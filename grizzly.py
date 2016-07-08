@@ -128,6 +128,9 @@ if __name__ == "__main__":
         "-c", "--cache", type=int, default=0,
         help="Maximum number of previous test cases to dump after crash")
     parser.add_argument(
+        "--ignore-timeouts", action="store_true",
+        help="Don't save the logs/results from a timeout")
+    parser.add_argument(
         '-l', '--log',
         help="log file name")
     parser.add_argument(
@@ -268,7 +271,9 @@ if __name__ == "__main__":
                         total_results
                     ))
 
-            # serve test case
+            # use Sapphire to serve the test case and
+            # if both the test case and the verification (done)
+            # pages are served serve_testcase() returns true
             failure_detected = not serv.serve_testcase(
                 corp_man.get_test_case_data(),
                 is_alive_cb=ffp.is_running
@@ -294,7 +299,14 @@ if __name__ == "__main__":
                 if not args.quiet:
                     print("Potential crash detected")
             elif failure_detected and not args.quiet and ffp.is_running():
-                print("Timeout detected")
+                if not args.quiet:
+                    print("Timeout detected")
+                if args.ignore_timeouts:
+                    if not args.quiet:
+                        print("Timeout ignored")
+                    ffp.close()
+                    ffp = None
+                    failure_detected = False
 
             # handle crashes or failures if detected
             if failure_detected:
