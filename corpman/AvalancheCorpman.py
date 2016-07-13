@@ -3,24 +3,24 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 """
-Grammr2CorpusManager is a CorpusManager that uses the grammr2 to generate data
-and embed it in a document suitable for processing by a web browser.
+AvalancheCorpusManager is a CorpusManager that uses Avalanche to generate data
+and then embeds it in a document suitable for processing by a web browser.
 """
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
+import avalanche
 import corpman
-import grammr2
 
-class Grammr2CorpusManager(corpman.CorpusManager):
-    key = "grammr2"
+class AvalancheCorpusManager(corpman.CorpusManager):
+    key = "avalanche"
 
     def _init_fuzzer(self, aggression):
         self._load_template()
         if not self._is_replay:
-            self._fuzzer = grammr2.Grammar(self._test.template_data)
+            self._fuzzer = avalanche.Grammar(self._test.template_data)
 
 
     def generate(self, media_type=None, redirect_page="done", timeout=5000):
