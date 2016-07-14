@@ -14,7 +14,7 @@ The following modules are required:
 * https://github.com/MozillaSecurity/ffpuppet
 * https://github.com/MozillaSecurity/loki
 * https://github.com/MozillaSecurity/sapphire
-* https://github.com/jschwartzentruber/ALF - for grammr2
+* https://github.com/jschwartzentruber/avalanche
 
 For now add symlinks to the project folders and files as needed. NOTE: This will change. I am open to suggestions for how to make this simple. Perhaps submodules?
 
@@ -24,7 +24,7 @@ ln -s <path_to_ffpuppet_dir> ffpuppet
 ln -s <path_to_sapphire_dir> sapphire
 cd corpman
 ln -s <path_to_loki_dir> loki
-ln -s <path_to_AFL_dir>/alf/fuzz/grammr2.py grammr2.py
+ln -s <path_to_avalanche_dir> avalanche
 
 ```
 
@@ -44,7 +44,7 @@ positional arguments:
   binary                Firefox binary to run
   input                 Test case or directory containing test cases
   corpus_manager        Supported corpus managers: audio, image_basic, image,
-                        grammr2, video, font... all available corpus managers
+                        avalanche, video, font... all available corpus managers
 
 optional arguments:
   -h, --help            show this help message and exit
