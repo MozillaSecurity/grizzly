@@ -23,7 +23,7 @@ class VideoCorpusManager(corpman.CorpusManager):
         self._fuzzer = loki.Loki(aggression)
 
 
-    def generate(self, media_type=None, timeout=250):
+    def generate(self, media_type=None, redirect_page="done", timeout=5000):
         self._rotate_template()
 
         # prepare data for playback
@@ -58,25 +58,18 @@ class VideoCorpusManager(corpman.CorpusManager):
         else:
             media_seek = ""
 
-        good_clip = "data:video/webm;base64," \
-                    "GkXfowEAAAAAAAAfQoaBAUL3gQFC8oEEQvOBCEKChHdlYm1Ch4ECQoWBAhhTgGcBAAAAAAAB6BFN" \
-                    "m3RALE27i1OrhBVJqWZTrIHfTbuMU6uEFlSua1OsggEwTbuMU6uEHFO7a1OsggHL7AEAAAAAAACk" \
-                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" \
-                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" \
-                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmAQAA" \
-                    "AAAAAEUq17GDD0JATYCNTGF2ZjU3LjI5LjEwMVdBjUxhdmY1Ny4yOS4xMDFzpJBAb17Yv2oNAF1Z" \
-                    "EESuco33RImIQFCAAAAAAAAWVK5rAQAAAAAAADyuAQAAAAAAADPXgQFzxYEBnIEAIrWcg3VuZIaF" \
-                    "Vl9WUDmDgQEj44OEAfygVeABAAAAAAAAB7CCAUC6gfAfQ7Z1AQAAAAAAAEfngQCjqYEAAICCSYNC" \
-                    "ABPwDvYAOCQcGFQAAFBh9jAAABML7AAATEnjdRwIJ+gAo5eBACEAhgBAkpwATEAABCasAABekcXg" \
-                    "ABxTu2sBAAAAAAAAEbuPs4EAt4r3gQHxggF48IED"
-
         fuzzed_data = "data:%s;base64,%s" % (
             media_type,
             base64.standard_b64encode(self._test.fuzzed_data))
 
-        if self._is_replay:
-            timeout = 5000
-
+        # The intended functionality is to wait for a canplay event and
+        # then begin playback. This will trigger a play event which will
+        # set a playback timeout (pbt) that will then call pause after the
+        # specified amount of time. The pause event will then cause the done()
+        # function to be called. done() then cleans up and moves on to the
+        # next test. If at anytime there is an error event done() is
+        # called. There is also a global timeout (tmr) that is intended
+        # to catch any other unexpected hangs.
         self._test.test_data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
@@ -85,28 +78,30 @@ class VideoCorpusManager(corpman.CorpusManager):
             "<meta http-equiv='Cache-control' content='no-cache'>",
             "</head>",
             "<body>",
-            "<video id='m01' autoplay='false' src='%s' type='%s'>" % (fuzzed_data, media_type),
+            "<video id='m01' src='%s' type='%s'>" % (fuzzed_data, media_type),
             "Error!",
             "</video>",
             "<script>",
-            "  var tmr;",
-            "  function reset(){window.location='/done';}",
-            "  function try_valid(){",
-            "    clearTimeout(tmr);",
-            "    v.removeEventListener('pause', try_valid, true);",
-            "    try{v.pause();}catch(e){};",
-            "    v.addEventListener('pause', reset, true);",
-            "    v.src='%s';" % good_clip,
-            "    v.type='video/webm';",
-            "    v.play();",
-            "  }",
+            "  var tmr;", # timeout timer
+            "  var pbt;", # playback timer
             "  var v=document.getElementById('m01');",
-            "  v.addEventListener('error', try_valid, true);",
+            "  function done(){",
+            "    clearTimeout(tmr);",
+            "    clearTimeout(pbt);",
+            "    v.removeEventListener('error', done, true);",
+            "    v.removeEventListener('pause', done, true);",
+            "    v.removeEventListener('canplay', done, true);",
+            "    window.location='/%s';" % redirect_page,
+            "  }",
+            "  v.addEventListener('error', done, true);",
             media_seek,
             playback_rate,
-            "  v.addEventListener('pause', try_valid, true);",
-            "  v.onload=function(){v.play();}",
-            "  tmr=setTimeout(try_valid, %d); // timeout" % timeout,
+            "  v.addEventListener('pause', done, true);",
+            "  v.onplay=function(){",
+            "      pbt=setTimeout(function(){try{v.pause()}catch(e){}}, 100);",
+            "  }",
+            "  v.addEventListener('canplay', v.play, true);",
+            "  tmr=setTimeout(done, %d); // timeout" % timeout,
             "</script>",
             "</body>",
             "</html>"])
