@@ -14,7 +14,7 @@ The following modules are required:
 * https://github.com/MozillaSecurity/ffpuppet
 * https://github.com/MozillaSecurity/loki
 * https://github.com/MozillaSecurity/sapphire
-* https://github.com/jschwartzentruber/avalanche
+* https://github.com/MozillaSecurity/avalanche
 
 For now add symlinks to the project folders and files as needed. NOTE: This will change. I am open to suggestions for how to make this simple. Perhaps submodules?
 
