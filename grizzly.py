@@ -131,6 +131,9 @@ if __name__ == "__main__":
         "--ignore-timeouts", action="store_true",
         help="Don't save the logs/results from a timeout")
     parser.add_argument(
+        "--launch-timeout", type=int, default=300,
+        help="Amount of time to wait to launch the browser before LaunchException is raised")
+    parser.add_argument(
         '-l', '--log',
         help="log file name")
     parser.add_argument(
@@ -242,6 +245,7 @@ if __name__ == "__main__":
                 ffp = ffpuppet.FFPuppet(use_valgrind=args.valgrind, use_xvfb=args.xvfb)
                 ffp.launch(
                     args.binary,
+                    launch_timeout=args.launch_timeout,
                     location="http://127.0.0.1:%d/%s" % (listening_port, serv.landing_page),
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs
