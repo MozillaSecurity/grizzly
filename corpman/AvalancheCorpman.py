@@ -10,6 +10,7 @@ and then embeds it in a document suitable for processing by a web browser.
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
+import os
 
 import avalanche
 import corpman
@@ -19,8 +20,10 @@ class AvalancheCorpusManager(corpman.CorpusManager):
 
     def _init_fuzzer(self, aggression):
         self._load_template()
-        if not self._is_replay:
-            self._fuzzer = avalanche.Grammar(self._test.template_data)
+        if self._is_replay:
+            raise RuntimeError("AvalancheCorpusManager does not support replay mode")
+        with open(self._test.template_name, "r") as gmr_file:
+            self._fuzzer = avalanche.Grammar(gmr_file)
 
 
     def generate(self, media_type=None, redirect_page="done", timeout=5000):
