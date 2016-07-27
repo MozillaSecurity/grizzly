@@ -23,7 +23,7 @@ class AudioCorpusManager(corpman.CorpusManager):
         self._fuzzer = loki.Loki(aggression)
 
 
-    def generate(self, media_type=None, redirect_page="done", timeout=250):
+    def generate(self, media_type=None, redirect_page="done", timeout=5000):
         self._rotate_template()
 
         # prepare data for playback
@@ -45,10 +45,24 @@ class AudioCorpusManager(corpman.CorpusManager):
                 media_type = "application/octet-stream"
 
         # add playbackRate
-        if not self._is_replay and random.randint(0, 5): # 5 out of 6 times
-            playback_rate = "  try{v.playbackRate=%0.1f}catch(e){}" % (random.choice([2, 10, 100]))
+        if not self._is_replay and random.randint(0, 9): # 9 out of 10 times
+            playback_rate = "  try{a.playbackRate=%0.2f}catch(e){};" % (random.choice([2, 10, 100]))
         else:
             playback_rate = ""
+
+        # add seek
+        if not self._is_replay and not random.randint(0, 20):
+            media_seek = []
+            media_seek.append("  var dur=a.duration;"),
+            for _ in range(random.randint(1, 10)):
+                seek = random.random()
+                if random.randint(0, 1):
+                    seek *= 10
+                media_seek.append("  try{a.fastSeek=Math.min(%0.2f, dur)}catch(e){};" % seek)
+            media_seek.append("  try{a.fastSeek=0}catch(e){};")
+            media_seek = "\n".join(media_seek)
+        else:
+            media_seek = ""
 
         fuzzed_data = "data:%s;base64,%s" % (
             media_type,
@@ -62,41 +76,33 @@ class AudioCorpusManager(corpman.CorpusManager):
             "<meta http-equiv='Cache-control' content='no-cache'>",
             "</head>",
             "<body>",
-            "<audio id='m01' preload='auto' src='%s' type='%s'>" % (fuzzed_data, media_type),
+            "<audio id='m01' src='%s' type='%s'>" % (fuzzed_data, media_type),
             "Error!",
             "</audio>",
             "<script>",
-            "  var tmr;",
-            "  var v=document.getElementById('m01');",
-            "  function set_duration(){tmr=setTimeout(reset, %d)}" % timeout,
+            "  var tmr;", # timeout timer
+            "  var pbt;", # playback timer
+            "  var a=document.getElementById('m01');",
+            "  function next(){window.location='/%s';}" % redirect_page,
             "  function done(){",
-            "    v.removeEventListener('error', done, true);",
-            "    v.removeEventListener('seeked', done, true);",
-            "    window.location='/%s';" % redirect_page,
-            "  }",
-            "  function reset(){",
             "    clearTimeout(tmr);",
-            "    v.removeEventListener('ended', reset, true);",
-            "    v.removeEventListener('error', reset, true);",
-            "    v.removeEventListener('pause', reset, true);",
-            "    v.removeEventListener('playing', set_duration, true);",
-            "    try{v.pause()}catch(e){}",
-            "    v.addEventListener('error', done, true);",
-            "    if(v.seekable && !isNaN(v.currentTime) && v.currentTime>0){",
-            "      if(!isNaN(v.duration) && v.duration>0)",
-            "        try{v.fastSeek(v.duration)}catch(e){}",
-            "      v.addEventListener('seeked', done, true);",
-            "      v.fastSeek(0);",
-            "    }",
-            "    else",
-            "      done();",
+            "    clearTimeout(pbt);",
+            "    a.removeEventListener('error', done, true);",
+            "    a.removeEventListener('pause', done, true);",
+            "    a.removeEventListener('canplay', done, true);",
+            "    a.addEventListener('pause', next, true);",
+            "    a.src='';",
+            "    a.play();",
             "  }",
-            "  v.addEventListener('ended', reset, true);",
-            "  v.addEventListener('error', reset, true);",
-            "  v.addEventListener('pause', reset, true);",
+            "  a.addEventListener('error', done, true);",
+            media_seek,
             playback_rate,
-            "  v.addEventListener('playing', set_duration, true);",
-            "  v.addEventListener('canplay', function(){v.play()}, true);",
+            "  a.addEventListener('pause', done, true);",
+            "  a.onplay=function(){",
+            "    pbt=setTimeout(function(){try{a.pause()}catch(e){}}, 150);",
+            "  }",
+            "  a.addEventListener('canplay', a.play, true);",
+            "  tmr=setTimeout(done, %d); // timeout" % timeout,
             "</script>",
             "</body>",
             "</html>"])
