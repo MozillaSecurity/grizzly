@@ -52,10 +52,15 @@ class CorpusManager(object):
 
 
     def _scan_testcases(self):
+        # ignored_list is a list of ignored files (usually auto generated OS files)
+        ignored_list = ["desktop.ini", "thumbs.db"]
         self._test_cases = list()
         if os.path.isdir(self._test_corpus):
             abs_path = os.path.abspath(self._test_corpus)
             for test_file in os.listdir(abs_path):
+                # check for unwanted files
+                if test_file.startswith(".") or test_file.lower() in ignored_list:
+                    continue
                 test_file = os.path.join(abs_path, test_file)
                 if os.path.isfile(test_file) and os.path.getsize(test_file) > 0:
                     self._test_cases.append(test_file)
