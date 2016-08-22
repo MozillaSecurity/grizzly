@@ -167,8 +167,11 @@ if __name__ == "__main__":
         "--valgrind", action="store_true",
         help="Use valgrind")
     parser.add_argument(
+        "--windbg", default=False, action="store_true",
+        help="Collect crash log with WinDBG (Windows only)")
+    parser.add_argument(
         "--xvfb", action="store_true",
-        help="Use xvfb")
+        help="Use xvfb (Linux only)")
     args = parser.parse_args()
 
     if not args.quiet:
@@ -231,6 +234,9 @@ if __name__ == "__main__":
                     if args.valgrind:
                         print("Running with Valgrind. This will be SLOW!")
 
+                    if args.windbg:
+                        print("Collecting debug information with WinDBG")
+
                     if args.memory:
                         print("Memory limit is %dMBs" % args.memory)
 
@@ -242,14 +248,16 @@ if __name__ == "__main__":
                     print("%s Launching FFPuppet" % time.strftime("[%Y-%m-%d %H:%M:%S]"))
 
                 # create and launch ffpuppet
-                ffp = ffpuppet.FFPuppet(use_valgrind=args.valgrind, use_xvfb=args.xvfb)
+                ffp = ffpuppet.FFPuppet(
+                    use_valgrind=args.valgrind,
+                    use_windbg=args.windbg,
+                    use_xvfb=args.xvfb)
                 ffp.launch(
                     args.binary,
                     launch_timeout=args.launch_timeout,
                     location="http://127.0.0.1:%d/%s" % (listening_port, serv.landing_page),
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
-                    prefs_js=args.prefs
-                )
+                    prefs_js=args.prefs)
 
             current_iter += 1
 

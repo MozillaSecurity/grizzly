@@ -26,6 +26,10 @@ import re
 _re_asan_w_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\sin\s(?P<line>.+)")
 _re_asan_wo_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\s\((?P<line>.+\+0x[0-9a-f]+)\)")
 _re_gdb = re.compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
+_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
+
+# 006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c
+
 #0  __memmove_ssse3_back () at ../sysdeps/x86_64/multiarch/memcpy-ssse3-back.S:1654
 #1  0x000000000041e276 in WelsDec::WelsReorderRefList (pCtx=0x7ffff7f44020)\n    at codec/decoder/core/src/manage_dec_ref.cpp:252
 #2  0x0000000000400545 in main ()
@@ -105,6 +109,18 @@ def parse_line(line):
             offset = bin_offset.split(" ")[0]
 
         return (location, func, offset, line_no)
+
+    m = _re_windbg.match(line)
+    if m is not None:
+        line = m.group("line")
+        try:
+            location, func = line.split("!")
+        except ValueError:
+            location = line
+            func = None
+        offset = m.group("off")
+
+        return (location, func, offset, None)
 
     return None
 
@@ -197,6 +213,10 @@ if __name__ == "__main__":
     #print parse_line("#2  0x0000000000400545 in main ()")
     #print parse_line("#3  0x0000000000400545 in main () at test.c:5")
 
+    # windbg support tests
+    #print parse_line("006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c")
+    #print parse_line("006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c")
+    #print parse_line("(Inline) -------- xul!SkTDArray<SkAAClip::Builder::Row>::append+0xc")
 
     with open(args.input, "r") as fp:
         stack = stack_from_text(fp.read())
