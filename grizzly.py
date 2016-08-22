@@ -332,12 +332,12 @@ if __name__ == "__main__":
                     print("Process is still running! Terminating.")
 
                 # close ffp and save log
-                temp_log = create_tmp_log()
-                ffp.close(temp_log)
+                browser_log = create_tmp_log()
+                ffp.close(browser_log)
                 ffp = None
 
                 # collect log
-                log_dir, file_prefix = capture_logs(temp_log)
+                log_dir, file_prefix = capture_logs(browser_log)
                 corp_man.dump(log_dir, file_prefix)
 
                 if args.cache:
@@ -353,19 +353,19 @@ if __name__ == "__main__":
                 if not args.quiet:
                     print("Triggering FFP relaunch")
 
-                temp_log = create_tmp_log()
-                ffp.close(temp_log)
+                browser_log = create_tmp_log()
+                ffp.close(browser_log)
                 ffp = None
 
                 # check for shutdown crash
-                if capture_logs(temp_log, ignore_stackless=True) is not None:
+                if capture_logs(browser_log, ignore_stackless=True) is not None:
                     total_results += 1
                     if not args.quiet:
                         print("Crash detected during close before relaunch!")
 
                 # remove log if we don't find anything interesting
-                if os.path.isfile(temp_log):
-                    os.remove(temp_log)
+                if os.path.isfile(browser_log):
+                    os.remove(browser_log)
 
             # all test cases have been replayed
             if args.replay and corp_man.size() == 0:
@@ -389,15 +389,15 @@ if __name__ == "__main__":
             serv.close()
 
         if ffp is not None:
-            temp_log = args.log
-            if temp_log is None:
-                temp_log = create_tmp_log()
-            ffp.close(temp_log)
+            browser_log = args.log
+            if browser_log is None:
+                browser_log = create_tmp_log()
+            ffp.close(browser_log)
 
             # check for shutdown crash
-            if capture_logs(temp_log, ignore_stackless=True) is not None:
-                print("Log saved: %s" % temp_log)
+            if capture_logs(browser_log, ignore_stackless=True) is not None:
+                print("Log saved: %s" % browser_log)
 
             # remove log if we don't want it saved
-            if args.log is None and os.path.isfile(temp_log):
-                os.remove(temp_log)
+            if args.log is None and os.path.isfile(browser_log):
+                os.remove(browser_log)
