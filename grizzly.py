@@ -133,9 +133,6 @@ if __name__ == "__main__":
         "--launch-timeout", type=int, default=300,
         help="Amount of time to wait to launch the browser before LaunchException is raised")
     parser.add_argument(
-        '-l', '--log',
-        help="log file name")
-    parser.add_argument(
         '-m', '--memory', type=int,
         help='Firefox process memory limit in MBs')
     parser.add_argument(
@@ -383,15 +380,11 @@ if __name__ == "__main__":
             serv.close()
 
         if ffp is not None:
-            browser_log = args.log
-            if browser_log is None:
-                browser_log = create_tmp_log()
-            ffp.close(browser_log)
+            shutdown_log = create_tmp_log()
+            ffp.close(shutdown_log)
 
             # check for shutdown crash
-            if capture_logs(browser_log, ignore_stackless=True) is not None:
-                print("Log saved: %s" % browser_log)
-
-            # remove log if we don't want it saved
-            if args.log is None and os.path.isfile(browser_log):
-                os.remove(browser_log)
+            if capture_logs(shutdown_log, ignore_stackless=True) is not None:
+                print("Crash detected during shutdown. Log: %s" % shutdown_log)
+            elif os.path.isfile(shutdown_log):
+                os.remove(shutdown_log)
