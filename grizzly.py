@@ -29,7 +29,6 @@ import random
 import re
 import shutil
 import socket
-import struct
 import tempfile
 import time
 
@@ -214,8 +213,6 @@ if __name__ == "__main__":
             raise e
 
     try:
-        random.seed(struct.unpack("q", os.urandom(8))[0])
-
         current_test = None # template/test case currently being fuzzed
         total_results = 0 # to count number of results found
 
