@@ -177,8 +177,8 @@ if __name__ == "__main__":
     if not args.quiet:
         print("%s Starting Grizzly" % time.strftime("[%Y-%m-%d %H:%M:%S]"))
 
-    ffp = None
     current_iter = 0
+    ffp = None
 
     # init corpus manager
     try:
@@ -222,7 +222,7 @@ if __name__ == "__main__":
         # main fuzzing iteration loop
         while True:
             # create firefox puppet instance if needed
-            if ffp is None:
+            if ffp is None or not ffp.is_running():
                 cache = [] # previously run tests
                 log_offset = 0 # location in the log used for log scanning
                 iters_before_relaunch = args.relaunch # iterations to perform before relaunch
@@ -317,7 +317,6 @@ if __name__ == "__main__":
                     if not args.quiet:
                         print("Timeout ignored")
                     ffp.close()
-                    ffp = None
                     failure_detected = False
 
             # handle crashes or failures if detected
@@ -334,7 +333,6 @@ if __name__ == "__main__":
                 # close ffp and save log
                 browser_log = create_tmp_log()
                 ffp.close(browser_log)
-                ffp = None
 
                 # collect log
                 log_dir, file_prefix = capture_logs(browser_log)
@@ -355,7 +353,6 @@ if __name__ == "__main__":
 
                 browser_log = create_tmp_log()
                 ffp.close(browser_log)
-                ffp = None
 
                 # check for shutdown crash
                 if capture_logs(browser_log, ignore_stackless=True) is not None:
