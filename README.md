@@ -28,23 +28,22 @@ ln -s <path_to_avalanche_dir> avalanche
 
 ```
 
-The python psutil is module is also required if you use memory limiting.
-
 Usage
 -----
 ```
 python grizzly.py -h
-usage: grizzly.py [-h] [-a AGGRESSION] [-c CACHE] [-l LOG] [-m MEMORY]
-                  [--mime MIME] [-p PREFS] [-q] [--replay]
-                  [--relaunch RELAUNCH] [--rotate ROTATE] [-s]
-                  [--timeout TIMEOUT] [--valgrind] [--xvfb]
+usage: grizzly.py [-h] [-a AGGRESSION] [-c CACHE] [--ignore-timeouts]
+                  [--launch-timeout LAUNCH_TIMEOUT] [-m MEMORY] [--mime MIME]
+                  [-p PREFS] [-q] [--replay] [--relaunch RELAUNCH]
+                  [--rotate ROTATE] [-s] [--timeout TIMEOUT] [--valgrind]
+                  [--windbg] [--xvfb]
                   binary input corpus_manager
 
 positional arguments:
   binary                Firefox binary to run
   input                 Test case or directory containing test cases
-  corpus_manager        Supported corpus managers: audio, image_basic, image,
-                        avalanche, video, font... all available corpus managers
+  corpus_manager        Supported corpus managers: audio, image,
+                        video, font ... all available corpus managers
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -53,7 +52,10 @@ optional arguments:
   -c CACHE, --cache CACHE
                         Maximum number of previous test cases to dump after
                         crash
-  -l LOG, --log LOG     log file name
+  --ignore-timeouts     Don't save the logs/results from a timeout
+  --launch-timeout LAUNCH_TIMEOUT
+                        Amount of time to wait to launch the browser before
+                        LaunchError is raised
   -m MEMORY, --memory MEMORY
                         Firefox process memory limit in MBs
   --mime MIME           Specify a mime type
@@ -67,5 +69,6 @@ optional arguments:
   -s, --asserts         Detect soft assertions
   --timeout TIMEOUT     Iteration timeout
   --valgrind            Use valgrind
-  --xvfb                Use xvfb
+  --windbg              Collect crash log with WinDBG (Windows only)
+  --xvfb                Use xvfb (Linux only)
 ```

@@ -131,7 +131,7 @@ if __name__ == "__main__":
         help="Don't save the logs/results from a timeout")
     parser.add_argument(
         "--launch-timeout", type=int, default=300,
-        help="Amount of time to wait to launch the browser before LaunchException is raised")
+        help="Amount of time to wait to launch the browser before LaunchError is raised")
     parser.add_argument(
         '-m', '--memory', type=int,
         help='Firefox process memory limit in MBs')
