@@ -122,19 +122,19 @@ if __name__ == "__main__":
         help="Supported corpus managers: %s" % ", ".join(corpman.managers))
     parser.add_argument(
         "-a", "--aggression", default=0.001, type=float,
-        help="0.001 == 1/1000")
+        help="0.001 == 1/1000 (default: %(default)s)")
     parser.add_argument(
         "-c", "--cache", type=int, default=0,
-        help="Maximum number of previous test cases to dump after crash")
+        help="Maximum number of previous test cases to dump after crash (default: %(default)s)")
     parser.add_argument(
         "--ignore-timeouts", action="store_true",
         help="Don't save the logs/results from a timeout")
     parser.add_argument(
         "--launch-timeout", type=int, default=300,
-        help="Amount of time to wait to launch the browser before LaunchError is raised")
+        help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
     parser.add_argument(
         '-m', '--memory', type=int,
-        help='Firefox process memory limit in MBs')
+        help='Browser process memory limit in MBs (default: No limit)')
     parser.add_argument(
         "--mime",
         help="Specify a mime type")
@@ -149,21 +149,21 @@ if __name__ == "__main__":
         help="Replay do not fuzz the test cases")
     parser.add_argument(
         "--relaunch", type=int, default=1000,
-        help="Number of iterations to perform before closing and relaunching the browser")
+        help="Number of iterations performed before relaunching the browser (default: %(default)s)")
     parser.add_argument(
         "--rotate", type=int, default=10,
-        help="Number of iterations per test case before switching")
+        help="Number of iterations per test case before rotating (default: %(default)s)")
     parser.add_argument(
         "-s", "--asserts", action="store_true",
         help="Detect soft assertions")
     parser.add_argument(
         "--timeout", type=int, default=60,
-        help="Iteration timeout")
+        help="Iteration timeout in seconds (default: %(default)s)")
     parser.add_argument(
         "--valgrind", action="store_true",
         help="Use valgrind")
     parser.add_argument(
-        "--windbg", default=False, action="store_true",
+        "--windbg", action="store_true",
         help="Collect crash log with WinDBG (Windows only)")
     parser.add_argument(
         "--xvfb", action="store_true",
