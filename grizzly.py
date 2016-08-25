@@ -260,7 +260,7 @@ if __name__ == "__main__":
                 # close ffp and save log
                 result_reporter = reporter.FilesystemReporter()
                 ffp.close(result_reporter.log_file)
-                result_reporter.report(test_cases, "moar_results")
+                result_reporter.report(reversed(test_cases))
 
             # trigger relaunch by closing the browser
             iters_before_relaunch -= 1
@@ -270,7 +270,7 @@ if __name__ == "__main__":
 
                 result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
                 ffp.close(result_reporter.log_file)
-                result_reporter.report(test_cases)
+                result_reporter.report(reversed(test_cases))
 
             # all test cases have been replayed
             if args.replay and corp_man.size() == 0:
@@ -290,4 +290,4 @@ if __name__ == "__main__":
             # close ffp and save log
             result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
             ffp.close(result_reporter.log_file)
-            result_reporter.report(test_cases)
+            result_reporter.report(reversed(test_cases))
