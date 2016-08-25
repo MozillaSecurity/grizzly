@@ -20,92 +20,19 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 """
 
 import argparse
-import hashlib
 import os
 import random
 import re
-import shutil
 import socket
-import tempfile
 import time
 
 import corpman
 import ffpuppet
+import reporter
 import sapphire
-import stack_hasher
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
-
-def capture_logs(log_file, ignore_stackless=False, results_path="results"):
-    """
-    capture_logs(log_file[, ignore_stackless, results_path])
-    Read log from browsers and bucket results on the file system. This is meant for local use.
-    If ignore_stackless is True logs with stacks that cannot be parsed are ignored.
-    results_path specifies where to store the results on the file system.
-    """
-
-    # parse log file
-    with open(log_file) as fp:
-        stack = stack_hasher.stack_from_text(fp.read())
-
-    # calculate bucket data
-    minor = stack_hasher.stack_to_hash(stack)
-    if minor is None:
-        if ignore_stackless:
-            return None
-        minor = "0"
-        major = "NO_STACK"
-
-        # !!!
-        # hack for stagefright asserts for now...
-        with open(log_file) as fp:
-            # only scan the last bit of the log
-            fp.seek(0, os.SEEK_END)
-            seek_back = min(2048, fp.tell()) * -1
-            fp.seek(seek_back, os.SEEK_END)
-            try:
-                # grab last line
-                line = fp.read().splitlines()[-1]
-            except IndexError:
-                line = None
-        if line and line.startswith("A/"):
-            line = line.split("):")[-1].strip().split()[0] # get the file name and line number
-            major = "NO_STACK_%s" % (hashlib.sha1(line).hexdigest())
-        # end hack for stagefright
-
-    else:
-        major = stack_hasher.stack_to_hash(stack, major=True)
-
-    # create results directory
-    results_dir = os.path.join(os.getcwd(), results_path)
-    if not os.path.isdir(results_dir):
-        os.mkdir(results_dir)
-
-    # create major bucket
-    major_dir = os.path.join(results_dir, major)
-    if not os.path.isdir(major_dir):
-        os.mkdir(major_dir)
-
-    # create file name without the extension
-    file_name = "%s_%s" % (minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S"))
-    output_name = os.path.join(major_dir, file_name)
-
-    # save log file
-    shutil.move(log_file, ".".join([output_name, "log.txt"]))
-
-    return (major_dir, file_name)
-
-
-def create_tmp_log():
-    fd, temp_log = tempfile.mkstemp(
-        dir=".",
-        prefix="grizzly_",
-        suffix="_log.txt"
-    )
-    os.close(fd)
-
-    return temp_log
 
 
 if __name__ == "__main__":
@@ -212,13 +139,14 @@ if __name__ == "__main__":
 
     try:
         current_test = None # template/test case currently being fuzzed
+        test_cases = [] # test cases (this should only be > 1 when cache is > 1)
         total_results = 0 # to count number of results found
 
         # main fuzzing iteration loop
         while True:
             # create firefox puppet instance if needed
             if ffp is None or not ffp.is_running():
-                test_cases = [] # test cases (this should only be > 1 when cache is > 1)
+                test_cases = [] # reset test case cache
                 log_offset = 0 # location in the log used for log scanning
                 iters_before_relaunch = args.relaunch # iterations to perform before relaunch
 
@@ -330,13 +258,9 @@ if __name__ == "__main__":
                     print("Process is still running! Terminating.")
 
                 # close ffp and save log
-                browser_log = create_tmp_log()
-                ffp.close(browser_log)
-
-                # collect log
-                log_dir, file_prefix = capture_logs(browser_log)
-                for test_number, test_case in enumerate(reversed(test_cases)):
-                    test_case.dump(log_dir, "%s-%d" % (file_prefix, test_number))
+                result_reporter = reporter.FilesystemReporter()
+                ffp.close(result_reporter.log_file)
+                result_reporter.report(test_cases, "moar_results")
 
             # trigger relaunch by closing the browser
             iters_before_relaunch -= 1
@@ -344,25 +268,15 @@ if __name__ == "__main__":
                 if not args.quiet:
                     print("Triggering FFP relaunch")
 
-                browser_log = create_tmp_log()
-                ffp.close(browser_log)
-
-                # check for shutdown crash
-                if capture_logs(browser_log, ignore_stackless=True) is not None:
-                    total_results += 1
-                    if not args.quiet:
-                        print("Crash detected during close before relaunch!")
-
-                # remove log if we don't find anything interesting
-                if os.path.isfile(browser_log):
-                    os.remove(browser_log)
+                result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
+                ffp.close(result_reporter.log_file)
+                result_reporter.report(test_cases)
 
             # all test cases have been replayed
             if args.replay and corp_man.size() == 0:
                 if not args.quiet:
                     print("Replay Complete")
                 break
-
 
     except KeyboardInterrupt:
         print("Completed %d iterations" % current_iter)
@@ -373,11 +287,7 @@ if __name__ == "__main__":
             serv.close()
 
         if ffp is not None:
-            shutdown_log = create_tmp_log()
-            ffp.close(shutdown_log)
-
-            # check for shutdown crash
-            if capture_logs(shutdown_log, ignore_stackless=True) is not None:
-                print("Crash detected during shutdown. Log: %s" % shutdown_log)
-            elif os.path.isfile(shutdown_log):
-                os.remove(shutdown_log)
+            # close ffp and save log
+            result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
+            ffp.close(result_reporter.log_file)
+            result_reporter.report(test_cases)
