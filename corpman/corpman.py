@@ -59,11 +59,12 @@ class TestCase(object):
             out_fp.write(self.data)
 
         # save raw test case
-        output_name = "%s_raw" % output_name
-        if self.extension is not None:
-            output_name = ".".join([output_name, self.extension])
-        with open(output_name, "wb") as out_fp:
-            out_fp.write(self.raw_data)
+        if self.raw_data is not None:
+            output_name = "%s_raw" % output_name
+            if self.extension is not None:
+                output_name = ".".join([output_name, self.extension])
+            with open(output_name, "wb") as out_fp:
+                out_fp.write(self.raw_data)
 
 
     def get_template_name(self):
