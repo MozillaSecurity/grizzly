@@ -59,7 +59,7 @@ class BasicImageCorpusManager(corpman.CorpusManager):
             "<meta http-equiv='Cache-control' content='no-cache'>",
             "</head>",
             "<body>",
-            "<img id='m1' src='%s'>" % self._to_data_url(test.raw_data, mime_type),
+            "<img id='m1' src='%s'>" % self.to_data_url(test.raw_data, mime_type),
             "<img id='m2' height='2' width='2'>",
             "<canvas id='c1'></canvas>",
             "<script>",

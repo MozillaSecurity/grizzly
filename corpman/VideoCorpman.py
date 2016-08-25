@@ -59,7 +59,7 @@ class VideoCorpusManager(corpman.CorpusManager):
         # next test. If at anytime there is an error event done() is
         # called. There is also a global timeout (tmr) that is intended
         # to catch any other unexpected hangs.
-        data_url = self._to_data_url(test.raw_data, mime_type=mime_type)
+        data_url = self.to_data_url(test.raw_data, mime_type=mime_type)
         test.data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",

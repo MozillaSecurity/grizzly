@@ -82,7 +82,7 @@ class ImageCorpusManager(corpman.CorpusManager):
             "      im1.src='%s'; // 2nd valid image" % valid_img2,
             "    }",
             "    else if(step_state==2){ // fuzzed image",
-            "      im1.src='%s';" % self._to_data_url(test.raw_data, mime_type=mime_type),
+            "      im1.src='%s';" % self.to_data_url(test.raw_data, mime_type=mime_type),
             "    }",
             "    else if(step_state==3){ // force downscaler",
             "      im1.removeEventListener('load', handle_step, false);",

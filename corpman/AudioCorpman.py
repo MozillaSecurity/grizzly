@@ -60,7 +60,7 @@ class AudioCorpusManager(corpman.CorpusManager):
 
 
         # prepare data for playback
-        data_url = self._to_data_url(test.raw_data, mime_type=mime_type)
+        data_url = self.to_data_url(test.raw_data, mime_type=mime_type)
         test.data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",

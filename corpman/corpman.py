@@ -121,7 +121,7 @@ class CorpusManager(object):
 
 
     @staticmethod
-    def _to_data_url(data, mime_type=None):
+    def to_data_url(data, mime_type=None):
         if mime_type is None:
             mime_type = "application/octet-stream"
         return "data:%s;base64,%s" % (mime_type, base64.standard_b64encode(data))

@@ -33,7 +33,7 @@ class EmbedCorpusManager(corpman.CorpusManager):
             "<meta http-equiv='Cache-control' content='no-cache'>",
             "</head>",
             "<body>",
-            "<iframe id='test_if' src='%s'></iframe>" % self._to_data_url(test.raw_data, mime_type),
+            "<iframe id='test_if' src='%s'></iframe>" % self.to_data_url(test.raw_data, mime_type),
             "<script>",
             "  var tmr;",
             "  tmr=setTimeout(reset, %d); // timeout" % timeout,

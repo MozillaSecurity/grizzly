@@ -40,7 +40,7 @@ class FontCorpusManager(corpman.CorpusManager):
             "<style>",
             "@font-face {",
             "  font-family: TestFont;",
-            "  src: url('%s');" % self._to_data_url(test.raw_data, mime_type=mime_type),
+            "  src: url('%s');" % self.to_data_url(test.raw_data, mime_type=mime_type),
             "}",
             "body { font-family: 'TestFont' }",
             "</style>",
