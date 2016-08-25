@@ -2,21 +2,20 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""
-BasicImageCorpusManager is a CorpusManager that uses the loki fuzzer to mutate
-data and embed it in a document suitable for processing by a web browser.
-"""
-
-__author__ = "Tyson Smith"
-__credits__ = ["Tyson Smith"]
-
-import base64
 import random
 
 import corpman
 import loki
 
+__author__ = "Tyson Smith"
+__credits__ = ["Tyson Smith"]
+
 class BasicImageCorpusManager(corpman.CorpusManager):
+    """
+    BasicImageCorpusManager is a CorpusManager that uses the loki fuzzer to mutate
+    data and embed it in a document suitable for processing by a web browser.
+    """
+
     key = "image_basic"
 
     def _init_fuzzer(self, aggression):
@@ -34,30 +33,25 @@ class BasicImageCorpusManager(corpman.CorpusManager):
             return random.randint(1, 4)
 
 
-    def generate(self, media_type=None, redirect_page="done", timeout=5000):
-        self._rotate_template()
+    def _generate(self, template, redirect_page, mime_type=None):
+        timeout = 5000 # test case timeout
+        test = corpman.TestCase(template_file=template.file_name)
+
+        if self._is_replay:
+            test.raw_data = template.get_data()
+        else:
+            test.raw_data = self._fuzzer.fuzz_data(template.get_data())
+
+        if mime_type is None:
+            if template.extension in ("jpeg", "jpg"):
+                mime_type = "image/jpeg"
+            elif template.extension == "ico":
+                mime_type = "image/x-icon"
+            elif template.extension in ("bmp", "gif", "png"):
+                mime_type = "image/%s" % template.extension
 
         # prepare data for playback
-        if self._is_replay:
-            self._test.fuzzed_data = self._test.template_data
-        else:
-            self._test.fuzzed_data = self._fuzzer.fuzz_data(self._test.template_data)
-
-        if media_type is None:
-            if self._test.extension in ("jpeg", "jpg"):
-                media_type = "image/jpeg"
-            elif self._test.extension == "ico":
-                media_type = "image/x-icon"
-            elif self._test.extension in ("bmp", "gif", "png"):
-                media_type = "image/%s" % self._test.extension
-            else:
-                media_type = "application/octet-stream"
-
-        fuzzed_img = "data:%s;base64,%s" % (
-            media_type,
-            base64.standard_b64encode(self._test.fuzzed_data))
-
-        self._test.test_data = "\n".join([
+        test.data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
@@ -65,7 +59,7 @@ class BasicImageCorpusManager(corpman.CorpusManager):
             "<meta http-equiv='Cache-control' content='no-cache'>",
             "</head>",
             "<body>",
-            "<img id='m1' src='%s'>" % fuzzed_img,
+            "<img id='m1' src='%s'>" % self._to_data_url(test.raw_data, mime_type),
             "<img id='m2' height='2' width='2'>",
             "<canvas id='c1'></canvas>",
             "<script>",
@@ -90,7 +84,6 @@ class BasicImageCorpusManager(corpman.CorpusManager):
             "  tmr=setTimeout(reset, %d); // timeout" % timeout,
             "</script>",
             "</body>",
-            "</html>"
-        ])
+            "</html>"])
 
-        self._gen_count += 1
+        return test

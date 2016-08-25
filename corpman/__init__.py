@@ -7,7 +7,7 @@ __credits__ = ["Jesse Schwartzentruber"]
 
 
 import logging as log
-from corpman import TestCase, CorpusManager
+from corpman import Template, TestCase, CorpusManager
 
 def _find_managers():
     import importlib

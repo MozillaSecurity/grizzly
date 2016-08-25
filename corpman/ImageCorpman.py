@@ -2,24 +2,23 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""
-ImageCorpusManager is a CorpusManager that uses the loki fuzzer to mutate data
-and embed it in a document suitable for processing by a web browser. This is
-Firefox specific and it requires "dom.send_after_paint_to_content=true;" to
-function properly. The intent is to force synchronization of the image
-processing threads in the browser.
-"""
-
-__author__ = "Tyson Smith"
-__credits__ = ["Tyson Smith", "Timothy Nikkel"]
-
-import base64
 import random
 
 import corpman
 import loki
 
+__author__ = "Tyson Smith"
+__credits__ = ["Tyson Smith", "Timothy Nikkel"]
+
 class ImageCorpusManager(corpman.CorpusManager):
+    """
+    ImageCorpusManager is a CorpusManager that uses the loki fuzzer to mutate data
+    and embed it in a document suitable for processing by a web browser. This is
+    Firefox specific and it requires "dom.send_after_paint_to_content=true;" to
+    function properly. The intent is to force synchronization of the image
+    processing threads in the browser.
+    """
+
     key = "image"
 
     def _init_fuzzer(self, aggression):
@@ -37,41 +36,29 @@ class ImageCorpusManager(corpman.CorpusManager):
             return random.randint(1, 10)
 
 
-    def generate(self, media_type=None, redirect_page="done", timeout=5000):
-        self._rotate_template()
+    def _generate(self, template, redirect_page, mime_type=None):
+        timeout = 5000 # test case timeout
+        test = corpman.TestCase(template_file=template.file_name)
 
-        # prepare data for playback
         if self._is_replay:
-            self._test.fuzzed_data = self._test.template_data
+            test.raw_data = template.get_data()
         else:
-            if self._can_splice and random.randint(0, 20) == 0:
-                with open(random.choice(self._test_cases), "rb") as fp:
-                    self._test.fuzzed_data = self._fuzzer.splice_data((
-                        self._test.template_data,
-                        fp.read()))
-            else:
-                self._test.fuzzed_data = self._fuzzer.fuzz_data(self._test.template_data)
+            test.raw_data = self._fuzzer.fuzz_data(template.get_data())
 
         # valid images used to trigger animation used to force sync decoding
         valid_img1 = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
         valid_img2 = "data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACwAAAAAAQABAAACAkQBADs="
 
-        if media_type is None:
-            if self._test.extension in ("jpeg", "jpg"):
-                media_type = "image/jpeg"
-            elif self._test.extension == "ico":
-                media_type = "image/x-icon"
-            elif self._test.extension in ("bmp", "gif", "png"):
-                media_type = "image/%s" % self._test.extension
-            else:
-                media_type = "application/octet-stream"
+        if mime_type is None:
+            if template.extension in ("jpeg", "jpg"):
+                mime_type = "image/jpeg"
+            elif template.extension == "ico":
+                mime_type = "image/x-icon"
+            elif template.extension in ("bmp", "gif", "png"):
+                mime_type = "image/%s" % template.extension
 
-        fuzzed_img = "data:%s;base64,%s" % (
-            media_type,
-            base64.standard_b64encode(self._test.fuzzed_data)
-        )
-
-        self._test.test_data = "\n".join([
+        # prepare data for playback
+        test.data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
@@ -95,7 +82,7 @@ class ImageCorpusManager(corpman.CorpusManager):
             "      im1.src='%s'; // 2nd valid image" % valid_img2,
             "    }",
             "    else if(step_state==2){ // fuzzed image",
-            "      im1.src='%s';" % fuzzed_img,
+            "      im1.src='%s';" % self._to_data_url(test.raw_data, mime_type=mime_type),
             "    }",
             "    else if(step_state==3){ // force downscaler",
             "      im1.removeEventListener('load', handle_step, false);",
@@ -143,7 +130,6 @@ class ImageCorpusManager(corpman.CorpusManager):
             "  }",
             "</script>",
             "</body>",
-            "</html>"
-        ])
+            "</html>"])
 
-        self._gen_count += 1
+        return test

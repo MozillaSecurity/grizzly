@@ -2,37 +2,38 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""
-AvalancheCorpusManager is a CorpusManager that uses Avalanche to generate data
-and then embeds it in a document suitable for processing by a web browser.
-"""
+import avalanche
+import corpman
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-import os
-
-import avalanche
-import corpman
-
 class AvalancheCorpusManager(corpman.CorpusManager):
+    """
+    AvalancheCorpusManager is a CorpusManager that uses Avalanche to generate data
+    and then embeds it in a document suitable for processing by a web browser.
+    """
+
     key = "avalanche"
 
-    def _init_fuzzer(self, aggression):
-        self._load_template()
-        if self._is_replay:
-            raise RuntimeError("AvalancheCorpusManager does not support replay mode")
-        with open(self._test.template_name, "r") as gmr_file:
-            self._fuzzer = avalanche.Grammar(gmr_file)
+    def _init_fuzzer(self, _):
+        self._fuzzer = None
 
 
-    def generate(self, media_type=None, redirect_page="done", timeout=5000):
+    def _generate(self, template, redirect_page, mime_type=None):
+        timeout = 5000 # test case timeout
+        test = corpman.TestCase(template_file=template.file_name, file_ext="html")
+
         if not self._is_replay:
-            self._test.fuzzed_data = self._fuzzer.generate()
+            # init fuzzer if needed
+            if self._fuzzer is None:
+                with open(template.file_name, "r") as gmr_fp:
+                    self._fuzzer = avalanche.Grammar(gmr_fp)
+            test.raw_data = self._fuzzer.generate()
         else:
-            self._test.fuzzed_data = self._test.template_data
+            test.raw_data = template.get_data()
 
-        self._test.test_data = "\n".join([
+        test.data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
@@ -42,15 +43,15 @@ class AvalancheCorpusManager(corpman.CorpusManager):
             "  function done(){",
             "    clearTimeout(tmr);",
             "    document.body.bgColor='FEFFFE';",
+            "    //document.getElementById('test_body').innerHTML='<p>done</p>';",
             "    window.location='/%s';" % redirect_page,
             "  }",
             "  window.onload=set_duration;",
             "</script>",
             "</head>",
-            "<body>",
-            self._test.fuzzed_data,
+            "<body id='test_body'>",
+            test.raw_data,
             "</body>",
-            "</html>"
-        ])
+            "</html>"])
 
-        self._gen_count += 1
+        return test

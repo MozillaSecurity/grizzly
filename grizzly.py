@@ -19,9 +19,6 @@ Support for different browser can be added by the creation of a browser "puppet"
 module (see ffpuppet). TODO: Implement generic "puppet" support.
 """
 
-__author__ = "Tyson Smith"
-__credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
-
 import argparse
 import hashlib
 import os
@@ -37,6 +34,8 @@ import ffpuppet
 import sapphire
 import stack_hasher
 
+__author__ = "Tyson Smith"
+__credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 def capture_logs(log_file, ignore_stackless=False, results_path="results"):
     """
@@ -124,7 +123,7 @@ if __name__ == "__main__":
         "-a", "--aggression", default=0.001, type=float,
         help="0.001 == 1/1000 (default: %(default)s)")
     parser.add_argument(
-        "-c", "--cache", type=int, default=0,
+        "-c", "--cache", type=int, default=1,
         help="Maximum number of previous test cases to dump after crash (default: %(default)s)")
     parser.add_argument(
         "--ignore-timeouts", action="store_true",
@@ -169,6 +168,8 @@ if __name__ == "__main__":
         "--xvfb", action="store_true",
         help="Use xvfb (Linux only)")
     args = parser.parse_args()
+
+    args.cache = max(args.cache, 1) # test case cache must be at least one
 
     if not args.quiet:
         print("%s Starting Grizzly" % time.strftime("[%Y-%m-%d %H:%M:%S]"))
@@ -217,7 +218,7 @@ if __name__ == "__main__":
         while True:
             # create firefox puppet instance if needed
             if ffp is None or not ffp.is_running():
-                cache = [] # previously run tests
+                test_cases = [] # test cases (this should only be > 1 when cache is > 1)
                 log_offset = 0 # location in the log used for log scanning
                 iters_before_relaunch = args.relaunch # iterations to perform before relaunch
 
@@ -256,7 +257,11 @@ if __name__ == "__main__":
             current_iter += 1
 
             # generate test case
-            corp_man.generate(media_type=args.mime, redirect_page=serv.done_page)
+            test_cases.append(corp_man.generate(serv.done_page, mime_type=args.mime))
+
+            # manage test case cache size
+            if len(test_cases) > args.cache:
+                test_cases.pop(0)
 
             # print iteration status
             if not args.quiet:
@@ -265,11 +270,11 @@ if __name__ == "__main__":
                         current_iter,
                         corp_man.size(),
                         total_results,
-                        os.path.basename(corp_man.get_test_case_fname())
+                        os.path.basename(corp_man.get_active_file_name())
                     ))
                 else:
-                    if current_test != corp_man.get_test_case_fname():
-                        current_test = corp_man.get_test_case_fname()
+                    if current_test != corp_man.get_active_file_name():
+                        current_test = corp_man.get_active_file_name()
                         print("Now fuzzing: %s" % os.path.basename(current_test))
                     print("%s I%04d-R%03d " % (
                         time.strftime("[%Y-%m-%d %H:%M:%S]"),
@@ -281,7 +286,7 @@ if __name__ == "__main__":
             # if both the test case and the verification (done)
             # pages are served serve_testcase() returns true
             failure_detected = not serv.serve_testcase(
-                corp_man.get_test_case_data(),
+                test_cases[-1].data,
                 is_alive_cb=ffp.is_running
             )
 
@@ -317,7 +322,7 @@ if __name__ == "__main__":
             if failure_detected:
                 total_results += 1
                 if not args.quiet:
-                    print("Current input: %s" % corp_man.get_test_case_fname())
+                    print("Current input: %s" % corp_man.get_active_file_name())
                     print("Collecting logs...")
 
                 # wait for process to dump logs
@@ -330,14 +335,8 @@ if __name__ == "__main__":
 
                 # collect log
                 log_dir, file_prefix = capture_logs(browser_log)
-                corp_man.dump(log_dir, file_prefix)
-
-                if args.cache:
-                    output_name = os.path.join(log_dir, file_prefix)
-                    for prev_test in range(len(cache)):
-                        # save html test page
-                        with open(".".join(["%s_%d" % (output_name, prev_test), "html"]), "w") as fp:
-                            fp.write(cache[prev_test])
+                for test_number, test_case in enumerate(test_cases):
+                    test_case.dump(log_dir, "%s-%d" % (file_prefix, test_number))
 
             # trigger relaunch by closing the browser
             iters_before_relaunch -= 1
@@ -363,12 +362,6 @@ if __name__ == "__main__":
                 if not args.quiet:
                     print("Replay Complete")
                 break
-
-            # store test case if no crash was detected
-            if args.cache > 0:
-                cache.append(corp_man.get_test_case_data())
-                if len(cache) > args.cache:
-                    cache.pop(0)
 
 
     except KeyboardInterrupt:
