@@ -335,7 +335,7 @@ if __name__ == "__main__":
 
                 # collect log
                 log_dir, file_prefix = capture_logs(browser_log)
-                for test_number, test_case in enumerate(test_cases):
+                for test_number, test_case in enumerate(reversed(test_cases)):
                     test_case.dump(log_dir, "%s-%d" % (file_prefix, test_number))
 
             # trigger relaunch by closing the browser
