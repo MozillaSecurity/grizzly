@@ -160,8 +160,11 @@ if __name__ == "__main__":
                     if args.windbg:
                         print("Collecting debug information with WinDBG")
 
+                    args.memory = max(args.memory, 0)
                     if args.memory:
                         print("Memory limit is %dMBs" % args.memory)
+                        if args.memory < 2048:
+                            print("WARNING: A memory limit less than 2048MBs is not recommended")
 
                     if args.prefs:
                         print("Using prefs from %s" % os.path.abspath(args.prefs))
