@@ -53,6 +53,9 @@ if __name__ == "__main__":
         "-c", "--cache", type=int, default=1,
         help="Maximum number of previous test cases to dump after crash (default: %(default)s)")
     parser.add_argument(
+        "--fuzzmanager", action="store_true",
+        help="Report results to FuzzManager")
+    parser.add_argument(
         "--ignore-timeouts", action="store_true",
         help="Don't save the logs/results from a timeout")
     parser.add_argument(
@@ -97,6 +100,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     args.cache = max(args.cache, 1) # test case cache must be at least one
+
+    if args.fuzzmanager:
+        reporter.FuzzManagerReporter.sanity_check(args.binary)
 
     if not args.quiet:
         print("%s Starting Grizzly" % time.strftime("[%Y-%m-%d %H:%M:%S]"))
@@ -260,10 +266,15 @@ if __name__ == "__main__":
                 if not args.quiet and ffp.is_running():
                     print("Process is still running! Terminating.")
 
-                # close ffp and save log
-                result_reporter = reporter.FilesystemReporter()
-                ffp.close(result_reporter.log_file)
-                result_reporter.report(reversed(test_cases))
+                # close ffp and report results
+                if args.fuzzmanager:
+                    result_reporter = reporter.FuzzManagerReporter()
+                    ffp.close(result_reporter.log_file)
+                    result_reporter.report(reversed(test_cases), args.binary)
+                else:
+                    result_reporter = reporter.FilesystemReporter()
+                    ffp.close(result_reporter.log_file)
+                    result_reporter.report(reversed(test_cases))
 
             # trigger relaunch by closing the browser
             iters_before_relaunch -= 1
