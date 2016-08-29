@@ -21,15 +21,16 @@ class AvalancheCorpusManager(corpman.CorpusManager):
 
 
     def _generate(self, template, redirect_page, mime_type=None):
+        if self._is_replay:
+            raise RuntimeError("AvalancheCorpusManager does not support replay mode")
+
+        # init fuzzer if needed
+        if self._fuzzer is None:
+            with open(template.file_name, "r") as gmr_fp:
+                self._fuzzer = avalanche.Grammar(gmr_fp)
+
         timeout = 5000 # test case timeout
-        test = corpman.TestCase(template_file=template.file_name, file_ext="html")
-
-        if not self._is_replay:
-            # init fuzzer if needed
-            if self._fuzzer is None:
-                with open(template.file_name, "r") as gmr_fp:
-                    self._fuzzer = avalanche.Grammar(gmr_fp)
-
+        test = corpman.TestCase(template=template, file_ext="html")
         test.data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
@@ -47,7 +48,7 @@ class AvalancheCorpusManager(corpman.CorpusManager):
             "</script>",
             "</head>",
             "<body id='test_body'>",
-            template.get_data() if self._is_replay else self._fuzzer.generate(),
+            self._fuzzer.generate(),
             "</body>",
             "</html>"])
 

@@ -38,7 +38,7 @@ class ImageCorpusManager(corpman.CorpusManager):
 
     def _generate(self, template, redirect_page, mime_type=None):
         timeout = 5000 # test case timeout
-        test = corpman.TestCase(template_file=template.file_name)
+        test = corpman.TestCase(template=template)
 
         if self._is_replay:
             test.raw_data = template.get_data()

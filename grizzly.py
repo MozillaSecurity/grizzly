@@ -45,7 +45,7 @@ if __name__ == "__main__":
         help="Test case or directory containing test cases")
     parser.add_argument(
         "corpus_manager",
-        help="Supported corpus managers: %s" % ", ".join(corpman.managers))
+        help="Available corpus managers: %s" % ", ".join(sorted(corpman.managers)))
     parser.add_argument(
         "-a", "--aggression", default=0.001, type=float,
         help="0.001 == 1/1000 (default: %(default)s)")
