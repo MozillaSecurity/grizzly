@@ -1,8 +1,7 @@
-################################################################################
-# Name   : ALF Testcase Reducer
-# Author : Jesse Schwartzentruber & Tyson Smith
+#!/usr/bin/env python
+# coding=utf-8
 #
-# Copyright 2014 BlackBerry Limited
+# Portions Copyright 2014 BlackBerry Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,15 +14,30 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-################################################################################
+
+import argparse
 import logging
+import os
 import os.path
 import re
+import tempfile
+import time
 
+from ffpuppet import FFPuppet
+from stack_hasher import stack_from_text, stack_to_hash
+
+__author__ = "Jesse Schwartzentruber"
+__credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 _RE_HTML_PARTS = re.compile(r"""(?x) [<>{}&;"]|
                                      \s*[A-Za-z]+="|
                                      [\n\r]+""", re.MULTILINE)
+
+
+log = logging.getLogger("reduce")
+if len(logging.getLogger().handlers) == 0:
+    logging.basicConfig()
+logging.getLogger().setLevel(logging.INFO)
 
 
 def html_parts(mutation):
@@ -41,58 +55,213 @@ def html_parts(mutation):
     return lines
 
 
-reducers = {
+REDUCERS = {
     "line": (str.splitlines, "\n".join),
     "html": (html_parts, "".join),
     "byte": (lambda x: [c for c in x], "".join),
 }
 
 
-def add_reducer(name, splitter, joiner):
-    """
-    Add a new reducer.
-    - splitter takes a string and yields a list of parts
-    - joiner takes a list of parts and yields a string
-    - joiner(splitter(x)) == x should always be True
-    - projects wishing to register a custom reducer must do so when
-      imported
-    """
-    reducers[name] = (splitter, joiner)
+class ReduceRunner(object):
+
+    def __init__(self, binary, soft_asserts=False, use_valgrind=False, use_windbg=False, use_xvfb=False,
+                 launch_timeout=None, run_timeout=None, memory_limit=None, prefs_js=None):
+        self.use_valgrind = use_valgrind
+        self.use_windbg = use_windbg
+        self.use_xvfb = use_xvfb
+        self.binary = binary
+        self.launch_timeout = launch_timeout
+        self.run_timeout = run_timeout
+        self.memory_limit = memory_limit
+        self.prefs_js = prefs_js
+        self.soft_asserts = soft_asserts
+
+    def run(self, location, profile_timeouts=False):
+        log_fd, log_fn = tempfile.mkstemp(prefix="grzreduce", suffix=".txt")
+        os.close(log_fd)
+        ffp = FFPuppet(use_valgrind=self.use_valgrind,
+                       use_windbg=self.use_windbg,
+                       use_xvfb=self.use_xvfb)
+        try:
+            #pre_launch = time.time()
+            ffp.launch(self.binary,
+                       launch_timeout=self.launch_timeout,
+                       location=location,
+                       memory_limit=self.memory_limit,
+                       prefs_js=self.prefs_js)
+            post_launch = time.time()
+            return_code = ffp.wait(self.run_timeout)
+            post_wait = time.time()
+        finally:
+            ffp.close(log_fn)
+            with open(log_fn) as log_fp:
+                log_contents = log_fp.read()
+            os.unlink(log_fn)
+
+        if profile_timeouts:
+            #launch_time = post_launch - pre_launch
+            run_time = post_wait - post_launch
+            self.run_timeout = max(10, min(run_time * 2, self.run_timeout))
+
+        failure_detected = False
+        if (self.soft_asserts or self.use_valgrind) and return_code is None:
+            if self.soft_asserts and log_contents.find("###!!! ASSERTION:") != -1:
+                # detected non-crashing assertions
+                failure_detected = True
+            elif self.use_valgrind and re.search(r"==\d+==\s", log_contents):
+                # detected valgrind output in log
+                failure_detected = True
+        elif return_code is not None:
+            failure_detected = True
+
+        if failure_detected:
+            stack = stack_to_hash(stack_from_text(log_contents), major=True)
+            return stack
+
+        return None
 
 
-def _reduce(fuzzer, reducer, n_tries, mutation, mutation_path, result):
-    """
-    fuzzer is an alf.Fuzzer object with a run_subject method
-    reducer is a key into the reducers dict
-    n_tries is the number of times a testcase must crash before it is
-        considered ok. this is used to improve semi-reproducible
-        testcases.
-    mutation is the testcase data to be reduced (as a string)
-    mutation_path is the path the testcase should be written out to.
-    result is the alf.debug.FuzzResult object for comparison. crashes
-        must match this to be accepted. (fuzzers can override
-        'def resultmatch(self, orig, other)' method to tweak this.)
-    """
-    splitter, joiner = reducers[reducer]
-    if n_tries <= 0:
+def reduce_args():
+    parser = argparse.ArgumentParser(description="Grizzly reducer")
+    parser.add_argument(
+        "binary",
+        help="Firefox binary to execute")
+    parser.add_argument(
+        "testcase",
+        help="Testcase to reduce")
+    parser.add_argument(
+        "-m", "--memory", type=int,
+        help="Process memory limit in MBs (Requires psutil)")
+    parser.add_argument(
+        "-p", "--prefs",
+        help="prefs.js file to use")
+    parser.add_argument(
+        "--timeout", type=int, default=60,
+        help="Iteration timeout in seconds (default: %(default)s)")
+    parser.add_argument(
+        "--launch-timeout", type=int, default=300,
+        help="Number of seconds to wait for the browser to become " \
+             "responsive after launching. (default: %(default)s)")
+    parser.add_argument(
+        "-s", "--asserts", action="store_true",
+        help="Detect soft assertions")
+    parser.add_argument(
+        "--valgrind", action="store_true",
+        help="Use valgrind")
+    parser.add_argument(
+        "--windbg", action="store_true",
+        help="Collect crash log with WinDBG (Windows only)")
+    parser.add_argument(
+        "--xvfb", action="store_true",
+        help="Use xvfb (Linux only)")
+    parser.add_argument(
+        "--n-tries", type=int, default=1,
+        help="Number of times to try each reduction (can help with intermittent testcases) (default: %(default)d)")
+    parser.add_argument(
+        "-r", "--reducer", default="line",
+        help="Reducer(s) to use, available options are: %r (can be comma separated list for multiple) (default: %%(default)s)" % REDUCERS.keys())
+    parser.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="Show verbose debugging output")
+    args = parser.parse_args()
+    if "," in args.reducer:
+        args.reducer = args.reducer.split(",")
+    else:
+        args.reducer = [args.reducer]
+    if not args.reducer or not set(args.reducer).issubset(set(REDUCERS.keys())):
+        parser.error("Invalid reducer")
+    return args
+
+
+def reduce_main(args):
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    rnr = ReduceRunner(args.binary,
+                       soft_asserts=args.asserts,
+                       use_valgrind=args.valgrind,
+                       use_windbg=args.windbg,
+                       use_xvfb=args.xvfb,
+                       launch_timeout=args.launch_timeout,
+                       run_timeout=args.timeout,
+                       memory_limit=args.memory * 1024 * 1024 if args.memory is not None else None,
+                       prefs_js=args.prefs)
+    iters = 0
+    if args.n_tries <= 0:
         raise Exception("n_tries must be at least 1")
-    best = len(mutation)
-    bestfn = "_BEST".join(os.path.splitext(mutation_path))
-    gen = FeedbackIter(splitter(mutation), formatter=joiner)
-    for attempt in gen:
-        with open(mutation_path, "wb") as f:
-            f.write(attempt)
-        for _ in range(n_tries):
-            result_try = fuzzer.run_subject(mutation_path)
-            same_crash = fuzzer.resultmatch(result, result_try)
-            if not same_crash:
+    # get initial stack
+    log.info("Running %s for initial crash", args.testcase)
+    orig_stack = rnr.run("file://%s" % os.path.abspath(args.testcase), profile_timeouts=True)
+    if orig_stack is None:
+        raise RuntimeError("%s didn't crash" % args.testcase)
+    log.info("got crash: %s", orig_stack)
+    with open(args.testcase, "rb") as tc_fp:
+        testcase = tc_fp.read()
+    if "DDBEGIN" in testcase:
+        testcase = testcase.splitlines()
+        begin = end = None
+        for line_no, line in enumerate(testcase):
+            if begin is None and "DDBEGIN" in line:
+                begin = line_no
+            elif begin is not None and end is None and "DDEND" in line:
+                end = line_no
                 break
-        if same_crash and len(attempt) < best:
-            best = len(attempt)
-            with open(bestfn, "wb") as f:
-                f.write(attempt)
-        gen.keep(not same_crash)
-    return gen.getvalue()
+        else:
+            raise RuntimeError("DDBEGIN found without matching DDEND")
+        log.debug("Found DDBEGIN on line %d and DDEND on line %d", begin + 1, end + 1)
+        prefix, testcase, suffix = ["\n".join(x) for x in (testcase[:begin+1] + [""],
+                                                           testcase[begin+1:end],
+                                                           [""] + testcase[end:])]
+    else:
+        log.debug("No DDBEGIN found, reducing entire file")
+        prefix = suffix = ""
+    orig = best = len(testcase)
+    log.info("original size is %d", orig)
+    best_fn = "_BEST".join(os.path.splitext(args.testcase))
+    try_fn = "_TRY".join(os.path.splitext(os.path.abspath(args.testcase)))
+    try_url = "file://%s" % try_fn
+    for reducer in args.reducer:
+        log.info("using reducer: %s", reducer)
+        splitter, joiner = REDUCERS[reducer]
+        gen = FeedbackIter(splitter(testcase), formatter=joiner)
+        for attempt in gen:
+            iters += 1
+            with open(try_fn, "wb") as try_fp:
+                try_fp.write(prefix)
+                try_fp.write(attempt)
+                try_fp.write(suffix)
+            for _ in range(args.n_tries):
+                result_try = rnr.run(try_url)
+                same_crash = (orig_stack == result_try)
+                if not same_crash:
+                    break
+            if same_crash:
+                assert len(attempt) < best
+                best = len(attempt)
+                with open(best_fn, "wb") as best_fp:
+                    best_fp.write(prefix)
+                    best_fp.write(attempt)
+                    best_fp.write(suffix)
+                log.info("I%03d - reduced ok to %d", iters, best)
+            elif result_try is not None:
+                log.info("I%03d - crashed but got %s", iters, result_try)
+            else:
+                log.info("I%03d - no crash", iters)
+            gen.keep(not same_crash)
+        testcase = gen.getvalue()
+    os.unlink(try_fn)
+    reduced_fn = "_REDUCED".join(os.path.splitext(args.testcase))
+    reduce_clobber = 0
+    while os.path.isfile(reduced_fn):
+        reduce_clobber += 1
+        reduced_fn = ("_REDUCED(%d)" % reduce_clobber).join(os.path.splitext(args.testcase))
+    with open(reduced_fn, "wb") as reduced_fp:
+        reduced_fp.write(prefix)
+        reduced_fp.write(testcase)
+        reduced_fp.write(suffix)
+    os.unlink(best_fn)
+    log.info("%s was %d bytes", args.testcase, orig)
+    log.info("%s is %d bytes", reduced_fn, best)
+    log.info("reduction took %d iterations", iters)
 
 
 class FeedbackIter(object):
@@ -144,23 +313,22 @@ class FeedbackIter(object):
                 else:
                     lens += 1
         self.data = data
-        logging.debug("chunk size: ~%d (len==%d)", self.size//lens, self.size)
+        log.debug("chunk size: ~%d (len==%d)", self.size//lens, self.size)
 
     def keep(self, yes):
         if self.tried is None:
             raise Exception("feedback before any value was generated")
         if yes:
             self.i += 1
-            logging.debug("keeping chunk %d/%d (len==%d)", self.i, len(self.data), self.size)
+            log.debug("keeping chunk %d/%d (len==%d)", self.i, len(self.data), self.size)
         else:
             self.size -= len(self.data[self.i])
             self.data = self.tried
             #self.found_something = True # setting this to True causes the reduce loop to keep
                                          # going at chunk=1 until nothing more can be eliminated
-            logging.debug("eliminated chunk %d/%d (len==%d)",
-                          self.i + 1, len(self.data) + 1, self.size)
+            log.debug("eliminated chunk %d/%d (len==%d)", self.i + 1, len(self.data) + 1, self.size)
             if len(self.data) == 1:
-                logging.debug("only one chunk left, assuming it is needed")
+                log.debug("only one chunk left, assuming it is needed")
                 self._reset()
         self.tried = None
 
@@ -190,3 +358,6 @@ class FeedbackIter(object):
             raise Exception("no feedback received on last value generated")
         return self.formatter(sum(self.data, []))
 
+
+if __name__ == '__main__':
+    reduce_main(reduce_args())
