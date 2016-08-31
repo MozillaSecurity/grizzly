@@ -21,9 +21,7 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 
 import argparse
 import os
-import random
 import re
-import socket
 import time
 
 import corpman
@@ -130,18 +128,7 @@ if __name__ == "__main__":
             print("Running in FUZZING mode")
 
     # launch http server used to serve test cases
-    serv = None
-    while serv is None:
-        # find an unused port and avoid blocked ports
-        # see: dxr.mozilla.org/mozilla-central/source/netwerk/base/nsIOService.cpp
-        listening_port = random.randint(0x2000, 0xFFFF)
-        try:
-            serv = sapphire.Sapphire(port=listening_port, timeout=args.timeout)
-        except socket.error as e:
-            if e.errno == 98: # Address already in use
-                serv = None
-                continue
-            raise e
+    serv = sapphire.Sapphire(timeout=args.timeout)
 
     try:
         current_test = None # template/test case currently being fuzzed
@@ -187,7 +174,7 @@ if __name__ == "__main__":
                 ffp.launch(
                     args.binary,
                     launch_timeout=args.launch_timeout,
-                    location="http://127.0.0.1:%d/%s" % (listening_port, serv.landing_page),
+                    location="http://127.0.0.1:%d/%s" % (serv.get_port(), serv.landing_page),
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs)
 
