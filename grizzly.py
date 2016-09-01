@@ -21,7 +21,6 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 
 import argparse
 import os
-import re
 import time
 
 import corpman
@@ -84,7 +83,7 @@ if __name__ == "__main__":
         "-s", "--asserts", action="store_true",
         help="Detect soft assertions")
     parser.add_argument(
-        "--timeout", type=int, default=60,
+        "-t", "--timeout", type=int, default=60,
         help="Iteration timeout in seconds (default: %(default)s)")
     parser.add_argument(
         "--valgrind", action="store_true",
@@ -166,11 +165,16 @@ if __name__ == "__main__":
 
                     print("%s Launching FFPuppet" % time.strftime("[%Y-%m-%d %H:%M:%S]"))
 
-                # create and launch ffpuppet
+                # create FFPuppet object
                 ffp = ffpuppet.FFPuppet(
                     use_valgrind=args.valgrind,
                     use_windbg=args.windbg,
                     use_xvfb=args.xvfb)
+
+                if args.asserts:
+                    ffp.add_abort_token("###!!! ASSERTION:")
+
+                # launch FFPuppet
                 ffp.launch(
                     args.binary,
                     launch_timeout=args.launch_timeout,
@@ -194,8 +198,7 @@ if __name__ == "__main__":
                         current_iter,
                         corp_man.size(),
                         total_results,
-                        os.path.basename(corp_man.get_active_file_name())
-                    ))
+                        os.path.basename(corp_man.get_active_file_name())))
                 else:
                     if current_test != corp_man.get_active_file_name():
                         current_test = corp_man.get_active_file_name()
@@ -203,75 +206,54 @@ if __name__ == "__main__":
                     print("%s I%04d-R%03d " % (
                         time.strftime("[%Y-%m-%d %H:%M:%S]"),
                         current_iter,
-                        total_results
-                    ))
+                        total_results))
 
             # use Sapphire to serve the test case and
             # if both the test case and the verification (done)
             # pages are served serve_testcase() returns true
             failure_detected = not serv.serve_testcase(
                 test_cases[-1].data,
-                is_alive_cb=ffp.is_running
-            )
+                is_alive_cb=ffp.is_running)
 
-            # detect error/failure messages in logs
-            if not failure_detected and (args.asserts or args.valgrind) and ffp.is_running():
-                log_contents = ffp.read_log(log_offset)
-                if args.asserts and log_contents.find("###!!! ASSERTION:") != -1:
-                    # detected non-crashing assertions
-                    failure_detected = True
-                    if not args.quiet:
-                        print("Soft assertion detected")
-                elif args.valgrind and re.search(r"==\d+==\s", log_contents):
-                    # detected valgrind output in log
-                    failure_detected = True
-                    if not args.quiet:
-                        print("Valgrind detected issues")
-                else:
-                    log_offset += len(log_contents)
-            elif not ffp.is_running():
-                failure_detected = True
+            # handle ignored timeouts
+            if failure_detected and ffp.is_running() and args.ignore_timeouts:
+                ffp.close()
+                ffp.clean_up()
+                failure_detected = False
                 if not args.quiet:
-                    print("Potential crash detected")
-            elif failure_detected and not args.quiet and ffp.is_running():
-                if not args.quiet:
-                    print("Timeout detected")
-                if args.ignore_timeouts:
-                    if not args.quiet:
-                        print("Timeout ignored")
-                    ffp.close()
-                    failure_detected = False
+                    print("Timeout ignored")
 
-            # handle crashes or failures if detected
-            if failure_detected:
+            # handle issues if detected
+            elif failure_detected:
                 total_results += 1
                 if not args.quiet:
+                    print("Potential issue detected")
                     print("Current input: %s" % corp_man.get_active_file_name())
                     print("Collecting logs...")
 
-                # wait for process to dump logs
-                if not args.quiet and ffp.is_running():
-                    print("Process is still running! Terminating.")
-
                 # close ffp and report results
+                ffp.close()
                 if args.fuzzmanager:
                     result_reporter = reporter.FuzzManagerReporter()
-                    ffp.close(result_reporter.log_file)
+                    ffp.save_log(result_reporter.log_file)
                     result_reporter.report(reversed(test_cases), args.binary)
                 else:
                     result_reporter = reporter.FilesystemReporter()
-                    ffp.close(result_reporter.log_file)
+                    ffp.save_log(result_reporter.log_file)
                     result_reporter.report(reversed(test_cases))
+                ffp.clean_up()
 
             # trigger relaunch by closing the browser
             iters_before_relaunch -= 1
-            if iters_before_relaunch <= 0 and ffp is not None:
+            if iters_before_relaunch <= 0 and ffp.is_running():
                 if not args.quiet:
                     print("Triggering FFP relaunch")
 
+                ffp.close()
                 result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
-                ffp.close(result_reporter.log_file)
+                ffp.save_log(result_reporter.log_file)
                 result_reporter.report(reversed(test_cases))
+                ffp.clean_up()
 
             # all test cases have been replayed
             if args.replay and corp_man.size() == 0:
@@ -289,6 +271,8 @@ if __name__ == "__main__":
 
         if ffp is not None:
             # close ffp and save log
+            ffp.close()
             result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
-            ffp.close(result_reporter.log_file)
+            ffp.save_log(result_reporter.log_file)
             result_reporter.report(reversed(test_cases))
+            ffp.clean_up()
