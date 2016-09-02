@@ -230,9 +230,7 @@ def reduce_main(args):
         for attempt in gen:
             iters += 1
             with open(try_fn, "wb") as try_fp:
-                try_fp.write(prefix)
-                try_fp.write(attempt)
-                try_fp.write(suffix)
+                try_fp.writelines([prefix, attempt, suffix])
             for _ in range(args.n_tries):
                 result_try = rnr.run(try_url)
                 same_crash = (orig_stack == result_try)
@@ -242,9 +240,7 @@ def reduce_main(args):
                 assert len(attempt) < best
                 best = len(attempt)
                 with open(best_fn, "wb") as best_fp:
-                    best_fp.write(prefix)
-                    best_fp.write(attempt)
-                    best_fp.write(suffix)
+                    best_fp.writelines([prefix, attempt, suffix])
                 log.info("I%03d - reduced ok to %d", iters, best)
             elif result_try is not None:
                 log.info("I%03d - crashed but got %s", iters, result_try)
@@ -259,9 +255,7 @@ def reduce_main(args):
         reduce_clobber += 1
         reduced_fn = ("_REDUCED(%d)" % reduce_clobber).join(os.path.splitext(args.testcase))
     with open(reduced_fn, "wb") as reduced_fp:
-        reduced_fp.write(prefix)
-        reduced_fp.write(testcase)
-        reduced_fp.write(suffix)
+        reduced_fp.writelines([prefix, testcase, suffix])
     os.unlink(best_fn)
     log.info("%s was %d bytes", args.testcase, orig)
     log.info("%s is %d bytes", reduced_fn, best)
