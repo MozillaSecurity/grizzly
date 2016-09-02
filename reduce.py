@@ -172,8 +172,14 @@ def reduce_args():
 
 
 def reduce_main(args):
+
+    if len(logging.getLogger().handlers) == 0:
+        logging.basicConfig()
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.INFO)
+
     rnr = ReduceRunner(args.binary,
                        soft_asserts=args.asserts,
                        use_valgrind=args.valgrind,
