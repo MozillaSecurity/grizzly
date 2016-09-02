@@ -20,6 +20,7 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 """
 
 import argparse
+import logging
 import os
 import time
 
@@ -32,7 +33,14 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
+log = logging.getLogger("grizzly") # pylint: disable=invalid-name
+
+
 if __name__ == "__main__":
+
+    if len(logging.getLogger().handlers) == 0:
+        logging.basicConfig()
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "binary",
@@ -96,13 +104,15 @@ if __name__ == "__main__":
         help="Use xvfb (Linux only)")
     args = parser.parse_args()
 
+    if not args.quiet:
+        logging.getLogger().setLevel(logging.INFO)
+
     args.cache = max(args.cache, 1) # test case cache must be at least one
 
     if args.fuzzmanager:
         reporter.FuzzManagerReporter.sanity_check(args.binary)
 
-    if not args.quiet:
-        print("%s Starting Grizzly" % time.strftime("[%Y-%m-%d %H:%M:%S]"))
+    log.info("%s Starting Grizzly", time.strftime("[%Y-%m-%d %H:%M:%S]"))
 
     current_iter = 0
     ffp = None
@@ -119,12 +129,11 @@ if __name__ == "__main__":
         rotate=args.rotate
     )
 
-    if not args.quiet:
-        print("Found %d test cases" % (corp_man.size()))
-        if args.replay:
-            print("Running in REPLAY mode")
-        else:
-            print("Running in FUZZING mode")
+    log.info("Found %d test cases", corp_man.size())
+    if args.replay:
+        log.info("Running in REPLAY mode")
+    else:
+        log.info("Running in FUZZING mode")
 
     # launch http server used to serve test cases
     serv = sapphire.Sapphire(timeout=args.timeout)
@@ -142,28 +151,27 @@ if __name__ == "__main__":
                 log_offset = 0 # location in the log used for log scanning
                 iters_before_relaunch = args.relaunch # iterations to perform before relaunch
 
-                if not args.quiet:
-                    if args.xvfb:
-                        print("Running with Xvfb")
+                if args.xvfb:
+                    log.info("Running with Xvfb")
 
-                    if args.valgrind:
-                        print("Running with Valgrind. This will be SLOW!")
+                if args.valgrind:
+                    log.info("Running with Valgrind. This will be SLOW!")
 
-                    if args.windbg:
-                        print("Collecting debug information with WinDBG")
+                if args.windbg:
+                    log.info("Collecting debug information with WinDBG")
 
-                    args.memory = max(args.memory, 0)
-                    if args.memory:
-                        print("Memory limit is %dMBs" % args.memory)
-                        if args.memory < 2048:
-                            print("WARNING: A memory limit less than 2048MBs is not recommended")
+                args.memory = max(args.memory, 0)
+                if args.memory:
+                    log.info("Memory limit is %dMBs", args.memory)
+                    if args.memory < 2048:
+                        log.warning("A memory limit less than 2048MBs is not recommended")
 
-                    if args.prefs:
-                        print("Using prefs from %s" % os.path.abspath(args.prefs))
-                    else:
-                        print("WARNING: Default prefs used, prefs.js file not specified")
+                if args.prefs:
+                    log.info("Using prefs from %s", os.path.abspath(args.prefs))
+                else:
+                    log.warning("Default prefs used, prefs.js file not specified")
 
-                    print("%s Launching FFPuppet" % time.strftime("[%Y-%m-%d %H:%M:%S]"))
+                log.info("%s Launching FFPuppet", time.strftime("[%Y-%m-%d %H:%M:%S]"))
 
                 # create FFPuppet object
                 ffp = ffpuppet.FFPuppet(
@@ -192,21 +200,20 @@ if __name__ == "__main__":
                 test_cases.pop(0)
 
             # print iteration status
-            if not args.quiet:
-                if args.replay:
-                    print("[I%04d-L%02d-R%03d] %s" % (
-                        current_iter,
-                        corp_man.size(),
-                        total_results,
-                        os.path.basename(corp_man.get_active_file_name())))
-                else:
-                    if current_test != corp_man.get_active_file_name():
-                        current_test = corp_man.get_active_file_name()
-                        print("Now fuzzing: %s" % os.path.basename(current_test))
-                    print("%s I%04d-R%03d " % (
-                        time.strftime("[%Y-%m-%d %H:%M:%S]"),
-                        current_iter,
-                        total_results))
+            if args.replay:
+                log.info("[I%04d-L%02d-R%03d] %s",
+                         current_iter,
+                         corp_man.size(),
+                         total_results,
+                         os.path.basename(corp_man.get_active_file_name()))
+            else:
+                if current_test != corp_man.get_active_file_name():
+                    current_test = corp_man.get_active_file_name()
+                    log.info("Now fuzzing: %s", os.path.basename(current_test))
+                log.info("%s I%04d-R%03d ",
+                         time.strftime("[%Y-%m-%d %H:%M:%S]"),
+                         current_iter,
+                         total_results)
 
             # use Sapphire to serve the test case and
             # if both the test case and the verification (done)
@@ -220,16 +227,14 @@ if __name__ == "__main__":
                 ffp.close()
                 ffp.clean_up()
                 failure_detected = False
-                if not args.quiet:
-                    print("Timeout ignored")
+                log.info("Timeout ignored")
 
             # handle issues if detected
             elif failure_detected:
                 total_results += 1
-                if not args.quiet:
-                    print("Potential issue detected")
-                    print("Current input: %s" % corp_man.get_active_file_name())
-                    print("Collecting logs...")
+                log.info("Potential issue detected")
+                log.info("Current input: %s", corp_man.get_active_file_name())
+                log.info("Collecting logs...")
 
                 # close ffp and report results
                 ffp.close()
@@ -246,8 +251,7 @@ if __name__ == "__main__":
             # trigger relaunch by closing the browser
             iters_before_relaunch -= 1
             if iters_before_relaunch <= 0 and ffp.is_running():
-                if not args.quiet:
-                    print("Triggering FFP relaunch")
+                log.info("Triggering FFP relaunch")
 
                 ffp.close()
                 result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
@@ -257,15 +261,14 @@ if __name__ == "__main__":
 
             # all test cases have been replayed
             if args.replay and corp_man.size() == 0:
-                if not args.quiet:
-                    print("Replay Complete")
+                log.info("Replay Complete")
                 break
 
     except KeyboardInterrupt:
-        print("Completed %d iterations" % current_iter)
+        log.warning("Completed %d iterations", current_iter)
 
     finally:
-        print("Shutting down...")
+        log.warning("Shutting down...")
         if serv is not None:
             serv.close()
 

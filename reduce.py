@@ -34,10 +34,7 @@ _RE_HTML_PARTS = re.compile(r"""(?x) [<>{}&;"]|
                                      [\n\r]+""", re.MULTILINE)
 
 
-log = logging.getLogger("reduce")
-if len(logging.getLogger().handlers) == 0:
-    logging.basicConfig()
-logging.getLogger().setLevel(logging.INFO)
+log = logging.getLogger("reduce") # pylint: disable=invalid-name
 
 
 def html_parts(mutation):

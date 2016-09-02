@@ -6,8 +6,12 @@ __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber"]
 
 
-import logging as log
+import logging
 from corpman import Template, TestCase, CorpusManager
+
+
+log = logging.getLogger("grizzly") # pylint: disable=invalid-name
+
 
 def _find_managers():
     import importlib
@@ -20,8 +24,8 @@ def _find_managers():
         if sub.endswith(".py") and sub not in {'__init__.py', 'corpman.py'}:
             try:
                 lib = importlib.import_module('.%s' % os.path.splitext(sub)[0], 'corpman')
-            except ImportError as e:
-                log.warn('ImportError for %s: %s', os.path.splitext(sub)[0], e)
+            except ImportError:
+                log.warning('ImportError for %s', os.path.splitext(sub)[0], exc_info=True)
                 continue
             for clsname in dir(lib):
                 cls = getattr(lib, clsname)
@@ -30,7 +34,10 @@ def _find_managers():
                     if cls.key.lower() != cls.key:
                         raise RuntimeError('Key for %s should be lowercase, not "%s"', cls.__name__, cls.key)
                     if cls.key in known:
-                        log.warn('The name "%s" already in use by %s, skipping %s', cls.key, known[cls.key].__name__, cls.__name__)
+                        log.warning('The name "%s" already in use by %s, skipping %s',
+                                    cls.key,
+                                    known[cls.key].__name__,
+                                    cls.__name__)
                         continue
                     globals()[clsname] = cls
                     known[cls.key] = cls
@@ -38,5 +45,5 @@ def _find_managers():
                     log.debug('-> nope, %s is a %s', cls, type(cls))
     return known
 
-managers = _find_managers()
 
+managers = _find_managers()
