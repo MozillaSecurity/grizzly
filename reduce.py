@@ -156,7 +156,8 @@ def reduce_args():
         help="Number of times to try each reduction (can help with intermittent testcases) (default: %(default)d)")
     parser.add_argument(
         "-r", "--reducer", default="line",
-        help="Reducer(s) to use, available options are: %r (can be comma separated list for multiple) (default: %%(default)s)" % REDUCERS.keys())
+        help="Reducer(s) to use, available options are: %r (can be comma separated list for multiple) "
+             "(default: %%(default)s)" % REDUCERS.keys())
     parser.add_argument(
         "-v", "--verbose", action="store_true",
         help="Show verbose debugging output")
@@ -284,7 +285,7 @@ class FeedbackIter(object):
         return self
 
     def _reset(self):
-        # pylint: disable=W0201
+        # pylint: disable=attribute-defined-outside-init
         self.i = 0
         self.found_something = False
         self.size = 0
