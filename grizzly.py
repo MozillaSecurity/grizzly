@@ -22,7 +22,6 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 import argparse
 import logging
 import os
-import time
 
 import corpman
 import ffpuppet
@@ -37,10 +36,6 @@ log = logging.getLogger("grizzly") # pylint: disable=invalid-name
 
 
 if __name__ == "__main__":
-
-    if len(logging.getLogger().handlers) == 0:
-        logging.basicConfig()
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "binary",
@@ -79,6 +74,9 @@ if __name__ == "__main__":
         "-q", "--quiet", action="store_true",
         help="Output is minimal")
     parser.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="Output is less minimal")
+    parser.add_argument(
         "--replay", action="store_true",
         help="Replay do not fuzz the test cases")
     parser.add_argument(
@@ -104,15 +102,21 @@ if __name__ == "__main__":
         help="Use xvfb (Linux only)")
     args = parser.parse_args()
 
-    if not args.quiet:
-        logging.getLogger().setLevel(logging.INFO)
+    log_level = logging.INFO
+    log_fmt = "[%(asctime)s] %(message)s"
+    if args.verbose:
+        log_level = logging.DEBUG
+        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
+    elif args.quiet:
+        log_level = logging.WARNING
+    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
     args.cache = max(args.cache, 1) # test case cache must be at least one
 
     if args.fuzzmanager:
         reporter.FuzzManagerReporter.sanity_check(args.binary)
 
-    log.info("%s Starting Grizzly", time.strftime("[%Y-%m-%d %H:%M:%S]"))
+    log.info("Starting Grizzly")
 
     current_iter = 0
     ffp = None
@@ -171,7 +175,7 @@ if __name__ == "__main__":
                 else:
                     log.warning("Default prefs used, prefs.js file not specified")
 
-                log.info("%s Launching FFPuppet", time.strftime("[%Y-%m-%d %H:%M:%S]"))
+                log.info("Launching FFPuppet")
 
                 # create FFPuppet object
                 ffp = ffpuppet.FFPuppet(
@@ -210,8 +214,7 @@ if __name__ == "__main__":
                 if current_test != corp_man.get_active_file_name():
                     current_test = corp_man.get_active_file_name()
                     log.info("Now fuzzing: %s", os.path.basename(current_test))
-                log.info("%s I%04d-R%03d ",
-                         time.strftime("[%Y-%m-%d %H:%M:%S]"),
+                log.info("I%04d-R%03d ",
                          current_iter,
                          total_results)
 
