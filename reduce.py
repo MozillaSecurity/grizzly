@@ -20,7 +20,6 @@ import logging
 import os
 import os.path
 import re
-import tempfile
 import time
 
 from ffpuppet import FFPuppet
@@ -59,53 +58,31 @@ REDUCERS = {
 }
 
 
-class ReduceRunner(object):
+class PuppetWrapper(FFPuppet):
 
-    def __init__(self, binary, soft_asserts=False, use_valgrind=False, use_windbg=False, use_xvfb=False,
-                 launch_timeout=None, run_timeout=None, memory_limit=None, prefs_js=None):
-        self.use_valgrind = use_valgrind
-        self.use_windbg = use_windbg
-        self.use_xvfb = use_xvfb
-        self.binary = binary
-        self.launch_timeout = launch_timeout
-        self.run_timeout = run_timeout
-        self.memory_limit = memory_limit
-        self.prefs_js = prefs_js
-        self.soft_asserts = soft_asserts
+    def __init__(self, run_timeout=None, **kwds):
+        FFPuppet.__init__(self, **kwds)
+        assert not hasattr(self, '_run_timeout')
+        self._run_timeout = run_timeout
 
-    def run(self, location, profile_timeouts=False):
-        log_fd, log_fn = tempfile.mkstemp(prefix="grzreduce", suffix=".txt")
-        os.close(log_fd)
-        ffp = FFPuppet(use_valgrind=self.use_valgrind,
-                       use_windbg=self.use_windbg,
-                       use_xvfb=self.use_xvfb)
-        try:
-            #pre_launch = time.time()
-            ffp.launch(self.binary,
-                       launch_timeout=self.launch_timeout,
-                       location=location,
-                       memory_limit=self.memory_limit,
-                       prefs_js=self.prefs_js)
-            post_launch = time.time()
-            return_code = ffp.wait(self.run_timeout)
-            post_wait = time.time()
-        finally:
-            ffp.close(log_fn)
-            with open(log_fn) as log_fp:
-                log_contents = log_fp.read()
-            os.unlink(log_fn)
+    def wait_get_hash(self, adjust_timeout=False, detect_soft_asserts=False):
+        start = time.time()
+        return_code = self.wait(self._run_timeout)
+        run_time = time.time() - start
+        if adjust_timeout:
+            self._run_timeout = max(10, min(run_time * 2, self._run_timeout))
 
-        if profile_timeouts:
-            #launch_time = post_launch - pre_launch
-            run_time = post_wait - post_launch
-            self.run_timeout = max(10, min(run_time * 2, self.run_timeout))
+        self.close()
+        with open(self._log.name) as log_fp:
+            log_contents = log_fp.read()
+        self.clean_up()
 
         failure_detected = False
-        if (self.soft_asserts or self.use_valgrind) and return_code is None:
-            if self.soft_asserts and log_contents.find("###!!! ASSERTION:") != -1:
+        if (detect_soft_asserts or self._use_valgrind) and return_code is None:
+            if detect_soft_asserts and log_contents.find("###!!! ASSERTION:") != -1:
                 # detected non-crashing assertions
                 failure_detected = True
-            elif self.use_valgrind and re.search(r"==\d+==\s", log_contents):
+            elif self._use_valgrind and re.search(r"==\d+==\s", log_contents):
                 # detected valgrind output in log
                 failure_detected = True
         elif return_code is not None:
@@ -168,6 +145,10 @@ def reduce_args():
         args.reducer = [args.reducer]
     if not args.reducer or not set(args.reducer).issubset(set(REDUCERS.keys())):
         parser.error("Invalid reducer")
+    if args.n_tries <= 0:
+        parser.error("n_tries must be at least 1")
+    if args.memory is not None:
+        args.memory = args.memory * 1024 * 1024
     return args
 
 
@@ -180,75 +161,85 @@ def reduce_main(args):
     else:
         logging.getLogger().setLevel(logging.INFO)
 
-    rnr = ReduceRunner(args.binary,
-                       soft_asserts=args.asserts,
-                       use_valgrind=args.valgrind,
-                       use_windbg=args.windbg,
-                       use_xvfb=args.xvfb,
-                       launch_timeout=args.launch_timeout,
-                       run_timeout=args.timeout,
-                       memory_limit=args.memory * 1024 * 1024 if args.memory is not None else None,
-                       prefs_js=args.prefs)
-    iters = 0
-    if args.n_tries <= 0:
-        raise Exception("n_tries must be at least 1")
-    # get initial stack
-    log.info("Running %s for initial crash", args.testcase)
-    orig_stack = rnr.run("file://%s" % os.path.abspath(args.testcase), profile_timeouts=True)
-    if orig_stack is None:
-        raise RuntimeError("%s didn't crash" % args.testcase)
-    log.info("got crash: %s", orig_stack)
-    with open(args.testcase, "rb") as tc_fp:
-        testcase = tc_fp.read()
-    if "DDBEGIN" in testcase:
-        testcase = testcase.splitlines()
-        begin = end = None
-        for line_no, line in enumerate(testcase):
-            if begin is None and "DDBEGIN" in line:
-                begin = line_no
-            elif begin is not None and end is None and "DDEND" in line:
-                end = line_no
-                break
-        else:
-            raise RuntimeError("DDBEGIN found without matching DDEND")
-        log.debug("Found DDBEGIN on line %d and DDEND on line %d", begin + 1, end + 1)
-        prefix, testcase, suffix = ["\n".join(x) for x in (testcase[:begin+1] + [""],
-                                                           testcase[begin+1:end],
-                                                           [""] + testcase[end:])]
-    else:
-        log.debug("No DDBEGIN found, reducing entire file")
-        prefix = suffix = ""
-    orig = best = len(testcase)
-    log.info("original size is %d", orig)
-    best_fn = "_BEST".join(os.path.splitext(args.testcase))
-    try_fn = "_TRY".join(os.path.splitext(os.path.abspath(args.testcase)))
-    try_url = "file://%s" % try_fn
-    for reducer in args.reducer:
-        log.info("using reducer: %s", reducer)
-        splitter, joiner = REDUCERS[reducer]
-        gen = FeedbackIter(splitter(testcase), formatter=joiner)
-        for attempt in gen:
-            iters += 1
-            with open(try_fn, "wb") as try_fp:
-                try_fp.writelines([prefix, attempt, suffix])
-            for _ in range(args.n_tries):
-                result_try = rnr.run(try_url)
-                same_crash = (orig_stack == result_try)
-                if not same_crash:
+    ffp = PuppetWrapper(
+        use_valgrind=args.valgrind,
+        use_windbg=args.windbg,
+        use_xvfb=args.xvfb,
+        run_timeout=args.timeout)
+    try:
+        iters = 0
+        # get initial stack
+        log.info("Running %s for initial crash", args.testcase)
+        ffp.launch(
+            args.binary,
+            location="file://%s" % os.path.abspath(args.testcase),
+            launch_timeout=args.launch_timeout,
+            memory_limit=args.memory,
+            prefs_js=args.prefs)
+        orig_stack = ffp.wait_get_hash(adjust_timeout=True, detect_soft_asserts=args.asserts)
+        if orig_stack is None:
+            raise RuntimeError("%s didn't crash" % args.testcase)
+        log.info("got crash: %s", orig_stack)
+        with open(args.testcase, "rb") as tc_fp:
+            testcase = tc_fp.read()
+        if "DDBEGIN" in testcase:
+            testcase = testcase.splitlines()
+            begin = end = None
+            for line_no, line in enumerate(testcase):
+                if begin is None and "DDBEGIN" in line:
+                    begin = line_no
+                elif begin is not None and end is None and "DDEND" in line:
+                    end = line_no
                     break
-            if same_crash:
-                assert len(attempt) < best
-                best = len(attempt)
-                with open(best_fn, "wb") as best_fp:
-                    best_fp.writelines([prefix, attempt, suffix])
-                log.info("I%03d - reduced ok to %d", iters, best)
-            elif result_try is not None:
-                log.info("I%03d - crashed but got %s", iters, result_try)
             else:
-                log.info("I%03d - no crash", iters)
-            gen.keep(not same_crash)
-        testcase = gen.getvalue()
-    os.unlink(try_fn)
+                raise RuntimeError("DDBEGIN found without matching DDEND")
+            log.debug("Found DDBEGIN on line %d and DDEND on line %d", begin + 1, end + 1)
+            prefix, testcase, suffix = ["\n".join(x) for x in (testcase[:begin+1] + [""],
+                                                               testcase[begin+1:end],
+                                                               [""] + testcase[end:])]
+        else:
+            log.debug("No DDBEGIN found, reducing entire file")
+            prefix = suffix = ""
+        orig = best = len(testcase)
+        log.info("original size is %d", orig)
+        best_fn = "_BEST".join(os.path.splitext(args.testcase))
+        try_fn = "_TRY".join(os.path.splitext(os.path.abspath(args.testcase)))
+        try_url = "file://%s" % try_fn
+        for reducer in args.reducer:
+            log.info("using reducer: %s", reducer)
+            splitter, joiner = REDUCERS[reducer]
+            gen = FeedbackIter(splitter(testcase), formatter=joiner)
+            for attempt in gen:
+                iters += 1
+                with open(try_fn, "wb") as try_fp:
+                    try_fp.writelines([prefix, attempt, suffix])
+                for _ in range(args.n_tries):
+                    ffp.launch(
+                        args.binary,
+                        location=try_url,
+                        launch_timeout=args.launch_timeout,
+                        memory_limit=args.memory,
+                        prefs_js=args.prefs)
+                    result_try = ffp.wait_get_hash(detect_soft_asserts=args.asserts)
+                    same_crash = (orig_stack == result_try)
+                    if not same_crash:
+                        break
+                if same_crash:
+                    assert len(attempt) < best
+                    best = len(attempt)
+                    with open(best_fn, "wb") as best_fp:
+                        best_fp.writelines([prefix, attempt, suffix])
+                    log.info("I%03d - reduced ok to %d", iters, best)
+                elif result_try is not None:
+                    log.info("I%03d - crashed but got %s", iters, result_try)
+                else:
+                    log.info("I%03d - no crash", iters)
+                gen.keep(not same_crash)
+            testcase = gen.getvalue()
+        os.unlink(try_fn)
+    finally:
+        ffp.close()
+        ffp.clean_up()
     reduced_fn = "_REDUCED".join(os.path.splitext(args.testcase))
     reduce_clobber = 0
     while os.path.isfile(reduced_fn):
