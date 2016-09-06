@@ -22,6 +22,7 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 import argparse
 import logging
 import os
+import time
 
 import corpman
 import ffpuppet
@@ -30,6 +31,39 @@ import sapphire
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
+
+
+class GrizzlyStatus(object):
+    """
+    GrizzlyStatus holds status information about the grizzly fuzzing process.
+    """
+    def __init__(self):
+        self.iteration = 0
+        self.results = 0
+        self._last_report = 0
+        self._report_file = "grz_status_%d.txt" % os.getpid()
+        self._start_time = time.time()
+
+
+    def clean_up(self):
+        if os.path.isfile(self._report_file):
+            os.remove(self._report_file)
+
+
+    def report(self, report_freq=60):
+        now = time.time()
+        if now < (self._last_report + report_freq):
+            return
+
+        self._last_report = now
+        duration = now - self._start_time
+        with open(self._report_file, "w") as log_fp:
+            log_fp.write("Duration: %0.1f\n" % duration)
+            log_fp.write("Iteration: %d\n" % self.iteration)
+            log_fp.write("Results: %d\n" % self.results)
+            rate = (self.iteration/duration) if duration > 0 and self.iteration > 1 else 0
+            log_fp.write("Speed: %0.3f\n" % rate)
+
 
 
 log = logging.getLogger("grizzly") # pylint: disable=invalid-name
@@ -117,11 +151,10 @@ if __name__ == "__main__":
         reporter.FuzzManagerReporter.sanity_check(args.binary)
 
     log.info("Starting Grizzly")
-
-    current_iter = 0
-    ffp = None
+    status = GrizzlyStatus()
 
     # init corpus manager
+    log.debug("Initializing the corpus manager")
     try:
         corp_man = corpman.managers[args.corpus_manager.lower()]
     except KeyError:
@@ -130,9 +163,7 @@ if __name__ == "__main__":
         args.input,
         aggression=args.aggression,
         is_replay=args.replay,
-        rotate=args.rotate
-    )
-
+        rotate=args.rotate)
     log.info("Found %d test cases", corp_man.size())
     if args.replay:
         log.info("Running in REPLAY mode")
@@ -140,20 +171,23 @@ if __name__ == "__main__":
         log.info("Running in FUZZING mode")
 
     # launch http server used to serve test cases
+    log.debug("Starting sapphire server")
     serv = sapphire.Sapphire(timeout=args.timeout)
 
     try:
         current_test = None # template/test case currently being fuzzed
+        ffp = None
         test_cases = [] # test cases (this should only be > 1 when cache is > 1)
-        total_results = 0 # to count number of results found
 
         # main fuzzing iteration loop
         while True:
+            status.iteration += 1
+            status.report()
+
             # create firefox puppet instance if needed
             if ffp is None or not ffp.is_running():
                 test_cases = [] # reset test case cache
-                log_offset = 0 # location in the log used for log scanning
-                iters_before_relaunch = args.relaunch # iterations to perform before relaunch
+                relaunch_countdown = args.relaunch # iterations to perform before relaunch
 
                 if args.xvfb:
                     log.info("Running with Xvfb")
@@ -194,8 +228,6 @@ if __name__ == "__main__":
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs)
 
-            current_iter += 1
-
             # generate test case
             test_cases.append(corp_man.generate(serv.done_page, mime_type=args.mime))
 
@@ -206,17 +238,15 @@ if __name__ == "__main__":
             # print iteration status
             if args.replay:
                 log.info("[I%04d-L%02d-R%03d] %s",
-                         current_iter,
+                         status.iteration,
                          corp_man.size(),
-                         total_results,
+                         status.results,
                          os.path.basename(corp_man.get_active_file_name()))
             else:
                 if current_test != corp_man.get_active_file_name():
                     current_test = corp_man.get_active_file_name()
                     log.info("Now fuzzing: %s", os.path.basename(current_test))
-                log.info("I%04d-R%03d ",
-                         current_iter,
-                         total_results)
+                log.info("I%04d-R%03d ", status.iteration, status.results)
 
             # use Sapphire to serve the test case and
             # if both the test case and the verification (done)
@@ -234,7 +264,7 @@ if __name__ == "__main__":
 
             # handle issues if detected
             elif failure_detected:
-                total_results += 1
+                status.results += 1
                 log.info("Potential issue detected")
                 log.info("Current input: %s", corp_man.get_active_file_name())
                 log.info("Collecting logs...")
@@ -252,8 +282,8 @@ if __name__ == "__main__":
                 ffp.clean_up()
 
             # trigger relaunch by closing the browser
-            iters_before_relaunch -= 1
-            if iters_before_relaunch <= 0 and ffp.is_running():
+            relaunch_countdown -= 1
+            if relaunch_countdown <= 0 and ffp.is_running():
                 log.info("Triggering FFP relaunch")
 
                 ffp.close()
@@ -268,10 +298,12 @@ if __name__ == "__main__":
                 break
 
     except KeyboardInterrupt:
-        log.warning("Completed %d iterations", current_iter)
+        log.warning("Iterations attempted: %d", status.iteration)
 
     finally:
         log.warning("Shutting down...")
+        status.clean_up()
+
         if serv is not None:
             serv.close()
 
