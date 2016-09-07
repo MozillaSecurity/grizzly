@@ -139,7 +139,7 @@ class FuzzManagerReporter(Reporter):
                 None,
                 None,
                 ProgramConfiguration.fromBinary(target_binary),
-                auxCrashData=log_fp.read())
+                auxCrashData=log_fp.read().splitlines())
 
         # submit results to FuzzManager server
         Collector().submit(crash_info, zip_name)
