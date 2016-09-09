@@ -137,9 +137,8 @@ class FuzzManagerReporter(Reporter):
         with open(log_file, "r") as log_fp:
             crash_info = CrashInfo.fromRawCrashData(
                 None,
-                None,
-                ProgramConfiguration.fromBinary(target_binary),
-                auxCrashData=log_fp.read().splitlines())
+                log_fp.read().splitlines(),
+                ProgramConfiguration.fromBinary(target_binary))
 
         # submit results to FuzzManager server
         Collector().submit(crash_info, zip_name)
