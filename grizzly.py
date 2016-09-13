@@ -69,7 +69,7 @@ class GrizzlyStatus(object):
 log = logging.getLogger("grizzly") # pylint: disable=invalid-name
 
 
-if __name__ == "__main__":
+def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "binary",
@@ -134,8 +134,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--xvfb", action="store_true",
         help="Use xvfb (Linux only)")
-    args = parser.parse_args()
+    return parser.parse_args(args)
 
+
+def main(args):
     log_level = logging.INFO
     log_fmt = "[%(asctime)s] %(message)s"
     if args.verbose:
@@ -228,6 +230,9 @@ if __name__ == "__main__":
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs)
 
+            else:
+                ffp.trim_log()
+
             # generate test case
             test_cases.append(corp_man.generate(serv.done_page, mime_type=args.mime))
 
@@ -314,3 +319,7 @@ if __name__ == "__main__":
             ffp.save_log(result_reporter.log_file)
             result_reporter.report(reversed(test_cases))
             ffp.clean_up()
+
+
+if __name__ == "__main__":
+    main(parse_args())
