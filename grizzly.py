@@ -179,6 +179,7 @@ def main(args):
     try:
         current_test = None # template/test case currently being fuzzed
         ffp = None
+        ffp_log_pos = None # length of log before prior iteration
         test_cases = [] # test cases (this should only be > 1 when cache is > 1)
 
         # main fuzzing iteration loop
@@ -229,9 +230,11 @@ def main(args):
                     location="http://127.0.0.1:%d/%s" % (serv.get_port(), serv.landing_page),
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs)
+                ffp_log_pos = 0
 
             else:
-                ffp.trim_log()
+                ffp.trim_log(ffp_log_pos)
+                ffp_log_pos = ffp.tell_log()
 
             # generate test case
             test_cases.append(corp_man.generate(serv.done_page, mime_type=args.mime))
