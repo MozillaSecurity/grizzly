@@ -20,6 +20,7 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 """
 
 import argparse
+import json
 import logging
 import os
 import time
@@ -41,7 +42,7 @@ class GrizzlyStatus(object):
         self.iteration = 0
         self.results = 0
         self._last_report = 0
-        self._report_file = "grz_status_%d.txt" % os.getpid()
+        self._report_file = "grz_status_%d.json" % os.getpid()
         self._start_time = time.time()
 
 
@@ -58,12 +59,11 @@ class GrizzlyStatus(object):
         self._last_report = now
         duration = now - self._start_time
         with open(self._report_file, "w") as log_fp:
-            log_fp.write("Duration: %0.1f\n" % duration)
-            log_fp.write("Iteration: %d\n" % self.iteration)
-            log_fp.write("Results: %d\n" % self.results)
-            rate = (self.iteration/duration) if duration > 0 and self.iteration > 1 else 0
-            log_fp.write("Speed: %0.3f\n" % rate)
-
+            json.dump({
+                "Duration": duration,
+                "Iteration": self.iteration,
+                "Rate": (self.iteration/duration) if duration > 0 else 0,
+                "Results": self.results}, log_fp)
 
 
 log = logging.getLogger("grizzly") # pylint: disable=invalid-name
@@ -184,8 +184,8 @@ def main(args):
 
         # main fuzzing iteration loop
         while True:
-            status.iteration += 1
             status.report()
+            status.iteration += 1
 
             # create firefox puppet instance if needed
             if ffp is None or not ffp.is_running():
