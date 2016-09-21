@@ -31,11 +31,12 @@ ln -s <path_to_avalanche_dir> avalanche
 Usage
 -----
 ```
-usage: grizzly.py [-h] [-a AGGRESSION] [-c CACHE] [-e] [--fuzzmanager]
-                  [--ignore-timeouts] [--launch-timeout LAUNCH_TIMEOUT]
-                  [-m MEMORY] [--mime MIME] [-p PREFS] [-q] [-v] [--replay]
-                  [--relaunch RELAUNCH] [--rotate ROTATE] [-s] [-t TIMEOUT]
-                  [--valgrind] [--windbg] [--xvfb]
+usage: grizzly.py [-h] [-a AGGRESSION] [-c CACHE] [-e EXTENSION]
+                  [--fuzzmanager] [--ignore-timeouts]
+                  [--launch-timeout LAUNCH_TIMEOUT] [-m MEMORY] [--mime MIME]
+                  [-p PREFS] [-q] [-v] [--replay] [--relaunch RELAUNCH]
+                  [--rotate ROTATE] [-s] [-t TIMEOUT] [--valgrind] [--windbg]
+                  [--xvfb]
                   binary input corpus_manager
 
 positional arguments:
@@ -51,7 +52,9 @@ optional arguments:
   -c CACHE, --cache CACHE
                         Maximum number of previous test cases to dump after
                         crash (default: 1)
-  -e, --extension       Install the fuzzPriv extension (Requires funfuzz)
+  -e EXTENSION, --extension EXTENSION
+                        Install the fuzzPriv extension (specify path to
+                        funfuzz/dom/extension)
   --fuzzmanager         Report results to FuzzManager
   --ignore-timeouts     Don't save the logs/results from a timeout
   --launch-timeout LAUNCH_TIMEOUT

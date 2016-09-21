@@ -104,8 +104,8 @@ def reduce_args():
         "testcase",
         help="Testcase to reduce")
     parser.add_argument(
-        "-e", "--extension", action="store_true",
-        help="Install the fuzzPriv extension (Requires funfuzz)")
+        "-e", "--extension",
+        help="Install the fuzzPriv extension (specify path to funfuzz/dom/extension)")
     parser.add_argument(
         "-m", "--memory", type=int,
         help="Process memory limit in MBs (Requires psutil)")

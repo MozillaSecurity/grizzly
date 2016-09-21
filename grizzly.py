@@ -87,8 +87,8 @@ def parse_args(args=None):
         "-c", "--cache", type=int, default=1,
         help="Maximum number of previous test cases to dump after crash (default: %(default)s)")
     parser.add_argument(
-        "-e", "--extension", action="store_true",
-        help="Install the fuzzPriv extension (Requires funfuzz)")
+        "-e", "--extension",
+        help="Install the fuzzPriv extension (specify path to funfuzz/dom/extension)")
     parser.add_argument(
         "--fuzzmanager", action="store_true",
         help="Report results to FuzzManager")
