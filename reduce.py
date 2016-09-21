@@ -104,6 +104,9 @@ def reduce_args():
         "testcase",
         help="Testcase to reduce")
     parser.add_argument(
+        "-e", "--extension", action="store_true",
+        help="Install the fuzzPriv extension (Requires funfuzz)")
+    parser.add_argument(
         "-m", "--memory", type=int,
         help="Process memory limit in MBs (Requires psutil)")
     parser.add_argument(
@@ -175,7 +178,8 @@ def reduce_main(args):
             location="file://%s" % os.path.abspath(args.testcase),
             launch_timeout=args.launch_timeout,
             memory_limit=args.memory,
-            prefs_js=args.prefs)
+            prefs_js=args.prefs,
+            extension=args.extension)
         orig_stack = ffp.wait_get_hash(adjust_timeout=True, detect_soft_asserts=args.asserts)
         if orig_stack is None:
             raise RuntimeError("%s didn't crash" % args.testcase)

@@ -87,6 +87,9 @@ def parse_args(args=None):
         "-c", "--cache", type=int, default=1,
         help="Maximum number of previous test cases to dump after crash (default: %(default)s)")
     parser.add_argument(
+        "-e", "--extension", action="store_true",
+        help="Install the fuzzPriv extension (Requires funfuzz)")
+    parser.add_argument(
         "--fuzzmanager", action="store_true",
         help="Report results to FuzzManager")
     parser.add_argument(
@@ -229,7 +232,8 @@ def main(args):
                     launch_timeout=args.launch_timeout,
                     location="http://127.0.0.1:%d/%s" % (serv.get_port(), serv.landing_page),
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
-                    prefs_js=args.prefs)
+                    prefs_js=args.prefs,
+                    extension=args.extension)
                 ffp_log_pos = 0
 
             else:

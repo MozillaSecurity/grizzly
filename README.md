@@ -31,43 +31,48 @@ ln -s <path_to_avalanche_dir> avalanche
 Usage
 -----
 ```
-python grizzly.py -h
-usage: grizzly.py [-h] [-a AGGRESSION] [-c CACHE] [--ignore-timeouts]
-                  [--launch-timeout LAUNCH_TIMEOUT] [-m MEMORY] [--mime MIME]
-                  [-p PREFS] [-q] [--replay] [--relaunch RELAUNCH]
-                  [--rotate ROTATE] [-s] [--timeout TIMEOUT] [--valgrind]
-                  [--windbg] [--xvfb]
+usage: grizzly.py [-h] [-a AGGRESSION] [-c CACHE] [-e] [--fuzzmanager]
+                  [--ignore-timeouts] [--launch-timeout LAUNCH_TIMEOUT]
+                  [-m MEMORY] [--mime MIME] [-p PREFS] [-q] [-v] [--replay]
+                  [--relaunch RELAUNCH] [--rotate ROTATE] [-s] [-t TIMEOUT]
+                  [--valgrind] [--windbg] [--xvfb]
                   binary input corpus_manager
 
 positional arguments:
   binary                Firefox binary to run
   input                 Test case or directory containing test cases
-  corpus_manager        Supported corpus managers: audio, image,
+  corpus_manager        Available corpus managers: audio, image,
                         video, font ... all available corpus managers
 
 optional arguments:
   -h, --help            show this help message and exit
   -a AGGRESSION, --aggression AGGRESSION
-                        0.001 == 1/1000
+                        0.001 == 1/1000 (default: 0.001)
   -c CACHE, --cache CACHE
                         Maximum number of previous test cases to dump after
-                        crash
+                        crash (default: 1)
+  -e, --extension       Install the fuzzPriv extension (Requires funfuzz)
+  --fuzzmanager         Report results to FuzzManager
   --ignore-timeouts     Don't save the logs/results from a timeout
   --launch-timeout LAUNCH_TIMEOUT
-                        Amount of time to wait to launch the browser before
-                        LaunchError is raised
+                        Number of seconds to wait before LaunchError is raised
+                        (default: 300)
   -m MEMORY, --memory MEMORY
-                        Firefox process memory limit in MBs
+                        Browser process memory limit in MBs (default: No
+                        limit)
   --mime MIME           Specify a mime type
   -p PREFS, --prefs PREFS
                         prefs.js file to use
   -q, --quiet           Output is minimal
+  -v, --verbose         Output is less minimal
   --replay              Replay do not fuzz the test cases
-  --relaunch RELAUNCH   Number of iterations to perform before closing and
-                        relaunching the browser
-  --rotate ROTATE       Number of iterations per test case before switching
+  --relaunch RELAUNCH   Number of iterations performed before relaunching the
+                        browser (default: 1000)
+  --rotate ROTATE       Number of iterations per test case before rotating
+                        (default: 10)
   -s, --asserts         Detect soft assertions
-  --timeout TIMEOUT     Iteration timeout
+  -t TIMEOUT, --timeout TIMEOUT
+                        Iteration timeout in seconds (default: 60)
   --valgrind            Use valgrind
   --windbg              Collect crash log with WinDBG (Windows only)
   --xvfb                Use xvfb (Linux only)
