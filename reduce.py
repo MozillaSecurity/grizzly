@@ -277,7 +277,7 @@ def reduce_main(args):
         log.info("%s is %d bytes", reduced_fn, best)
     else:
         log.warning("%s was not reduced", args.testcase)
-    log.info("ran for %d iterations in %s", iters, english_time_diff(time.time() - start_time))
+    log.info("ran for %d iterations in %s", iters, pretty_time_diff(time.time() - start_time))
 
 
 class FeedbackIter(object):
