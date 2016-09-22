@@ -58,7 +58,26 @@ REDUCERS = {
 }
 
 
+def pretty_time_diff(seconds):
+    "Format a timestamp difference"
+    minutes, seconds = divmod(seconds, 60)
+    hours = divmod(minutes, 60)
+    days = divmod(hours, 24)
+    if days:
+        return "%dd%02dh%02dm%02ds" % (days, hours, minutes, seconds)
+    elif hours:
+        return "%dh%02dm%02ds" % (hours, minutes, seconds)
+    elif minutes:
+        return "%dm%02ds" % (minutes, seconds)
+    else:
+        return "%ds" % seconds
+
+
 class PuppetWrapper(FFPuppet):
+    """
+    Wrapper around FFPuppet which contains the crash detection and running time logic.
+    According to some it should not exist.
+    """
 
     def __init__(self, run_timeout=None, **kwds):
         FFPuppet.__init__(self, **kwds)
@@ -171,6 +190,7 @@ def reduce_main(args):
         run_timeout=args.timeout)
     try:
         iters = 0
+        start_time = time.time()
         # get initial stack
         log.info("Running %s for initial crash", args.testcase)
         ffp.launch(
@@ -244,17 +264,20 @@ def reduce_main(args):
     finally:
         ffp.close()
         ffp.clean_up()
-    reduced_fn = "_REDUCED".join(os.path.splitext(args.testcase))
-    reduce_clobber = 0
-    while os.path.isfile(reduced_fn):
-        reduce_clobber += 1
-        reduced_fn = ("_REDUCED(%d)" % reduce_clobber).join(os.path.splitext(args.testcase))
-    with open(reduced_fn, "wb") as reduced_fp:
-        reduced_fp.writelines([prefix, testcase, suffix])
-    os.unlink(best_fn)
-    log.info("%s was %d bytes", args.testcase, orig)
-    log.info("%s is %d bytes", reduced_fn, best)
-    log.info("reduction took %d iterations", iters)
+    if orig != best:
+        reduced_fn = "_REDUCED".join(os.path.splitext(args.testcase))
+        reduce_clobber = 0
+        while os.path.isfile(reduced_fn):
+            reduce_clobber += 1
+            reduced_fn = ("_REDUCED(%d)" % reduce_clobber).join(os.path.splitext(args.testcase))
+        with open(reduced_fn, "wb") as reduced_fp:
+            reduced_fp.writelines([prefix, testcase, suffix])
+        os.unlink(best_fn)
+        log.info("%s was %d bytes", args.testcase, orig)
+        log.info("%s is %d bytes", reduced_fn, best)
+    else:
+        log.warning("%s was not reduced", args.testcase)
+    log.info("ran for %d iterations in %s", iters, english_time_diff(time.time() - start_time))
 
 
 class FeedbackIter(object):
