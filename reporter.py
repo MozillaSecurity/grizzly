@@ -76,8 +76,30 @@ class Reporter(object):
             shutil.rmtree(self._log_path)
 
 
+    @staticmethod
+    def tail(in_file, size_limit):
+        with open(in_file, "r") as in_fp:
+            # check if tail is needed
+            in_fp.seek(0, os.SEEK_END)
+            if in_fp.tell() <= size_limit:
+                return # no tail needed
+
+            # perform tail operation
+            in_fp.seek(size_limit * -1, os.SEEK_END)
+            out_file = create_log()
+            with open(out_file, "w") as out_fp:
+                out_fp.write("[LOG TAILED]\n")
+                out_fp.write(in_fp.read())
+
+        os.remove(in_file)
+        shutil.move(out_file, in_file)
+
+
 class FilesystemReporter(Reporter):
-    def _report(self, test_cases, results_path=None):
+    def _report(self, test_cases, results_path=None, log_limit=0):
+        if log_limit > 0:
+            self.tail(self.log_file, log_limit)
+
         if results_path is None:
             results_path = os.path.join(os.getcwd(), "results")
 
@@ -114,7 +136,10 @@ class FuzzManagerReporter(Reporter):
         ProgramConfiguration.fromBinary(bin_file)
 
 
-    def _report(self, test_cases, target_binary):
+    def _report(self, test_cases, target_binary, log_limit=0):
+        if log_limit > 0:
+            self.tail(self.log_file, log_limit)
+
         # rename log
         log_file = "%s_log.txt" % os.path.join(self._log_path, self._file_prefix)
         shutil.move(self.log_file, log_file)
