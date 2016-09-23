@@ -61,8 +61,8 @@ REDUCERS = {
 def pretty_time_diff(seconds):
     "Format a timestamp difference"
     minutes, seconds = divmod(seconds, 60)
-    hours = divmod(minutes, 60)
-    days = divmod(hours, 24)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
     if days:
         return "%dd%02dh%02dm%02ds" % (days, hours, minutes, seconds)
     elif hours:
