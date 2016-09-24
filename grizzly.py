@@ -237,10 +237,6 @@ def main(args):
             # generate test case
             test_cases.append(corp_man.generate(serv.done_page, mime_type=args.mime))
 
-            # manage test case cache size
-            if len(test_cases) > args.cache:
-                test_cases.pop(0)
-
             # print iteration status
             if args.replay:
                 log.info("[I%04d-L%02d-R%03d] %s",
@@ -254,15 +250,21 @@ def main(args):
                     log.info("Now fuzzing: %s", os.path.basename(current_test))
                 log.info("I%04d-R%03d ", status.iteration, status.results)
 
-            # use Sapphire to serve the test case and
-            # if both the test case and the verification (done)
-            # pages are served serve_testcase() returns true
-            failure_detected = not serv.serve_testcase(
+            # use Sapphire to serve the most recent test case
+            server_status = serv.serve_testcase(
                 test_cases[-1].data,
                 is_alive_cb=ffp.is_running)
 
+            failure_detected = server_status != sapphire.SERVED_ALL
+            if server_status == sapphire.SERVED_NONE:
+                test_cases.pop() # most recent test case was not requested don't include it
+
+            # manage test case cache size
+            if len(test_cases) > args.cache:
+                test_cases.pop(0)
+
             # handle ignored timeouts
-            if failure_detected and ffp.is_running() and args.ignore_timeouts:
+            if failure_detected and args.ignore_timeouts and ffp.is_running():
                 ffp.close()
                 ffp.clean_up()
                 failure_detected = False
