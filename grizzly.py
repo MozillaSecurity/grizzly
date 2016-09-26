@@ -187,10 +187,8 @@ def main(args):
         ffp = ffpuppet.FFPuppet(
             use_valgrind=args.valgrind,
             use_windbg=args.windbg,
-            use_xvfb=args.xvfb)
-
-        if args.asserts:
-            ffp.add_abort_token("###!!! ASSERTION:")
+            use_xvfb=args.xvfb,
+            detect_soft_assertions=args.asserts)
 
         # main fuzzing iteration loop
         while True:

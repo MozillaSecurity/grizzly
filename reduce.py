@@ -75,7 +75,7 @@ def pretty_time_diff(seconds):
 
 class PuppetWrapper(FFPuppet):
     """
-    Wrapper around FFPuppet which contains the crash detection and running time logic.
+    Wrapper around FFPuppet which contains the hashing and running time logic.
     According to some it should not exist.
     """
 
@@ -84,7 +84,7 @@ class PuppetWrapper(FFPuppet):
         assert not hasattr(self, '_run_timeout')
         self._run_timeout = run_timeout
 
-    def wait_get_hash(self, adjust_timeout=False, detect_soft_asserts=False):
+    def wait_get_hash(self, adjust_timeout=False):
         start = time.time()
         return_code = self.wait(self._run_timeout)
         run_time = time.time() - start
@@ -92,24 +92,10 @@ class PuppetWrapper(FFPuppet):
             self._run_timeout = max(10, min(run_time * 2, self._run_timeout))
 
         self.close()
-        with open(self._log.name) as log_fp:
-            log_contents = log_fp.read()
-        self.clean_up()
 
-        failure_detected = False
-        if (detect_soft_asserts or self._use_valgrind) and return_code is None:
-            if detect_soft_asserts and log_contents.find("###!!! ASSERTION:") != -1:
-                # detected non-crashing assertions
-                failure_detected = True
-            elif self._use_valgrind and re.search(r"==\d+==\s", log_contents):
-                # detected valgrind output in log
-                failure_detected = True
-        elif return_code is not None:
-            failure_detected = True
-
-        if failure_detected:
-            stack = stack_to_hash(stack_from_text(log_contents), major=True)
-            return stack
+        if return_code is not None:
+            with open(self._log.name) as log_fp:
+                return stack_to_hash(stack_from_text(log_fp.read()), major=True)
 
         return None
 
@@ -187,6 +173,7 @@ def reduce_main(args):
         use_valgrind=args.valgrind,
         use_windbg=args.windbg,
         use_xvfb=args.xvfb,
+        detect_soft_assertions=args.asserts,
         run_timeout=args.timeout)
     try:
         iters = 0
@@ -200,7 +187,7 @@ def reduce_main(args):
             memory_limit=args.memory,
             prefs_js=args.prefs,
             extension=args.extension)
-        orig_stack = ffp.wait_get_hash(adjust_timeout=True, detect_soft_asserts=args.asserts)
+        orig_stack = ffp.wait_get_hash(adjust_timeout=True)
         if orig_stack is None:
             raise RuntimeError("%s didn't crash" % args.testcase)
         log.info("got crash: %s", orig_stack)
@@ -244,7 +231,7 @@ def reduce_main(args):
                         launch_timeout=args.launch_timeout,
                         memory_limit=args.memory,
                         prefs_js=args.prefs)
-                    result_try = ffp.wait_get_hash(detect_soft_asserts=args.asserts)
+                    result_try = ffp.wait_get_hash()
                     same_crash = (orig_stack == result_try)
                     if not same_crash:
                         break
