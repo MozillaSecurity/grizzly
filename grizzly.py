@@ -151,6 +151,7 @@ def main(args):
     logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
     args.cache = max(args.cache, 1) # test case cache must be at least one
+    args.memory = max(args.memory, 0)
 
     if args.fuzzmanager:
         reporter.FuzzManagerReporter.sanity_check(args.binary)
@@ -181,18 +182,25 @@ def main(args):
 
     try:
         current_test = None # template/test case currently being fuzzed
-        ffp = None
-        test_cases = [] # test cases (this should only be > 1 when cache is > 1)
+
+        # create FFPuppet object
+        ffp = ffpuppet.FFPuppet(
+            use_valgrind=args.valgrind,
+            use_windbg=args.windbg,
+            use_xvfb=args.xvfb)
+
+        if args.asserts:
+            ffp.add_abort_token("###!!! ASSERTION:")
 
         # main fuzzing iteration loop
         while True:
             status.report()
             status.iteration += 1
 
-            # create firefox puppet instance if needed
-            if ffp is None or not ffp.is_running():
-                test_cases = [] # reset test case cache
+            # launch FFPuppet
+            if ffp.closed:
                 relaunch_countdown = args.relaunch # iterations to perform before relaunch
+                test_cases = [] # should only contain more than 1 test case when cache is > 1
 
                 if args.xvfb:
                     log.info("Running with Xvfb")
@@ -203,7 +211,6 @@ def main(args):
                 if args.windbg:
                     log.info("Collecting debug information with WinDBG")
 
-                args.memory = max(args.memory, 0)
                 if args.memory:
                     log.info("Memory limit is %dMBs", args.memory)
                     if args.memory < 2048:
@@ -215,17 +222,6 @@ def main(args):
                     log.warning("Default prefs used, prefs.js file not specified")
 
                 log.info("Launching FFPuppet")
-
-                # create FFPuppet object
-                ffp = ffpuppet.FFPuppet(
-                    use_valgrind=args.valgrind,
-                    use_windbg=args.windbg,
-                    use_xvfb=args.xvfb)
-
-                if args.asserts:
-                    ffp.add_abort_token("###!!! ASSERTION:")
-
-                # launch FFPuppet
                 ffp.launch(
                     args.binary,
                     launch_timeout=args.launch_timeout,
@@ -266,7 +262,6 @@ def main(args):
             # handle ignored timeouts
             if failure_detected and args.ignore_timeouts and ffp.is_running():
                 ffp.close()
-                ffp.clean_up()
                 failure_detected = False
                 log.info("Timeout ignored")
 
@@ -288,7 +283,6 @@ def main(args):
                     result_reporter = reporter.FilesystemReporter()
                     ffp.save_log(result_reporter.log_file)
                     result_reporter.report(reversed(test_cases))
-                ffp.clean_up()
 
             # trigger relaunch by closing the browser
             relaunch_countdown -= 1
@@ -299,7 +293,6 @@ def main(args):
                 result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
                 ffp.save_log(result_reporter.log_file)
                 result_reporter.report(reversed(test_cases))
-                ffp.clean_up()
 
             # all test cases have been replayed
             if args.replay and corp_man.size() == 0:
