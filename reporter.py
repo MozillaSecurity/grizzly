@@ -144,11 +144,25 @@ class FuzzManagerReporter(Reporter):
         log_file = "%s_log.txt" % os.path.join(self._log_path, self._file_prefix)
         shutil.move(self.log_file, log_file)
 
+        # prepare data for submission as CrashInfo
+        with open(log_file, "r") as log_fp:
+            crash_info = CrashInfo.fromRawCrashData(
+                None,
+                log_fp.read().splitlines(),
+                ProgramConfiguration.fromBinary(target_binary))
+
+        collector = Collector()
+
+        # search for a cached signature match and if the signature
+        # is already in the cache don't bother submitting
+        if collector.search(crash_info)[0] is not None:
+            return
+
         # dump results to working directory
         for test_number, test_case in enumerate(test_cases):
             test_case.dump(self._log_path, "%s-%d" % (self._file_prefix, test_number))
 
-        # add results to a zipfile
+        # add results to a zip file
         zip_name = ".".join([self._file_prefix, "zip"])
         with zipfile.ZipFile(zip_name, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_fp:
             for dir_name, _, dir_files in os.walk(self._log_path):
@@ -158,15 +172,8 @@ class FuzzManagerReporter(Reporter):
                         os.path.join(dir_name, file_name),
                         arcname=os.path.join(arc_path, file_name))
 
-        # prepare data for submission as CrashInfo
-        with open(log_file, "r") as log_fp:
-            crash_info = CrashInfo.fromRawCrashData(
-                None,
-                log_fp.read().splitlines(),
-                ProgramConfiguration.fromBinary(target_binary))
-
-        # submit results to FuzzManager server
-        Collector().submit(crash_info, zip_name)
+        # submit results to the FuzzManager server
+        collector.submit(crash_info, testCase=zip_name)
 
         # remove zipfile
         if os.path.isfile(zip_name):
