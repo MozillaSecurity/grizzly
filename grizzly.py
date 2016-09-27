@@ -41,6 +41,7 @@ class GrizzlyStatus(object):
     def __init__(self):
         self.iteration = 0
         self.results = 0
+        self.test_name = None
         self._last_report = 0
         self._report_file = "grz_status_%d.json" % os.getpid()
         self._start_time = time.time()
@@ -181,7 +182,7 @@ def main(args):
     serv = sapphire.Sapphire(timeout=args.timeout)
 
     try:
-        current_test = None # template/test case currently being fuzzed
+        ffp = None # define ffp in case exceptions are raised on init
 
         # create FFPuppet object
         ffp = ffpuppet.FFPuppet(
@@ -239,9 +240,9 @@ def main(args):
                          status.results,
                          os.path.basename(corp_man.get_active_file_name()))
             else:
-                if current_test != corp_man.get_active_file_name():
-                    current_test = corp_man.get_active_file_name()
-                    log.info("Now fuzzing: %s", os.path.basename(current_test))
+                if status.test_name != corp_man.get_active_file_name():
+                    status.test_name = corp_man.get_active_file_name()
+                    log.info("Now fuzzing: %s", os.path.basename(status.test_name))
                 log.info("I%04d-R%03d ", status.iteration, status.results)
 
             # use Sapphire to serve the most recent test case
