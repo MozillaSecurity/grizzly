@@ -230,7 +230,7 @@ def main(args):
                     extension=args.extension)
 
             # generate test case
-            test_cases.append(corp_man.generate(serv.done_page, mime_type=args.mime))
+            current_test = corp_man.generate(serv.done_page, mime_type=args.mime)
 
             # print iteration status
             if args.replay:
@@ -247,16 +247,20 @@ def main(args):
 
             # use Sapphire to serve the most recent test case
             server_status = serv.serve_testcase(
-                test_cases[-1].data,
+                current_test.data,
                 is_alive_cb=ffp.is_running)
 
             failure_detected = server_status != sapphire.SERVED_ALL
-            if server_status == sapphire.SERVED_NONE:
-                test_cases.pop() # most recent test case was not requested don't include it
+            # only process the most recent test case if it was requested
+            if server_status != sapphire.SERVED_NONE:
+                updated_test = corp_man.update_test(ffp.clone_log, current_test)
+                if updated_test is not None:
+                    current_test = updated_test
+                test_cases.append(current_test)
 
-            # manage test case cache size
-            if len(test_cases) > args.cache:
-                test_cases.pop(0)
+                # manage test case cache size
+                if len(test_cases) > args.cache:
+                    test_cases.pop(0)
 
             # handle ignored timeouts
             if failure_detected and args.ignore_timeouts and ffp.is_running():

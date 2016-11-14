@@ -210,3 +210,7 @@ class CorpusManager(object):
 
     def size(self):
         return len(self._templates)
+
+
+    def update_test(self, clone_log_cb, test):
+        return None
