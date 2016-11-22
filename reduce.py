@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # coding=utf-8
 #
 # Portions Copyright 2014 BlackBerry Limited
@@ -131,6 +131,9 @@ def reduce_args():
         "--valgrind", action="store_true",
         help="Use valgrind")
     parser.add_argument(
+        "--gdb", action="store_true",
+        help="Use GDB")
+    parser.add_argument(
         "--windbg", action="store_true",
         help="Collect crash log with WinDBG (Windows only)")
     parser.add_argument(
@@ -139,6 +142,9 @@ def reduce_args():
     parser.add_argument(
         "--n-tries", type=int, default=1,
         help="Number of times to try each reduction (can help with intermittent testcases) (default: %(default)d)")
+    parser.add_argument(
+        "--skip", type=int, default=0,
+        help="Skip initial number of tries.")
     parser.add_argument(
         "-r", "--reducer", default="line",
         help="Reducer(s) to use, available options are: %r (can be comma separated list for multiple) "
@@ -170,6 +176,7 @@ def reduce_main(args):
         logging.getLogger().setLevel(logging.INFO)
 
     ffp = PuppetWrapper(
+        use_gdb=args.gdb,
         use_valgrind=args.valgrind,
         use_windbg=args.windbg,
         use_xvfb=args.xvfb,
@@ -220,6 +227,10 @@ def reduce_main(args):
             log.info("using reducer: %s", reducer)
             splitter, joiner = REDUCERS[reducer]
             gen = FeedbackIter(splitter(testcase), formatter=joiner)
+            # skip initial few
+            for i in range(args.skip):
+                gen.next()
+                gen.keep(True)
             for attempt in gen:
                 iters += 1
                 with open(try_fn, "wb") as try_fp:
@@ -242,7 +253,11 @@ def reduce_main(args):
                         best_fp.writelines([prefix, attempt, suffix])
                     log.info("I%03d - reduced ok to %d", iters, best)
                 elif result_try is not None:
-                    log.info("I%03d - crashed but got %s", iters, result_try)
+                    log.info("I%03d - crashed but got %s (saved)", iters, result_try)
+                    alt_fn = ("_%s" % result_try[:8]).join(os.path.splitext(args.testcase))
+                    with open(alt_fn, "wb") as alt_fp:
+                        alt_fp.writelines([prefix, attempt, suffix])
+                    ffp.save_log("%s.log" % os.path.splitext(alt_fn)[0])
                 else:
                     log.info("I%03d - no crash", iters)
                 gen.keep(not same_crash)
