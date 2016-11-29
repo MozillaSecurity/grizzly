@@ -15,6 +15,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import psutil
+
 import argparse
 import logging
 import os
@@ -91,9 +93,20 @@ class PuppetWrapper(FFPuppet):
         if adjust_timeout:
             self._run_timeout = max(10, min(run_time * 2, self._run_timeout))
 
+        if self.is_running():
+            p = psutil.Process(pid=self.get_pid())
+            # cpu_percent() returns 0.0 on the first call.
+            # http://pythonhosted.org/psutil/#psutil.Process.cpu_percent
+            p.cpu_percent()
+            is_hang = p.cpu_percent(0.5) > 75
+        else:
+            is_hang = False
+
         self.close()
 
-        if return_code is not None:
+        if is_hang:
+            return "TIMEOUT" # return a string since we won't calculate a hash
+        elif return_code is not None:
             with open(self._log.name) as log_fp:
                 return stack_to_hash(stack_from_text(log_fp.read()), major=True)
 
