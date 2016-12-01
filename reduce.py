@@ -15,14 +15,14 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import psutil
-
 import argparse
 import logging
 import os
 import os.path
 import re
 import time
+
+import psutil
 
 from ffpuppet import FFPuppet
 from stack_hasher import stack_from_text, stack_to_hash
@@ -75,45 +75,44 @@ def pretty_time_diff(seconds):
         return "%ds" % seconds
 
 
-class PuppetWrapper(FFPuppet):
+def wait_get_hash(puppet, timeout):
     """
-    Wrapper around FFPuppet which contains the hashing and running time logic.
-    According to some it should not exist.
+    Wait on FFPuppet, figure out if it was a crash, and calculate a new timeout.
     """
+    start = time.time()
+    return_code = puppet.wait(timeout)
+    run_time = time.time() - start
+    # new_timeout will be 2x this run_time if less than the existing timeout
+    # in other words, decrease the timeout if this ran in less than half the timeout (floored at 10s)
+    new_timeout = max(10, min(run_time * 2, timeout))
 
-    def __init__(self, run_timeout=None, **kwds):
-        FFPuppet.__init__(self, **kwds)
-        assert not hasattr(self, '_run_timeout')
-        self._run_timeout = run_timeout
+    if puppet.is_running():
+        proc = psutil.Process(pid=puppet.get_pid())
+        # cpu_percent() returns 0.0 on the first call.
+        # http://pythonhosted.org/psutil/#psutil.Process.cpu_percent
+        proc.cpu_percent()
+        is_hang = proc.cpu_percent(0.5) > 75
+    else:
+        is_hang = False
 
-    def wait_get_hash(self, adjust_timeout=False):
-        start = time.time()
-        return_code = self.wait(self._run_timeout)
-        run_time = time.time() - start
-        if adjust_timeout:
-            self._run_timeout = max(10, min(run_time * 2, self._run_timeout))
+    puppet.close()
 
-        if self.is_running():
-            p = psutil.Process(pid=self.get_pid())
-            # cpu_percent() returns 0.0 on the first call.
-            # http://pythonhosted.org/psutil/#psutil.Process.cpu_percent
-            p.cpu_percent()
-            is_hang = p.cpu_percent(0.5) > 75
-        else:
-            is_hang = False
+    if is_hang:
+        result = "TIMEOUT" # return a string since we won't calculate a hash
+    elif return_code is not None:
+        log_fn = puppet.clone_log()
+        try:
+            with open(log_fn) as log_fp:
+                result = stack_to_hash(stack_from_text(log_fp.read()), major=True)
+        finally:
+            os.unlink(log_fn)
+    else:
+        result = None
 
-        self.close()
-
-        if is_hang:
-            return "TIMEOUT" # return a string since we won't calculate a hash
-        elif return_code is not None:
-            with open(self._log.name) as log_fp:
-                return stack_to_hash(stack_from_text(log_fp.read()), major=True)
-
-        return None
+    return result, new_timeout
 
 
-def reduce_args():
+def reduce_args(argv=None):
     parser = argparse.ArgumentParser(description="Grizzly reducer")
     parser.add_argument(
         "binary",
@@ -165,7 +164,7 @@ def reduce_args():
     parser.add_argument(
         "-v", "--verbose", action="store_true",
         help="Show verbose debugging output")
-    args = parser.parse_args()
+    args = parser.parse_args(args=argv)
     if "," in args.reducer:
         args.reducer = args.reducer.split(",")
     else:
@@ -188,13 +187,13 @@ def reduce_main(args):
     else:
         logging.getLogger().setLevel(logging.INFO)
 
-    ffp = PuppetWrapper(
+    timeout = args.timeout
+    ffp = FFPuppet(
         use_gdb=args.gdb,
         use_valgrind=args.valgrind,
         use_windbg=args.windbg,
         use_xvfb=args.xvfb,
-        detect_soft_assertions=args.asserts,
-        run_timeout=args.timeout)
+        detect_soft_assertions=args.asserts)
     try:
         iters = 0
         start_time = time.time()
@@ -207,30 +206,11 @@ def reduce_main(args):
             memory_limit=args.memory,
             prefs_js=args.prefs,
             extension=args.extension)
-        orig_stack = ffp.wait_get_hash(adjust_timeout=True)
+        orig_stack, timeout = wait_get_hash(ffp, timeout)
         if orig_stack is None:
             raise RuntimeError("%s didn't crash" % args.testcase)
         log.info("got crash: %s", orig_stack)
-        with open(args.testcase, "rb") as tc_fp:
-            testcase = tc_fp.read()
-        if "DDBEGIN" in testcase:
-            testcase = testcase.splitlines()
-            begin = end = None
-            for line_no, line in enumerate(testcase):
-                if begin is None and "DDBEGIN" in line:
-                    begin = line_no
-                elif begin is not None and end is None and "DDEND" in line:
-                    end = line_no
-                    break
-            else:
-                raise RuntimeError("DDBEGIN found without matching DDEND")
-            log.debug("Found DDBEGIN on line %d and DDEND on line %d", begin + 1, end + 1)
-            prefix, testcase, suffix = ["\n".join(x) for x in (testcase[:begin+1] + [""],
-                                                               testcase[begin+1:end],
-                                                               [""] + testcase[end:])]
-        else:
-            log.debug("No DDBEGIN found, reducing entire file")
-            prefix = suffix = ""
+        prefix, testcase, suffix = split_reduce_area(args.testcase)
         orig = best = len(testcase)
         log.info("original size is %d", orig)
         best_fn = "_BEST".join(os.path.splitext(args.testcase))
@@ -241,7 +221,7 @@ def reduce_main(args):
             splitter, joiner = REDUCERS[reducer]
             gen = FeedbackIter(splitter(testcase), formatter=joiner)
             # skip initial few
-            for i in range(args.skip):
+            for _ in range(args.skip):
                 gen.next()
                 gen.keep(True)
             for attempt in gen:
@@ -255,7 +235,7 @@ def reduce_main(args):
                         launch_timeout=args.launch_timeout,
                         memory_limit=args.memory,
                         prefs_js=args.prefs)
-                    result_try = ffp.wait_get_hash()
+                    result_try, new_timeout = wait_get_hash(ffp, timeout)
                     same_crash = (orig_stack == result_try)
                     if not same_crash:
                         break
@@ -265,6 +245,7 @@ def reduce_main(args):
                     with open(best_fn, "wb") as best_fp:
                         best_fp.writelines([prefix, attempt, suffix])
                     log.info("I%03d - reduced ok to %d", iters, best)
+                    timeout = new_timeout
                 elif result_try is not None:
                     log.info("I%03d - crashed but got %s (saved)", iters, result_try)
                     alt_fn = ("_%s" % result_try[:8]).join(os.path.splitext(args.testcase))
@@ -293,6 +274,40 @@ def reduce_main(args):
     else:
         log.warning("%s was not reduced", args.testcase)
     log.info("ran for %d iterations in %s", iters, pretty_time_diff(time.time() - start_time))
+
+
+def split_reduce_area(filename, splitlines=False, begin="DDBEGIN", end="DDEND"):
+    """
+    Read in the filename and split on lithium reduction tokens (DDBEGIN/DDEND)
+    Return the pre-DDBEGIN (inclusive), middle, and post-DDEND (inclusive) sections
+    splitlines=True will change the return type from a 3-tuple of strings to a 3-tuple of lists (lines)
+    """
+    before, reduce_area, after = [], [], []
+    with open(filename, "rb") as tc_fp:
+        for line in tc_fp:
+            before.append(line)
+            if begin in line:
+                break
+        for line in tc_fp:
+            if end in line:
+                after.append(line)
+                break
+            reduce_area.append(line)
+        for line in tc_fp:
+            after.append(line)
+        if not after:
+            if reduce_area:
+                raise RuntimeError("begin token '%s' found without matching end token '%s'" % (begin, end))
+            log.debug("No begin token '%s' found, reducing entire file", begin)
+            reduce_area = begin
+            begin = []
+        else:
+            log.debug("Found begin token '%s' on line %d and end token '%s' on line %d",
+                      begin, len(before), end, len(before) + len(reduce_area) + 1)
+        if splitlines:
+            return before, reduce_area, after
+        else:
+            return "".join(before), "".join(reduce_area), "".join(after)
 
 
 class FeedbackIter(object):
@@ -390,5 +405,5 @@ class FeedbackIter(object):
         return self.formatter(sum(self.data, []))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     reduce_main(reduce_args())
