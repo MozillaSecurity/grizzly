@@ -32,8 +32,9 @@ try:
     from FTB.Signatures.CrashInfo import CrashInfo
     HAVE_FUZZMANAGER = True
 except ImportError:
-    from stack_hasher import stack_from_text, stack_to_hash
     HAVE_FUZZMANAGER = False
+
+from stack_hasher import stack_from_text, stack_to_hash
 
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
