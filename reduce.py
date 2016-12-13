@@ -86,19 +86,33 @@ def wait_get_hash(puppet, timeout):
     # in other words, decrease the timeout if this ran in less than half the timeout (floored at 10s)
     new_timeout = max(10, min(run_time * 2, timeout))
 
+    memory_limit_hit = False
     if puppet.is_running():
         proc = psutil.Process(pid=puppet.get_pid())
         # cpu_percent() returns 0.0 on the first call.
         # http://pythonhosted.org/psutil/#psutil.Process.cpu_percent
         proc.cpu_percent()
         is_hang = proc.cpu_percent(0.5) > 75
+        exit_code = None
     else:
         is_hang = False
+        exit_code = puppet.wait()
 
     puppet.close()
 
+    if not is_hang and exit_code == -15:
+        # check if memory limit was exceeded
+        log_file = puppet.clone_log()
+        try:
+            with open(log_file, "r") as fp:
+                memory_limit_hit = fp.read().find("MEMORY_LIMIT_EXCEEDED") != -1
+        finally:
+            os.unlink(log_file)
+
     if is_hang:
         result = "TIMEOUT" # return a string since we won't calculate a hash
+    elif memory_limit_hit:
+        result = "MEMORY_LIMIT_EXCEEDED" # return a string since we won't calculate a hash
     elif return_code is not None:
         log_fn = puppet.clone_log()
         try:
@@ -106,7 +120,7 @@ def wait_get_hash(puppet, timeout):
                 result = stack_to_hash(stack_from_text(log_fp.read()), major=True)
         finally:
             os.unlink(log_fn)
-    else:
+    else: # XXX: I don't think this is possible
         result = None
 
     return result, new_timeout
