@@ -21,11 +21,19 @@ import os
 import os.path
 import re
 import time
+import hashlib
 
 import psutil
 
 from ffpuppet import FFPuppet
-from stack_hasher import stack_from_text, stack_to_hash
+
+try:
+    from FTB.ProgramConfiguration import ProgramConfiguration
+    from FTB.Signatures.CrashInfo import CrashInfo
+    HAVE_FUZZMANAGER = True
+except ImportError:
+    from stack_hasher import stack_from_text, stack_to_hash
+    HAVE_FUZZMANAGER = False
 
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
@@ -75,7 +83,7 @@ def pretty_time_diff(seconds):
         return "%ds" % seconds
 
 
-def wait_get_hash(puppet, timeout):
+def wait_get_hash(puppet, timeout, cfg):
     """
     Wait on FFPuppet, figure out if it was a crash, and calculate a new timeout.
     """
@@ -116,8 +124,16 @@ def wait_get_hash(puppet, timeout):
     elif return_code is not None:
         log_fn = puppet.clone_log()
         try:
-            with open(log_fn) as log_fp:
-                result = stack_to_hash(stack_from_text(log_fp.read()), major=True)
+            if cfg is None:
+                with open(log_fn) as log_fp:
+                    result = stack_to_hash(stack_from_text(log_fp.read()), major=True)
+            else:
+                with open(log_fn) as log_fp:
+                    crash = CrashInfo.fromRawCrashData(None, log_fp.read(), cfg)
+                if crash.createShortSignature() == "No crash detected":
+                    result = None
+                else:
+                    result = hashlib.sha1("%s\n%r" % (crash.createShortSignature(), crash.backtrace[:5])).hexdigest()
         finally:
             os.unlink(log_fn)
     else: # XXX: I don't think this is possible
@@ -201,6 +217,10 @@ def reduce_main(args):
     else:
         logging.getLogger().setLevel(logging.INFO)
 
+    if HAVE_FUZZMANAGER:
+        program_cfg = ProgramConfiguration.fromBinary(args.binary)
+    else:
+        program_cfg = None
     timeout = args.timeout
     ffp = FFPuppet(
         use_gdb=args.gdb,
@@ -220,7 +240,7 @@ def reduce_main(args):
             memory_limit=args.memory,
             prefs_js=args.prefs,
             extension=args.extension)
-        orig_stack, timeout = wait_get_hash(ffp, timeout)
+        orig_stack, timeout = wait_get_hash(ffp, timeout, program_cfg)
         if orig_stack is None:
             raise RuntimeError("%s didn't crash" % args.testcase)
         log.info("got crash: %s", orig_stack)
@@ -249,7 +269,7 @@ def reduce_main(args):
                         launch_timeout=args.launch_timeout,
                         memory_limit=args.memory,
                         prefs_js=args.prefs)
-                    result_try, new_timeout = wait_get_hash(ffp, timeout)
+                    result_try, new_timeout = wait_get_hash(ffp, timeout, program_cfg)
                     same_crash = (orig_stack == result_try)
                     if not same_crash:
                         break
