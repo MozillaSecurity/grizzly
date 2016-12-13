@@ -313,11 +313,18 @@ def split_reduce_area(filename, splitlines=False, begin="DDBEGIN", end="DDEND"):
             if reduce_area:
                 raise RuntimeError("begin token '%s' found without matching end token '%s'" % (begin, end))
             log.debug("No begin token '%s' found, reducing entire file", begin)
-            reduce_area = begin
-            begin = []
+            reduce_area = before
+            before = []
         else:
             log.debug("Found begin token '%s' on line %d and end token '%s' on line %d",
                       begin, len(before), end, len(before) + len(reduce_area) + 1)
+            # move trailing newline in `reduce_area` to `after` so it is not reduced out
+            if reduce_area[-1]:
+                newline_match = re.search(r'(\r?\n)$', reduce_area[-1])
+                if newline_match is not None:
+                    newline = newline_match.group(1)
+                    reduce_area[-1] = reduce_area[-1][:-len(newline)]
+                    after.insert(0, newline)
         if splitlines:
             return before, reduce_area, after
         else:
