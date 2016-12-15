@@ -236,7 +236,7 @@ def reduce_main(args):
         log.info("Running %s for initial crash", args.testcase)
         ffp.launch(
             args.binary,
-            location="file://%s" % os.path.abspath(args.testcase),
+            location=os.path.abspath(args.testcase),
             launch_timeout=args.launch_timeout,
             memory_limit=args.memory,
             prefs_js=args.prefs,
@@ -250,7 +250,7 @@ def reduce_main(args):
         log.info("original size is %d", orig)
         best_fn = "_BEST".join(os.path.splitext(args.testcase))
         try_fn = "_TRY".join(os.path.splitext(os.path.abspath(args.testcase)))
-        try_url = "file://%s" % try_fn
+        try_url = try_fn
         for reducer in args.reducer:
             log.info("using reducer: %s", reducer)
             splitter, joiner = REDUCERS[reducer]
