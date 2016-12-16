@@ -250,7 +250,6 @@ def reduce_main(args):
         log.info("original size is %d", orig)
         best_fn = "_BEST".join(os.path.splitext(args.testcase))
         try_fn = "_TRY".join(os.path.splitext(os.path.abspath(args.testcase)))
-        try_url = try_fn
         for reducer in args.reducer:
             log.info("using reducer: %s", reducer)
             splitter, joiner = REDUCERS[reducer]
@@ -266,7 +265,7 @@ def reduce_main(args):
                 for _ in range(args.n_tries):
                     ffp.launch(
                         args.binary,
-                        location=try_url,
+                        location=try_fn,
                         launch_timeout=args.launch_timeout,
                         memory_limit=args.memory,
                         prefs_js=args.prefs)
