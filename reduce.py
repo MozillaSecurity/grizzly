@@ -113,8 +113,8 @@ def wait_get_hash(puppet, timeout, cfg):
         # check if memory limit was exceeded
         log_file = puppet.clone_log()
         try:
-            with open(log_file, "r") as fp:
-                memory_limit_hit = fp.read().find("MEMORY_LIMIT_EXCEEDED") != -1
+            with open(log_file, "r") as log_fp:
+                memory_limit_hit = log_fp.read().find("MEMORY_LIMIT_EXCEEDED") != -1
         finally:
             os.unlink(log_file)
 
@@ -254,6 +254,7 @@ def reduce_main(args):
             log.info("using reducer: %s", reducer)
             splitter, joiner = REDUCERS[reducer]
             gen = FeedbackIter(splitter(testcase), formatter=joiner)
+            log.info("estimated # of iterations: %d", gen.remaining_tries())
             # skip initial few
             for _ in range(args.skip):
                 gen.next()
@@ -274,21 +275,23 @@ def reduce_main(args):
                     if not same_crash:
                         break
                 if same_crash:
+                    gen.keep(not same_crash)
                     assert len(attempt) < best
                     best = len(attempt)
                     with open(best_fn, "wb") as best_fp:
                         best_fp.writelines([prefix, attempt, suffix])
-                    log.info("I%03d - reduced ok to %d", iters, best)
+                    log.info("I%03d - reduced ok to %d (%d to go)", iters, best, gen.remaining_tries())
                     timeout = new_timeout
                 elif result_try is not None:
-                    log.info("I%03d - crashed but got %s (saved)", iters, result_try)
+                    gen.keep(not same_crash)
+                    log.info("I%03d - crashed but got %s (saved) (%d to go)", iters, result_try, gen.remaining_tries())
                     alt_fn = ("_%s" % result_try[:8]).join(os.path.splitext(args.testcase))
                     with open(alt_fn, "wb") as alt_fp:
                         alt_fp.writelines([prefix, attempt, suffix])
                     ffp.save_log("%s.log" % os.path.splitext(alt_fn)[0])
                 else:
-                    log.info("I%03d - no crash", iters)
-                gen.keep(not same_crash)
+                    gen.keep(not same_crash)
+                    log.info("I%03d - no crash (%d to go)", iters, gen.remaining_tries())
             testcase = gen.getvalue()
         os.unlink(try_fn)
     finally:
@@ -356,92 +359,121 @@ class FeedbackIter(object):
     This iterable operates on a sequence, deciding whether or not
     chunks of it can be removed.
 
-    For each iteration, the keep() method should be called with a
-    boolean indicating whether or not the chunk just removed should be
-    kept (ie, "that broke something, put it back").
 
     The size of the chunk that is removed starts at len(sequence)/2,
     and decreases to 1.  The iteration is terminated once the sequence
-    is iterated over with chunk size of 1 and no chunks are removed.
+    is iterated over with chunk size of 1.
+
+    go_until_none_removed: Setting this to True causes the reduce loop to keep
+                           going at a chunk size of 1 until nothing more can be
+                           eliminated.
     """
-    def __init__(self, sequence, formatter=lambda x: x):
-        self.data = [sequence]
-        self.tried = None
-        self._reset()
+    def __init__(self, sequence, formatter=lambda x: x, go_until_none_removed=False):
+        if sequence is not None:
+            self.data = [sequence]
         self.formatter = formatter
-
-    def __iter__(self):
-        return self
-
-    def _reset(self):
-        # pylint: disable=attribute-defined-outside-init
-        self.i = 0
-        self.found_something = False
+        self.go_until_none_removed = go_until_none_removed
+        self.cursor = 0
         self.size = 0
+        self.waiting_for_feedback = False
+        self.found_something = False
         data = []
         lens = 0
         explode = None
-        for i in self.data:
-            self.size += len(i)
+        while self.data:
+            chunk = self.data.pop(0)
+            self.size += len(chunk)
             lens += 1
             if explode is None:
-                explode = bool(len(i)//2 <= 1)
+                explode = bool(len(chunk) // 2 <= 1)
             if explode:
                 lens -= 1
-                for j in range(len(i)):
-                    data.append(i[j:j+1])
+                for j in range(len(chunk)):
+                    data.append(chunk[j:j+1])
                     lens += 1
             else:
-                spl = max(1, len(i)//2)
-                data.append(i[:spl])
-                data.append(i[spl:])
+                spl = max(1, len(chunk)//2)
+                data.append(chunk[:spl])
+                data.append(chunk[spl:])
                 if not data[-1]:
                     data.pop()
                 else:
                     lens += 1
         self.data = data
-        log.debug("chunk size: ~%d (len==%d)", self.size//lens, self.size)
+        log.debug("chunk size: ~%d (len==%d)", self.size // lens, self.size)
+
+    def remaining_tries(self):
+        """
+        Calculate the estimated number of iterations remaining. This can fluctuate
+        down whenever there is a reduction, and up when go_until_none_removed is True.
+        """
+        if not self.data:
+            return 0
+        result = len(self.data) - self.cursor
+        if len(self.data[0]) != 1:
+            # more levels to go
+            chunk_sz = len(self.data[0])
+            while True:
+                chunk_sz = max(1, chunk_sz // 2)
+                result += (self.size + chunk_sz - 1) // chunk_sz
+                if chunk_sz == 1:
+                    break
+        elif self.go_until_none_removed and self.found_something:
+            result += len(self.size)
+        return result
+
+    def __iter__(self):
+        return self
 
     def keep(self, yes):
-        if self.tried is None:
+        """
+        For each iteration, keep() should be called with a boolean indicating
+        whether or not the chunk just removed should be kept (ie. the last removal
+        broke something, put it back).
+        """
+        if not self.waiting_for_feedback:
             raise Exception("feedback before any value was generated")
         if yes:
-            self.i += 1
-            log.debug("keeping chunk %d/%d (len==%d)", self.i, len(self.data), self.size)
+            self.cursor += 1
+            log.debug("keeping chunk %d/%d (len==%d)", self.cursor, len(self.data), self.size)
         else:
-            self.size -= len(self.data[self.i])
-            self.data = self.tried
-            #self.found_something = True # setting this to True causes the reduce loop to keep
-                                         # going at chunk=1 until nothing more can be eliminated
-            log.debug("eliminated chunk %d/%d (len==%d)", self.i + 1, len(self.data) + 1, self.size)
+            self.size -= len(self.data[self.cursor])
+            self.data.pop(self.cursor)
+            if self.go_until_none_removed:
+                self.found_something = True
+            log.debug("eliminated chunk %d/%d (len==%d)", self.cursor + 1, len(self.data) + 1, self.size)
             if len(self.data) == 1:
                 log.debug("only one chunk left, assuming it is needed")
-                self._reset()
-        self.tried = None
-
-    def __next__(self):
-        return self.next()
+                self.__init__(None, formatter=self.formatter, go_until_none_removed=self.go_until_none_removed)
+        self.waiting_for_feedback = False
 
     def next(self):
-        if self.tried is not None:
+        "Alias of __next__ for Python 2."
+        return self.__next__()
+
+    def __next__(self):
+        """
+        Get the next reduced testcase to be tried. keep() should be used to provide feedback on this
+        reduce testcase before calling again.
+        """
+        if self.waiting_for_feedback:
             raise Exception("no feedback received on last value generated")
         while True:
-            self.tried = self.data[:] # make a copy
-            try:
-                rmd = self.tried.pop(self.i)
-                if len(rmd) == 1 and rmd[0] == "\n":
-                    self.keep(True)
-                    continue # skip newlines
-                return self.formatter(sum(self.tried, []))
-            except IndexError:
-                self.tried = None
+            if self.cursor >= len(self.data):
+                # end of iteration at this size. check if done
                 if not self.data or (len(self.data[0]) == 1 and not self.found_something):
                     raise StopIteration
-                else:
-                    self._reset()
+                # not done. go to next chunk size.
+                self.__init__(None, formatter=self.formatter, go_until_none_removed=self.go_until_none_removed)
+            elif len(self.data[self.cursor]) == 1 and self.data[self.cursor][0] == "\n":
+                self.keep(True) # skip newlines
+            else:
+                self.waiting_for_feedback = True
+                return self.formatter(sum([chunk for (i, chunk) in enumerate(self.data) if i != self.cursor], []))
 
     def getvalue(self):
-        if self.tried is not None:
+        "Return the current best reduced testcase."
+        if self.waiting_for_feedback:
             raise Exception("no feedback received on last value generated")
         return self.formatter(sum(self.data, []))
 
