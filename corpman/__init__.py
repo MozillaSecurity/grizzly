@@ -21,7 +21,7 @@ def _find_managers():
     here = os.path.dirname(__file__)
     known = {}
     for sub in os.listdir(here):
-        if sub.endswith(".py") and sub not in {'__init__.py', 'corpman.py'}:
+        if sub.endswith(".py") and sub not in {'__init__.py', 'corpman.py', 'tests.py'}:
             try:
                 lib = importlib.import_module('.%s' % os.path.splitext(sub)[0], 'corpman')
             except ImportError:
@@ -31,8 +31,10 @@ def _find_managers():
                 cls = getattr(lib, clsname)
                 log.debug('Checking out %s...', cls)
                 if isinstance(cls, type) and issubclass(cls, CorpusManager):
+                    if not isinstance(cls.key, str):
+                        raise RuntimeError('Key for %s should be a string, not "%s"' % (cls.__name__, cls.key))
                     if cls.key.lower() != cls.key:
-                        raise RuntimeError('Key for %s should be lowercase, not "%s"', cls.__name__, cls.key)
+                        raise RuntimeError('Key for %s should be lowercase, not "%s"' % (cls.__name__, cls.key))
                     if cls.key in known:
                         log.warning('The name "%s" already in use by %s, skipping %s',
                                     cls.key,

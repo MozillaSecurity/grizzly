@@ -1,0 +1,105 @@
+import os
+import shutil
+import tempfile
+import unittest
+
+from corpman import CorpusManager, TestFile, TestCase
+
+class SimpleCorpman(CorpusManager):
+    key = "simple"
+    def _init_fuzzer(self, aggr):
+        pass
+    def _generate(self, testcase, redirect_page, mime_type=None):
+        testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
+        return testcase
+
+class CorpusManagerTests(unittest.TestCase):
+
+    def test_0(self):
+        "test a basic corpus manager"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            # create template
+            template_file = os.path.join(corp_dir, "test_template.bin")
+            with open(template_file, "wb") as fp:
+                fp.write("template_data")
+            # create corpman
+            cm = SimpleCorpman(corp_dir)
+            self.assertEqual(cm.key, "simple")
+            self.assertEqual(cm.size(), 1) # we only added one template
+            self.assertEqual(cm.get_active_file_name(), None) # None since generate() has not been called
+            self.assertEqual(cm.landing_page(), "test_page_0000.html")
+            
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
+    def test_1(self):
+        "test CorpusManager generate() creates TestCases and TestFiles using SimpleCorpman"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        tc_dir = tempfile.mkdtemp(prefix="tc_")
+        try:
+            template_file = os.path.join(corp_dir, "test_template.bin")
+            with open(template_file, "wb") as fp:
+                fp.write("template_data")
+            cm = SimpleCorpman(corp_dir)
+            self.assertEqual(cm.landing_page(), "test_page_0000.html")
+            tc = cm.generate()
+            # make sure we move forwared when generate() is called
+            self.assertEqual(cm.landing_page(), "test_page_0001.html")
+            self.assertEqual(cm.get_active_file_name(), template_file)
+            self.assertIsInstance(tc, TestCase)
+            self.assertEqual(tc.landing_page, "test_page_0000.html")
+            tc.dump(tc_dir)
+            dumped_tf = os.listdir(tc_dir) # dumpped test files
+            self.assertIn("test_page_0000.html", dumped_tf)
+            self.assertIn("transition_0000.html", dumped_tf)            
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+            if os.path.isdir(tc_dir):
+                shutil.rmtree(tc_dir)
+
+    def test_2(self):
+        "test CorpusManager multiple calls to generate() and template rotation"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            selected_templates = set()
+            # create templates
+            template_count = 10
+            for i in range(template_count):
+                with open(os.path.join(corp_dir, "test_template_%d.bin" % i), "wb") as fp:
+                    fp.write("template_data_%d" % i)
+            cm = SimpleCorpman(corp_dir, rotate=1)
+            for i in range(50):
+                self.assertEqual(cm.landing_page(), "test_page_%04d.html" % i)
+                tc = cm.generate()
+                self.assertEqual(cm.landing_page(), "test_page_%04d.html" % (i+1))
+                selected_templates.add(cm.get_active_file_name())
+            # make sure we rotate templates
+            self.assertGreater(len(selected_templates), 1)    
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
+    def test_3(self):
+        "test CorpusManager replay mode"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            selected_templates = set()
+            # create templates
+            template_count = 10
+            for i in range(template_count):
+                with open(os.path.join(corp_dir, "test_template_%d.bin" % i), "wb") as fp:
+                    fp.write("template_data_%d" % i)
+            cm = SimpleCorpman(corp_dir, is_replay=True)
+            self.assertEqual(cm.size(), template_count)
+            for i in range(10):
+                tc = cm.generate()
+                selected_templates.add(cm.get_active_file_name())
+            self.assertEqual(len(selected_templates), template_count)
+            self.assertEqual(cm.size(), 0)
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+#TODO: info page, test other objs
