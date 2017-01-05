@@ -23,6 +23,8 @@ import argparse
 import json
 import logging
 import os
+import shutil
+import tempfile
 import time
 
 import corpman
@@ -183,6 +185,7 @@ def main(args):
 
     try:
         ffp = None # define ffp in case exceptions are raised on init
+        wwwdir = None # directory containing test files to be served
 
         # create FFPuppet object
         ffp = ffpuppet.FFPuppet(
@@ -199,7 +202,7 @@ def main(args):
             # launch FFPuppet
             if ffp.closed:
                 relaunch_countdown = args.relaunch # iterations to perform before relaunch
-                test_cases = [] # should only contain more than 1 test case when cache is > 1
+                test_cases = [] # should contain len(cache) + 1 maximum
 
                 if args.xvfb:
                     log.info("Running with Xvfb")
@@ -224,13 +227,13 @@ def main(args):
                 ffp.launch(
                     args.binary,
                     launch_timeout=args.launch_timeout,
-                    location="http://127.0.0.1:%d/%s" % (serv.get_port(), serv.landing_page),
+                    location="http://127.0.0.1:%d/%s" % (serv.get_port(), corp_man.landing_page()),
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs,
                     extension=args.extension)
 
             # generate test case
-            current_test = corp_man.generate(serv.done_page, mime_type=args.mime)
+            current_test = corp_man.generate(mime_type=args.mime)
 
             # print iteration status
             if args.replay:
@@ -245,10 +248,20 @@ def main(args):
                     log.info("Now fuzzing: %s", os.path.basename(status.test_name))
                 log.info("I%04d-R%03d ", status.iteration, status.results)
 
+            # dump test case files to filesystem to be served
+            wwwdir = tempfile.mkdtemp(prefix="grz_test_")
+            current_test.dump(wwwdir)
+
             # use Sapphire to serve the most recent test case
-            server_status = serv.serve_testcase(
-                current_test.data,
-                is_alive_cb=ffp.is_running)
+            # TODO: add optional files support
+            server_status = serv.serve_path(
+                wwwdir,
+                continue_cb=ffp.is_running,
+                optional_files=current_test.get_optional())
+
+            # remove test files
+            if wwwdir and os.path.isdir(wwwdir):
+                shutil.rmtree(wwwdir)
 
             failure_detected = server_status != sapphire.SERVED_ALL
             # only process the most recent test case if it was requested
@@ -311,6 +324,9 @@ def main(args):
 
         if serv is not None:
             serv.close()
+
+        if wwwdir and os.path.isdir(wwwdir):
+            shutil.rmtree(wwwdir)
 
         if ffp is not None:
             # close ffp and save log

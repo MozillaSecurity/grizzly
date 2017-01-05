@@ -16,35 +16,36 @@ class AvalancheCorpusManager(corpman.CorpusManager):
 
     key = "avalanche"
 
+
     def _init_fuzzer(self, _):
         self._fuzzer = None
+        self._use_transition = False
 
 
-    def _generate(self, template, redirect_page, mime_type=None):
+    def _generate(self, test_case, redirect_page, mime_type=None):
         if self._is_replay:
             raise RuntimeError("AvalancheCorpusManager does not support replay mode")
 
         # init fuzzer if needed
         if self._fuzzer is None:
-            with open(template.file_name, "r") as gmr_fp:
+            with open(test_case.template.file_name, "r") as gmr_fp:
                 self._fuzzer = avalanche.Grammar(gmr_fp)
 
-        timeout = 5000 # test case timeout
-        test = corpman.TestCase(template=template, file_ext="html")
-        test.data = "\n".join([
+        data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
             "<script>",
-            "  var tmr;",
-            "  function set_duration(){tmr=setTimeout(done, %d)}" % timeout,
-            "  function done(){",
-            "    clearTimeout(tmr);",
-            "    document.body.bgColor='FEFFFE';",
-            "    //document.getElementById('test_body').innerHTML='<p>done</p>';",
-            "    window.location='/%s';" % redirect_page,
-            "  }",
-            "  window.onload=set_duration;",
+            "var tmr;",
+            "function set_duration(){tmr=setTimeout(done, 5000)}",
+            "function done(){",
+            "  clearTimeout(tmr);",
+            "  try{fuzzPriv.GC()}catch(e){}",
+            "  try{fuzzPriv.CC()}catch(e){}",
+            "  document.body.bgColor='FEFFFE';",
+            "  window.location='/%s';" % redirect_page,
+            "}",
+            "window.onload=set_duration;",
             "</script>",
             "</head>",
             "<body id='test_body'>",
@@ -52,4 +53,4 @@ class AvalancheCorpusManager(corpman.CorpusManager):
             "</body>",
             "</html>"])
 
-        return test
+        test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))

@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
 import random
 
 import corpman
@@ -36,29 +37,31 @@ class ImageCorpusManager(corpman.CorpusManager):
             return random.randint(1, 10)
 
 
-    def _generate(self, template, redirect_page, mime_type=None):
-        timeout = 5000 # test case timeout
-        test = corpman.TestCase(template=template)
+    def _generate(self, test_case, redirect_page, mime_type=None):
+        f_ext = os.path.splitext(test_case.template.file_name)[-1]
+        data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
         if self._is_replay:
-            test.raw_data = template.get_data()
+            test_case.add_testfile(
+                corpman.TestFile(data_file, test_case.template.get_data()))
         else:
-            test.raw_data = self._fuzzer.fuzz_data(template.get_data())
+            test_case.add_testfile(
+                corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
+
+        if mime_type is None:
+            if f_ext in (".jpeg", ".jpg"):
+                mime_type = "image/jpeg"
+            elif f_ext == ".ico":
+                mime_type = "image/x-icon"
+            elif f_ext in (".bmp", ".gif", ".png"):
+                mime_type = "image/%s" % f_ext.lstrip(".")
 
         # valid images used to trigger animation used to force sync decoding
         valid_img1 = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
         valid_img2 = "data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACwAAAAAAQABAAACAkQBADs="
 
-        if mime_type is None:
-            if template.extension in ("jpeg", "jpg"):
-                mime_type = "image/jpeg"
-            elif template.extension == "ico":
-                mime_type = "image/x-icon"
-            elif template.extension in ("bmp", "gif", "png"):
-                mime_type = "image/%s" % template.extension
-
         # prepare data for playback
-        test.data = "\n".join([
+        data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
@@ -82,7 +85,7 @@ class ImageCorpusManager(corpman.CorpusManager):
             "      im1.src='%s'; // 2nd valid image" % valid_img2,
             "    }",
             "    else if(step_state==2){ // fuzzed image",
-            "      im1.src='%s';" % self.to_data_url(test.raw_data, mime_type=mime_type),
+            "      im1.src='/%s';" % data_file,
             "    }",
             "    else if(step_state==3){ // force downscaler",
             "      im1.removeEventListener('load', handle_step, false);",
@@ -120,7 +123,7 @@ class ImageCorpusManager(corpman.CorpusManager):
             "      reset(); // test complete",
             "    }",
             "  }",
-            "  tmr=setTimeout(reset, %d); // timeout" % timeout,
+            "  tmr=setTimeout(reset, 5000); // timeout",
             "  im1.addEventListener('error', reset, true);",
             "  window.onload=function(){",
             "    setTimeout(function(){",
@@ -132,4 +135,4 @@ class ImageCorpusManager(corpman.CorpusManager):
             "</body>",
             "</html>"])
 
-        return test
+        test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))

@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
 import random
 
 import corpman
@@ -33,25 +34,27 @@ class BasicImageCorpusManager(corpman.CorpusManager):
             return random.randint(1, 4)
 
 
-    def _generate(self, template, redirect_page, mime_type=None):
-        timeout = 5000 # test case timeout
-        test = corpman.TestCase(template=template)
+    def _generate(self, test_case, redirect_page, mime_type=None):
+        f_ext = os.path.splitext(test_case.template.file_name)[-1]
+        data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
         if self._is_replay:
-            test.raw_data = template.get_data()
+            test_case.add_testfile(
+                corpman.TestFile(data_file, test_case.template.get_data()))
         else:
-            test.raw_data = self._fuzzer.fuzz_data(template.get_data())
+            test_case.add_testfile(
+                corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
 
         if mime_type is None:
-            if template.extension in ("jpeg", "jpg"):
+            if f_ext in (".jpeg", ".jpg"):
                 mime_type = "image/jpeg"
-            elif template.extension == "ico":
+            elif f_ext == ".ico":
                 mime_type = "image/x-icon"
-            elif template.extension in ("bmp", "gif", "png"):
-                mime_type = "image/%s" % template.extension
+            elif f_ext in (".bmp", ".gif", ".png"):
+                mime_type = "image/%s" % f_ext.lstrip(".")
 
         # prepare data for playback
-        test.data = "\n".join([
+        data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
@@ -59,17 +62,17 @@ class BasicImageCorpusManager(corpman.CorpusManager):
             "<meta http-equiv='Cache-control' content='no-cache'>",
             "</head>",
             "<body>",
-            "<img id='m1' src='%s'>" % self.to_data_url(test.raw_data, mime_type),
+            "<img id='m1' src='/%s'>" % data_file,
             "<img id='m2' height='2' width='2'>",
             "<canvas id='c1'></canvas>",
             "<script>",
             "  var tmr;",
             "  var im1=document.getElementById('m1');",
-            "  function reset(){",
+            "  function done(){",
             "    clearTimeout(tmr);",
             "    window.location='/%s';" % redirect_page,
             "  }",
-            "  im1.addEventListener('error', reset, true);",
+            "  im1.addEventListener('error', done, true);",
             "  window.onload=function(){",
             "    var im2=document.getElementById('m2');",
             "    im2.src=im1.src;",
@@ -79,11 +82,11 @@ class BasicImageCorpusManager(corpman.CorpusManager):
             "    im2.height=%d;" % self._random_dimention(),
             "    im2.width=%d;" % self._random_dimention(),
             "    ctx.drawImage(im2, 0, 0);",
-            "    reset();",
+            "    done();",
             "  }",
-            "  tmr=setTimeout(reset, %d); // timeout" % timeout,
+            "  tmr=setTimeout(done, 5000); // timeout",
             "</script>",
             "</body>",
             "</html>"])
 
-        return test
+        test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))

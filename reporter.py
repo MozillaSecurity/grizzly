@@ -112,9 +112,12 @@ class FilesystemReporter(Reporter):
         if not os.path.isdir(major_dir):
             os.mkdir(major_dir)
 
-        # dump results to working directory
+        # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(test_cases):
-            test_case.dump(major_dir, "%s-%d" % (self._file_prefix, test_number))
+            dump_path = os.path.join(major_dir, "%s-%d" % (self._file_prefix, test_number))
+            if not os.path.isdir(dump_path):
+                os.mkdir(dump_path)
+            test_case.dump(dump_path, info_file=True)
 
         # rename and move log into bucket directory
         shutil.move(self.log_file, "%s_log.txt" % os.path.join(major_dir, self._file_prefix))
@@ -158,9 +161,12 @@ class FuzzManagerReporter(Reporter):
         if collector.search(crash_info)[0] is not None:
             return
 
-        # dump results to working directory
+        # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(test_cases):
-            test_case.dump(self._log_path, "%s-%d" % (self._file_prefix, test_number))
+            dump_path = os.path.join(self._log_path, "%s-%d" % (self._file_prefix, test_number))
+            if not os.path.isdir(dump_path):
+                os.mkdir(dump_path)
+            test_case.dump(dump_path, info_file=True)
 
         # add results to a zip file
         zip_name = ".".join([self._file_prefix, "zip"])

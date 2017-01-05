@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
 import random
 
 import corpman
@@ -22,30 +23,36 @@ class AudioCorpusManager(corpman.CorpusManager):
         self._fuzzer = loki.Loki(aggression)
 
 
-    def _generate(self, template, redirect_page, mime_type=None):
-        timeout = 5000 # test case timeout
-        test = corpman.TestCase(template=template)
+    def _generate(self, test_case, redirect_page, mime_type=None):
+        f_ext = os.path.splitext(test_case.template.file_name)[-1]
+        data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
         if self._is_replay:
-            test.raw_data = template.get_data()
+            test_case.add_testfile(
+                corpman.TestFile(data_file, test_case.template.get_data()))
         else:
-            test.raw_data = self._fuzzer.fuzz_data(template.get_data())
+            test_case.add_testfile(
+                corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
 
         if mime_type is None:
-            if template.extension in ("m4a", "m4b", "mp4"):
+            if f_ext in (".m4a", ".m4b", ".mp4"):
                 mime_type = "audio/mp4"
-            elif template.extension == "mp3":
+            elif f_ext == ".mp3":
                 mime_type = "audio/mpeg"
-            elif template.extension in ("ogg", "oga", "spx", "opus"):
+            elif f_ext in (".ogg", ".oga", ".spx", ".opus"):
                 mime_type = "audio/ogg"
-            elif template.extension == "wav":
+            elif f_ext == ".wav":
                 mime_type = "audio/wav"
 
         # add playbackRate
         if not self._is_replay and random.randint(0, 9): # 9 out of 10 times
-            playback_rate = "  try{a.playbackRate=%0.2f}catch(e){};" % (random.choice([2, 10, 100]))
+            if random.randint(0, 1):
+                rate = random.random() * random.randint(1, 20)
+            else:
+                rate = random.choice([2, 10, 100])
+            pb_rate = "  try{a.playbackRate=%0.2f}catch(e){};" % rate
         else:
-            playback_rate = ""
+            pb_rate = ""
 
         # add seek
         media_seek = []
@@ -60,8 +67,8 @@ class AudioCorpusManager(corpman.CorpusManager):
 
 
         # prepare data for playback
-        data_url = self.to_data_url(test.raw_data, mime_type=mime_type)
-        test.data = "\n".join([
+        #data_url = self.to_data_url(test.raw_data, mime_type=mime_type)
+        data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
@@ -69,7 +76,7 @@ class AudioCorpusManager(corpman.CorpusManager):
             "<meta http-equiv='Cache-control' content='no-cache'>",
             "</head>",
             "<body>",
-            "<audio id='m01' src='%s' type='%s'>" % (data_url, mime_type),
+            "<audio id='m01' src='/%s' type='%s'>" % (data_file, mime_type),
             "Error!",
             "</audio>",
             "<script>",
@@ -89,15 +96,15 @@ class AudioCorpusManager(corpman.CorpusManager):
             "  }",
             "  a.addEventListener('error', done, true);",
             "\n".join(media_seek),
-            playback_rate,
+            pb_rate,
             "  a.addEventListener('pause', done, true);",
             "  a.onplay=function(){",
-            "    pbt=setTimeout(function(){try{a.pause()}catch(e){}}, 150);",
+            "    pbt=setTimeout(function(){try{a.pause()}catch(e){}}, 100);",
             "  }",
             "  a.addEventListener('canplay', a.play, true);",
-            "  tmr=setTimeout(done, %d); // timeout" % timeout,
+            "  tmr=setTimeout(done, 5000); // timeout",
             "</script>",
             "</body>",
             "</html>"])
 
-        return test
+        test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))

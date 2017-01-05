@@ -2,6 +2,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
+import random
+
 import corpman
 import loki
 
@@ -19,19 +22,22 @@ class FontCorpusManager(corpman.CorpusManager):
 
     def _init_fuzzer(self, aggression):
         self._fuzzer = loki.Loki(aggression)
+        self._use_transition = False
 
 
-    def _generate(self, template, redirect_page, mime_type=None):
-        timeout = 5000 # test case timeout
+    def _generate(self, test_case, redirect_page, mime_type=None):
+        f_ext = os.path.splitext(test_case.template.file_name)[-1]
+        data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
-        test = corpman.TestCase(template=template)
         if self._is_replay:
-            test.raw_data = template.get_data()
+            test_case.add_testfile(
+                corpman.TestFile(data_file, test_case.template.get_data()))
         else:
-            test.raw_data = self._fuzzer.fuzz_data(template.get_data())
+            test_case.add_testfile(
+                corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
 
         # prepare data for playback
-        test.data = "\n".join([
+        data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
@@ -40,20 +46,20 @@ class FontCorpusManager(corpman.CorpusManager):
             "<style>",
             "@font-face {",
             "  font-family: TestFont;",
-            "  src: url('%s');" % self.to_data_url(test.raw_data, mime_type=mime_type),
+            "  src: url('/%s');" % data_file,
             "}",
             "body { font-family: 'TestFont' }",
             "</style>",
-            "<script>",
-            "  var tmr;",
-            "  function reset(){clearTimeout(tmr);window.location='/%s';}" % redirect_page,
-            "  window.onload=reset;",
-            "  tmr=setTimeout(reset, %d); // timeout" % timeout,
-            "</script>",
             "</head>",
             "<body>",
             "".join(["&#x%02x;" % i for i in range(32, 4096)]),
             "</body>",
+            "<script>",
+            "  var tmr;",
+            "  function reset(){clearTimeout(tmr);window.location='/%s';}" % redirect_page,
+            "  document.body.onload=reset;",
+            "  tmr=setTimeout(reset, 5000); // timeout",
+            "</script>",
             "</html>"])
 
-        return test
+        test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))
