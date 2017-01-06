@@ -248,33 +248,33 @@ def main(args):
                     log.info("Now fuzzing: %s", os.path.basename(status.test_name))
                 log.info("I%04d-R%03d ", status.iteration, status.results)
 
-            # dump test case files to filesystem to be served
+            # create working directory for current test case
             wwwdir = tempfile.mkdtemp(prefix="grz_test_")
+            # dump test case files to filesystem to be served
             current_test.dump(wwwdir)
 
             # use Sapphire to serve the most recent test case
-            # TODO: add optional files support
             server_status = serv.serve_path(
                 wwwdir,
                 continue_cb=ffp.is_running,
                 optional_files=current_test.get_optional())
 
-            # remove test files
+            # remove test case working directory
             if wwwdir and os.path.isdir(wwwdir):
                 shutil.rmtree(wwwdir)
 
-            failure_detected = server_status != sapphire.SERVED_ALL
-            # only process the most recent test case if it was requested
+            corp_man.update_test(ffp.clone_log, current_test)
+
+            # only add test case to list if something was served
+            # to maintain browser/fuzzer sync
             if server_status != sapphire.SERVED_NONE:
-                updated_test = corp_man.update_test(ffp.clone_log, current_test)
-                if updated_test is not None:
-                    current_test = updated_test
                 test_cases.append(current_test)
 
                 # manage test case cache size
                 if len(test_cases) > args.cache:
                     test_cases.pop(0)
 
+            failure_detected = server_status != sapphire.SERVED_ALL
             # handle ignored timeouts
             if failure_detected and args.ignore_timeouts and ffp.is_running():
                 ffp.close()
