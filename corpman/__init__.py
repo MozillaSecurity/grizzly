@@ -7,7 +7,7 @@ __credits__ = ["Jesse Schwartzentruber"]
 
 
 import logging
-from corpman import Template, TestCase, CorpusManager
+from .corpman import Template, TestCase, CorpusManager
 
 
 log = logging.getLogger("grizzly") # pylint: disable=invalid-name
@@ -23,7 +23,11 @@ def _find_managers():
     for sub in os.listdir(here):
         if sub.endswith(".py") and sub not in {'__init__.py', 'corpman.py', 'tests.py'}:
             try:
-                lib = importlib.import_module('.%s' % os.path.splitext(sub)[0], 'corpman')
+                # a lovely hack for pytest's sake. __future__.absolute_import doesn't seem to affect importlib?
+                try:
+                    lib = importlib.import_module('.%s' % os.path.splitext(sub)[0], 'grizzly.corpman')
+                except ImportError:
+                    lib = importlib.import_module('.%s' % os.path.splitext(sub)[0], 'corpman')
             except ImportError:
                 log.warning('ImportError for %s', os.path.splitext(sub)[0], exc_info=True)
                 continue
