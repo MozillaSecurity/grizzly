@@ -269,7 +269,8 @@ def reduce_main(args):
                         location=try_fn,
                         launch_timeout=args.launch_timeout,
                         memory_limit=args.memory,
-                        prefs_js=args.prefs)
+                        prefs_js=args.prefs,
+                        extension=args.extension)
                     result_try, new_timeout = wait_get_hash(ffp, timeout, program_cfg)
                     same_crash = (orig_stack == result_try)
                     if not same_crash:
