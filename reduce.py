@@ -466,8 +466,6 @@ class FeedbackIter(object):
                     raise StopIteration
                 # not done. go to next chunk size.
                 self.__init__(None, formatter=self.formatter, go_until_none_removed=self.go_until_none_removed)
-            elif len(self.data[self.cursor]) == 1 and self.data[self.cursor][0] == "\n":
-                self.keep(True) # skip newlines
             else:
                 self.waiting_for_feedback = True
                 return self.formatter(sum([chunk for (i, chunk) in enumerate(self.data) if i != self.cursor], []))

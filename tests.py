@@ -36,3 +36,16 @@ class GrizzlyTests(TestCase):
                 grizzly.main(grizzly.parse_args([fn, fn, 'embed']))
         finally:
             os.unlink(fn)
+
+
+class ReducerTests(TestCase):
+
+    def test_0(self):
+        "test for empty newline in test"
+        rdcr = FeedbackIter("\n\n\n".splitlines(True), "".join)
+        n = 0
+        for test in rdcr:
+            rdcr.keep(True)
+            n += 1
+        self.assertEqual(rdcr.getvalue(), "\n\n\n")
+        self.assertEqual(n, 3)
