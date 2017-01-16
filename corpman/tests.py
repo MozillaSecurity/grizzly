@@ -176,4 +176,28 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
+    def test_8(self):
+        "test extension filter normalization"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            selected_templates = set()
+            # create templates
+            with open(os.path.join(corp_dir, "test_template.bad"), "wb") as fp:
+                fp.write("template_data")
+
+            with open(os.path.join(corp_dir, "test_template1.good"), "wb") as fp:
+               fp.write("template_data")
+
+            with open(os.path.join(corp_dir, "test_template2.GOOD"), "wb") as fp:
+               fp.write("template_data")
+
+            with open(os.path.join(corp_dir, "test_template2.GReat"), "wb") as fp:
+               fp.write("template_data")
+
+            cm = SimpleCorpman(corp_dir, accepted_extensions=["good", ".greaT"])
+            self.assertEqual(cm.size(), 3)
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
 #TODO: info page, test other objs

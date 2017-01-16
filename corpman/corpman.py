@@ -159,14 +159,20 @@ class CorpusManager(object):
         self._templates = list()
 
         if os.path.isdir(self._corpus_path):
+            # create a set of normalized file extensions to look in
+            normalized_exts = set()
+            if accepted_extensions:
+                for ext in accepted_extensions:
+                    normalized_exts.add(ext.lstrip(".").lower())
+
             for d_name, _, filenames in os.walk(self._corpus_path):
                 for f_name in filenames:
                     # check for unwanted files
                     if f_name.startswith(".") or f_name.lower() in ignored_list:
                         continue
-                    if accepted_extensions:
+                    if normalized_exts:
                         ext = os.path.splitext(f_name)[1].lstrip(".").lower()
-                        if ext not in accepted_extensions:
+                        if ext not in normalized_exts:
                             continue
                     test_file = os.path.abspath(os.path.join(d_name, f_name))
                     # skip empty files
@@ -175,7 +181,7 @@ class CorpusManager(object):
         elif os.path.isfile(self._corpus_path) and os.path.getsize(self._corpus_path) > 0:
             self._templates.append(os.path.abspath(self._corpus_path))
 
-        # TODO: should be force CMs to have templates???
+        # TODO: should we force CMs to have templates???
         if not self._templates:
             raise IOError("Could not find test case(s) at %s" % self._corpus_path)
 
