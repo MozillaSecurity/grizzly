@@ -123,7 +123,6 @@ class CorpusManagerTests(unittest.TestCase):
         nd_1 = tempfile.mkdtemp(prefix="test1_", dir=corp_dir)
         nd_2 = tempfile.mkdtemp(prefix="test2_", dir=corp_dir)
         try:
-            selected_templates = set()
             # create templates
             template_count = 10
             for i in range(template_count):
@@ -142,7 +141,6 @@ class CorpusManagerTests(unittest.TestCase):
         "test multiple template files with extension filter"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
-            selected_templates = set()
             # create templates
             for i in range(10):
                 with open(os.path.join(corp_dir, "test_template_%d.bad" % i), "wb") as fp:
@@ -159,7 +157,6 @@ class CorpusManagerTests(unittest.TestCase):
         "test ignore empty template files and blacklisted files"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
-            selected_templates = set()
             # create templates
             with open(os.path.join(corp_dir, "test_template.good"), "wb") as fp:
                fp.write("template_data")
@@ -180,7 +177,6 @@ class CorpusManagerTests(unittest.TestCase):
         "test extension filter normalization"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
-            selected_templates = set()
             # create templates
             with open(os.path.join(corp_dir, "test_template.bad"), "wb") as fp:
                 fp.write("template_data")
