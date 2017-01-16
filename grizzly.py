@@ -84,6 +84,10 @@ def parse_args(args=None):
         "corpus_manager",
         help="Available corpus managers: %s" % ", ".join(sorted(corpman.managers)))
     parser.add_argument(
+        "--accepted_extensions", nargs='+',
+        help="Specify a space separated list of supported file extensions... " \
+             "ie: html svg (default: all)")
+    parser.add_argument(
         "-a", "--aggression", default=0.001, type=float,
         help="0.001 == 1/1000 (default: %(default)s)")
     parser.add_argument(
@@ -170,6 +174,7 @@ def main(args):
         raise RuntimeError("Invalid corpus manager type: %s" % args.corpus_manager)
     corp_man = corp_man(
         args.input,
+        accepted_extensions=args.accepted_extensions,
         aggression=args.aggression,
         is_replay=args.replay,
         rotate=args.rotate)

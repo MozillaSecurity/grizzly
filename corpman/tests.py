@@ -66,8 +66,7 @@ class CorpusManagerTests(unittest.TestCase):
         try:
             selected_templates = set()
             # create templates
-            template_count = 10
-            for i in range(template_count):
+            for i in range(10):
                 with open(os.path.join(corp_dir, "test_template_%d.bin" % i), "wb") as fp:
                     fp.write("template_data_%d" % i)
             cm = SimpleCorpman(corp_dir, rotate=1)
@@ -102,4 +101,79 @@ class CorpusManagerTests(unittest.TestCase):
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
+
+    def test_4(self):
+        "test single template file"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            selected_templates = set()
+            # create templates
+            for i in range(10):
+                with open(os.path.join(corp_dir, "test_template_%d.bin" % i), "wb") as fp:
+                    fp.write("template_data_%d" % i)
+            cm = SimpleCorpman(os.path.join(corp_dir, "test_template_0.bin"))
+            self.assertEqual(cm.size(), 1)
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
+    def test_5(self):
+        "test multiple template files in nested directories"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        nd_1 = tempfile.mkdtemp(prefix="test1_", dir=corp_dir)
+        nd_2 = tempfile.mkdtemp(prefix="test2_", dir=corp_dir)
+        try:
+            selected_templates = set()
+            # create templates
+            template_count = 10
+            for i in range(template_count):
+                with open(os.path.join(nd_1, "test_template_%d.bin" % i), "wb") as fp:
+                    fp.write("template_data_%d" % i)
+            for i in range(template_count):
+                with open(os.path.join(nd_2, "test_template_%d.bin" % i), "wb") as fp:
+                    fp.write("template_data_%d" % i)
+            cm = SimpleCorpman(corp_dir)
+            self.assertEqual(cm.size(), template_count*2)
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
+    def test_6(self):
+        "test multiple template files with extension filter"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            selected_templates = set()
+            # create templates
+            for i in range(10):
+                with open(os.path.join(corp_dir, "test_template_%d.bad" % i), "wb") as fp:
+                    fp.write("template_data_%d" % i)
+            with open(os.path.join(corp_dir, "test_template.good"), "wb") as fp:
+               fp.write("template_data")
+            cm = SimpleCorpman(corp_dir, accepted_extensions=["good"])
+            self.assertEqual(cm.size(), 1)
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
+    def test_7(self):
+        "test ignore empty template files and blacklisted files"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            selected_templates = set()
+            # create templates
+            with open(os.path.join(corp_dir, "test_template.good"), "wb") as fp:
+               fp.write("template_data")
+            with open(os.path.join(corp_dir, "test_template.empty"), "wb") as fp:
+               fp.write("")
+            with open(os.path.join(corp_dir, ".somefile"), "wb") as fp:
+               fp.write("template_data")
+            # /me crosses fingers and hopes this test doesn't break something on Windows...
+            with open(os.path.join(corp_dir, "thumbs.db"), "wb") as fp:
+               fp.write("template_data")
+            cm = SimpleCorpman(corp_dir)
+            self.assertEqual(cm.size(), 1)
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
 #TODO: info page, test other objs

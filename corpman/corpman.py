@@ -133,7 +133,7 @@ class CorpusManager(object):
 
     key = None # this must be overloaded in the subclass
 
-    def __init__(self, path, aggression=0.001, is_replay=False, rotate=10):
+    def __init__(self, path, accepted_extensions=None, aggression=0.001, is_replay=False, rotate=10):
         self._active_template = None
         self._corpus_path = path # directory to look for template files in
         self._fuzzer = None
@@ -144,7 +144,7 @@ class CorpusManager(object):
         self._use_transition = True # use transition page between test cases
 
         self._init_fuzzer(aggression)
-        self._scan_for_templates()
+        self._scan_for_templates(accepted_extensions)
 
 
     def _init_fuzzer(self, aggression):
@@ -153,29 +153,36 @@ class CorpusManager(object):
         """
 
 
-    def _scan_for_templates(self):
+    def _scan_for_templates(self, accepted_extensions=None):
         # ignored_list is a list of ignored files (usually auto generated OS files)
         ignored_list = ["desktop.ini", "thumbs.db"]
         self._templates = list()
+
         if os.path.isdir(self._corpus_path):
-            abs_path = os.path.abspath(self._corpus_path)
-            for test_file in os.listdir(abs_path):
-                # check for unwanted files
-                if test_file.startswith(".") or test_file.lower() in ignored_list:
-                    continue
-                test_file = os.path.join(abs_path, test_file)
-                if os.path.isfile(test_file) and os.path.getsize(test_file) > 0:
-                    self._templates.append(test_file)
+            for d_name, _, filenames in os.walk(self._corpus_path):
+                for f_name in filenames:
+                    # check for unwanted files
+                    if f_name.startswith(".") or f_name.lower() in ignored_list:
+                        continue
+                    if accepted_extensions:
+                        ext = os.path.splitext(f_name)[1].lstrip(".").lower()
+                        if ext not in accepted_extensions:
+                            continue
+                    test_file = os.path.abspath(os.path.join(d_name, f_name))
+                    # skip empty files
+                    if os.path.getsize(test_file) > 0:
+                        self._templates.append(test_file)
         elif os.path.isfile(self._corpus_path) and os.path.getsize(self._corpus_path) > 0:
             self._templates.append(os.path.abspath(self._corpus_path))
+
+        # TODO: should be force CMs to have templates???
+        if not self._templates:
+            raise IOError("Could not find test case(s) at %s" % self._corpus_path)
 
         # order list for replay to help manually remove items if needed
         if self._is_replay:
             # reverse since we use .pop()
             self._templates.sort(reverse=True)
-
-        if not self._templates:
-            raise IOError("Could not find test case(s) at %s" % self._corpus_path)
 
 
     @staticmethod
