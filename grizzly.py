@@ -232,13 +232,19 @@ def main(args):
                 ffp.launch(
                     args.binary,
                     launch_timeout=args.launch_timeout,
-                    location="http://127.0.0.1:%d/%s" % (serv.get_port(), corp_man.landing_page()),
+                    location="http://127.0.0.1:%d/%s" % (
+                        serv.get_port(),
+                        corp_man.landing_page(harness=True)),
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs,
                     extension=args.extension)
 
             # generate test case
             current_test = corp_man.generate(mime_type=args.mime)
+
+            # update sapphire redirects from the corpman
+            for redirect in corp_man.get_redirects():
+                serv.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
 
             # print iteration status
             if args.replay:

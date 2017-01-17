@@ -131,6 +131,10 @@ class CorpusManager(object):
     managers.
     """
 
+    #TODO: complete the harness
+    harness = {
+        "name":"grizzly_fuzz_harness.html",
+        "data":"<script>window.open('/next_test', 'Grizzly Fuzz');</script>"}
     key = None # this must be overloaded in the subclass
 
     def __init__(self, path, accepted_extensions=None, aggression=0.001, is_replay=False, rotate=10):
@@ -138,7 +142,9 @@ class CorpusManager(object):
         self._corpus_path = path # directory to look for template files in
         self._fuzzer = None
         self._generated = 0 # number of test cases generated
+        self._harness = None # dict holding the name and data of the in browser grizzly test harness
         self._is_replay = is_replay
+        self._redirect_map = {} # document paths to map to file names using 307s
         self._rotate_period = 0 if is_replay else rotate # how often a new template is selected
         self._templates = list() # fuzzed test cases will be based on these files
         self._use_transition = True # use transition page between test cases
@@ -151,6 +157,10 @@ class CorpusManager(object):
         """
         _init_fuzzer is meant to be implemented in subclass
         """
+
+
+    def _set_redirect(self, url, file_name, required=True):
+        self._redirect_map[url] = (file_name, required)
 
 
     def _scan_for_templates(self, accepted_extensions=None):
@@ -219,17 +229,27 @@ class CorpusManager(object):
 
         # create test case object and landing page names
         test = TestCase(
-            "test_page_%04d.html" % self._generated,
+            self.landing_page(),
             corpman_name=self.key,
             template=self._active_template)
+
+        # handle page redirects (to next test case)
         if self._use_transition:
-            redirect_page = "transition_%04d.html" % self._generated
+            redirect_page = self.landing_page(transition=True)
             rd_file = TestFile(
                 redirect_page,
-                "<script>window.location='test_page_%04d.html';</script>" % (self._generated + 1))
+                "<script>window.location='/%s';</script>" % self.landing_page(next=True))
             test.add_testfile(rd_file) # add redirect file to test case
         else:
-            redirect_page = "test_page_%04d.html" % (self._generated + 1)
+            redirect_page = self.landing_page(next=True)
+
+        # add harness to test case if it exists
+        if self._harness:
+            test.add_testfile(
+                TestFile(self._harness["name"], self._harness["data"], required=False))
+
+        # reset redirect map
+        self._redirect_map = {}
 
         self._generate(test, redirect_page, mime_type=mime_type)
         self._generated += 1
@@ -244,8 +264,23 @@ class CorpusManager(object):
             return None
 
 
-    def landing_page(self):
-        return "test_page_%04d.html" % (self._generated)
+    def get_redirects(self):
+        out = []
+        for url, file_info in self._redirect_map.items():
+            out.append({
+                "url":url,
+                "file_name":file_info[0],
+                "required":file_info[1]})
+
+        return out
+
+
+    def landing_page(self, harness=False, next=False, transition=False):
+        if harness and self._harness is not None:
+            return self._harness["name"]
+        if transition:
+            return "transition_%04d.html" % self._generated
+        return "test_page_%04d.html" % ((self._generated + 1) if next else self._generated)
 
 
     def size(self):
@@ -253,7 +288,7 @@ class CorpusManager(object):
 
 
     # TODO: rename update_test() -> finish_test()
-    # TODO: update_test() and generate() should not take test as a param
+    # TODO: update_test() and generate() should not take test as an arg
     # it should be a class member.
     def update_test(self, clone_log_cb, test):
         """

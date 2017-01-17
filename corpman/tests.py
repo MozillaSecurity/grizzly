@@ -13,6 +13,15 @@ class SimpleCorpman(CorpusManager):
         testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
         return testcase
 
+class HarnessCorpman(SimpleCorpman):
+    key = "harness"
+    def _init_fuzzer(self, aggr):
+        self._harness = self.harness
+    def _generate(self, testcase, redirect_page, mime_type=None):
+        testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
+        return testcase
+
+
 class CorpusManagerTests(unittest.TestCase):
 
     def test_0(self):
@@ -192,6 +201,78 @@ class CorpusManagerTests(unittest.TestCase):
 
             cm = SimpleCorpman(corp_dir, accepted_extensions=["good", ".greaT"])
             self.assertEqual(cm.size(), 3)
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
+    def test_9(self):
+        "test corpus manager with a harness"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        tc_dir = tempfile.mkdtemp(prefix="tc_")
+        try:
+            # create templates
+            with open(os.path.join(corp_dir, "test_template.bin"), "wb") as fp:
+               fp.write("template_data")
+
+            cm = HarnessCorpman(corp_dir)
+            self.assertEqual(cm.landing_page(harness=True), "grizzly_fuzz_harness.html")
+            self.assertEqual(cm.size(), 1)
+
+            expected_test = cm.landing_page()
+            tc = cm.generate()
+            tc.dump(tc_dir)
+            dumped_tf = os.listdir(tc_dir) # dumped test files
+            self.assertIn(expected_test, dumped_tf)
+            self.assertIn(cm.landing_page(harness=True), dumped_tf)
+
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+            if os.path.isdir(tc_dir):
+                shutil.rmtree(tc_dir)
+
+    def test_10(self):
+        "test corpus manager landing_page() without a harness"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            # create templates
+            with open(os.path.join(corp_dir, "test_template.bin"), "wb") as fp:
+               fp.write("template_data")
+
+            cm = SimpleCorpman(corp_dir)
+            self.assertIn(cm.landing_page(harness=True), "test_page_0000.html")
+
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
+    def test_11(self):
+        "test get/set and reset redirects"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            # create templates
+            with open(os.path.join(corp_dir, "test_template.bin"), "wb") as fp:
+                fp.write("template_data")
+            cm = SimpleCorpman(corp_dir)
+            test_redirs = (
+                ("url1", "file1", True),
+                ("url2", "file2", False),
+                ("url3", "file3", True),
+                ("url3", "file4", False))
+            for url, name, reqd in test_redirs:
+                cm._set_redirect(url, name, reqd)
+            results=cm.get_redirects()
+            self.assertEqual(len(results), 3)
+            f_count = 0
+            t_count = 0
+            for redir in results:
+                if redir["required"]:
+                    t_count += 1
+                else:
+                    f_count += 1
+            self.assertEqual(t_count, 1)
+            cm.generate()
+            self.assertEqual(f_count, 2)
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
