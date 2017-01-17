@@ -287,11 +287,8 @@ class CorpusManager(object):
         return len(self._templates)
 
 
-    # TODO: rename update_test() -> finish_test()
-    # TODO: update_test() and generate() should not take test as an arg
-    # it should be a class member.
-    def update_test(self, clone_log_cb, test):
+    def finish_test(self, clone_log_cb, test, files_served=None):
         """
-        update_test is meant to be implemented in subclass
+        finish_test is meant to be implemented in subclass
         """
         return None

@@ -265,7 +265,7 @@ def main(args):
             current_test.dump(wwwdir)
 
             # use Sapphire to serve the most recent test case
-            server_status = serv.serve_path(
+            server_status, files_served = serv.serve_path(
                 wwwdir,
                 continue_cb=ffp.is_running,
                 optional_files=current_test.get_optional())
@@ -274,7 +274,7 @@ def main(args):
             if wwwdir and os.path.isdir(wwwdir):
                 shutil.rmtree(wwwdir)
 
-            corp_man.update_test(ffp.clone_log, current_test)
+            corp_man.finish_test(ffp.clone_log, current_test, files_served)
 
             # only add test case to list if something was served
             # to maintain browser/fuzzer sync
