@@ -166,7 +166,6 @@ class CorpusManager(object):
     def _scan_for_templates(self, accepted_extensions=None):
         # ignored_list is a list of ignored files (usually auto generated OS files)
         ignored_list = ["desktop.ini", "thumbs.db"]
-        self._templates = list()
 
         if os.path.isdir(self._corpus_path):
             # create a set of normalized file extensions to look in
@@ -215,9 +214,7 @@ class CorpusManager(object):
     def generate(self, mime_type=None):
         # check if we should choose a new active template
         if self._rotate_period > 0 and (self._generated % self._rotate_period) == 0:
-            # rescan test case directory to pick up any new additions
-            self._scan_for_templates()
-            # only switch templates if we have more than one
+            # only switch t emplates if we have more than one
             if len(self._templates) > 1:
                 self._active_template = None
 
