@@ -239,7 +239,7 @@ def main(args):
                     location="http://127.0.0.1:%d/%s#%d" % (
                         serv.get_port(),
                         corp_man.landing_page(harness=True),
-                        corp_man.test_duration),
+                        args.timeout),
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs,
                     extension=args.extension)
