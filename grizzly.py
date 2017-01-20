@@ -232,9 +232,10 @@ def main(args):
                 ffp.launch(
                     args.binary,
                     launch_timeout=args.launch_timeout,
-                    location="http://127.0.0.1:%d/%s" % (
+                    location="http://127.0.0.1:%d/%s#%d000" % (
                         serv.get_port(),
-                        corp_man.landing_page(harness=True)),
+                        corp_man.landing_page(harness=True),
+                        args.timeout),
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs,
                     extension=args.extension)

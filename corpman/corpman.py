@@ -131,10 +131,52 @@ class CorpusManager(object):
     managers.
     """
 
-    #TODO: complete the harness
     harness = {
-        "name":"grizzly_fuzz_harness.html",
-        "data":"<script>window.open('/next_test', 'Grizzly Fuzz');</script>"}
+        "name": "grizzly_fuzz_harness.html",
+        "data": "\n".join([
+            "<!DOCTYPE html>",
+            "<html>",
+            "<head>",
+            "<meta charset=UTF-8>",
+            "<script>",
+            "let limit_tmr, closed_tmr, sub, time_limit = Number(location.hash.substr(1));",
+            "let req_url = '/first_test';",
+            "if (time_limit <= 0) {",
+            "  dump('No time limit given, using default of 5s\\n');",
+            "  time_limit = 5000;",
+            "} else {",
+            "  dump('Using time limit of ' + time_limit + '\\n');",
+            "}",
+            "let main = function(){",
+            "  sub = open(req_url, 'Grizzly Fuzz');",
+            "  limit_tmr = setTimeout(function(){",
+            "    clearInterval(closed_tmr);",
+            "    dump('Time limit exceeded, closing it\\n');",
+            "    sub.close();",
+            "    setTimeout(main, 0);",
+            "  }, time_limit);",
+            "  closed_tmr = setInterval(function(){",
+            "    if (sub.closed) {",
+            "      clearTimeout(limit_tmr);",
+            "      clearInterval(closed_tmr);",
+            "      dump('Testcase closed itself\\n');",
+            "      setTimeout(main, 0);",
+            "    }",
+            "  }, 50);",
+            "  req_url = '/next_test';",
+            "};",
+            "window.onload = main;",
+            "window.onbeforeunload = function() {",
+            "  clearInterval(closed_tmr);",
+            "  clearTimeout(limit_tmr);",
+            "  dump('Cleaning up\\n');",
+            "  if (!sub.closed) {",
+            "    sub.close();",
+            "  }",
+            "};",
+            "</script>",
+            "</head>",
+            "</html>"])}
     key = None # this must be overloaded in the subclass
 
     def __init__(self, path, accepted_extensions=None, aggression=0.001, is_replay=False, rotate=10):
