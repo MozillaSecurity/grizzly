@@ -180,6 +180,7 @@ class CorpusManager(object):
     key = None # this must be overloaded in the subclass
 
     def __init__(self, path, accepted_extensions=None, aggression=0.001, is_replay=False, rotate=10):
+        self.test_duration = 5000 # used by the html harness to redirect to next testcase
         self._active_template = None
         self._corpus_path = path # directory to look for template files in
         self._fuzzer = None
