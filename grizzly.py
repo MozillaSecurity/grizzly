@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python2
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -187,6 +188,10 @@ def main(args):
     # launch http server used to serve test cases
     log.debug("Starting sapphire server")
     serv = sapphire.Sapphire(timeout=args.timeout)
+
+    # add include paths to server
+    for url_path, target_path in corp_man.get_includes():
+        serv.add_include(url_path, target_path)
 
     try:
         ffp = None # define ffp in case exceptions are raised on init

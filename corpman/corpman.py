@@ -185,6 +185,7 @@ class CorpusManager(object):
         self._fuzzer = None
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
+        self._include_map = {} # mapping of directories that can be requested
         self._is_replay = is_replay
         self._redirect_map = {} # document paths to map to file names using 307s
         self._rotate_period = 0 if is_replay else rotate # how often a new template is selected
@@ -199,6 +200,13 @@ class CorpusManager(object):
         """
         _init_fuzzer is meant to be implemented in subclass
         """
+        pass
+
+
+    def _add_include(self, url_path, target_path):
+        if not os.path.isdir(target_path):
+            raise IOError("%r does not exist")
+        self._include_map[url_path] = os.path.abspath(target_path)
 
 
     def _set_redirect(self, url, file_name, required=True):
@@ -256,7 +264,7 @@ class CorpusManager(object):
     def generate(self, mime_type=None):
         # check if we should choose a new active template
         if self._rotate_period > 0 and (self._generated % self._rotate_period) == 0:
-            # only switch t emplates if we have more than one
+            # only switch templates if we have more than one
             if len(self._templates) > 1:
                 self._active_template = None
 
@@ -301,6 +309,10 @@ class CorpusManager(object):
             return self._active_template.file_name
         except AttributeError:
             return None
+
+
+    def get_includes(self):
+        return self._include_map.items()
 
 
     def get_redirects(self):

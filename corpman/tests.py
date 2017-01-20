@@ -277,4 +277,26 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
+    def test_12(self):
+        "test get/set includes"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        inc_dir = tempfile.mkdtemp(prefix="inc_")
+        try:
+            # create templates
+            with open(os.path.join(corp_dir, "dummy_template.bin"), "wb") as fp:
+                fp.write("template_data")
+
+            cm = SimpleCorpman(corp_dir)
+            cm._add_include("/", inc_dir)
+            with self.assertRaises(IOError):
+                cm._add_include("bad_path", "/does_not_exist/asdf")
+
+            results=cm.get_includes()
+            self.assertEqual(len(results), 1)
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+            if os.path.isdir(inc_dir):
+                shutil.rmtree(inc_dir)
+
 #TODO: info page, test other objs
