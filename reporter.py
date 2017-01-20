@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 import os
 import shutil
 import tempfile
@@ -22,6 +23,10 @@ import stack_hasher
 __all__ = ("FilesystemReporter", "FuzzManagerReporter")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
+
+
+log = logging.getLogger("grizzly") # pylint: disable=invalid-name
+
 
 def create_log(path=None):
     fd, file_name = tempfile.mkstemp(
@@ -158,7 +163,9 @@ class FuzzManagerReporter(Reporter):
 
         # search for a cached signature match and if the signature
         # is already in the cache don't bother submitting
-        if collector.search(crash_info)[0] is not None:
+        cache_signature = collector.search(crash_info)[1]
+        if cache_signature is not None:
+            log.info("Crash matched existing signature: %s", cache_signature["shortDescription"])
             return
 
         # dump test cases and the contained files to working directory
