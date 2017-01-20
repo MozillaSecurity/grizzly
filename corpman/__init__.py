@@ -28,8 +28,8 @@ def _find_managers():
                     lib = importlib.import_module('.%s' % os.path.splitext(sub)[0], 'grizzly.corpman')
                 except ImportError:
                     lib = importlib.import_module('.%s' % os.path.splitext(sub)[0], 'corpman')
-            except ImportError:
-                log.warning('ImportError for %s', os.path.splitext(sub)[0], exc_info=True)
+            except ImportError as e:
+                log.warning('ImportError for %s: %s', os.path.splitext(sub)[0], e)
                 continue
             for clsname in dir(lib):
                 cls = getattr(lib, clsname)
