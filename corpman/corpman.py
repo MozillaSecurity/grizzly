@@ -281,13 +281,13 @@ class CorpusManager(object):
             corpman_name=self.key,
             template=self._active_template)
 
+        # reset redirect map
+        self._redirect_map = {}
+
         # handle page redirects (to next test case)
         if self._use_transition:
             redirect_page = self.landing_page(transition=True)
-            rd_file = TestFile(
-                redirect_page,
-                "<script>window.location='/%s';</script>" % self.landing_page(next=True))
-            test.add_testfile(rd_file) # add redirect file to test case
+            self._set_redirect(redirect_page, self.landing_page(next=True))
         else:
             redirect_page = self.landing_page(next=True)
 
@@ -295,9 +295,6 @@ class CorpusManager(object):
         if self._harness:
             test.add_testfile(
                 TestFile(self._harness["name"], self._harness["data"], required=False))
-
-        # reset redirect map
-        self._redirect_map = {}
 
         self._generate(test, redirect_page, mime_type=mime_type)
         self._generated += 1
@@ -331,7 +328,7 @@ class CorpusManager(object):
         if harness and self._harness is not None:
             return self._harness["name"]
         if transition:
-            return "transition_%04d.html" % self._generated
+            return "transition_%04d" % self._generated
         return "test_page_%04d.html" % ((self._generated + 1) if next else self._generated)
 
 

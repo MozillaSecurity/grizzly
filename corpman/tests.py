@@ -38,7 +38,7 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertEqual(cm.size(), 1) # we only added one template
             self.assertEqual(cm.get_active_file_name(), None) # None since generate() has not been called
             self.assertEqual(cm.landing_page(), "test_page_0000.html")
-            
+            self.assertEqual(cm.landing_page(transition=True), "transition_0000")
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
@@ -54,15 +54,18 @@ class CorpusManagerTests(unittest.TestCase):
             cm = SimpleCorpman(corp_dir)
             self.assertEqual(cm.landing_page(), "test_page_0000.html")
             tc = cm.generate()
-            # make sure we move forwared when generate() is called
+            # check for transition redirect
+            self.assertEqual("transition_0000", cm.get_redirects()[0]["url"])
+            # check for transition page incremented
+            self.assertEqual("transition_0001", cm.landing_page(transition=True))
+            # make sure we move forwarded when generate() is called
             self.assertEqual(cm.landing_page(), "test_page_0001.html")
             self.assertEqual(cm.get_active_file_name(), template_file)
             self.assertIsInstance(tc, TestCase)
             self.assertEqual(tc.landing_page, "test_page_0000.html")
             tc.dump(tc_dir)
-            dumped_tf = os.listdir(tc_dir) # dumpped test files
+            dumped_tf = os.listdir(tc_dir) # dumped test files
             self.assertIn("test_page_0000.html", dumped_tf)
-            self.assertIn("transition_0000.html", dumped_tf)            
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
