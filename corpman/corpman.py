@@ -131,52 +131,6 @@ class CorpusManager(object):
     managers.
     """
 
-    harness = {
-        "name": "grizzly_fuzz_harness.html",
-        "data": "\n".join([
-            "<!DOCTYPE html>",
-            "<html>",
-            "<head>",
-            "<meta charset=UTF-8>",
-            "<script>",
-            "let limit_tmr, closed_tmr, sub, time_limit = Number(location.hash.substr(1));",
-            "let req_url = '/first_test';",
-            "if (time_limit <= 0) {",
-            "  dump('No time limit given, using default of 5s\\n');",
-            "  time_limit = 5000;",
-            "} else {",
-            "  dump('Using time limit of ' + time_limit + '\\n');",
-            "}",
-            "let main = function(){",
-            "  sub = open(req_url, 'Grizzly Fuzz');",
-            "  limit_tmr = setTimeout(function(){",
-            "    clearInterval(closed_tmr);",
-            "    dump('Time limit exceeded, closing it\\n');",
-            "    sub.close();",
-            "    setTimeout(main, 0);",
-            "  }, time_limit);",
-            "  closed_tmr = setInterval(function(){",
-            "    if (sub.closed) {",
-            "      clearTimeout(limit_tmr);",
-            "      clearInterval(closed_tmr);",
-            "      dump('Testcase closed itself\\n');",
-            "      setTimeout(main, 0);",
-            "    }",
-            "  }, 50);",
-            "  req_url = '/next_test';",
-            "};",
-            "window.onload = main;",
-            "window.onbeforeunload = function() {",
-            "  clearInterval(closed_tmr);",
-            "  clearTimeout(limit_tmr);",
-            "  dump('Cleaning up\\n');",
-            "  if (!sub.closed) {",
-            "    sub.close();",
-            "  }",
-            "};",
-            "</script>",
-            "</head>",
-            "</html>"])}
     key = None # this must be overloaded in the subclass
 
     def __init__(self, path, accepted_extensions=None, aggression=0.001, is_replay=False, rotate=10):
@@ -191,7 +145,7 @@ class CorpusManager(object):
         self._redirect_map = {} # document paths to map to file names using 307s
         self._rotate_period = 0 if is_replay else rotate # how often a new template is selected
         self._templates = list() # fuzzed test cases will be based on these files
-        self._use_transition = True # use transition page between test cases
+        self._use_transition = True # use transition redirect to next test case
 
         self._init_fuzzer(aggression)
         self._scan_for_templates(accepted_extensions)
@@ -258,6 +212,21 @@ class CorpusManager(object):
         return "data:%s;base64,%s" % (mime_type, base64.standard_b64encode(data))
 
 
+    def enable_harness(self, file_name=None, harness_data=None):
+        self._use_transition = False
+        self._harness = {}
+        if file_name is None:
+            self._harness["name"] = "grizzly_fuzz_harness.html"
+        else:
+            self._harness["name"] = file_name
+
+        if harness_data is None:
+            with open(os.path.join(os.path.dirname(__file__), "harness.html"), "r") as in_fp:
+                self._harness["data"] = in_fp.read()
+        else:
+            self._harness["data"] = harness_data
+
+
     def _generate(self, test, redirect_page, mime_type=None):
         raise NotImplementedError("_generate must be implemented in the subclass")
 
@@ -291,8 +260,11 @@ class CorpusManager(object):
         else:
             redirect_page = self.landing_page(next=True)
 
-        # add harness to test case if it exists
         if self._harness:
+            # setup redirects for harness
+            self._set_redirect("first_test", self.landing_page(), required=False)
+            self._set_redirect("next_test", self.landing_page(next=True))
+            # add harness to test case
             test.add_testfile(
                 TestFile(self._harness["name"], self._harness["data"], required=False))
 
@@ -315,12 +287,8 @@ class CorpusManager(object):
 
     def get_redirects(self):
         out = []
-        for url, file_info in self._redirect_map.items():
-            out.append({
-                "url":url,
-                "file_name":file_info[0],
-                "required":file_info[1]})
-
+        for url, (file_name, required) in self._redirect_map.items():
+            out.append({"url":url, "file_name":file_name, "required":required})
         return out
 
 
@@ -328,7 +296,7 @@ class CorpusManager(object):
         if harness and self._harness is not None:
             return self._harness["name"]
         if transition:
-            return "transition_%04d" % self._generated
+            return "next_test" # point to redirect
         return "test_page_%04d.html" % ((self._generated + 1) if next else self._generated)
 
 

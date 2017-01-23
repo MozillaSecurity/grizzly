@@ -13,14 +13,6 @@ class SimpleCorpman(CorpusManager):
         testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
         return testcase
 
-class HarnessCorpman(SimpleCorpman):
-    key = "harness"
-    def _init_fuzzer(self, aggr):
-        self._harness = self.harness
-    def _generate(self, testcase, redirect_page, mime_type=None):
-        testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
-        return testcase
-
 
 class CorpusManagerTests(unittest.TestCase):
 
@@ -38,7 +30,7 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertEqual(cm.size(), 1) # we only added one template
             self.assertEqual(cm.get_active_file_name(), None) # None since generate() has not been called
             self.assertEqual(cm.landing_page(), "test_page_0000.html")
-            self.assertEqual(cm.landing_page(transition=True), "transition_0000")
+            self.assertEqual(cm.landing_page(transition=True), "next_test")
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
@@ -55,9 +47,7 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertEqual(cm.landing_page(), "test_page_0000.html")
             tc = cm.generate()
             # check for transition redirect
-            self.assertEqual("transition_0000", cm.get_redirects()[0]["url"])
-            # check for transition page incremented
-            self.assertEqual("transition_0001", cm.landing_page(transition=True))
+            self.assertEqual("next_test", cm.get_redirects()[0]["url"])
             # make sure we move forwarded when generate() is called
             self.assertEqual(cm.landing_page(), "test_page_0001.html")
             self.assertEqual(cm.get_active_file_name(), template_file)
@@ -209,7 +199,7 @@ class CorpusManagerTests(unittest.TestCase):
                 shutil.rmtree(corp_dir)
 
     def test_9(self):
-        "test corpus manager with a harness"
+        "test corpus manager with default harness"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         tc_dir = tempfile.mkdtemp(prefix="tc_")
         try:
@@ -217,17 +207,34 @@ class CorpusManagerTests(unittest.TestCase):
             with open(os.path.join(corp_dir, "test_template.bin"), "wb") as fp:
                fp.write("template_data")
 
-            cm = HarnessCorpman(corp_dir)
+            cm = SimpleCorpman(corp_dir)
+            cm.enable_harness()
             self.assertEqual(cm.landing_page(harness=True), "grizzly_fuzz_harness.html")
             self.assertEqual(cm.size(), 1)
 
             expected_test = cm.landing_page()
             tc = cm.generate()
             tc.dump(tc_dir)
+
+            # verify test files
             dumped_tf = os.listdir(tc_dir) # dumped test files
+            self.assertEqual(len(dumped_tf), 2) # expect test and harness
             self.assertIn(expected_test, dumped_tf)
             self.assertIn(cm.landing_page(harness=True), dumped_tf)
 
+            # verify redirects
+            redirs = cm.get_redirects()
+            self.assertEqual(len(redirs), 2)
+            r_count = 0
+            for redir in redirs:
+                self.assertIn(redir["url"], ["next_test", "first_test"])
+                if redir["url"] == "first_test":
+                    self.assertEqual(redir["file_name"], expected_test)
+                elif redir["url"] == "next_test":
+                    self.assertEqual(redir["file_name"], cm.landing_page())
+                if redir["required"]:
+                    r_count += 1
+            self.assertEqual(r_count, 1)
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
