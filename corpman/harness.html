@@ -13,31 +13,33 @@ if (time_limit <= 0) {
 }
 let main = function(){
   sub = open(req_url, 'Grizzly Fuzz');
+  sub.addEventListener('beforeunload', function(){
+    closed_tmr = setInterval(function(){
+      if (sub.closed) {
+        clearTimeout(limit_tmr);
+        clearInterval(closed_tmr);
+        dump('Testcase closed itself\n');
+        setTimeout(main, 0);
+      }
+    }, 10);
+  });
   limit_tmr = setTimeout(function(){
     clearInterval(closed_tmr);
     dump('Time limit exceeded, closing it\n');
     sub.close();
     setTimeout(main, 0);
   }, time_limit);
-  closed_tmr = setInterval(function(){
-    if (sub.closed) {
-      clearTimeout(limit_tmr);
-      clearInterval(closed_tmr);
-      dump('Testcase closed itself\n');
-      setTimeout(main, 0);
-    }
-  }, 20);
   req_url = '/next_test';
 };
 window.onload = main;
-window.onbeforeunload = function() {
+window.addEventListener('beforeunload', function(){
   clearInterval(closed_tmr);
   clearTimeout(limit_tmr);
   dump('Cleaning up\n');
   if (!sub.closed) {
     sub.close();
   }
-};
+});
 </script>
 </head>
 </html>
