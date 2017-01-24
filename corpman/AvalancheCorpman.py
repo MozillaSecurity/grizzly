@@ -18,8 +18,7 @@ class AvalancheCorpusManager(corpman.CorpusManager):
 
 
     def _init_fuzzer(self, _):
-        self._fuzzer = None
-        self._use_transition = False
+        self.enable_harness()
 
 
     def _generate(self, test_case, redirect_page, mime_type=None):
@@ -36,16 +35,14 @@ class AvalancheCorpusManager(corpman.CorpusManager):
             "<html>",
             "<head>",
             "<script>",
-            "var tmr;",
-            "function set_duration(){tmr=setTimeout(done, 5000)}",
+            "var tmr=setTimeout(done, 5000);",
             "function done(){",
             "  clearTimeout(tmr);",
             "  try{fuzzPriv.GC()}catch(e){}",
             "  try{fuzzPriv.CC()}catch(e){}",
             "  document.body.bgColor='FEFFFE';",
-            "  window.location='/%s';" % redirect_page,
+            "  window.close();",
             "}",
-            "window.onload=set_duration;",
             "</script>",
             "</head>",
             "<body id='test_body'>",
