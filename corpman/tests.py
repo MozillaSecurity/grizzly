@@ -309,4 +309,22 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(inc_dir):
                 shutil.rmtree(inc_dir)
 
+    def test_13(self):
+        "test get/set and reset dynamic responses (callbacks)"
+        def test_callback():
+            return "PASS"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            # create templates
+            with open(os.path.join(corp_dir, "test_template.bin"), "wb") as fp:
+                fp.write("template_data")
+            cm = SimpleCorpman(corp_dir)
+            cm._add_dynamic_response("test_url", test_callback, mime_type="text/plain")
+            results=cm.get_dynamic_responses()
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0]["callback"](), "PASS")
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
 #TODO: info page, test other objs

@@ -137,6 +137,7 @@ class CorpusManager(object):
         self.test_duration = 5000 # used by the html harness to redirect to next testcase
         self._active_template = None
         self._corpus_path = path # directory to look for template files in
+        self._dynamic_map = {}
         self._fuzzer = None
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
@@ -156,6 +157,10 @@ class CorpusManager(object):
         _init_fuzzer is meant to be implemented in subclass
         """
         pass
+
+
+    def _add_dynamic_response(self, url_path, callback, mime_type="application/octet-stream"):
+        self._dynamic_map[url_path] = (callback, mime_type)
 
 
     def _add_include(self, url_path, target_path):
@@ -279,6 +284,13 @@ class CorpusManager(object):
             return self._active_template.file_name
         except AttributeError:
             return None
+
+
+    def get_dynamic_responses(self):
+        out = []
+        for url, (callback, mime) in self._dynamic_map.items():
+            out.append({"url":url, "callback":callback, "mime":mime})
+        return out
 
 
     def get_includes(self):
