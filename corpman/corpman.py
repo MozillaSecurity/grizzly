@@ -98,6 +98,9 @@ class TestCase(object):
 
         # save test file page
         for test_file in self._test_files:
+            target_path = os.path.join(log_dir, os.path.dirname(test_file.file_name))
+            if not os.path.isdir(target_path):
+                os.makedirs(target_path)
             with open(os.path.join(log_dir, test_file.file_name), "wb") as out_fp:
                 out_fp.write(test_file.data)
 

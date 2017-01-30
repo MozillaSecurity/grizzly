@@ -327,4 +327,24 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
+    def test_14(self):
+        "test adding test files in nested directories"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        tc_dir = tempfile.mkdtemp(prefix="tc_")
+        try:
+            template_file = os.path.join(corp_dir, "test_template.bin")
+            with open(template_file, "wb") as fp:
+                fp.write("template_data")
+            cm = SimpleCorpman(corp_dir)
+            tc = cm.generate()
+            test_file_path = "test/dir/path/file.txt"
+            tc.add_testfile(TestFile(test_file_path, "somedata"))
+            tc.dump(tc_dir)
+            self.assertTrue(os.path.isfile(os.path.join(tc_dir, test_file_path)))
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+            if os.path.isdir(tc_dir):
+                shutil.rmtree(tc_dir)
+
 #TODO: info page, test other objs
