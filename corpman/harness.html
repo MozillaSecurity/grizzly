@@ -13,22 +13,27 @@ if (time_limit <= 0) {
   dump('Using time limit of ' + time_limit + '\n');
 }
 let main = function(){
+  let is_done = false;
   sub = open(req_url, 'Grizzly Fuzz');
   sub.addEventListener('beforeunload', function(){
     closed_tmr = setInterval(function(){
-      if (sub.closed) {
+      if (!is_done && sub.closed) {
         clearTimeout(limit_tmr);
         clearInterval(closed_tmr);
+        is_done = true;
         dump('Testcase closed itself\n');
         setTimeout(main, 0);
       }
     }, 10);
   });
   limit_tmr = setTimeout(function(){
-    clearInterval(closed_tmr);
-    dump('Time limit exceeded, closing it\n');
-    sub.close();
-    setTimeout(main, 0);
+    if (!is_done) {
+      clearInterval(closed_tmr);
+      is_done = true;
+      dump('Time limit exceeded, closing it\n');
+      sub.close();
+      setTimeout(main, 0);
+    }
   }, time_limit);
   req_url = '/next_test';
 };
