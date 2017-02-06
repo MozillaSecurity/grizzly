@@ -184,6 +184,10 @@ def main(args):
     else:
         log.info("Running in FUZZING mode")
 
+    if (corp_man.test_duration/1000.0) >= args.timeout:
+        raise RuntimeError("Test duration (%0.02fs) should be less than browser timeout (%ds)" % (
+            (corp_man.test_duration/1000.0), args.timeout))
+
     # launch http server used to serve test cases
     log.debug("Starting sapphire server")
     serv = sapphire.Sapphire(timeout=args.timeout)
