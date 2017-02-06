@@ -193,8 +193,8 @@ def main(args):
         serv.add_include(url_path, target_path)
 
     # add dynamic responses to the server
-    for url_path, (callback, mime_type) in corp_man.get_dynamic_responses():
-        serv.add_dynamic_response(url_path, callback, mime_type)
+    for dr in corp_man.get_dynamic_responses():
+        serv.add_dynamic_response(dr["url"], dr["callback"], dr["mime"])
 
     try:
         ffp = None # define ffp in case exceptions are raised on init
