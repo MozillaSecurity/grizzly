@@ -327,4 +327,4 @@ class CorpusManager(object):
         """
         finish_test is meant to be implemented in subclass
         """
-        return None
+        pass
