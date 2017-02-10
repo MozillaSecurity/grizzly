@@ -34,6 +34,7 @@ class AvalancheCorpusManager(corpman.CorpusManager):
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
+            "<meta charset='UTF-8'>",
             "<script>",
             "var tmr=setTimeout(done, %d);" % self.test_duration,
             "function done(){",
