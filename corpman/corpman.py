@@ -102,7 +102,10 @@ class TestCase(object):
             if not os.path.isdir(target_path):
                 os.makedirs(target_path)
             with open(os.path.join(log_dir, test_file.file_name), "wb") as out_fp:
-                out_fp.write(test_file.data)
+                if isinstance(test_file.data, bytes) or not test_file.encoding:
+                    out_fp.write(test_file.data)
+                else:
+                    out_fp.write(test_file.data.encode(test_file.encoding))
 
         # save test case and template file information
         if info_file:
@@ -122,9 +125,10 @@ class TestCase(object):
 
 
 class TestFile(object):
-    def __init__(self, file_name, data, required=True):
-        self.file_name = file_name # name including path relative to wwwroot
+    def __init__(self, file_name, data, encoding="UTF-8", required=True):
         self.data = data
+        self.encoding = encoding
+        self.file_name = file_name # name including path relative to wwwroot
         self.required = required # this file must be served to complete test case
 
 
@@ -323,4 +327,4 @@ class CorpusManager(object):
         """
         finish_test is meant to be implemented in subclass
         """
-        return None
+        pass
