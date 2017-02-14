@@ -29,8 +29,42 @@ class WebGLCorpusManager(corpman.CorpusManager):
     def _fuzz(self, frames):
 
         aggression = random.randint(1, 10)
+        for _ in range(aggression):
+            #fuzz_choice = random.randint(0, 3)
+            fuzz_choice = 1
+            if fuzz_choice == 0: # shuffle frames
+                self._munge_setup(frames)
+            elif fuzz_choice == 1:
+                self._munge_buffer_data(frames)
+            elif fuzz_choice == 2:
+                print "hold"
+
+    def _munge_buffer_data(self, frames):
+        buffer_constants_list = ['__GL_STATIC_DRAW', '__GL_STREAM_DRAW', '__GL_DYNAMIC_DRAW', '__GL_ARRAY_BUFFER', '__GL_ELEMENT_ARRAY_BUFFER', '__GL_BUFFER_SIZE', '__GL_BUFFER_USAGE']
+
+        for frameset in frames:
+            for frame in frameset:
+                if frame == "bufferData":
+                    new_frame = list(frame)
+                    new_frame[-1] = buffer_constants_list[random.randint(0, len(buffer_constants_list) - 1)]
+                    frameset.extend(new_frame)
+
+    def _duplicate_frames(self, frames):
+        total_frames = len(frames)
+        chunk = random.randint(1, total_frames)
+        starting_point = random.randint(0, (total_frames) - chunk)
+        insertion_point = random.randint(0, (total_frames))
+
+        working_frames = frames[starting_point:starting_point + chunk]
+
+        frames.insert(insertion_point, working_frames)
+
+    def _munge_setup(self, frames):
+
+        aggression = random.randint(1, 10)
 
         for _ in range(aggression):
+
             fuzz_choice = random.randint(0, 3)
 
             if fuzz_choice == 0: # shuffle frames
@@ -41,22 +75,9 @@ class WebGLCorpusManager(corpman.CorpusManager):
                 removed_frame = random.randint(1, len(frames) - 1)
                 del frames[removed_frame]
 
-    def _duplicate_frames(self, frames):
-
-        total_frames = len(frames)
-        chunk = random.randint(1, total_frames)
-        starting_point = random.randint(0, (total_frames) - chunk)
-        insertion_point = random.randint(0, (total_frames))
-
-        working_frames = frames[starting_point:starting_point + chunk]
-
-        frames.insert(insertion_point, working_frames)
-
 
     def _generate(self, test_case, redirect_page, mime_type=None):
-        timeout = 5000 # test case timeout
-         # test = corpman.TestCase(template=template)
-
+        timeout = 1000 # test case timeout
 
         with open(test_case.template.file_name) as json_data:
             data = json.load(json_data)
@@ -67,7 +88,7 @@ class WebGLCorpusManager(corpman.CorpusManager):
         self._fuzz(temp_frames)
         temp_data["frames"][0] = temp_frames
 
-        with open(os.path.join('..', 'grizzly-private', 'resources', 'webgl', 'rr-utilities.js'), 'r') as fp:
+        with open(os.path.join('..', 'grizzly-private', 'resources', 'webgl', 'utilities.js'), 'r') as fp:
             utility_data = fp.read()
         utilities_data_url = self.to_data_url(utility_data, mime_type="appliation/javascript")
 
@@ -77,10 +98,9 @@ class WebGLCorpusManager(corpman.CorpusManager):
 
         with tempfile.NamedTemporaryFile(delete=False) as outfile:
             json.dump(temp_data, outfile, indent=4)
+            outfile.seek(0)
             fuzzed_file_data = outfile.read()
         fuzzedfile_data_url = self.to_data_url(fuzzed_file_data, mime_type="appliation/json")
-
-
         # prepare data for playback
         data = "\n".join([
             "<html>",
@@ -99,7 +119,7 @@ class WebGLCorpusManager(corpman.CorpusManager):
             "</head>",
             "<body>",
             "<script>",
-            "window.WEBGLRR_DISABLE_ATTACH = null;",
+            "    window.WEBGLRR_DISABLE_ATTACH = null;",
             "</script>",
             "<script src='%s'>" % webglrr_data_url, "</script>",
             "<script src='%s'>" % utilities_data_url, "</script>",
@@ -109,26 +129,27 @@ class WebGLCorpusManager(corpman.CorpusManager):
             "<div id='sandbox'></div>",
             "<hr/>",
             "<script>",
-            "    // var srcPath = args['src'];",
-            "    srcPath = '%s'" % fuzzedfile_data_url,
-            "    if (srcPath) {",
-            "        var xhr = new XMLHttpRequest();",
-            "        xhr.open('GET', srcPath, true);",
-            "        xhr.responseType = 'blob';",
-            "        xhr.onreadystatechange = function(e) {",
-            "            if (xhr.readyState != 4)",
-            "                return;",
-            "            var blob = xhr.response;",
-            "            if (!blob) {",
-            "                console.log('Failed to load blob from: ' + srcPath);",
-            "                return;",
-            "             }",
-            "             FileInputChanged(blob);",
-            "        };",
-            "         xhr.send();",
-            "    }",
-            "</script>",
+            "   var srcPath = '%s'" % fuzzedfile_data_url,
+            "   if (srcPath) {",
+            "       var xhr = new XMLHttpRequest();",
+            "       xhr.open('GET', srcPath, true);",
+            "       xhr.responseType = 'blob';",
+            "       xhr.onreadystatechange = function(e) {",
+            "        if (xhr.readyState != 4)",
+            "            return;",
+            "        var blob = xhr.response;",
+            "        if (!blob) {",
+            "            console.log('Failed to load blob from: ' + srcPath);",
+            "            return;",
+            "           }",
+            "        FileInputChanged(blob);",
+            "    };",
+            "    xhr.send();",
+            "    NextFrame();",
+            "   }",
+            " </script>",
             "</body>",
-            "</html>"])
+            "</html>"
+            ])
 
         test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))
