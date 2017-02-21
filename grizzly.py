@@ -298,11 +298,10 @@ def main(args):
                 if len(test_cases) > args.cache:
                     test_cases.pop(0)
 
-            failure_detected = server_status != sapphire.SERVED_ALL
+            failure_detected = (server_status != sapphire.SERVED_ALL) or not ffp.is_running()
             # handle ignored timeouts
             if failure_detected and args.ignore_timeouts and ffp.is_running():
                 ffp.close()
-                failure_detected = False
                 log.info("Timeout ignored")
 
             # handle issues if detected
