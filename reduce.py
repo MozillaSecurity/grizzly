@@ -137,7 +137,7 @@ def wait_get_hash(puppet, timeout, cfg):
                     result = hashlib.sha1("%s\n%r" % (crash.createShortSignature(), crash.backtrace[:5])).hexdigest()
         finally:
             os.unlink(log_fn)
-        if result is None:
+        if result is None and return_code != 0:
             result = "UNKNOWN_RESULT"
     else: # XXX: I don't think this is possible
         result = None
