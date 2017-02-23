@@ -253,6 +253,7 @@ def main(args):
                     extension=args.extension)
 
             # generate test case
+            log.debug("calling corp_man.generate()")
             current_test = corp_man.generate(mime_type=args.mime)
 
             # update sapphire redirects from the corpman
@@ -261,7 +262,7 @@ def main(args):
 
             # print iteration status
             if args.replay:
-                log.info("[I%04d-L%02d-R%03d] %s",
+                log.info("[I%04d-L%02d-R%02d] %s",
                          status.iteration,
                          corp_man.size(),
                          status.results,
@@ -270,7 +271,7 @@ def main(args):
                 if status.test_name != corp_man.get_active_file_name():
                     status.test_name = corp_man.get_active_file_name()
                     log.info("Now fuzzing: %s", os.path.basename(status.test_name))
-                log.info("I%04d-R%03d ", status.iteration, status.results)
+                log.info("I%04d-R%02d ", status.iteration, status.results)
 
             # create working directory for current test case
             wwwdir = tempfile.mkdtemp(prefix="grz_test_")
@@ -287,6 +288,7 @@ def main(args):
             if wwwdir and os.path.isdir(wwwdir):
                 shutil.rmtree(wwwdir)
 
+            log.debug("calling corp_man.finish_test()")
             corp_man.finish_test(ffp.clone_log, current_test, files_served)
 
             # only add test case to list if something was served
@@ -299,6 +301,8 @@ def main(args):
                     test_cases.pop(0)
 
             failure_detected = (server_status != sapphire.SERVED_ALL) or not ffp.is_running()
+            log.debug("failure_detected: %r", failure_detected)
+
             # handle ignored timeouts
             if failure_detected and args.ignore_timeouts and ffp.is_running():
                 log.info("Timeout ignored")
