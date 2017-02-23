@@ -290,7 +290,7 @@ def main(args):
             corp_man.finish_test(ffp.clone_log, current_test, files_served)
 
             # only add test case to list if something was served
-            # to maintain browser/fuzzer sync
+            # to help maintain browser/fuzzer sync
             if server_status != sapphire.SERVED_NONE:
                 test_cases.append(current_test)
 
@@ -301,18 +301,17 @@ def main(args):
             failure_detected = (server_status != sapphire.SERVED_ALL) or not ffp.is_running()
             # handle ignored timeouts
             if failure_detected and args.ignore_timeouts and ffp.is_running():
-                ffp.close()
                 log.info("Timeout ignored")
+                ffp.close()
 
             # handle issues if detected
             elif failure_detected:
                 status.results += 1
                 log.info("Potential issue detected")
-                log.info("Current input: %s", corp_man.get_active_file_name())
-                log.info("Collecting logs...")
-
-                # close ffp and report results
                 ffp.close()
+
+                log.debug("Current input: %s", corp_man.get_active_file_name())
+                log.info("Collecting logs...")
                 if args.fuzzmanager:
                     result_reporter = reporter.FuzzManagerReporter()
                     ffp.save_log(result_reporter.log_file)
@@ -327,8 +326,9 @@ def main(args):
             relaunch_countdown -= 1
             if relaunch_countdown <= 0 and ffp.is_running():
                 log.info("Triggering FFP relaunch")
-
                 ffp.close()
+
+                # check for browser shutdown crashes
                 result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
                 ffp.save_log(result_reporter.log_file)
                 result_reporter.report(reversed(test_cases))
