@@ -42,12 +42,18 @@ class WebGLCorpusManager(corpman.CorpusManager):
     def _munge_buffer_data(self, frames):
         buffer_constants_list = ['__GL_STATIC_DRAW', '__GL_STREAM_DRAW', '__GL_DYNAMIC_DRAW', '__GL_ARRAY_BUFFER', '__GL_ELEMENT_ARRAY_BUFFER', '__GL_BUFFER_SIZE', '__GL_BUFFER_USAGE']
 
-        for frameset in frames:
-            for frame in frameset:
-                if frame == "bufferData":
-                    new_frame = list(frame)
-                    new_frame[-1] = buffer_constants_list[random.randint(0, len(buffer_constants_list) - 1)]
-                    frameset.extend(new_frame)
+        for frame in frames:
+            temp_frames = []
+            for item in frame:
+                if item[1] == "bufferData":
+                    for _ in range(random.randint(1, 4)):
+                        new_frame = copy.deepcopy(item)
+                        new_frame[-1][-1] = buffer_constants_list[random.randint(0, len(buffer_constants_list) - 1)]
+                        temp_frames.append(new_frame)
+
+            if len(temp_frames) > 0:
+                for item in temp_frames:
+                    frame.append(item)
 
     def _duplicate_frames(self, frames):
         total_frames = len(frames)
@@ -83,10 +89,10 @@ class WebGLCorpusManager(corpman.CorpusManager):
             data = json.load(json_data)
 
         temp_data = copy.deepcopy(data)
-        temp_frames = temp_data["frames"][0]
+        temp_frames = temp_data["frames"]
 
         self._fuzz(temp_frames)
-        temp_data["frames"][0] = temp_frames
+        temp_data["frames"] = temp_frames
 
         with open(os.path.join('..', 'grizzly-private', 'resources', 'webgl', 'utilities.js'), 'r') as fp:
             utility_data = fp.read()
@@ -95,11 +101,12 @@ class WebGLCorpusManager(corpman.CorpusManager):
         with open(os.path.join('..', 'grizzly-private', 'resources', 'webgl', 'webgl-rr.js'), 'r') as fp:
             webglrr_data = fp.read()
         webglrr_data_url = self.to_data_url(webglrr_data, mime_type="appliation/javascript")
-
+        print "making temp file"
         with tempfile.NamedTemporaryFile(delete=False) as outfile:
             json.dump(temp_data, outfile, indent=4)
             outfile.seek(0)
             fuzzed_file_data = outfile.read()
+
         fuzzedfile_data_url = self.to_data_url(fuzzed_file_data, mime_type="appliation/json")
         # prepare data for playback
         data = "\n".join([
@@ -151,5 +158,6 @@ class WebGLCorpusManager(corpman.CorpusManager):
             "</body>",
             "</html>"
             ])
+
 
         test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))
