@@ -6,6 +6,7 @@
 <script>
 let limit_tmr, closed_tmr, sub, time_limit = Number(location.hash.substr(1));
 let req_url = '/first_test';
+let prev_url = null;
 if (time_limit <= 0) {
   dump('No time limit given, using default of 5s\n');
   time_limit = 5000;
@@ -21,7 +22,7 @@ let main = function(){
         clearTimeout(limit_tmr);
         clearInterval(closed_tmr);
         is_done = true;
-        dump('Testcase closed itself\n');
+        dump('Test case closed itself\n');
         setTimeout(main, 0);
       }
     }, 10);
@@ -30,8 +31,25 @@ let main = function(){
     if (!is_done) {
       clearInterval(closed_tmr);
       is_done = true;
-      dump('Time limit exceeded, closing it\n');
-      sub.close();
+      dump('Time limit exceeded\n');
+      let cur_loc = null;
+      if (!sub.closed && sub.location != null){
+        cur_loc = sub.location.toString();
+      }
+      if (cur_loc != null && cur_loc == prev_url){
+        // TODO: figure out why this happens
+        dump('Potential browser/fuzzer sync issue detected\n');
+        dump('Continued to request: ' + cur_loc + '\n');
+        prev_url = null;
+        req_url = '/first_test';
+      }
+      else {
+        prev_url = cur_loc;
+      }
+      if (!sub.closed){
+        dump('Closing test case\n');
+        sub.close();
+      }
       setTimeout(main, 0);
     }
   }, time_limit);
