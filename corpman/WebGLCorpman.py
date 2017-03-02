@@ -160,3 +160,6 @@ class WebGLCorpusManager(corpman.CorpusManager):
 
         print test_case.landing_page
         test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))
+        print "removing %s " % outfile.name
+        os.remove(outfile.name)
+        
