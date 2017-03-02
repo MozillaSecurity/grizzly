@@ -23,8 +23,8 @@ class WebGLCorpusManager(corpman.CorpusManager):
 
     key = "webgl"
 
-    def _init_fuzzer(self, aggression):
-        self._fuzzer
+    def _init_fuzzer(self, _):
+        self.enable_harness()
 
     def _fuzz(self, frames):
 
@@ -46,10 +46,9 @@ class WebGLCorpusManager(corpman.CorpusManager):
             temp_frames = []
             for item in frame:
                 if item[1] == "bufferData":
-                    for _ in range(random.randint(1, 4)):
-                        new_frame = copy.deepcopy(item)
-                        new_frame[-1][-1] = buffer_constants_list[random.randint(0, len(buffer_constants_list) - 1)]
-                        temp_frames.append(new_frame)
+                    new_frame = copy.deepcopy(item)
+                    new_frame[-1][-1] = buffer_constants_list[random.randint(0, len(buffer_constants_list) - 1)]
+                    temp_frames.append(new_frame)
 
             if len(temp_frames) > 0:
                 for item in temp_frames:
@@ -83,8 +82,6 @@ class WebGLCorpusManager(corpman.CorpusManager):
 
 
     def _generate(self, test_case, redirect_page, mime_type=None):
-        timeout = 1000 # test case timeout
-
         with open(test_case.template.file_name) as json_data:
             data = json.load(json_data)
 
@@ -101,27 +98,29 @@ class WebGLCorpusManager(corpman.CorpusManager):
         with open(os.path.join('..', 'grizzly-private', 'resources', 'webgl', 'webgl-rr.js'), 'r') as fp:
             webglrr_data = fp.read()
         webglrr_data_url = self.to_data_url(webglrr_data, mime_type="appliation/javascript")
-        print "making temp file"
+
         with tempfile.NamedTemporaryFile(delete=False) as outfile:
             json.dump(temp_data, outfile, indent=4)
             outfile.seek(0)
             fuzzed_file_data = outfile.read()
+            print outfile.name
 
         fuzzedfile_data_url = self.to_data_url(fuzzed_file_data, mime_type="appliation/json")
         # prepare data for playback
         data = "\n".join([
+            "<!DOCTYPE html>",
             "<html>",
             "<head>",
             "<meta charset='UTF-8'>",
             "<script>",
-            "  var tmr;",
-            "  function set_duration(){tmr=setTimeout(done, %d)}" % timeout,
-            "  function done(){",
-            "    clearTimeout(tmr);",
-            "    //document.getElementById('sandbox').innerHTML='<p>done</p>';",
-            "    window.location='/%s';" % redirect_page,
-            "  }",
-            "  window.onload=set_duration;",
+            "var tmr=setTimeout(done, %d);" % self.test_duration,
+            "function done(){",
+            "  clearTimeout(tmr);",
+            "  try{fuzzPriv.forceGC()}catch(e){}",
+            "  try{fuzzPriv.CC()}catch(e){}",
+            "  document.body.bgColor='FEFFFE';",
+            "  window.close();",
+            "}",
             "</script>",
             "</head>",
             "<body>",
@@ -159,5 +158,5 @@ class WebGLCorpusManager(corpman.CorpusManager):
             "</html>"
             ])
 
-
+        print test_case.landing_page
         test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))
