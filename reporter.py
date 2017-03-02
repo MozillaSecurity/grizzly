@@ -162,9 +162,9 @@ class FuzzManagerReporter(Reporter):
         collector = Collector()
 
         # search for a cached signature match and if the signature
-        # is already in the cache don't bother submitting
+        # is already in the cache and marked as frequent, don't bother submitting
         cache_signature = collector.search(crash_info)[1]
-        if cache_signature is not None:
+        if cache_signature is not None and cache_signature['frequent']:
             log.info("Crash matched existing signature: %s", cache_signature["shortDescription"])
             return
 
