@@ -169,11 +169,14 @@ class FuzzManagerReporter(Reporter):
             return
 
         # dump test cases and the contained files to working directory
+        test_case_meta = []
         for test_number, test_case in enumerate(test_cases):
+            test_case_meta.append([test_case.corpman_name, test_case.template])
             dump_path = os.path.join(self._log_path, "%s-%d" % (self._file_prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, info_file=True)
+        crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
 
         # add results to a zip file
         zip_name = ".".join([self._file_prefix, "zip"])
