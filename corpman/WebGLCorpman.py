@@ -99,7 +99,7 @@ class WebGLCorpusManager(corpman.CorpusManager):
             webglrr_data = fp.read()
         webglrr_data_url = self.to_data_url(webglrr_data, mime_type="appliation/javascript")
 
-        with tempfile.NamedTemporaryFile(delete=False) as outfile:
+        with tempfile.NamedTemporaryFile() as outfile:
             json.dump(temp_data, outfile, indent=4)
             outfile.seek(0)
             fuzzed_file_data = outfile.read()
@@ -160,6 +160,4 @@ class WebGLCorpusManager(corpman.CorpusManager):
 
         print test_case.landing_page
         test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))
-        print "removing %s " % outfile.name
-        os.remove(outfile.name)
         
