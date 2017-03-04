@@ -171,7 +171,7 @@ class FuzzManagerReporter(Reporter):
         # dump test cases and the contained files to working directory
         test_case_meta = []
         for test_number, test_case in enumerate(test_cases):
-            test_case_meta.append([test_case.corpman_name, test_case.template])
+            test_case_meta.append([test_case.corpman_name, test_case.template.file_name])
             dump_path = os.path.join(self._log_path, "%s-%d" % (self._file_prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
