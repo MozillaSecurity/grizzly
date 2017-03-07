@@ -10,6 +10,7 @@ import tempfile
 import time
 import copy
 import corpman
+import sys
 
 
 __author__ = "Raymond Forbes"
@@ -27,9 +28,19 @@ class WebGLCorpusManager(corpman.CorpusManager):
         self.enable_harness()
         self.webgl_frames = []
 
+        self.resources = []
+
+        with open(os.path.join('..', 'grizzly-private', 'resources', 'webgl', 'utilities.js'), 'rb') as fp:
+            self.resources.append(corpman.TestFile('utilities.js', fp.read(), required=False))
+
+        with open(os.path.join('..', 'grizzly-private', 'resources', 'webgl', 'webgl-rr.js'), 'rb') as fp:
+            self.resources.append(corpman.TestFile('webgl-rr.js', fp.read(), required=False))
+
+        print self.resources
+
     def _fuzz(self):
 
-        aggression = random.randint(1, 10)
+        aggression = random.randint(1, 3)
 
         for _ in range(aggression):
             #fuzz_choice = random.randint(0, 2)
@@ -63,7 +74,7 @@ class WebGLCorpusManager(corpman.CorpusManager):
                     frameset.append(item)
 
     def _munge_setup(self):
-    
+
         aggression = random.randint(1, 10)
 
         for _ in range(aggression):
@@ -90,16 +101,15 @@ class WebGLCorpusManager(corpman.CorpusManager):
     def _generate(self, test_case, redirect_page, mime_type=None):
         with open(test_case.template.file_name) as json_data:
             self.webgl_frames = json.load(json_data)
-
+        
         self._fuzz()
 
-        with open(os.path.join('..', 'grizzly-private', 'resources', 'webgl', 'utilities.js'), 'r') as fp:
-            utilities_data_url = self.to_data_url(fp.read(), mime_type="appliation/javascript")
+        with open('webgltest.json', 'w') as fp:
+            json.dump(self.webgl_frames, fp)
+            print fp.name
+        with open('webgltest.json') as fp:
+            self.resources.append(corpman.TestFile('webgltest.json', fp.read(), required=False))
 
-        with open(os.path.join('..', 'grizzly-private', 'resources', 'webgl', 'webgl-rr.js'), 'r') as fp:
-            webglrr_data_url = self.to_data_url(fp.read(), mime_type="appliation/javascript")
-
-        fuzzedfile_data_url = self.to_data_url(json.dumps(self.webgl_frames, indent=4), mime_type="appliation/json")
         # prepare data for playback
         data = "\n".join([
             "<!DOCTYPE html>",
@@ -121,15 +131,15 @@ class WebGLCorpusManager(corpman.CorpusManager):
             "<script>",
             "    window.WEBGLRR_DISABLE_ATTACH = null;",
             "</script>",
-            "<script src='%s'>" % webglrr_data_url, "</script>",
-            "<script src='%s'>" % utilities_data_url, "</script>",
+            "<script src='webgl-rr.js'></script>",
+            "<script src='utilities.js'></script>",
             "<br/>",
             "Status: <span id='status'>-</span>",
             "<hr/>",
             "<div id='sandbox'></div>",
             "<hr/>",
             "<script>",
-            "   var srcPath = '%s'" % fuzzedfile_data_url,
+            "   var srcPath = 'webgltest.json'",
             "   if (srcPath) {",
             "       var xhr = new XMLHttpRequest();",
             "       xhr.open('GET', srcPath, true);",
@@ -151,6 +161,9 @@ class WebGLCorpusManager(corpman.CorpusManager):
             "</body>",
             "</html>"
             ])
+
+        for r_file in self.resources:
+            test_case.add_testfile(r_file)
 
         test_case.add_testfile(corpman.TestFile(test_case.landing_page, data))
 
