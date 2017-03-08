@@ -84,7 +84,7 @@ class CorpusManagerTests(unittest.TestCase):
                 shutil.rmtree(corp_dir)
 
     def test_3(self):
-        "test CorpusManager replay mode"
+        "test CorpusManager single pass mode"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
             selected_templates = set()
@@ -93,7 +93,8 @@ class CorpusManagerTests(unittest.TestCase):
             for i in range(template_count):
                 with open(os.path.join(corp_dir, "test_template_%d.bin" % i), "wb") as fp:
                     fp.write("template_data_%d" % i)
-            cm = SimpleCorpman(corp_dir, is_replay=True)
+            cm = SimpleCorpman(corp_dir)
+            cm.single_pass = True
             self.assertEqual(cm.size(), template_count)
             for i in range(10):
                 tc = cm.generate()

@@ -38,20 +38,8 @@ class BasicImageCorpusManager(corpman.CorpusManager):
         f_ext = os.path.splitext(test_case.template.file_name)[-1]
         data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
-        if self._is_replay:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, test_case.template.get_data()))
-        else:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
-
-        if mime_type is None:
-            if f_ext in (".jpeg", ".jpg"):
-                mime_type = "image/jpeg"
-            elif f_ext == ".ico":
-                mime_type = "image/x-icon"
-            elif f_ext in (".bmp", ".gif", ".png"):
-                mime_type = "image/%s" % f_ext.lstrip(".")
+        test_case.add_testfile(
+            corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
 
         # prepare data for playback
         data = "\n".join([
@@ -62,28 +50,28 @@ class BasicImageCorpusManager(corpman.CorpusManager):
             "<meta http-equiv='Cache-control' content='no-cache'>",
             "</head>",
             "<body>",
-            "<img id='m1' src='/%s'>" % data_file,
+            "<img id='m1' src='%s'>" % data_file,
             "<img id='m2' height='2' width='2'>",
             "<canvas id='c1'></canvas>",
             "<script>",
-            "  var tmr;",
-            "  var im1=document.getElementById('m1');",
+            "  let tmr;",
+            "  let im1=document.getElementById('m1');",
             "  function done(){",
             "    clearTimeout(tmr);",
-            "    window.location='/%s';" % redirect_page,
+            "    window.location='%s';" % redirect_page,
             "  }",
             "  im1.addEventListener('error', done, true);",
-            "  window.onload=function(){",
-            "    var im2=document.getElementById('m2');",
+            "  document.addEventListener('DOMContentLoaded', function(){",
+            "    let im2=document.getElementById('m2');",
             "    im2.src=im1.src;",
-            "    var ctx=document.getElementById('c1').getContext('2d');",
+            "    let ctx=document.getElementById('c1').getContext('2d');",
             "    ctx.drawImage(im1, 0, 0); // sync docoder call",
             "    ctx.drawImage(im2, 0, 0); // sync downscaler call",
             "    im2.height=%d;" % self._random_dimention(),
             "    im2.width=%d;" % self._random_dimention(),
             "    ctx.drawImage(im2, 0, 0);",
             "    done();",
-            "  }",
+            "  });",
             "  tmr=setTimeout(done, 5000); // timeout",
             "</script>",
             "</body>",

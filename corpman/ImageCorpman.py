@@ -41,20 +41,8 @@ class ImageCorpusManager(corpman.CorpusManager):
         f_ext = os.path.splitext(test_case.template.file_name)[-1]
         data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
-        if self._is_replay:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, test_case.template.get_data()))
-        else:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
-
-        if mime_type is None:
-            if f_ext in (".jpeg", ".jpg"):
-                mime_type = "image/jpeg"
-            elif f_ext == ".ico":
-                mime_type = "image/x-icon"
-            elif f_ext in (".bmp", ".gif", ".png"):
-                mime_type = "image/%s" % f_ext.lstrip(".")
+        test_case.add_testfile(
+            corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
 
         # valid images used to trigger animation used to force sync decoding
         valid_img1 = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
@@ -77,7 +65,7 @@ class ImageCorpusManager(corpman.CorpusManager):
             "  function reset(){",
             "    clearTimeout(tmr);",
             "    window.removeEventListener('MozAfterPaint', handle_step, false);",
-            "    window.location='/%s';" % redirect_page,
+            "    window.location='%s';" % redirect_page,
             "  }",
             "  function handle_step(){",
             "    step_state+=1;",
@@ -85,7 +73,7 @@ class ImageCorpusManager(corpman.CorpusManager):
             "      im1.src='%s'; // 2nd valid image" % valid_img2,
             "    }",
             "    else if(step_state==2){ // fuzzed image",
-            "      im1.src='/%s';" % data_file,
+            "      im1.src='%s';" % data_file,
             "    }",
             "    else if(step_state==3){ // force downscaler",
             "      im1.removeEventListener('load', handle_step, false);",
@@ -125,12 +113,12 @@ class ImageCorpusManager(corpman.CorpusManager):
             "  }",
             "  tmr=setTimeout(reset, 5000); // timeout",
             "  im1.addEventListener('error', reset, true);",
-            "  window.onload=function(){",
+            "  document.addEventListener('DOMContentLoaded', function(){",
             "    setTimeout(function(){",
             "      im1.addEventListener('load', handle_step, false);",
             "      im1.src='%s'; // 1st valid image" % valid_img1,
             "    }, 0); // setTimeout to avoid paint suppression",
-            "  }",
+            "  });",
             "</script>",
             "</body>",
             "</html>"])

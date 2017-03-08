@@ -22,9 +22,6 @@ class AvalancheCorpusManager(corpman.CorpusManager):
 
 
     def _generate(self, test_case, redirect_page, mime_type=None):
-        if self._is_replay:
-            raise RuntimeError("AvalancheCorpusManager does not support replay mode")
-
         # init fuzzer if needed
         if self._fuzzer is None:
             with open(test_case.template.file_name, "r") as gmr_fp:

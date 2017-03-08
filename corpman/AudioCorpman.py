@@ -27,11 +27,7 @@ class AudioCorpusManager(corpman.CorpusManager):
         f_ext = os.path.splitext(test_case.template.file_name)[-1]
         data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
-        if self._is_replay:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, test_case.template.get_data()))
-        else:
-            test_case.add_testfile(
+        test_case.add_testfile(
                 corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
 
         if mime_type is None:
@@ -45,18 +41,17 @@ class AudioCorpusManager(corpman.CorpusManager):
                 mime_type = "audio/wav"
 
         # add playbackRate
-        if not self._is_replay and random.randint(0, 9): # 9 out of 10 times
+        pb_rate = ""
+        if random.randint(0, 9): # 9 out of 10 times
             if random.randint(0, 1):
                 rate = random.random() * random.randint(1, 20)
             else:
                 rate = random.choice([2, 10, 100])
             pb_rate = "  try{a.playbackRate=%0.2f}catch(e){};" % rate
-        else:
-            pb_rate = ""
 
         # add seek
         media_seek = []
-        if not self._is_replay and not random.randint(0, 20):
+        if not random.randint(0, 9): # 1 out of 10 times
             media_seek.append("  var dur=a.duration;")
             for _ in range(random.randint(1, 10)):
                 seek = random.random()
@@ -67,7 +62,6 @@ class AudioCorpusManager(corpman.CorpusManager):
 
 
         # prepare data for playback
-        #data_url = self.to_data_url(test.raw_data, mime_type=mime_type)
         data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",

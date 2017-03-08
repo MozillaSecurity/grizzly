@@ -121,9 +121,6 @@ def parse_args(args=None):
         "-v", "--verbose", action="store_true",
         help="Output is less minimal")
     parser.add_argument(
-        "--replay", action="store_true",
-        help="Replay do not fuzz the test cases")
-    parser.add_argument(
         "--relaunch", type=int, default=1000,
         help="Number of iterations performed before relaunching the browser (default: %(default)s)")
     parser.add_argument(
@@ -176,10 +173,9 @@ def main(args):
         args.input,
         accepted_extensions=args.accepted_extensions,
         aggression=args.aggression,
-        is_replay=args.replay,
         rotate=args.rotate)
     log.info("Found %d test cases", corp_man.size())
-    if args.replay:
+    if corp_man.single_pass:
         log.info("Running in REPLAY mode")
     else:
         log.info("Running in FUZZING mode")
@@ -261,7 +257,7 @@ def main(args):
                 serv.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
 
             # print iteration status
-            if args.replay:
+            if corp_man.single_pass:
                 log.info("[I%04d-L%02d-R%02d] %s",
                          status.iteration,
                          corp_man.size(),
@@ -338,7 +334,7 @@ def main(args):
                 result_reporter.report(reversed(test_cases))
 
             # all test cases have been replayed
-            if args.replay and corp_man.size() == 0:
+            if corp_man.single_pass and corp_man.size() == 0:
                 log.info("Replay Complete")
                 break
 

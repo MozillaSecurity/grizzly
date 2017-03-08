@@ -29,12 +29,8 @@ class FontCorpusManager(corpman.CorpusManager):
         f_ext = os.path.splitext(test_case.template.file_name)[-1]
         data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
-        if self._is_replay:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, test_case.template.get_data()))
-        else:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
+        test_case.add_testfile(
+            corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
 
         # prepare data for playback
         data = "\n".join([
@@ -46,7 +42,7 @@ class FontCorpusManager(corpman.CorpusManager):
             "<style>",
             "@font-face {",
             "  font-family: TestFont;",
-            "  src: url('/%s');" % data_file,
+            "  src: url('%s');" % data_file,
             "}",
             "body { font-family: 'TestFont' }",
             "</style>",

@@ -27,18 +27,20 @@ class VideoCorpusManager(corpman.CorpusManager):
         f_ext = os.path.splitext(test_case.template.file_name)[-1]
         data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
-        if self._is_replay:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, test_case.template.get_data()))
-        else:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
+        test_case.add_testfile(
+            corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
 
+        # TODO: mime type support needs work
         if mime_type is None and f_ext in (".mp4", ".ogg", ".webm"):
             mime_type = "video/%s" % f_ext.lstrip(".")
 
+        if mime_type:
+            type = " type='%s'" % mime_type
+        else:
+            type = ""
+
         # add playbackRate
-        if not self._is_replay and random.randint(0, 9): # 9 out of 10 times
+        if random.randint(0, 9): # 9 out of 10 times
             if random.randint(0, 1):
                 rate = random.random() * random.randint(1, 20)
             else:
@@ -49,7 +51,7 @@ class VideoCorpusManager(corpman.CorpusManager):
 
         # add seek
         media_seek = []
-        if not self._is_replay and not random.randint(0, 20):
+        if not random.randint(0, 9):
             media_seek.append("  var dur=v.duration;")
             for _ in range(random.randint(1, 10)):
                 seek = random.random()
@@ -74,14 +76,14 @@ class VideoCorpusManager(corpman.CorpusManager):
             "<meta http-equiv='Cache-control' content='no-cache'>",
             "</head>",
             "<body>",
-            "<video id='m01' src='/%s' type='%s'>" % (data_file, mime_type),
-            "Error!",
+            "<video id='m01'>",
+            "  <source src='%s'%s>" % (data_file, type),
             "</video>",
             "<script>",
             "  var tmr;", # timeout timer
             "  var pbt;", # playback timer
             "  var v=document.getElementById('m01');",
-            "  function reset(){window.location='/%s';}" % redirect_page,
+            "  function reset(){window.location='%s';}" % redirect_page,
             "  function done(){",
             "    clearTimeout(tmr);",
             "    clearTimeout(pbt);",
