@@ -75,6 +75,12 @@ class TestCase(object):
         self._optional_files = [] # contains TestFile(s) that are not strictly required
 
 
+    def add_template_as_testfile(self, file_name=None):
+        if file_name is None:
+            file_name = os.path.basename(self.template.file_name)
+        self.add_testfile(TestFile(file_name, self.template.get_data()))
+
+
     def add_testfile(self, test_file):
         if not isinstance(test_file, TestFile):
             raise TypeError("add_testfile() only accepts TestFile objects")

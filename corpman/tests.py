@@ -14,6 +14,16 @@ class SimpleCorpman(CorpusManager):
         return testcase
 
 
+class SinglePassCorpman(CorpusManager):
+    key = "single_pass"
+    def _init_fuzzer(self, aggr):
+        self.single_pass = True
+    def _generate(self, testcase, redirect_page, mime_type=None):
+        testcase.add_template_as_testfile()
+        testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
+        return testcase
+
+
 class CorpusManagerTests(unittest.TestCase):
 
     def test_0(self):
@@ -93,11 +103,11 @@ class CorpusManagerTests(unittest.TestCase):
             for i in range(template_count):
                 with open(os.path.join(corp_dir, "test_template_%d.bin" % i), "wb") as fp:
                     fp.write("template_data_%d" % i)
-            cm = SimpleCorpman(corp_dir)
-            cm.single_pass = True
+            cm = SinglePassCorpman(corp_dir)
             self.assertEqual(cm.size(), template_count)
-            for i in range(10):
+            for _ in range(template_count):
                 tc = cm.generate()
+                self.assertEqual(len(tc._test_files), 2)
                 selected_templates.add(cm.get_active_file_name())
             self.assertEqual(len(selected_templates), template_count)
             self.assertEqual(cm.size(), 0)
