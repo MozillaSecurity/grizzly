@@ -146,26 +146,27 @@ class CorpusManager(object):
 
     key = None # this must be overloaded in the subclass
 
-    def __init__(self, path, accepted_extensions=None, aggression=0.001, rotate=10):
-        self.single_pass = False # only run each template one
+    def __init__(self, path, accepted_extensions=None):
+        self.rotation_period = 10 # template rotation period
+        self.single_pass = False # only run each template for one rotation period
         self.test_duration = 5000 # used by the html harness to redirect to next testcase
         self._active_template = None
         self._corpus_path = path # directory to look for template files in
-        self._dynamic_map = {}
-        self._fuzzer = None
+        self._fuzzer = None # meant for fuzzer specific data
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
-        self._include_map = {} # mapping of directories that can be requested
-        self._redirect_map = {} # document paths to map to file names using 307s
-        self._rotate_period = 0 if self.single_pass else rotate # template rotation
+        self._srv_map = {} # server mappings
+        self._srv_map["dynamic"] = {}
+        self._srv_map["include"] = {} # mapping of directories that can be requested
+        self._srv_map["redirect"] = {} # document paths to map to file names using 307s
         self._templates = list() # fuzzed test cases will be based on these files
         self._use_transition = True # use transition redirect to next test case
 
-        self._init_fuzzer(aggression)
-        self._scan_for_templates(accepted_extensions)
+        self._scan_input(accepted_extensions)
+        self._init_fuzzer()
 
 
-    def _init_fuzzer(self, aggression):
+    def _init_fuzzer(self):
         """
         _init_fuzzer is meant to be implemented in subclass
         """
@@ -173,20 +174,37 @@ class CorpusManager(object):
 
 
     def _add_dynamic_response(self, url_path, callback, mime_type="application/octet-stream"):
-        self._dynamic_map[url_path] = (callback, mime_type)
+        self._srv_map["dynamic"][url_path] = (callback, mime_type)
 
 
     def _add_include(self, url_path, target_path):
         if not os.path.isdir(target_path):
             raise IOError("%r does not exist")
-        self._include_map[url_path] = os.path.abspath(target_path)
+        self._srv_map["include"][url_path] = os.path.abspath(target_path)
+
+
+    def _handle_rotation(self):
+        assert self.rotation_period > 0, "rotation_period must be greater than zero"
+
+        # check if we should choose a new active template
+        if (self._generated % self.rotation_period) == 0:
+            # only switch templates if we have more than one
+            if len(self._templates) > 0:
+                self._active_template = None
+
+        # choose a template
+        if self._active_template is None:
+            if self.single_pass:
+                self._active_template = Template(self._templates.pop())
+            else:
+                self._active_template = Template(random.choice(self._templates))
 
 
     def _set_redirect(self, url, file_name, required=True):
-        self._redirect_map[url] = (file_name, required)
+        self._srv_map["redirect"][url] = (file_name, required)
 
 
-    def _scan_for_templates(self, accepted_extensions=None):
+    def _scan_input(self, accepted_extensions=None):
         # ignored_list is a list of ignored files (usually auto generated OS files)
         ignored_list = ["desktop.ini", "thumbs.db"]
 
@@ -206,10 +224,10 @@ class CorpusManager(object):
                         ext = os.path.splitext(f_name)[1].lstrip(".").lower()
                         if ext not in normalized_exts:
                             continue
-                    test_file = os.path.abspath(os.path.join(d_name, f_name))
+                    input_file = os.path.abspath(os.path.join(d_name, f_name))
                     # skip empty files
-                    if os.path.getsize(test_file) > 0:
-                        self._templates.append(test_file)
+                    if os.path.getsize(input_file) > 0:
+                        self._templates.append(input_file)
         elif os.path.isfile(self._corpus_path) and os.path.getsize(self._corpus_path) > 0:
             self._templates.append(os.path.abspath(self._corpus_path))
 
@@ -250,17 +268,7 @@ class CorpusManager(object):
 
 
     def generate(self, mime_type=None):
-        # check if we should choose a new active template
-        if self._rotate_period > 0 and (self._generated % self._rotate_period) == 0:
-            # only switch templates if we have more than one
-            if len(self._templates) > 1:
-                self._active_template = None
-
-        # choose a template
-        if self.single_pass:
-            self._active_template = Template(self._templates.pop())
-        elif self._active_template is None:
-            self._active_template = Template(random.choice(self._templates))
+        self._handle_rotation()
 
         # create test case object and landing page names
         test = TestCase(
@@ -269,7 +277,7 @@ class CorpusManager(object):
             template=self._active_template)
 
         # reset redirect map
-        self._redirect_map = {}
+        self._srv_map["redirect"] = {}
 
         # handle page redirects (to next test case)
         if self._use_transition:
@@ -301,18 +309,18 @@ class CorpusManager(object):
 
     def get_dynamic_responses(self):
         out = []
-        for url, (callback, mime) in self._dynamic_map.items():
+        for url, (callback, mime) in self._srv_map["dynamic"].items():
             out.append({"url":url, "callback":callback, "mime":mime})
         return out
 
 
     def get_includes(self):
-        return self._include_map.items()
+        return self._srv_map["include"].items()
 
 
     def get_redirects(self):
         out = []
-        for url, (file_name, required) in self._redirect_map.items():
+        for url, (file_name, required) in self._srv_map["redirect"].items():
             out.append({"url":url, "file_name":file_name, "required":required})
         return out
 

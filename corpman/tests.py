@@ -7,8 +7,6 @@ from corpman import CorpusManager, TestFile, TestCase
 
 class SimpleCorpman(CorpusManager):
     key = "simple"
-    def _init_fuzzer(self, aggr):
-        pass
     def _generate(self, testcase, redirect_page, mime_type=None):
         testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
         return testcase
@@ -16,7 +14,8 @@ class SimpleCorpman(CorpusManager):
 
 class SinglePassCorpman(CorpusManager):
     key = "single_pass"
-    def _init_fuzzer(self, aggr):
+    def _init_fuzzer(self):
+        self.rotation_period = 1
         self.single_pass = True
     def _generate(self, testcase, redirect_page, mime_type=None):
         testcase.add_template_as_testfile()
@@ -81,7 +80,8 @@ class CorpusManagerTests(unittest.TestCase):
             for i in range(10):
                 with open(os.path.join(corp_dir, "test_template_%d.bin" % i), "wb") as fp:
                     fp.write("template_data_%d" % i)
-            cm = SimpleCorpman(corp_dir, rotate=1)
+            cm = SimpleCorpman(corp_dir)
+            cm.rotation_period = 1
             for i in range(50):
                 self.assertEqual(cm.landing_page(), "test_page_%04d.html" % i)
                 tc = cm.generate()
@@ -109,6 +109,7 @@ class CorpusManagerTests(unittest.TestCase):
                 tc = cm.generate()
                 self.assertEqual(len(tc._test_files), 2)
                 selected_templates.add(cm.get_active_file_name())
+            # make sure we cover all the input files
             self.assertEqual(len(selected_templates), template_count)
             self.assertEqual(cm.size(), 0)
         finally:

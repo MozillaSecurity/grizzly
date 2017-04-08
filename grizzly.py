@@ -88,9 +88,6 @@ def parse_args(args=None):
         help="Specify a space separated list of supported file extensions... " \
              "ie: html svg (default: all)")
     parser.add_argument(
-        "-a", "--aggression", default=0.001, type=float,
-        help="0.001 == 1/1000 (default: %(default)s)")
-    parser.add_argument(
         "-c", "--cache", type=int, default=1,
         help="Maximum number of previous test cases to dump after crash (default: %(default)s)")
     parser.add_argument(
@@ -123,9 +120,6 @@ def parse_args(args=None):
     parser.add_argument(
         "--relaunch", type=int, default=1000,
         help="Number of iterations performed before relaunching the browser (default: %(default)s)")
-    parser.add_argument(
-        "--rotate", type=int, default=10,
-        help="Number of iterations per test case before rotating (default: %(default)s)")
     parser.add_argument(
         "-s", "--asserts", action="store_true",
         help="Detect soft assertions")
@@ -171,9 +165,7 @@ def main(args):
         raise RuntimeError("Invalid corpus manager type: %s" % args.corpus_manager)
     corp_man = corp_man(
         args.input,
-        accepted_extensions=args.accepted_extensions,
-        aggression=args.aggression,
-        rotate=args.rotate)
+        accepted_extensions=args.accepted_extensions)
     log.info("Found %d test cases", corp_man.size())
     if corp_man.single_pass:
         log.info("Running in REPLAY mode")
