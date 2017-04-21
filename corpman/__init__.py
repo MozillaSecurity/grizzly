@@ -7,7 +7,7 @@ __credits__ = ["Jesse Schwartzentruber"]
 
 
 import logging
-from .corpman import Template, TestCase, CorpusManager
+from .corpman import TestCase, CorpusManager
 
 
 log = logging.getLogger("grizzly") # pylint: disable=invalid-name

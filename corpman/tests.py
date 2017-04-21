@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import unittest
 
-from corpman import CorpusManager, TestFile, TestCase
+from corpman import CorpusManager, InputFile, TestFile, TestCase
 
 class SimpleCorpman(CorpusManager):
     key = "simple"
@@ -18,7 +18,7 @@ class SinglePassCorpman(CorpusManager):
         self.rotation_period = 1
         self.single_pass = True
     def _generate(self, testcase, redirect_page, mime_type=None):
-        testcase.add_template_as_testfile()
+        testcase.add_testfile(TestFile(self._active_input.file_name, self._active_input.get_data()))
         testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
         return testcase
 

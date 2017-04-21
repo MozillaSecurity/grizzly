@@ -351,6 +351,9 @@ def main(args):
             result_reporter.report(reversed(test_cases))
             ffp.clean_up()
 
+        corp_man.close()
+
+
 
 if __name__ == "__main__":
     main(parse_args())

@@ -3,19 +3,17 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import base64
-import hashlib
 import os
 import random
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-class Template(object):
+class InputFile(object):
     def __init__(self, file_name):
         self._data = None # file data
-        self._data_hash = None # SHA1 hash of data
         self.extension = None # file extension
-        self.file_name = file_name # file name of the template
+        self.file_name = file_name
 
         if self.file_name is None:
             raise IOError("File does not exist: %s" % self.file_name)
@@ -24,61 +22,32 @@ class Template(object):
             self.extension = os.path.splitext(self.file_name)[1].lstrip(".")
 
 
-    def _load_and_hash_data(self):
-        # read data from disk
-        if not os.path.isfile(self.file_name):
-            raise IOError("File does not exist: %s" % self.file_name)
-        with open(self.file_name, "rb") as in_fp:
-            self._data = in_fp.read()
-
-        # calculate SHA1 hash
-        self._data_hash = hashlib.sha1(self._data).hexdigest()
-
-
     def get_data(self):
         """
         get_data()
-        Provide the raw template data to the caller. If data has not been loaded
-        _load_and_hash_data() is called
+        Provide the raw input file data to the caller.
 
-        returns template data from file.read()
+        returns input file data from file.read()
         """
 
-        # load template data the first time it is requested
+        # load input file data the first time it is requested
         if self._data is None:
-            self._load_and_hash_data()
+            # read data from disk
+            if not os.path.isfile(self.file_name):
+                raise IOError("File does not exist: %s" % self.file_name)
+            with open(self.file_name, "rb") as in_fp:
+                self._data = in_fp.read()
 
         return self._data
 
 
-    def get_hash(self):
-        """
-        get_hash()
-        Provide the template data hash to the caller. If the SHA1 hash has not been calculated yet
-        _load_and_hash_data() is called.
-
-        returns SHA1 hash string
-        """
-
-        if self._data_hash is None:
-            self._load_and_hash_data()
-
-        return self._data_hash
-
-
 class TestCase(object):
-    def __init__(self, landing_page, corpman_name, template=None):
+    def __init__(self, landing_page, corpman_name, input_fname=None):
         self.corpman_name = corpman_name
         self.landing_page = landing_page
-        self.template = template
-        self._test_files = [] # contains TestFile(s) that make up a test case
+        self.input_fname = input_fname # file that was use to create the test case
         self._optional_files = [] # contains TestFile(s) that are not strictly required
-
-
-    def add_template_as_testfile(self, file_name=None):
-        if file_name is None:
-            file_name = os.path.basename(self.template.file_name)
-        self.add_testfile(TestFile(file_name, self.template.get_data()))
+        self._test_files = [] # contains TestFile(s) that make up a test case
 
 
     def add_testfile(self, test_file):
@@ -96,7 +65,7 @@ class TestCase(object):
         Write all the test case data to the filesystem.
         This includes:
         - the generated test case
-        - template file details
+        - details of input file used
         All data will be located in log_dir.
 
         returns None
@@ -113,15 +82,14 @@ class TestCase(object):
                 else:
                     out_fp.write(test_file.data.encode(test_file.encoding))
 
-        # save test case and template file information
+        # save test case and input file, file information
         if info_file:
             with open(os.path.join(log_dir, "test_info.txt"), "w") as out_fp:
-                out_fp.write("[Grizzly template/test case details]\n")
+                out_fp.write("[Grizzly test case details]\n")
                 out_fp.write("Corpus Manager: %s\n" % self.corpman_name)
                 out_fp.write("Landing Page:   %s\n" % self.landing_page)
-                if self.template is not None:
-                    out_fp.write("Template File:  %s\n" % os.path.basename(self.template.file_name))
-                    out_fp.write("Template SHA1:  %s\n" % self.template.get_hash())
+                if self.input_file is not None:
+                    out_fp.write("Input File:     %s\n" % os.path.basename(self.input_fname))
 
 
     def get_optional(self):
@@ -147,11 +115,14 @@ class CorpusManager(object):
     key = None # this must be overloaded in the subclass
 
     def __init__(self, path, accepted_extensions=None):
-        self.rotation_period = 10 # template rotation period
-        self.single_pass = False # only run each template for one rotation period
+        self.input_files = list() # fuzzed test cases will be based on these files
+        self.rotation_period = 10 # input file rotation period
+        self.single_pass = False # only run each input file for one rotation period
         self.test_duration = 5000 # used by the html harness to redirect to next testcase
-        self._active_template = None
-        self._corpus_path = path # directory to look for template files in
+        self._active_input = None
+        self._corpus_path = os.path.abspath(path)
+        if not os.path.isdir(path):
+            self._corpus_path = os.path.dirname(self._corpus_path)
         self._fuzzer = None # meant for fuzzer specific data
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
@@ -159,10 +130,9 @@ class CorpusManager(object):
         self._srv_map["dynamic"] = {}
         self._srv_map["include"] = {} # mapping of directories that can be requested
         self._srv_map["redirect"] = {} # document paths to map to file names using 307s
-        self._templates = list() # fuzzed test cases will be based on these files
         self._use_transition = True # use transition redirect to next test case
 
-        self._scan_input(accepted_extensions)
+        self._scan_input(path, accepted_extensions)
         self._init_fuzzer()
 
 
@@ -183,39 +153,42 @@ class CorpusManager(object):
         self._srv_map["include"][url_path] = os.path.abspath(target_path)
 
 
-    def _handle_rotation(self):
-        assert self.rotation_period > 0, "rotation_period must be greater than zero"
+    def _select_active_input(self):
+        if self.single_pass:
+            assert self.rotation_period > 0, "rotation_period must be greater than zero"
+        else:
+            assert self.rotation_period > -1, "rotation_period must not be negative"
 
-        # check if we should choose a new active template
+        # check if we should choose a new active input file
         if (self._generated % self.rotation_period) == 0:
-            # only switch templates if we have more than one
-            if len(self._templates) > 0:
-                self._active_template = None
+            # only switch input files if we have more than one
+            if len(self.input_files) > 1 or self.single_pass:
+                self._active_input = None
 
-        # choose a template
-        if self._active_template is None:
+        # choose an input file
+        if self._active_input is None:
             if self.single_pass:
-                self._active_template = Template(self._templates.pop())
+                self._active_input = InputFile(self.input_files.pop())
             else:
-                self._active_template = Template(random.choice(self._templates))
+                self._active_input = InputFile(random.choice(self.input_files))
 
 
     def _set_redirect(self, url, file_name, required=True):
         self._srv_map["redirect"][url] = (file_name, required)
 
 
-    def _scan_input(self, accepted_extensions=None):
+    def _scan_input(self, scan_path, accepted_extensions):
         # ignored_list is a list of ignored files (usually auto generated OS files)
         ignored_list = ["desktop.ini", "thumbs.db"]
 
-        if os.path.isdir(self._corpus_path):
+        if os.path.isdir(scan_path):
             # create a set of normalized file extensions to look in
             normalized_exts = set()
             if accepted_extensions:
                 for ext in accepted_extensions:
                     normalized_exts.add(ext.lstrip(".").lower())
 
-            for d_name, _, filenames in os.walk(self._corpus_path):
+            for d_name, _, filenames in os.walk(scan_path):
                 for f_name in filenames:
                     # check for unwanted files
                     if f_name.startswith(".") or f_name.lower() in ignored_list:
@@ -227,18 +200,13 @@ class CorpusManager(object):
                     input_file = os.path.abspath(os.path.join(d_name, f_name))
                     # skip empty files
                     if os.path.getsize(input_file) > 0:
-                        self._templates.append(input_file)
-        elif os.path.isfile(self._corpus_path) and os.path.getsize(self._corpus_path) > 0:
-            self._templates.append(os.path.abspath(self._corpus_path))
+                        self.input_files.append(input_file)
+        elif os.path.isfile(scan_path) and os.path.getsize(scan_path) > 0:
+            self.input_files.append(os.path.abspath(scan_path))
 
-        # TODO: should we force CMs to have templates???
-        if not self._templates:
-            raise IOError("Could not find test case(s) at %s" % self._corpus_path)
-
-        # order list for replay to help manually remove items if needed
-        if self.single_pass:
-            # reverse since we use .pop()
-            self._templates.sort(reverse=True)
+        # TODO: should we force CMs to have input files???
+        if not self.input_files:
+            raise IOError("Could not find input files(s) at %s" % scan_path)
 
 
     @staticmethod
@@ -246,6 +214,14 @@ class CorpusManager(object):
         if mime_type is None:
             mime_type = "application/octet-stream"
         return "data:%s;base64,%s" % (mime_type, base64.standard_b64encode(data))
+
+
+    def close(self):
+        """
+        close is meant to be implemented in subclass.
+        This is where any clean up should be performed.
+        """
+        pass
 
 
     def enable_harness(self, file_name=None, harness_data=None):
@@ -268,13 +244,13 @@ class CorpusManager(object):
 
 
     def generate(self, mime_type=None):
-        self._handle_rotation()
+        self._select_active_input()
 
         # create test case object and landing page names
         test = TestCase(
             self.landing_page(),
             corpman_name=self.key,
-            template=self._active_template)
+            input_fname=self._active_input)
 
         # reset redirect map
         self._srv_map["redirect"] = {}
@@ -302,7 +278,7 @@ class CorpusManager(object):
 
     def get_active_file_name(self):
         try:
-            return self._active_template.file_name
+            return self._active_input.file_name
         except AttributeError:
             return None
 
@@ -334,7 +310,7 @@ class CorpusManager(object):
 
 
     def size(self):
-        return len(self._templates)
+        return len(self.input_files)
 
 
     def finish_test(self, clone_log_cb, test, files_served=None):
