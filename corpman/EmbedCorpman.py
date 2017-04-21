@@ -13,20 +13,16 @@ __credits__ = ["Tyson Smith"]
 class EmbedCorpusManager(corpman.CorpusManager):
     key = "embed"
 
-    def _init_fuzzer(self, aggression):
-        self._fuzzer = loki.Loki(aggression)
+    def _init_fuzzer(self):
+        self._fuzzer = loki.Loki(0.001)
 
 
     def _generate(self, test_case, redirect_page, mime_type=None):
-        f_ext = os.path.splitext(test_case.template.file_name)[-1]
+        f_ext = os.path.splitext(self._active_input.file_name)[-1]
         data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
-        if self._is_replay:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, test_case.template.get_data()))
-        else:
-            test_case.add_testfile(
-                corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
+        test_case.add_testfile(
+            corpman.TestFile(data_file, self._fuzzer.fuzz_data(self._active_input.get_data())))
 
         # prepare data for playback
         data = "\n".join([
@@ -40,7 +36,7 @@ class EmbedCorpusManager(corpman.CorpusManager):
             "<iframe id='test_if' src='/%s'></iframe>" % data_file,
             "<script>",
             "  var tmr;",
-            "  tmr=setTimeout(reset, 5000); // timeout",
+            "  tmr=setTimeout(reset, %d);" % self.test_duration,
             "  function reset(){clearTimeout(tmr);window.location='/%s';}" % redirect_page,
             "  document.getElementById('test_if').onload=reset;",
             "</script>",

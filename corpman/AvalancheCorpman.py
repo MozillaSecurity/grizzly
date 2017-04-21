@@ -2,6 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
+
 import avalanche
 import corpman
 
@@ -17,28 +19,29 @@ class AvalancheCorpusManager(corpman.CorpusManager):
     key = "avalanche"
 
 
-    def _init_fuzzer(self, _):
+    def _init_fuzzer(self):
         self.enable_harness()
+
+        assert len(self.input_files) == 1 and os.path.isfile(self.input_files[0])
+        with open(self.input_files[0], "r") as gmr_fp:
+            self._fuzzer = avalanche.Grammar(gmr_fp)
 
 
     def _generate(self, test_case, redirect_page, mime_type=None):
-        # init fuzzer if needed
-        if self._fuzzer is None:
-            with open(test_case.template.file_name, "r") as gmr_fp:
-                self._fuzzer = avalanche.Grammar(gmr_fp)
-
         data = "\n".join([
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
             "<meta charset='UTF-8'>",
             "<script>",
+            #"dump('loading %s\\n');" % test_case.landing_page,
             "var tmr=setTimeout(done, %d);" % self.test_duration,
             "function done(){",
             "  clearTimeout(tmr);",
             "  try{fuzzPriv.forceGC()}catch(e){}",
             "  try{fuzzPriv.CC()}catch(e){}",
             "  document.body.bgColor='FEFFFE';",
+            "  dump('%s complete\\n');" % test_case.landing_page,
             "  window.close();",
             "}",
             "</script>",

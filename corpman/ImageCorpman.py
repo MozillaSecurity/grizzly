@@ -22,8 +22,8 @@ class ImageCorpusManager(corpman.CorpusManager):
 
     key = "image"
 
-    def _init_fuzzer(self, aggression):
-        self._fuzzer = loki.Loki(aggression)
+    def _init_fuzzer(self):
+        self._fuzzer = loki.Loki(0.001)
 
 
     @staticmethod
@@ -38,11 +38,11 @@ class ImageCorpusManager(corpman.CorpusManager):
 
 
     def _generate(self, test_case, redirect_page, mime_type=None):
-        f_ext = os.path.splitext(test_case.template.file_name)[-1]
+        f_ext = os.path.splitext(self._active_input.file_name)[-1]
         data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
         test_case.add_testfile(
-            corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
+            corpman.TestFile(data_file, self._fuzzer.fuzz_data(self._active_input.get_data())))
 
         # valid images used to trigger animation used to force sync decoding
         valid_img1 = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
@@ -111,7 +111,7 @@ class ImageCorpusManager(corpman.CorpusManager):
             "      reset(); // test complete",
             "    }",
             "  }",
-            "  tmr=setTimeout(reset, 5000); // timeout",
+            "  tmr=setTimeout(reset, %d);" % self.test_duration,
             "  im1.addEventListener('error', reset, true);",
             "  document.addEventListener('DOMContentLoaded', function(){",
             "    setTimeout(function(){",

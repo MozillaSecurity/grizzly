@@ -24,7 +24,7 @@ class WebGLCorpusManager(corpman.CorpusManager):
 
     key = "webgl"
 
-    def _init_fuzzer(self, _):
+    def _init_fuzzer(self):
         self.enable_harness()
         self.webgl_frames = []
 
@@ -99,7 +99,7 @@ class WebGLCorpusManager(corpman.CorpusManager):
 
 
     def _generate(self, test_case, redirect_page, mime_type=None):
-        with open(test_case.template.file_name) as json_data:
+        with open(self._active_input.file_name) as json_data:
             self.webgl_frames = json.load(json_data)
         
         self._fuzz()

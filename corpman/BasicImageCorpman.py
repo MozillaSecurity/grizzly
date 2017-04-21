@@ -19,8 +19,8 @@ class BasicImageCorpusManager(corpman.CorpusManager):
 
     key = "image_basic"
 
-    def _init_fuzzer(self, aggression):
-        self._fuzzer = loki.Loki(aggression)
+    def _init_fuzzer(self):
+        self._fuzzer = loki.Loki(0.001)
 
 
     @staticmethod
@@ -35,11 +35,11 @@ class BasicImageCorpusManager(corpman.CorpusManager):
 
 
     def _generate(self, test_case, redirect_page, mime_type=None):
-        f_ext = os.path.splitext(test_case.template.file_name)[-1]
+        f_ext = os.path.splitext(self._active_input.file_name)[-1]
         data_file = "".join(["test_data_%d" % self._generated, f_ext])
 
         test_case.add_testfile(
-            corpman.TestFile(data_file, self._fuzzer.fuzz_data(test_case.template.get_data())))
+            corpman.TestFile(data_file, self._fuzzer.fuzz_data(self._active_input.get_data())))
 
         # prepare data for playback
         data = "\n".join([
@@ -72,7 +72,7 @@ class BasicImageCorpusManager(corpman.CorpusManager):
             "    ctx.drawImage(im2, 0, 0);",
             "    done();",
             "  });",
-            "  tmr=setTimeout(done, 5000); // timeout",
+            "  tmr=setTimeout(done, %d);" % self.test_duration,
             "</script>",
             "</body>",
             "</html>"])
