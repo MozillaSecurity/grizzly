@@ -88,7 +88,7 @@ class TestCase(object):
                 out_fp.write("[Grizzly test case details]\n")
                 out_fp.write("Corpus Manager: %s\n" % self.corpman_name)
                 out_fp.write("Landing Page:   %s\n" % self.landing_page)
-                if self.input_file is not None:
+                if self.input_fname is not None:
                     out_fp.write("Input File:     %s\n" % os.path.basename(self.input_fname))
 
 
