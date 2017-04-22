@@ -250,7 +250,7 @@ class CorpusManager(object):
         test = TestCase(
             self.landing_page(),
             corpman_name=self.key,
-            input_fname=self._active_input)
+            input_fname=self._active_input.file_name)
 
         # reset redirect map
         self._srv_map["redirect"] = {}
