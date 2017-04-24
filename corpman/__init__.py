@@ -2,15 +2,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
+
+from .corpman import TestCase, CorpusManager
+
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber"]
 
 
-import logging
-from .corpman import TestCase, CorpusManager
-
-
-log = logging.getLogger("grizzly") # pylint: disable=invalid-name
+log = logging.getLogger("corpman_init") # pylint: disable=invalid-name
 
 
 def _find_managers():
@@ -19,9 +19,11 @@ def _find_managers():
     import sys
 
     here = os.path.dirname(__file__)
+    log.debug('looking for CorpusManagers in: %s', here)
     known = {}
     for sub in os.listdir(here):
         if sub.endswith(".py") and sub not in {'__init__.py', 'corpman.py', 'tests.py'}:
+            log.debug('processing: %s', sub)
             try:
                 # a lovely hack for pytest's sake. __future__.absolute_import doesn't seem to affect importlib?
                 try:
@@ -33,23 +35,37 @@ def _find_managers():
                 continue
             for clsname in dir(lib):
                 cls = getattr(lib, clsname)
-                log.debug('Checking out %s...', cls)
                 if isinstance(cls, type) and issubclass(cls, CorpusManager):
                     if not isinstance(cls.key, str):
                         raise RuntimeError('Key for %s should be a string, not "%s"' % (cls.__name__, cls.key))
                     if cls.key.lower() != cls.key:
                         raise RuntimeError('Key for %s should be lowercase, not "%s"' % (cls.__name__, cls.key))
                     if cls.key in known:
-                        log.warning('The name "%s" already in use by %s, skipping %s',
-                                    cls.key,
-                                    known[cls.key].__name__,
-                                    cls.__name__)
-                        continue
+                        raise RuntimeError(
+                            'Key collision! "%s" is use by %s and %s',
+                            cls.key,
+                            known[cls.key].__name__,
+                            cls.__name__)
                     globals()[clsname] = cls
                     known[cls.key] = cls
-                else:
-                    log.debug('-> nope, %s is a %s', cls, type(cls))
     return known
 
 
-managers = _find_managers()
+class Loader(object):
+    def __init__(self):
+        self._managers = None
+
+
+    def get(self, manager_key):
+        if self._managers is None:
+            self._managers = _find_managers()
+        return self._managers[manager_key]
+
+
+    def list(self):
+        if self._managers is None:
+            self._managers = _find_managers()
+        return self._managers
+
+
+loader = Loader()

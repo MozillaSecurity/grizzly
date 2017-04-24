@@ -36,6 +36,9 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
+log = logging.getLogger("grizzly") # pylint: disable=invalid-name
+
+
 class GrizzlyStatus(object):
     """
     GrizzlyStatus holds status information about the grizzly fuzzing process.
@@ -69,9 +72,6 @@ class GrizzlyStatus(object):
                 "Results": self.results}, log_fp)
 
 
-log = logging.getLogger("grizzly") # pylint: disable=invalid-name
-
-
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -82,7 +82,7 @@ def parse_args(args=None):
         help="Test case or directory containing test cases")
     parser.add_argument(
         "corpus_manager",
-        help="Available corpus managers: %s" % ", ".join(sorted(corpman.managers)))
+        help="Available corpus managers: %s" % ", ".join(sorted(corpman.loader.list())))
     parser.add_argument(
         "--accepted_extensions", nargs='+',
         help="Specify a space separated list of supported file extensions... " \
@@ -115,9 +115,6 @@ def parse_args(args=None):
         "-q", "--quiet", action="store_true",
         help="Output is minimal")
     parser.add_argument(
-        "-v", "--verbose", action="store_true",
-        help="Output is less minimal")
-    parser.add_argument(
         "--relaunch", type=int, default=1000,
         help="Number of iterations performed before relaunching the browser (default: %(default)s)")
     parser.add_argument(
@@ -139,14 +136,8 @@ def parse_args(args=None):
 
 
 def main(args):
-    log_level = logging.INFO
-    log_fmt = "[%(asctime)s] %(message)s"
-    if args.verbose:
-        log_level = logging.DEBUG
-        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
-    elif args.quiet:
-        log_level = logging.WARNING
-    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+    if args.quiet and not bool(os.getenv("DEBUG")):
+        logging.getLogger().setLevel(logging.WARNING)
 
     args.cache = max(args.cache, 1) # test case cache must be at least one
     args.memory = max(args.memory, 0)
@@ -160,7 +151,7 @@ def main(args):
     # init corpus manager
     log.debug("Initializing the corpus manager")
     try:
-        corp_man = corpman.managers[args.corpus_manager.lower()]
+        corp_man = corpman.loader.get(args.corpus_manager.lower())
     except KeyError:
         raise RuntimeError("Invalid corpus manager type: %s" % args.corpus_manager)
     corp_man = corp_man(
@@ -354,6 +345,12 @@ def main(args):
         corp_man.close()
 
 
-
 if __name__ == "__main__":
+    log_level = logging.INFO
+    log_fmt = "[%(asctime)s] %(message)s"
+    if bool(os.getenv("DEBUG")):
+        log_level = logging.DEBUG
+        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
+    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+
     main(parse_args())
