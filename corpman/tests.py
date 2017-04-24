@@ -62,7 +62,7 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertEqual(cm.get_active_file_name(), template_file)
             self.assertIsInstance(tc, TestCase)
             self.assertEqual(tc.landing_page, "test_page_0000.html")
-            tc.dump(tc_dir)
+            tc.dump(tc_dir, info_file=True)
             dumped_tf = os.listdir(tc_dir) # dumped test files
             self.assertIn("test_page_0000.html", dumped_tf)
         finally:
@@ -358,5 +358,46 @@ class CorpusManagerTests(unittest.TestCase):
                 shutil.rmtree(corp_dir)
             if os.path.isdir(tc_dir):
                 shutil.rmtree(tc_dir)
+
+    def test_15(self):
+        "test InputFile object"
+        tc_dir = tempfile.mkdtemp(prefix="tc_")
+        t_file = os.path.join(tc_dir, "testfile.bin")
+        with open(t_file, "w") as tf:
+            tf.write("test")
+        in_file = InputFile(t_file)
+        try:
+            self.assertEqual(in_file.extension, "bin")
+            self.assertEqual(in_file.file_name, t_file)
+            self.assertEqual(in_file.get_data(), "test")
+        finally:
+            if os.path.isdir(tc_dir):
+                shutil.rmtree(tc_dir)
+
+    def test_16(self):
+        "test empty InputFile object"
+        with self.assertRaises(IOError):
+            InputFile("foo/bar/none")
+
+    def test_17(self):
+        "test TestCase object"
+        tf1 = TestFile("testfile1.bin", "test_req")
+        tf2 = TestFile("test_dir/testfile2.bin", "test_nreq", required=False)
+        tc = TestCase("land_page", "corp_name", input_fname="testfile1.bin")
+        tc.add_testfile(tf1)
+        tc.add_testfile(tf2)
+        opt_files = tc.get_optional()
+        self.assertEqual(len(opt_files), 1)
+        self.assertTrue("test_dir/testfile2.bin" in opt_files)
+        tc_dir = tempfile.mkdtemp(prefix="tc_")
+        try:
+            tc.dump(tc_dir, info_file=True)
+            self.assertTrue(os.path.isfile(os.path.join(tc_dir, "test_info.txt")))
+            self.assertTrue(os.path.isdir(os.path.join(tc_dir, "test_dir")))
+            self.assertTrue(os.path.isfile(os.path.join(tc_dir, "test_dir/testfile2.bin")))
+            with open(os.path.join(tc_dir, "testfile1.bin"), "r") as test_fp:
+                self.assertEqual(test_fp.read(), "test_req")
+        finally:
+            shutil.rmtree(tc_dir)
 
 #TODO: info page, test other objs
