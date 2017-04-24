@@ -15,7 +15,7 @@ class InputFile(object):
         self.extension = None # file extension
         self.file_name = file_name
 
-        if self.file_name is None:
+        if self.file_name is None or not os.path.isfile(file_name):
             raise IOError("File does not exist: %s" % self.file_name)
 
         if "." in self.file_name:
