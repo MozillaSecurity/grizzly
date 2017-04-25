@@ -189,7 +189,7 @@ class FuzzManagerReporter(Reporter):
                         arcname=os.path.join(arc_path, file_name))
 
         # submit results to the FuzzManager server
-        collector.submit(crash_info, testCase=zip_name)
+        collector.submit(crash_info, testCase=zip_name, testCaseQuality=5)
 
         # remove zipfile
         if os.path.isfile(zip_name):
