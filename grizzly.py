@@ -150,9 +150,8 @@ def main(args):
 
     # init corpus manager
     log.debug("Initializing the corpus manager")
-    try:
-        corp_man = corpman.loader.get(args.corpus_manager.lower())
-    except KeyError:
+    corp_man = corpman.loader.get(args.corpus_manager.lower())
+    if corp_man is None:
         raise RuntimeError("Invalid corpus manager type: %s" % args.corpus_manager)
     corp_man = corp_man(
         args.input,
