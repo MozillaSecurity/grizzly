@@ -160,7 +160,7 @@ class CorpusManager(object):
             assert self.rotation_period > -1, "rotation_period must not be negative"
 
         # check if we should choose a new active input file
-        if (self._generated % self.rotation_period) == 0:
+        if self.rotation_period > 0 and (self._generated % self.rotation_period) == 0:
             # only switch input files if we have more than one
             if len(self.input_files) > 1 or self.single_pass:
                 self._active_input = None
