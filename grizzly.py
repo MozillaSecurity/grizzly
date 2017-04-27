@@ -229,6 +229,7 @@ def main(args):
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs,
                     extension=args.extension)
+                corp_man.launch_count += 1
 
             # generate test case
             log.debug("calling corp_man.generate()")
