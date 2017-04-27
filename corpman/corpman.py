@@ -116,6 +116,7 @@ class CorpusManager(object):
 
     def __init__(self, path, accepted_extensions=None):
         self.input_files = list() # fuzzed test cases will be based on these files
+        self.launch_count = 0 # number of times the browser has been launched
         self.rotation_period = 10 # input file rotation period
         self.single_pass = False # only run each input file for one rotation period
         self.test_duration = 5000 # used by the html harness to redirect to next testcase
