@@ -46,6 +46,7 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertEqual(cm.get_active_file_name(), None) # None since generate() has not been called
             self.assertEqual(cm.landing_page(), "test_page_0000.html")
             self.assertEqual(cm.landing_page(transition=True), "next_test")
+            self.assertEqual(cm.launch_count, 0) # should default to 0 and be incremented by grizzly.py
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
@@ -406,6 +407,35 @@ class CorpusManagerTests(unittest.TestCase):
         finally:
             shutil.rmtree(tc_dir)
 
+    def test_18(self):
+        "test a rotation period of 0 with single_pass true"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            selected_templates = set()
+            with open(os.path.join(corp_dir, "test_template.bin"), "wb") as fp:
+                fp.write("a")
+            cm = SinglePassCorpman(corp_dir)
+            cm.rotation_period = 0
+            with self.assertRaises(AssertionError):
+                cm.generate()
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
+    def test_19(self):
+        "test a negative rotation period"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            selected_templates = set()
+            with open(os.path.join(corp_dir, "test_template.bin"), "wb") as fp:
+                fp.write("a")
+            cm = SimpleCorpman(corp_dir)
+            cm.rotation_period = -1
+            with self.assertRaises(AssertionError):
+                cm.generate()
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
 
 class LoaderTests(unittest.TestCase):
     def test_0(self):
