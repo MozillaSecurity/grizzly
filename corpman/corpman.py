@@ -135,6 +135,8 @@ class CorpusManager(object):
 
         self._scan_input(path, accepted_extensions)
         self._init_fuzzer()
+        if self.single_pass and self.input_files:
+            self.input_files.sort(reverse=True)
 
 
     def _init_fuzzer(self):
