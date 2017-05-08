@@ -127,9 +127,6 @@ def parse_args(args=None):
         "--valgrind", action="store_true",
         help="Use valgrind")
     parser.add_argument(
-        "--windbg", action="store_true",
-        help="Collect crash log with WinDBG (Windows only)")
-    parser.add_argument(
         "--xvfb", action="store_true",
         help="Use xvfb (Linux only)")
     return parser.parse_args(args)
@@ -185,7 +182,6 @@ def main(args):
         # create FFPuppet object
         ffp = ffpuppet.FFPuppet(
             use_valgrind=args.valgrind,
-            use_windbg=args.windbg,
             use_xvfb=args.xvfb,
             detect_soft_assertions=args.asserts)
 
@@ -204,9 +200,6 @@ def main(args):
 
                 if args.valgrind:
                     log.info("Running with Valgrind. This will be SLOW!")
-
-                if args.windbg:
-                    log.info("Collecting debug information with WinDBG")
 
                 if args.memory:
                     log.info("Memory limit is %dMBs", args.memory)
