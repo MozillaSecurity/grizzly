@@ -179,9 +179,6 @@ def reduce_args(argv=None):
         "--gdb", action="store_true",
         help="Use GDB")
     parser.add_argument(
-        "--windbg", action="store_true",
-        help="Collect crash log with WinDBG (Windows only)")
-    parser.add_argument(
         "--xvfb", action="store_true",
         help="Use xvfb (Linux only)")
     parser.add_argument(
@@ -228,7 +225,6 @@ def reduce_main(args):
     ffp = FFPuppet(
         use_gdb=args.gdb,
         use_valgrind=args.valgrind,
-        use_windbg=args.windbg,
         use_xvfb=args.xvfb,
         detect_soft_assertions=args.asserts)
     try:
