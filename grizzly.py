@@ -127,6 +127,9 @@ def parse_args(args=None):
         "--valgrind", action="store_true",
         help="Use valgrind")
     parser.add_argument(
+        "-w", "--working-path",
+        help="Working directory. Intended to be used with ramdrives. (default: None)")
+    parser.add_argument(
         "--xvfb", action="store_true",
         help="Use xvfb (Linux only)")
     return parser.parse_args(args)
@@ -144,6 +147,9 @@ def main(args):
 
     log.info("Starting Grizzly")
     status = GrizzlyStatus()
+
+    if args.working_path is not None and not os.path.isdir(args.working_path):
+        raise IOError("%r is not a directory" % args.working_path)
 
     # init corpus manager
     log.debug("Initializing the corpus manager")
@@ -249,7 +255,7 @@ def main(args):
                 log.info("I%04d-R%02d ", status.iteration, status.results)
 
             # create working directory for current test case
-            wwwdir = tempfile.mkdtemp(prefix="grz_test_")
+            wwwdir = tempfile.mkdtemp(prefix="grz_test_", dir=args.working_path)
             # dump test case files to filesystem to be served
             current_test.dump(wwwdir)
 
