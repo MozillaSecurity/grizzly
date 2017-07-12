@@ -122,7 +122,7 @@ class FilesystemReporter(Reporter):
             dump_path = os.path.join(major_dir, "%s-%d" % (self._file_prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
-            test_case.dump(dump_path, info_file=True)
+            test_case.dump(dump_path, include_details=True)
 
         # rename and move log into bucket directory
         shutil.move(self.log_file, "%s_log.txt" % os.path.join(major_dir, self._file_prefix))
@@ -175,7 +175,7 @@ class FuzzManagerReporter(Reporter):
             dump_path = os.path.join(self._log_path, "%s-%d" % (self._file_prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
-            test_case.dump(dump_path, info_file=True)
+            test_case.dump(dump_path, include_details=True)
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
 
         # add results to a zip file

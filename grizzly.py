@@ -236,6 +236,7 @@ def main(args):
             # generate test case
             log.debug("calling corp_man.generate()")
             current_test = corp_man.generate(mime_type=args.mime)
+            current_test.add_environ_file("prefs.js", args.prefs)
 
             # update sapphire redirects from the corpman
             for redirect in corp_man.get_redirects():

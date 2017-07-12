@@ -5,6 +5,7 @@
 import base64
 import os
 import random
+import shutil
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -46,8 +47,20 @@ class TestCase(object):
         self.corpman_name = corpman_name
         self.landing_page = landing_page
         self.input_fname = input_fname # file that was use to create the test case
+        self._env_files = dict() # # environment files: prefs.js, etc...
+        self._env_vars = dict() # environment variables required
         self._optional_files = [] # contains TestFile(s) that are not strictly required
         self._test_files = [] # contains TestFile(s) that make up a test case
+
+
+    def add_environ_file(self, fname, path):
+        if not os.path.isfile(path):
+            raise IOError("Could not find environ files: %s" % path)
+        self._env_files[fname] = path
+
+
+    def add_environ_var(self, var_name, value):
+        self._env_vars[var_name] = value
 
 
     def add_testfile(self, test_file):
@@ -59,7 +72,7 @@ class TestCase(object):
             self._optional_files.append(test_file.file_name)
 
 
-    def dump(self, log_dir, info_file=False):
+    def dump(self, log_dir, include_details=False):
         """
         dump(log_dir)
         Write all the test case data to the filesystem.
@@ -82,14 +95,22 @@ class TestCase(object):
                 else:
                     out_fp.write(test_file.data.encode(test_file.encoding))
 
-        # save test case and input file, file information
-        if info_file:
+        # save test case, input file, file information, environment info
+        if include_details:
             with open(os.path.join(log_dir, "test_info.txt"), "w") as out_fp:
                 out_fp.write("[Grizzly test case details]\n")
-                out_fp.write("Corpus Manager: %s\n" % self.corpman_name)
-                out_fp.write("Landing Page:   %s\n" % self.landing_page)
+                out_fp.write("Corpus Manager:    %s\n" % self.corpman_name)
+                out_fp.write("Landing Page:      %s\n" % self.landing_page)
                 if self.input_fname is not None:
-                    out_fp.write("Input File:     %s\n" % os.path.basename(self.input_fname))
+                    out_fp.write("Input File:        %s\n" % os.path.basename(self.input_fname))
+
+            for env_file, env_path in self._env_files.items():
+                shutil.copyfile(env_path, os.path.join(log_dir, env_file))
+
+            if self._env_vars.items():
+                with open(os.path.join(log_dir, "env_vars.txt"), "w") as out_fp:
+                    for env_var, env_val in self._env_vars.items():
+                        out_fp.write("%s=%s\n" % (env_var, env_val))
 
 
     def get_optional(self):
@@ -124,10 +145,10 @@ class CorpusManager(object):
         self._corpus_path = os.path.abspath(path)
         if not os.path.isdir(path):
             self._corpus_path = os.path.dirname(self._corpus_path)
+        self._environ_vars = dict() # required environment variables
         self._fuzzer = None # meant for fuzzer specific data
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
-        self._req_env_vars = dict() # required environment variables
         self._srv_map = {} # server mappings
         self._srv_map["dynamic"] = {}
         self._srv_map["include"] = {} # mapping of directories that can be requested
@@ -215,7 +236,7 @@ class CorpusManager(object):
 
 
     def _verify_env_vars(self):
-        for key, value in self._req_env_vars.items():
+        for key, value in self._environ_vars.items():
             if key in os.environ and (len(value) == 0 or os.environ[key] == value):
                 continue
             if len(value) == 0: # value a value for the error if needed
@@ -232,7 +253,7 @@ class CorpusManager(object):
 
 
     def add_required_envvar(self, var_name, value=""):
-        self._req_env_vars[var_name.upper()] = value
+        self._environ_vars[var_name.upper()] = value
 
 
     def close(self):
@@ -270,6 +291,10 @@ class CorpusManager(object):
             self.landing_page(),
             corpman_name=self.key,
             input_fname=self._active_input.file_name)
+
+        # add environment variable info to test case
+        for key, value in self._environ_vars.items():
+            test.add_environ_var(key, value)
 
         # reset redirect map
         self._srv_map["redirect"] = {}

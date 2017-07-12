@@ -15,6 +15,7 @@ class EnvVarCorpman(corpman.CorpusManager):
     key = "envvar"
     def _init_fuzzer(self):
         self.add_required_envvar("RANDOM_ENVAR_TEST")
+        self.add_required_envvar("RANDOM_ENVAR_TEST2", "test123")
     def _generate(self, testcase, redirect_page, mime_type=None):
         testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
         return testcase
@@ -77,7 +78,7 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertEqual(cm.get_active_file_name(), template_file)
             self.assertIsInstance(tc, corpman.TestCase)
             self.assertEqual(tc.landing_page, "test_page_0000.html")
-            tc.dump(tc_dir, info_file=True)
+            tc.dump(tc_dir, include_details=True)
             dumped_tf = os.listdir(tc_dir) # dumped test files
             self.assertIn("test_page_0000.html", dumped_tf)
         finally:
@@ -406,7 +407,7 @@ class CorpusManagerTests(unittest.TestCase):
         self.assertTrue("test_dir/testfile2.bin" in opt_files)
         tc_dir = tempfile.mkdtemp(prefix="tc_")
         try:
-            tc.dump(tc_dir, info_file=True)
+            tc.dump(tc_dir, include_details=True)
             self.assertTrue(os.path.isfile(os.path.join(tc_dir, "test_info.txt")))
             self.assertTrue(os.path.isdir(os.path.join(tc_dir, "test_dir")))
             self.assertTrue(os.path.isfile(os.path.join(tc_dir, "test_dir/testfile2.bin")))
@@ -458,6 +459,43 @@ class CorpusManagerTests(unittest.TestCase):
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
+
+    def test_21(self):
+        "test environment variable & files are dumped"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        tc_dir = tempfile.mkdtemp(prefix="tc_")
+        prf_dir = tempfile.mkdtemp(prefix="prf_")
+        try:
+            # create template
+            template_file = os.path.join(corp_dir, "test_template.bin")
+            with open(template_file, "wb") as fp:
+                fp.write("template_data")
+            os.environ["RANDOM_ENVAR_TEST"] = "anything!"
+            os.environ["RANDOM_ENVAR_TEST2"] = "test123"
+            cm = EnvVarCorpman(corp_dir)
+            tc = cm.generate()
+            env_file = os.path.join(prf_dir, "simple_prefs.js")
+            with open(env_file, "wb") as fp:
+                fp.write("stuff.blah=1;")
+            tc.add_environ_file("prefs.js", env_file)
+            tc.dump(tc_dir, include_details=True)
+            dumped_tf = os.listdir(tc_dir)
+            self.assertIn("prefs.js", dumped_tf)
+            self.assertIn("env_vars.txt", dumped_tf)
+            with open(os.path.join(tc_dir, "env_vars.txt"), "r") as fp:
+                vars = fp.read()
+            self.assertRegexpMatches(vars, "RANDOM_ENVAR_TEST=")
+            self.assertRegexpMatches(vars, "RANDOM_ENVAR_TEST2=test123")
+        finally:
+            os.environ.pop("RANDOM_ENVAR_TEST", None)
+            os.environ.pop("RANDOM_ENVAR_TEST2", None)
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+            if os.path.isdir(tc_dir):
+                shutil.rmtree(tc_dir)
+            if os.path.isdir(prf_dir):
+                shutil.rmtree(prf_dir)
+
 
 class LoaderTests(unittest.TestCase):
     def test_0(self):
