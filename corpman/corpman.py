@@ -127,6 +127,7 @@ class CorpusManager(object):
         self._fuzzer = None # meant for fuzzer specific data
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
+        self._req_env_vars = dict() # required environment variables
         self._srv_map = {} # server mappings
         self._srv_map["dynamic"] = {}
         self._srv_map["include"] = {} # mapping of directories that can be requested
@@ -135,6 +136,7 @@ class CorpusManager(object):
 
         self._scan_input(path, accepted_extensions)
         self._init_fuzzer()
+        self._verify_env_vars()
         if self.single_pass and self.input_files:
             self.input_files.sort(reverse=True)
 
@@ -212,11 +214,25 @@ class CorpusManager(object):
             raise IOError("Could not find input files(s) at %s" % scan_path)
 
 
+    def _verify_env_vars(self):
+        for key, value in self._req_env_vars.items():
+            if key in os.environ and (len(value) == 0 or os.environ[key] == value):
+                continue
+            if len(value) == 0: # value a value for the error if needed
+                value = "1"
+            raise RuntimeError("Missing environment variable! " \
+                "%s=%s is required for this CorpusManager" % (key, value))
+
+
     @staticmethod
     def to_data_url(data, mime_type=None):
         if mime_type is None:
             mime_type = "application/octet-stream"
         return "data:%s;base64,%s" % (mime_type, base64.standard_b64encode(data))
+
+
+    def add_required_envvar(self, var_name, value=""):
+        self._req_env_vars[var_name.upper()] = value
 
 
     def close(self):

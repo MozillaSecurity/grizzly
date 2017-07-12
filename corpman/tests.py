@@ -4,28 +4,36 @@ import shutil
 import tempfile
 import unittest
 
-from corpman import CorpusManager, InputFile, TestFile, TestCase
+import corpman
 
 
 logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
 log = logging.getLogger("corpman_test")
 
 
-class SimpleCorpman(CorpusManager):
+class EnvVarCorpman(corpman.CorpusManager):
+    key = "envvar"
+    def _init_fuzzer(self):
+        self.add_required_envvar("RANDOM_ENVAR_TEST")
+    def _generate(self, testcase, redirect_page, mime_type=None):
+        testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
+        return testcase
+
+class SimpleCorpman(corpman.CorpusManager):
     key = "simple"
     def _generate(self, testcase, redirect_page, mime_type=None):
-        testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
+        testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
         return testcase
 
 
-class SinglePassCorpman(CorpusManager):
+class SinglePassCorpman(corpman.CorpusManager):
     key = "single_pass"
     def _init_fuzzer(self):
         self.rotation_period = 1
         self.single_pass = True
     def _generate(self, testcase, redirect_page, mime_type=None):
-        testcase.add_testfile(TestFile(self._active_input.file_name, self._active_input.get_data()))
-        testcase.add_testfile(TestFile(testcase.landing_page, redirect_page))
+        testcase.add_testfile(corpman.TestFile(self._active_input.file_name, self._active_input.get_data()))
+        testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
         return testcase
 
 
@@ -67,7 +75,7 @@ class CorpusManagerTests(unittest.TestCase):
             # make sure we move forwarded when generate() is called
             self.assertEqual(cm.landing_page(), "test_page_0001.html")
             self.assertEqual(cm.get_active_file_name(), template_file)
-            self.assertIsInstance(tc, TestCase)
+            self.assertIsInstance(tc, corpman.TestCase)
             self.assertEqual(tc.landing_page, "test_page_0000.html")
             tc.dump(tc_dir, info_file=True)
             dumped_tf = os.listdir(tc_dir) # dumped test files
@@ -357,7 +365,7 @@ class CorpusManagerTests(unittest.TestCase):
             cm = SimpleCorpman(corp_dir)
             tc = cm.generate()
             test_file_path = "test/dir/path/file.txt"
-            tc.add_testfile(TestFile(test_file_path, "somedata"))
+            tc.add_testfile(corpman.TestFile(test_file_path, "somedata"))
             tc.dump(tc_dir)
             self.assertTrue(os.path.isfile(os.path.join(tc_dir, test_file_path)))
         finally:
@@ -372,7 +380,7 @@ class CorpusManagerTests(unittest.TestCase):
         t_file = os.path.join(tc_dir, "testfile.bin")
         with open(t_file, "w") as tf:
             tf.write("test")
-        in_file = InputFile(t_file)
+        in_file = corpman.InputFile(t_file)
         try:
             self.assertEqual(in_file.extension, "bin")
             self.assertEqual(in_file.file_name, t_file)
@@ -384,13 +392,13 @@ class CorpusManagerTests(unittest.TestCase):
     def test_16(self):
         "test empty InputFile object"
         with self.assertRaises(IOError):
-            InputFile("foo/bar/none")
+            corpman.InputFile("foo/bar/none")
 
     def test_17(self):
         "test TestCase object"
-        tf1 = TestFile("testfile1.bin", "test_req")
-        tf2 = TestFile("test_dir/testfile2.bin", "test_nreq", required=False)
-        tc = TestCase("land_page", "corp_name", input_fname="testfile1.bin")
+        tf1 = corpman.TestFile("testfile1.bin", "test_req")
+        tf2 = corpman.TestFile("test_dir/testfile2.bin", "test_nreq", required=False)
+        tc = corpman.TestCase("land_page", "corp_name", input_fname="testfile1.bin")
         tc.add_testfile(tf1)
         tc.add_testfile(tf2)
         opt_files = tc.get_optional()
@@ -433,6 +441,20 @@ class CorpusManagerTests(unittest.TestCase):
             cm.rotation_period = -1
             with self.assertRaises(AssertionError):
                 cm.generate()
+        finally:
+            if os.path.isdir(corp_dir):
+                shutil.rmtree(corp_dir)
+
+    def test_20(self):
+        "test missing an environment variable check"
+        corp_dir = tempfile.mkdtemp(prefix="crp_")
+        try:
+            # create template
+            template_file = os.path.join(corp_dir, "test_template.bin")
+            with open(template_file, "wb") as fp:
+                fp.write("template_data")
+            with self.assertRaisesRegexp(RuntimeError, "Missing environment variable!.+"):
+                cm = EnvVarCorpman(corp_dir)
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
