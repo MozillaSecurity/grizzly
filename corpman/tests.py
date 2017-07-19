@@ -16,6 +16,7 @@ class EnvVarCorpman(corpman.CorpusManager):
     def _init_fuzzer(self):
         self.add_required_envvar("RANDOM_ENVAR_TEST")
         self.add_required_envvar("RANDOM_ENVAR_TEST2", "test123")
+        self.add_required_envvar("RANDOM_ENVAR_TEST3", "3test3")
     def _generate(self, testcase, redirect_page, mime_type=None):
         testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
         return testcase
@@ -470,8 +471,9 @@ class CorpusManagerTests(unittest.TestCase):
             template_file = os.path.join(corp_dir, "test_template.bin")
             with open(template_file, "wb") as fp:
                 fp.write("template_data")
-            os.environ["RANDOM_ENVAR_TEST"] = "anything!"
+            os.environ["RANDOM_ENVAR_TEST"] = ""
             os.environ["RANDOM_ENVAR_TEST2"] = "test123"
+            os.environ["RANDOM_ENVAR_TEST3"] = "3test3"
             cm = EnvVarCorpman(corp_dir)
             tc = cm.generate()
             env_file = os.path.join(prf_dir, "simple_prefs.js")
@@ -484,11 +486,13 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertIn("env_vars.txt", dumped_tf)
             with open(os.path.join(tc_dir, "env_vars.txt"), "r") as fp:
                 vars = fp.read()
-            self.assertRegexpMatches(vars, "RANDOM_ENVAR_TEST=")
-            self.assertRegexpMatches(vars, "RANDOM_ENVAR_TEST2=test123")
+            self.assertRegexpMatches(vars, "RANDOM_ENVAR_TEST=\n")
+            self.assertRegexpMatches(vars, "RANDOM_ENVAR_TEST2=test123\n")
+            self.assertRegexpMatches(vars, "RANDOM_ENVAR_TEST3=3test3\n")
         finally:
             os.environ.pop("RANDOM_ENVAR_TEST", None)
             os.environ.pop("RANDOM_ENVAR_TEST2", None)
+            os.environ.pop("RANDOM_ENVAR_TEST3", None)
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
             if os.path.isdir(tc_dir):

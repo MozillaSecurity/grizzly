@@ -239,8 +239,8 @@ class CorpusManager(object):
         for key, value in self._environ_vars.items():
             if key in os.environ and (len(value) == 0 or os.environ[key] == value):
                 continue
-            if len(value) == 0: # value a value for the error if needed
-                value = "1"
+            if len(value) == 0: # set a value for the error if needed
+                value = "?"
             raise RuntimeError("Missing environment variable! " \
                 "%s=%s is required for this CorpusManager" % (key, value))
 
@@ -253,6 +253,10 @@ class CorpusManager(object):
 
 
     def add_required_envvar(self, var_name, value=""):
+        var_name = var_name.upper()
+        # grab currently set value if available
+        if len(value) < 1 and var_name in os.environ:
+            value = os.environ[var_name]
         self._environ_vars[var_name.upper()] = value
 
 
