@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 import logging
 import os
 import shutil
@@ -14,6 +15,7 @@ try:
     from Collector.Collector import Collector
     from FTB.ProgramConfiguration import ProgramConfiguration
     from FTB.Signatures.CrashInfo import CrashInfo
+    import fasteners
     _fm_import_error = None
 except ImportError as err:
     _fm_import_error = err
@@ -131,6 +133,8 @@ class FilesystemReporter(Reporter):
 class FuzzManagerReporter(Reporter):
     # this is where Collector looks for the '.fuzzmanagerconf' (see Collector.py)
     fm_config = os.path.join(os.path.expanduser("~"), ".fuzzmanagerconf")
+    # max number of times to report a non-frequent signature to FuzzManager
+    rate_limit = 50
 
 
     @staticmethod
@@ -163,10 +167,26 @@ class FuzzManagerReporter(Reporter):
 
         # search for a cached signature match and if the signature
         # is already in the cache and marked as frequent, don't bother submitting
-        cache_signature = collector.search(crash_info)[1]
-        if cache_signature is not None and cache_signature['frequent']:
-            log.info("Crash matched existing signature: %s", cache_signature["shortDescription"])
-            return
+        with fasteners.process_lock.InterProcessLock(os.path.join(tempfile.gettempdir(), "fm_sigcache.lock")):
+            cache_file, cache_signature = collector.search(crash_info)
+            if cache_signature is not None:
+                if cache_signature['frequent']:
+                    log.info("Crash matched existing signature: %s", cache_signature["shortDescription"])
+                    return
+                # there is already a signature, initialize count
+                cache_signature.setdefault("_grizzly_seen_count", 0)
+            else:
+                # there is no signature, create one locally so we can count the number of times we've seen it
+                cache_file = collector.generate(crash_info, numFrames=8)
+                cache_signature = {"_grizzly_seen_count": 0, "frequent": False}
+            # limit the number of times we report per cycle
+            cache_signature["_grizzly_seen_count"] += 1
+            if cache_signature["_grizzly_seen_count"] >= self.rate_limit:
+                # we will still report this one, but no more
+                cache_signature['frequent'] = True
+            metadata_file = cache_file.replace(".signature", ".metadata")
+            with open(metadata_file, "w") as meta_fp:
+                json.dump(cache_signature, meta_fp)
 
         # dump test cases and the contained files to working directory
         test_case_meta = []
