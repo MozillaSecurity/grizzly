@@ -136,6 +136,7 @@ class CorpusManager(object):
     key = None # this must be overloaded in the subclass
 
     def __init__(self, path, accepted_extensions=None):
+        self.abort_tokens = list() # tokens that when added to the log with trigger an abort
         self.input_files = list() # fuzzed test cases will be based on these files
         self.launch_count = 0 # number of times the browser has been launched
         self.rotation_period = 10 # input file rotation period
@@ -250,6 +251,10 @@ class CorpusManager(object):
         if mime_type is None:
             mime_type = "application/octet-stream"
         return "data:%s;base64,%s" % (mime_type, base64.standard_b64encode(data))
+
+
+    def add_abort_token(self, tokens):
+        self.abort_tokens.append(tokens)
 
 
     def add_required_envvar(self, var_name, value=""):

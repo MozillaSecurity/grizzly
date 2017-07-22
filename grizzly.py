@@ -194,6 +194,10 @@ def main(args):
         if args.asserts:
             ffp.add_abort_token("###!!! ASSERTION:")
 
+        # add tokens from corpus manager
+        for token in corp_man.abort_tokens:
+            ffp.add_abort_token(token)
+
         # main fuzzing iteration loop
         while True:
             status.report()

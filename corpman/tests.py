@@ -23,6 +23,8 @@ class EnvVarCorpman(corpman.CorpusManager):
 
 class SimpleCorpman(corpman.CorpusManager):
     key = "simple"
+    def _init_fuzzer(self):
+        self.add_abort_token("ABORT_TOKEN")
     def _generate(self, testcase, redirect_page, mime_type=None):
         testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
         return testcase
@@ -57,6 +59,7 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertEqual(cm.landing_page(), "test_page_0000.html")
             self.assertEqual(cm.landing_page(transition=True), "next_test")
             self.assertEqual(cm.launch_count, 0) # should default to 0 and be incremented by grizzly.py
+            self.assertIn("ABORT_TOKEN", cm.abort_tokens)
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
