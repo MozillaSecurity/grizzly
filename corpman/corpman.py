@@ -7,6 +7,8 @@ import os
 import random
 import shutil
 
+import browser_monitor
+
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -138,7 +140,7 @@ class CorpusManager(object):
     def __init__(self, path, accepted_extensions=None):
         self.abort_tokens = list() # tokens that when added to the log with trigger an abort
         self.input_files = list() # fuzzed test cases will be based on these files
-        self.launch_count = 0 # number of times the browser has been launched
+        self.br_mon = browser_monitor.BrowserMonitor() # provide browser details
         self.rotation_period = 10 # input file rotation period
         self.single_pass = False # only run each input file for one rotation period
         self.test_duration = 5000 # used by the html harness to redirect to next testcase
@@ -238,9 +240,9 @@ class CorpusManager(object):
 
     def _verify_env_vars(self):
         for key, value in self._environ_vars.items():
-            if key in os.environ and (len(value) == 0 or os.environ[key] == value):
+            if key in os.environ and (not value or os.environ[key] == value):
                 continue
-            if len(value) == 0: # set a value for the error if needed
+            if not value: # set a value for the error if needed
                 value = "?"
             raise RuntimeError("Missing environment variable! " \
                 "%s=%s is required for this CorpusManager" % (key, value))
@@ -366,7 +368,7 @@ class CorpusManager(object):
         return len(self.input_files)
 
 
-    def finish_test(self, clone_log_cb, test, files_served=None):
+    def finish_test(self, test, files_served=None):
         """
         finish_test is meant to be implemented in subclass
         """

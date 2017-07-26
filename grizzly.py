@@ -190,6 +190,8 @@ def main(args):
             use_valgrind=args.valgrind,
             use_xvfb=args.xvfb)
 
+        corp_man.br_mon.monitor_instance(ffp)
+
         # detect soft assertions
         if args.asserts:
             ffp.add_abort_token("###!!! ASSERTION:")
@@ -235,7 +237,6 @@ def main(args):
                     memory_limit=args.memory * 1024 * 1024 if args.memory else None,
                     prefs_js=args.prefs,
                     extension=args.extension)
-                corp_man.launch_count += 1
 
             # generate test case
             log.debug("calling corp_man.generate()")
@@ -275,7 +276,7 @@ def main(args):
                 shutil.rmtree(wwwdir)
 
             log.debug("calling corp_man.finish_test()")
-            corp_man.finish_test(ffp.clone_log, current_test, files_served)
+            corp_man.finish_test(current_test, files_served)
 
             # only add test case to list if something was served
             # to help maintain browser/fuzzer sync

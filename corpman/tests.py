@@ -58,7 +58,11 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertEqual(cm.get_active_file_name(), None) # None since generate() has not been called
             self.assertEqual(cm.landing_page(), "test_page_0000.html")
             self.assertEqual(cm.landing_page(transition=True), "next_test")
-            self.assertEqual(cm.launch_count, 0) # should default to 0 and be incremented by grizzly.py
+            self.assertIsNone(cm.br_mon.clone_log())
+            self.assertEqual(cm.br_mon.launch_count(), 0) # should default to 0 and be incremented by ffpuppet.py
+            self.assertFalse(cm.br_mon.is_running())
+            self.assertIsNone(cm.br_mon.log_data())
+            self.assertEqual(cm.br_mon.log_length(), 0)
             self.assertIn("ABORT_TOKEN", cm.abort_tokens)
         finally:
             if os.path.isdir(corp_dir):
