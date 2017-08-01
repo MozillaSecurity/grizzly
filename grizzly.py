@@ -44,6 +44,7 @@ class GrizzlyStatus(object):
     GrizzlyStatus holds status information about the grizzly fuzzing process.
     """
     def __init__(self):
+        self.ignored = 0
         self.iteration = 0
         self.results = 0
         self.test_name = None
@@ -67,6 +68,7 @@ class GrizzlyStatus(object):
         with open(self._report_file, "w") as log_fp:
             json.dump({
                 "Duration": duration,
+                "Ignored": self.ignored,
                 "Iteration": self.iteration,
                 "Rate": (self.iteration/duration) if duration > 0 else 0,
                 "Results": self.results}, log_fp)
@@ -293,12 +295,12 @@ def main(args):
 
             # handle ignored timeouts
             if failure_detected and args.ignore_timeouts and ffp.is_running():
-                log.info("Timeout ignored")
+                status.ignored += 1
+                log.info("Timeout ignored (%d)", status.ignored)
                 ffp.close()
 
             # handle issues if detected
             elif failure_detected:
-                status.results += 1
                 log.info("Potential issue detected")
                 ffp.close()
 
