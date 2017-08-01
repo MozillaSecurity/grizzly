@@ -483,6 +483,8 @@ class CorpusManagerTests(unittest.TestCase):
             os.environ["RANDOM_ENVAR_TEST3"] = "3test3"
             cm = EnvVarCorpman(corp_dir)
             tc = cm.generate()
+            with self.assertRaisesRegexp(IOError, "Could not find environ file:.+"):
+                tc.add_environ_file("nofile.js", "missing_file")
             env_file = os.path.join(prf_dir, "simple_prefs.js")
             with open(env_file, "wb") as fp:
                 fp.write("stuff.blah=1;")

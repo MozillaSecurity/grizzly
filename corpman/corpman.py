@@ -57,7 +57,7 @@ class TestCase(object):
 
     def add_environ_file(self, fname, path):
         if not os.path.isfile(path):
-            raise IOError("Could not find environ files: %s" % path)
+            raise IOError("Could not find environ file: %s" % path)
         self._env_files[fname] = path
 
 
