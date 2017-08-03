@@ -301,6 +301,7 @@ def main(args):
 
             # handle issues if detected
             elif failure_detected:
+                status.results += 1
                 log.info("Potential issue detected")
                 ffp.close()
 
