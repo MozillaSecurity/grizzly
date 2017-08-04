@@ -46,6 +46,7 @@ class GrizzlyStatus(object):
     def __init__(self):
         self.ignored = 0
         self.iteration = 0
+        self.log_size = 0
         self.results = 0
         self.test_name = None
         self._last_report = 0
@@ -70,6 +71,7 @@ class GrizzlyStatus(object):
                 "Duration": duration,
                 "Ignored": self.ignored,
                 "Iteration": self.iteration,
+                "Logsize": self.log_size,
                 "Rate": (self.iteration/duration) if duration > 0 else 0,
                 "Results": self.results}, log_fp)
 
@@ -236,7 +238,8 @@ def main(args):
                         serv.get_port(),
                         corp_man.landing_page(harness=True),
                         corp_man.test_duration),
-                    memory_limit=args.memory * 1024 * 1024 if args.memory else None,
+                    log_limit=0x6400000, # 100MB log size limit (something is likely very wrong)
+                    memory_limit=args.memory * 1024 * 1024 if args.memory else 0,
                     prefs_js=args.prefs,
                     extension=args.extension)
 
@@ -316,6 +319,11 @@ def main(args):
                     result_reporter = reporter.FilesystemReporter()
                     ffp.save_log(result_reporter.log_file)
                     result_reporter.report(reversed(test_cases))
+
+            # warn about large browser logs
+            status.log_size = ffp.log_length()
+            if status.log_size > 0x1900000: # 25MB
+                log.warning("Large browser log: %dMBs", (status.log_size/1048576))
 
             # trigger relaunch by closing the browser
             relaunch_countdown -= 1
