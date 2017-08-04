@@ -346,15 +346,17 @@ def main(args):
         if wwwdir and os.path.isdir(wwwdir):
             shutil.rmtree(wwwdir)
 
-        if ffp is not None:
-            # close ffp and save log
-            ffp.close()
-            result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
-            ffp.save_log(result_reporter.log_file)
-            result_reporter.report(reversed(test_cases))
-            ffp.clean_up()
-
-        corp_man.close()
+        try:
+            if ffp is not None:
+                try:
+                    ffp.close()
+                    result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
+                    ffp.save_log(result_reporter.log_file)
+                    result_reporter.report(reversed(test_cases))
+                finally:
+                    ffp.clean_up()
+        finally:
+            corp_man.close()
 
 
 if __name__ == "__main__":
