@@ -4,14 +4,17 @@
 <meta charset=UTF-8>
 <title>&#x1f43b; &sdot; Grizzly &sdot; &#x1f98a;</title>
 <script>
+function grz_dump(msg){
+  dump('[grizzly harness][' + new Date().toGMTString() + '] ' + msg);
+}
 let limit_tmr, closed_tmr, sub, time_limit = Number(location.hash.substr(1));
 let req_url = '/first_test';
 let prev_url = null;
 if (time_limit <= 0) {
-  dump('No time limit given, using default of 5s\n');
+  grz_dump('No time limit given, using default of 5s\n');
   time_limit = 5000;
 } else {
-  dump('Using time limit of ' + time_limit + '\n');
+  grz_dump('Using time limit of ' + time_limit + '\n');
 }
 let main = function(){
   let is_done = false;
@@ -22,7 +25,7 @@ let main = function(){
         clearTimeout(limit_tmr);
         clearInterval(closed_tmr);
         is_done = true;
-        dump('Test case closed itself\n');
+        grz_dump('Test case closed itself\n');
         setTimeout(main, 0);
       }
     }, 10);
@@ -31,15 +34,15 @@ let main = function(){
     if (!is_done) {
       clearInterval(closed_tmr);
       is_done = true;
-      dump('Time limit exceeded\n');
+      grz_dump('Time limit exceeded\n');
       let cur_loc = null;
       if (!sub.closed && sub.location != null){
         cur_loc = sub.location.toString();
       }
       if (cur_loc != null && cur_loc == prev_url){
         // TODO: figure out why this happens
-        dump('Potential browser/fuzzer sync issue detected\n');
-        dump('Continued to request: ' + cur_loc + '\n');
+        grz_dump('Potential browser/fuzzer sync issue detected\n');
+        grz_dump('Continued to request: ' + cur_loc + '\n');
         prev_url = null;
         req_url = '/first_test';
       }
@@ -47,7 +50,7 @@ let main = function(){
         prev_url = cur_loc;
       }
       if (!sub.closed){
-        dump('Closing test case\n');
+        grz_dump('Closing test case\n');
         sub.close();
       }
       setTimeout(main, 0);
@@ -59,7 +62,7 @@ window.onload = main;
 window.addEventListener('beforeunload', function(){
   clearInterval(closed_tmr);
   clearTimeout(limit_tmr);
-  dump('Cleaning up\n');
+  grz_dump('Cleaning up\n');
   if (!sub.closed) {
     sub.close();
   }
