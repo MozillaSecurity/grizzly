@@ -5,6 +5,7 @@
 import base64
 import os
 import random
+import re
 import shutil
 
 import browser_monitor
@@ -165,7 +166,8 @@ class CorpusManager(object):
             self.input_files.sort(reverse=True)
 
         # this is for e10s support, detect the child process is gone and close the main process
-        self.add_abort_token(r"###!!!\s*\[Parent\].+?Error:\s*\(.+?PBrowser::Msg_Destroy\)")
+        self.add_abort_token(
+            re.compile(r"###!!!\s*\[Parent\].+?Error:\s*\(.+?PBrowser::Msg_Destroy\)"))
 
     def _init_fuzzer(self):
         """
