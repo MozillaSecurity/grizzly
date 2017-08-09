@@ -157,6 +157,8 @@ def reduce_args(argv=None):
         "-e", "--extension",
         help="Install the fuzzPriv extension (specify path to funfuzz/dom/extension)")
     parser.add_argument(
+        "--log-limit", type=int, help="Log file size limit in MBs")
+    parser.add_argument(
         "-m", "--memory", type=int,
         help="Process memory limit in MBs (Requires psutil)")
     parser.add_argument(
@@ -203,8 +205,6 @@ def reduce_args(argv=None):
         parser.error("Invalid reducer")
     if args.n_tries <= 0:
         parser.error("n_tries must be at least 1")
-    if args.memory is not None:
-        args.memory = args.memory * 1024 * 1024
     return args
 
 
@@ -237,7 +237,8 @@ def reduce_main(args):
             args.binary,
             location=os.path.abspath(args.testcase),
             launch_timeout=args.launch_timeout,
-            memory_limit=args.memory,
+            log_limit=args.log_limit * 1024 * 1024 if args.log_limit else 0,
+            memory_limit=args.memory * 1024 * 1024 if args.memory else 0,
             prefs_js=args.prefs,
             extension=args.extension)
         orig_stack, timeout = wait_get_hash(ffp, timeout, program_cfg)
@@ -267,7 +268,8 @@ def reduce_main(args):
                         args.binary,
                         location=try_fn,
                         launch_timeout=args.launch_timeout,
-                        memory_limit=args.memory,
+                        log_limit=args.log_limit * 1024 * 1024 if args.log_limit else 0,
+                        memory_limit=args.memory * 1024 * 1024 if args.memory else 0,
                         prefs_js=args.prefs,
                         extension=args.extension)
                     result_try, new_timeout = wait_get_hash(ffp, timeout, program_cfg)

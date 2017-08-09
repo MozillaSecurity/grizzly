@@ -107,6 +107,8 @@ def parse_args(args=None):
         "--launch-timeout", type=int, default=300,
         help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
     parser.add_argument(
+        "--log-limit", type=int, help="Log file size limit in MBs")
+    parser.add_argument(
         '-m', '--memory', type=int,
         help='Browser process memory limit in MBs (default: No limit)')
     parser.add_argument(
@@ -238,7 +240,7 @@ def main(args):
                         serv.get_port(),
                         corp_man.landing_page(harness=True),
                         corp_man.test_duration),
-                    log_limit=0x6400000, # 100MB log size limit (something is likely very wrong)
+                    log_limit=args.log_limit * 1024 * 1024 if args.log_limit else 0,
                     memory_limit=args.memory * 1024 * 1024 if args.memory else 0,
                     prefs_js=args.prefs,
                     extension=args.extension)
