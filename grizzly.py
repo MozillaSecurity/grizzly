@@ -136,6 +136,9 @@ def parse_args(args=None):
     parser.add_argument(
         "--xvfb", action="store_true",
         help="Use xvfb (Linux only)")
+    parser.add_argument(
+        "--gcov-iterations", type=int, default=None,
+        help="Run only the specified amount of iterations and dump GCOV data every iteration.")
     return parser.parse_args(args)
 
 
@@ -208,6 +211,21 @@ def main(args):
         while True:
             status.report()
             status.iteration += 1
+
+            if args.gcov_iterations is not None:
+                if status.iteration > args.gcov_iterations:
+                    log.info("GCOV: Finished with iterations, terminating...")
+                    break
+
+                # If at this point, the browser is running, i.e. we did neither
+                # relaunch nor crash/timeout, then we need to signal the browser
+                # to dump coverage before attempting a new test that potentially
+                # crashes.
+                # Note: This is not required if we closed or are going to close
+                # the browser (relaunch or done with all iterations) because the
+                # SIGTERM will also trigger coverage to be synced out.
+                if ffp.is_running():
+                    os.kill(ffp._proc.pid, signal.SIGUSR1)
 
             # launch FFPuppet
             if ffp.closed:
