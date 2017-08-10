@@ -168,25 +168,29 @@ class FuzzManagerReporter(Reporter):
         # search for a cached signature match and if the signature
         # is already in the cache and marked as frequent, don't bother submitting
         with fasteners.process_lock.InterProcessLock(os.path.join(tempfile.gettempdir(), "fm_sigcache.lock")):
-            cache_file, cache_signature = collector.search(crash_info)
-            if cache_signature is not None:
-                if cache_signature['frequent']:
-                    log.info("Crash matched existing signature: %s", cache_signature["shortDescription"])
+            cache_sig_file, cache_metadata = collector.search(crash_info)
+            if cache_metadata is not None:
+                if cache_metadata['frequent']:
+                    log.info("Frequent crash matched existing signature: %s", cache_metadata["shortDescription"])
                     return
                 # there is already a signature, initialize count
-                cache_signature.setdefault("_grizzly_seen_count", 0)
+                cache_metadata.setdefault("_grizzly_seen_count", 0)
             else:
                 # there is no signature, create one locally so we can count the number of times we've seen it
-                cache_file = collector.generate(crash_info, numFrames=8)
-                cache_signature = {"_grizzly_seen_count": 0, "frequent": False}
+                cache_sig_file = collector.generate(crash_info, numFrames=8)
+                cache_metadata = {
+                    "_grizzly_seen_count": 0,
+                    "frequent": False,
+                    "shortDescription": crash_info.createShortSignature()
+                }
             # limit the number of times we report per cycle
-            cache_signature["_grizzly_seen_count"] += 1
-            if cache_signature["_grizzly_seen_count"] >= self.rate_limit:
+            cache_metadata["_grizzly_seen_count"] += 1
+            if cache_metadata["_grizzly_seen_count"] >= self.rate_limit:
                 # we will still report this one, but no more
-                cache_signature['frequent'] = True
-            metadata_file = cache_file.replace(".signature", ".metadata")
+                cache_metadata['frequent'] = True
+            metadata_file = cache_sig_file.replace(".signature", ".metadata")
             with open(metadata_file, "w") as meta_fp:
-                json.dump(cache_signature, meta_fp)
+                json.dump(cache_metadata, meta_fp)
 
         # dump test cases and the contained files to working directory
         test_case_meta = []
