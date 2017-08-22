@@ -102,6 +102,9 @@ def parse_args(args=None):
         "--fuzzmanager", action="store_true",
         help="Report results to FuzzManager")
     parser.add_argument(
+        "--gcov-iterations", type=int, default=None,
+        help="Run only the specified amount of iterations and dump GCOV data every iteration.")
+    parser.add_argument(
         "--ignore-timeouts", action="store_true",
         help="Don't save the logs/results from a timeout")
     parser.add_argument(
@@ -137,9 +140,6 @@ def parse_args(args=None):
     parser.add_argument(
         "--xvfb", action="store_true",
         help="Use xvfb (Linux only)")
-    parser.add_argument(
-        "--gcov-iterations", type=int, default=None,
-        help="Run only the specified amount of iterations and dump GCOV data every iteration.")
     return parser.parse_args(args)
 
 
@@ -170,6 +170,9 @@ def main(args):
     log.info("Found %d test cases", corp_man.size())
     if corp_man.single_pass:
         log.info("Running in REPLAY mode")
+    elif args.gcov_iterations is not None:
+        log.info("Running in GCOV mode")
+        corp_man.rotation_period = 1 # cover as many test cases as possible
     else:
         log.info("Running in FUZZING mode")
 
