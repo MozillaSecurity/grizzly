@@ -194,6 +194,9 @@ def main(args):
         ffp = None # define ffp in case exceptions are raised on init
         wwwdir = None # directory containing test files to be served
 
+        # do not allow network connections to non local endpoints
+        os.environ["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
+
         # create FFPuppet object
         ffp = ffpuppet.FFPuppet(
             use_valgrind=args.valgrind,
