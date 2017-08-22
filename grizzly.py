@@ -107,10 +107,11 @@ def parse_args(args=None):
         "--launch-timeout", type=int, default=300,
         help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
     parser.add_argument(
-        "--log-limit", type=int, help="Log file size limit in MBs")
+        "--log-limit", type=int,
+        help="Log file size limit in MBs (default: 'no limit')")
     parser.add_argument(
-        '-m', '--memory', type=int,
-        help='Browser process memory limit in MBs (default: No limit)')
+        "-m", "--memory", type=int,
+        help="Browser process memory limit in MBs (default: 'no limit') -- requires psutil")
     parser.add_argument(
         "--mime",
         help="Specify a mime type")
@@ -131,13 +132,14 @@ def parse_args(args=None):
         help="Iteration timeout in seconds (default: %(default)s)")
     parser.add_argument(
         "--valgrind", action="store_true",
-        help="Use valgrind")
+        help="Use Valgrind (Linux only)")
     parser.add_argument(
         "-w", "--working-path",
-        help="Working directory. Intended to be used with ramdrives. (default: None)")
+        help="Working directory. Intended to be used with ram-drives." \
+             " (default: %r)" % tempfile.gettempdir())
     parser.add_argument(
         "--xvfb", action="store_true",
-        help="Use xvfb (Linux only)")
+        help="Use Xvfb (Linux only)")
     return parser.parse_args(args)
 
 
@@ -146,6 +148,7 @@ def main(args):
         logging.getLogger().setLevel(logging.WARNING)
 
     args.cache = max(args.cache, 1) # test case cache must be at least one
+    args.log_limit = max(args.log_limit, 0)
     args.memory = max(args.memory, 0)
 
     if args.fuzzmanager:
