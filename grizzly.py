@@ -318,8 +318,8 @@ def main(args):
                 if args.fuzzmanager:
                     result_reporter = reporter.FuzzManagerReporter()
                     ffp.save_log(result_reporter.log_file)
-                    # report with a log size limit of 128KB
-                    result_reporter.report(reversed(test_cases), args.binary, log_limit=0x20000)
+                    # report with a log size limit of 256KB
+                    result_reporter.report(reversed(test_cases), args.binary, log_limit=0x40000)
                 else:
                     result_reporter = reporter.FilesystemReporter()
                     ffp.save_log(result_reporter.log_file)
