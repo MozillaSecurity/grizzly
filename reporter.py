@@ -149,7 +149,17 @@ class FuzzManagerReporter(Reporter):
 
 
     def _report(self, test_cases, target_binary, log_limit=0):
+        original_crash_info = None
+        original_size = None
+
         if log_limit > 0:
+            # create a pre-log_limit crash report to compare it after calling tail()
+            with open(self.log_file, "r") as log_fp:
+                original_crash_info = CrashInfo.fromRawCrashData(
+                    None,
+                    log_fp.read().splitlines(),
+                    ProgramConfiguration.fromBinary(target_binary))
+                original_size = log_fp.tell()
             self.tail(self.log_file, log_limit)
 
         # rename log
@@ -162,6 +172,16 @@ class FuzzManagerReporter(Reporter):
                 None,
                 log_fp.read().splitlines(),
                 ProgramConfiguration.fromBinary(target_binary))
+
+        # check that tail operation didn't mess up the crash report
+        if original_crash_info is not None and \
+                original_crash_info.createShortSignature() != crash_info.createShortSignature():
+            log.warning("Log limit of %d bytes would have broken crash report! (log size is %d)",
+                        log_limit, original_size)
+            crash_info = original_crash_info
+        else:
+            # could be large, delete it
+            del original_crash_info
 
         collector = Collector()
 
