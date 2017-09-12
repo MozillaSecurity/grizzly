@@ -77,7 +77,8 @@ class GrizzlyStatus(object):
                 "Results": self.results}, log_fp)
 
 
-def parse_args(args=None):
+def parse_args(argv=None):
+    aval_corpmans = sorted(corpman.loader.list())
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "binary",
@@ -87,7 +88,7 @@ def parse_args(args=None):
         help="Test case or directory containing test cases")
     parser.add_argument(
         "corpus_manager",
-        help="Available corpus managers: %s" % ", ".join(sorted(corpman.loader.list())))
+        help="Available corpus managers: %s" % ", ".join(aval_corpmans))
     parser.add_argument(
         "--accepted_extensions", nargs='+',
         help="Specify a space separated list of supported file extensions... " \
@@ -144,7 +145,30 @@ def parse_args(args=None):
     parser.add_argument(
         "--xvfb", action="store_true",
         help="Use Xvfb (Linux only)")
-    return parser.parse_args(args)
+
+    args = parser.parse_args(argv)
+
+    if not os.path.isfile(args.binary):
+        parser.error("%r does not exist" % args.binary)
+
+    if not os.path.exists(args.input):
+        parser.error("%r does not exist" % args.input)
+    elif os.path.isdir(args.input) and not os.listdir(args.input):
+        parser.error("%r is empty" % args.input)
+
+    if args.corpus_manager.lower() not in aval_corpmans:
+        parser.error("%r corpus manager does not exist" % args.corpus_manager.lower())
+
+    if args.extension is not None and not os.path.exists(args.extension):
+        parser.error("%r does not exist" % args.extension)
+
+    if args.prefs is not None and not os.path.isfile(args.prefs):
+        parser.error("%r does not exist" % args.prefs)
+
+    if args.working_path is not None and not os.path.isdir(args.working_path):
+        parser.error("%r is not a directory" % args.working_path)
+
+    return args
 
 
 def main(args):
@@ -160,9 +184,6 @@ def main(args):
 
     log.info("Starting Grizzly")
     status = GrizzlyStatus()
-
-    if args.working_path is not None and not os.path.isdir(args.working_path):
-        raise IOError("%r is not a directory" % args.working_path)
 
     # init corpus manager
     log.debug("Initializing the corpus manager")
