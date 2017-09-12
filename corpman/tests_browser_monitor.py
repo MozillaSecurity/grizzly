@@ -14,7 +14,8 @@ class TestPuppet(object):
     running = False
     launches = 0
 
-    def clone_log(self, offset=0):
+    def clone_log(self, log_id, offset=0):
+        assert log_id is not None
         tmp_fd, log_file = tempfile.mkstemp(
             suffix="_log.txt",
             prefix="test_")
@@ -29,7 +30,7 @@ class TestPuppet(object):
     def is_running(self):
         return self.running
 
-    def log_length(self):
+    def log_length(self, log_id):
         return 4
 
 
@@ -41,25 +42,24 @@ class BrowserMonitorTests(unittest.TestCase):
         tp = TestPuppet()
         bm.monitor_instance(tp)
 
-        log = bm.clone_log(offset=0)
+        test_log = bm.clone_log("test_log", offset=0)
         try:
-            self.assertTrue(os.path.isfile(log))
+            self.assertTrue(os.path.isfile(test_log))
         finally:
-            if log is not None:
-                os.remove(log)
+            if test_log is not None:
+                os.remove(test_log)
         tp.launches += 1
         self.assertEqual(bm.launch_count(), 1)
         tp.running = True
         self.assertTrue(bm.is_running())
-        self.assertEqual(bm.log_length(), 4)
-        self.assertEqual(bm.log_data(), "test")
+        self.assertEqual(bm.log_length("test_log"), 4)
+        self.assertEqual(bm.log_data("test_log"), "test")
 
     def test_2(self):
         "test an uninitialized browser monitor"
         bm = browser_monitor.BrowserMonitor()
-        self.assertIsNone(bm.clone_log(offset=0), None)
+        self.assertIsNone(bm.clone_log("test_log", offset=0))
         self.assertEqual(bm.launch_count(), 0)
         self.assertFalse(bm.is_running())
-        self.assertEqual(bm.log_length(), 0)
-        self.assertIsNone(bm.log_data())
-
+        self.assertEqual(bm.log_length("test_log"), 0)
+        self.assertIsNone(bm.log_data("test_log"))

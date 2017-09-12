@@ -16,10 +16,10 @@ class BrowserMonitor(object):
         self._fn_log_length = None
 
 
-    def clone_log(self, offset=0):
+    def clone_log(self, log_id, offset=0):
         if self._fn_clone_log is None:
             return None
-        return self._fn_clone_log(offset=offset)
+        return self._fn_clone_log(log_id, offset=offset)
 
 
     def launch_count(self):
@@ -34,10 +34,10 @@ class BrowserMonitor(object):
         return self._fn_is_running()
 
 
-    def log_data(self, offset=0):
+    def log_data(self, log_id, offset=0):
         if self._fn_clone_log is None:
             return None
-        log_file = self._fn_clone_log(offset=offset)
+        log_file = self._fn_clone_log(log_id, offset=offset)
         if log_file is None:
             return None
         try:
@@ -47,10 +47,10 @@ class BrowserMonitor(object):
             os.remove(log_file)
 
 
-    def log_length(self):
+    def log_length(self, log_id):
         if self._fn_log_length is None:
             return 0
-        return self._fn_log_length()
+        return self._fn_log_length(log_id)
 
 
     def monitor_instance(self, puppet):

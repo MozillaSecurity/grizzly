@@ -5,6 +5,7 @@
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -30,46 +31,68 @@ __credits__ = ["Tyson Smith"]
 log = logging.getLogger("grizzly") # pylint: disable=invalid-name
 
 
-def create_log(path=None):
-    fd, file_name = tempfile.mkstemp(
-        dir=path,
-        prefix="grizzly_",
-        suffix="_log.txt"
-    )
-    os.close(fd)
-
-    return file_name
-
-
 class Reporter(object):
-    def __init__(self, ignore_stackless=False):
-        self._file_prefix = None # prefix for results
-        self._ignore_stackless = ignore_stackless
-        self._log_path = tempfile.mkdtemp(prefix="grz_report_")
+    DEFAULT_MAJOR = "NO_STACK"
+    DEFAULT_MINOR = "0"
+
+    def __init__(self, log_path):
+        self.log_files = os.listdir(log_path)
+        self.log_path = log_path
         self._major = None # stack hash
+        self._map = {} # map logs (stderr, stdout, aux/preferred crash log) to file names
         self._minor = None # stack hash
-        self.log_file = create_log(self._log_path)
+        self._prefix = None # prefix for results
 
 
-    def _process_log(self):
-        # parse log file
-        with open(self.log_file) as log_fp:
-            stack = stack_hasher.stack_from_text(log_fp.read())
+    def _find_preferred_stack(self):
+        # pattern to identify the crash triggered when the parent process goes away
+        re_asan_null = re.compile(r"==\d+==ERROR:.+?SEGV\son\sunknown\saddress\s0x[0]+\s\(.+?T2\)")
+        log_size = 0
+        for fname in self.log_files:
+            if "asan" not in fname:
+                continue # ignore non-ASan logs at this point
+            with open(os.path.join(self.log_path, fname)) as log_fp:
+                data = log_fp.read(4096) # grab the start of the ASan log
+            if re_asan_null.search(data) is not None:
+                continue
+            if "aux" not in self._map:
+                self._map["aux"] = fname # use this ASan log
+                log_size = os.stat(os.path.join(self.log_path, fname)).st_size
+            # prefer larger log if there is more than one
+            elif os.stat(os.path.join(self.log_path, fname)).st_size > log_size:
+                self._map["aux"] = fname # use this ASan log
+                log_size = os.stat(os.path.join(self.log_path, fname)).st_size
 
-        if self._ignore_stackless and not stack:
-            return False
+        # prefer ASan logs over minidump logs
+        if "aux" not in self._map:
+            for fname in self.log_files:
+                if "minidump" in fname: # for now just use the first one we come across
+                    self._map["aux"] = fname # use this minidump log
+                    break
 
-        # calculate hashes
-        self._minor = stack_hasher.stack_to_hash(stack)
-        if self._minor is not None:
-            self._major = stack_hasher.stack_to_hash(stack, major=True)
-        else:
-            self._minor = "0"
-            self._major = "NO_STACK"
+        for fname in self.log_files:
+            if "stderr" in fname:
+                self._map["stderr"] = fname
+                continue
+            if "stdout" in fname:
+                self._map["stdout"] = fname
+                continue
 
-        self._file_prefix = "%s_%s" % (self._minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S"))
 
-        return True
+    def _process_logs(self):
+        self._find_preferred_stack()
+        log_to_scan = self._map["aux"] if "aux" in self._map else self._map["stderr"]
+        if log_to_scan is not None:
+            with open(os.path.join(self.log_path, log_to_scan), "r") as log_fp:
+                stack = stack_hasher.stack_from_text(log_fp.read())
+            # calculate hashes
+            if stack is not None:
+                self._minor = stack_hasher.stack_to_hash(stack)
+                self._major = stack_hasher.stack_to_hash(stack, major=True)
+        if self._minor is None:
+            self._minor = self.DEFAULT_MINOR
+            self._major = self.DEFAULT_MAJOR
+        self._prefix = "_".join([self._minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S")])
 
 
     def _report(self, *args, **kwargs):
@@ -77,27 +100,29 @@ class Reporter(object):
 
 
     def report(self, *args, **kwargs):
-        if self._process_log():
+        self._process_logs()
+        if self._minor is not None:
             self._report(*args, **kwargs)
-        if os.path.isdir(self._log_path):
-            shutil.rmtree(self._log_path)
+        if os.path.isdir(self.log_path):
+            shutil.rmtree(self.log_path)
 
 
     @staticmethod
     def tail(in_file, size_limit):
-        with open(in_file, "r") as in_fp:
+        assert size_limit > 0
+        with open(in_file, "rb") as in_fp:
             # check if tail is needed
             in_fp.seek(0, os.SEEK_END)
             if in_fp.tell() <= size_limit:
                 return # no tail needed
-
             # perform tail operation
-            in_fp.seek(size_limit * -1, os.SEEK_END)
-            out_file = create_log()
-            with open(out_file, "w") as out_fp:
-                out_fp.write("[LOG TAILED]\n")
-                out_fp.write(in_fp.read())
-
+            dump_pos = max((in_fp.tell() - size_limit), 0)
+            in_fp.seek(dump_pos)
+            out_fd, out_file = tempfile.mkstemp()
+            os.close(out_fd)
+            with open(out_file, "wb") as out_fp:
+                out_fp.write(b"[LOG TAILED]\n")
+                shutil.copyfileobj(in_fp, out_fp, 0x10000) # 64KB chunks
         os.remove(in_file)
         shutil.move(out_file, in_file)
 
@@ -105,7 +130,8 @@ class Reporter(object):
 class FilesystemReporter(Reporter):
     def _report(self, test_cases, results_path=None, log_limit=0):
         if log_limit > 0:
-            self.tail(self.log_file, log_limit)
+            for fname in self.log_files:
+                self.tail(os.path.join(self.log_path, fname), log_limit)
 
         if results_path is None:
             results_path = os.path.join(os.getcwd(), "results")
@@ -121,13 +147,13 @@ class FilesystemReporter(Reporter):
 
         # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(test_cases):
-            dump_path = os.path.join(major_dir, "%s-%d" % (self._file_prefix, test_number))
+            dump_path = os.path.join(major_dir, "%s-%d" % (self._prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
 
-        # rename and move log into bucket directory
-        shutil.move(self.log_file, "%s_log.txt" % os.path.join(major_dir, self._file_prefix))
+        # move logs into bucket directory
+        shutil.move(self.log_path, os.path.join(major_dir, "_".join([self._prefix, "logs"])))
 
 
 class FuzzManagerReporter(Reporter):
@@ -140,7 +166,7 @@ class FuzzManagerReporter(Reporter):
     @staticmethod
     def sanity_check(bin_file):
         if _fm_import_error is not None:
-            raise _fm_import_error
+            raise _fm_import_error # pylint: disable=raising-bad-type
         if not os.path.isfile(FuzzManagerReporter.fm_config):
             raise IOError("Missing: %s" % FuzzManagerReporter.fm_config)
         if not os.path.isfile("".join([bin_file, ".fuzzmanagerconf"])):
@@ -148,35 +174,43 @@ class FuzzManagerReporter(Reporter):
         ProgramConfiguration.fromBinary(bin_file)
 
 
+    def _create_crash_info(self, target_binary):
+        aux_data = None
+        if "aux" in self._map:
+            with open(os.path.join(self.log_path, self._map["aux"]), "r") as log_fp:
+                aux_data = log_fp.read().splitlines()
+        with open(os.path.join(self.log_path, self._map["stderr"]), "r") as err_fp:
+            with open(os.path.join(self.log_path, self._map["stdout"]), "r") as out_fp:
+                return CrashInfo.fromRawCrashData(
+                    out_fp.read().splitlines(),
+                    err_fp.read().splitlines(),
+                    ProgramConfiguration.fromBinary(target_binary),
+                    auxCrashData=aux_data)
+
+
     def _report(self, test_cases, target_binary, log_limit=0):
         if log_limit > 0:
-            self.tail(self.log_file, log_limit)
-
-        # rename log
-        log_file = "%s_log.txt" % os.path.join(self._log_path, self._file_prefix)
-        shutil.move(self.log_file, log_file)
+            for fname in self.log_files:
+                self.tail(os.path.join(self.log_path, fname), log_limit)
 
         # prepare data for submission as CrashInfo
-        with open(log_file, "r") as log_fp:
-            crash_info = CrashInfo.fromRawCrashData(
-                None,
-                log_fp.read().splitlines(),
-                ProgramConfiguration.fromBinary(target_binary))
-
-        collector = Collector()
+        crash_info = self._create_crash_info(target_binary)
 
         # search for a cached signature match and if the signature
         # is already in the cache and marked as frequent, don't bother submitting
         with fasteners.process_lock.InterProcessLock(os.path.join(tempfile.gettempdir(), "fm_sigcache.lock")):
+            collector = Collector()
             cache_sig_file, cache_metadata = collector.search(crash_info)
             if cache_metadata is not None:
                 if cache_metadata['frequent']:
-                    log.info("Frequent crash matched existing signature: %s", cache_metadata["shortDescription"])
+                    log.info("Frequent crash matched existing signature: %s",
+                             cache_metadata["shortDescription"])
                     return
                 # there is already a signature, initialize count
                 cache_metadata.setdefault("_grizzly_seen_count", 0)
             else:
-                # there is no signature, create one locally so we can count the number of times we've seen it
+                # there is no signature, create one locally so we can count
+                # the number of times we've seen it
                 cache_sig_file = collector.generate(crash_info, numFrames=8)
                 cache_metadata = {
                     "_grizzly_seen_count": 0,
@@ -196,17 +230,18 @@ class FuzzManagerReporter(Reporter):
         test_case_meta = []
         for test_number, test_case in enumerate(test_cases):
             test_case_meta.append([test_case.corpman_name, test_case.input_fname])
-            dump_path = os.path.join(self._log_path, "%s-%d" % (self._file_prefix, test_number))
+            dump_path = os.path.join(self.log_path, "%s-%d" % (self._prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
 
         # add results to a zip file
-        zip_name = ".".join([self._file_prefix, "zip"])
+        zip_name = ".".join([self._prefix, "zip"])
         with zipfile.ZipFile(zip_name, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_fp:
-            for dir_name, _, dir_files in os.walk(self._log_path):
-                arc_path = os.path.relpath(dir_name, self._log_path)
+            # add test files
+            for dir_name, _, dir_files in os.walk(self.log_path):
+                arc_path = os.path.relpath(dir_name, self.log_path)
                 for file_name in dir_files:
                     zip_fp.write(
                         os.path.join(dir_name, file_name),

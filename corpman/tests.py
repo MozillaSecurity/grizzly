@@ -43,7 +43,7 @@ class SinglePassCorpman(corpman.CorpusManager):
 
 class CorpusManagerTests(unittest.TestCase):
 
-    def test_0(self):
+    def test_00(self):
         "test a basic corpus manager"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
@@ -58,17 +58,17 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertEqual(cm.get_active_file_name(), None) # None since generate() has not been called
             self.assertEqual(cm.landing_page(), "test_page_0000.html")
             self.assertEqual(cm.landing_page(transition=True), "next_test")
-            self.assertIsNone(cm.br_mon.clone_log())
+            self.assertIsNone(cm.br_mon.clone_log("stderr"))
             self.assertEqual(cm.br_mon.launch_count(), 0) # should default to 0 and be incremented by ffpuppet.py
             self.assertFalse(cm.br_mon.is_running())
-            self.assertIsNone(cm.br_mon.log_data())
-            self.assertEqual(cm.br_mon.log_length(), 0)
+            self.assertIsNone(cm.br_mon.log_data("stderr"))
+            self.assertEqual(cm.br_mon.log_length("stderr"), 0)
             self.assertIn("ABORT_TOKEN", cm.abort_tokens)
         finally:
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
-    def test_1(self):
+    def test_01(self):
         "test CorpusManager generate() creates TestCases and TestFiles using SimpleCorpman"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         tc_dir = tempfile.mkdtemp(prefix="tc_")
@@ -95,7 +95,7 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(tc_dir):
                 shutil.rmtree(tc_dir)
 
-    def test_2(self):
+    def test_02(self):
         "test CorpusManager multiple calls to generate() and template rotation"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
@@ -117,7 +117,7 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
-    def test_3(self):
+    def test_03(self):
         "test CorpusManager single pass mode"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
@@ -140,7 +140,7 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
-    def test_4(self):
+    def test_04(self):
         "test single template file"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
@@ -155,7 +155,7 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
-    def test_5(self):
+    def test_05(self):
         "test multiple template files in nested directories"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         nd_1 = tempfile.mkdtemp(prefix="test1_", dir=corp_dir)
@@ -175,7 +175,7 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
-    def test_6(self):
+    def test_06(self):
         "test multiple template files with extension filter"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
@@ -191,7 +191,7 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
-    def test_7(self):
+    def test_07(self):
         "test ignore empty template files and blacklisted files"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
@@ -211,7 +211,7 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
-    def test_8(self):
+    def test_08(self):
         "test extension filter normalization"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         try:
@@ -234,7 +234,7 @@ class CorpusManagerTests(unittest.TestCase):
             if os.path.isdir(corp_dir):
                 shutil.rmtree(corp_dir)
 
-    def test_9(self):
+    def test_09(self):
         "test corpus manager with default harness"
         corp_dir = tempfile.mkdtemp(prefix="crp_")
         tc_dir = tempfile.mkdtemp(prefix="tc_")
@@ -511,7 +511,7 @@ class CorpusManagerTests(unittest.TestCase):
 
 
 class LoaderTests(unittest.TestCase):
-    def test_0(self):
+    def test_00(self):
         "test loader"
         pass # TODO
 

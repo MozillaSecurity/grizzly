@@ -361,31 +361,29 @@ def main(args):
 
                 log.debug("Current input: %s", corp_man.get_active_file_name())
                 log.info("Collecting logs...")
+                # create working directory for current test case
+                result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=args.working_path)
+                ffp.save_logs(result_logs)
                 if args.fuzzmanager:
-                    result_reporter = reporter.FuzzManagerReporter()
-                    ffp.save_log(result_reporter.log_file)
-                    # report with a log size limit of 256KB
+                    result_reporter = reporter.FuzzManagerReporter(result_logs)
+                    # report with a log size limit of 256KB per log
                     result_reporter.report(reversed(test_cases), args.binary, log_limit=0x40000)
                 else:
-                    result_reporter = reporter.FilesystemReporter()
-                    ffp.save_log(result_reporter.log_file)
+                    result_reporter = reporter.FilesystemReporter(result_logs)
                     result_reporter.report(reversed(test_cases))
+                if os.path.isdir(result_logs):
+                    shutil.rmtree(result_logs)
 
             # warn about large browser logs
-            status.log_size = ffp.log_length()
+            status.log_size = ffp.log_length("stderr") + ffp.log_length("stdout")
             if status.log_size > 0x1900000: # 25MB
-                log.warning("Large browser log: %dMBs", (status.log_size/1048576))
+                log.warning("Large browser logs: %dMBs", (status.log_size/1048576))
 
             # trigger relaunch by closing the browser
             relaunch_countdown -= 1
             if relaunch_countdown <= 0 and ffp.is_running():
                 log.info("Triggering FFP relaunch")
                 ffp.close()
-
-                # check for browser shutdown crashes
-                result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
-                ffp.save_log(result_reporter.log_file)
-                result_reporter.report(reversed(test_cases))
 
             # all test cases have been replayed
             if corp_man.single_pass and corp_man.size() == 0:
@@ -398,24 +396,13 @@ def main(args):
     finally:
         log.warning("Shutting down...")
         status.clean_up()
-
         if serv is not None:
             serv.close()
-
         if wwwdir and os.path.isdir(wwwdir):
             shutil.rmtree(wwwdir)
-
-        try:
-            if ffp is not None:
-                try:
-                    ffp.close()
-                    result_reporter = reporter.FilesystemReporter(ignore_stackless=True)
-                    ffp.save_log(result_reporter.log_file)
-                    result_reporter.report(reversed(test_cases))
-                finally:
-                    ffp.clean_up()
-        finally:
-            corp_man.close()
+        if ffp is not None:
+            ffp.clean_up()
+        corp_man.close()
 
 
 if __name__ == "__main__":
