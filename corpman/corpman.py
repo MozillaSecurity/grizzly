@@ -126,9 +126,13 @@ class TestFile(object):
     def __init__(self, file_name, data, encoding="UTF-8", required=True):
         self.data = data
         self.encoding = encoding
-        self.file_name = file_name # name including path relative to wwwroot
+        self.file_name = os.path.normpath(file_name) # name including path relative to wwwroot
         self.required = required # this file must be served to complete test case
 
+        # XXX: This is a naive fix for a larger path issue
+        if "\\" in self.file_name:
+            self.file_name.replace("\\", "/")
+        self.file_name = self.file_name.lstrip('/')
 
 class CorpusManager(object):
     """
