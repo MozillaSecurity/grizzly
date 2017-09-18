@@ -402,7 +402,7 @@ def main(args):
             shutil.rmtree(wwwdir)
         if ffp is not None:
             ffp.clean_up()
-        corp_man.close()
+        corp_man.clean_up()
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import os
 import random
 import re
 import shutil
+import tempfile
 
 import browser_monitor
 
@@ -14,16 +15,30 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 class InputFile(object):
+    MEMORY_BUF_LIMIT = 0xA00000 # 10MB
+
     def __init__(self, file_name):
-        self._data = None # file data
         self.extension = None # file extension
         self.file_name = file_name
+        self.fp = None
 
         if self.file_name is None or not os.path.isfile(file_name):
             raise IOError("File does %r does not exist" % self.file_name)
 
         if "." in self.file_name:
             self.extension = os.path.splitext(self.file_name)[1].lstrip(".")
+
+
+    def _cache_data(self):
+        self.fp = tempfile.SpooledTemporaryFile(max_size=self.MEMORY_BUF_LIMIT)
+        with open(self.file_name, "rb") as src_fp:
+            shutil.copyfileobj(src_fp, self.fp, 0x10000) # 64KB
+
+
+    def close(self):
+        if self.fp is not None:
+            self.fp.close()
+        self.fp = None
 
 
     def get_data(self):
@@ -34,15 +49,17 @@ class InputFile(object):
         returns input file data from file.read()
         """
 
-        # load input file data the first time it is requested
-        if self._data is None:
-            # read data from disk
-            if not os.path.isfile(self.file_name):
-                raise IOError("File does not exist: %s" % self.file_name)
-            with open(self.file_name, "rb") as in_fp:
-                self._data = in_fp.read()
+        if self.fp is None:
+            self._cache_data()
+        self.fp.seek(0)
+        return self.fp.read() # TODO: add size limit
 
-        return self._data
+
+    def get_fp(self):
+        if self.fp is None:
+            self._cache_data()
+        self.fp.seek(0)
+        return self.fp
 
 
 class TestCase(object):
@@ -137,6 +154,7 @@ class TestFile(object):
             self.file_name.replace("\\", "/")
         self.file_name = self.file_name.lstrip('/')
 
+
 class CorpusManager(object):
     """
     CorpusManager is the base class that is used when creating specific corpus
@@ -202,8 +220,10 @@ class CorpusManager(object):
         # check if we should choose a new active input file
         if self.rotation_period > 0 and (self._generated % self.rotation_period) == 0:
             # only switch input files if we have more than one
-            if len(self.input_files) > 1 or self.single_pass:
-                self._active_input = None
+            if self._active_input is not None:
+                if len(self.input_files) > 1 or self.single_pass:
+                    self._active_input.close()
+                    self._active_input = None
 
         # choose an input file
         if self._active_input is None:
@@ -276,6 +296,12 @@ class CorpusManager(object):
         if len(value) < 1 and var_name in os.environ:
             value = os.environ[var_name]
         self._environ_vars[var_name.upper()] = value
+
+
+    def clean_up(self):
+        if self._active_input is not None:
+            self._active_input.close()
+        self.close()
 
 
     def close(self):

@@ -450,9 +450,14 @@ class TestCaseTests(unittest.TestCase):
         with open(t_file, "w") as test_fp:
             test_fp.write("test")
         in_file = corpman.InputFile(t_file)
+        self.addCleanup(in_file.close)
         self.assertEqual(in_file.extension, "bin")
         self.assertEqual(in_file.file_name, t_file)
+        self.assertIsNone(in_file.fp)
         self.assertEqual(in_file.get_data(), "test")
+        self.assertEqual(in_file.get_fp().read(), "test")
+        in_file.close()
+        self.assertIsNone(in_file.fp)
 
 
 class LoaderTests(unittest.TestCase):
