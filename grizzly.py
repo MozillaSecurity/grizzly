@@ -298,7 +298,7 @@ def main(args):
             log.debug("calling corp_man.generate()")
             current_test = corp_man.generate(mime_type=args.mime)
             if args.prefs is not None:
-                current_test.add_environ_file("prefs.js", args.prefs)
+                current_test.add_environ_file(args.prefs, fname="prefs.js")
 
             # update sapphire redirects from the corpman
             for redirect in corp_man.get_redirects():

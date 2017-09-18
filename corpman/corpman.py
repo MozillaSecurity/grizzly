@@ -20,7 +20,7 @@ class InputFile(object):
         self.file_name = file_name
 
         if self.file_name is None or not os.path.isfile(file_name):
-            raise IOError("File does not exist: %s" % self.file_name)
+            raise IOError("File does %r does not exist" % self.file_name)
 
         if "." in self.file_name:
             self.extension = os.path.splitext(self.file_name)[1].lstrip(".")
@@ -56,10 +56,13 @@ class TestCase(object):
         self._test_files = [] # contains TestFile(s) that make up a test case
 
 
-    def add_environ_file(self, fname, path):
-        if not os.path.isfile(path):
-            raise IOError("Could not find environ file: %s" % path)
-        self._env_files[fname] = path
+    def add_environ_file(self, full_path, fname=None):
+        full_path = os.path.abspath(full_path)
+        if not os.path.isfile(full_path):
+            raise IOError("Could not find environ file %r" % full_path)
+        if fname is None:
+            fname = os.path.basename(full_path)
+        self._env_files[fname] = full_path
 
 
     def add_environ_var(self, var_name, value):
