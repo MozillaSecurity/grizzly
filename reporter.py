@@ -160,7 +160,7 @@ class FuzzManagerReporter(Reporter):
     # this is where Collector looks for the '.fuzzmanagerconf' (see Collector.py)
     fm_config = os.path.join(os.path.expanduser("~"), ".fuzzmanagerconf")
     # max number of times to report a non-frequent signature to FuzzManager
-    rate_limit = 50
+    rate_limit = 10
 
 
     @staticmethod
