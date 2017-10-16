@@ -20,61 +20,23 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 """
 
 import argparse
-import json
 import logging
 import os
 import shutil
 import signal
 import tempfile
-import time
 
 import corpman
 import ffpuppet
 import reporter
 import sapphire
+from status import GrizzlyStatus
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
 log = logging.getLogger("grizzly") # pylint: disable=invalid-name
-
-
-class GrizzlyStatus(object):
-    """
-    GrizzlyStatus holds status information about the grizzly fuzzing process.
-    """
-    def __init__(self):
-        self.ignored = 0
-        self.iteration = 0
-        self.log_size = 0
-        self.results = 0
-        self.test_name = None
-        self._last_report = 0
-        self._report_file = "grz_status_%d.json" % os.getpid()
-        self._start_time = time.time()
-
-
-    def clean_up(self):
-        if os.path.isfile(self._report_file):
-            os.remove(self._report_file)
-
-
-    def report(self, report_freq=60):
-        now = time.time()
-        if now < (self._last_report + report_freq):
-            return
-
-        self._last_report = now
-        duration = now - self._start_time
-        with open(self._report_file, "w") as log_fp:
-            json.dump({
-                "Duration": duration,
-                "Ignored": self.ignored,
-                "Iteration": self.iteration,
-                "Logsize": self.log_size,
-                "Rate": (self.iteration/duration) if duration > 0 else 0,
-                "Results": self.results}, log_fp)
 
 
 def parse_args(argv=None):
