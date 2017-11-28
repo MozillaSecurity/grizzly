@@ -46,15 +46,18 @@ class Reporter(object):
 
     def _find_preferred_stack(self):
         # pattern to identify the crash triggered when the parent process goes away
-        re_asan_null = re.compile(r"==\d+==ERROR:.+?SEGV\son\sunknown\saddress\s0x[0]+\s\(.+?T2\)")
+        re_e10s_forced = re.compile(r"""
+            ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
+            #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
+            """, re.DOTALL | re.VERBOSE)
         log_size = 0
         for fname in self.log_files:
             if "asan" not in fname:
                 continue # ignore non-ASan logs at this point
+            # check for e10s forced crash
             with open(os.path.join(self.log_path, fname)) as log_fp:
-                data = log_fp.read(4096) # grab the start of the ASan log
-            if re_asan_null.search(data) is not None:
-                continue
+                if re_e10s_forced.search(log_fp.read(4096)) is not None:
+                    continue
             if "aux" not in self._map:
                 self._map["aux"] = fname # use this ASan log
                 log_size = os.stat(os.path.join(self.log_path, fname)).st_size
@@ -215,8 +218,7 @@ class FuzzManagerReporter(Reporter):
                 cache_metadata = {
                     "_grizzly_seen_count": 0,
                     "frequent": False,
-                    "shortDescription": crash_info.createShortSignature()
-                }
+                    "shortDescription": crash_info.createShortSignature()}
             # limit the number of times we report per cycle
             cache_metadata["_grizzly_seen_count"] += 1
             if cache_metadata["_grizzly_seen_count"] >= self.rate_limit:
