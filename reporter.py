@@ -238,6 +238,14 @@ class FuzzManagerReporter(Reporter):
             test_case.dump(dump_path, include_details=True)
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
 
+        # grab screen log
+        if os.getenv("WINDOW") is not None:
+            screen_log = ".".join(["screenlog", os.getenv("WINDOW")])
+            if os.path.isfile(screen_log):
+                target_log = os.path.join(self.log_path, "screenlog.txt")
+                shutil.copyfile(screen_log, target_log)
+                self.tail(target_log, 10240)  # limit to last 10K
+
         # add results to a zip file
         zip_name = ".".join([self._prefix, "zip"])
         with zipfile.ZipFile(zip_name, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_fp:
