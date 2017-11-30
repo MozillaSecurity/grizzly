@@ -299,24 +299,29 @@ def main(args):
 
             # only add test case to list if something was served
             # to help maintain browser/fuzzer sync
-            if server_status != sapphire.SERVED_NONE:
+            if files_served:
                 test_cases.append(current_test)
-
                 # manage test case cache size
                 if len(test_cases) > args.cache:
                     test_cases.pop(0)
 
-            failure_detected = (server_status != sapphire.SERVED_ALL) or not ffp.is_running()
-            log.debug("failure_detected: %r", failure_detected)
+            # attempt to detect a failure
+            failure_detected = False
+            if not ffp.is_running() and server_status != sapphire.SERVED_TIMEOUT:
+                log.debug("failure_detected")
+                failure_detected = True
+            elif server_status == sapphire.SERVED_TIMEOUT:
+                log.debug("timeout detected")
+                # handle ignored timeouts
+                if args.ignore_timeouts:
+                    status.ignored += 1
+                    log.info("Timeout ignored (%d)", status.ignored)
+                    ffp.close()
+                else:
+                    failure_detected = True
 
-            # handle ignored timeouts
-            if failure_detected and args.ignore_timeouts and ffp.is_running():
-                status.ignored += 1
-                log.info("Timeout ignored (%d)", status.ignored)
-                ffp.close()
-
-            # handle issues if detected
-            elif failure_detected:
+            # handle failure if detected
+            if failure_detected:
                 status.results += 1
                 log.info("Potential issue detected")
                 ffp.close()
