@@ -133,82 +133,161 @@ def parse_args(argv=None):
     return args
 
 
-def main(args):
-    if args.quiet and not bool(os.getenv("DEBUG")):
-        logging.getLogger().setLevel(logging.WARNING)
+class Session(object):
+    FM_LOG_SIZE_LIMIT = 0x40000  # max log size for log sent to FuzzManager (256KB)
+    TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    args.cache = max(args.cache, 1) # test case cache must be at least one
-    args.log_limit = max(args.log_limit, 0)
-    args.memory = max(args.memory, 0)
+    def __init__(self, cache_size, goc_iters, ignore_timeouts, log_limit, memory_limit, relaunch, use_fm, working_path=None):
+        self.adapter = None
+        self.binary = None
+        self.cache_size = max(cache_size, 1)  # testcase cache must be at least one
+        self.extension = None  # TODO: this should become part of the target
+        self.gcov_iterations = goc_iters  # TODO: this should become part of the adapter
+        self.ignore_timeouts = ignore_timeouts
+        self.launch_timeout = None  # TODO: this should become part of the target
+        self.log_limit = max(log_limit * 1024 * 1024, 0) if log_limit else 0  # maximum log size limit
+        self.memory_limit = max(memory_limit * 1024 * 1024, 0) if memory_limit else 0 # target's memory limit
+        self.mime = None  # TODO: this should become part of adapter
+        self.prefs = None  # TODO: this should become part of the target
+        self.rl_countdown = 0  # TODO: this should become part of the target
+        self.rl_reset = max(relaunch, 1)  # iterations to perform before relaunch... TODO: this should become part of the target
+        self.use_fuzzmanager = use_fm
+        self.server = None
+        self.status = GrizzlyStatus()
+        self.target = None
+        self.test_cache = list()  # should contain len(cache) + 1 maximum
+        self.use_fm = use_fm  # TODO: reporter should be changed to take this
+        self.wwwdir = None  # directory containing test files to be served
+        self.working_path = working_path  # where test files will be stored
 
-    if args.fuzzmanager:
-        reporter.FuzzManagerReporter.sanity_check(args.binary)
 
-    log.info("Starting Grizzly")
-    status = GrizzlyStatus()
+    def config_adapter(self, name, input_path, iteration_timeout, accepted_extensions=None, mime_type=None):
+        log.debug("initializing the adapter")
+        assert self.adapter is None
+        self.mime = mime_type
 
-    # init corpus manager
-    log.debug("Initializing the corpus manager")
-    corp_man = corpman.loader.get(args.corpus_manager.lower())
-    if corp_man is None:
-        raise RuntimeError("Invalid corpus manager type: %s" % args.corpus_manager)
-    corp_man = corp_man(
-        args.input,
-        accepted_extensions=args.accepted_extensions)
-    log.info("Found %d test cases", corp_man.size())
-    if corp_man.single_pass:
-        log.info("Running in REPLAY mode")
-    elif args.gcov_iterations is not None:
-        log.info("Running in GCOV mode")
-        corp_man.rotation_period = 1 # cover as many test cases as possible
-    else:
-        log.info("Running in FUZZING mode")
+        adpt_const = corpman.loader.get(name.lower())
+        if adpt_const is None:
+            raise RuntimeError("Invalid corpus manager %r" % name)
 
-    if (corp_man.test_duration/1000.0) >= args.timeout:
-        raise RuntimeError("Test duration (%0.02fs) should be less than browser timeout (%ds)" % (
-            (corp_man.test_duration/1000.0), args.timeout))
+        self.adapter = adpt_const(
+            input_path,
+            accepted_extensions=accepted_extensions)
 
-    # launch http server used to serve test cases
-    log.debug("Starting sapphire server")
-    serv = sapphire.Sapphire(timeout=args.timeout)
+        log.info("Found %d test cases", self.adapter.size())
+        if self.adapter.single_pass:
+            log.info("Running in REPLAY mode")
+        elif self.gcov_iterations is not None:
+            log.info("Running in GCOV mode")
+            self.adapter.rotation_period = 1 # cover as many test cases as possible
+        else:
+            log.info("Running in FUZZING mode")
 
-    # add include paths to server
-    for url_path, target_path in corp_man.get_includes():
-        serv.add_include(url_path, target_path)
+        if (self.adapter.test_duration/1000.0) >= iteration_timeout:
+            raise RuntimeError("Test duration (%0.02fs) should be less than browser timeout (%ds)" % (
+                (self.adapter.test_duration/1000.0), iteration_timeout))
 
-    # add dynamic responses to the server
-    for dr in corp_man.get_dynamic_responses():
-        serv.add_dynamic_response(dr["url"], dr["callback"], dr["mime"])
 
-    try:
-        ffp = None # define ffp in case exceptions are raised on init
-        wwwdir = None # directory containing test files to be served
-
+    def config_target(self, binary, prefs, extension, launch_timeout, use_valgrind, use_xvfb):
+        log.debug("initializing the target")
+        assert self.target is None
+        # TODO: target will be an abstraction in the future
         # do not allow network connections to non local endpoints
         os.environ["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
 
+        self.binary = binary
+        self.extension = extension
+        self.launch_timeout = launch_timeout
+        assert self.binary is not None and os.path.isfile(self.binary)
+
+        if prefs is not None:
+            self.prefs = os.path.abspath(prefs)
+            assert os.path.isfile(self.prefs)
+            log.info("Using prefs from %r", self.prefs)
+
+        if use_xvfb:
+            log.info("Running with Xvfb")
+        if use_valgrind:
+            log.info("Running with Valgrind. This will be SLOW!")
+
         # create FFPuppet object
-        ffp = ffpuppet.FFPuppet(
-            use_valgrind=args.valgrind,
-            use_xvfb=args.xvfb)
+        self.target = ffpuppet.FFPuppet(
+            use_valgrind=use_valgrind,
+            use_xvfb=use_xvfb)
 
-        corp_man.br_mon.monitor_instance(ffp)
 
-        # detect soft assertions
-        if args.asserts:
-            ffp.add_abort_token("###!!! ASSERTION:")
+    def config_server(self, iteration_timeout):
+        log.debug("initializing the server")
+        assert self.server is None
+        assert self.adapter is not None, "adapter must be configured first"
+        log.debug("starting sapphire server")
+        # launch http server used to serve test cases
+        self.server = sapphire.Sapphire(timeout=iteration_timeout)
+        # add include paths to server
+        for url_path, target_path in self.adapter.get_includes():
+            self.server.add_include(url_path, target_path)
+        # add dynamic responses to the server
+        for dyn_rsp in self.adapter.get_dynamic_responses():
+            self.server.add_dynamic_response(dyn_rsp["url"], dyn_rsp["callback"], dyn_rsp["mime"])
 
-        # add tokens from corpus manager
-        for token in corp_man.abort_tokens:
-            ffp.add_abort_token(token)
 
-        # main fuzzing iteration loop
-        while True:
-            status.report()
-            status.iteration += 1
+    def close(self):
+        self.status.clean_up()
+        if self.server is not None:
+            self.server.close()
+        if self.wwwdir and os.path.isdir(self.wwwdir):
+            shutil.rmtree(self.wwwdir)
+        if self.target is not None:
+            self.target.clean_up()
+        if self.adapter is not None:
+            self.adapter.clean_up()
 
-            if args.gcov_iterations is not None:
-                if status.iteration > args.gcov_iterations:
+
+    def launch_target(self):
+        self.rl_countdown = self.rl_reset
+        self.test_cache = list()
+
+        log.info("Launching target")
+        self.target.launch(
+            self.binary,
+            launch_timeout=self.launch_timeout,
+            location="http://127.0.0.1:%d/%s#%d" % (
+                self.server.get_port(),
+                self.adapter.landing_page(harness=True),
+                self.adapter.test_duration),
+            log_limit=self.log_limit,
+            memory_limit=self.memory_limit,
+            prefs_js=self.prefs,
+            extension=self.extension)
+
+
+    def _report_result(self):
+        # create working directory for current testcase
+        result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
+        self.target.save_logs(result_logs)
+        if self.use_fm:
+            log.debug("reporting issue via FuzzManager")
+            result_reporter = reporter.FuzzManagerReporter(result_logs)
+            # report with a log size limit of FM_LOG_SIZE_LIMIT per log
+            result_reporter.report(reversed(self.test_cache), self.binary, log_limit=self.FM_LOG_SIZE_LIMIT)
+        else:
+            result_reporter = reporter.FilesystemReporter(result_logs)
+            result_reporter.report(reversed(self.test_cache))
+        if os.path.isdir(result_logs):
+            shutil.rmtree(result_logs)
+
+
+    def run(self):
+        assert self.adapter is not None, "adapter is not configured"
+        assert self.server is not None, "server is not configured"
+        assert self.target is not None, "target is not configured"
+
+        while True:  # main fuzzing iteration loop
+            self.status.report()
+            self.status.iteration += 1
+
+            if self.gcov_iterations is not None:
+                if self.status.iteration > self.gcov_iterations:
                     log.info("GCOV: Finished with iterations, terminating...")
                     break
 
@@ -219,157 +298,155 @@ def main(args):
                 # Note: This is not required if we closed or are going to close
                 # the browser (relaunch or done with all iterations) because the
                 # SIGTERM will also trigger coverage to be synced out.
-                if ffp.is_running():
-                    os.kill(ffp._proc.pid, signal.SIGUSR1)
+                if self.target.is_running():
+                    os.kill(self.target._proc.pid, signal.SIGUSR1)
 
             # launch FFPuppet
-            if ffp.closed:
-                relaunch_countdown = args.relaunch # iterations to perform before relaunch
-                test_cases = [] # should contain len(cache) + 1 maximum
+            if self.target.closed:
+                self.launch_target()
 
-                if args.xvfb:
-                    log.info("Running with Xvfb")
-
-                if args.valgrind:
-                    log.info("Running with Valgrind. This will be SLOW!")
-
-                if args.memory:
-                    log.info("Memory limit is %dMBs", args.memory)
-                    if args.memory < 2048:
-                        log.warning("A memory limit less than 2048MBs is not recommended")
-
-                if args.prefs:
-                    log.info("Using prefs from %s", os.path.abspath(args.prefs))
-                else:
-                    log.warning("Default prefs used, prefs.js file not specified")
-
-                log.info("Launching FFPuppet")
-                ffp.launch(
-                    args.binary,
-                    launch_timeout=args.launch_timeout,
-                    location="http://127.0.0.1:%d/%s#%d" % (
-                        serv.get_port(),
-                        corp_man.landing_page(harness=True),
-                        corp_man.test_duration),
-                    log_limit=args.log_limit * 1024 * 1024 if args.log_limit else 0,
-                    memory_limit=args.memory * 1024 * 1024 if args.memory else 0,
-                    prefs_js=args.prefs,
-                    extension=args.extension)
-
-            # generate test case
-            log.debug("calling corp_man.generate()")
-            current_test = corp_man.generate(mime_type=args.mime)
-            if args.prefs is not None:
-                current_test.add_environ_file(args.prefs, fname="prefs.js")
+            # generate testcase
+            log.debug("calling self.adapter.generate()")
+            current_test = self.adapter.generate(mime_type=self.mime)
+            if self.prefs is not None:
+                current_test.add_environ_file(self.prefs, fname="prefs.js")
 
             # update sapphire redirects from the corpman
-            for redirect in corp_man.get_redirects():
-                serv.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
+            for redirect in self.adapter.get_redirects():
+                self.server.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
 
             # print iteration status
-            if corp_man.single_pass:
+            if self.adapter.single_pass:
                 log.info("[I%04d-L%02d-R%02d] %s",
-                         status.iteration,
-                         corp_man.size(),
-                         status.results,
-                         os.path.basename(corp_man.get_active_file_name()))
+                         self.status.iteration,
+                         self.adapter.size(),
+                         self.status.results,
+                         os.path.basename(self.adapter.get_active_file_name()))
             else:
-                if status.test_name != corp_man.get_active_file_name():
-                    status.test_name = corp_man.get_active_file_name()
-                    log.info("Now fuzzing: %s", os.path.basename(status.test_name))
-                log.info("I%04d-R%02d ", status.iteration, status.results)
+                if self.status.test_name != self.adapter.get_active_file_name():
+                    self.status.test_name = self.adapter.get_active_file_name()
+                    log.info("Now fuzzing: %s", os.path.basename(self.status.test_name))
+                log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
             # create working directory for current test case
-            wwwdir = tempfile.mkdtemp(prefix="grz_test_", dir=args.working_path)
+            self.wwwdir = tempfile.mkdtemp(prefix="grz_test_", dir=self.working_path)
             # dump test case files to filesystem to be served
-            current_test.dump(wwwdir)
+            current_test.dump(self.wwwdir)
 
             # use Sapphire to serve the most recent test case
-            server_status, files_served = serv.serve_path(
-                wwwdir,
-                continue_cb=ffp.is_running,
+            server_status, files_served = self.server.serve_path(
+                self.wwwdir,
+                continue_cb=self.target.is_running,
                 optional_files=current_test.get_optional())
 
             # remove test case working directory
-            if wwwdir and os.path.isdir(wwwdir):
-                shutil.rmtree(wwwdir)
+            if self.wwwdir and os.path.isdir(self.wwwdir):
+                shutil.rmtree(self.wwwdir)
 
-            log.debug("calling corp_man.finish_test()")
-            corp_man.finish_test(current_test, files_served)
+            log.debug("calling self.adapter.finish_test()")
+            self.adapter.finish_test(current_test, files_served)
 
             # only add test case to list if something was served
             # to help maintain browser/fuzzer sync
             if files_served:
-                test_cases.append(current_test)
+                self.test_cache.append(current_test)
                 # manage test case cache size
-                if len(test_cases) > args.cache:
-                    test_cases.pop(0)
+                if len(self.test_cache) > self.cache_size:
+                    self.test_cache.pop(0)
 
             # attempt to detect a failure
             failure_detected = False
-            if not ffp.is_running() and server_status != sapphire.SERVED_TIMEOUT:
+            if not self.target.is_running() and server_status != sapphire.SERVED_TIMEOUT:
                 log.debug("failure_detected")
                 failure_detected = True
             elif server_status == sapphire.SERVED_TIMEOUT:
                 log.debug("timeout detected")
                 # handle ignored timeouts
-                if args.ignore_timeouts:
-                    status.ignored += 1
-                    log.info("Timeout ignored (%d)", status.ignored)
-                    ffp.close()
+                if self.ignore_timeouts:
+                    self.status.ignored += 1
+                    log.info("Timeout ignored (%d)", self.status.ignored)
+                    self.target.close()
                 else:
                     failure_detected = True
 
             # handle failure if detected
             if failure_detected:
-                status.results += 1
+                self.status.results += 1
                 log.info("Potential issue detected")
-                ffp.close()
+                self.target.close()
 
-                log.debug("Current input: %s", corp_man.get_active_file_name())
-                log.info("Collecting logs...")
-                # create working directory for current test case
-                result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=args.working_path)
-                ffp.save_logs(result_logs)
-                if args.fuzzmanager:
-                    result_reporter = reporter.FuzzManagerReporter(result_logs)
-                    # report with a log size limit of 256KB per log
-                    result_reporter.report(reversed(test_cases), args.binary, log_limit=0x40000)
-                else:
-                    result_reporter = reporter.FilesystemReporter(result_logs)
-                    result_reporter.report(reversed(test_cases))
-                if os.path.isdir(result_logs):
-                    shutil.rmtree(result_logs)
+                log.debug("Current input: %s", self.adapter.get_active_file_name())
+                log.info("Reporting results...")
+                self._report_result()
 
             # warn about large browser logs
-            status.log_size = ffp.log_length("stderr") + ffp.log_length("stdout")
-            if status.log_size > 0x1900000: # 25MB
-                log.warning("Large browser logs: %dMBs", (status.log_size/1048576))
+            self.status.log_size = self.target.log_length("stderr") + self.target.log_length("stdout")
+            if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
+                log.warning("Large browser logs: %dMBs", (self.status.log_size/1048576))
 
             # trigger relaunch by closing the browser
-            relaunch_countdown -= 1
-            if relaunch_countdown <= 0 and ffp.is_running():
-                log.info("Triggering FFP relaunch")
-                ffp.close()
+            self.rl_countdown -= 1
+            if self.rl_countdown <= 0 and self.target.is_running():
+                log.info("Triggering target relaunch")
+                self.target.close()
 
             # all test cases have been replayed
-            if corp_man.single_pass and corp_man.size() == 0:
+            if self.adapter.single_pass and self.adapter.size() == 0:
                 log.info("Replay Complete")
                 break
 
+
+def main(args):
+    if args.quiet and not bool(os.getenv("DEBUG")):
+        logging.getLogger().setLevel(logging.WARNING)
+
+    log.info("Starting Grizzly")
+    if args.fuzzmanager:
+        reporter.FuzzManagerReporter.sanity_check(args.binary)
+
+    session = Session(
+        args.cache,
+        args.gcov_iterations,
+        args.ignore_timeouts,
+        args.log_limit,
+        args.memory,
+        args.relaunch,
+        args.fuzzmanager,
+        working_path=args.working_path)
+
+    try:
+        session.config_adapter(
+            args.corpus_manager,
+            args.input,
+            args.timeout,
+            accepted_extensions=args.accepted_extensions)
+        session.config_server(args.timeout)
+        session.config_target(
+            args.binary,
+            args.prefs,
+            args.extension,
+            args.launch_timeout,
+            args.valgrind,
+            args.xvfb)
+
+        session.adapter.br_mon.monitor_instance(session.target)
+
+        # detect soft assertions
+        if args.asserts:
+            session.target.add_abort_token("###!!! ASSERTION:")
+
+        # add tokens from corpus manager
+        for token in session.adapter.abort_tokens:
+            session.target.add_abort_token(token)
+
+        session.run()
+
     except KeyboardInterrupt:
-        log.warning("Iterations attempted: %d", status.iteration)
+        log.warning("Iterations attempted: %d", session.status.iteration)
 
     finally:
         log.warning("Shutting down...")
-        status.clean_up()
-        if serv is not None:
-            serv.close()
-        if wwwdir and os.path.isdir(wwwdir):
-            shutil.rmtree(wwwdir)
-        if ffp is not None:
-            ffp.clean_up()
-        corp_man.clean_up()
+        session.close()
 
 
 if __name__ == "__main__":
