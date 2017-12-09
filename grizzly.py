@@ -149,9 +149,9 @@ class Session(object):
         self.memory_limit = max(memory_limit * 1024 * 1024, 0) if memory_limit else 0 # target's memory limit
         self.mime = None  # TODO: this should become part of adapter
         self.prefs = None  # TODO: this should become part of the target
+        self.reporter = None
         self.rl_countdown = 0  # TODO: this should become part of the target
         self.rl_reset = max(relaunch, 1)  # iterations to perform before relaunch... TODO: this should become part of the target
-        self.use_fuzzmanager = use_fm
         self.server = None
         self.status = GrizzlyStatus()
         self.target = None
@@ -199,6 +199,14 @@ class Session(object):
         self.extension = extension
         self.launch_timeout = launch_timeout
         assert self.binary is not None and os.path.isfile(self.binary)
+
+        if self.use_fm:
+            log.info("Reporting issues via FuzzManager")
+            self.reporter = reporter.FuzzManagerReporter(
+                self.binary,
+                log_limit=self.FM_LOG_SIZE_LIMIT)
+        else:
+            self.reporter = reporter.FilesystemReporter()
 
         if prefs is not None:
             self.prefs = os.path.abspath(prefs)
@@ -259,22 +267,6 @@ class Session(object):
             memory_limit=self.memory_limit,
             prefs_js=self.prefs,
             extension=self.extension)
-
-
-    def _report_result(self):
-        # create working directory for current testcase
-        result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
-        self.target.save_logs(result_logs)
-        if self.use_fm:
-            log.debug("reporting issue via FuzzManager")
-            result_reporter = reporter.FuzzManagerReporter(result_logs)
-            # report with a log size limit of FM_LOG_SIZE_LIMIT per log
-            result_reporter.report(reversed(self.test_cache), self.binary, log_limit=self.FM_LOG_SIZE_LIMIT)
-        else:
-            result_reporter = reporter.FilesystemReporter(result_logs)
-            result_reporter.report(reversed(self.test_cache))
-        if os.path.isdir(result_logs):
-            shutil.rmtree(result_logs)
 
 
     def run(self):
@@ -377,7 +369,12 @@ class Session(object):
 
                 log.debug("Current input: %s", self.adapter.get_active_file_name())
                 log.info("Reporting results...")
-                self._report_result()
+                # create working directory for current testcase
+                result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
+                self.target.save_logs(result_logs)
+                self.reporter.report(result_logs, reversed(self.test_cache))
+                if os.path.isdir(result_logs):
+                    shutil.rmtree(result_logs)
 
             # warn about large browser logs
             self.status.log_size = self.target.log_length("stderr") + self.target.log_length("stdout")
