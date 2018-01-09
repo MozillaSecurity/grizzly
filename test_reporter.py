@@ -190,3 +190,52 @@ class GrizzlyReporterTests(TestCase):
         for fname in range(10):
             testcases.append(DummyTest())
         reporter.report(logs, testcases)
+
+    def test_08(self):
+        "test selecting minidump"
+        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        with open(os.path.join(self.tmpdir, "log_minidump_01.txt"), "w") as log_fp:
+            log_fp.write("GPU|||\n")
+            log_fp.write("Crash|SIGSEGV|0x0|0\n")
+            log_fp.write("minidump log\n")
+        reporter = Reporter()
+        reporter._log_path = self.tmpdir
+        reporter._find_preferred_stack() # pylint: disable=protected-access
+        self.assertIn("aux", reporter._map) # pylint: disable=protected-access
+        self.assertIn("stderr", reporter._map) # pylint: disable=protected-access
+        self.assertIn("stdout", reporter._map) # pylint: disable=protected-access
+        with open(os.path.join(self.tmpdir, reporter._map["aux"]), "r") as log_fp: # pylint: disable=protected-access
+            self.assertIn("minidump log", log_fp.read())
+
+    def test_09(self):
+        "test selecting preferred DUMP_REQUESTED minidump"
+        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        with open(os.path.join(self.tmpdir, "log_minidump_01.txt"), "w") as log_fp:
+            log_fp.write("GPU|||\n")
+            log_fp.write("Crash|DUMP_REQUESTED|0x7f9518665d18|0\n")
+            log_fp.write("0|0|bar.so|sadf|a.cc:739484451a63|3066|0x0\n")
+            log_fp.write("0|1|gar.so|fdsa|b.cc:739484451a63|1644|0x12\n")
+        with open(os.path.join(self.tmpdir, "log_minidump_02.txt"), "w") as log_fp:
+            log_fp.write("GPU|||\n")
+            log_fp.write("Crash|DUMP_REQUESTED|0x7f57ac9e2e14|0\n")
+            log_fp.write("0|0|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:234|674|0xc\n")
+            log_fp.write("0|1|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:4a2|645|0x8\n")
+        with open(os.path.join(self.tmpdir, "log_minidump_03.txt"), "w") as log_fp:
+            log_fp.write("GPU|||\n")
+            log_fp.write("Crash|DUMP_REQUESTED|0x7f9518665d18|0\n")
+            log_fp.write("0|0|bar.so|sadf|a.cc:1234|3066|0x0\n")
+            log_fp.write("0|1|gar.so|fdsa|b.cc:4323|1644|0x12\n")
+        reporter = Reporter()
+        reporter._log_path = self.tmpdir
+        reporter._find_preferred_stack() # pylint: disable=protected-access
+        self.assertIn("aux", reporter._map) # pylint: disable=protected-access
+        self.assertIn("stderr", reporter._map) # pylint: disable=protected-access
+        self.assertIn("stdout", reporter._map) # pylint: disable=protected-access
+        with open(os.path.join(self.tmpdir, reporter._map["aux"]), "r") as log_fp: # pylint: disable=protected-access
+            self.assertIn("google_breakpad::ExceptionHandler::WriteMinidump", log_fp.read())
