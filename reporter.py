@@ -47,20 +47,17 @@ class Reporter(object):
 
 
     def _find_preferred_stack(self):
-        # pattern to identify the crash triggered when the parent process goes away
-        # TODO: add e10s forced check for minidumps
-        re_e10s_forced = re.compile(r"""
-            ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
-            #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
-            """, re.DOTALL | re.VERBOSE)
         log_size = 0
         log_files = os.listdir(self._log_path)
         if not log_files:
             raise IOError("No logs found in %r" % self._log_path)
 
-        for fname in log_files:
-            if "asan" not in fname:
-                continue # ignore non-ASan logs at this point
+        # pattern to identify the crash triggered when the parent process goes away
+        re_e10s_forced = re.compile(r"""
+            ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
+            #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
+            """, re.DOTALL | re.VERBOSE)
+        for fname in filter(lambda x: "asan" in x, log_files):
             # check for e10s forced crash
             with open(os.path.join(self._log_path, fname)) as log_fp:
                 if re_e10s_forced.search(log_fp.read(4096)) is not None:
@@ -75,10 +72,13 @@ class Reporter(object):
 
         # prefer ASan logs over minidump logs
         if "aux" not in self._map:
-            for fname in log_files:
-                if "minidump" in fname: # for now just use the first one we come across
-                    self._map["aux"] = fname # use this minidump log
-                    break
+            re_dump_req = re.compile(r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump")
+            for fname in filter(lambda x: "minidump" in x, log_files):
+                with open(os.path.join(self._log_path, fname)) as log_fp:
+                    md_data = log_fp.read(4096)
+                    if "Crash|DUMP_REQUESTED|" not in md_data or re_dump_req.search(md_data) is not None:
+                        self._map["aux"] = fname
+                        break
 
         for fname in log_files:
             if "stderr" in fname:
