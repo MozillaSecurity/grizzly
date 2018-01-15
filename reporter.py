@@ -46,56 +46,69 @@ class Reporter(object):
         self._reset()
 
 
-    def _find_preferred_stack(self):
-        log_size = 0
-        log_files = os.listdir(self._log_path)
+    @staticmethod
+    def select_logs(log_path):
+        logs = {"aux": None, "stderr": None, "stdout": None}
+
+        if not os.path.isdir(log_path):
+            raise IOError("log_path does not exist %r" % log_path)
+        log_files = os.listdir(log_path)
         if not log_files:
-            raise IOError("No logs found in %r" % self._log_path)
+            raise IOError("No logs found in %r" % log_path)
 
         # pattern to identify the crash triggered when the parent process goes away
         re_e10s_forced = re.compile(r"""
             ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
             #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
             """, re.DOTALL | re.VERBOSE)
-        for fname in filter(lambda x: "asan" in x, log_files):
+
+        log_size = 0
+        for fname in [log_file for log_file in log_files if "asan" in log_file]:
             # check for e10s forced crash
-            with open(os.path.join(self._log_path, fname)) as log_fp:
+            with open(os.path.join(log_path, fname)) as log_fp:
                 if re_e10s_forced.search(log_fp.read(4096)) is not None:
                     continue
-            if "aux" not in self._map:
-                self._map["aux"] = fname # use this ASan log
-                log_size = os.stat(os.path.join(self._log_path, fname)).st_size
+            if logs["aux"] is None:
+                logs["aux"] = fname # use this ASan log
+                log_size = os.stat(os.path.join(log_path, fname)).st_size
             # prefer larger log if there is more than one
-            elif os.stat(os.path.join(self._log_path, fname)).st_size > log_size:
-                self._map["aux"] = fname # use this ASan log
-                log_size = os.stat(os.path.join(self._log_path, fname)).st_size
+            elif os.stat(os.path.join(log_path, fname)).st_size > log_size:
+                logs["aux"] = fname # use this ASan log
+                log_size = os.stat(os.path.join(log_path, fname)).st_size
 
         # prefer ASan logs over minidump logs
-        if "aux" not in self._map:
+        if logs["aux"] is None:
             re_dump_req = re.compile(r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump")
-            for fname in filter(lambda x: "minidump" in x, log_files):
-                with open(os.path.join(self._log_path, fname)) as log_fp:
+            for fname in [log_file for log_file in log_files if "minidump" in log_file]:
+                with open(os.path.join(log_path, fname)) as log_fp:
                     md_data = log_fp.read(4096)
+                    # this will select log that contains "Crash|SIGSEGV|" or
+                    # the desired "DUMP_REQUESTED" log
                     if "Crash|DUMP_REQUESTED|" not in md_data or re_dump_req.search(md_data) is not None:
-                        self._map["aux"] = fname
+                        logs["aux"] = fname
                         break
 
         for fname in log_files:
             if "stderr" in fname:
-                self._map["stderr"] = fname
+                logs["stderr"] = fname
                 continue
             if "stdout" in fname:
-                self._map["stdout"] = fname
+                logs["stdout"] = fname
                 continue
 
+        return logs
 
     def _process_logs(self):
-        self._find_preferred_stack()
-        log_to_scan = None
-        for log_src in ("aux", "stderr", "stdout"):
-            if log_src in self._map:
-                log_to_scan = self._map[log_src]
-                break
+        self._map = self.select_logs(self._log_path)
+        if self._map["aux"] is not None:
+            log_to_scan = self._map["aux"]
+        elif self._map["stderr"] is not None:
+            log_to_scan = self._map["stderr"]
+        elif self._map["stdout"] is not None:
+            log_to_scan = self._map["stdout"]
+        else:
+            log_to_scan = None
+
         if log_to_scan:
             with open(os.path.join(self._log_path, log_to_scan), "r") as log_fp:
                 stack = stack_hasher.stack_from_text(log_fp.read())
