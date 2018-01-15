@@ -70,7 +70,7 @@ class GrizzlyReporterTests(TestCase):
         self.assertEqual(log_data[13:], b"FOO")
 
     def test_03(self):
-        "test Reporter._find_preferred_stack()"
+        "test Reporter.select_logs()"
         asan_prefix = "log_asan.txt"
         test_logs = list()
         for _ in range(3):
@@ -99,17 +99,15 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("STDERR log")
         with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
             log_fp.write("STDOUT log")
-        reporter = Reporter()
-        reporter._log_path = self.tmpdir
-        reporter._find_preferred_stack() # pylint: disable=protected-access
-        self.assertIn("aux", reporter._map) # pylint: disable=protected-access
-        self.assertIn("stderr", reporter._map) # pylint: disable=protected-access
-        self.assertIn("stdout", reporter._map) # pylint: disable=protected-access
-        with open(os.path.join(self.tmpdir, reporter._map["aux"]), "r") as log_fp: # pylint: disable=protected-access
+        log_map = Reporter.select_logs(self.tmpdir)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stderr"])))
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
+        with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("GOOD LOG", log_fp.read())
-        with open(os.path.join(self.tmpdir, reporter._map["stderr"]), "r") as log_fp: # pylint: disable=protected-access
+        with open(os.path.join(self.tmpdir, log_map["stderr"]), "r") as log_fp:
             self.assertIn("STDERR", log_fp.read())
-        with open(os.path.join(self.tmpdir, reporter._map["stdout"]), "r") as log_fp: # pylint: disable=protected-access
+        with open(os.path.join(self.tmpdir, log_map["stdout"]), "r") as log_fp:
             self.assertIn("STDOUT", log_fp.read())
 
     def test_04(self):
@@ -121,7 +119,7 @@ class GrizzlyReporterTests(TestCase):
         reporter = Reporter()
         reporter._log_path = self.tmpdir
         reporter._process_logs() # pylint: disable=protected-access
-        self.assertNotIn("aux", reporter._map) # pylint: disable=protected-access
+        self.assertIsNone(reporter._map["aux"]) # pylint: disable=protected-access
         self.assertEqual(Reporter.DEFAULT_MAJOR, reporter._major) # pylint: disable=protected-access
         self.assertEqual(Reporter.DEFAULT_MINOR, reporter._minor) # pylint: disable=protected-access
 
@@ -201,13 +199,11 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("GPU|||\n")
             log_fp.write("Crash|SIGSEGV|0x0|0\n")
             log_fp.write("minidump log\n")
-        reporter = Reporter()
-        reporter._log_path = self.tmpdir
-        reporter._find_preferred_stack() # pylint: disable=protected-access
-        self.assertIn("aux", reporter._map) # pylint: disable=protected-access
-        self.assertIn("stderr", reporter._map) # pylint: disable=protected-access
-        self.assertIn("stdout", reporter._map) # pylint: disable=protected-access
-        with open(os.path.join(self.tmpdir, reporter._map["aux"]), "r") as log_fp: # pylint: disable=protected-access
+        log_map = Reporter.select_logs(self.tmpdir)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stderr"])))
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
+        with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("minidump log", log_fp.read())
 
     def test_09(self):
@@ -231,11 +227,9 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("Crash|DUMP_REQUESTED|0x7f9518665d18|0\n")
             log_fp.write("0|0|bar.so|sadf|a.cc:1234|3066|0x0\n")
             log_fp.write("0|1|gar.so|fdsa|b.cc:4323|1644|0x12\n")
-        reporter = Reporter()
-        reporter._log_path = self.tmpdir
-        reporter._find_preferred_stack() # pylint: disable=protected-access
-        self.assertIn("aux", reporter._map) # pylint: disable=protected-access
-        self.assertIn("stderr", reporter._map) # pylint: disable=protected-access
-        self.assertIn("stdout", reporter._map) # pylint: disable=protected-access
-        with open(os.path.join(self.tmpdir, reporter._map["aux"]), "r") as log_fp: # pylint: disable=protected-access
+        log_map = Reporter.select_logs(self.tmpdir)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stderr"])))
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
+        with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("google_breakpad::ExceptionHandler::WriteMinidump", log_fp.read())
