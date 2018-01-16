@@ -27,7 +27,7 @@ import signal
 import tempfile
 
 import corpman
-import ffpuppet
+from ffpuppet import FFPuppet
 import reporter
 import sapphire
 from status import GrizzlyStatus
@@ -137,12 +137,12 @@ class Session(object):
     FM_LOG_SIZE_LIMIT = 0x40000  # max log size for log sent to FuzzManager (256KB)
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, cache_size, goc_iters, ignore_timeouts, log_limit, memory_limit, relaunch, use_fm, working_path=None):
+    def __init__(self, cache_size, gcov_iters, ignore_timeouts, log_limit, memory_limit, relaunch, use_fm, working_path=None):
         self.adapter = None
         self.binary = None
         self.cache_size = max(cache_size, 1)  # testcase cache must be at least one
         self.extension = None  # TODO: this should become part of the target
-        self.gcov_iterations = goc_iters  # TODO: this should become part of the adapter
+        self.gcov_iterations = gcov_iters  # TODO: this should become part of the adapter
         self.ignore_timeouts = ignore_timeouts
         self.launch_timeout = None  # TODO: this should become part of the target
         self.log_limit = max(log_limit * 1024 * 1024, 0) if log_limit else 0  # maximum log size limit
@@ -219,7 +219,7 @@ class Session(object):
             log.info("Running with Valgrind. This will be SLOW!")
 
         # create FFPuppet object
-        self.target = ffpuppet.FFPuppet(
+        self.target = FFPuppet(
             use_valgrind=use_valgrind,
             use_xvfb=use_xvfb)
 
@@ -259,10 +259,11 @@ class Session(object):
         self.target.launch(
             self.binary,
             launch_timeout=self.launch_timeout,
-            location="http://127.0.0.1:%d/%s#%d" % (
+            location="http://127.0.0.1:%d/%s#timeout=%d,close_after=%d" % (
                 self.server.get_port(),
                 self.adapter.landing_page(harness=True),
-                self.adapter.test_duration),
+                self.adapter.test_duration,
+                self.rl_reset),
             log_limit=self.log_limit,
             memory_limit=self.memory_limit,
             prefs_js=self.prefs,
@@ -279,10 +280,6 @@ class Session(object):
             self.status.iteration += 1
 
             if self.gcov_iterations is not None:
-                if self.status.iteration > self.gcov_iterations:
-                    log.info("GCOV: Finished with iterations, terminating...")
-                    break
-
                 # If at this point, the browser is running, i.e. we did neither
                 # relaunch nor crash/timeout, then we need to signal the browser
                 # to dump coverage before attempting a new test that potentially
@@ -290,8 +287,15 @@ class Session(object):
                 # Note: This is not required if we closed or are going to close
                 # the browser (relaunch or done with all iterations) because the
                 # SIGTERM will also trigger coverage to be synced out.
+
+                # TODO: maybe this should use relaunch=1 and self close every iteration
                 if self.target.is_running():
+                    log.info("GCOV: Dumping coverage data...")
                     os.kill(self.target._proc.pid, signal.SIGUSR1)
+
+                if self.status.iteration > self.gcov_iterations:
+                    log.info("GCOV: Finished with iterations, terminating...")
+                    break
 
             # launch FFPuppet
             if self.target.closed:
@@ -325,6 +329,8 @@ class Session(object):
             # dump test case files to filesystem to be served
             current_test.dump(self.wwwdir)
 
+            # decrement relaunch countdown
+            self.rl_countdown -= 1
             # use Sapphire to serve the most recent test case
             server_status, files_served = self.server.serve_path(
                 self.wwwdir,
@@ -346,18 +352,33 @@ class Session(object):
                 if len(self.test_cache) > self.cache_size:
                     self.test_cache.pop(0)
 
+            # when in self_closing mode wait for logs to dump etc...
+            if self.rl_countdown < 1 and server_status != sapphire.SERVED_TIMEOUT:
+                # if the corpus manager does not use the default harness
+                # chances are it will hang here for 60 seconds
+                log.debug("relaunch will be triggered... waiting 60 seconds")
+                self.target.wait(60)
+                if self.target.is_running():
+                    log.warning("Target should have closed itself")
+
             # attempt to detect a failure
             failure_detected = False
-            if not self.target.is_running() and server_status != sapphire.SERVED_TIMEOUT:
-                log.debug("failure_detected")
-                failure_detected = True
+            if not self.target.is_running():
+                return_code = self.target.returncode
+                self.target.close()
+                # self_closing should be used if the target will close itself
+                if self.target.reason == FFPuppet.RC_EXITED and self.target.retuncode == 0:
+                    log.warning("Target closed itself")
+                else:
+                    log.debug("failure detected")
+                    failure_detected = True
             elif server_status == sapphire.SERVED_TIMEOUT:
                 log.debug("timeout detected")
+                self.target.close()
                 # handle ignored timeouts
                 if self.ignore_timeouts:
                     self.status.ignored += 1
                     log.info("Timeout ignored (%d)", self.status.ignored)
-                    self.target.close()
                 else:
                     failure_detected = True
 
@@ -365,8 +386,6 @@ class Session(object):
             if failure_detected:
                 self.status.results += 1
                 log.info("Potential issue detected")
-                self.target.close()
-
                 log.debug("Current input: %s", self.adapter.get_active_file_name())
                 log.info("Reporting results...")
                 # create working directory for current testcase
@@ -382,9 +401,8 @@ class Session(object):
                 log.warning("Large browser logs: %dMBs", (self.status.log_size/1048576))
 
             # trigger relaunch by closing the browser
-            self.rl_countdown -= 1
-            if self.rl_countdown <= 0 and self.target.is_running():
-                log.info("Triggering target relaunch")
+            if self.rl_countdown < 1 and self.target.is_running():
+                log.info("Forcing target relaunch")
                 self.target.close()
 
             # all test cases have been replayed
