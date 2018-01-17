@@ -30,7 +30,7 @@ import corpman
 from ffpuppet import FFPuppet
 import reporter
 import sapphire
-from status import GrizzlyStatus
+from status import Status
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
@@ -137,7 +137,7 @@ class Session(object):
     FM_LOG_SIZE_LIMIT = 0x40000  # max log size for log sent to FuzzManager (256KB)
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, cache_size, gcov_iters, ignore_timeouts, log_limit, memory_limit, relaunch, use_fm, working_path=None):
+    def __init__(self, cache_size, gcov_iters, ignore_timeouts, log_limit, memory_limit, relaunch, working_path=None):
         self.adapter = None
         self.binary = None
         self.cache_size = max(cache_size, 1)  # testcase cache must be at least one
@@ -153,10 +153,9 @@ class Session(object):
         self.rl_countdown = 0  # TODO: this should become part of the target
         self.rl_reset = max(relaunch, 1)  # iterations to perform before relaunch... TODO: this should become part of the target
         self.server = None
-        self.status = GrizzlyStatus()
+        self.status = Status()
         self.target = None
         self.test_cache = list()  # should contain len(cache) + 1 maximum
-        self.use_fm = use_fm  # TODO: reporter should be changed to take this
         self.wwwdir = None  # directory containing test files to be served
         self.working_path = working_path  # where test files will be stored
 
@@ -200,14 +199,6 @@ class Session(object):
         self.launch_timeout = launch_timeout
         assert self.binary is not None and os.path.isfile(self.binary)
 
-        if self.use_fm:
-            log.info("Reporting issues via FuzzManager")
-            self.reporter = reporter.FuzzManagerReporter(
-                self.binary,
-                log_limit=self.FM_LOG_SIZE_LIMIT)
-        else:
-            self.reporter = reporter.FilesystemReporter()
-
         if prefs is not None:
             self.prefs = os.path.abspath(prefs)
             assert os.path.isfile(self.prefs)
@@ -232,15 +223,15 @@ class Session(object):
         # launch http server used to serve test cases
         self.server = sapphire.Sapphire(timeout=iteration_timeout)
         # add include paths to server
-        for url_path, target_path in self.adapter.get_includes():
+        for url_path, target_path in self.adapter.includes:
             self.server.add_include(url_path, target_path)
         # add dynamic responses to the server
-        for dyn_rsp in self.adapter.get_dynamic_responses():
+        for dyn_rsp in self.adapter.dynamic_responses:
             self.server.add_dynamic_response(dyn_rsp["url"], dyn_rsp["callback"], dyn_rsp["mime"])
 
 
     def close(self):
-        self.status.clean_up()
+        self.status.cleanup()
         if self.server is not None:
             self.server.close()
         if self.wwwdir and os.path.isdir(self.wwwdir):
@@ -248,7 +239,7 @@ class Session(object):
         if self.target is not None:
             self.target.clean_up()
         if self.adapter is not None:
-            self.adapter.clean_up()
+            self.adapter.cleanup()
 
 
     def launch_target(self):
@@ -272,6 +263,7 @@ class Session(object):
 
     def run(self):
         assert self.adapter is not None, "adapter is not configured"
+        assert self.reporter is not None, "reporter is not configured"
         assert self.server is not None, "server is not configured"
         assert self.target is not None, "target is not configured"
 
@@ -308,7 +300,7 @@ class Session(object):
                 current_test.add_environ_file(self.prefs, fname="prefs.js")
 
             # update sapphire redirects from the corpman
-            for redirect in self.adapter.get_redirects():
+            for redirect in self.adapter.redirects:
                 self.server.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
 
             # print iteration status
@@ -317,10 +309,10 @@ class Session(object):
                          self.status.iteration,
                          self.adapter.size(),
                          self.status.results,
-                         os.path.basename(self.adapter.get_active_file_name()))
+                         os.path.basename(self.adapter.active_file))
             else:
-                if self.status.test_name != self.adapter.get_active_file_name():
-                    self.status.test_name = self.adapter.get_active_file_name()
+                if self.status.test_name != self.adapter.active_file:
+                    self.status.test_name = self.adapter.active_file
                     log.info("Now fuzzing: %s", os.path.basename(self.status.test_name))
                 log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
@@ -352,7 +344,6 @@ class Session(object):
                 if len(self.test_cache) > self.cache_size:
                     self.test_cache.pop(0)
 
-            # when in self_closing mode wait for logs to dump etc...
             if self.rl_countdown < 1 and server_status != sapphire.SERVED_TIMEOUT:
                 # if the corpus manager does not use the default harness
                 # chances are it will hang here for 60 seconds
@@ -364,11 +355,9 @@ class Session(object):
             # attempt to detect a failure
             failure_detected = False
             if not self.target.is_running():
-                return_code = self.target.returncode
                 self.target.close()
-                # self_closing should be used if the target will close itself
-                if self.target.reason == FFPuppet.RC_EXITED and self.target.retuncode == 0:
-                    log.warning("Target closed itself")
+                if self.target.reason == FFPuppet.RC_EXITED and self.target.returncode == 0:
+                    log.info("Target closed itself")
                 else:
                     log.debug("failure detected")
                     failure_detected = True
@@ -386,7 +375,7 @@ class Session(object):
             if failure_detected:
                 self.status.results += 1
                 log.info("Potential issue detected")
-                log.debug("Current input: %s", self.adapter.get_active_file_name())
+                log.debug("Current input: %s", self.adapter.active_file)
                 log.info("Reporting results...")
                 # create working directory for current testcase
                 result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
@@ -426,7 +415,6 @@ def main(args):
         args.log_limit,
         args.memory,
         args.relaunch,
-        args.fuzzmanager,
         working_path=args.working_path)
 
     try:
@@ -443,6 +431,14 @@ def main(args):
             args.launch_timeout,
             args.valgrind,
             args.xvfb)
+
+        if args.fuzzmanager:
+            log.info("Reporting issues via FuzzManager")
+            session.reporter = reporter.FuzzManagerReporter(
+                args.binary,
+                log_limit=Session.FM_LOG_SIZE_LIMIT)
+        else:
+            session.reporter = reporter.FilesystemReporter()
 
         session.adapter.br_mon.monitor_instance(session.target)
 

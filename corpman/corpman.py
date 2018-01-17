@@ -298,7 +298,7 @@ class CorpusManager(object):
         self._environ_vars[var_name.upper()] = value
 
 
-    def clean_up(self):
+    def cleanup(self):
         if self._active_input is not None:
             self._active_input.close()
         self.close()
@@ -367,27 +367,30 @@ class CorpusManager(object):
 
         return test
 
-
-    def get_active_file_name(self):
+    @property
+    def active_file(self):
         try:
             return self._active_input.file_name
         except AttributeError:
             return None
 
 
-    def get_dynamic_responses(self):
-        out = []
+    @property
+    def dynamic_responses(self):
+        out = list()
         for url, (callback, mime) in self._srv_map["dynamic"].items():
             out.append({"url":url, "callback":callback, "mime":mime})
         return out
 
 
-    def get_includes(self):
+    @property
+    def includes(self):
         return self._srv_map["include"].items()
 
 
-    def get_redirects(self):
-        out = []
+    @property
+    def redirects(self):
+        out = list()
         for url, (file_name, required) in self._srv_map["redirect"].items():
             out.append({"url":url, "file_name":file_name, "required":required})
         return out

@@ -117,11 +117,11 @@ class GrizzlyReporterTests(TestCase):
         with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
             log_fp.write("STDOUT log")
         reporter = Reporter()
-        reporter._log_path = self.tmpdir
-        reporter._process_logs() # pylint: disable=protected-access
-        self.assertIsNone(reporter._map["aux"]) # pylint: disable=protected-access
-        self.assertEqual(Reporter.DEFAULT_MAJOR, reporter._major) # pylint: disable=protected-access
-        self.assertEqual(Reporter.DEFAULT_MINOR, reporter._minor) # pylint: disable=protected-access
+        reporter._log_path = self.tmpdir  # pylint: disable=protected-access
+        reporter._process_logs()  # pylint: disable=protected-access
+        self.assertIsNone(reporter._map["aux"])  # pylint: disable=protected-access
+        self.assertEqual(Reporter.DEFAULT_MAJOR, reporter._major)  # pylint: disable=protected-access
+        self.assertEqual(Reporter.DEFAULT_MINOR, reporter._minor)  # pylint: disable=protected-access
 
     def test_05(self):
         "test Reporter._process_logs()"
@@ -133,10 +133,10 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
             log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
         reporter = Reporter()
-        reporter._log_path = self.tmpdir
-        reporter._process_logs() # pylint: disable=protected-access
-        self.assertNotEqual(Reporter.DEFAULT_MAJOR, reporter._major) # pylint: disable=protected-access
-        self.assertNotEqual(Reporter.DEFAULT_MINOR, reporter._minor) # pylint: disable=protected-access
+        reporter._log_path = self.tmpdir  # pylint: disable=protected-access
+        reporter._process_logs()  # pylint: disable=protected-access
+        self.assertNotEqual(Reporter.DEFAULT_MAJOR, reporter._major)  # pylint: disable=protected-access
+        self.assertNotEqual(Reporter.DEFAULT_MINOR, reporter._minor)  # pylint: disable=protected-access
 
     def test_06(self):
         "test FilesystemReporter without testcases"
@@ -157,7 +157,7 @@ class GrizzlyReporterTests(TestCase):
         class DummyTest(object):
             def __init__(self):
                 self.dump_called = False
-            def dump(self, log_dir, include_details=False):
+            def dump(self, log_dir, include_details=False):  # pylint: disable=unused-argument
                 assert not self.dump_called
                 self.dump_called = True
 
@@ -171,7 +171,7 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
             log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
         testcases = list()
-        for fname in range(10):
+        for _ in range(10):
             testcases.append(DummyTest())
         report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
         reporter = FilesystemReporter(report_path=report_dir)
@@ -185,7 +185,7 @@ class GrizzlyReporterTests(TestCase):
         testcases = list()
         for tc in testcases:
             self.assertTrue(tc.dump_called)
-        for fname in range(10):
+        for _ in range(10):
             testcases.append(DummyTest())
         reporter.report(logs, testcases)
 

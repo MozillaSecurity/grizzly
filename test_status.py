@@ -1,9 +1,13 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import os
 import sys
 import tempfile
 import unittest
 
-from status import GrizzlyStatus
+from status import Status
 
 class TestCase(unittest.TestCase):
 
@@ -16,7 +20,7 @@ class TestCase(unittest.TestCase):
             return self.assertRaisesRegexp(*args, **kwds)
 
 
-class GrizzlyStatusTests(TestCase):
+class StatusTests(TestCase):
     def setUp(self):
         fd, self.tmpfn = tempfile.mkstemp(prefix="grz_test_")
         os.close(fd)
@@ -26,8 +30,8 @@ class GrizzlyStatusTests(TestCase):
             os.remove(self.tmpfn)
 
     def test_01(self):
-        "test GrizzlyStatus report()"
-        status = GrizzlyStatus(self.tmpfn)
+        "test Status report()"
+        status = Status(self.tmpfn)
         status.report()
         self.assertTrue(os.path.isfile(self.tmpfn))
         # write report when a previous report exists (update)
@@ -40,26 +44,26 @@ class GrizzlyStatusTests(TestCase):
         self.assertFalse(os.path.isfile(self.tmpfn))
 
     def test_02(self):
-        "test GrizzlyStatus clean_up()"
-        status = GrizzlyStatus(self.tmpfn)
+        "test Status cleanup()"
+        status = Status(self.tmpfn)
         status.report()
         self.assertTrue(os.path.isfile(self.tmpfn))
-        status.clean_up()
+        status.cleanup()
         self.assertFalse(os.path.isfile(self.tmpfn))
 
     def test_03(self):
-        "test GrizzlyStatus load()"
-        self.assertIsNone(GrizzlyStatus.load("no_file.json"))
-        self.assertIsNone(GrizzlyStatus.load(self.tmpfn))
-        status = GrizzlyStatus(self.tmpfn)
+        "test Status load()"
+        self.assertIsNone(Status.load("no_file.json"))
+        self.assertIsNone(Status.load(self.tmpfn))
+        status = Status(self.tmpfn)
         self.assertIsNotNone(status)
         status.ignored = 1
         status.iteration = 10
         status.log_size = 1
         status.results = 2
         status.report()
-        ld_status = GrizzlyStatus.load(self.tmpfn)
-        self.addCleanup(ld_status.clean_up)
+        ld_status = Status.load(self.tmpfn)
+        self.addCleanup(ld_status.cleanup)
         self.assertEqual(ld_status.ignored, 1)
         self.assertEqual(ld_status.iteration, 10)
         self.assertEqual(ld_status.log_size, 1)
