@@ -7,13 +7,13 @@ import json
 import os
 import time
 
-__all__ = ("GrizzlyStatus")
+__all__ = ("Status")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-class GrizzlyStatus(object):
+class Status(object):
     """
-    GrizzlyStatus holds status information about the grizzly fuzzing process.
+    Status holds status information for the grizzly session.
     """
     FILE_PREFIX = "grz_status_"
     FILE_EXT = ".json"
@@ -53,7 +53,7 @@ class GrizzlyStatus(object):
         report._start_time = None # reports loaded from disk will not have a start time
         return report
 
-    def clean_up(self):
+    def cleanup(self):
         if os.path.isfile(self._report_file):
             os.remove(self._report_file)
 
@@ -62,7 +62,7 @@ class GrizzlyStatus(object):
             return
         now = time.time()
         if report_freq is None:
-            report_freq = GrizzlyStatus.REPORT_FREQ
+            report_freq = Status.REPORT_FREQ
         if now < (self._last_report + report_freq):
             return
 
@@ -81,7 +81,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--path", default=".",
-        help="Directory to search for status report %r files" % GrizzlyStatus.FILE_EXT)
+        help="Directory to search for status report %r files" % Status.FILE_EXT)
     args = parser.parse_args()
     if not os.path.isdir(args.path):
         parser.error("Directory %r does not exist" % args.path)
@@ -96,12 +96,12 @@ def main():
     # scan directory for reports
     reports = []
     for fname in os.listdir(args.path):
-        if not fname.lower().endswith(GrizzlyStatus.FILE_EXT):
+        if not fname.lower().endswith(Status.FILE_EXT):
             continue
-        if os.stat(fname).st_mtime < (time.time() - (GrizzlyStatus.REPORT_FREQ  + 300)): # + 5 min
+        if os.stat(fname).st_mtime < (time.time() - (Status.REPORT_FREQ  + 300)): # + 5 min
             total["old"].append(fname)
             continue
-        report = GrizzlyStatus.load(os.path.join(args.path, fname))
+        report = Status.load(os.path.join(args.path, fname))
         if report is None:
             continue
         reports.append(report)
