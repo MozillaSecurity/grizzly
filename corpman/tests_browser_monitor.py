@@ -12,7 +12,7 @@ log = logging.getLogger("browser_mon_test")
 
 class TestPuppet(object):
     running = False
-    launches = 0
+    _launches = 0
 
     def clone_log(self, log_id, offset=0):
         assert log_id is not None
@@ -24,8 +24,9 @@ class TestPuppet(object):
             log_fp.write("test")
         return log_file
 
-    def get_launch_count(self):
-        return self.launches
+    @property
+    def launches(self):
+        return self._launches
 
     def is_running(self):
         return self.running
@@ -48,7 +49,7 @@ class BrowserMonitorTests(unittest.TestCase):
         finally:
             if test_log is not None:
                 os.remove(test_log)
-        tp.launches += 1
+        tp._launches += 1
         self.assertEqual(bm.launch_count(), 1)
         tp.running = True
         self.assertTrue(bm.is_running())

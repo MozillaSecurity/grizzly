@@ -56,5 +56,5 @@ class BrowserMonitor(object):
     def monitor_instance(self, puppet):
         self._fn_clone_log = puppet.clone_log
         self._fn_is_running = puppet.is_running
-        self._fn_launch_count = puppet.get_launch_count
+        self._fn_launch_count = lambda: puppet.launches
         self._fn_log_length = puppet.log_length
