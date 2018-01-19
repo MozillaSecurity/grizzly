@@ -222,8 +222,8 @@ if __name__ == "__main__":
         stack = stack_from_text(fp.read())
 
     for line in stack:
-        print line
+        print(line)
         #if None in line:
         #    print line
-    print stack_to_hash(stack)
-    print stack_to_hash(stack, major=True)
+    print(stack_to_hash(stack))
+    print(stack_to_hash(stack, major=True))
