@@ -93,24 +93,26 @@ def main():
         "rate": 0,
         "results": 0}
 
+    full_path = os.path.abspath(args.path)
     # scan directory for reports
     reports = []
-    for fname in os.listdir(args.path):
+    for fname in os.listdir(full_path):
         if not fname.lower().endswith(Status.FILE_EXT):
             continue
+        fname = os.path.join(full_path, fname)
         if os.stat(fname).st_mtime < (time.time() - (Status.REPORT_FREQ  + 300)): # + 5 min
             total["old"].append(fname)
             continue
-        report = Status.load(os.path.join(args.path, fname))
+        report = Status.load(fname)
         if report is None:
             continue
         reports.append(report)
 
     # display results
     if not reports:
-        print("No reports to display found in %r" % os.path.abspath(args.path))
+        print("No reports to display found in %r" % full_path)
     else:
-        print("Status reports found in %r" % os.path.abspath(args.path))
+        print("Status reports found in %r" % full_path)
         for report in reports:
             print(" iters: %03d - rate: %0.2f - ignored: %02d - results %d" % (
                 report.iteration, report.rate, report.ignored, report.results))
