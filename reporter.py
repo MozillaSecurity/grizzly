@@ -228,7 +228,7 @@ class FuzzManagerReporter(Reporter):
 
     def _create_crash_info(self):
         aux_data = None
-        if "aux" in self._map:
+        if "aux" in self._map and self._map["aux"] is not None:
             with open(os.path.join(self._log_path, self._map["aux"]), "r") as log_fp:
                 aux_data = log_fp.read().splitlines()
         with open(os.path.join(self._log_path, self._map["stderr"]), "r") as err_fp:
