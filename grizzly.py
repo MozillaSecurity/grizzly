@@ -52,9 +52,8 @@ def parse_args(argv=None):
         "corpus_manager",
         help="Available corpus managers: %s" % ", ".join(aval_corpmans))
     parser.add_argument(
-        "--accepted_extensions", nargs='+',
-        help="Specify a space separated list of supported file extensions... " \
-             "ie: html svg (default: all)")
+        "--accepted_extensions", nargs="+",
+        help="Space separated list of supported file extensions. ie: html svg (default: all)")
     parser.add_argument(
         "-c", "--cache", type=int, default=1,
         help="Maximum number of previous test cases to dump after crash (default: %(default)s)")
@@ -68,8 +67,8 @@ def parse_args(argv=None):
         "--gcov-iterations", type=int, default=None,
         help="Run only the specified amount of iterations and dump GCOV data every iteration.")
     parser.add_argument(
-        "--ignore-timeouts", action="store_true",
-        help="Don't save the logs/results from a timeout")
+        "--ignore", nargs="+",
+        help="Space separated ignore list. ie: memory timeouts (default: None)")
     parser.add_argument(
         "--launch-timeout", type=int, default=300,
         help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
@@ -113,6 +112,11 @@ def parse_args(argv=None):
     if not os.path.isfile(args.binary):
         parser.error("%r does not exist" % args.binary)
 
+    if args.ignore is not None:
+        # sanitize ignore list
+        ignorable = {"memory", "timeouts"}
+        args.ignore = {arg.lower() for arg in args.ignore if arg.lower() in ignorable}
+
     if not os.path.exists(args.input):
         parser.error("%r does not exist" % args.input)
     elif os.path.isdir(args.input) and not os.listdir(args.input):
@@ -137,13 +141,13 @@ class Session(object):
     FM_LOG_SIZE_LIMIT = 0x40000  # max log size for log sent to FuzzManager (256KB)
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, cache_size, gcov_iters, ignore_timeouts, log_limit, memory_limit, relaunch, working_path=None):
+    def __init__(self, cache_size, gcov_iters, ignore, log_limit, memory_limit, relaunch, working_path=None):
         self.adapter = None
         self.binary = None
         self.cache_size = max(cache_size, 1)  # testcase cache must be at least one
         self.extension = None  # TODO: this should become part of the target
         self.gcov_iterations = gcov_iters  # TODO: this should become part of the adapter
-        self.ignore_timeouts = ignore_timeouts
+        self.ignore = ignore
         self.launch_timeout = None  # TODO: this should become part of the target
         self.log_limit = max(log_limit * 1024 * 1024, 0) if log_limit else 0  # maximum log size limit
         self.memory_limit = max(memory_limit * 1024 * 1024, 0) if memory_limit else 0 # target's memory limit
@@ -358,6 +362,7 @@ class Session(object):
                 self.target.close()
                 if self.target.reason == FFPuppet.RC_EXITED and self.target.returncode == 0:
                     log.info("Target closed itself")
+                # TOOO: ignore memory limit ignore support
                 else:
                     log.debug("failure detected")
                     failure_detected = True
@@ -365,7 +370,7 @@ class Session(object):
                 log.debug("timeout detected")
                 self.target.close()
                 # handle ignored timeouts
-                if self.ignore_timeouts:
+                if self.ignore and "timeouts" in self.ignore:
                     self.status.ignored += 1
                     log.info("Timeout ignored (%d)", self.status.ignored)
                 else:
@@ -411,7 +416,7 @@ def main(args):
     session = Session(
         args.cache,
         args.gcov_iterations,
-        args.ignore_timeouts,
+        args.ignore,
         args.log_limit,
         args.memory,
         args.relaunch,
