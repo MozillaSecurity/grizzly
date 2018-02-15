@@ -41,7 +41,7 @@ log = logging.getLogger("grizzly") # pylint: disable=invalid-name
 
 def parse_args(argv=None):
     aval_corpmans = sorted(corpman.loader.list())
-    ignorable = ("memory", "timeout")
+    ignorable = ("log-limit", "memory", "timeout")
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "binary",
@@ -68,8 +68,8 @@ def parse_args(argv=None):
         "--gcov-iterations", type=int, default=None,
         help="Run only the specified amount of iterations and dump GCOV data every iteration.")
     parser.add_argument(
-        "--ignore", nargs="+",
-        help="Space separated ignore list. ie: %s (default: None)" % " ".join(ignorable))
+        "--ignore", nargs="+", default=list(),
+        help="Space separated ignore list. ie: %s (default: nothing)" % " ".join(ignorable))
     parser.add_argument(
         "--launch-timeout", type=int, default=300,
         help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
@@ -78,7 +78,7 @@ def parse_args(argv=None):
         help="Log file size limit in MBs (default: 'no limit')")
     parser.add_argument(
         "-m", "--memory", type=int,
-        help="Browser process memory limit in MBs (default: 'no limit') -- requires psutil")
+        help="Browser process memory limit in MBs (default: 'no limit')")
     parser.add_argument(
         "--mime",
         help="Specify a mime type")
@@ -113,12 +113,11 @@ def parse_args(argv=None):
     if not os.path.isfile(args.binary):
         parser.error("%r does not exist" % args.binary)
 
-    if args.ignore is not None:
-        # sanitize ignore list
-        args.ignore = {arg.lower() for arg in args.ignore}
-        for ignore_token in args.ignore:
-            if ignore_token not in ignorable:
-                parser.error("Unrecognized ignore value: %s" % ignore_token)
+    # sanitize ignore list
+    args.ignore = {arg.lower() for arg in args.ignore}
+    for ignore_token in args.ignore:
+        if ignore_token not in ignorable:
+            parser.error("Unrecognized ignore value: %s" % ignore_token)
 
     if not os.path.exists(args.input):
         parser.error("%r does not exist" % args.input)
@@ -365,12 +364,16 @@ class Session(object):
                 self.target.close()
                 if self.target.reason == FFPuppet.RC_EXITED and self.target.returncode == 0:
                     log.info("Target closed itself")
-                elif (self.target.reason == FFPuppet.RC_WORKER and self.ignore
+                elif (self.target.reason == FFPuppet.RC_WORKER
                       and "memory" in self.ignore
                       and "ffp_worker_memory_limiter" in self.target.available_logs()):
                     self.status.ignored += 1
                     log.info("Memory limit exceeded, ignored (%d)", self.status.ignored)
-                #TODO: add log limit check
+                elif (self.target.reason == FFPuppet.RC_WORKER
+                      and "log-limit" in self.ignore
+                      and "ffp_worker_log_size_limiter" in self.target.available_logs()):
+                    self.status.ignored += 1
+                    log.info("Log size limit exceeded, ignored (%d)", self.status.ignored)
                 else:
                     log.debug("failure detected")
                     failure_detected = True
