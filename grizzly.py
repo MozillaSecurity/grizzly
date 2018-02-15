@@ -41,6 +41,7 @@ log = logging.getLogger("grizzly") # pylint: disable=invalid-name
 
 def parse_args(argv=None):
     aval_corpmans = sorted(corpman.loader.list())
+    ignorable = ("memory", "timeout")
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "binary",
@@ -68,7 +69,7 @@ def parse_args(argv=None):
         help="Run only the specified amount of iterations and dump GCOV data every iteration.")
     parser.add_argument(
         "--ignore", nargs="+",
-        help="Space separated ignore list. ie: memory timeouts (default: None)")
+        help="Space separated ignore list. ie: %s (default: None)" % " ".join(ignorable))
     parser.add_argument(
         "--launch-timeout", type=int, default=300,
         help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
@@ -114,8 +115,10 @@ def parse_args(argv=None):
 
     if args.ignore is not None:
         # sanitize ignore list
-        ignorable = {"memory", "timeouts"}
-        args.ignore = {arg.lower() for arg in args.ignore if arg.lower() in ignorable}
+        args.ignore = {arg.lower() for arg in args.ignore}
+        for ignore_token in args.ignore:
+            if ignore_token not in ignorable:
+                parser.error("Unrecognized ignore value: %s" % ignore_token)
 
     if not os.path.exists(args.input):
         parser.error("%r does not exist" % args.input)
@@ -362,7 +365,12 @@ class Session(object):
                 self.target.close()
                 if self.target.reason == FFPuppet.RC_EXITED and self.target.returncode == 0:
                     log.info("Target closed itself")
-                # TOOO: ignore memory limit ignore support
+                elif (self.target.reason == FFPuppet.RC_WORKER and self.ignore
+                      and "memory" in self.ignore
+                      and "ffp_worker_memory_limiter" in self.target.available_logs()):
+                    self.status.ignored += 1
+                    log.info("Memory limit exceeded, ignored (%d)", self.status.ignored)
+                #TODO: add log limit check
                 else:
                     log.debug("failure detected")
                     failure_detected = True
@@ -370,7 +378,7 @@ class Session(object):
                 log.debug("timeout detected")
                 self.target.close()
                 # handle ignored timeouts
-                if self.ignore and "timeouts" in self.ignore:
+                if self.ignore and "timeout" in self.ignore:
                     self.status.ignored += 1
                     log.info("Timeout ignored (%d)", self.status.ignored)
                 else:
@@ -412,6 +420,9 @@ def main(args):
     log.info("Starting Grizzly")
     if args.fuzzmanager:
         reporter.FuzzManagerReporter.sanity_check(args.binary)
+
+    if args.ignore:
+        log.info("Ignoring: %s", ", ".join(args.ignore))
 
     session = Session(
         args.cache,
