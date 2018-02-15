@@ -99,6 +99,9 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("STDERR log")
         with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
             log_fp.write("STDOUT log")
+        # should be ignored in favor of "GOOD LOG"
+        with open(os.path.join(self.tmpdir, "log_ffp_worker_blah.txt"), "w") as log_fp:
+            log_fp.write("worker log")
         log_map = Reporter.select_logs(self.tmpdir)
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stderr"])))
@@ -233,3 +236,23 @@ class GrizzlyReporterTests(TestCase):
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
         with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("google_breakpad::ExceptionHandler::WriteMinidump", log_fp.read())
+
+    def test_10(self):
+        "test selecting worker logs"
+        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        with open(os.path.join(self.tmpdir, "log_ffp_worker_blah.txt"), "w") as log_fp:
+            log_fp.write("worker log")
+        # should not be selected
+        with open(os.path.join(self.tmpdir, "log_minidump_01.txt"), "w") as log_fp:
+            log_fp.write("GPU|||\n")
+            log_fp.write("Crash|SIGSEGV|0x0|0\n")
+            log_fp.write("minidump log\n")
+        log_map = Reporter.select_logs(self.tmpdir)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stderr"])))
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
+        with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
+            self.assertIn("worker log", log_fp.read())

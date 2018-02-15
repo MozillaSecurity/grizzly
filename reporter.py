@@ -56,25 +56,33 @@ class Reporter(object):
         if not log_files:
             raise IOError("No logs found in %r" % log_path)
 
-        # pattern to identify the crash triggered when the parent process goes away
+        # pattern to identify the ASan crash triggered when the parent process goes away
         re_e10s_forced = re.compile(r"""
             ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
             #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
             """, re.DOTALL | re.VERBOSE)
 
+        # look for ffpuppet worker logs
+        # worker logs should be the default aux log but can be overwritten by asan logs
+        for fname in [log_file for log_file in log_files if log_file.startswith("log_ffp_worker")]:
+            if logs["aux"] is not None:
+                # we only expect one log here...
+                log.warning("aux log previously selected: %s, overwriting!", logs["aux"])
+            logs["aux"] = fname
+
+        # look for sanitizer (ASan, UBSan, etc...) logs
         log_size = 0
+        favored = None # favored sanitizer log
         for fname in [log_file for log_file in log_files if "asan" in log_file]:
             # check for e10s forced crash
             with open(os.path.join(log_path, fname)) as log_fp:
                 if re_e10s_forced.search(log_fp.read(4096)) is not None:
                     continue
-            if logs["aux"] is None:
-                logs["aux"] = fname # use this ASan log
+            if favored is None or os.stat(os.path.join(log_path, fname)).st_size > log_size:
+                favored = fname
                 log_size = os.stat(os.path.join(log_path, fname)).st_size
-            # prefer larger log if there is more than one
-            elif os.stat(os.path.join(log_path, fname)).st_size > log_size:
-                logs["aux"] = fname # use this ASan log
-                log_size = os.stat(os.path.join(log_path, fname)).st_size
+        if favored is not None:
+            logs["aux"] = favored
 
         # prefer ASan logs over minidump logs
         if logs["aux"] is None:
@@ -84,7 +92,7 @@ class Reporter(object):
                     md_data = log_fp.read(4096)
                     # this will select log that contains "Crash|SIGSEGV|" or
                     # the desired "DUMP_REQUESTED" log
-                    if "Crash|DUMP_REQUESTED|" not in md_data or re_dump_req.search(md_data) is not None:
+                    if "Crash|DUMP_REQUESTED|" not in md_data or re_dump_req.search(md_data):
                         logs["aux"] = fname
                         break
 
