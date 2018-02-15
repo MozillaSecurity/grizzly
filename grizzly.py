@@ -53,7 +53,7 @@ def parse_args(argv=None):
         "corpus_manager",
         help="Available corpus managers: %s" % ", ".join(aval_corpmans))
     parser.add_argument(
-        "--accepted_extensions", nargs="+",
+        "--accepted-extensions", nargs="+",
         help="Space separated list of supported file extensions. ie: html svg (default: all)")
     parser.add_argument(
         "-c", "--cache", type=int, default=1,
