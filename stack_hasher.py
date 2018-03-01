@@ -26,7 +26,7 @@ import re
 _re_asan_w_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\sin\s(?P<line>.+)")
 _re_asan_wo_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\s+\((?P<line>.+\+0x[0-9a-f]+)\)")
 _re_gdb = re.compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
-_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
+#_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
 
 # 006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c
 
@@ -110,48 +110,33 @@ def parse_line(line):
 
         return (location, func, offset, line_no)
 
-    m = _re_windbg.match(line)
-    if m is not None:
-        line = m.group("line")
-        try:
-            location, func = line.split("!")
-        except ValueError:
-            location = line
-            func = None
-        offset = m.group("off")
-
-        return (location, func, offset, None)
-
     return None
 
 
-def stack_from_text(input_txt, one_trace=True):
+def stack_from_text(input_txt):
     """
     parse a stack trace from text.
 
     input_txt is the data to parse the trace from.
-
-    one_trace if True will try to only parse the first stack trace from the
-    input.
     """
 
-    stack = []
-    current_line = 0
+    prev_line = None
+    stack = list()
 
-    for line in input_txt.splitlines():
+    for line in reversed(input_txt.splitlines()):
         try:
-            location, func, offset, stack_line_no = parse_line(line)
+            location, func, offset, stack_line = parse_line(line)
         except TypeError:
             continue
 
-        if one_trace and stack_line_no is not None:
-            # check if still parsing first trace
-            if int(stack_line_no) < current_line:
-                break
-
-        current_line += 1
-
-        stack.append((location, func, offset))
+        stack_line = int(stack_line)
+        # check if we've found a different stack in the data
+        if prev_line is not None and prev_line <= stack_line:
+            break
+        stack.insert(0, (location, func, offset))
+        if stack_line < 1:
+            break
+        prev_line = stack_line
 
     return stack
 
@@ -159,7 +144,7 @@ def stack_from_text(input_txt, one_trace=True):
 def stack_to_hash(stack, major=False, major_depth=5):
     h = hashlib.sha1()
 
-    if len(stack) == 0 or (major and major_depth <= 0):
+    if not stack or (major and major_depth <= 0):
         return None
 
     current_depth = -1
@@ -184,15 +169,6 @@ def stack_to_hash(stack, major=False, major_depth=5):
 
 
     return h.hexdigest()
-
-
-def trim_asan_log(input_txt):
-    pos = re.find(r"==\d+==[ERROR|WARNING]{1}:\sAddressSanitizer:", input_txt)
-    if pos is None:
-        return None
-    input_txt = input_txt[pos.start():]
-    #TODO: in progress...
-
 
 
 if __name__ == "__main__":

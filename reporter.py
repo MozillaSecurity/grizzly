@@ -69,6 +69,7 @@ class Reporter(object):
             with open(os.path.join(log_path, fname)) as log_fp:
                 if re_e10s_forced.search(log_fp.read(4096)) is not None:
                     continue
+            # TODO: add check for empty LSan logs
             if logs["aux"] is None or os.stat(os.path.join(log_path, fname)).st_size > log_size:
                 logs["aux"] = fname
                 log_size = os.stat(os.path.join(log_path, fname)).st_size
@@ -103,24 +104,20 @@ class Reporter(object):
 
         return logs
 
+
     def _process_logs(self):
         self._map = self.select_logs(self._log_path)
-        if self._map["aux"] is not None:
-            log_to_scan = self._map["aux"]
-        elif self._map["stderr"] is not None:
-            log_to_scan = self._map["stderr"]
-        elif self._map["stdout"] is not None:
-            log_to_scan = self._map["stdout"]
-        else:
-            log_to_scan = None
-
-        if log_to_scan:
-            with open(os.path.join(self._log_path, log_to_scan), "r") as log_fp:
+        # look through logs one by one until we find a stack
+        for scan_log in (self._map["aux"], self._map["stderr"], self._map["stdout"]):
+            if scan_log is None:
+                continue
+            with open(os.path.join(self._log_path, scan_log), "r") as log_fp:
                 stack = stack_hasher.stack_from_text(log_fp.read())
             # calculate hashes
-            if stack is not None:
+            if stack:
                 self._minor = stack_hasher.stack_to_hash(stack)
                 self._major = stack_hasher.stack_to_hash(stack, major=True)
+                break
         if self._minor is None:
             self._minor = self.DEFAULT_MINOR
             self._major = self.DEFAULT_MAJOR
