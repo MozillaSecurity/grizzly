@@ -174,7 +174,7 @@ class CorpusManager(object):
         self._corpus_path = os.path.abspath(path)
         if not os.path.isdir(path):
             self._corpus_path = os.path.dirname(self._corpus_path)
-        self._environ_vars = dict() # required environment variables
+        self._environ = dict() # recorded environment variables
         self._fuzzer = None # meant for fuzzer specific data
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
@@ -186,7 +186,6 @@ class CorpusManager(object):
 
         self._scan_input(path, accepted_extensions)
         self._init_fuzzer()
-        self._verify_env_vars()
         if self.single_pass and self.input_files:
             self.input_files.sort(reverse=True)
 
@@ -269,16 +268,6 @@ class CorpusManager(object):
             raise IOError("Could not find input files(s) at %s" % scan_path)
 
 
-    def _verify_env_vars(self):
-        for key, value in self._environ_vars.items():
-            if key in os.environ and (not value or os.environ[key] == value):
-                continue
-            if not value: # set a value for the error if needed
-                value = "?"
-            raise RuntimeError("Missing environment variable! " \
-                "%s=%s is required for this CorpusManager" % (key, value))
-
-
     @staticmethod
     def to_data_url(data, mime_type=None):
         if mime_type is None:
@@ -288,14 +277,6 @@ class CorpusManager(object):
 
     def add_abort_token(self, tokens):
         self.abort_tokens.append(tokens)
-
-
-    def add_required_envvar(self, var_name, value=""):
-        var_name = var_name.upper()
-        # grab currently set value if available
-        if len(value) < 1 and var_name in os.environ:
-            value = os.environ[var_name]
-        self._environ_vars[var_name.upper()] = value
 
 
     def cleanup(self):
@@ -341,8 +322,9 @@ class CorpusManager(object):
             input_fname=self._active_input.file_name)
 
         # add environment variable info to test case
-        for key, value in self._environ_vars.items():
-            test.add_environ_var(key, value)
+        for key, (value, _) in self._environ.items():
+            if key in os.environ:
+                test.add_environ_var(key, value)
 
         # reset redirect map
         self._srv_map["redirect"] = {}
@@ -402,6 +384,15 @@ class CorpusManager(object):
         if transition:
             return "next_test" # point to redirect
         return "test_page_%04d.html" % ((self._generated + 1) if next else self._generated)
+
+
+    def record_envvar(self, var_name, required=False):
+        var_name = var_name.upper()
+        # grab currently set value if available
+        if var_name in os.environ:
+            self._environ[var_name] = (os.environ[var_name], required)
+        elif required:
+            raise RuntimeError("Missing required environment variable %r" % var_name)
 
 
     def size(self):

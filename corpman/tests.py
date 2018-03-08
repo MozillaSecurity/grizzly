@@ -14,9 +14,10 @@ log = logging.getLogger("corpman_test")
 class EnvVarCorpman(corpman.CorpusManager):
     key = "envvar"
     def _init_fuzzer(self):
-        self.add_required_envvar("RANDOM_ENVAR_TEST")
-        self.add_required_envvar("RANDOM_ENVAR_TEST2", "test123")
-        self.add_required_envvar("RANDOM_ENVAR_TEST3", "3test3")
+        self.record_envvar("ENVAR_REQ", required=True)
+        self.record_envvar("ENVAR_EMPTY")
+        self.record_envvar("ENVAR_NOT_REQ")
+        self.record_envvar("ENVAR_NOT_SET")
     def _generate(self, testcase, redirect_page, mime_type=None):
         testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
         return testcase
@@ -336,7 +337,7 @@ class CorpusManagerTests(unittest.TestCase):
         template_file = os.path.join(self.tdir, "test_template.bin")
         with open(template_file, "wb") as fp:
             fp.write("template_data")
-        with self.assertRaisesRegexp(RuntimeError, "Missing environment variable!.+"):
+        with self.assertRaisesRegexp(RuntimeError, "Missing required environment variable.+"):
             EnvVarCorpman(self.tdir)
 
     def test_18(self):
@@ -349,9 +350,9 @@ class CorpusManagerTests(unittest.TestCase):
             template_file = os.path.join(corp_dir, "test_template.bin")
             with open(template_file, "wb") as fp:
                 fp.write("template_data")
-            os.environ["RANDOM_ENVAR_TEST"] = ""
-            os.environ["RANDOM_ENVAR_TEST2"] = "test123"
-            os.environ["RANDOM_ENVAR_TEST3"] = "3test3"
+            os.environ["ENVAR_REQ"] = "test123"
+            os.environ["ENVAR_NOT_REQ"] = "test321"
+            os.environ["ENVAR_EMPTY"] = ""
             cm = EnvVarCorpman(corp_dir)
             self.addCleanup(cm.cleanup)
             tc = cm.generate()
@@ -367,13 +368,14 @@ class CorpusManagerTests(unittest.TestCase):
             self.assertIn("env_vars.txt", dumped_tf)
             with open(os.path.join(tc_dir, "env_vars.txt"), "r") as fp:
                 env_vars = fp.read()
-            self.assertRegexpMatches(env_vars, "RANDOM_ENVAR_TEST=\n")
-            self.assertRegexpMatches(env_vars, "RANDOM_ENVAR_TEST2=test123\n")
-            self.assertRegexpMatches(env_vars, "RANDOM_ENVAR_TEST3=3test3\n")
+            self.assertRegexpMatches(env_vars, "ENVAR_REQ=test123\n")
+            self.assertRegexpMatches(env_vars, "ENVAR_NOT_REQ=test321\n")
+            self.assertRegexpMatches(env_vars, "ENVAR_EMPTY=\n")
+            self.assertNotIn("ENVAR_NOT_SET", env_vars)
         finally:
-            os.environ.pop("RANDOM_ENVAR_TEST", None)
-            os.environ.pop("RANDOM_ENVAR_TEST2", None)
-            os.environ.pop("RANDOM_ENVAR_TEST3", None)
+            os.environ.pop("ENVAR_EMPTY", None)
+            os.environ.pop("ENVAR_NOT_REQ", None)
+            os.environ.pop("ENVAR_REQ", None)
 
 
 class TestCaseTests(unittest.TestCase):
