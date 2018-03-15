@@ -27,7 +27,7 @@ import signal
 import tempfile
 
 import corpman
-from ffpuppet import FFPuppet
+from ffpuppet import BrowserTerminatedError, FFPuppet
 import reporter
 import sapphire
 from status import Status
@@ -267,6 +267,19 @@ class Session(object):
             extension=self.extension)
 
 
+    def process_result(self):
+        self.status.results += 1
+        log.info("Potential issue detected")
+        log.debug("Current input: %s", self.adapter.active_file)
+        log.info("Reporting results...")
+        # create working directory for current testcase
+        result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
+        self.target.save_logs(result_logs)
+        self.reporter.report(result_logs, reversed(self.test_cache))
+        if os.path.isdir(result_logs):
+            shutil.rmtree(result_logs)
+
+
     def run(self):
         assert self.adapter is not None, "adapter is not configured"
         assert self.reporter is not None, "reporter is not configured"
@@ -297,7 +310,12 @@ class Session(object):
 
             # launch FFPuppet
             if self.target.closed:
-                self.launch_target()
+                try:
+                    self.launch_target()
+                except BrowserTerminatedError:
+                    # this result likely has nothing to do with grizzly
+                    self.process_result()
+                    raise
 
             # generate testcase
             log.debug("calling self.adapter.generate()")
@@ -389,16 +407,7 @@ class Session(object):
 
             # handle failure if detected
             if failure_detected:
-                self.status.results += 1
-                log.info("Potential issue detected")
-                log.debug("Current input: %s", self.adapter.active_file)
-                log.info("Reporting results...")
-                # create working directory for current testcase
-                result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
-                self.target.save_logs(result_logs)
-                self.reporter.report(result_logs, reversed(self.test_cache))
-                if os.path.isdir(result_logs):
-                    shutil.rmtree(result_logs)
+                self.process_result()
 
             # warn about large browser logs
             self.status.log_size = self.target.log_length("stderr") + self.target.log_length("stdout")
