@@ -27,7 +27,7 @@ import signal
 import tempfile
 
 import corpman
-from ffpuppet import BrowserTerminatedError, FFPuppet
+from ffpuppet import BrowserTerminatedError, FFPuppet, LaunchError
 import reporter
 import sapphire
 from status import Status
@@ -253,18 +253,22 @@ class Session(object):
         self.test_cache = list()
 
         log.info("Launching target")
-        self.target.launch(
-            self.binary,
-            launch_timeout=self.launch_timeout,
-            location="http://127.0.0.1:%d/%s#timeout=%d,close_after=%d" % (
-                self.server.get_port(),
-                self.adapter.landing_page(harness=True),
-                self.adapter.test_duration,
-                self.rl_reset),
-            log_limit=self.log_limit,
-            memory_limit=self.memory_limit,
-            prefs_js=self.prefs,
-            extension=self.extension)
+        try:
+            self.target.launch(
+                self.binary,
+                launch_timeout=self.launch_timeout,
+                location="http://127.0.0.1:%d/%s#timeout=%d,close_after=%d" % (
+                    self.server.get_port(),
+                    self.adapter.landing_page(harness=True),
+                    self.adapter.test_duration,
+                    self.rl_reset),
+                log_limit=self.log_limit,
+                memory_limit=self.memory_limit,
+                prefs_js=self.prefs,
+                extension=self.extension)
+        except LaunchError:
+            self.target.close()
+            raise
 
 
     def process_result(self):
