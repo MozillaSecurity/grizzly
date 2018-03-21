@@ -268,15 +268,15 @@ class FuzzManagerReporter(Reporter):
                     "_grizzly_seen_count": 0,
                     "frequent": False,
                     "shortDescription": crash_info.createShortSignature()}
-            # TODO: check cache_sig_file is not None
-            # limit the number of times we report per cycle
-            cache_metadata["_grizzly_seen_count"] += 1
-            if cache_metadata["_grizzly_seen_count"] >= self.MAX_REPORTS:
-                # we will still report this one, but no more
-                cache_metadata["frequent"] = True
-            metadata_file = cache_sig_file.replace(".signature", ".metadata")
-            with open(metadata_file, "w") as meta_fp:
-                json.dump(cache_metadata, meta_fp)
+            if cache_sig_file is not None:
+                # limit the number of times we report per cycle
+                cache_metadata["_grizzly_seen_count"] += 1
+                if cache_metadata["_grizzly_seen_count"] >= self.MAX_REPORTS:
+                    # we will still report this one, but no more
+                    cache_metadata["frequent"] = True
+                metadata_file = cache_sig_file.replace(".signature", ".metadata")
+                with open(metadata_file, "w") as meta_fp:
+                    json.dump(cache_metadata, meta_fp)
 
         # dump test cases and the contained files to working directory
         test_case_meta = []
