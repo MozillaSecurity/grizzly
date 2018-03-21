@@ -111,12 +111,12 @@ class Reporter(object):
         for scan_log in (self._map["aux"], self._map["stderr"], self._map["stdout"]):
             if scan_log is None:
                 continue
-            with open(os.path.join(self._log_path, scan_log), "r") as log_fp:
-                stack = stack_hasher.stack_from_text(log_fp.read())
+            with open(os.path.join(self._log_path, scan_log), "rb") as log_fp:
+                stack = stack_hasher.Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
             # calculate hashes
-            if stack:
-                self._minor = stack_hasher.stack_to_hash(stack)
-                self._major = stack_hasher.stack_to_hash(stack, major=True)
+            if stack.frames:
+                self._minor = stack.minor
+                self._major = stack.major
                 break
         if self._minor is None:
             self._minor = self.DEFAULT_MINOR
@@ -229,17 +229,19 @@ class FuzzManagerReporter(Reporter):
 
 
     def _create_crash_info(self):
+        # read in the log files and create a CrashInfo object
         aux_data = None
         if "aux" in self._map and self._map["aux"] is not None:
-            with open(os.path.join(self._log_path, self._map["aux"]), "r") as log_fp:
-                aux_data = log_fp.read().splitlines()
-        with open(os.path.join(self._log_path, self._map["stderr"]), "r") as err_fp:
-            with open(os.path.join(self._log_path, self._map["stdout"]), "r") as out_fp:
-                return CrashInfo.fromRawCrashData(
-                    out_fp.read().splitlines(),
-                    err_fp.read().splitlines(),
-                    ProgramConfiguration.fromBinary(self.target_binary),
-                    auxCrashData=aux_data)
+            with open(os.path.join(self._log_path, self._map["aux"]), "rb") as log_fp:
+                aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
+        stderr_file = os.path.join(self._log_path, self._map["stderr"])
+        stdout_file = os.path.join(self._log_path, self._map["stdout"])
+        with open(stderr_file, "rb") as err_fp, open(stdout_file, "rb") as out_fp:
+            return CrashInfo.fromRawCrashData(
+                out_fp.read().decode("utf-8", errors="ignore").splitlines(),
+                err_fp.read().decode("utf-8", errors="ignore").splitlines(),
+                ProgramConfiguration.fromBinary(self.target_binary),
+                auxCrashData=aux_data)
 
 
     def _report(self):
@@ -252,7 +254,7 @@ class FuzzManagerReporter(Reporter):
             collector = Collector()
             cache_sig_file, cache_metadata = collector.search(crash_info)
             if cache_metadata is not None:
-                if cache_metadata['frequent']:
+                if cache_metadata["frequent"]:
                     log.info("Frequent crash matched existing signature: %s",
                              cache_metadata["shortDescription"])
                     return
@@ -266,11 +268,12 @@ class FuzzManagerReporter(Reporter):
                     "_grizzly_seen_count": 0,
                     "frequent": False,
                     "shortDescription": crash_info.createShortSignature()}
+            # TODO: check cache_sig_file is not None
             # limit the number of times we report per cycle
             cache_metadata["_grizzly_seen_count"] += 1
             if cache_metadata["_grizzly_seen_count"] >= self.MAX_REPORTS:
                 # we will still report this one, but no more
-                cache_metadata['frequent'] = True
+                cache_metadata["frequent"] = True
             metadata_file = cache_sig_file.replace(".signature", ".metadata")
             with open(metadata_file, "w") as meta_fp:
                 json.dump(cache_metadata, meta_fp)

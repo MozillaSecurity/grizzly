@@ -17,158 +17,253 @@ __credits__ = ["Tyson Smith"]
 
 import argparse
 import hashlib
+import logging
 import os
 import re
 
-# location/function/offset
+log = logging.getLogger("stack_hasher")  # pylint: disable=invalid-name
 
-# regexs for supported stack trace lines
-_re_asan_w_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\sin\s(?P<line>.+)")
-_re_asan_wo_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\s+\((?P<line>.+\+0x[0-9a-f]+)\)")
-_re_gdb = re.compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
-#_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
+MAJOR_DEPTH = 5
 
-# 006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c
+class StackFrame(object):
+    MODE_ASAN_SYMS = 0
+    MODE_ASAN_NO_SYMS = 1
+    MODE_GDB = 2
 
-#0  __memmove_ssse3_back () at ../sysdeps/x86_64/multiarch/memcpy-ssse3-back.S:1654
-#1  0x000000000041e276 in WelsDec::WelsReorderRefList (pCtx=0x7ffff7f44020)\n    at codec/decoder/core/src/manage_dec_ref.cpp:252
-#2  0x0000000000400545 in main ()
-#3  0x0000000000400545 in main () at test.c:5
-_re_func_name = re.compile(r"(?P<func>.+?)[\(|\s]{1}")
+    _re_func_name = re.compile(r"(?P<func>.+?)[\(|\s]{1}")
+    # regexs for supported stack trace lines
+    _re_asan_w_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\sin\s(?P<line>.+)")
+    _re_asan_wo_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\s+\((?P<line>.+\+0x[0-9a-f]+)\)")
+    _re_gdb = re.compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
+    # TODO: minidumps, valgrind
+    #_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
 
-
-def parse_line(line):
-    # try to match symbolized ASan output line
-    m = _re_asan_w_syms.match(line)
-    if m is not None:
-        line = m.group("line")
-        line_no = m.group("num")
-
-        # find function/method name
-        m = _re_func_name.match(line)
-        if m is not None:
-            func = m.group("func")
-        else:
-            func = None
-
-        # find location (file name) and offset (line #)
-        line = line.strip(')').split()[-1].split(":")
-        if len(line) == 1: # no line number
-            line = line[0].split("+") # look for offset
-        location = os.path.basename(line[0])
-        if len(line) > 1: # with offset
-            offset = line[-1]
-        else:
-            offset = None
-
-        return (location, func, offset, line_no)
-
-    # try to match unsymbolized ASan output line
-    m = _re_asan_wo_syms.match(line)
-    if m is not None:
-        func = None
-        line = m.group("line")
-        line_no = m.group("num")
-
-        # find location (binary) and offset
-        line = line.split()[-1].split("+")
-        location = os.path.basename(line[0])
-        if len(line) > 1:
-            offset = line[-1]
-        else:
-            offset = None
-
-        return (location, func, offset, line_no)
-
-    # try to match gdb output line
-    m = _re_gdb.match(line)
-    if m is not None:
-        line = m.group("line")
-        line_no = m.group("num")
-        location = None
-        offset = None
-        bin_offset = m.group("off")
-
-        # find function/method name
-        m = _re_func_name.match(line)
-        if m is not None:
-            func = m.group("func")
-        else:
-            func = None
-
-        # find file name and line number
-        if line.find(") at ") != -1:
-            line = line.split(") at ")[-1]
-            try:
-                line, offset = line.split(":")
-            except ValueError:
-                offset = None
-            location = os.path.basename(line)
-
-        if offset is None and bin_offset is not None:
-            offset = bin_offset.split(" ")[0]
-
-        return (location, func, offset, line_no)
-
-    return None
+    def __init__(self, function=None, location=None, mode=None, offset=None, stack_line=None):
+        self.function = function
+        self.location = location
+        self.offset = offset
+        self.stack_line = stack_line
+        self.mode = mode
 
 
-def stack_from_text(input_txt):
-    """
-    parse a stack trace from text.
+    def __str__(self):
+        out = []
+        if self.stack_line is not None:
+            out.append("%02d" % int(self.stack_line))
+        if self.function is not None:
+            out.append("function: %r" % self.function)
+        if self.location is not None:
+            out.append("location: %r" % self.location)
+        if self.offset is not None:
+            out.append("offset: %r" % self.offset)
 
-    input_txt is the data to parse the trace from.
-    """
-
-    prev_line = None
-    stack = list()
-
-    for line in reversed(input_txt.splitlines()):
-        try:
-            location, func, offset, stack_line = parse_line(line)
-        except TypeError:
-            continue
-
-        stack_line = int(stack_line)
-        # check if we've found a different stack in the data
-        if prev_line is not None and prev_line <= stack_line:
-            break
-        stack.insert(0, (location, func, offset))
-        if stack_line < 1:
-            break
-        prev_line = stack_line
-
-    return stack
+        return " - ".join(out)
 
 
-def stack_to_hash(stack, major=False, major_depth=5):
-    h = hashlib.sha1()
+    @classmethod
+    def from_line(cls, input_line, parse_mode=None):
+        assert "\n" not in input_line, "Input contains unexpected new line(s)"
+        # try to match symbolized ASan output line
+        if parse_mode is None or parse_mode == StackFrame.MODE_ASAN_SYMS:
+            frame_info = cls._parse_asan_with_syms(input_line)
+            if frame_info is not None:
+                return StackFrame(**frame_info)
 
-    if not stack or (major and major_depth <= 0):
+        if parse_mode is None or parse_mode == StackFrame.MODE_ASAN_NO_SYMS:
+            frame_info = cls._parse_asan_wo_syms(input_line)
+            if frame_info is not None:
+                return StackFrame(**frame_info)
+
+        if parse_mode is None or parse_mode == StackFrame.MODE_GDB:
+            frame_info = cls._parse_gdb(input_line)
+            if frame_info is not None:
+                return StackFrame(**frame_info)
+
         return None
 
-    current_depth = -1
-    for location, func, offset in stack:
-        current_depth += 1
-        if major and current_depth >= major_depth:
-            break
 
-        if location is not None:
-            h.update(location)
+    @staticmethod
+    def _parse_asan_with_syms(input_line):
+        if "#" not in input_line:
+            return None  # no match
+        m = StackFrame._re_asan_w_syms.match(input_line)
+        if m is None:
+            return None  # no match
 
-        if func is not None:
-            h.update(func)
+        frame = {"function":None, "location":None, "mode":StackFrame.MODE_ASAN_SYMS, "offset":None}
+        input_line = m.group("line")
+        frame["stack_line"] = m.group("num")
 
-        if major and current_depth > 0:
-            # only add the offset from the top frame
-            # when calculating the major hash
-            continue
+        # find function/method name
+        m = StackFrame._re_func_name.match(input_line)
+        if m is not None:
+            frame["function"] = m.group("func")
 
-        if offset is not None:
-            h.update(offset)
+        # find location (file name) and offset (line #)
+        input_line = input_line.strip(")").split()[-1].split(":")
+        if len(input_line) == 1:  # no line number
+            input_line = input_line[0].split("+")  # look for offset
+        frame["location"] = os.path.basename(input_line[0])
+        if len(input_line) > 1:  # with offset
+            frame["offset"] = input_line[1]
+
+        return frame
 
 
-    return h.hexdigest()
+    @staticmethod
+    def _parse_asan_wo_syms(input_line):
+        if "#" not in input_line:
+            return None  # no match
+        m = StackFrame._re_asan_wo_syms.match(input_line)
+        if m is None:
+            return None  # no match
+
+        frame = {"function":None, "mode":StackFrame.MODE_ASAN_NO_SYMS, "offset":None}
+        frame["stack_line"] = m.group("num")
+        input_line = m.group("line")
+
+        # find location (binary) and offset
+        input_line = input_line.split()[-1].split("+")
+        frame["location"] = os.path.basename(input_line[0])
+        if len(input_line) > 1:
+            frame["offset"] = input_line[-1]
+
+        return frame
+
+
+    @staticmethod
+    def _parse_gdb(input_line):
+        if "#" not in input_line:
+            return None  # no match
+        m = StackFrame._re_gdb.match(input_line)
+        if m is None:
+            return None
+        frame = {"function":None, "location":None, "mode":StackFrame.MODE_GDB, "offset":None}
+        frame["stack_line"] = m.group("num")
+        #frame["offset"] = m.group("off")  # ignore binary offset for now
+        input_line = m.group("line").strip()
+        print(input_line)
+        if not input_line:
+            return
+
+        # find function/method name
+        m = StackFrame._re_func_name.match(input_line)
+        if m is not None:
+            frame["function"] = m.group("func")
+
+        # find file name and line number
+        if ") at " in input_line:
+            input_line = input_line.split(") at ")[-1]
+            try:
+                input_line, frame["offset"] = input_line.split(":")
+            except ValueError:
+                pass
+            frame["location"] = os.path.basename(input_line).split()[0]
+
+        return frame
+
+
+class Stack(object):
+    def __init__(self, frames=None, major_depth=MAJOR_DEPTH):
+        assert frames is None or isinstance(frames, list)
+        self.frames = list() if frames is None else frames
+        self._major_depth = major_depth
+        self._major = None
+        self._minor = None
+
+
+    def __str__(self):
+        return "\n".join(["%s" % frame for frame in self.frames])
+
+
+    def _calculate_hash(self, major=False):
+        h = hashlib.sha1()
+
+        if not self.frames or (major and self._major_depth < 1):
+            return None
+
+        current_depth = 0
+        for frame in self.frames:
+            current_depth += 1
+            if major and current_depth > self._major_depth:
+                break
+
+            if frame.location is not None:
+                h.update(frame.location.encode("utf-8", errors="ignore"))
+
+            if frame.function is not None:
+                h.update(frame.function.encode("utf-8", errors="ignore"))
+
+            if major and current_depth > 1:
+                # only add the offset from the top frame when calculating
+                # the major hash and skip the rest
+                continue
+
+            if frame.offset is not None:
+                h.update(frame.offset.encode("utf-8", errors="ignore"))
+
+        return h.hexdigest()
+
+
+    def from_file(self, file_name):
+        raise NotImplementedError()  # TODO
+
+
+    @classmethod
+    def from_text(cls, input_text, major_depth=MAJOR_DEPTH, parse_mode=None):
+        """
+        parse a stack trace from text.
+        input_txt is the data to parse the trace from.
+        """
+
+        frames = list()
+        prev_line = None
+        parse_mode = parse_mode
+
+        for line in reversed(input_text.split("\n")):
+            if not line:
+                continue  # skip empty lines
+            frame = StackFrame.from_line(line, parse_mode=parse_mode)
+            if frame is None:
+                continue
+
+            # avoid issues with mixed stack types
+            if parse_mode is None:
+                parse_mode = frame.mode
+            elif parse_mode != frame.mode:
+                continue  # don't mix parse modes!
+
+            stack_line = int(frame.stack_line)
+            # check if we've found a different stack in the data
+            if prev_line is not None and prev_line <= stack_line:
+                break
+            frames.insert(0, frame)
+            if stack_line < 1:
+                break
+            prev_line = stack_line
+
+        if frames:  # sanity check
+            # assuming the first frame is 0
+            if int(frames[0].stack_line) != 0:
+                log.warning("First stack line %r not 0", frames[0].stack_line)
+            if int(frames[-1].stack_line) != len(frames) - 1:
+                log.warning("Last stack line %r not %r (frames-1)", frames[0].stack_line, len(frames) - 1)
+
+        return cls(frames=frames, major_depth=major_depth)
+
+
+    @property
+    def major(self):
+        if self._major is None:
+            self._major = self._calculate_hash(major=True)
+        return self._major
+
+
+    @property
+    def minor(self):
+        if self._minor is None:
+            self._minor = self._calculate_hash()
+        return self._minor
 
 
 if __name__ == "__main__":
@@ -177,29 +272,20 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # asan support tests
-    #print parse_line("    #1 0x7f00dad60565 in Abort(char const*) /blah/base/nsDebugImpl.cpp:472")
-    #print parse_line("    #36 0x48a6e4 in main /app/nsBrowserApp.cpp:399")
-    #print parse_line("    #1 0x7f00ecc1b33f (/lib/x86_64-linux-gnu/libpthread.so.0+0x1033f)")
-    #print parse_line("    #25 0x7f0155526181 in start_thread (/lib/x86_64-linux-gnu/libpthread.so.0+0x8181)")
+    # set output verbosity
+    if os.getenv("DEBUG"):
+        log_level = logging.DEBUG
+        log_fmt = "[%(levelname).1s] %(message)s"
+    else:
+        log_level = logging.INFO
+        log_fmt = "%(message)s"
+    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    # gdb support tests
-    #print parse_line("#0  __memmove_ssse3_back () at ../sysdeps/x86_64/multiarch/memcpy-ssse3-back.S:1654")
-    #print parse_line("#1  0x000000000041e276 in WelsDec::WelsReorderRefList (pCtx=0x7ffff7f44020)\n    at codec/decoder/core/src/manage_dec_ref.cpp:252")
-    #print parse_line("#2  0x0000000000400545 in main ()")
-    #print parse_line("#3  0x0000000000400545 in main () at test.c:5")
+    with open(args.input, "rb") as fp:
+        stack = Stack.from_text(fp.read().decode("utf-8", errors="ignore"))
 
-    # windbg support tests
-    #print parse_line("006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c")
-    #print parse_line("006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c")
-    #print parse_line("(Inline) -------- xul!SkTDArray<SkAAClip::Builder::Row>::append+0xc")
-
-    with open(args.input, "r") as fp:
-        stack = stack_from_text(fp.read())
-
-    for line in stack:
-        print(line)
-        #if None in line:
-        #    print line
-    print(stack_to_hash(stack))
-    print(stack_to_hash(stack, major=True))
+    for frame in stack.frames:
+        log.info(frame)
+    log.info("Minor: %s", stack.minor)
+    log.info("Major: %s", stack.major)
+    log.info("Frames: %d", len(stack.frames))

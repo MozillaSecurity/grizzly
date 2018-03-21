@@ -316,6 +316,7 @@ class Session(object):
             if self.target.closed:
                 try:
                     self.launch_target()
+                    # TODO: handle BrowserTimeoutError?
                 except BrowserTerminatedError:
                     # this result likely has nothing to do with grizzly
                     self.process_result()
