@@ -25,6 +25,7 @@ import os
 import shutil
 import signal
 import tempfile
+import time
 
 import corpman
 from ffpuppet import BrowserTerminatedError, FFPuppet, LaunchError
@@ -380,6 +381,20 @@ class Session(object):
                 self.target.wait(60)
                 if self.target.is_running():
                     log.warning("Target should have closed itself")
+
+            # check if the target is in the process of
+            # dumping crash reports and wait if needed
+            if self.target.is_running() and not self.target.appears_healthy():
+                log.debug("target seems to be crashing")
+                wait_end = time.time()
+                # for non timeout cases wait for logs to dump
+                if server_status != sapphire.SERVED_TIMEOUT:
+                    wait_end += 60
+                while self.target.is_running():
+                    time.sleep(0.25)
+                    if time.time() > wait_end:
+                        log.info("Browser is alive but has crash reports. Terminating...")
+                        self.target.close()
 
             # attempt to detect a failure
             failure_detected = False
