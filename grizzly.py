@@ -356,7 +356,7 @@ class Session(object):
             # use Sapphire to serve the most recent test case
             server_status, files_served = self.server.serve_path(
                 self.wwwdir,
-                continue_cb=self.target.is_running,
+                continue_cb=self.target.appears_healthy,
                 optional_files=current_test.get_optional())
 
             # remove test case working directory
@@ -382,20 +382,6 @@ class Session(object):
                 if self.target.is_running():
                     log.warning("Target should have closed itself")
 
-            # check if the target is in the process of
-            # dumping crash reports and wait if needed
-            if self.target.is_running() and not self.target.appears_healthy():
-                log.debug("target seems to be crashing")
-                wait_end = time.time()
-                # for non timeout cases wait for logs to dump
-                if server_status != sapphire.SERVED_TIMEOUT:
-                    wait_end += 60
-                while self.target.is_running():
-                    time.sleep(0.25)
-                    if time.time() > wait_end:
-                        log.info("Browser is alive but has crash reports. Terminating...")
-                        self.target.close()
-
             # attempt to detect a failure
             failure_detected = False
             if not self.target.is_running():
@@ -415,6 +401,17 @@ class Session(object):
                 else:
                     log.debug("failure detected")
                     failure_detected = True
+            elif not self.target.appears_healthy():
+                failure_detected = True
+                wait_end = time.time()
+                if server_status != sapphire.SERVED_TIMEOUT:
+                    wait_end += 5  # for non timeout cases wait for logs to dump
+                log.info("Browser is alive but has crash reports. Terminating...")
+                while self.target.is_running():
+                    time.sleep(0.25)
+                    if time.time() > wait_end:
+                        break
+                self.target.close()
             elif server_status == sapphire.SERVED_TIMEOUT:
                 log.debug("timeout detected")
                 self.target.close()
