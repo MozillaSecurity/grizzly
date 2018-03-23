@@ -62,14 +62,36 @@ class Reporter(object):
             #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
             """, re.DOTALL | re.VERBOSE)
 
+        # this is a list of *San error reports to prioritize
+        # ASan reports not included below (deprioritized):
+        # stack-overflow, BUS, failed to allocate
+        interesting_sanitizer_tokens = (
+            "use-after-", "-buffer-overflow on", ": SEGV on ", "access-violation on ",
+            "negative-size-param", "attempting free on ", "memcpy-param-overlap")
+
         # look for sanitizer (ASan, UBSan, etc...) logs
         log_size = 0
         for fname in [log_file for log_file in log_files if "asan" in log_file]:
-            # check for e10s forced crash
-            with open(os.path.join(log_path, fname)) as log_fp:
-                if re_e10s_forced.search(log_fp.read(4096)) is not None:
+            # grab first chunk of log to help triage
+            with open(os.path.join(log_path, fname), "r") as log_fp:
+                log_data = log_fp.read(4096)
+
+            # look for interesting crash info in the log
+            if "==ERROR:" in log_data:
+                # check for e10s forced crash
+                if re_e10s_forced.search(log_data) is not None:
                     continue
+                logs["aux"] = fname
+                if any(x in log_data for x in interesting_sanitizer_tokens):
+                    break  # this is the likely cause of the crash
+                continue  # probably the most interesting but lets keep looking
+
+            # UBSan error
+            if ": runtime error: " in log_data:
+                logs["aux"] = fname
+
             # TODO: add check for empty LSan logs
+            # catch all (choose the one with the most info for now)
             if logs["aux"] is None or os.stat(os.path.join(log_path, fname)).st_size > log_size:
                 logs["aux"] = fname
                 log_size = os.stat(os.path.join(log_path, fname)).st_size
@@ -78,11 +100,11 @@ class Reporter(object):
         if logs["aux"] is None:
             re_dump_req = re.compile(r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump")
             for fname in [log_file for log_file in log_files if "minidump" in log_file]:
-                with open(os.path.join(log_path, fname)) as log_fp:
-                    md_data = log_fp.read(4096)
+                with open(os.path.join(log_path, fname), "r") as log_fp:
+                    log_data = log_fp.read(4096)
                     # this will select log that contains "Crash|SIGSEGV|" or
                     # the desired "DUMP_REQUESTED" log
-                    if "Crash|DUMP_REQUESTED|" not in md_data or re_dump_req.search(md_data):
+                    if "Crash|DUMP_REQUESTED|" not in log_data or re_dump_req.search(log_data):
                         logs["aux"] = fname
                         break
 

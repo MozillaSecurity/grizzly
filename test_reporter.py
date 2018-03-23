@@ -253,3 +253,31 @@ class GrizzlyReporterTests(TestCase):
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
         with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("worker log", log_fp.read())
+
+    def test_11(self):
+        "test prioritizing *San logs"
+        asan_prefix = "log_asan.txt"
+        test_logs = list()
+        for _ in range(3):
+            test_logs.append(".".join([asan_prefix, str(random.randint(1000, 4000))]))
+        # crash on another thread
+        with open(os.path.join(self.tmpdir, test_logs[0]), "w") as log_fp:
+            log_fp.write("GOOD LOG\n")
+            log_fp.write("==1942==ERROR: AddressSanitizer: heap-use-after-free on ... blah\n") # must be 2nd line
+            for _ in range(4): # pad out to 6 lines
+                log_fp.write("filler line\n")
+        # child log that should be ignored (created when parent crashes)
+        with open(os.path.join(self.tmpdir, test_logs[1]), "w") as log_fp:
+            log_fp.write("BAD LOG\n")
+            log_fp.write("==1184==ERROR: AddressSanitizer: BUS on ... blah\n") # must be 2nd line
+            for _ in range(4): # pad out to 6 lines
+                log_fp.write("filler line\n")
+        with open(os.path.join(self.tmpdir, test_logs[2]), "w") as log_fp:
+            log_fp.write("BAD LOG\n")
+            log_fp.write("==9482==ERROR: AddressSanitizer: stack-overflow on ...\n") # must be 2nd line
+            for _ in range(4): # pad out to 6 lines
+                log_fp.write("filler line\n")
+        log_map = Reporter.select_logs(self.tmpdir)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
+        with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
+            self.assertIn("GOOD LOG", log_fp.read())
