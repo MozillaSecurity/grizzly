@@ -169,7 +169,7 @@ class CorpusManager(object):
         self.br_mon = browser_monitor.BrowserMonitor() # provide browser details
         self.rotation_period = 10 # input file rotation period
         self.single_pass = False # only run each input file for one rotation period
-        self.test_duration = 5000 # used by the html harness to redirect to next testcase
+        self.test_duration = 30000 # used by the html harness to redirect to next testcase
         self._active_input = None
         self._corpus_path = os.path.abspath(path)
         if not os.path.isdir(path):
