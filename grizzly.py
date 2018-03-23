@@ -93,8 +93,14 @@ def parse_args(argv=None):
         "--relaunch", type=int, default=1000,
         help="Number of iterations performed before relaunching the browser (default: %(default)s)")
     parser.add_argument(
+        "--rr", action="store_true",
+        help="Use RR (Linux only)")
+    parser.add_argument(
         "-s", "--asserts", action="store_true",
         help="Detect soft assertions")
+    parser.add_argument(
+        "--s3-fuzzmanager", action="store_true",
+        help="Report large attachments (if any) to S3 and then the crash & S3 link to FuzzManager")
     parser.add_argument(
         "-t", "--timeout", type=int, default=60,
         help="Iteration timeout in seconds (default: %(default)s)")
@@ -134,6 +140,9 @@ def parse_args(argv=None):
     if args.prefs is not None and not os.path.isfile(args.prefs):
         parser.error("%r does not exist" % args.prefs)
 
+    if args.fuzzmanager and args.s3_fuzzmanager:
+        parser.error("--fuzzmanager and --s3-fuzzmanager are mutually exclusive")
+
     if args.working_path is not None and not os.path.isdir(args.working_path):
         parser.error("%r is not a directory" % args.working_path)
 
@@ -144,7 +153,7 @@ class Session(object):
     FM_LOG_SIZE_LIMIT = 0x40000  # max log size for log sent to FuzzManager (256KB)
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, cache_size, gcov_iters, ignore, log_limit, memory_limit, relaunch, working_path=None):
+    def __init__(self, cache_size, gcov_iters, ignore, log_limit, memory_limit, relaunch, use_rr, working_path=None):
         self.adapter = None
         self.binary = None
         self.cache_size = max(cache_size, 1)  # testcase cache must be at least one
@@ -159,8 +168,10 @@ class Session(object):
         self.reporter = None
         self.rl_countdown = 0  # TODO: this should become part of the target
         self.rl_reset = max(relaunch, 1)  # iterations to perform before relaunch... TODO: this should become part of the target
+        self.rr_path = None  # path to rr traces
         self.server = None
         self.status = Status()
+        self.use_rr = use_rr
         self.target = None
         self.test_cache = list()  # should contain len(cache) + 1 maximum
         self.wwwdir = None  # directory containing test files to be served
@@ -215,9 +226,12 @@ class Session(object):
             log.info("Running with Xvfb")
         if use_valgrind:
             log.info("Running with Valgrind. This will be SLOW!")
+        if self.use_rr:
+            log.info("Running with RR")
 
         # create FFPuppet object
         self.target = FFPuppet(
+            use_rr=self.use_rr,
             use_valgrind=use_valgrind,
             use_xvfb=use_xvfb)
 
@@ -247,11 +261,21 @@ class Session(object):
             self.target.clean_up()
         if self.adapter is not None:
             self.adapter.cleanup()
+        if self.use_rr:
+            if self.rr_path is not None and os.path.isdir(self.rr_path):
+                shutil.rmtree(self.rr_path)
 
 
     def launch_target(self):
         self.rl_countdown = self.rl_reset
         self.test_cache = list()
+        env_mod = dict()
+
+        if self.use_rr:
+            if self.rr_path is not None and os.path.isdir(self.rr_path):
+                shutil.rmtree(self.rr_path)
+            self.rr_path = tempfile.mkdtemp(prefix="grz_rr")
+            env_mod["_RR_TRACE_DIR"] = self.rr_path
 
         log.info("Launching target")
         try:
@@ -266,7 +290,8 @@ class Session(object):
                 log_limit=self.log_limit,
                 memory_limit=self.memory_limit,
                 prefs_js=self.prefs,
-                extension=self.extension)
+                extension=self.extension,
+                env_mod=env_mod)
         except LaunchError:
             self.target.close()
             raise
@@ -279,6 +304,18 @@ class Session(object):
         log.info("Reporting results...")
         # create working directory for current testcase
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
+        if self.use_rr:
+            # symlink the RR trace into the log path so the Reporter can detect it
+            # and process if needed.
+            rrtrace = None
+            if self.rr_path is not None:
+                rrtrace = os.path.realpath(os.path.join(self.rr_path, "latest-trace"))
+                if not os.path.isdir(rrtrace):
+                    rrtrace = None
+            if rrtrace is not None:
+                os.symlink(rrtrace, os.path.join(result_logs, "rr-trace"))
+            else:
+                log.warning("RR specified but no trace detected.")
         self.target.save_logs(result_logs)
         self.reporter.report(result_logs, reversed(self.test_cache))
         if os.path.isdir(result_logs):
@@ -449,6 +486,8 @@ def main(args):
     log.info("Starting Grizzly")
     if args.fuzzmanager:
         reporter.FuzzManagerReporter.sanity_check(args.binary)
+    elif args.s3_fuzzmanager:
+        reporter.S3FuzzManagerReporter.sanity_check(args.binary)
 
     if args.ignore:
         log.info("Ignoring: %s", ", ".join(args.ignore))
@@ -460,6 +499,7 @@ def main(args):
         args.log_limit,
         args.memory,
         args.relaunch,
+        args.rr,
         working_path=args.working_path)
 
     try:
@@ -480,6 +520,11 @@ def main(args):
         if args.fuzzmanager:
             log.info("Reporting issues via FuzzManager")
             session.reporter = reporter.FuzzManagerReporter(
+                args.binary,
+                log_limit=Session.FM_LOG_SIZE_LIMIT)
+        elif args.s3_fuzzmanager:
+            log.info("Reporting issues via FuzzManager w/ large attachments in S3")
+            session.reporter = reporter.S3FuzzManagerReporter(
                 args.binary,
                 log_limit=Session.FM_LOG_SIZE_LIMIT)
         else:

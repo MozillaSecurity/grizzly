@@ -1,7 +1,10 @@
+import glob
 import logging
 import os
+import platform
 import random
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -281,3 +284,34 @@ class GrizzlyReporterTests(TestCase):
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
         with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("GOOD LOG", log_fp.read())
+
+    @unittest.skipIf(not platform.system().lower().startswith("linux"),
+                     "RR only supported on Linux")
+    def test_12(self):
+        "test packaging rr traces"
+        rr_dir = tempfile.mkdtemp(prefix="tst_rr", dir=self.tmpdir)
+        try:
+            subprocess.check_output(["rr", "record", "/bin/echo", "hello world"], env={"_RR_TRACE_DIR": rr_dir})
+        except OSError as exc:
+            self.skipTest("calling rr: %s" % (exc,))
+        self.assertTrue(os.path.islink(os.path.join(rr_dir, "latest-trace")))
+        self.assertTrue(os.path.isdir(os.path.realpath(os.path.join(rr_dir, "latest-trace"))))
+        logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
+        # write logs
+        os.symlink(os.path.realpath(os.path.join(rr_dir, "latest-trace")),
+                   os.path.join(logs, "rr-trace"))
+        with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(logs, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        with open(os.path.join(logs, "log_asan_blah.txt"), "w") as log_fp:
+            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
+        report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
+        reporter = FilesystemReporter(report_path=report_dir)
+        reporter.report(logs, [])
+        report_log_dirs = glob.glob(report_dir + "/*/*_logs/")
+        self.assertEqual(len(report_log_dirs), 1)
+        report_log_dir = report_log_dirs[0]
+        self.assertFalse(os.path.islink(os.path.join(report_log_dir, "rr-trace")))
+        self.assertTrue(os.path.isfile(os.path.join(report_log_dir, "rr.tar.xz")))

@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import time
 import zipfile
@@ -21,11 +22,25 @@ try:
 except ImportError as err:
     _fm_import_error = err
 
+# check if boto is available for S3FuzzManager reporter
+try:
+    import boto3
+    import botocore
+    _boto_import_error = None
+    logging.getLogger("botocore").setLevel(logging.WARNING)
+    logging.getLogger("boto3").setLevel(logging.WARNING)
+    logging.getLogger("s3transfer").setLevel(logging.WARNING)
+except ImportError as err:
+    _boto_import_error = err
+
 import stack_hasher
 
 __all__ = ("FilesystemReporter", "FuzzManagerReporter")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
+
+
+S3_BUCKET = 'grizzly.fuzzing.mozilla.org'
 
 
 log = logging.getLogger("grizzly") # pylint: disable=invalid-name
@@ -146,6 +161,19 @@ class Reporter(object):
         self._prefix = "_".join([self._minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S")])
 
 
+    def _process_rr_trace(self):
+        trace_dir = os.path.join(self._log_path, "rr-trace")
+        if os.path.isdir(trace_dir):
+            log.debug("calling: rr pack %s", trace_dir)
+            subprocess.check_output(["rr", "pack", trace_dir])
+            log.debug("calling: tar cf rr.tar %s", trace_dir)
+            rr_tar = os.path.join(self._log_path, "rr.tar.xz")
+            subprocess.check_call(["tar", "-C", trace_dir, "-caf", rr_tar, "."])
+            os.unlink(trace_dir)
+            return rr_tar
+        return None
+
+
     def _report(self):
         raise NotImplementedError("_report must be implemented in the subclass")
 
@@ -169,6 +197,7 @@ class Reporter(object):
         if not os.path.isdir(self._log_path):
             raise IOError("No such directory %r" % self._log_path)
         self._process_logs()
+        self._process_rr_trace()
         # tails logs before reporting if needed
         if self.log_limit > 0:
             for fname in os.listdir(log_path):
@@ -198,6 +227,8 @@ class Reporter(object):
 
 
 class FilesystemReporter(Reporter):
+
+
     def __init__(self, log_limit=0, report_path=None):
         Reporter.__init__(self, log_limit)
         self.report_path = report_path
@@ -239,6 +270,11 @@ class FuzzManagerReporter(Reporter):
         self.target_binary = target_binary
 
 
+    def _reset(self):
+        Reporter._reset(self)
+        self._extra_metadata = {}
+
+
     @staticmethod
     def sanity_check(bin_file):
         if _fm_import_error is not None:
@@ -264,6 +300,15 @@ class FuzzManagerReporter(Reporter):
                 err_fp.read().decode("utf-8", errors="ignore").splitlines(),
                 ProgramConfiguration.fromBinary(self.target_binary),
                 auxCrashData=aux_data)
+
+
+    def _process_rr_trace(self):
+        # don't report large files to FuzzManager
+        trace_dir = os.path.join(self._log_path, "rr-trace")
+        if os.path.isdir(trace_dir):
+            self._extra_metadata['rr-trace'] = 'ignored'
+            os.unlink(trace_dir)
+        return None
 
 
     def _report(self):
@@ -308,6 +353,7 @@ class FuzzManagerReporter(Reporter):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
+        crash_info.configuration.addMetadata(self._extra_metadata)
 
         # grab screen log
         if os.getenv("WINDOW") is not None:
@@ -334,3 +380,48 @@ class FuzzManagerReporter(Reporter):
         # remove zipfile
         if os.path.isfile(zip_name):
             os.remove(zip_name)
+
+
+class S3FuzzManagerReporter(FuzzManagerReporter):
+
+
+    def _process_rr_trace(self):
+        trace_dir = os.path.join(self._log_path, "rr-trace")
+        if os.path.isdir(trace_dir):
+            # check for existing minor hash in S3
+            s3 = boto3.resource('s3')
+
+            s3_key = "rr-%s.tar.xz" % (self._minor,)
+            s3_url = "http://%s.s3.amazonaws.com/%s" % (S3_BUCKET, s3_key)
+            try:
+                s3.Object(S3_BUCKET, s3_key).load()  # HEAD, doesn't fetch the whole object
+            except botocore.exceptions.ClientError as exc:
+                if exc.response['Error']['Code'] == "404":
+                    # The object does not exist.
+                    pass
+                else:
+                    # Something else has gone wrong.
+                    raise
+            else:
+                # The object already exists.
+                log.info("RR trace exists at %s", s3_url)
+                self._extra_metadata['rr-trace'] = s3_url
+                os.unlink(trace_dir)
+                return s3_url
+
+            # Upload to S3
+            rr_path = Reporter._process_rr_trace(self)
+            s3.meta.client.upload_file(rr_path, S3_BUCKET, s3_key, ExtraArgs={'ACL': 'public-read'})
+            self._extra_metadata['rr-trace'] = s3_url
+            os.remove(rr_path)
+            log.info("RR trace uploaded at %s", s3_url)
+            return s3_url
+
+        return None
+
+
+    @staticmethod
+    def sanity_check(bin_file):
+        if _boto_import_error is not None:
+            raise _boto_import_error # pylint: disable=raising-bad-type
+        FuzzManagerReporter.sanity_check(bin_file)
