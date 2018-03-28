@@ -84,15 +84,15 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("GOOD LOG\n")
             log_fp.write("==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x00000BADF00D")
             log_fp.write(" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T0)\n") # must be 2nd line
-            for _ in range(4): # pad out to 6 lines
-                log_fp.write("filler line\n")
+            for l_no in range(4): # pad out to 6 lines
+                log_fp.write("    #%d blah...\n" % l_no)
         # child log that should be ignored (created when parent crashes)
         with open(os.path.join(self.tmpdir, test_logs[2]), "w") as log_fp:
             log_fp.write("BAD LOG\n")
             log_fp.write("==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000")
             log_fp.write(" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T2)\n") # must be 2nd line
-            for _ in range(4): # pad out to 6 lines
-                log_fp.write("filler line\n")
+            for l_no in range(4): # pad out to 6 lines
+                log_fp.write("    #%d blah...\n" % l_no)
         with open(os.path.join(self.tmpdir, "log_mindump_blah.txt"), "w") as log_fp:
             log_fp.write("minidump log")
         with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
@@ -258,25 +258,33 @@ class GrizzlyReporterTests(TestCase):
         "test prioritizing *San logs"
         asan_prefix = "log_asan.txt"
         test_logs = list()
-        for _ in range(3):
+        for _ in range(5):
             test_logs.append(".".join([asan_prefix, str(random.randint(1000, 4000))]))
-        # crash on another thread
+        # crash
         with open(os.path.join(self.tmpdir, test_logs[0]), "w") as log_fp:
             log_fp.write("GOOD LOG\n")
             log_fp.write("==1942==ERROR: AddressSanitizer: heap-use-after-free on ... blah\n") # must be 2nd line
-            for _ in range(4): # pad out to 6 lines
-                log_fp.write("filler line\n")
-        # child log that should be ignored (created when parent crashes)
+            for l_no in range(4): # pad out to 6 lines
+                log_fp.write("    #%d blah...\n" % l_no)
+        # crash missing trace
         with open(os.path.join(self.tmpdir, test_logs[1]), "w") as log_fp:
             log_fp.write("BAD LOG\n")
-            log_fp.write("==1184==ERROR: AddressSanitizer: BUS on ... blah\n") # must be 2nd line
-            for _ in range(4): # pad out to 6 lines
-                log_fp.write("filler line\n")
+            log_fp.write("==1984==ERROR: AddressSanitizer: SEGV on ... blah\n") # must be 2nd line
+            log_fp.write("missing trace...\n")
+        # child log that should be ignored (created when parent crashes)
         with open(os.path.join(self.tmpdir, test_logs[2]), "w") as log_fp:
             log_fp.write("BAD LOG\n")
+            log_fp.write("==1184==ERROR: AddressSanitizer: BUS on ... blah\n") # must be 2nd line
+            for l_no in range(4): # pad out to 6 lines
+                log_fp.write("    #%d blah...\n" % l_no)
+        with open(os.path.join(self.tmpdir, test_logs[3]), "w") as log_fp:
+            log_fp.write("BAD LOG\n")
             log_fp.write("==9482==ERROR: AddressSanitizer: stack-overflow on ...\n") # must be 2nd line
-            for _ in range(4): # pad out to 6 lines
-                log_fp.write("filler line\n")
+            for l_no in range(4): # pad out to 6 lines
+                log_fp.write("    #%d blah...\n" % l_no)
+        with open(os.path.join(self.tmpdir, test_logs[4]), "w") as log_fp:
+            log_fp.write("BAD LOG\n")
+            log_fp.write("ERROR: Failed to mmap\n") # must be 2nd line
         log_map = Reporter.select_logs(self.tmpdir)
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
         with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:

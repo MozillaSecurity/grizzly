@@ -64,7 +64,7 @@ class Reporter(object):
 
         # this is a list of *San error reports to prioritize
         # ASan reports not included below (deprioritized):
-        # stack-overflow, BUS, failed to allocate
+        # stack-overflow, BUS, failed to allocate, detected memory leaks
         interesting_sanitizer_tokens = (
             "use-after-", "-buffer-overflow on", ": SEGV on ", "access-violation on ",
             "negative-size-param", "attempting free on ", "memcpy-param-overlap")
@@ -81,12 +81,14 @@ class Reporter(object):
                 # check for e10s forced crash
                 if re_e10s_forced.search(log_data) is not None:
                     continue
-                logs["aux"] = fname
-                if any(x in log_data for x in interesting_sanitizer_tokens):
-                    break  # this is the likely cause of the crash
-                continue  # probably the most interesting but lets keep looking
+                # make sure there is something that looks like a stack frame in the log
+                if "#0 " in log_data:
+                    logs["aux"] = fname
+                    if any(x in log_data for x in interesting_sanitizer_tokens):
+                        break  # this is the likely cause of the crash
+                    continue  # probably the most interesting but lets keep looking
 
-            # UBSan error
+            # UBSan error (non-ASan builds)
             if ": runtime error: " in log_data:
                 logs["aux"] = fname
 
@@ -290,6 +292,7 @@ class FuzzManagerReporter(Reporter):
                     "_grizzly_seen_count": 0,
                     "frequent": False,
                     "shortDescription": crash_info.createShortSignature()}
+            assert cache_sig_file is not None, "Failed to create signature"
             # limit the number of times we report per cycle
             cache_metadata["_grizzly_seen_count"] += 1
             if cache_metadata["_grizzly_seen_count"] >= self.MAX_REPORTS:
