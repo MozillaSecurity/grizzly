@@ -1,12 +1,8 @@
-import logging
-import os
 import sys
 import unittest
 
 from stack_hasher import Stack, StackFrame
 
-logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
-log = logging.getLogger("grz_report_test")
 
 class TestCase(unittest.TestCase):
 
@@ -27,7 +23,7 @@ class StackTests(TestCase):
         self.assertIsNone(stack.minor)
         self.assertIsNone(stack.major)
         self.assertTrue(isinstance(stack.frames, list))
-        self.assertGreater(stack._major_depth, 0)
+        self.assertGreater(stack._major_depth, 0)  # pylint: disable=protected-access
 
     def test_02(self):
         "test creating a Stack with 1 frame"
@@ -103,7 +99,7 @@ class StackTests(TestCase):
             "\n" \
             "AddressSanitizer can not provide additional info.\n" \
             "SUMMARY: AddressSanitizer: SEGV /aa/bb/cc/dd/ee/ff/asdf.cpp:5533:14 in test::test::test(nsIWa*, nsICa*)\n" \
-            "==7854==ABORTI\nNG"
+            "==7854==ABORTING\n"
         stack = Stack.from_text(input_txt)
         self.assertEqual(len(stack.frames), 6)
         self.assertNotEqual(stack.minor, stack.major)
@@ -193,6 +189,7 @@ class StackFrameTests(TestCase):
         self.assertIsNone(StackFrame.from_line("###"))
         self.assertIsNone(StackFrame.from_line("123"))
         self.assertIsNone(StackFrame.from_line("test()"))
+        self.assertIsNone(StackFrame.from_line("|||"))
 
 
 class ASanStackFrameSupportTests(TestCase):
@@ -241,7 +238,7 @@ class ASanStackFrameSupportTests(TestCase):
         self.assertEqual(frame.offset, "356")
         self.assertEqual(frame.mode, StackFrame.MODE_ASAN)
 
-    def test_05(self):
+    def test_06(self):
         "test creating a StackFrame from a useless frame"
         frame = StackFrame.from_line("    #2 0x7ffffffff  (<unknown module>)")
         self.assertEqual(frame.stack_line, "2")
@@ -249,6 +246,7 @@ class ASanStackFrameSupportTests(TestCase):
         self.assertEqual(frame.location, "<unknown module>")
         self.assertIsNone(frame.offset)
         self.assertEqual(frame.mode, StackFrame.MODE_ASAN)
+
 
 class GDBStackFrameSupportTests(TestCase):
     def test_01(self):
@@ -277,6 +275,26 @@ class GDBStackFrameSupportTests(TestCase):
         self.assertEqual(frame.location, "test.c")
         self.assertEqual(frame.offset, "5")
         self.assertEqual(frame.mode, StackFrame.MODE_GDB)
+
+
+class MinidumpStackFrameSupportTests(TestCase):
+    def test_01(self):
+        "test creating a StackFrame from a Minidump line with symbols"
+        frame = StackFrame.from_line("0|2|libtest|main|hg:c.a.org/m-c:a/b/file.cpp:5bf50|114|0x3a")
+        self.assertEqual(frame.stack_line, "2")
+        self.assertEqual(frame.function, "main")
+        self.assertEqual(frame.location, "file.cpp")
+        self.assertEqual(frame.offset, "114")
+        self.assertEqual(frame.mode, StackFrame.MODE_MINIDUMP)
+
+    def test_02(self):
+        "test creating a StackFrame from a Minidump line without symbols"
+        frame = StackFrame.from_line("9|42|libpthread-2.26.so||||0x10588")
+        self.assertEqual(frame.stack_line, "42")
+        self.assertIsNone(frame.function)
+        self.assertEqual(frame.location, "libpthread-2.26.so")
+        self.assertEqual(frame.offset, "0x10588")
+        self.assertEqual(frame.mode, StackFrame.MODE_MINIDUMP)
 
     # windbg support tests
     #print parse_line("006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c")

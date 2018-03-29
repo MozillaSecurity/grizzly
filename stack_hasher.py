@@ -28,6 +28,7 @@ MAJOR_DEPTH = 5
 class StackFrame(object):
     MODE_ASAN = 0
     MODE_GDB = 1
+    MODE_MINIDUMP = 2
 
     _re_func_name = re.compile(r"(?P<func>.+?)[\(|\s|\<]{1}")
     # regexs for supported stack trace lines
@@ -73,6 +74,11 @@ class StackFrame(object):
 
         if parse_mode is None or parse_mode == StackFrame.MODE_GDB:
             frame_info = cls._parse_gdb(input_line)
+            if frame_info is not None:
+                return StackFrame(**frame_info)
+
+        if parse_mode is None or parse_mode == StackFrame.MODE_MINIDUMP:
+            frame_info = cls._parse_minidump(input_line)
             if frame_info is not None:
                 return StackFrame(**frame_info)
 
@@ -156,6 +162,31 @@ class StackFrame(object):
             except ValueError:
                 pass
             frame["location"] = os.path.basename(input_line).split()[0]
+
+        return frame
+
+    @staticmethod
+    def _parse_minidump(input_line):
+        try:
+            frame = {"function":None, "location":None, "mode":StackFrame.MODE_MINIDUMP, "offset":None}
+            tid, frame["stack_line"], lib_name, func_name, file_name, line_no, offset = input_line.split("|")
+            if int(tid) < 0 or int(frame["stack_line"]) < 0:
+                return None  # invalid match
+        except ValueError:
+            return None  # no match
+
+        if func_name:
+            frame["function"] = func_name.strip()
+
+        if file_name:
+            frame["location"] = os.path.basename(file_name.split(":")[-2])
+        elif lib_name:
+            frame["location"] = lib_name.strip()
+
+        if line_no:
+            frame["offset"] = line_no.strip()
+        elif offset:
+            frame["offset"] = offset.strip()
 
         return frame
 
