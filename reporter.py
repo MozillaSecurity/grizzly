@@ -268,6 +268,20 @@ class FuzzManagerReporter(Reporter):
                 auxCrashData=aux_data)
 
 
+    def _ignored(self):
+        # This is here to prevent reporting stack-less crashes
+        # that were caused by system OOM or bogus other crashes
+        if "aux" in self._map and self._map["aux"]:
+            log_file = os.path.join(self._log_path, self._map["aux"])
+        else:
+            log_file = os.path.join(self._log_path, self._map["stderr"])
+        with open(log_file, "rb") as log_fp:
+            log_data = log_fp.read().decode("utf-8", errors="ignore")
+        if "ERROR: Failed to mmap" in log_data and "#0 " not in log_data:
+            return True  # Likely a system OOM
+        return False
+
+
     def _report(self):
         # prepare data for submission as CrashInfo
         crash_info = self._create_crash_info()
@@ -292,6 +306,8 @@ class FuzzManagerReporter(Reporter):
                     "_grizzly_seen_count": 0,
                     "frequent": False,
                     "shortDescription": crash_info.createShortSignature()}
+            if cache_sig_file is None and self._ignored():
+                return
             assert cache_sig_file is not None, "Failed to create signature"
             # limit the number of times we report per cycle
             cache_metadata["_grizzly_seen_count"] += 1
