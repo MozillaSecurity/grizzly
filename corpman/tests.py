@@ -377,6 +377,25 @@ class CorpusManagerTests(unittest.TestCase):
             os.environ.pop("ENVAR_NOT_REQ", None)
             os.environ.pop("ENVAR_REQ", None)
 
+    def test_19(self):
+        "test *San suppression files are collected"
+        corp_dir = tempfile.mkdtemp(prefix="crp_", dir=self.tdir)
+        tc_dir = tempfile.mkdtemp(prefix="tc_", dir=self.tdir)
+        supp_file = os.path.join(self.tdir, "supp_file.txt")
+        with open(supp_file, "w") as fp:
+            fp.write("# test\n")
+        with open(os.path.join(corp_dir, "template_01.bin"), "wb") as fp:
+            fp.write("template_data_01")
+        try:
+            os.environ["ASAN_OPTIONS"] = "blah=1:suppressions=%s:foo=2" % supp_file
+            cm = SimpleCorpman(os.path.join(corp_dir, "template_01.bin"))
+            self.addCleanup(cm.cleanup)
+            tc = cm.generate()
+        finally:
+            os.environ.pop("ASAN_OPTIONS", None)
+        tc.dump(tc_dir, include_details=True)
+        self.assertTrue(os.path.isfile(os.path.join(tc_dir, "asan.supp")))
+
 
 class TestCaseTests(unittest.TestCase):
     def setUp(self):

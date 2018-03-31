@@ -175,6 +175,7 @@ class CorpusManager(object):
         if not os.path.isdir(path):
             self._corpus_path = os.path.dirname(self._corpus_path)
         self._environ = dict() # recorded environment variables
+        self._environ_files = dict() # collection of files that should be added to the testcase
         self._fuzzer = None # meant for fuzzer specific data
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
@@ -186,6 +187,7 @@ class CorpusManager(object):
 
         self._scan_input(path, accepted_extensions)
         self._init_fuzzer()
+        self._add_suppressions()
         if self.single_pass and self.input_files:
             self.input_files.sort(reverse=True)
 
@@ -205,6 +207,22 @@ class CorpusManager(object):
         if not os.path.isdir(target_path):
             raise IOError("%r does not exist")
         self._srv_map["include"][url_path] = os.path.abspath(target_path)
+
+
+    def _add_suppressions(self):
+        # Add suppression files to environment files
+        for san_opts in [san_opt for san_opt in os.environ if ("SAN_OPTIONS" in san_opt)]:
+            env_var = os.environ.get(san_opts)
+            if not env_var or "suppressions" not in env_var:
+                continue
+            for opt in env_var.split(":"):
+                if not opt.startswith("suppressions"):
+                    continue
+                supp_file = opt.split("=")[-1]
+                if os.path.isfile(supp_file):
+                    fname = "%s.supp" % san_opts.split("_")[0].lower()
+                    self._environ_files[fname] = supp_file
+                    break
 
 
     def _select_active_input(self):
@@ -319,9 +337,13 @@ class CorpusManager(object):
             input_fname=self._active_input.file_name)
 
         # add environment variable info to test case
+        # TODO: make this more like env_files
         for key, (value, _) in self._environ.items():
             if key in os.environ:
                 test.add_environ_var(key, value)
+
+        for fname, fpath in self._environ_files.items():
+            test.add_environ_file(fpath, fname)
 
         # reset redirect map
         self._srv_map["redirect"] = {}
