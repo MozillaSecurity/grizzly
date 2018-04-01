@@ -169,6 +169,28 @@ class StackTests(TestCase):
         self.assertNotEqual(stack.minor, stack.major)
         self.assertEqual(stack.frames[0].mode, StackFrame.MODE_ASAN)
 
+    def test_12(self):
+        "test"
+        input_txt = "" \
+            "==4754== \n" \
+            "==4754== Use of uninitialised value of size 8\n" \
+            "==4754==    at 0x45C6C0: FooBar (decode.c:964)\n" \
+            "==4754==    by 0x462A20: main (test.cc:71)\n" \
+            "==4754==  Uninitialised value was created by a heap allocation\n" \
+            "==4754==    at 0x4C2AB80: malloc (in /usr/lib/test-linux.so)\n" \
+            "==4754==    by 0x459455: FooBar (decode.c:757)\n" \
+            "==4754==    by 0x462A20: main (test.cc:71)\n" \
+            "==4754== \n"
+        stack = Stack.from_text(input_txt)
+        self.assertEqual(len(stack.frames), 5)
+        self.assertEqual(stack.frames[0].location, "decode.c")
+        self.assertEqual(stack.frames[1].location, "test.cc")
+        self.assertEqual(stack.frames[2].function, "malloc")
+        self.assertEqual(stack.frames[3].function, "FooBar")
+        self.assertEqual(stack.frames[4].function, "main")
+        self.assertNotEqual(stack.minor, stack.major)
+        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_VALGRIND)
+
 
 class StackFrameTests(TestCase):
 
@@ -190,6 +212,8 @@ class StackFrameTests(TestCase):
         self.assertIsNone(StackFrame.from_line("123"))
         self.assertIsNone(StackFrame.from_line("test()"))
         self.assertIsNone(StackFrame.from_line("|||"))
+        self.assertIsNone(StackFrame.from_line("==123=="))
+        self.assertIsNone(StackFrame.from_line("==1== by 0x0: a ()"))
 
 
 class ASanStackFrameSupportTests(TestCase):
@@ -295,6 +319,48 @@ class MinidumpStackFrameSupportTests(TestCase):
         self.assertEqual(frame.location, "libpthread-2.26.so")
         self.assertEqual(frame.offset, "0x10588")
         self.assertEqual(frame.mode, StackFrame.MODE_MINIDUMP)
+
+
+class ValgringStackFrameSupportTests(TestCase):
+    def test_01(self):
+        frame = StackFrame.from_line("==4754==    at 0x45C6C0: FuncName (decode.c:123)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "FuncName")
+        self.assertEqual(frame.location, "decode.c")
+        self.assertEqual(frame.offset, "123")
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
+
+    def test_02(self):
+        frame = StackFrame.from_line("==4754==    by 0x462A20: main (foo.cc:71)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "main")
+        self.assertEqual(frame.location, "foo.cc")
+        self.assertEqual(frame.offset, "71")
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
+
+    def test_03(self):
+        frame = StackFrame.from_line("==4754==    at 0x4C2AB80: malloc (in /usr/lib/blah-linux.so)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "malloc")
+        self.assertEqual(frame.location, "blah-linux.so")
+        self.assertIsNone(frame.offset)
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
+
+    def test_04(self):
+        frame = StackFrame.from_line("==2342==    by 0x4E3E71: (anon ns)::test(b2::a&, int) (main.cpp:49)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "(anon ns)::test(b2::a&, int)")
+        self.assertEqual(frame.location, "main.cpp")
+        self.assertEqual(frame.offset, "49")
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
+
+    def test_05(self):
+        frame = StackFrame.from_line("==2342==    at 0xF00D: Foo::Foo(char *, int, bool) (File.h:37)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "Foo::Foo(char *, int, bool)")
+        self.assertEqual(frame.location, "File.h")
+        self.assertEqual(frame.offset, "37")
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
 
     # windbg support tests
     #print parse_line("006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c")
