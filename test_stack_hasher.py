@@ -1,12 +1,8 @@
-import logging
-import os
 import sys
 import unittest
 
 from stack_hasher import Stack, StackFrame
 
-logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
-log = logging.getLogger("grz_report_test")
 
 class TestCase(unittest.TestCase):
 
@@ -27,7 +23,7 @@ class StackTests(TestCase):
         self.assertIsNone(stack.minor)
         self.assertIsNone(stack.major)
         self.assertTrue(isinstance(stack.frames, list))
-        self.assertGreater(stack._major_depth, 0)
+        self.assertGreater(stack._major_depth, 0)  # pylint: disable=protected-access
 
     def test_02(self):
         "test creating a Stack with 1 frame"
@@ -103,11 +99,11 @@ class StackTests(TestCase):
             "\n" \
             "AddressSanitizer can not provide additional info.\n" \
             "SUMMARY: AddressSanitizer: SEGV /aa/bb/cc/dd/ee/ff/asdf.cpp:5533:14 in test::test::test(nsIWa*, nsICa*)\n" \
-            "==7854==ABORTI\nNG"
+            "==7854==ABORTING\n"
         stack = Stack.from_text(input_txt)
-        self.assertEqual(len(stack.frames), 5)
+        self.assertEqual(len(stack.frames), 6)
         self.assertNotEqual(stack.minor, stack.major)
-        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_ASAN_SYMS)
+        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_ASAN)
 
     def test_07(self):
         "test creating a Stack by calling from_text() with mixed frames modes"
@@ -120,13 +116,7 @@ class StackTests(TestCase):
         stack = Stack.from_text(input_txt)
         self.assertEqual(len(stack.frames), 4)
         self.assertNotEqual(stack.minor, stack.major)
-        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_ASAN_SYMS)
-
-    #0 0x90000223  (/usr/swr_a.so+0x231223)
-    #1 0x00000447  (/usr/as.so.1+0x42447)
-    #2 0x000098fc in fSasd /src/obj-firefox/dist/include/something.h:102:9
-    #3 0x000098fc in mz::as::asdf::SB() /src/Blah.cpp:655
-
+        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_ASAN)
 
     def test_08(self):
         "test creating a Stack by calling from_text() with text containing 2 stacks"
@@ -140,7 +130,7 @@ class StackTests(TestCase):
         self.assertEqual(stack.frames[0].function, "good::frame0")
         self.assertEqual(stack.frames[1].function, "good::frame1")
         self.assertNotEqual(stack.minor, stack.major)
-        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_ASAN_SYMS)
+        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_ASAN)
 
     def test_09(self):
         "test creating a Stack by calling from_text() with empty string"
@@ -148,6 +138,58 @@ class StackTests(TestCase):
         self.assertEqual(len(stack.frames), 0)
         self.assertIsNone(stack.minor)
         self.assertEqual(stack.minor, stack.major)
+
+    def test_10(self):
+        "test creating a Stack from an ASan trace with an unsymbolized lib"
+        input_txt = "" \
+            "    #0 0x4c7702 in realloc asan/asan_malloc_linux.cc:107:3\n" \
+            "    #1 0x7f6d056ce7fc  (/lib/x86_64-linux-gnu/libdbus-1.so.3+0x2d7fc)\n" \
+            "    #2 0x7ffffffff  (<unknown module>)\n"
+        stack = Stack.from_text(input_txt)
+        self.assertEqual(len(stack.frames), 3)
+        self.assertEqual(stack.frames[0].location, "asan_malloc_linux.cc")
+        self.assertEqual(stack.frames[1].location, "libdbus-1.so.3")
+        self.assertEqual(stack.frames[2].location, "<unknown module>")
+        self.assertNotEqual(stack.minor, stack.major)
+        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_ASAN)
+
+    def test_11(self):
+        "test creating a Stack from an ASan trace with an unsymbolized lib"
+        input_txt = "" \
+            "    #0 0x90000223  (/usr/swr_a.so+0x231223)\n" \
+            "    #1 0x00000447  (/usr/as.so.1+0x42447)\n" \
+            "    #2 0x000098fc in fSasd /src/obj-firefox/dist/include/something.h:102:9\n" \
+            "    #3 0x000098fc in mz::as::asdf::SB() /src/Blah.cpp:655\n"
+        stack = Stack.from_text(input_txt)
+        self.assertEqual(len(stack.frames), 4)
+        self.assertEqual(stack.frames[0].location, "swr_a.so")
+        self.assertEqual(stack.frames[1].location, "as.so.1")
+        self.assertEqual(stack.frames[2].function, "fSasd")
+        self.assertEqual(stack.frames[3].function, "mz::as::asdf::SB")
+        self.assertNotEqual(stack.minor, stack.major)
+        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_ASAN)
+
+    def test_12(self):
+        "test"
+        input_txt = "" \
+            "==4754== \n" \
+            "==4754== Use of uninitialised value of size 8\n" \
+            "==4754==    at 0x45C6C0: FooBar (decode.c:964)\n" \
+            "==4754==    by 0x462A20: main (test.cc:71)\n" \
+            "==4754==  Uninitialised value was created by a heap allocation\n" \
+            "==4754==    at 0x4C2AB80: malloc (in /usr/lib/test-linux.so)\n" \
+            "==4754==    by 0x459455: FooBar (decode.c:757)\n" \
+            "==4754==    by 0x462A20: main (test.cc:71)\n" \
+            "==4754== \n"
+        stack = Stack.from_text(input_txt)
+        self.assertEqual(len(stack.frames), 5)
+        self.assertEqual(stack.frames[0].location, "decode.c")
+        self.assertEqual(stack.frames[1].location, "test.cc")
+        self.assertEqual(stack.frames[2].function, "malloc")
+        self.assertEqual(stack.frames[3].function, "FooBar")
+        self.assertEqual(stack.frames[4].function, "main")
+        self.assertNotEqual(stack.minor, stack.major)
+        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_VALGRIND)
 
 
 class StackFrameTests(TestCase):
@@ -169,6 +211,9 @@ class StackFrameTests(TestCase):
         self.assertIsNone(StackFrame.from_line("###"))
         self.assertIsNone(StackFrame.from_line("123"))
         self.assertIsNone(StackFrame.from_line("test()"))
+        self.assertIsNone(StackFrame.from_line("|||"))
+        self.assertIsNone(StackFrame.from_line("==123=="))
+        self.assertIsNone(StackFrame.from_line("==1== by 0x0: a ()"))
 
 
 class ASanStackFrameSupportTests(TestCase):
@@ -179,7 +224,7 @@ class ASanStackFrameSupportTests(TestCase):
         self.assertEqual(frame.function, "Abort")
         self.assertEqual(frame.location, "nsDebugImpl.cpp")
         self.assertEqual(frame.offset, "472")
-        self.assertEqual(frame.mode, StackFrame.MODE_ASAN_SYMS)
+        self.assertEqual(frame.mode, StackFrame.MODE_ASAN)
 
     def test_02(self):
         "test creating a StackFrame from an ASan line with symbols"
@@ -188,7 +233,7 @@ class ASanStackFrameSupportTests(TestCase):
         self.assertEqual(frame.function, "main")
         self.assertEqual(frame.location, "nsBrowserApp.cpp")
         self.assertEqual(frame.offset, "399")
-        self.assertEqual(frame.mode, StackFrame.MODE_ASAN_SYMS)
+        self.assertEqual(frame.mode, StackFrame.MODE_ASAN)
 
     def test_03(self):
         "test creating a StackFrame from an ASan line without symbols"
@@ -197,7 +242,7 @@ class ASanStackFrameSupportTests(TestCase):
         self.assertIsNone(frame.function)
         self.assertEqual(frame.location, "libpthread.so.0")
         self.assertEqual(frame.offset, "0x1033f")
-        self.assertEqual(frame.mode, StackFrame.MODE_ASAN_NO_SYMS)
+        self.assertEqual(frame.mode, StackFrame.MODE_ASAN)
 
     def test_04(self):
         "test creating a StackFrame from an ASan line with symbols"
@@ -206,7 +251,25 @@ class ASanStackFrameSupportTests(TestCase):
         self.assertEqual(frame.function, "start_thread")
         self.assertEqual(frame.location, "libpthread.so.0")
         self.assertEqual(frame.offset, "0x8181")
-        self.assertEqual(frame.mode, StackFrame.MODE_ASAN_SYMS)
+        self.assertEqual(frame.mode, StackFrame.MODE_ASAN)
+
+    def test_05(self):
+        "test creating a StackFrame from an ASan line with angle brackets"
+        frame = StackFrame.from_line("    #123 0x7f30afea9148 in Call<nsBlah *> /a/b.cpp:356:50")
+        self.assertEqual(frame.stack_line, "123")
+        self.assertEqual(frame.function, "Call")
+        self.assertEqual(frame.location, "b.cpp")
+        self.assertEqual(frame.offset, "356")
+        self.assertEqual(frame.mode, StackFrame.MODE_ASAN)
+
+    def test_06(self):
+        "test creating a StackFrame from a useless frame"
+        frame = StackFrame.from_line("    #2 0x7ffffffff  (<unknown module>)")
+        self.assertEqual(frame.stack_line, "2")
+        self.assertIsNone(frame.function)
+        self.assertEqual(frame.location, "<unknown module>")
+        self.assertIsNone(frame.offset)
+        self.assertEqual(frame.mode, StackFrame.MODE_ASAN)
 
 
 class GDBStackFrameSupportTests(TestCase):
@@ -236,6 +299,68 @@ class GDBStackFrameSupportTests(TestCase):
         self.assertEqual(frame.location, "test.c")
         self.assertEqual(frame.offset, "5")
         self.assertEqual(frame.mode, StackFrame.MODE_GDB)
+
+
+class MinidumpStackFrameSupportTests(TestCase):
+    def test_01(self):
+        "test creating a StackFrame from a Minidump line with symbols"
+        frame = StackFrame.from_line("0|2|libtest|main|hg:c.a.org/m-c:a/b/file.cpp:5bf50|114|0x3a")
+        self.assertEqual(frame.stack_line, "2")
+        self.assertEqual(frame.function, "main")
+        self.assertEqual(frame.location, "file.cpp")
+        self.assertEqual(frame.offset, "114")
+        self.assertEqual(frame.mode, StackFrame.MODE_MINIDUMP)
+
+    def test_02(self):
+        "test creating a StackFrame from a Minidump line without symbols"
+        frame = StackFrame.from_line("9|42|libpthread-2.26.so||||0x10588")
+        self.assertEqual(frame.stack_line, "42")
+        self.assertIsNone(frame.function)
+        self.assertEqual(frame.location, "libpthread-2.26.so")
+        self.assertEqual(frame.offset, "0x10588")
+        self.assertEqual(frame.mode, StackFrame.MODE_MINIDUMP)
+
+
+class ValgringStackFrameSupportTests(TestCase):
+    def test_01(self):
+        frame = StackFrame.from_line("==4754==    at 0x45C6C0: FuncName (decode.c:123)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "FuncName")
+        self.assertEqual(frame.location, "decode.c")
+        self.assertEqual(frame.offset, "123")
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
+
+    def test_02(self):
+        frame = StackFrame.from_line("==4754==    by 0x462A20: main (foo.cc:71)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "main")
+        self.assertEqual(frame.location, "foo.cc")
+        self.assertEqual(frame.offset, "71")
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
+
+    def test_03(self):
+        frame = StackFrame.from_line("==4754==    at 0x4C2AB80: malloc (in /usr/lib/blah-linux.so)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "malloc")
+        self.assertEqual(frame.location, "blah-linux.so")
+        self.assertIsNone(frame.offset)
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
+
+    def test_04(self):
+        frame = StackFrame.from_line("==2342==    by 0x4E3E71: (anon ns)::test(b2::a&, int) (main.cpp:49)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "(anon ns)::test(b2::a&, int)")
+        self.assertEqual(frame.location, "main.cpp")
+        self.assertEqual(frame.offset, "49")
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
+
+    def test_05(self):
+        frame = StackFrame.from_line("==2342==    at 0xF00D: Foo::Foo(char *, int, bool) (File.h:37)")
+        self.assertIsNone(frame.stack_line)
+        self.assertEqual(frame.function, "Foo::Foo(char *, int, bool)")
+        self.assertEqual(frame.location, "File.h")
+        self.assertEqual(frame.offset, "37")
+        self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
 
     # windbg support tests
     #print parse_line("006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c")

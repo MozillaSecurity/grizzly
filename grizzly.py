@@ -393,7 +393,7 @@ class Session(object):
             # use Sapphire to serve the most recent test case
             server_status, files_served = self.server.serve_path(
                 self.wwwdir,
-                continue_cb=self.target.appears_healthy,
+                continue_cb=self.target.is_healthy,
                 optional_files=current_test.get_optional())
 
             # remove test case working directory
@@ -438,16 +438,10 @@ class Session(object):
                 else:
                     log.debug("failure detected")
                     failure_detected = True
-            elif not self.target.appears_healthy():
+            elif not self.target.is_healthy():
+                # this should be e10s only
                 failure_detected = True
-                wait_end = time.time()
-                if server_status != sapphire.SERVED_TIMEOUT:
-                    wait_end += 5  # for non timeout cases wait for logs to dump
                 log.info("Browser is alive but has crash reports. Terminating...")
-                while self.target.is_running():
-                    time.sleep(0.25)
-                    if time.time() > wait_end:
-                        break
                 self.target.close()
             elif server_status == sapphire.SERVED_TIMEOUT:
                 log.debug("timeout detected")

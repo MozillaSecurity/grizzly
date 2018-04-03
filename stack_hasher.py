@@ -26,16 +26,18 @@ log = logging.getLogger("stack_hasher")  # pylint: disable=invalid-name
 MAJOR_DEPTH = 5
 
 class StackFrame(object):
-    MODE_ASAN_SYMS = 0
-    MODE_ASAN_NO_SYMS = 1
-    MODE_GDB = 2
+    MODE_ASAN = 0
+    MODE_GDB = 1
+    MODE_MINIDUMP = 2
+    MODE_VALGRIND = 3
 
-    _re_func_name = re.compile(r"(?P<func>.+?)[\(|\s]{1}")
+    _re_func_name = re.compile(r"(?P<func>.+?)[\(|\s|\<]{1}")
     # regexs for supported stack trace lines
     _re_asan_w_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\sin\s(?P<line>.+)")
-    _re_asan_wo_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\s+\((?P<line>.+\+0x[0-9a-f]+)\)")
+    _re_asan_wo_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\s+\((?P<line>.+?)(\+(?P<off>0x[0-9a-f]+))?\)")
     _re_gdb = re.compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
-    # TODO: minidumps, valgrind
+    _re_valgrind = re.compile(r"^==\d+==\s+(at|by)\s+0x[0-9A-F]+\:\s+(?P<func>.+?)\s+\((?P<line>.+)\)")
+    # TODO: rust? winddbg?
     #_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
 
     def __init__(self, function=None, location=None, mode=None, offset=None, stack_line=None):
@@ -64,18 +66,26 @@ class StackFrame(object):
     def from_line(cls, input_line, parse_mode=None):
         assert "\n" not in input_line, "Input contains unexpected new line(s)"
         # try to match symbolized ASan output line
-        if parse_mode is None or parse_mode == StackFrame.MODE_ASAN_SYMS:
+        if parse_mode is None or parse_mode == StackFrame.MODE_ASAN:
             frame_info = cls._parse_asan_with_syms(input_line)
             if frame_info is not None:
                 return StackFrame(**frame_info)
-
-        if parse_mode is None or parse_mode == StackFrame.MODE_ASAN_NO_SYMS:
             frame_info = cls._parse_asan_wo_syms(input_line)
             if frame_info is not None:
                 return StackFrame(**frame_info)
 
         if parse_mode is None or parse_mode == StackFrame.MODE_GDB:
             frame_info = cls._parse_gdb(input_line)
+            if frame_info is not None:
+                return StackFrame(**frame_info)
+
+        if parse_mode is None or parse_mode == StackFrame.MODE_MINIDUMP:
+            frame_info = cls._parse_minidump(input_line)
+            if frame_info is not None:
+                return StackFrame(**frame_info)
+
+        if parse_mode is None or parse_mode == StackFrame.MODE_VALGRIND:
+            frame_info = cls._parse_valgrind(input_line)
             if frame_info is not None:
                 return StackFrame(**frame_info)
 
@@ -90,7 +100,7 @@ class StackFrame(object):
         if m is None:
             return None  # no match
 
-        frame = {"function":None, "location":None, "mode":StackFrame.MODE_ASAN_SYMS, "offset":None}
+        frame = {"function":None, "location":None, "mode":StackFrame.MODE_ASAN, "offset":None}
         input_line = m.group("line")
         frame["stack_line"] = m.group("num")
 
@@ -118,15 +128,15 @@ class StackFrame(object):
         if m is None:
             return None  # no match
 
-        frame = {"function":None, "mode":StackFrame.MODE_ASAN_NO_SYMS, "offset":None}
+        frame = {"function":None, "mode":StackFrame.MODE_ASAN, "offset":None}
         frame["stack_line"] = m.group("num")
         input_line = m.group("line")
-
+        if input_line:
+            frame["location"] = os.path.basename(input_line)
         # find location (binary) and offset
-        input_line = input_line.split()[-1].split("+")
-        frame["location"] = os.path.basename(input_line[0])
-        if len(input_line) > 1:
-            frame["offset"] = input_line[-1]
+        offset = m.group("off")
+        if offset:
+            frame["offset"] = offset
 
         return frame
 
@@ -160,6 +170,57 @@ class StackFrame(object):
                 pass
             frame["location"] = os.path.basename(input_line).split()[0]
 
+        return frame
+
+
+    @staticmethod
+    def _parse_minidump(input_line):
+        try:
+            frame = {"function":None, "location":None, "mode":StackFrame.MODE_MINIDUMP, "offset":None}
+            tid, frame["stack_line"], lib_name, func_name, file_name, line_no, offset = input_line.split("|")
+            if int(tid) < 0 or int(frame["stack_line"]) < 0:
+                return None  # invalid match
+        except ValueError:
+            return None  # no match
+
+        if func_name:
+            frame["function"] = func_name.strip()
+
+        if file_name:
+            frame["location"] = os.path.basename(file_name.split(":")[-2])
+        elif lib_name:
+            frame["location"] = lib_name.strip()
+
+        if line_no:
+            frame["offset"] = line_no.strip()
+        elif offset:
+            frame["offset"] = offset.strip()
+
+        return frame
+
+    @staticmethod
+    def _parse_valgrind(input_line):
+        if "== " not in input_line:
+            return None  # no match
+        m = StackFrame._re_valgrind.match(input_line)
+        if m is None:
+            return None
+        frame = {"location":None, "mode":StackFrame.MODE_VALGRIND, "offset":None, "stack_line":None}
+        frame["function"] = m.group("func")
+        input_line = m.group("line")
+        if input_line is None:
+            return None  # this should not happen
+        try:
+            frame["location"], frame["offset"] = input_line.split(":")
+            frame["location"] = frame["location"].strip()
+        except ValueError:
+            # trim anything from the beginning we might have missed
+            frame["location"] = input_line.rsplit("(")[-1]
+            if frame["location"].startswith("in "):
+                frame["location"] = input_line[3:]
+            frame["location"] = os.path.basename(frame["location"]).strip()
+        if not frame["location"]:
+            return None
         return frame
 
 
@@ -233,21 +294,24 @@ class Stack(object):
             elif parse_mode != frame.mode:
                 continue  # don't mix parse modes!
 
-            stack_line = int(frame.stack_line)
-            # check if we've found a different stack in the data
-            if prev_line is not None and prev_line <= stack_line:
-                break
-            frames.insert(0, frame)
-            if stack_line < 1:
-                break
-            prev_line = stack_line
+            if frame.stack_line is not None:
+                stack_line = int(frame.stack_line)
+                # check if we've found a different stack in the data
+                if prev_line is not None and prev_line <= stack_line:
+                    break
+                frames.insert(0, frame)
+                if stack_line < 1:
+                    break
+                prev_line = stack_line
+            else:
+                frames.insert(0, frame)
 
-        if frames:  # sanity check
+        if frames and prev_line is not None:  # sanity check
             # assuming the first frame is 0
             if int(frames[0].stack_line) != 0:
-                log.warning("First stack line %r not 0", frames[0].stack_line)
+                log.warning("First stack line %s not 0", frames[0].stack_line)
             if int(frames[-1].stack_line) != len(frames) - 1:
-                log.warning("Last stack line %r not %r (frames-1)", frames[0].stack_line, len(frames) - 1)
+                log.warning("Last stack line %s not %d (frames-1)", frames[0].stack_line, len(frames) - 1)
 
         return cls(frames=frames, major_depth=major_depth)
 
