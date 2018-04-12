@@ -29,13 +29,15 @@ class StackFrame(object):
     MODE_ASAN = 0
     MODE_GDB = 1
     MODE_MINIDUMP = 2
-    MODE_VALGRIND = 3
+    MODE_RR = 3
+    MODE_VALGRIND = 4
 
     _re_func_name = re.compile(r"(?P<func>.+?)[\(|\s|\<]{1}")
     # regexs for supported stack trace lines
     _re_asan_w_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\sin\s(?P<line>.+)")
     _re_asan_wo_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\s+\((?P<line>.+?)(\+(?P<off>0x[0-9a-f]+))?\)")
     _re_gdb = re.compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
+    _re_rr = re.compile(r"rr\((?P<loc>.+)\+(?P<off>0x[0-9a-f]+)\)\[0x[0-9a-f]+\]")
     _re_valgrind = re.compile(r"^==\d+==\s+(at|by)\s+0x[0-9A-F]+\:\s+(?P<func>.+?)\s+\((?P<line>.+)\)")
     # TODO: rust? winddbg?
     #_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
@@ -81,6 +83,11 @@ class StackFrame(object):
 
         if parse_mode is None or parse_mode == StackFrame.MODE_MINIDUMP:
             frame_info = cls._parse_minidump(input_line)
+            if frame_info is not None:
+                return StackFrame(**frame_info)
+
+        if parse_mode is None or parse_mode == StackFrame.MODE_RR:
+            frame_info = cls._parse_rr(input_line)
             if frame_info is not None:
                 return StackFrame(**frame_info)
 
@@ -197,6 +204,22 @@ class StackFrame(object):
             frame["offset"] = offset.strip()
 
         return frame
+
+
+    @staticmethod
+    def _parse_rr(input_line):
+        if "rr(" not in input_line:
+            return None  # no match
+        m = StackFrame._re_rr.match(input_line)
+        if m is None:
+            return None
+        frame = {"function":None, "mode":StackFrame.MODE_RR, "stack_line":None}
+
+        frame["location"] = m.group("loc")
+        frame["offset"] = m.group("off")
+
+        return frame
+
 
     @staticmethod
     def _parse_valgrind(input_line):

@@ -321,7 +321,7 @@ class MinidumpStackFrameSupportTests(TestCase):
         self.assertEqual(frame.mode, StackFrame.MODE_MINIDUMP)
 
 
-class ValgringStackFrameSupportTests(TestCase):
+class ValgrindStackFrameSupportTests(TestCase):
     def test_01(self):
         frame = StackFrame.from_line("==4754==    at 0x45C6C0: FuncName (decode.c:123)")
         self.assertIsNone(frame.stack_line)
@@ -361,6 +361,17 @@ class ValgringStackFrameSupportTests(TestCase):
         self.assertEqual(frame.location, "File.h")
         self.assertEqual(frame.offset, "37")
         self.assertEqual(frame.mode, StackFrame.MODE_VALGRIND)
+
+
+class RRStackFrameSupportTests(TestCase):
+    def test_01(self):
+        frame = StackFrame.from_line("rr(main+0x244)[0x450b74]")
+        self.assertIsNone(frame.stack_line)
+        self.assertIsNone(frame.function)
+        self.assertEqual(frame.location, "main")
+        self.assertEqual(frame.offset, "0x244")
+        self.assertEqual(frame.mode, StackFrame.MODE_RR)
+
 
     # windbg support tests
     #print parse_line("006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c")
