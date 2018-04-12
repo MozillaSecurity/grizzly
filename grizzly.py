@@ -25,7 +25,6 @@ import os
 import shutil
 import signal
 import tempfile
-import time
 
 import corpman
 from ffpuppet import BrowserTerminatedError, FFPuppet, LaunchError
@@ -37,7 +36,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
-log = logging.getLogger("grizzly") # pylint: disable=invalid-name
+log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 def parse_args(argv=None):
@@ -241,6 +240,8 @@ class Session(object):
         assert self.server is None
         assert self.adapter is not None, "adapter must be configured first"
         log.debug("starting sapphire server")
+        # have client error pages (code 4XX) call window.close() after a few seconds
+        sapphire.Sapphire.CLOSE_CLIENT_ERROR = 2
         # launch http server used to serve test cases
         self.server = sapphire.Sapphire(timeout=iteration_timeout)
         # add include paths to server
