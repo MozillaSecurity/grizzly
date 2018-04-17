@@ -191,6 +191,45 @@ class StackTests(TestCase):
         self.assertNotEqual(stack.minor, stack.major)
         self.assertEqual(stack.frames[0].mode, StackFrame.MODE_VALGRIND)
 
+    def test_13(self):
+        "test creating a Stack from Rust trace"
+        input_txt = "" \
+        "thread '<unnamed>' panicked at 'Invoking Servo_Element_IsDisplayContents on unstyled element', libcore/option.rs:917:5\n" \
+        "stack backtrace:\n" \
+        "   0:     0x7ff1c65e93d3 - std::sys::unix::backtrace::tracing::imp::unwind_backtrace::h09c1ee131a74b1c4\n" \
+        "                               at libstd/sys/unix/backtrace/tracing/gcc_s.rs:49\n" \
+        "   1:     0x7ff1c65e81c4 - std::panicking::default_hook::{{closure}}::h945a649c9017832e\n" \
+        "                               at libstd/sys_common/backtrace.rs:71\n" \
+        "                               at libstd/sys_common/backtrace.rs:59\n" \
+        "                               at libstd/panicking.rs:380\n" \
+        "   2:     0x7ff1c65e7457 - std::panicking::default_hook::hcc534c2d30fbcda3\n" \
+        "                               at libstd/panicking.rs:396\n" \
+        "   3:     0x7ff1c65e6de7 - std::panicking::rust_panic_with_hook::h09a7a3a353dc2f38\n" \
+        "                               at libstd/panicking.rs:576\n" \
+        "   4:     0x7ff1c65e6c95 - std::panicking::begin_panic::h8327f16bde15df70\n" \
+        "                               at libstd/panicking.rs:537\n" \
+        "   5:     0x7ff1c65e6c29 - std::panicking::begin_panic_fmt::h42ff1d37404632d6\n" \
+        "                               at libstd/panicking.rs:521\n" \
+        "   6:     0x7ff1c65fa46a - core::panicking::panic_fmt::h0bd854df201d1baf\n" \
+        "                               at libstd/panicking.rs:497\n" \
+        "   7:     0x7ff1c65ffba8 - core::option::expect_failed::hfa0c8a51e07f7adc\n" \
+        "                               at libcore/option.rs:917\n" \
+        "   8:     0x7ff1c632d473 - Servo_Element_IsDisplayContents\n" \
+        "                               at /checkout/src/libcore/option.rs:302\n" \
+        "                               at servo/ports/geckolib/glue.rs:1086\n" \
+        "   9:     0x7f44064ee749 - _ZNK7nsFrame24DoGetParentComputedStyleEPP8nsIFrame\n" \
+        "                                at /builds/worker/workspace/build/src/layout/generic/nsFrame.cpp:9893\n" \
+        "   10:     0x7f4406229749 - _ZN7mozilla14RestyleManager35DoReparentComputedStyleForFirstLineEP8nsIFrameRNS_13ServoStyleSetE\n" \
+        "                                at /builds/worker/workspace/build/src/layout/base/RestyleManager.cpp:3407\n" \
+        "   11:     0x7f440622a0a5 - _ZN7mozilla14RestyleManager24ReparentFrameDescendantsEP8nsIFrameS2_RNS_13ServoStyleSetE\n" \
+        "                                at /builds/worker/workspace/build/src/layout/base/RestyleManager.cpp:3538\n"
+        stack = Stack.from_text(input_txt)
+        self.assertEqual(len(stack.frames), 12)
+        self.assertEqual(stack.frames[0].function, "std::sys::unix::backtrace::tracing::imp::unwind_backtrace")
+        self.assertEqual(stack.frames[8].function, "Servo_Element_IsDisplayContents")
+        self.assertNotEqual(stack.minor, stack.major)
+        self.assertEqual(stack.frames[0].mode, StackFrame.MODE_RUST)
+
 
 class StackFrameTests(TestCase):
 
@@ -372,6 +411,25 @@ class RRStackFrameSupportTests(TestCase):
         self.assertEqual(frame.offset, "0x244")
         self.assertEqual(frame.mode, StackFrame.MODE_RR)
 
+
+class RustStackFrameSupportTests(TestCase):
+    def test_01(self):
+        "test creating a StackFrame from stack line"
+        frame = StackFrame.from_line("  53:    0x7ff1d7e4982f - __libc_start_main")
+        self.assertEqual(frame.stack_line, "53")
+        self.assertIsNone(frame.location)
+        self.assertEqual(frame.function, "__libc_start_main")
+        self.assertIsNone(frame.offset)
+        self.assertEqual(frame.mode, StackFrame.MODE_RUST)
+
+    def test_02(self):
+        "test creating a StackFrame from stack line"
+        frame = StackFrame.from_line("  4:    0x10b715a5b - unwind::begin_unwind_fmt::h227376fe1e021a36n3d")
+        self.assertEqual(frame.stack_line, "4")
+        self.assertIsNone(frame.location)
+        self.assertEqual(frame.function, "unwind::begin_unwind_fmt")
+        self.assertIsNone(frame.offset)
+        self.assertEqual(frame.mode, StackFrame.MODE_RUST)
 
     # windbg support tests
     #print parse_line("006fd6f4 7149b958 xul!nsLayoutUtils::AppUnitWidthOfStringBidi+0x6c")

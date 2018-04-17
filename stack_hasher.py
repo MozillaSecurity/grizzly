@@ -24,13 +24,15 @@ import re
 log = logging.getLogger("stack_hasher")  # pylint: disable=invalid-name
 
 MAJOR_DEPTH = 5
+MAJOR_DEPTH_RUST = 10
 
 class StackFrame(object):
     MODE_ASAN = 0
     MODE_GDB = 1
     MODE_MINIDUMP = 2
     MODE_RR = 3
-    MODE_VALGRIND = 4
+    MODE_RUST = 4
+    MODE_VALGRIND = 5
 
     _re_func_name = re.compile(r"(?P<func>.+?)[\(|\s|\<]{1}")
     # regexs for supported stack trace lines
@@ -38,8 +40,11 @@ class StackFrame(object):
     _re_asan_wo_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\s+\((?P<line>.+?)(\+(?P<off>0x[0-9a-f]+))?\)")
     _re_gdb = re.compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
     _re_rr = re.compile(r"rr\((?P<loc>.+)\+(?P<off>0x[0-9a-f]+)\)\[0x[0-9a-f]+\]")
+    _re_rust_frame = re.compile(r"^\s+(?P<num>\d+):\s+0x[0-9a-f]+\s+\-\s+(?P<line>.+)")
     _re_valgrind = re.compile(r"^==\d+==\s+(at|by)\s+0x[0-9A-F]+\:\s+(?P<func>.+?)\s+\((?P<line>.+)\)")
-    # TODO: rust? winddbg?
+
+    # TODO: winddbg?
+    #_re_rust_file = re.compile(r"^\s+at\s+(?P<line>.+)")
     #_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
 
     def __init__(self, function=None, location=None, mode=None, offset=None, stack_line=None):
@@ -88,6 +93,11 @@ class StackFrame(object):
 
         if parse_mode is None or parse_mode == StackFrame.MODE_RR:
             frame_info = cls._parse_rr(input_line)
+            if frame_info is not None:
+                return StackFrame(**frame_info)
+
+        if parse_mode is None or parse_mode == StackFrame.MODE_RUST:
+            frame_info = cls._parse_rust(input_line)
             if frame_info is not None:
                 return StackFrame(**frame_info)
 
@@ -222,6 +232,26 @@ class StackFrame(object):
 
 
     @staticmethod
+    def _parse_rust(input_line):
+        frame = None
+        m = StackFrame._re_rust_frame.match(input_line)
+        if m is not None:
+            frame = {"mode":StackFrame.MODE_RUST, "location":None, "offset":None}
+            frame["stack_line"] = m.group("num")
+            frame["function"] = m.group("line").strip().rsplit("::h", 1)[0]
+        # Don't bother with the file offset stuff atm
+        #m = StackFrame._re_rust_file.match(input_line) if frame is None else None
+        #if m is not None:
+        #    frame = {"function":None, "mode":StackFrame.MODE_RUST, "offset":None, "stack_line":None}
+        #    input_line = m.group("line").strip()
+        #    if ":" in input_line:
+        #        frame["location"], frame["offset"] = input_line.rsplit(":", 1)
+        #    else:
+        #        frame["location"] = input_line
+        return frame
+
+
+    @staticmethod
     def _parse_valgrind(input_line):
         if "== " not in input_line:
             return None  # no match
@@ -335,6 +365,9 @@ class Stack(object):
                 log.warning("First stack line %s not 0", frames[0].stack_line)
             if int(frames[-1].stack_line) != len(frames) - 1:
                 log.warning("Last stack line %s not %d (frames-1)", frames[0].stack_line, len(frames) - 1)
+
+        if frames and frames[0].mode == StackFrame.MODE_RUST and major_depth < MAJOR_DEPTH_RUST:
+            major_depth = MAJOR_DEPTH_RUST
 
         return cls(frames=frames, major_depth=major_depth)
 
