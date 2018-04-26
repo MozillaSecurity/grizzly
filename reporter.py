@@ -43,7 +43,7 @@ __credits__ = ["Tyson Smith"]
 S3_BUCKET = 'grizzly.fuzzing.mozilla.org'
 
 
-log = logging.getLogger("grizzly") # pylint: disable=invalid-name
+log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class Reporter(object):
@@ -62,6 +62,15 @@ class Reporter(object):
 
 
     @staticmethod
+    def meta_sort(meta_file, iterable, sort_property="st_ctime"):
+        with open(meta_file, "r") as json_fp:
+            meta = json.load(json_fp)
+        return sorted(
+            (lfn for lfn in iterable if lfn != os.path.basename(meta_file)),
+            key=lambda x: meta[x]["st_ctime"])
+
+
+    @staticmethod
     def select_logs(log_path):
         logs = {"aux": None, "stderr": None, "stdout": None}
 
@@ -70,6 +79,14 @@ class Reporter(object):
         log_files = os.listdir(log_path)
         if not log_files:
             raise IOError("No logs found in %r" % log_path)
+
+        # order log files by creation date because the oldest log is likely the cause of the issue
+        # log_metadata file name can be found in ffpuppet/puppet_logger.py
+        log_metadata = os.path.join(log_path, "log_metadata.json")
+        if os.path.isfile(log_metadata):
+            log_files = Reporter.meta_sort(log_metadata, log_files)
+            # remove meta data file since it is not needed in the report
+            os.remove(log_metadata)
 
         # pattern to identify the ASan crash triggered when the parent process goes away
         re_e10s_forced = re.compile(r"""
@@ -85,8 +102,7 @@ class Reporter(object):
             "negative-size-param", "attempting free on ", "memcpy-param-overlap")
 
         # look for sanitizer (ASan, UBSan, etc...) logs
-        log_size = 0
-        for fname in [log_file for log_file in log_files if "asan" in log_file]:
+        for fname in (log_file for log_file in log_files if "asan" in log_file):
             # grab first chunk of log to help triage
             with open(os.path.join(log_path, fname), "r") as log_fp:
                 log_data = log_fp.read(4096)
@@ -109,9 +125,8 @@ class Reporter(object):
 
             # TODO: add check for empty LSan logs
             # catch all (choose the one with the most info for now)
-            if logs["aux"] is None or os.stat(os.path.join(log_path, fname)).st_size > log_size:
+            if logs["aux"] is None and os.stat(os.path.join(log_path, fname)).st_size:
                 logs["aux"] = fname
-                log_size = os.stat(os.path.join(log_path, fname)).st_size
 
         # prefer ASan logs over minidump logs
         if logs["aux"] is None:
@@ -127,7 +142,7 @@ class Reporter(object):
 
         # look for ffpuppet worker logs, worker logs should be used if nothing else is available
         if logs["aux"] is None:
-            for fname in [log_file for log_file in log_files if "ffp_worker" in log_file]:
+            for fname in (log_file for log_file in log_files if "ffp_worker" in log_file):
                 if logs["aux"] is not None:
                     # we only expect one log here...
                     log.warning("aux log previously selected: %s, overwriting!", logs["aux"])

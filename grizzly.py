@@ -317,7 +317,7 @@ class Session(object):
                 os.symlink(rrtrace, os.path.join(result_logs, "rr-trace"))
             else:
                 log.warning("RR specified but no trace detected.")
-        self.target.save_logs(result_logs)
+        self.target.save_logs(result_logs, meta=True)
         self.reporter.report(result_logs, reversed(self.test_cache))
         if os.path.isdir(result_logs):
             shutil.rmtree(result_logs)
