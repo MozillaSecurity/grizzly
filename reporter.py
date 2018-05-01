@@ -40,7 +40,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
-S3_BUCKET = 'grizzly.fuzzing.mozilla.org'
+S3_BUCKET = "grizzly.fuzzing.mozilla.org"
 
 
 log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
@@ -67,7 +67,7 @@ class Reporter(object):
             meta = json.load(json_fp)
         return sorted(
             (lfn for lfn in iterable if lfn != os.path.basename(meta_file)),
-            key=lambda x: meta[x]["st_ctime"])
+            key=lambda x: meta[x][sort_property])
 
 
     @staticmethod
@@ -323,7 +323,7 @@ class FuzzManagerReporter(Reporter):
         # don't report large files to FuzzManager
         trace_dir = os.path.join(self._log_path, "rr-trace")
         if os.path.isdir(trace_dir):
-            self._extra_metadata['rr-trace'] = 'ignored'
+            self._extra_metadata["rr-trace"] = "ignored"
             os.unlink(trace_dir)
         return None
 
@@ -423,14 +423,14 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
         trace_dir = os.path.join(self._log_path, "rr-trace")
         if os.path.isdir(trace_dir):
             # check for existing minor hash in S3
-            s3 = boto3.resource('s3')
+            s3 = boto3.resource("s3")
 
             s3_key = "rr-%s.tar.xz" % (self._minor,)
             s3_url = "http://%s.s3.amazonaws.com/%s" % (S3_BUCKET, s3_key)
             try:
                 s3.Object(S3_BUCKET, s3_key).load()  # HEAD, doesn't fetch the whole object
             except botocore.exceptions.ClientError as exc:
-                if exc.response['Error']['Code'] == "404":
+                if exc.response["Error"]["Code"] == "404":
                     # The object does not exist.
                     pass
                 else:
@@ -439,14 +439,14 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
             else:
                 # The object already exists.
                 log.info("RR trace exists at %s", s3_url)
-                self._extra_metadata['rr-trace'] = s3_url
+                self._extra_metadata["rr-trace"] = s3_url
                 os.unlink(trace_dir)
                 return s3_url
 
             # Upload to S3
             rr_path = Reporter._process_rr_trace(self)
-            s3.meta.client.upload_file(rr_path, S3_BUCKET, s3_key, ExtraArgs={'ACL': 'public-read'})
-            self._extra_metadata['rr-trace'] = s3_url
+            s3.meta.client.upload_file(rr_path, S3_BUCKET, s3_key, ExtraArgs={"ACL": "public-read"})
+            self._extra_metadata["rr-trace"] = s3_url
             os.remove(rr_path)
             log.info("RR trace uploaded at %s", s3_url)
             return s3_url
@@ -457,5 +457,5 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
     @staticmethod
     def sanity_check(bin_file):
         if _boto_import_error is not None:
-            raise _boto_import_error # pylint: disable=raising-bad-type
+            raise _boto_import_error  # pylint: disable=raising-bad-type
         FuzzManagerReporter.sanity_check(bin_file)
