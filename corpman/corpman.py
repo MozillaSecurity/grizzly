@@ -5,11 +5,10 @@
 import base64
 import os
 import random
-import re
 import shutil
 import tempfile
 
-import browser_monitor
+from .browser_monitor import BrowserMonitor
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -26,7 +25,7 @@ class InputFile(object):
             raise IOError("File does %r does not exist" % self.file_name)
 
         if "." in self.file_name:
-            self.extension = os.path.splitext(self.file_name)[1].lstrip(".")
+            self.extension = os.path.splitext(self.file_name)[-1].lstrip(".")
 
 
     def _cache_data(self):
@@ -152,7 +151,7 @@ class TestFile(object):
         # XXX: This is a naive fix for a larger path issue
         if "\\" in self.file_name:
             self.file_name.replace("\\", "/")
-        self.file_name = self.file_name.lstrip('/')
+        self.file_name = self.file_name.lstrip("/")
 
 
 class CorpusManager(object):
@@ -166,7 +165,7 @@ class CorpusManager(object):
     def __init__(self, path, accepted_extensions=None):
         self.abort_tokens = list() # tokens that when added to the log with trigger an abort
         self.input_files = list() # fuzzed test cases will be based on these files
-        self.br_mon = browser_monitor.BrowserMonitor() # provide browser details
+        self.br_mon = BrowserMonitor() # provide browser details
         self.rotation_period = 10 # input file rotation period
         self.single_pass = False # only run each input file for one rotation period
         self.test_duration = 30000 # used by the html harness to redirect to next testcase
@@ -179,10 +178,11 @@ class CorpusManager(object):
         self._fuzzer = None # meant for fuzzer specific data
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
-        self._srv_map = {} # server mappings
-        self._srv_map["dynamic"] = {}
-        self._srv_map["include"] = {} # mapping of directories that can be requested
-        self._srv_map["redirect"] = {} # document paths to map to file names using 307s
+        self._srv_map = {  # TODO: should this be standalone object?
+            "dynamic": dict(),
+            "include": dict(),  # mapping of directories that can be requested
+            "redirect": dict()  # document paths to map to file names using 307s
+        }
         self._use_transition = True # use transition redirect to next test case
 
         self._scan_input(path, accepted_extensions)

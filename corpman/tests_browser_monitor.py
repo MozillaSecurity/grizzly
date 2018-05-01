@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-import browser_monitor
+from .browser_monitor import BrowserMonitor
 
 
 logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
@@ -21,7 +21,7 @@ class TestPuppet(object):
             prefix="test_")
         os.close(tmp_fd)
         with open(log_file, "wb") as log_fp:
-            log_fp.write("test")
+            log_fp.write(b"test")
         return log_file
 
     @property
@@ -39,7 +39,7 @@ class BrowserMonitorTests(unittest.TestCase):
 
     def test_1(self):
         "test a basic browser monitor"
-        bm = browser_monitor.BrowserMonitor()
+        bm = BrowserMonitor()
         tp = TestPuppet()
         bm.monitor_instance(tp)
 
@@ -54,11 +54,11 @@ class BrowserMonitorTests(unittest.TestCase):
         tp.running = True
         self.assertTrue(bm.is_running())
         self.assertEqual(bm.log_length("test_log"), 4)
-        self.assertEqual(bm.log_data("test_log"), "test")
+        self.assertEqual(bm.log_data("test_log"), b"test")
 
     def test_2(self):
         "test an uninitialized browser monitor"
-        bm = browser_monitor.BrowserMonitor()
+        bm = BrowserMonitor()
         self.assertIsNone(bm.clone_log("test_log", offset=0))
         self.assertEqual(bm.launch_count(), 0)
         self.assertFalse(bm.is_running())
