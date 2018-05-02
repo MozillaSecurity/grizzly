@@ -54,8 +54,8 @@ class CorpusManagerTests(unittest.TestCase):
         "test a basic corpus manager"
         # create template
         template_file = os.path.join(self.tdir, "test_template.bin")
-        with open(template_file, "wb") as fp:
-            fp.write(b"template_data")
+        with open(template_file, "wb") as out_fp:
+            out_fp.write(b"template_data")
         # create corpman
         cm = SimpleCorpman(self.tdir)
         self.addCleanup(cm.cleanup)
@@ -75,14 +75,14 @@ class CorpusManagerTests(unittest.TestCase):
         "test CorpusManager generate() creates TestCases and TestFiles using SimpleCorpman"
         corp_dir = tempfile.mkdtemp(prefix="crp_", dir=self.tdir)
         template_file = os.path.join(corp_dir, "test_template.bin")
-        with open(template_file, "wb") as fp:
-            fp.write(b"template_data")
+        with open(template_file, "wb") as out_fp:
+            out_fp.write(b"template_data")
         cm = SimpleCorpman(corp_dir)
         self.addCleanup(cm.cleanup)
         self.assertEqual(cm.landing_page(), "test_page_0000.html")
         tc = cm.generate()
         # check for transition redirect
-        self.assertEqual("next_test", cm.redirects[0]["url"])
+        self.assertEqual("next_test", cm.srv_map.redirects[0]["url"])
         # make sure we move forwarded when generate() is called
         self.assertEqual(cm.landing_page(), "test_page_0001.html")
         self.assertEqual(cm.active_file, template_file)
@@ -98,8 +98,8 @@ class CorpusManagerTests(unittest.TestCase):
         selected_templates = set()
         # create templates
         for i in range(10):
-            with open(os.path.join(self.tdir, "test_template_%d.bin" % i), "wb") as fp:
-                fp.write(b"template_data_%d" % i)
+            with open(os.path.join(self.tdir, "test_template_%d.bin" % i), "wb") as out_fp:
+                out_fp.write(b"template_data_%d" % i)
         cm = SimpleCorpman(self.tdir)
         self.addCleanup(cm.cleanup)
         cm.rotation_period = 1
@@ -117,8 +117,8 @@ class CorpusManagerTests(unittest.TestCase):
         # create templates
         template_count = 10
         for i in range(template_count):
-            with open(os.path.join(self.tdir, "test_template_%d.bin" % i), "wb") as fp:
-                fp.write(b"template_data_%d" % i)
+            with open(os.path.join(self.tdir, "test_template_%d.bin" % i), "wb") as out_fp:
+                out_fp.write(b"template_data_%d" % i)
         cm = SinglePassCorpman(self.tdir)
         self.addCleanup(cm.cleanup)
         self.assertEqual(cm.size(), template_count)
@@ -134,8 +134,8 @@ class CorpusManagerTests(unittest.TestCase):
         "test single template file"
         # create templates
         for i in range(10):
-            with open(os.path.join(self.tdir, "test_template_%d.bin" % i), "wb") as fp:
-                fp.write(b"template_data_%d" % i)
+            with open(os.path.join(self.tdir, "test_template_%d.bin" % i), "wb") as out_fp:
+                out_fp.write(b"template_data_%d" % i)
         cm = SimpleCorpman(os.path.join(self.tdir, "test_template_0.bin"))
         self.addCleanup(cm.cleanup)
         self.assertEqual(cm.size(), 1)
@@ -148,11 +148,11 @@ class CorpusManagerTests(unittest.TestCase):
         # create templates
         template_count = 10
         for i in range(template_count):
-            with open(os.path.join(nd_1, "test_template_%d.bin" % i), "wb") as fp:
-                fp.write(b"template_data_%d" % i)
+            with open(os.path.join(nd_1, "test_template_%d.bin" % i), "wb") as out_fp:
+                out_fp.write(b"template_data_%d" % i)
         for i in range(template_count):
-            with open(os.path.join(nd_2, "test_template_%d.bin" % i), "wb") as fp:
-                fp.write(b"template_data_%d" % i)
+            with open(os.path.join(nd_2, "test_template_%d.bin" % i), "wb") as out_fp:
+                out_fp.write(b"template_data_%d" % i)
         cm = SimpleCorpman(corp_dir)
         self.addCleanup(cm.cleanup)
         self.assertEqual(cm.size(), template_count*2)
@@ -161,10 +161,10 @@ class CorpusManagerTests(unittest.TestCase):
         "test multiple template files with extension filter"
         # create templates
         for i in range(10):
-            with open(os.path.join(self.tdir, "test_template_%d.bad" % i), "wb") as fp:
-                fp.write(b"template_data_%d" % i)
-        with open(os.path.join(self.tdir, "test_template.good"), "wb") as fp:
-            fp.write(b"template_data")
+            with open(os.path.join(self.tdir, "test_template_%d.bad" % i), "wb") as out_fp:
+                out_fp.write(b"template_data_%d" % i)
+        with open(os.path.join(self.tdir, "test_template.good"), "wb") as out_fp:
+            out_fp.write(b"template_data")
         cm = SimpleCorpman(self.tdir, accepted_extensions=["good"])
         self.addCleanup(cm.cleanup)
         self.assertEqual(cm.size(), 1)
@@ -172,15 +172,15 @@ class CorpusManagerTests(unittest.TestCase):
     def test_07(self):
         "test ignore empty template files and blacklisted files"
         # create templates
-        with open(os.path.join(self.tdir, "test_template.good"), "wb") as fp:
-            fp.write(b"template_data")
-        with open(os.path.join(self.tdir, "test_template.empty"), "wb") as fp:
+        with open(os.path.join(self.tdir, "test_template.good"), "wb") as out_fp:
+            out_fp.write(b"template_data")
+        with open(os.path.join(self.tdir, "test_template.empty"), "wb") as out_fp:
             pass
-        with open(os.path.join(self.tdir, ".somefile"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(self.tdir, ".somefile"), "wb") as out_fp:
+            out_fp.write(b"template_data")
         # /me crosses fingers and hopes this test doesn't break something on Windows...
-        with open(os.path.join(self.tdir, "thumbs.db"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(self.tdir, "thumbs.db"), "wb") as out_fp:
+            out_fp.write(b"template_data")
         cm = SimpleCorpman(self.tdir)
         self.addCleanup(cm.cleanup)
         self.assertEqual(cm.size(), 1)
@@ -188,17 +188,17 @@ class CorpusManagerTests(unittest.TestCase):
     def test_08(self):
         "test extension filter normalization"
         # create templates
-        with open(os.path.join(self.tdir, "test_template.bad"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(self.tdir, "test_template.bad"), "wb") as out_fp:
+            out_fp.write(b"template_data")
 
-        with open(os.path.join(self.tdir, "test_template1.good"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(self.tdir, "test_template1.good"), "wb") as out_fp:
+            out_fp.write(b"template_data")
 
-        with open(os.path.join(self.tdir, "test_template2.GOOD"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(self.tdir, "test_template2.GOOD"), "wb") as out_fp:
+            out_fp.write(b"template_data")
 
-        with open(os.path.join(self.tdir, "test_template2.GReat"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(self.tdir, "test_template2.GReat"), "wb") as out_fp:
+            out_fp.write(b"template_data")
 
         cm = SimpleCorpman(self.tdir, accepted_extensions=["good", ".greaT"])
         self.addCleanup(cm.cleanup)
@@ -209,8 +209,8 @@ class CorpusManagerTests(unittest.TestCase):
         corp_dir = tempfile.mkdtemp(prefix="crp_", dir=self.tdir)
         tc_dir = tempfile.mkdtemp(prefix="tc_", dir=self.tdir)
         # create templates
-        with open(os.path.join(corp_dir, "test_template.bin"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(corp_dir, "test_template.bin"), "wb") as out_fp:
+            out_fp.write(b"template_data")
 
         cm = SimpleCorpman(corp_dir)
         self.addCleanup(cm.cleanup)
@@ -229,9 +229,9 @@ class CorpusManagerTests(unittest.TestCase):
         self.assertIn(cm.landing_page(harness=True), dumped_tf)
 
         # verify redirects
-        self.assertEqual(len(cm.redirects), 2)
+        self.assertEqual(len(cm.srv_map.redirects), 2)
         r_count = 0
-        for redir in cm.redirects:
+        for redir in cm.srv_map.redirects:
             self.assertIn(redir["url"], ["next_test", "first_test"])
             if redir["url"] == "first_test":
                 self.assertEqual(redir["file_name"], expected_test)
@@ -244,8 +244,8 @@ class CorpusManagerTests(unittest.TestCase):
     def test_10(self):
         "test corpus manager landing_page() without a harness"
         # create templates
-        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as out_fp:
+            out_fp.write(b"template_data")
 
         cm = SimpleCorpman(self.tdir)
         self.addCleanup(cm.cleanup)
@@ -254,8 +254,8 @@ class CorpusManagerTests(unittest.TestCase):
     def test_11(self):
         "test get/set and reset redirects"
         # create templates
-        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as out_fp:
+            out_fp.write(b"template_data")
         cm = SimpleCorpman(self.tdir)
         self.addCleanup(cm.cleanup)
         test_redirs = (
@@ -264,9 +264,9 @@ class CorpusManagerTests(unittest.TestCase):
             ("url3", "file3", True),
             ("url3", "file4", False))
         for url, name, reqd in test_redirs:
-            cm._set_redirect(url, name, reqd)
-        self.assertEqual(len(cm.redirects), 3)
-        self.assertEqual(len([redir for redir in cm.redirects if redir["required"]]), 1)
+            cm.srv_map.add_redirect(url, name, reqd)
+        self.assertEqual(len(cm.srv_map.redirects), 3)
+        self.assertEqual(len([redir for redir in cm.srv_map.redirects if redir["required"]]), 1)
         cm.generate()
 
     def test_12(self):
@@ -274,35 +274,35 @@ class CorpusManagerTests(unittest.TestCase):
         corp_dir = tempfile.mkdtemp(prefix="crp_", dir=self.tdir)
         inc_dir = tempfile.mkdtemp(prefix="inc_", dir=self.tdir)
         # create templates
-        with open(os.path.join(corp_dir, "dummy_template.bin"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(corp_dir, "dummy_template.bin"), "wb") as out_fp:
+            out_fp.write(b"template_data")
         cm = SimpleCorpman(corp_dir)
         self.addCleanup(cm.cleanup)
-        cm._add_include("/", inc_dir)
+        cm.srv_map.add_include("/", inc_dir)
         with self.assertRaises(IOError):
-            cm._add_include("bad_path", "/does_not_exist/asdf")
-        self.assertEqual(len(cm.includes), 1)
+            cm.srv_map.add_include("bad_path", "/does_not_exist/asdf")
+        self.assertEqual(len(cm.srv_map.includes), 1)
 
     def test_13(self):
         "test get/set and reset dynamic responses (callbacks)"
         def test_callback():
             return "PASS"
         # create templates
-        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as fp:
-            fp.write(b"template_data")
+        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as out_fp:
+            out_fp.write(b"template_data")
         cm = SimpleCorpman(self.tdir)
         self.addCleanup(cm.cleanup)
-        cm._add_dynamic_response("test_url", test_callback, mime_type="text/plain")
-        self.assertEqual(len(cm.dynamic_responses), 1)
-        self.assertEqual(cm.dynamic_responses[0]["callback"](), "PASS")
+        cm.srv_map.add_dynamic_response("test_url", test_callback, mime_type="text/plain")
+        self.assertEqual(len(cm.srv_map.dynamic_responses), 1)
+        self.assertEqual(cm.srv_map.dynamic_responses[0]["callback"](), "PASS")
 
     def test_14(self):
         "test adding test files in nested directories"
         corp_dir = tempfile.mkdtemp(prefix="crp_", dir=self.tdir)
         tc_dir = tempfile.mkdtemp(prefix="tc_", dir=self.tdir)
         template_file = os.path.join(corp_dir, "test_template.bin")
-        with open(template_file, "wb") as fp:
-            fp.write(b"template_data")
+        with open(template_file, "wb") as out_fp:
+            out_fp.write(b"template_data")
         cm = SimpleCorpman(corp_dir)
         self.addCleanup(cm.cleanup)
         tc = cm.generate()
@@ -313,8 +313,8 @@ class CorpusManagerTests(unittest.TestCase):
 
     def test_15(self):
         "test a rotation period of 0 with single_pass true"
-        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as fp:
-            fp.write(b"a")
+        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as out_fp:
+            out_fp.write(b"a")
         cm = SinglePassCorpman(self.tdir)
         self.addCleanup(cm.cleanup)
         cm.rotation_period = 0
@@ -323,8 +323,8 @@ class CorpusManagerTests(unittest.TestCase):
 
     def test_16(self):
         "test a negative rotation period"
-        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as fp:
-            fp.write(b"a")
+        with open(os.path.join(self.tdir, "test_template.bin"), "wb") as out_fp:
+            out_fp.write(b"a")
         cm = SimpleCorpman(self.tdir)
         self.addCleanup(cm.cleanup)
         cm.rotation_period = -1
@@ -335,8 +335,8 @@ class CorpusManagerTests(unittest.TestCase):
         "test missing an environment variable check"
         # create template
         template_file = os.path.join(self.tdir, "test_template.bin")
-        with open(template_file, "wb") as fp:
-            fp.write(b"template_data")
+        with open(template_file, "wb") as out_fp:
+            out_fp.write(b"template_data")
         with self.assertRaisesRegexp(RuntimeError, "Missing required environment variable.+"):
             EnvVarCorpman(self.tdir)
 
@@ -348,8 +348,8 @@ class CorpusManagerTests(unittest.TestCase):
         try:
             # create template
             template_file = os.path.join(corp_dir, "test_template.bin")
-            with open(template_file, "wb") as fp:
-                fp.write(b"template_data")
+            with open(template_file, "wb") as out_fp:
+                out_fp.write(b"template_data")
             os.environ["ENVAR_REQ"] = "test123"
             os.environ["ENVAR_NOT_REQ"] = "test321"
             os.environ["ENVAR_EMPTY"] = ""
@@ -359,15 +359,15 @@ class CorpusManagerTests(unittest.TestCase):
             with self.assertRaises(IOError):
                 tc.add_environ_file("nofile.js")
             env_file = os.path.join(prf_dir, "simple_prefs.js")
-            with open(env_file, "wb") as fp:
-                fp.write(b"stuff.blah=1;")
+            with open(env_file, "wb") as out_fp:
+                out_fp.write(b"stuff.blah=1;")
             tc.add_environ_file(env_file, fname="prefs.js")
             tc.dump(tc_dir, include_details=True)
             dumped_tf = os.listdir(tc_dir)
             self.assertIn("prefs.js", dumped_tf)
             self.assertIn("env_vars.txt", dumped_tf)
-            with open(os.path.join(tc_dir, "env_vars.txt"), "r") as fp:
-                env_vars = fp.read()
+            with open(os.path.join(tc_dir, "env_vars.txt"), "r") as in_fp:
+                env_vars = in_fp.read()
             self.assertRegexpMatches(env_vars, "ENVAR_REQ=test123\n")
             self.assertRegexpMatches(env_vars, "ENVAR_NOT_REQ=test321\n")
             self.assertRegexpMatches(env_vars, "ENVAR_EMPTY=\n")
@@ -382,10 +382,10 @@ class CorpusManagerTests(unittest.TestCase):
         corp_dir = tempfile.mkdtemp(prefix="crp_", dir=self.tdir)
         tc_dir = tempfile.mkdtemp(prefix="tc_", dir=self.tdir)
         supp_file = os.path.join(self.tdir, "supp_file.txt")
-        with open(supp_file, "w") as fp:
-            fp.write("# test\n")
-        with open(os.path.join(corp_dir, "template_01.bin"), "wb") as fp:
-            fp.write(b"template_data_01")
+        with open(supp_file, "w") as out_fp:
+            out_fp.write("# test\n")
+        with open(os.path.join(corp_dir, "template_01.bin"), "wb") as out_fp:
+            out_fp.write(b"template_data_01")
         try:
             os.environ["ASAN_OPTIONS"] = "blah=1:suppressions=%s:foo=2" % supp_file
             cm = SimpleCorpman(os.path.join(corp_dir, "template_01.bin"))
@@ -395,6 +395,54 @@ class CorpusManagerTests(unittest.TestCase):
             os.environ.pop("ASAN_OPTIONS", None)
         tc.dump(tc_dir, include_details=True)
         self.assertTrue(os.path.isfile(os.path.join(tc_dir, "asan.supp")))
+
+
+class TestServerMap(unittest.TestCase):
+
+    def test_01(self):
+        "test empty ServerMap"
+        srv_map = corpman.ServerMap()
+        self.assertFalse(srv_map.dynamic_responses)
+        self.assertFalse(srv_map.includes)
+        self.assertFalse(srv_map.redirects)
+        with self.assertRaisesRegex(AssertionError, "At least one kwarg should be True"):
+            srv_map.reset()
+
+    def test_02(self):
+        "test ServerMap dynamic responses"
+        def test_cb():
+            pass
+        srv_map = corpman.ServerMap()
+        srv_map.add_dynamic_response("test_url", test_cb, mime_type="test/type")
+        self.assertEqual(srv_map.dynamic_responses[0]["url"], "test_url")
+        self.assertEqual(srv_map.dynamic_responses[0]["mime"], "test/type")
+        self.assertTrue(callable(srv_map.dynamic_responses[0]["callback"]))
+        srv_map.reset(dynamic_response=True)
+        self.assertFalse(srv_map.dynamic_responses)
+
+    def test_03(self):
+        "test ServerMap includes"
+        srv_map = corpman.ServerMap()
+        with self.assertRaisesRegex(OSError, "'no_dir' does not exist"):
+            srv_map.add_include("test_url", "no_dir")
+        self.assertFalse(srv_map.includes)
+        tdir = tempfile.mkdtemp(prefix="cm_tests")
+        self.addCleanup(shutil.rmtree, tdir)
+        srv_map.add_include("test_url", tdir)
+        self.assertEqual(srv_map.includes[0][0], "test_url")
+        self.assertEqual(srv_map.includes[0][1], tdir)
+        srv_map.reset(include=True)
+        self.assertFalse(srv_map.includes)
+
+    def test_04(self):
+        "test ServerMap redirects"
+        srv_map = corpman.ServerMap()
+        srv_map.add_redirect("test_url", "test_file", required=True)
+        self.assertEqual(srv_map.redirects[0]["url"], "test_url")
+        self.assertEqual(srv_map.redirects[0]["file_name"], "test_file")
+        self.assertTrue(srv_map.redirects[0]["required"])
+        srv_map.reset(redirect=True)
+        self.assertFalse(srv_map.redirects)
 
 
 class TestCaseTests(unittest.TestCase):

@@ -245,10 +245,10 @@ class Session(object):
         # launch http server used to serve test cases
         self.server = sapphire.Sapphire(timeout=iteration_timeout)
         # add include paths to server
-        for url_path, target_path in self.adapter.includes:
+        for url_path, target_path in self.adapter.srv_map.includes:
             self.server.add_include(url_path, target_path)
         # add dynamic responses to the server
-        for dyn_rsp in self.adapter.dynamic_responses:
+        for dyn_rsp in self.adapter.srv_map.dynamic_responses:
             self.server.add_dynamic_response(dyn_rsp["url"], dyn_rsp["callback"], dyn_rsp["mime"])
 
 
@@ -368,7 +368,7 @@ class Session(object):
                 current_test.add_environ_file(self.prefs, fname="prefs.js")
 
             # update sapphire redirects from the corpman
-            for redirect in self.adapter.redirects:
+            for redirect in self.adapter.srv_map.redirects:
                 self.server.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
 
             # print iteration status

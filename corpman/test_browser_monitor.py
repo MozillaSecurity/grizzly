@@ -44,11 +44,8 @@ class BrowserMonitorTests(unittest.TestCase):
         bm.monitor_instance(tp)
 
         test_log = bm.clone_log("test_log", offset=0)
-        try:
-            self.assertTrue(os.path.isfile(test_log))
-        finally:
-            if test_log is not None:
-                os.remove(test_log)
+        self.addCleanup(os.remove, test_log)
+        self.assertTrue(os.path.isfile(test_log))
         tp._launches += 1
         self.assertEqual(bm.launch_count(), 1)
         tp.running = True

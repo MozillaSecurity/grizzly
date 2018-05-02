@@ -61,6 +61,66 @@ class InputFile(object):
         return self.fp
 
 
+class ServerMap(object):
+    def __init__(self):
+        self._dynamic = dict()
+        self._include = dict()  # mapping of directories that can be requested
+        self._redirect = dict()  # document paths to map to file names using 307s
+
+
+    def add_dynamic_response(self, url_path, callback, mime_type="application/octet-stream"):
+        assert isinstance(url_path, str)
+        assert callable(callback)
+        assert isinstance(mime_type, str)
+        self._dynamic[url_path] = (callback, mime_type)
+
+
+    def add_include(self, url_path, target_path):
+        assert isinstance(url_path, str)
+        assert isinstance(target_path, str)
+        if not os.path.isdir(target_path):
+            raise IOError("%r does not exist" % target_path)
+        self._include[url_path] = os.path.abspath(target_path)
+
+
+    def add_redirect(self, url, file_name, required=True):
+        assert isinstance(file_name, str)
+        assert isinstance(required, bool)
+        assert isinstance(url, str)
+        self._redirect[url] = (file_name, required)
+
+
+    @property
+    def dynamic_responses(self):
+        out = list()
+        for url, (callback, mime) in self._dynamic.items():
+            out.append({"url":url, "callback":callback, "mime":mime})
+        return out
+
+
+    @property
+    def includes(self):
+        return list(self._include.items())
+
+
+    @property
+    def redirects(self):
+        out = list()
+        for url, (file_name, required) in self._redirect.items():
+            out.append({"url":url, "file_name":file_name, "required":required})
+        return out
+
+
+    def reset(self, dynamic_response=False, include=False, redirect=False):
+        assert dynamic_response or include or redirect, "At least one kwarg should be True"
+        if dynamic_response:
+            self._dynamic = dict()
+        if include:
+            self._include = dict()  # mapping of directories that can be requested
+        if redirect:
+            self._redirect = dict()  # document paths to map to file names using 307s
+
+
 class TestCase(object):
     def __init__(self, landing_page, corpman_name, input_fname=None):
         self.corpman_name = corpman_name
@@ -129,7 +189,7 @@ class TestCase(object):
             for env_file, env_path in self._env_files.items():
                 shutil.copyfile(env_path, os.path.join(log_dir, env_file))
 
-            if self._env_vars.items():
+            if self._env_vars:
                 with open(os.path.join(log_dir, "env_vars.txt"), "w") as out_fp:
                     for env_var, env_val in self._env_vars.items():
                         out_fp.write("%s=%s\n" % (env_var, env_val))
@@ -168,6 +228,7 @@ class CorpusManager(object):
         self.br_mon = BrowserMonitor() # provide browser details
         self.rotation_period = 10 # input file rotation period
         self.single_pass = False # only run each input file for one rotation period
+        self.srv_map = ServerMap()
         self.test_duration = 30000 # used by the html harness to redirect to next testcase
         self._active_input = None
         self._corpus_path = os.path.abspath(path)
@@ -178,11 +239,6 @@ class CorpusManager(object):
         self._fuzzer = None # meant for fuzzer specific data
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
-        self._srv_map = {  # TODO: should this be standalone object?
-            "dynamic": dict(),
-            "include": dict(),  # mapping of directories that can be requested
-            "redirect": dict()  # document paths to map to file names using 307s
-        }
         self._use_transition = True # use transition redirect to next test case
 
         self._scan_input(path, accepted_extensions)
@@ -197,16 +253,6 @@ class CorpusManager(object):
         _init_fuzzer is meant to be implemented in subclass
         """
         pass
-
-
-    def _add_dynamic_response(self, url_path, callback, mime_type="application/octet-stream"):
-        self._srv_map["dynamic"][url_path] = (callback, mime_type)
-
-
-    def _add_include(self, url_path, target_path):
-        if not os.path.isdir(target_path):
-            raise IOError("%r does not exist")
-        self._srv_map["include"][url_path] = os.path.abspath(target_path)
 
 
     def _add_suppressions(self):
@@ -245,10 +291,6 @@ class CorpusManager(object):
                 self._active_input = InputFile(self.input_files.pop())
             else:
                 self._active_input = InputFile(random.choice(self.input_files))
-
-
-    def _set_redirect(self, url, file_name, required=True):
-        self._srv_map["redirect"][url] = (file_name, required)
 
 
     def _scan_input(self, scan_path, accepted_extensions):
@@ -346,19 +388,19 @@ class CorpusManager(object):
             test.add_environ_file(fpath, fname)
 
         # reset redirect map
-        self._srv_map["redirect"] = {}
+        self.srv_map.reset(redirect=True)
 
         # handle page redirects (to next test case)
         if self._use_transition:
             redirect_page = self.landing_page(transition=True)
-            self._set_redirect(redirect_page, self.landing_page(next=True))
+            self.srv_map.add_redirect(redirect_page, self.landing_page(next=True))
         else:
             redirect_page = self.landing_page(next=True)
 
         if self._harness:
             # setup redirects for harness
-            self._set_redirect("first_test", self.landing_page(), required=False)
-            self._set_redirect("next_test", self.landing_page(next=True))
+            self.srv_map.add_redirect("first_test", self.landing_page(), required=False)
+            self.srv_map.add_redirect("next_test", self.landing_page(next=True))
             # add harness to test case
             test.add_testfile(
                 TestFile(self._harness["name"], self._harness["data"], required=False))
@@ -374,27 +416,6 @@ class CorpusManager(object):
             return self._active_input.file_name
         except AttributeError:
             return None
-
-
-    @property
-    def dynamic_responses(self):
-        out = list()
-        for url, (callback, mime) in self._srv_map["dynamic"].items():
-            out.append({"url":url, "callback":callback, "mime":mime})
-        return out
-
-
-    @property
-    def includes(self):
-        return self._srv_map["include"].items()
-
-
-    @property
-    def redirects(self):
-        out = list()
-        for url, (file_name, required) in self._srv_map["redirect"].items():
-            out.append({"url":url, "file_name":file_name, "required":required})
-        return out
 
 
     def landing_page(self, harness=False, next=False, transition=False):
