@@ -22,6 +22,7 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 import argparse
 import logging
 import os
+import psutil
 import shutil
 import signal
 import tempfile
@@ -65,8 +66,8 @@ def parse_args(argv=None):
         "--fuzzmanager", action="store_true",
         help="Report results to FuzzManager")
     parser.add_argument(
-        "--gcov-iterations", type=int, default=None,
-        help="Run only the specified amount of iterations and dump GCOV data every iteration.")
+        "--coverage", action="store_true",
+        help="Enable coverage collection")
     parser.add_argument(
         "--ignore", nargs="+", default=list(),
         help="Space separated ignore list. ie: %s (default: nothing)" % " ".join(ignorable))
@@ -152,12 +153,12 @@ class Session(object):
     FM_LOG_SIZE_LIMIT = 0x40000  # max log size for log sent to FuzzManager (256KB)
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, cache_size, gcov_iters, ignore, log_limit, memory_limit, relaunch, use_rr, working_path=None):
+    def __init__(self, cache_size, coverage, ignore, log_limit, memory_limit, relaunch, use_rr, working_path=None):
         self.adapter = None
         self.binary = None
         self.cache_size = max(cache_size, 1)  # testcase cache must be at least one
         self.extension = None  # TODO: this should become part of the target
-        self.gcov_iterations = gcov_iters  # TODO: this should become part of the adapter
+        self.coverage = coverage  # TODO: this should become part of the adapter
         self.ignore = ignore
         self.launch_timeout = None  # TODO: this should become part of the target
         self.log_limit = max(log_limit * 1024 * 1024, 0) if log_limit else 0  # maximum log size limit
@@ -193,7 +194,7 @@ class Session(object):
         log.info("Found %d test cases", self.adapter.size())
         if self.adapter.single_pass:
             log.info("Running in REPLAY mode")
-        elif self.gcov_iterations is not None:
+        elif self.coverage:
             log.info("Running in GCOV mode")
             self.adapter.rotation_period = 1 # cover as many test cases as possible
         else:
@@ -333,7 +334,7 @@ class Session(object):
             self.status.report()
             self.status.iteration += 1
 
-            if self.gcov_iterations is not None:
+            if self.coverage:
                 # If at this point, the browser is running, i.e. we did neither
                 # relaunch nor crash/timeout, then we need to signal the browser
                 # to dump coverage before attempting a new test that potentially
@@ -346,10 +347,6 @@ class Session(object):
                 if self.target.is_running():
                     log.info("GCOV: Dumping coverage data...")
                     os.kill(self.target._proc.pid, signal.SIGUSR1)
-
-                if self.status.iteration > self.gcov_iterations:
-                    log.info("GCOV: Finished with iterations, terminating...")
-                    break
 
             # launch FFPuppet
             if self.target.reason is not None:
@@ -489,7 +486,7 @@ def main(args):
 
     session = Session(
         args.cache,
-        args.gcov_iterations,
+        args.coverage,
         args.ignore,
         args.log_limit,
         args.memory,
