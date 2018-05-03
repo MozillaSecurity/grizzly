@@ -352,7 +352,7 @@ class Session(object):
                     break
 
             # launch FFPuppet
-            if self.target.closed:
+            if self.target.reason is not None:
                 try:
                     self.launch_target()
                     # TODO: handle BrowserTimeoutError?
@@ -424,7 +424,7 @@ class Session(object):
             failure_detected = False
             if not self.target.is_running():
                 self.target.close()
-                if self.target.reason == FFPuppet.RC_EXITED and self.target.returncode == 0:
+                if self.target.reason == FFPuppet.RC_EXITED:
                     log.info("Target closed itself")
                 elif (self.target.reason == FFPuppet.RC_WORKER
                       and "memory" in self.ignore
