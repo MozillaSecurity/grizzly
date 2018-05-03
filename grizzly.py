@@ -346,6 +346,10 @@ class Session(object):
                 # TODO: maybe this should use relaunch=1 and self close every iteration
                 if self.target.is_running():
                     log.info("GCOV: Dumping coverage data...")
+                    children = psutil.Process(self.target._proc.pid).children(recursive=True)
+                    for child in children:
+                        log.debug('Sending SIGUSR1 to %d', child.pid)
+                        os.kill(child.pid, signal.SIGUSR1)
                     os.kill(self.target._proc.pid, signal.SIGUSR1)
 
             # launch FFPuppet
