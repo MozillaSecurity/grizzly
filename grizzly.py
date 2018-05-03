@@ -22,13 +22,14 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 import argparse
 import logging
 import os
-import psutil
 import shutil
 import signal
 import tempfile
+import time
 
 import corpman
 from ffpuppet import BrowserTerminatedError, FFPuppet, LaunchError
+import psutil
 import reporter
 import sapphire
 from status import Status
@@ -268,6 +269,19 @@ class Session(object):
                 shutil.rmtree(self.rr_path)
 
 
+    @staticmethod
+    def dump_coverage(pid):
+        log.info("GCOV: Dumping coverage data...")
+        try:
+            for child in psutil.Process(pid).children(recursive=True):
+                log.debug('Sending SIGUSR1 to %d', child.pid)
+                os.kill(child.pid, signal.SIGUSR1)
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            pass
+        log.debug('Sending SIGUSR1 to %d', pid)
+        os.kill(pid, signal.SIGUSR1)
+
+
     def launch_target(self):
         self.rl_countdown = self.rl_reset
         self.test_cache = list()
@@ -333,24 +347,6 @@ class Session(object):
         while True:  # main fuzzing iteration loop
             self.status.report()
             self.status.iteration += 1
-
-            if self.coverage:
-                # If at this point, the browser is running, i.e. we did neither
-                # relaunch nor crash/timeout, then we need to signal the browser
-                # to dump coverage before attempting a new test that potentially
-                # crashes.
-                # Note: This is not required if we closed or are going to close
-                # the browser (relaunch or done with all iterations) because the
-                # SIGTERM will also trigger coverage to be synced out.
-
-                # TODO: maybe this should use relaunch=1 and self close every iteration
-                if self.target.is_running():
-                    log.info("GCOV: Dumping coverage data...")
-                    children = psutil.Process(self.target._proc.pid).children(recursive=True)
-                    for child in children:
-                        log.debug('Sending SIGUSR1 to %d', child.pid)
-                        os.kill(child.pid, signal.SIGUSR1)
-                    os.kill(self.target._proc.pid, signal.SIGUSR1)
 
             # launch FFPuppet
             if self.target.reason is not None:
@@ -464,8 +460,21 @@ class Session(object):
             if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
                 log.warning("Large browser logs: %dMBs", (self.status.log_size/1048576))
 
+            if self.coverage and self.target.is_running():
+                # If at this point, the browser is running, i.e. we did neither
+                # relaunch nor crash/timeout, then we need to signal the browser
+                # to dump coverage before attempting a new test that potentially
+                # crashes.
+                # Note: This is not required if we closed or are going to close
+                # the browser (relaunch or done with all iterations) because the
+                # SIGTERM will also trigger coverage to be synced out.
+                self.dump_coverage(self.target._proc.pid)  # pylint: disable=protected-access
+
             # trigger relaunch by closing the browser
             if self.rl_countdown < 1 and self.target.is_running():
+                if self.coverage:
+                    log.info("Waiting 10s for coverage data before forcing relaunch...")
+                    time.sleep(10)
                 log.info("Forcing target relaunch")
                 self.target.close()
 
