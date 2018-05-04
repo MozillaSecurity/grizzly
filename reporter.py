@@ -66,7 +66,7 @@ class Reporter(object):
         with open(meta_file, "r") as json_fp:
             meta = json.load(json_fp)
         return sorted(
-            (lfn for lfn in iterable if lfn != os.path.basename(meta_file)),
+            (lfn for lfn in iterable if lfn not in {os.path.basename(meta_file), "rr-trace"}),
             key=lambda x: meta[x][sort_property])
 
 
