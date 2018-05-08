@@ -1,3 +1,4 @@
+# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -33,7 +34,7 @@ try:
 except ImportError as err:
     _boto_import_error = err
 
-import stack_hasher
+from . import stack_hasher
 
 __all__ = ("FilesystemReporter", "FuzzManagerReporter", "S3FuzzManagerReporter")
 __author__ = "Tyson Smith"

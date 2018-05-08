@@ -1,5 +1,7 @@
-#!/usr/bin/env python2
 # coding=utf-8
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 Interesting script to use FFPuppet/Sapphire for fast reduction using lithium.
 """
@@ -561,36 +563,4 @@ class FFPInteresting(object):
 
         return args
 
-    def main(self):
-        import lithium
-
-        logging.basicConfig(format="%(message)s", level=logging.INFO)
-
-        try:
-            verbose = int(os.getenv("DEBUG", "0"))
-            assert verbose in {0, 1}
-        except (AssertionError, ValueError):
-            log.error("expecting 0 or 1 for DEBUG")
-            return 1
-        if verbose:
-            logging.getLogger().setLevel(logging.DEBUG)
-
-        try:
-            lith = lithium.Lithium()
-            lith.conditionScript = self
-            # XXX: lithium args should be parsed from beginning .. no api for this yet
-            lith.conditionArgs = sys.argv[1:]
-            lith.strategy = lithium.Minimize()
-            lith.testcase = lithium.TestcaseLine()
-            lith.testcase.readTestcase(sys.argv[-1])
-            return lith.run()
-        except lithium.LithiumError as exc:
-            lithium.summaryHeader()
-            log.error(exc)
-            return 1
-
-
-if __name__ == "__main__":
-    exit(FFPInteresting().main())
-else:
-    FFPInteresting(True)
+FFPInteresting(True)
