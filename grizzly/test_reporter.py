@@ -1,3 +1,7 @@
+# coding=utf-8
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import glob
 import logging
 import json
@@ -10,7 +14,7 @@ import sys
 import tempfile
 import unittest
 
-from reporter import FilesystemReporter, Reporter, Report
+from grizzly.reporter import FilesystemReporter, Reporter, Report
 
 logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
 log = logging.getLogger("grz_report_test")

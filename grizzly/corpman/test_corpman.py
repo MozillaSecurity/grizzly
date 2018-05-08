@@ -1,10 +1,14 @@
+# coding=utf-8
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
 import shutil
 import tempfile
 import unittest
 
-import corpman
+from grizzly import corpman
 
 
 logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
@@ -405,7 +409,7 @@ class TestServerMap(unittest.TestCase):
         self.assertFalse(srv_map.dynamic_responses)
         self.assertFalse(srv_map.includes)
         self.assertFalse(srv_map.redirects)
-        with self.assertRaisesRegex(AssertionError, "At least one kwarg should be True"):
+        with self.assertRaisesRegexp(AssertionError, "At least one kwarg should be True"):
             srv_map.reset()
 
     def test_02(self):
@@ -423,7 +427,7 @@ class TestServerMap(unittest.TestCase):
     def test_03(self):
         "test ServerMap includes"
         srv_map = corpman.ServerMap()
-        with self.assertRaisesRegex(OSError, "'no_dir' does not exist"):
+        with self.assertRaisesRegexp(IOError, "'no_dir' does not exist"):
             srv_map.add_include("test_url", "no_dir")
         self.assertFalse(srv_map.includes)
         tdir = tempfile.mkdtemp(prefix="cm_tests")

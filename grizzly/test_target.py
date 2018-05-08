@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 from ffpuppet import FFPuppet
-from target import Target
+from grizzly.target import Target
 
 logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
 log = logging.getLogger("grz_target_test")

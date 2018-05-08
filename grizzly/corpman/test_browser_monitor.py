@@ -1,9 +1,13 @@
+# coding=utf-8
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
 import tempfile
 import unittest
 
-from .browser_monitor import BrowserMonitor
+from grizzly.corpman.browser_monitor import BrowserMonitor
 
 
 logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
