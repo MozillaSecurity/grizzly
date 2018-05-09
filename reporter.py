@@ -35,39 +35,68 @@ except ImportError as err:
 
 import stack_hasher
 
-__all__ = ("FilesystemReporter", "FuzzManagerReporter")
+__all__ = ("FilesystemReporter", "FuzzManagerReporter", "S3FuzzManagerReporter")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
-
-
-S3_BUCKET = "grizzly.fuzzing.mozilla.org"
 
 
 log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
-class Reporter(object):
-    DEFAULT_MAJOR = "NO_STACK"
-    DEFAULT_MINOR = "0"
+class Report(object):
+    def __init__(self, log_path, log_map, size_limit=0):
+        assert isinstance(log_map, dict)
+        self.path = log_path
+        self.log_aux = log_map.get("aux") if log_map is not None else None
+        self.log_err = log_map.get("stderr") if log_map is not None else None
+        self.log_out = log_map.get("stdout") if log_map is not None else None
 
-    def __init__(self, log_limit=0):
-        self.log_limit = max(log_limit, 0)  # maximum log file size
-        self._log_path = None
-        self._major = None  # stack hash
-        self._map = None  # map logs (stderr, stdout, aux/preferred crash log) to file names
-        self._minor = None  # stack hash
-        self._prefix = None  # prefix for results
-        self._test_cases = None
-        self._reset()
+        # look through logs one by one until we find a stack
+        # NOTE: order matters aux->stderr->stdout
+        stack = None
+        for scan_log in (self.log_aux, self.log_err, self.log_out):
+            if scan_log is None:
+                continue
+            with open(os.path.join(log_path, scan_log), "rb") as log_fp:
+                stack = stack_hasher.Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
+            if stack.frames:
+                break
+        self.stack = stack if stack is not None and stack.frames else None
+
+        if size_limit > 0 and os.path.isdir(log_path):
+            for fname in os.listdir(log_path):
+                Report.tail(os.path.join(log_path, fname), size_limit)
 
 
-    @staticmethod
-    def meta_sort(meta_file, iterable, sort_property="st_ctime"):
-        with open(meta_file, "r") as json_fp:
-            meta = json.load(json_fp)
-        return sorted(
-            (lfn for lfn in iterable if lfn not in {os.path.basename(meta_file), "rr-trace"}),
-            key=lambda x: meta[x][sort_property])
+    def create_crash_info(self, target_binary):
+        # read in the log files and create a CrashInfo object
+        aux_data = None
+        if self.log_aux is not None:
+            with open(os.path.join(self.path, self.log_aux), "rb") as log_fp:
+                aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
+        stderr_file = os.path.join(self.path, self.log_err)
+        stdout_file = os.path.join(self.path, self.log_out)
+        with open(stderr_file, "rb") as err_fp, open(stdout_file, "rb") as out_fp:
+            return CrashInfo.fromRawCrashData(
+                out_fp.read().decode("utf-8", errors="ignore").splitlines(),
+                err_fp.read().decode("utf-8", errors="ignore").splitlines(),
+                ProgramConfiguration.fromBinary(target_binary),
+                auxCrashData=aux_data)
+
+
+    def cleanup(self):
+        if os.path.isdir(self.path):
+            shutil.rmtree(self.path)
+
+
+    @classmethod
+    def from_path(cls, path, size_limit=0):
+        return cls(path, Report.select_logs(path), size_limit=size_limit)
+
+
+    @property
+    def preferred(self):
+        return self.log_aux if self.log_aux is not None else self.log_err
 
 
     @staticmethod
@@ -85,8 +114,6 @@ class Reporter(object):
         log_metadata = os.path.join(log_path, "log_metadata.json")
         if os.path.isfile(log_metadata):
             log_files = Reporter.meta_sort(log_metadata, log_files)
-            # remove meta data file since it is not needed in the report
-            os.remove(log_metadata)
 
         # pattern to identify the ASan crash triggered when the parent process goes away
         re_e10s_forced = re.compile(r"""
@@ -123,7 +150,6 @@ class Reporter(object):
             if ": runtime error: " in log_data:
                 logs["aux"] = fname
 
-            # TODO: add check for empty LSan logs
             # catch all (choose the one with the most info for now)
             if logs["aux"] is None and os.stat(os.path.join(log_path, fname)).st_size:
                 logs["aux"] = fname
@@ -136,6 +162,8 @@ class Reporter(object):
                     log_data = log_fp.read(4096)
                     # this will select log that contains "Crash|SIGSEGV|" or
                     # the desired "DUMP_REQUESTED" log
+                    # TODO: review this it may be too strict
+                    # see https://searchfox.org/mozilla-central/source/accessible/ipc/DocAccessibleParent.cpp#452
                     if "Crash|DUMP_REQUESTED|" not in log_data or re_dump_req.search(log_data):
                         logs["aux"] = fname
                         break
@@ -159,70 +187,6 @@ class Reporter(object):
         return logs
 
 
-    def _process_logs(self):
-        self._map = self.select_logs(self._log_path)
-        # look through logs one by one until we find a stack
-        for scan_log in (self._map["aux"], self._map["stderr"], self._map["stdout"]):
-            if scan_log is None:
-                continue
-            with open(os.path.join(self._log_path, scan_log), "rb") as log_fp:
-                stack = stack_hasher.Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
-            # calculate hashes
-            if stack.frames:
-                self._minor = stack.minor
-                self._major = stack.major
-                break
-        if self._minor is None:
-            self._minor = self.DEFAULT_MINOR
-            self._major = self.DEFAULT_MAJOR
-        self._prefix = "_".join([self._minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S")])
-
-
-    def _process_rr_trace(self):
-        trace_dir = os.path.join(self._log_path, "rr-trace")
-        if os.path.isdir(trace_dir):
-            log.debug("calling: rr pack %s", trace_dir)
-            subprocess.check_output(["rr", "pack", trace_dir])
-            log.debug("calling: tar cf rr.tar %s", trace_dir)
-            rr_tar = os.path.join(self._log_path, "rr.tar.xz")
-            subprocess.check_call(["tar", "-C", trace_dir, "-caf", rr_tar, "."])
-            os.unlink(trace_dir)
-            return rr_tar
-        return None
-
-
-    def _report(self):
-        raise NotImplementedError("_report must be implemented in the subclass")
-
-
-    def _reset(self):
-        if self._log_path is not None and os.path.isdir(self._log_path):
-            shutil.rmtree(self._log_path)
-        self._log_path = None
-        self._major = None
-        self._map = dict()
-        self._minor = None
-        self._prefix = None
-        self._test_cases = None
-
-
-    def report(self, log_path, test_cases):
-        assert self._log_path is None
-        assert self._test_cases is None
-        self._log_path = log_path
-        self._test_cases = test_cases
-        if not os.path.isdir(self._log_path):
-            raise IOError("No such directory %r" % self._log_path)
-        self._process_logs()
-        self._process_rr_trace()
-        # tails logs before reporting if needed
-        if self.log_limit > 0:
-            for fname in os.listdir(log_path):
-                self.tail(os.path.join(log_path, fname), self.log_limit)
-        self._report()
-        self._reset()
-
-
     @staticmethod
     def tail(in_file, size_limit):
         assert size_limit > 0
@@ -243,15 +207,88 @@ class Reporter(object):
         shutil.move(out_file, in_file)
 
 
+class Reporter(object):
+    DEFAULT_MAJOR = "NO_STACK"
+    DEFAULT_MINOR = "0"
+
+    def __init__(self, log_limit=0):
+        self.log_limit = max(log_limit, 0)  # maximum log file size
+        self.report = None
+        self.test_cases = None
+        self._reset()
+
+
+    @property
+    def major(self):
+        if self.report is not None and self.report.stack is not None and self.report.stack.frames:
+            return self.report.stack.major
+        return self.DEFAULT_MAJOR
+
+
+    @property
+    def minor(self):
+        if self.report is not None and self.report.stack is not None and self.report.stack.frames:
+            return self.report.stack.minor
+        return self.DEFAULT_MINOR
+
+
+    @staticmethod
+    def meta_sort(meta_file, iterable, sort_property="st_ctime"):
+        with open(meta_file, "r") as json_fp:
+            meta = json.load(json_fp)
+        return sorted(
+            (lfn for lfn in iterable if lfn not in {os.path.basename(meta_file), "rr-trace"}),
+            key=lambda x: meta[x][sort_property])
+
+
+    @property
+    def prefix(self):
+        return "_".join([self.minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S")])
+
+
+    def _process_rr_trace(self):
+        trace_dir = os.path.join(self.report.path, "rr-trace")
+        if os.path.isdir(trace_dir):
+            log.debug("calling: rr pack %s", trace_dir)
+            subprocess.check_output(["rr", "pack", trace_dir])
+            log.debug("calling: tar cf rr.tar %s", trace_dir)
+            rr_tar = os.path.join(self.report.path, "rr.tar.xz")
+            subprocess.check_call(["tar", "-C", trace_dir, "-caf", rr_tar, "."])
+            os.unlink(trace_dir)
+            return rr_tar
+        return None
+
+
+    def _submit(self):
+        raise NotImplementedError("_submit must be implemented in the subclass")
+
+
+    def _reset(self):
+        if self.report is not None:
+            self.report.cleanup()
+        self.report = None
+        self.test_cases = None
+
+
+    def submit(self, log_path, test_cases):
+        assert self.report is None
+        assert self.test_cases is None
+        if not os.path.isdir(log_path):
+            raise IOError("No such directory %r" % log_path)
+        self.report = Report.from_path(log_path, self.log_limit)
+        self.test_cases = test_cases
+        self._process_rr_trace()
+        self._submit()
+        self._reset()
+
+
 class FilesystemReporter(Reporter):
-
-
     def __init__(self, log_limit=0, report_path=None):
         Reporter.__init__(self, log_limit)
         self.report_path = report_path
 
 
-    def _report(self):
+    def _submit(self):
         if self.report_path is None:
             self.report_path = os.path.join(os.getcwd(), "results")
 
@@ -260,19 +297,21 @@ class FilesystemReporter(Reporter):
             os.mkdir(self.report_path)
 
         # create major bucket directory in working directory if needed
-        major_dir = os.path.join(self.report_path, self._major)
+        major_dir = os.path.join(self.report_path, self.major)
         if not os.path.isdir(major_dir):
             os.mkdir(major_dir)
 
         # dump test cases and the contained files to working directory
-        for test_number, test_case in enumerate(self._test_cases):
-            dump_path = os.path.join(major_dir, "%s-%d" % (self._prefix, test_number))
+        for test_number, test_case in enumerate(self.test_cases):
+            dump_path = os.path.join(major_dir, "%s-%d" % (self.prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
 
         # move logs into bucket directory
-        shutil.move(self._log_path, os.path.join(major_dir, "_".join([self._prefix, "logs"])))
+        shutil.move(
+            self.report.path,
+            os.path.join(major_dir, "_".join([self.prefix, "logs"])))
 
 
 class FuzzManagerReporter(Reporter):
@@ -303,25 +342,9 @@ class FuzzManagerReporter(Reporter):
         ProgramConfiguration.fromBinary(bin_file)
 
 
-    def _create_crash_info(self):
-        # read in the log files and create a CrashInfo object
-        aux_data = None
-        if "aux" in self._map and self._map["aux"] is not None:
-            with open(os.path.join(self._log_path, self._map["aux"]), "rb") as log_fp:
-                aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
-        stderr_file = os.path.join(self._log_path, self._map["stderr"])
-        stdout_file = os.path.join(self._log_path, self._map["stdout"])
-        with open(stderr_file, "rb") as err_fp, open(stdout_file, "rb") as out_fp:
-            return CrashInfo.fromRawCrashData(
-                out_fp.read().decode("utf-8", errors="ignore").splitlines(),
-                err_fp.read().decode("utf-8", errors="ignore").splitlines(),
-                ProgramConfiguration.fromBinary(self.target_binary),
-                auxCrashData=aux_data)
-
-
     def _process_rr_trace(self):
         # don't report large files to FuzzManager
-        trace_dir = os.path.join(self._log_path, "rr-trace")
+        trace_dir = os.path.join(self.report.path, "rr-trace")
         if os.path.isdir(trace_dir):
             self._extra_metadata["rr-trace"] = "ignored"
             os.unlink(trace_dir)
@@ -331,10 +354,7 @@ class FuzzManagerReporter(Reporter):
     def _ignored(self):
         # This is here to prevent reporting stack-less crashes
         # that were caused by system OOM or bogus other crashes
-        if "aux" in self._map and self._map["aux"]:
-            log_file = os.path.join(self._log_path, self._map["aux"])
-        else:
-            log_file = os.path.join(self._log_path, self._map["stderr"])
+        log_file = os.path.join(self.report.path, self.report.preferred)
         with open(log_file, "rb") as log_fp:
             log_data = log_fp.read().decode("utf-8", errors="ignore")
         if "ERROR: Failed to mmap" in log_data and "#0 " not in log_data:
@@ -342,9 +362,9 @@ class FuzzManagerReporter(Reporter):
         return False
 
 
-    def _report(self):
+    def _submit(self):
         # prepare data for submission as CrashInfo
-        crash_info = self._create_crash_info()
+        crash_info = self.report.create_crash_info(self.target_binary)
 
         # search for a cached signature match and if the signature
         # is already in the cache and marked as frequent, don't bother submitting
@@ -380,9 +400,9 @@ class FuzzManagerReporter(Reporter):
 
         # dump test cases and the contained files to working directory
         test_case_meta = []
-        for test_number, test_case in enumerate(self._test_cases):
+        for test_number, test_case in enumerate(self.test_cases):
             test_case_meta.append([test_case.corpman_name, test_case.input_fname])
-            dump_path = os.path.join(self._log_path, "%s-%d" % (self._prefix, test_number))
+            dump_path = os.path.join(self.report.path, "%s-%d" % (self.prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
@@ -393,16 +413,16 @@ class FuzzManagerReporter(Reporter):
         if os.getenv("WINDOW") is not None:
             screen_log = ".".join(["screenlog", os.getenv("WINDOW")])
             if os.path.isfile(screen_log):
-                target_log = os.path.join(self._log_path, "screenlog.txt")
+                target_log = os.path.join(self.report.path, "screenlog.txt")
                 shutil.copyfile(screen_log, target_log)
-                self.tail(target_log, 10240)  # limit to last 10K
+                Report.tail(target_log, 10240)  # limit to last 10K
 
         # add results to a zip file
-        zip_name = ".".join([self._prefix, "zip"])
+        zip_name = ".".join([self.prefix, "zip"])
         with zipfile.ZipFile(zip_name, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_fp:
             # add test files
-            for dir_name, _, dir_files in os.walk(self._log_path):
-                arc_path = os.path.relpath(dir_name, self._log_path)
+            for dir_name, _, dir_files in os.walk(self.report.path):
+                arc_path = os.path.relpath(dir_name, self.report.path)
                 for file_name in dir_files:
                     zip_fp.write(
                         os.path.join(dir_name, file_name),
@@ -410,6 +430,7 @@ class FuzzManagerReporter(Reporter):
 
         # submit results to the FuzzManager server
         collector.submit(crash_info, testCase=zip_name, testCaseQuality=5)
+        # TODO: add msg with cache_metadata["shortDescription"]
 
         # remove zipfile
         if os.path.isfile(zip_name):
@@ -417,18 +438,18 @@ class FuzzManagerReporter(Reporter):
 
 
 class S3FuzzManagerReporter(FuzzManagerReporter):
-
+    S3_BUCKET = "grizzly.fuzzing.mozilla.org"
 
     def _process_rr_trace(self):
-        trace_dir = os.path.join(self._log_path, "rr-trace")
+        trace_dir = os.path.join(self.report.path, "rr-trace")
         if os.path.isdir(trace_dir):
             # check for existing minor hash in S3
             s3 = boto3.resource("s3")
 
-            s3_key = "rr-%s.tar.xz" % (self._minor,)
+            s3_key = "rr-%s.tar.xz" % (self.minor,)
             s3_url = "http://%s.s3.amazonaws.com/%s" % (S3_BUCKET, s3_key)
             try:
-                s3.Object(S3_BUCKET, s3_key).load()  # HEAD, doesn't fetch the whole object
+                s3.Object(self.S3_BUCKET, s3_key).load()  # HEAD, doesn't fetch the whole object
             except botocore.exceptions.ClientError as exc:
                 if exc.response["Error"]["Code"] == "404":
                     # The object does not exist.
@@ -445,7 +466,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
 
             # Upload to S3
             rr_path = Reporter._process_rr_trace(self)
-            s3.meta.client.upload_file(rr_path, S3_BUCKET, s3_key, ExtraArgs={"ACL": "public-read"})
+            s3.meta.client.upload_file(rr_path, self.S3_BUCKET, s3_key, ExtraArgs={"ACL": "public-read"})
             self._extra_metadata["rr-trace"] = s3_url
             os.remove(rr_path)
             log.info("RR trace uploaded at %s", s3_url)

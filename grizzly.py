@@ -333,7 +333,7 @@ class Session(object):
             else:
                 log.warning("RR specified but no trace detected.")
         self.target.save_logs(result_logs, meta=True)
-        self.reporter.report(result_logs, reversed(self.test_cache))
+        self.reporter.submit(result_logs, reversed(self.test_cache))
         if os.path.isdir(result_logs):
             shutil.rmtree(result_logs)
 

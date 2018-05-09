@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 
-from reporter import FilesystemReporter, Reporter
+from reporter import FilesystemReporter, Reporter, Report
 
 logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
 log = logging.getLogger("grz_report_test")
@@ -26,7 +26,7 @@ class TestCase(unittest.TestCase):
             return self.assertRaisesRegexp(*args, **kwds)
 
 
-class GrizzlyReporterTests(TestCase):
+class ReportTests(TestCase):
     def setUp(self):
         fd, self.tmpfn = tempfile.mkstemp(prefix="grz_test_")
         os.close(fd)
@@ -39,42 +39,68 @@ class GrizzlyReporterTests(TestCase):
             os.remove(self.tmpfn)
 
     def test_01(self):
-        "test creating a simple Reporter"
-        reporter = Reporter()
-        self.assertEqual(reporter.log_limit, 0)
-        with self.assertRaisesRegexp(IOError, "No such directory 'fake_dir'"):
-            reporter.report("fake_dir", [])
-
-        reporter = Reporter(1024)
-        self.assertEqual(reporter.log_limit, 1024)
-        with self.assertRaisesRegexp(IOError, "No logs found in"):
-            reporter.report(self.tmpdir, [])
-
-        test_log = os.path.join(self.tmpdir, "test.log.txt")
-        with open(test_log, "w") as log_fp:
-            log_fp.write("test log...\n123\n\n")
-        reporter = Reporter()
-        with self.assertRaisesRegexp(NotImplementedError, "_report must be implemented in the subclass"):
-            reporter.report(self.tmpdir, [])
+        "test creating a simple Report"
+        report = Report("no_dir", dict())
+        self.assertEqual(report.path, "no_dir")
+        self.assertIsNone(report.log_aux)
+        self.assertIsNone(report.log_err)
+        self.assertIsNone(report.log_out)
+        self.assertIsNone(report.stack)
+        self.assertIsNone(report.preferred)
+        report.cleanup()
 
     def test_02(self):
-        "test Reporter.tail()"
+        "test from_path() with boring logs"
+        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        report = Report.from_path(self.tmpdir)
+        self.assertEqual(report.path, self.tmpdir)
+        self.assertTrue(report.log_err.endswith("log_stderr.txt"))
+        self.assertTrue(report.log_out.endswith("log_stdout.txt"))
+        self.assertTrue(report.preferred.endswith("log_stderr.txt"))
+        self.assertIsNone(report.log_aux)
+        self.assertIsNone(report.stack)
+        report.cleanup()
+        self.assertFalse(os.path.isdir(self.tmpdir))
+
+    def test_03(self):
+        "test from_path()"
+        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        with open(os.path.join(self.tmpdir, "log_asan_blah.txt"), "w") as log_fp:
+            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
+        report = Report.from_path(self.tmpdir)
+        self.assertEqual(report.path, self.tmpdir)
+        self.assertTrue(report.log_aux.endswith("log_asan_blah.txt"))
+        self.assertTrue(report.log_err.endswith("log_stderr.txt"))
+        self.assertTrue(report.log_out.endswith("log_stdout.txt"))
+        self.assertTrue(report.preferred.endswith("log_asan_blah.txt"))
+        self.assertIsNotNone(report.stack)
+        report.cleanup()
+
+    def test_04(self):
+        "test Report.tail()"
         with open(self.tmpfn, "wb") as test_fp:
             test_fp.write(b"blah\ntest\n123\xEF\x00FOO")
             length = test_fp.tell()
         # no size limit
         self.assertEqual(os.stat(self.tmpfn).st_size, length)
         with self.assertRaises(AssertionError):
-            Reporter.tail(self.tmpfn, 0)
+            Report.tail(self.tmpfn, 0)
         self.assertEqual(os.stat(self.tmpfn).st_size, length)
-        Reporter.tail(self.tmpfn, 3)
+        Report.tail(self.tmpfn, 3)
         with open(self.tmpfn, "rb") as test_fp:
             log_data = test_fp.read()
         self.assertTrue(log_data.startswith(b"[LOG TAILED]\n"))
         self.assertEqual(log_data[13:], b"FOO")
 
-    def test_03(self):
-        "test Reporter.select_logs()"
+    def test_05(self):
+        "test Report.select_logs()"
         asan_prefix = "log_asan.txt"
         test_logs = list()
         for _ in range(3):
@@ -106,7 +132,7 @@ class GrizzlyReporterTests(TestCase):
         # should be ignored in favor of "GOOD LOG"
         with open(os.path.join(self.tmpdir, "log_ffp_worker_blah.txt"), "w") as log_fp:
             log_fp.write("worker log")
-        log_map = Reporter.select_logs(self.tmpdir)
+        log_map = Report.select_logs(self.tmpdir)
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stderr"])))
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
@@ -117,87 +143,8 @@ class GrizzlyReporterTests(TestCase):
         with open(os.path.join(self.tmpdir, log_map["stdout"]), "r") as log_fp:
             self.assertIn("STDOUT", log_fp.read())
 
-    def test_04(self):
-        "test Reporter._process_logs() with boring files (no stack)"
-        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
-            log_fp.write("STDERR log")
-        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
-            log_fp.write("STDOUT log")
-        reporter = Reporter()
-        reporter._log_path = self.tmpdir  # pylint: disable=protected-access
-        reporter._process_logs()  # pylint: disable=protected-access
-        self.assertIsNone(reporter._map["aux"])  # pylint: disable=protected-access
-        self.assertEqual(Reporter.DEFAULT_MAJOR, reporter._major)  # pylint: disable=protected-access
-        self.assertEqual(Reporter.DEFAULT_MINOR, reporter._minor)  # pylint: disable=protected-access
-
-    def test_05(self):
-        "test Reporter._process_logs()"
-        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
-            log_fp.write("STDERR log")
-        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
-            log_fp.write("STDOUT log")
-        with open(os.path.join(self.tmpdir, "log_asan_blah.txt"), "w") as log_fp:
-            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
-            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
-        reporter = Reporter()
-        reporter._log_path = self.tmpdir  # pylint: disable=protected-access
-        reporter._process_logs()  # pylint: disable=protected-access
-        self.assertNotEqual(Reporter.DEFAULT_MAJOR, reporter._major)  # pylint: disable=protected-access
-        self.assertNotEqual(Reporter.DEFAULT_MINOR, reporter._minor)  # pylint: disable=protected-access
-
     def test_06(self):
-        "test FilesystemReporter without testcases"
-        logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
-        with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
-            log_fp.write("STDERR log")
-        with open(os.path.join(logs, "log_stdout.txt"), "w") as log_fp:
-            log_fp.write("STDOUT log")
-        with open(os.path.join(logs, "log_asan_blah.txt"), "w") as log_fp:
-            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
-            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
-        report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
-        reporter = FilesystemReporter(report_path=report_dir)
-        reporter.report(logs, [])
-
-    def test_07(self):
-        "test FilesystemReporter with testcases"
-        class DummyTest(object):
-            def __init__(self):
-                self.dump_called = False
-            def dump(self, log_dir, include_details=False):  # pylint: disable=unused-argument
-                assert not self.dump_called
-                self.dump_called = True
-
-        logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
-        # write logs
-        with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
-            log_fp.write("STDERR log")
-        with open(os.path.join(logs, "log_stdout.txt"), "w") as log_fp:
-            log_fp.write("STDOUT log")
-        with open(os.path.join(logs, "log_asan_blah.txt"), "w") as log_fp:
-            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
-            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
-        testcases = list()
-        for _ in range(10):
-            testcases.append(DummyTest())
-        report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
-        reporter = FilesystemReporter(report_path=report_dir)
-        reporter.report(logs, testcases)
-        # call report a 2nd time
-        logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
-        with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
-            log_fp.write("STDERR log")
-        with open(os.path.join(logs, "log_stdout.txt"), "w") as log_fp:
-            log_fp.write("STDOUT log")
-        testcases = list()
-        for tc in testcases:
-            self.assertTrue(tc.dump_called)
-        for _ in range(10):
-            testcases.append(DummyTest())
-        reporter.report(logs, testcases)
-
-    def test_08(self):
-        "test selecting minidump"
+        "test minidump with Report.select_logs()"
         with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
             log_fp.write("STDERR log")
         with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
@@ -208,15 +155,15 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("GPU|||\n")
             log_fp.write("Crash|SIGSEGV|0x0|0\n")
             log_fp.write("minidump log\n")
-        log_map = Reporter.select_logs(self.tmpdir)
+        log_map = Report.select_logs(self.tmpdir)
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stderr"])))
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
         with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("minidump log", log_fp.read())
 
-    def test_09(self):
-        "test selecting preferred DUMP_REQUESTED minidump"
+    def test_07(self):
+        "test selecting preferred DUMP_REQUESTED minidump with Report.select_logs()"
         with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
             log_fp.write("STDERR log")
         with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
@@ -236,30 +183,30 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("Crash|DUMP_REQUESTED|0x7f9518665d18|0\n")
             log_fp.write("0|0|bar.so|sadf|a.cc:1234|3066|0x0\n")
             log_fp.write("0|1|gar.so|fdsa|b.cc:4323|1644|0x12\n")
-        log_map = Reporter.select_logs(self.tmpdir)
+        log_map = Report.select_logs(self.tmpdir)
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stderr"])))
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
         with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("google_breakpad::ExceptionHandler::WriteMinidump", log_fp.read())
 
-    def test_10(self):
-        "test selecting worker logs"
+    def test_08(self):
+        "test selecting worker logs with Report.select_logs()"
         with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
             log_fp.write("STDERR log")
         with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
             log_fp.write("STDOUT log")
         with open(os.path.join(self.tmpdir, "log_ffp_worker_blah.txt"), "w") as log_fp:
             log_fp.write("worker log")
-        log_map = Reporter.select_logs(self.tmpdir)
+        log_map = Report.select_logs(self.tmpdir)
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stderr"])))
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["stdout"])))
         with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("worker log", log_fp.read())
 
-    def test_11(self):
-        "test prioritizing *San logs"
+    def test_09(self):
+        "test prioritizing *San logs with Report.select_logs()"
         asan_prefix = "log_asan.txt"
         test_logs = list()
         for _ in range(5):
@@ -289,14 +236,121 @@ class GrizzlyReporterTests(TestCase):
         with open(os.path.join(self.tmpdir, test_logs[4]), "w") as log_fp:
             log_fp.write("BAD LOG\n")
             log_fp.write("ERROR: Failed to mmap\n") # must be 2nd line
-        log_map = Reporter.select_logs(self.tmpdir)
+        log_map = Report.select_logs(self.tmpdir)
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir, log_map["aux"])))
         with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("GOOD LOG", log_fp.read())
 
+
+class ReporterTests(TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="grz_test")
+
+    def tearDown(self):
+        if os.path.isdir(self.tmpdir):
+            shutil.rmtree(self.tmpdir)
+
+    def test_01(self):
+        "test creating a simple Reporter"
+        reporter = Reporter()
+        self.assertIsNotNone(Reporter.prefix)
+        self.assertEqual(reporter.log_limit, 0)
+        with self.assertRaisesRegexp(IOError, "No such directory 'fake_dir'"):
+            reporter.submit("fake_dir", [])
+
+        reporter = Reporter(1024)
+        self.assertEqual(reporter.log_limit, 1024)
+        with self.assertRaisesRegexp(IOError, "No logs found in"):
+            reporter.submit(self.tmpdir, [])
+
+        test_log = os.path.join(self.tmpdir, "test.log.txt")
+        with open(test_log, "w") as log_fp:
+            log_fp.write("test log...\n123\n\n")
+        reporter = Reporter()
+        with self.assertRaisesRegexp(NotImplementedError, "_submit must be implemented in the subclass"):
+            reporter.submit(self.tmpdir, [])
+
+    def test_02(self):
+        "test Reporter with boring files (no stack)"
+        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        reporter = Reporter()
+        reporter.report = Report.from_path(self.tmpdir)
+        self.assertEqual(Reporter.DEFAULT_MAJOR, reporter.major)
+        self.assertEqual(Reporter.DEFAULT_MINOR, reporter.minor)
+        self.assertIsNotNone(Reporter.prefix)
+
+    def test_03(self):
+        "test Reporter"
+        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        with open(os.path.join(self.tmpdir, "log_asan_blah.txt"), "w") as log_fp:
+            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
+        reporter = Reporter()
+        reporter.report = Report.from_path(self.tmpdir)
+        self.assertNotEqual(Reporter.DEFAULT_MAJOR, reporter.major)
+        self.assertNotEqual(Reporter.DEFAULT_MINOR, reporter.minor)
+        self.assertIsNotNone(Reporter.prefix)
+
+    def test_04(self):
+        "test FilesystemReporter without testcases"
+        logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
+        with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(logs, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        with open(os.path.join(logs, "log_asan_blah.txt"), "w") as log_fp:
+            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
+        report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
+        reporter = FilesystemReporter(report_path=report_dir)
+        reporter.submit(logs, [])
+
+    def test_05(self):
+        "test FilesystemReporter with testcases"
+        class DummyTest(object):  # pylint: disable=too-few-public-methods
+            def __init__(self):
+                self.dump_called = False
+            def dump(self, log_dir, include_details=False):  # pylint: disable=unused-argument
+                assert not self.dump_called
+                self.dump_called = True
+
+        logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
+        # write logs
+        with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(logs, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        with open(os.path.join(logs, "log_asan_blah.txt"), "w") as log_fp:
+            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
+        testcases = list()
+        for _ in range(10):
+            testcases.append(DummyTest())
+        report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
+        reporter = FilesystemReporter(report_path=report_dir)
+        reporter.submit(logs, testcases)
+        # call report a 2nd time
+        logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
+        with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log")
+        with open(os.path.join(logs, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log")
+        testcases = list()
+        for tstc in testcases:
+            self.assertTrue(tstc.dump_called)
+        for _ in range(10):
+            testcases.append(DummyTest())
+        reporter.submit(logs, testcases)
+
     @unittest.skipIf(not platform.system().lower().startswith("linux"),
                      "RR only supported on Linux")
-    def test_12(self):
+    def test_06(self):
         "test packaging rr traces"
         rr_dir = tempfile.mkdtemp(prefix="tst_rr", dir=self.tmpdir)
         try:
@@ -318,14 +372,14 @@ class GrizzlyReporterTests(TestCase):
             log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
         report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
         reporter = FilesystemReporter(report_path=report_dir)
-        reporter.report(logs, [])
+        reporter.submit(logs, [])
         report_log_dirs = glob.glob(report_dir + "/*/*_logs/")
         self.assertEqual(len(report_log_dirs), 1)
         report_log_dir = report_log_dirs[0]
         self.assertFalse(os.path.islink(os.path.join(report_log_dir, "rr-trace")))
         self.assertTrue(os.path.isfile(os.path.join(report_log_dir, "rr.tar.xz")))
 
-    def test_13(self):
+    def test_07(self):
         "test meta_sort()"
         meta_file = os.path.join(self.tmpdir, "meta.json")
         meta_data = {
