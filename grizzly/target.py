@@ -26,8 +26,8 @@ class Target(object):
         self.binary = binary
         self.extension = extension
         self.launch_timeout = max(launch_timeout, 300)
-        self.log_limit = log_limit * 0x100000 if log_limit > 0 else 0
-        self.memory_limit = memory_limit * 0x100000 if memory_limit > 0 else 0
+        self.log_limit = log_limit * 0x100000 if log_limit and log_limit > 0 else 0
+        self.memory_limit = memory_limit * 0x100000 if memory_limit and memory_limit > 0 else 0
         self.prefs = os.path.abspath(prefs) if prefs else None
         self.rl_countdown = 0
         self.rl_reset = max(relaunch, 1)
@@ -136,9 +136,9 @@ class Target(object):
         os.kill(pid, signal.SIGUSR1)
 
 
-    def launch(self, location):
+    def launch(self, location, env_mod=None):
         self.rl_countdown = self.rl_reset
-        env_mod = dict()
+        env_mod = dict(env_mod or [])  # if passed, make a copy so modifications aren't passed out
 
         # do not allow network connections to non local endpoints
         env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"

@@ -19,7 +19,6 @@ Support for different browser can be added by the creation of a browser "puppet"
 module (see ffpuppet). TODO: Implement generic "puppet" support.
 """
 
-import argparse
 import logging
 import os
 import shutil
@@ -37,115 +36,6 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
 log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
-
-
-def parse_args(argv=None):
-    aval_corpmans = sorted(corpman.loader.list())
-    ignorable = ("log-limit", "memory", "timeout")
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "binary",
-        help="Firefox binary to run")
-    parser.add_argument(
-        "input",
-        help="Test case or directory containing test cases")
-    parser.add_argument(
-        "corpus_manager",
-        help="Available corpus managers: %s" % ", ".join(aval_corpmans))
-    parser.add_argument(
-        "--accepted-extensions", nargs="+",
-        help="Space separated list of supported file extensions. ie: html svg (default: all)")
-    parser.add_argument(
-        "-c", "--cache", type=int, default=1,
-        help="Maximum number of previous test cases to dump after crash (default: %(default)s)")
-    parser.add_argument(
-        "-e", "--extension",
-        help="Install the fuzzPriv extension (specify path to funfuzz/dom/extension)")
-    parser.add_argument(
-        "--fuzzmanager", action="store_true",
-        help="Report results to FuzzManager")
-    parser.add_argument(
-        "--coverage", action="store_true",
-        help="Enable coverage collection")
-    parser.add_argument(
-        "--ignore", nargs="+", default=list(),
-        help="Space separated ignore list. ie: %s (default: nothing)" % " ".join(ignorable))
-    parser.add_argument(
-        "--launch-timeout", type=int, default=300,
-        help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
-    parser.add_argument(
-        "--log-limit", type=int,
-        help="Log file size limit in MBs (default: 'no limit')")
-    parser.add_argument(
-        "-m", "--memory", type=int,
-        help="Browser process memory limit in MBs (default: 'no limit')")
-    parser.add_argument(
-        "--mime",
-        help="Specify a mime type")
-    parser.add_argument(
-        "-p", "--prefs",
-        help="prefs.js file to use")
-    parser.add_argument(
-        "-q", "--quiet", action="store_true",
-        help="Output is minimal")
-    parser.add_argument(
-        "--relaunch", type=int, default=1000,
-        help="Number of iterations performed before relaunching the browser (default: %(default)s)")
-    parser.add_argument(
-        "--rr", action="store_true",
-        help="Use RR (Linux only)")
-    parser.add_argument(
-        "-s", "--asserts", action="store_true",
-        help="Detect soft assertions")
-    parser.add_argument(
-        "--s3-fuzzmanager", action="store_true",
-        help="Report large attachments (if any) to S3 and then the crash & S3 link to FuzzManager")
-    parser.add_argument(
-        "-t", "--timeout", type=int, default=60,
-        help="Iteration timeout in seconds (default: %(default)s)")
-    parser.add_argument(
-        "--valgrind", action="store_true",
-        help="Use Valgrind (Linux only)")
-    parser.add_argument(
-        "-w", "--working-path",
-        help="Working directory. Intended to be used with ram-drives." \
-             " (default: %r)" % tempfile.gettempdir())
-    parser.add_argument(
-        "--xvfb", action="store_true",
-        help="Use Xvfb (Linux only)")
-
-    args = parser.parse_args(argv)
-
-    if not os.path.isfile(args.binary):
-        parser.error("%r does not exist" % args.binary)
-
-    # sanitize ignore list
-    args.ignore = {arg.lower() for arg in args.ignore}
-    for ignore_token in args.ignore:
-        if ignore_token not in ignorable:
-            parser.error("Unrecognized ignore value: %s" % ignore_token)
-
-    if not os.path.exists(args.input):
-        parser.error("%r does not exist" % args.input)
-    elif os.path.isdir(args.input) and not os.listdir(args.input):
-        parser.error("%r is empty" % args.input)
-
-    if args.corpus_manager.lower() not in aval_corpmans:
-        parser.error("%r corpus manager does not exist" % args.corpus_manager.lower())
-
-    if args.extension is not None and not os.path.exists(args.extension):
-        parser.error("%r does not exist" % args.extension)
-
-    if args.prefs is not None and not os.path.isfile(args.prefs):
-        parser.error("%r does not exist" % args.prefs)
-
-    if args.fuzzmanager and args.s3_fuzzmanager:
-        parser.error("--fuzzmanager and --s3-fuzzmanager are mutually exclusive")
-
-    if args.working_path is not None and not os.path.isdir(args.working_path):
-        parser.error("%r is not a directory" % args.working_path)
-
-    return args
 
 
 class Session(object):
