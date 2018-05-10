@@ -23,16 +23,14 @@ import argparse
 import logging
 import os
 import shutil
-import signal
 import tempfile
-import time
 
 import corpman
-from ffpuppet import BrowserTerminatedError, FFPuppet, LaunchError
-import psutil
+from ffpuppet import BrowserTerminatedError
 import reporter
 import sapphire
 from status import Status
+from target import Target
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
@@ -154,26 +152,17 @@ class Session(object):
     FM_LOG_SIZE_LIMIT = 0x40000  # max log size for log sent to FuzzManager (256KB)
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, cache_size, coverage, ignore, log_limit, memory_limit, relaunch, use_rr, working_path=None):
+    def __init__(self, cache_size, coverage, ignore, target, working_path=None):
         self.adapter = None
         self.binary = None
         self.cache_size = max(cache_size, 1)  # testcase cache must be at least one
-        self.extension = None  # TODO: this should become part of the target
-        self.coverage = coverage  # TODO: this should become part of the adapter
+        self.coverage = coverage  # TODO: this should become part of the adapter???
         self.ignore = ignore
-        self.launch_timeout = None  # TODO: this should become part of the target
-        self.log_limit = max(log_limit * 1024 * 1024, 0) if log_limit else 0  # maximum log size limit
-        self.memory_limit = max(memory_limit * 1024 * 1024, 0) if memory_limit else 0 # target's memory limit
         self.mime = None  # TODO: this should become part of adapter
-        self.prefs = None  # TODO: this should become part of the target
         self.reporter = None
-        self.rl_countdown = 0  # TODO: this should become part of the target
-        self.rl_reset = max(relaunch, 1)  # iterations to perform before relaunch... TODO: this should become part of the target
-        self.rr_path = None  # path to rr traces
         self.server = None
         self.status = Status()
-        self.use_rr = use_rr
-        self.target = None
+        self.target = target
         self.test_cache = list()  # should contain len(cache) + 1 maximum
         self.wwwdir = None  # directory containing test files to be served
         self.working_path = working_path  # where test files will be stored
@@ -206,37 +195,6 @@ class Session(object):
                 (self.adapter.test_duration/1000.0), iteration_timeout))
 
 
-    def config_target(self, binary, prefs, extension, launch_timeout, use_valgrind, use_xvfb):
-        log.debug("initializing the target")
-        assert self.target is None
-        # TODO: target will be an abstraction in the future
-        # do not allow network connections to non local endpoints
-        os.environ["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
-
-        self.binary = binary
-        self.extension = extension
-        self.launch_timeout = launch_timeout
-        assert self.binary is not None and os.path.isfile(self.binary)
-
-        if prefs is not None:
-            self.prefs = os.path.abspath(prefs)
-            assert os.path.isfile(self.prefs)
-            log.info("Using prefs from %r", self.prefs)
-
-        if use_xvfb:
-            log.info("Running with Xvfb")
-        if use_valgrind:
-            log.info("Running with Valgrind. This will be SLOW!")
-        if self.use_rr:
-            log.info("Running with RR")
-
-        # create FFPuppet object
-        self.target = FFPuppet(
-            use_rr=self.use_rr,
-            use_valgrind=use_valgrind,
-            use_xvfb=use_xvfb)
-
-
     def config_server(self, iteration_timeout):
         log.debug("initializing the server")
         assert self.server is None
@@ -261,56 +219,12 @@ class Session(object):
         if self.wwwdir and os.path.isdir(self.wwwdir):
             shutil.rmtree(self.wwwdir)
         if self.target is not None:
-            self.target.clean_up()
+            self.target.cleanup()
         if self.adapter is not None:
             self.adapter.cleanup()
-        if self.use_rr:
-            if self.rr_path is not None and os.path.isdir(self.rr_path):
-                shutil.rmtree(self.rr_path)
-
-
-    @staticmethod
-    def dump_coverage(pid):
-        log.info("GCOV: Dumping coverage data...")
-        try:
-            for child in psutil.Process(pid).children(recursive=True):
-                log.debug('Sending SIGUSR1 to %d', child.pid)
-                os.kill(child.pid, signal.SIGUSR1)
-        except (psutil.AccessDenied, psutil.NoSuchProcess):
-            pass
-        log.debug('Sending SIGUSR1 to %d', pid)
-        os.kill(pid, signal.SIGUSR1)
-
-
-    def launch_target(self):
-        self.rl_countdown = self.rl_reset
-        self.test_cache = list()
-        env_mod = dict()
-
-        if self.use_rr:
-            if self.rr_path is not None and os.path.isdir(self.rr_path):
-                shutil.rmtree(self.rr_path)
-            self.rr_path = tempfile.mkdtemp(prefix="grz_rr")
-            env_mod["_RR_TRACE_DIR"] = self.rr_path
-
-        log.info("Launching target")
-        try:
-            self.target.launch(
-                self.binary,
-                launch_timeout=self.launch_timeout,
-                location="http://127.0.0.1:%d/%s#timeout=%d,close_after=%d" % (
-                    self.server.get_port(),
-                    self.adapter.landing_page(harness=True),
-                    self.adapter.test_duration,
-                    self.rl_reset),
-                log_limit=self.log_limit,
-                memory_limit=self.memory_limit,
-                prefs_js=self.prefs,
-                extension=self.extension,
-                env_mod=env_mod)
-        except LaunchError:
-            self.target.close()
-            raise
+        if self.target.use_rr:
+            if self.target.rr_path is not None and os.path.isdir(self.target.rr_path):
+                shutil.rmtree(self.target.rr_path)
 
 
     def process_result(self):
@@ -320,12 +234,12 @@ class Session(object):
         log.info("Reporting results...")
         # create working directory for current testcase
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
-        if self.use_rr:
+        if self.target.use_rr:
             # symlink the RR trace into the log path so the Reporter can detect it
             # and process if needed.
             rrtrace = None
-            if self.rr_path is not None:
-                rrtrace = os.path.realpath(os.path.join(self.rr_path, "latest-trace"))
+            if self.target.rr_path is not None:
+                rrtrace = os.path.realpath(os.path.join(self.target.rr_path, "latest-trace"))
                 if not os.path.isdir(rrtrace):
                     rrtrace = None
             if rrtrace is not None:
@@ -342,16 +256,22 @@ class Session(object):
         assert self.adapter is not None, "adapter is not configured"
         assert self.reporter is not None, "reporter is not configured"
         assert self.server is not None, "server is not configured"
-        assert self.target is not None, "target is not configured"
 
         while True:  # main fuzzing iteration loop
             self.status.report()
             self.status.iteration += 1
 
             # launch FFPuppet
-            if self.target.reason is not None:
+            if self.target.closed:
                 try:
-                    self.launch_target()
+                    self.test_cache = list()
+                    location = "http://127.0.0.1:%d/%s#timeout=%d,close_after=%d" % (
+                        self.server.get_port(),
+                        self.adapter.landing_page(harness=True),
+                        self.adapter.test_duration,
+                        self.target.rl_reset)
+                    log.info("Launching target")
+                    self.target.launch(location)
                     # TODO: handle BrowserTimeoutError?
                 except BrowserTerminatedError:
                     # this result likely has nothing to do with grizzly
@@ -361,8 +281,8 @@ class Session(object):
             # generate testcase
             log.debug("calling self.adapter.generate()")
             current_test = self.adapter.generate(mime_type=self.mime)
-            if self.prefs is not None:
-                current_test.add_environ_file(self.prefs, fname="prefs.js")
+            if self.target.prefs is not None:
+                current_test.add_environ_file(self.target.prefs, fname="prefs.js")
 
             # update sapphire redirects from the corpman
             for redirect in self.adapter.srv_map.redirects:
@@ -386,12 +306,10 @@ class Session(object):
             # dump test case files to filesystem to be served
             current_test.dump(self.wwwdir)
 
-            # decrement relaunch countdown
-            self.rl_countdown -= 1
             # use Sapphire to serve the most recent test case
             server_status, files_served = self.server.serve_path(
                 self.wwwdir,
-                continue_cb=self.target.is_healthy,
+                continue_cb=self.target._puppet.is_healthy,
                 optional_files=current_test.get_optional())
 
             # remove test case working directory
@@ -409,74 +327,29 @@ class Session(object):
                 if len(self.test_cache) > self.cache_size:
                     self.test_cache.pop(0)
 
-            if self.rl_countdown < 1 and server_status != sapphire.SERVED_TIMEOUT:
-                # if the corpus manager does not use the default harness
-                # chances are it will hang here for 60 seconds
-                log.debug("relaunch will be triggered... waiting 60 seconds")
-                self.target.wait(60)
-                if self.target.is_running():
-                    log.warning("Target should have closed itself")
-
             # attempt to detect a failure
-            failure_detected = False
-            if not self.target.is_running():
-                self.target.close()
-                if self.target.reason == FFPuppet.RC_EXITED:
-                    log.info("Target closed itself")
-                elif (self.target.reason == FFPuppet.RC_WORKER
-                      and "memory" in self.ignore
-                      and "ffp_worker_memory_limiter" in self.target.available_logs()):
-                    self.status.ignored += 1
-                    log.info("Memory limit exceeded, ignored (%d)", self.status.ignored)
-                elif (self.target.reason == FFPuppet.RC_WORKER
-                      and "log-limit" in self.ignore
-                      and "ffp_worker_log_size_limiter" in self.target.available_logs()):
-                    self.status.ignored += 1
-                    log.info("Log size limit exceeded, ignored (%d)", self.status.ignored)
-                else:
-                    log.debug("failure detected")
-                    failure_detected = True
-            elif not self.target.is_healthy():
-                # this should be e10s only
-                failure_detected = True
-                log.info("Browser is alive but has crash reports. Terminating...")
-                self.target.close()
-            elif server_status == sapphire.SERVED_TIMEOUT:
-                log.debug("timeout detected")
-                self.target.close()
-                # handle ignored timeouts
-                if self.ignore and "timeout" in self.ignore:
-                    self.status.ignored += 1
-                    log.info("Timeout ignored (%d)", self.status.ignored)
-                else:
-                    failure_detected = True
+            failure_detected = self.target.detect_failure(
+                self.ignore,
+                server_status == sapphire.SERVED_TIMEOUT)
 
             # handle failure if detected
-            if failure_detected:
+            if failure_detected == Target.RESULT_FAILURE:
                 self.process_result()
+            elif failure_detected == Target.RESULT_IGNORED:
+                self.status.ignored += 1
+                log.info("Ignored (%d)", self.status.ignored)
+
 
             # warn about large browser logs
-            self.status.log_size = self.target.log_length("stderr") + self.target.log_length("stdout")
+            self.status.log_size = self.target.log_size()
             if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
-                log.warning("Large browser logs: %dMBs", (self.status.log_size/1048576))
+                log.warning("Large browser logs: %dMBs", (self.status.log_size/0x100000))
 
-            if self.coverage and self.target.is_running():
-                # If at this point, the browser is running, i.e. we did neither
-                # relaunch nor crash/timeout, then we need to signal the browser
-                # to dump coverage before attempting a new test that potentially
-                # crashes.
-                # Note: This is not required if we closed or are going to close
-                # the browser (relaunch or done with all iterations) because the
-                # SIGTERM will also trigger coverage to be synced out.
-                self.dump_coverage(self.target._proc.pid)  # pylint: disable=protected-access
+            if self.coverage:
+                self.target.dump_coverage()
 
-            # trigger relaunch by closing the browser
-            if self.rl_countdown < 1 and self.target.is_running():
-                if self.coverage:
-                    log.info("Waiting 10s for coverage data before forcing relaunch...")
-                    time.sleep(10)
-                log.info("Forcing target relaunch")
-                self.target.close()
+            # trigger relaunch by closing the browser if needed
+            self.target.check_relaunch()
 
             # all test cases have been replayed
             if self.adapter.single_pass and self.adapter.size() == 0:
@@ -497,14 +370,31 @@ def main(args):
     if args.ignore:
         log.info("Ignoring: %s", ", ".join(args.ignore))
 
+    # TODO: should these prints move?
+    if args.xvfb:
+        log.info("Running with Xvfb")
+    if args.valgrind:
+        log.info("Running with Valgrind. This will be SLOW!")
+    if args.rr:
+        log.info("Running with RR")
+
+    target = Target(
+        args.binary,
+        args.extension,
+        args.launch_timeout,
+        args.log_limit,
+        args.memory,
+        args.prefs,
+        args.relaunch,
+        args.rr,
+        args.valgrind,
+        args.xvfb)
+
     session = Session(
         args.cache,
         args.coverage,
         args.ignore,
-        args.log_limit,
-        args.memory,
-        args.relaunch,
-        args.rr,
+        target,
         working_path=args.working_path)
 
     try:
@@ -514,13 +404,6 @@ def main(args):
             args.timeout,
             accepted_extensions=args.accepted_extensions)
         session.config_server(args.timeout)
-        session.config_target(
-            args.binary,
-            args.prefs,
-            args.extension,
-            args.launch_timeout,
-            args.valgrind,
-            args.xvfb)
 
         if args.fuzzmanager:
             log.info("Reporting issues via FuzzManager")
@@ -535,15 +418,15 @@ def main(args):
         else:
             session.reporter = reporter.FilesystemReporter()
 
-        session.adapter.br_mon.monitor_instance(session.target)
+        session.adapter.br_mon.monitor_instance(session.target._puppet)
 
         # detect soft assertions
         if args.asserts:
-            session.target.add_abort_token("###!!! ASSERTION:")
+            session.target._puppet.add_abort_token("###!!! ASSERTION:")
 
         # add tokens from corpus manager
         for token in session.adapter.abort_tokens:
-            session.target.add_abort_token(token)
+            session.target._puppet.add_abort_token(token)
 
         session.run()
 
