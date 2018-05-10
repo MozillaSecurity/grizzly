@@ -2,94 +2,51 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""
+Given a build and testcase, try to reproduce it using a set of strategies.
+"""
 from __future__ import absolute_import
-import argparse
-import ConfigParser as configparser
-import copy
 import hashlib
 import io
-import jsbeautifier
 import logging
 import os
+import posixpath
 import re
 import shutil
 import tempfile
-import time
 import zipfile
-from FTB.ProgramConfiguration import ProgramConfiguration
-from FTB.Signatures.CrashInfo import CrashInfo
-import fasteners
-from fuzzfetch import Fetcher, BuildFlags
+
+try:
+    import jsbeautifier
+    HAVE_JSBEAUTIFIER = True
+except ImportError:
+    HAVE_JSBEAUTIFIER = False
 import lithium
-from . import common
-from .ffp import FFPInteresting
+from FTB.Signatures.CrashInfo import CrashSignature
+
+from .interesting import Interesting
+from . import quality
+from ..core import Session
+from ..corpman import TestFile, TestCase
+from ..reporter import Report
+from ..target import Target
+from .. import reporter
 
 
-log = logging.getLogger("reduce")  # pylint: disable=invalid-name
+__author__ = "Jesse Schwartzentruber"
+__credits__ = ["Tyson Smith", "Jesse Schwartzentruber", "Jason Kratzer"]
 
 
-# testcase quality values
-REDUCED_RESULT = 0  # the final reduced testcase
-REDUCED_ORIGINAL = 1  # the original used for successful reduction
-REPRODUCIBLE = 4  # the testcase was reproducible
-UNREDUCED = 5  # haven't attempted reduction yet
-REDUCER_BROKE = 8  # the testcase was reproducible, but broke during reduction
-REDUCER_ERROR = 9  # reducer error
-NOT_REPRODUCIBLE = 10  # could not reproduce the testcase
+log = logging.getLogger("grizzly.reduce")  # pylint: disable=invalid-name
 
 
 class ReducerError(Exception):
     pass
 
 
-class PushDir(object):  # pylint: disable=too-few-public-methods
-    """
-    Context manager which changes directory and remembers the original
-    directory at time of creation. When exited, it will chdir back to
-    the original.
-    """
-
-    def __init__(self, chd):
-        self.new_dir = chd
-        self.old_dir = os.getcwd()
-        log.debug("")
-
-    def __enter__(self):
-        os.chdir(self.new_dir)
-        return self
-
-    def __exit__(self, _exc_type, _exc_val, _exc_tb):
-        os.chdir(self.old_dir)
-        return False
-
-
-class TempCWD(PushDir):  # pylint: disable=too-few-public-methods
-    """
-    Context manager which creates a temp directory, chdirs to it, and when
-    the context is exited will chdir back to the cwd at time of creation, and
-    delete the temp directory.
-
-    All arguments are passed through to tempfile.mkdtemp.
-    """
-
-    def __init__(self, *args, **kwds):
-        tmp_dir = tempfile.mkdtemp(*args, **kwds)
-        self._no_delete = False
-        super(TempCWD, self).__init__(tmp_dir)
-
-    def no_delete(self):
-        self._no_delete = True
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        result = super(TempCWD, self).__exit__(exc_type, exc_val, exc_tb)
-        if not self._no_delete:
-            shutil.rmtree(self.new_dir)
-        return result
-
-
-def _testcase_contents():
-    for dir_name, _, dir_files in os.walk("."):
-        arc_path = os.path.relpath(dir_name, ".")
+def _testcase_contents(path="."):
+    for dir_name, _, dir_files in os.walk(path):
+        arc_path = os.path.relpath(dir_name, path)
         # skip tmp folders
         if re.match(r"^tmp.+$", arc_path.split(os.sep, 1)[0]) is not None:
             continue
@@ -97,521 +54,487 @@ def _testcase_contents():
         if re.match(r"^core.\d+$", os.path.basename(arc_path)) is not None:
             continue
         for file_name in dir_files:
-            if arc_path == ".":
+            if arc_path == path:
                 yield file_name
             else:
                 yield os.path.join(arc_path, file_name)
 
 
-def _update_build(build_dir, fetch_args):
-    # use a lock to ensure that only one worker process tries updating each build type at a time
-    with fasteners.InterProcessLock(build_dir + ".lock"):
-        dl = Fetcher(*fetch_args)
-        latest_version = "%.8s-%.12s" % (dl.build_info["buildid"], dl.build_info["moz_source_stamp"])
-        if os.path.isdir(build_dir):
-            if os.path.isfile(os.path.join(build_dir, "firefox.fuzzmanagerconf")):
-                cfg = configparser.RawConfigParser()
-                cfg.read(os.path.join(build_dir, "firefox.fuzzmanagerconf"))
-                have_version = cfg.get("Main", "product_version")
-                if have_version == latest_version:
-                    return os.path.realpath(build_dir)
-                log.info("have version: %s, latest is %s", have_version, latest_version)
-            os.unlink(build_dir)
-        # need to download it
-        out_dir = build_dir + dl.build_info["moz_source_stamp"][:12]
-        if os.path.isdir(out_dir):
-            # previous download failed? remove it
-            shutil.rmtree(out_dir)
-        os.mkdir(out_dir)
-        try:
-            dl.extract_build(out_dir)
-            os.symlink(out_dir, build_dir)
-        except Exception:
-            shutil.rmtree(out_dir)
-            raise
-        return os.path.realpath(build_dir)
-
-
 class ReductionJob(object):
-    DEFAULT_PREFS = os.path.join(os.path.expanduser("~"), "fuzzing-no-e10s.prefs.js")
-    DEFAULT_EXTENSION = os.path.join(os.path.expanduser("~"), "fuzzpriv")
 
-    def __init__(self, message, report=True, extension_path=None, prefs_path=None):
-        """
-        MessageBody format (json):
-        {
-            "crash": {crash_id},
-            "signature": "{sig}",
-            "reduced": {crash_id}|null
-        }
-        """
-        self.crash_id = message.crash
-        self.task_sig = message.signature
-        self.reduced_id = None
-        self.skipped = False
-        self.ignored = False
-        self.report = report
-        self.report_cb = None
-        self.extension = extension_path or self.DEFAULT_EXTENSION
-        self.prefs = prefs_path or self.DEFAULT_PREFS
+    def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
+                 repeat, idle_poll, idle_threshold, idle_timeout, testcase_cache=True):
+        """Use lithium to reduce a testcase.
 
+        Args:
+            target (grizzly.target.Target): Target object to use for reduction.
+        """
+        self.reporter = None
+        self.result_code = None
+        self.signature = None
+        self.interesting = Interesting(
+            ignore,
+            target,
+            iter_timeout,
+            no_harness,
+            any_crash,
+            skip,
+            min_crashes,
+            repeat,
+            idle_poll,
+            idle_threshold,
+            idle_timeout,
+            testcase_cache)
+        self.interesting.alt_crash_cb = self._other_crash_found
+        self.interesting.interesting_cb = self._interesting_crash
+        self.testcase = None
+        self.tmpdir = tempfile.mkdtemp(prefix="grzreduce")
+        self.tcroot = os.path.join(self.tmpdir, "tc")
         self.other_crashes = {}
-        self.tool = None
+        self.input_fname = None
+        self.interesting_prefix = None
 
-    def message(self):
-        if self.skipped:
-            return None
-        elif self.ignored:
-            return {"crash": self.crash_id, "signature": self.task_sig, "reduced": None, "ignored": True}
-        return {"crash": self.crash_id, "signature": self.task_sig, "reduced": self.reduced_id, "ignored": False}
+    def config_signature(self, signature):
+        """Configure a signature to use for reduction.  If none is given, an automatic signature is
+        created based on the initial repro.
 
-    def _gather_reduced_crash_info(self, target_binary, testcase_fn):
-        # find the interesting log
+        Args:
+            signature (str): A JSON signature to match for reduction.
 
-        # get all lithium tmp dirs in descending order
-        # the final reduced testcase is the highest numbered testcase marked "interesting"
-        # in the highest numbered tmp folder
-        tmps = sorted([entry for entry in os.listdir(".")
-                       if os.path.isdir(entry) and re.match(r"^tmp\d+$", entry) is not None],
-                      key=lambda x: -int(x[3:]))
-        for tmp in tmps:
-            interestings = sorted([entry for entry in os.listdir(tmp)
-                                   if re.match(r"^\d+-interesting\.", entry)],
-                                  key=lambda x: -int(x.split("-", 1)[0]))
-            if interestings:
-                interesting = interestings[0]
-                break
-        else:
-            raise RuntimeError("no interesting files found")
-        err_fn = os.path.join(tmp, interesting.split("-", 1)[0]) + "_stderr.txt"
-        out_fn = os.path.join(tmp, interesting.split("-", 1)[0]) + "_stdout.txt"
-        crash_fn = os.path.join(tmp, interesting.split("-", 1)[0]) + "_crashdata.txt"
-        interesting = os.path.join(tmp, interesting)
-        assert os.path.isfile(err_fn), "no stderr file for %s" % interesting
-        assert os.path.isfile(out_fn), "no stdout file for %s" % interesting
-
-        # check that the interesting file we found in tmp matches the one that was written as output
-        with io.open(interesting, "rb") as last_inter_fp, io.open(testcase_fn, "rb") as testcase_fp:
-            while True:
-                interesting_chunk = last_inter_fp.read(64 * 1024)
-                testcase_chunk = testcase_fp.read(64 * 1024)
-                assert interesting_chunk == testcase_chunk, \
-                    "interesting file %s doesn't match resulting testcase" % interesting
-                if not interesting_chunk:
-                    break
-
-        # create a crashinfo
-        if os.path.isfile(crash_fn):
-            with io.open(crash_fn, "rb") as crash_fp:
-                crash_lines = crash_fp.read().splitlines()
-        else:
-            crash_lines = None
-        with io.open(err_fn, "rb") as err_fp, io.open(out_fn, "rb") as out_fp:
-            err_lines = err_fp.read().splitlines()
-            out_lines = out_fp.read().splitlines()
-            # XXX: should insert the lithium reduction summary here if possible
-            crash_info = CrashInfo.fromRawCrashData(
-                out_lines,
-                err_lines,
-                ProgramConfiguration.fromBinary(target_binary),
-                auxCrashData=crash_lines)
-
-        return crash_info
-
-    def _report_result(self, crash_info, quality, check_signature=False):
-        # search for a cached signature match and if the signature
-        # is already in the cache and marked as frequent, don't bother submitting
-        if check_signature:
-            cache_signature = common.FM_COLLECTOR.search(crash_info)[1]
-            if cache_signature is not None and cache_signature['frequent']:  # XXX: this should be looser
-                log.info("Crash matched existing signature: %s", cache_signature["shortDescription"])
-                return None
-
-        # add results to a zip file
-        zip_name = "%d_reduced.zip" % self.crash_id
-        with zipfile.ZipFile(zip_name, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_fp:
-            for file_name in _testcase_contents():
-                if file_name == zip_name:
-                    continue
-                zip_fp.write(file_name)
-
-        # insert original crash id in the log
-        crash_info.rawStderr.insert(0, b"Reduced to quality %d from crash %d" % (quality, self.crash_id))
-
-        if self.report_cb is not None:
-            self.report_cb(crash_info, zip_name, quality)
-
-        if not self.report:
-            return None
-
-        # submit results to the FuzzManager server
-        tool_collector = copy.copy(common.FM_COLLECTOR)
-        tool_collector.tool = self.tool
-        new_entry = tool_collector.submit(crash_info, testCase=zip_name, testCaseQuality=quality)
-
-        # remove zipfile
-        os.unlink(zip_name)
-
-        log.info("Logged new crash %d with quality %d", new_entry["id"], quality)
-
-        return new_entry["id"]
-
-    def _change_quality(self, quality):
-        if not self.report:
-            return
-        log.info("updating crash %d to quality %d", self.crash_id, quality)
-        try:
-            common.FM_COLLECTOR.patch(common.FM_URL + "rest/crashes/%d/" % self.crash_id,
-                                      data={"testcase_quality": quality})
-        except RuntimeError as exc:
-            # let 404's go .. evidently the crash was deleted
-            if str(exc) != "Unexpected HTTP response: 404":
-                raise
-
-    def _other_crash_found(self, crash_info):
+        Returns:
+            None
         """
-        If we hit an alternate crash, store the report in a tmp folder.
+        self.signature = CrashSignature(signature)
+
+    @staticmethod
+    def _get_landing_page(testpath):
+        """Parse test_info.txt for landing page
+
+        Args:
+            testpath (str): Path to a testcase folder (containing a test_info.txt from Grizzly).
+
+        Returns:
+            str: Path to the landing page within testpath
+        """
+        with io.open(os.path.join(testpath, "test_info.txt"), encoding="utf-8") as info:
+            for line in info:
+                if line.lower().startswith("landing page: "):
+                    landing_page = os.path.join(testpath,
+                                                line.split(": ", 1)[1].strip().encode("utf-8"))
+                    break
+            else:
+                raise ReducerError("Couldn't find landing page in %s!"
+                                   % (os.path.abspath(info.name),))
+        assert os.path.isfile(landing_page)
+        return landing_page
+
+    def config_testcase(self, testcase):
+        """Prepare a user provided testcase for reduction.
+
+        Args:
+            testcase (str): Path to a testcase. This should be a Grizzly testcase (zip or folder).
+
+        Returns:
+            None
+        """
+        # extract the testcase if necessary
+        assert not os.path.exists(self.tcroot)
+        if os.path.isfile(testcase):
+            assert testcase.endswith(".zip")
+            os.mkdir(self.tcroot)
+            with zipfile.ZipFile(testcase) as zip_fp:
+                zip_fp.extractall(path=self.tcroot)
+        else:
+            assert os.path.isdir(testcase)
+            shutil.copytree(testcase, self.tcroot)
+
+        self.input_fname = os.path.basename(testcase)
+
+        # get a list of all directories containing testcases (1-n, depending on how much history
+        # grizzly saved)
+        entries = set(os.listdir(self.tcroot))
+        if "test_info.txt" in entries:
+            dirs = [self.tcroot]
+        else:
+            dirs = sorted([os.path.join(self.tcroot, entry) for entry in entries
+                           if os.path.exists(os.path.join(self.tcroot, entry, "test_info.txt"))],
+                          key=lambda x: -int(x.rsplit('-', 1)[1]))
+
+        # check for included prefs and environment
+        if "prefs.js" in os.listdir(dirs[0]):
+            # move the file out of tcroot because we prune these non-testcase files later
+            os.rename(os.path.join(dirs[0], "prefs.js"), os.path.join(self.tmpdir, "prefs.js"))
+            self.interesting.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
+            log.warning("Using prefs included in testcase: %s", self.interesting.target.prefs)
+        if "env_vars.txt" in os.listdir(dirs[0]):
+            self.interesting.config_environ(os.path.join(dirs[0], "environ.txt"))
+            log.warning("Using environment included in testcase: %s",
+                        os.path.abspath(os.path.join(dirs[0], "environ.txt")))
+
+        # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
+        # them all in order
+        pages = ['/' + posixpath.relpath(self._get_landing_page(d), self.tcroot) for d in dirs]
+        if len(pages) == 1:
+            self.testcase = pages[0]
+        else:
+            # create a harness to iterate over the whole history
+            harness_path = os.path.join(os.path.dirname(__file__), '..', 'corpman', 'harness.html')
+            with io.open(harness_path, encoding="utf-8") as harness_fp:
+                harness = harness_fp.read()
+            # change dump string so that logs can be told apart
+            harness = harness.replace("[grizzly harness]", "[reduce harness]")
+            # change the window name so that window.open doesn't clobber self
+            harness = harness.replace("'GrizzlyFuzz'", "'ReduceIter'")
+            # insert the iteration timeout. insert it directly because we can't set a hash value
+            new_harness = re.sub(r"^(\s*let\s.*\btime_limit\b)",
+                                 r"\1 = %d" % (self.interesting.iter_timeout * 1000),
+                                 harness,
+                                 flags=re.MULTILINE)
+            if new_harness == harness:
+                raise ReducerError("Unable to set time_limit in harness, please update pattern "
+                                   "to match harness!")
+            harness = new_harness
+            # insert the landing page loop
+            harness = harness.replace("<script>", "\n".join([
+                "<script>",
+                "let _reduce_tests = [",
+                "//DDBEGIN",
+                "'" + "',\n'".join(pages) + "',",
+                "//DDEND",
+                "]",
+                "function _reduce_next(){",
+                "  return _reduce_tests.shift()",
+                "}"
+            ]))
+            # make first test and next test grab from the array
+            harness = harness.replace("'/first_test'", "_reduce_next()")
+            harness = harness.replace("'/next_test'", "_reduce_next()")
+            # insert the close condition. we are iterating over the array of landing pages,
+            # undefined means we hit the end and the harness should close
+            new_harness = re.sub(r"^(\s*sub\s*=\s*open\(req_url.*'ReduceIter')",
+                                 r"if (req_url === undefined) window.close()\n\1",
+                                 harness,
+                                 flags=re.MULTILINE)
+            if new_harness == harness:
+                raise ReducerError("Unable to insert finish condition, please update pattern "
+                                   "to match harness!")
+            harness = new_harness
+            fp, harness_path = tempfile.mkstemp(prefix="harness_", suffix=".html", dir=self.tcroot)
+            os.close(fp)
+            with io.open(harness_path, "w", encoding="utf-8") as harness_fp:
+                harness_fp.write(harness)
+            self.testcase = harness_path
+
+        # prune unnecessary files from the testcase
+        for root, _, files in os.walk(self.tcroot):
+            for file in files:
+                if file in {"prefs.js", "env_vars.txt", "test_info.txt", "log_metadata.json",
+                            "grizzly_fuzz_harness.html", "screenlog.txt"} or \
+                        (file.startswith("log_") and file.endswith(".txt")):
+                    os.unlink(os.path.join(root, file))
+
+
+    def close(self):
+        """Clean up any resources used for this job.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        if self.tmpdir is not None and os.path.isdir(self.tmpdir):
+            shutil.rmtree(self.tmpdir)
+            self.tmpdir = None
+
+    def _report_result(self, tcroot, temp_prefix, quality_value, force=False):
+        self.reporter.quality = quality_value
+        self.reporter.force_report = force
+
+        landing_page = os.path.relpath(self.testcase, self.tcroot)
+        testcase = TestCase(landing_page, "grizzly.reduce", input_fname=self.input_fname)
+
+        # add testcase contents
+        for filename in _testcase_contents(tcroot):
+            with open(os.path.join(tcroot, filename)) as testfile_fp:
+                testcase.add_testfile(TestFile(filename, testfile_fp.read()))
+
+        # add prefs
+        if self.interesting.target.prefs is not None:
+            testcase.add_environ_file(self.interesting.target.prefs, "prefs.js")
+
+        # add environment variables
+        if self.interesting.env_mod is not None:
+            for name, value in self.interesting.env_mod.items():
+                testcase.add_environ_var(name, value)
+
+        self.reporter.submit(temp_prefix + "_logs", [testcase])
+
+    def _interesting_crash(self, temp_prefix):
+        self.interesting_prefix = temp_prefix
+
+    def _other_crash_found(self, temp_prefix):
+        """
+        If we hit an alternate crash, store the testcase in a tmp folder.
         If the same crash is encountered again, only keep the newest one.
         """
+        crash_info = Report.from_path(temp_prefix + "_logs") \
+            .create_crash_info(self.interesting.target.binary)
         this_sig = crash_info.createCrashSignature(maxFrames=5)
         crash_hash = hashlib.sha256(this_sig.rawSignature).hexdigest()[:10]
-        tmpd = "tmpalt%s" % crash_hash
+        tmpd = os.path.join(self.tmpdir, "alt", crash_hash)
         if crash_hash in self.other_crashes:
-            shutil.rmtree(self.other_crashes[crash_hash]["tmpd"])
+            shutil.rmtree(self.other_crashes[crash_hash]["tcroot"])
             log.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
         else:
             log.info("Found alternate crash: %s", crash_info.createShortSignature())
-        os.mkdir(tmpd)
-        for file_name in _testcase_contents():
+        os.makedirs(tmpd)
+        for file_name in _testcase_contents(self.tcroot):
             out = os.path.join(tmpd, file_name)
             out_dir = os.path.dirname(out)
             if not os.path.isdir(out_dir):
                 os.makedirs(out_dir)
             shutil.copyfile(file_name, out)
-        self.other_crashes[crash_hash] = {"tmpd": os.path.realpath(tmpd), "crash": crash_info}
+        self.other_crashes[crash_hash] = {"tcroot": os.path.realpath(tmpd), "prefix": temp_prefix}
 
     def _report_other_crashes(self):
         """
         After reduce is finished, report any alternate results (if they don't match the collector cache).
         """
-        for key in list(self.other_crashes):
-            entry = self.other_crashes.pop(key)
-            with PushDir(entry["tmpd"]):
-                self._report_result(entry["crash"], UNREDUCED, check_signature=True)
+        for entry in self.other_crashes.values():
+            self._report_result(entry["tcroot"], entry["prefix"], quality.UNREDUCED)
 
-    def run(self, firefox=None, condition_args=None):
+    def run(self):
+        """Run reduction.
         """
-        firefox: override the firefox binary to use, instead of downloading the latest
-        condition_args: list of command line arguments to pass to ffp.py
-        """
-        condition_args = condition_args or []
-
-        def was_reproducible():
-            self._change_quality(REPRODUCIBLE)
-            reducer.conditionScript.interesting_result_cb = None
+        assert self.testcase is not None
+        assert self.reporter is not None
 
         try:
-            if self.task_sig and "stack overflow" in self.task_sig.lower():
-                self.ignored = True
-                log.info("Ignored token \"stack overflow\" found in signature")
-                return None
+            # set up lithium
+            reducer = lithium.Lithium()
+            self.interesting.orig_sig = self.signature
+            self.interesting.landing_page = self.testcase
+            reducer.conditionScript = self.interesting
 
-            # download the testcase
-            # XXX: should detect 404 and signal the monitor not to retry
-            testcase_fn, crash = common.FM_COLLECTOR.download(self.crash_id)
-            crash = common.AttrDict(crash)
-            if crash.testcase_quality != UNREDUCED:
-                log.warning("crash %d was already quality %d, skipped", self.crash_id, crash.testcase_quality)
-                self.skipped = True
-                return True
-            crash_info = common.crash_to_crashinfo(crash)
-
-            # if crash matches the ignore list, don't try to reducec
-            cache_signature = common.SIG_IGNORE_COLLECTOR.search(crash_info)[1]
-            if cache_signature is not None:
-                self.ignored = True
-                log.info("Crash matched ignored signature: %s", cache_signature["shortDescription"])
-                return None
-
-            orig_sig = crash_info.createCrashSignature(maxFrames=5)
-            self.tool = crash.tool
-
-            # extract the testcase
-            assert testcase_fn.endswith(".zip")
-            with zipfile.ZipFile(testcase_fn) as zip_fp:
-                zip_fp.extractall()
-            os.unlink(testcase_fn)
-
-            if firefox is not None:
-                builds_to_try = [(os.path.dirname(firefox), None, [])]
-
-            else:
-                # Fetcher args are (target, branch, build, flags) where flags is (asan, debug, fuzzing)
-                # try opt first because it is small and will fail fast, if that doesn't repro then try debug too.
-                flags_asan = BuildFlags(asan=True, debug=False, fuzzing=True, coverage=False)
-                flags_debug = BuildFlags(asan=False, debug=True, fuzzing=True, coverage=False)
-                # get build type -- either central or inbound
-                build_type = crash.product.split("-", 1)[1]
-                builds_to_try = (("%s-asan" % build_type, ("firefox", build_type, "latest", flags_asan), []),
-                                 ("%s-asan" % build_type, ("firefox", build_type, "latest", flags_asan),
-                                  ["--no-harness"]),
-                                 ("%s-debug" % build_type, ("firefox", build_type, "latest", flags_debug), []),
-                                 ("%s-debug" % build_type, ("firefox", build_type, "latest", flags_debug),
-                                  ["--no-harness"]))
-
-            for build_dir, fetch_args, condition_args_loop in builds_to_try:
-                if firefox is None:
-                    # get latest build of same type to reduce with (if not already downloaded)
-                    build_dir = os.path.join(os.path.expanduser("~"), "builds", build_dir)
-                    build_dir = _update_build(build_dir, fetch_args)
-
-                # iterate from 0 up for each test case in download cache
-                entries = set(os.listdir("."))
-                if "test_info.txt" in entries:
-                    dirs = ["."]
+            # if we are using a harness to iterate over multiple testcases, reduce that set of
+            # testcases before anything else
+            files_to_reduce = [self.testcase]
+            if os.path.basename(self.testcase).startswith("harness_"):
+                self.interesting.reduce_file = self.testcase
+                log.info("Reducing %s with %s on %ss",
+                         self.testcase, lithium.Minimize.name, lithium.TestcaseLine.atom)
+                reducer.strategy = lithium.Minimize()
+                reducer.testcase = lithium.TestcaseLine()
+                reducer.testcase.readTestcase(self.testcase)
+                result = reducer.run()
+                if result != 0:
+                    log.warning("Could not reduce: Iterating over history did not reproduce the "
+                                "issue")
+                    return False
+                reducer.testcase.readTestcase(self.testcase)
+                if len(reducer.testcase) == 1:
+                    # we reduced this down to a single testcase, remove the harness
+                    testcase_rel = reducer.testcase.parts[0].strip()
+                    assert testcase_rel.startswith("'/")
+                    assert testcase_rel.endswith("',")
+                    testcase_rel = testcase_rel[2:-2]  # quoted, begins with / and ends with a comma
+                    testcase_path = testcase_rel.split('/')
+                    assert len(testcase_path) == 2
+                    self.tcroot = os.path.join(self.tcroot, testcase_path[0])
+                    self.testcase = os.path.join(self.tcroot, testcase_path[1])
+                    self.interesting.landing_page = self.testcase
+                    files_to_reduce = [self.testcase]
+                    log.info("Reduced history to a single file: %s", testcase_path[1])
                 else:
-                    dirs = sorted([entry for entry in entries if os.path.isdir(entry)],
-                                  key=lambda x: int(x.rsplit('-', 1)[1]))
-                for tcdir in dirs:
-                    with PushDir(tcdir):
-                        ff_bin = os.path.join(build_dir, "firefox").encode("utf-8")
+                    files_to_reduce = []  # don't bother trying to reduce the harness further
+                    log.info("Reduced history down to %d testcases", len(reducer.testcase))
 
-                        # set up lithium
-                        reducer = lithium.Lithium()
-                        reducer.conditionScript = FFPInteresting()
-                        reducer.conditionScript.alt_crash_cb = self._other_crash_found
-                        # touch binary so the folder is not deleted
-                        reducer.conditionScript.interesting_cb = lambda: os.utime(ff_bin, None)
-                        reducer.conditionScript.interesting_result_cb = was_reproducible
-                        reducer.conditionScript.orig_sig = orig_sig
-                        if os.path.isfile("prefs.js"):
-                            prefs = "prefs.js"
-                        else:
-                            prefs = self.prefs
-                        if os.path.isfile("env_vars.txt"):
-                            env_args = ["--environ", "env_vars.txt"]
-                        else:
-                            env_args = []
-                        reducer.conditionArgs = condition_args + condition_args_loop + env_args + \
-                            ["--xvfb",
-                             "-e", self.extension,
-                             "-p", prefs,
-                             "--repeat", "3",
-                             "-m", "7000",
-                             "--ignore-timeouts",
-                             "--reduce-file", "reducefile_placeholder",
-                             ff_bin,
-                             "testcase_placeholder"]
+            # find all files for reduction
+            for file_name in _testcase_contents(self.tcroot):
+                file_name = os.path.join(self.tcroot, file_name)
+                if file_name == self.testcase:
+                    continue
+                with open(file_name, "rb") as tc_fp:
+                    for line in tc_fp:
+                        if b"DDBEGIN" in line:
+                            files_to_reduce.append(file_name)
+                            break
+            if len(files_to_reduce) > 1:
+                # sort by descending size
+                files_to_reduce.sort(key=lambda fn: os.stat(fn).st_size, reverse=True)
+            original_size = sum(os.stat(fn).st_size for fn in files_to_reduce)
 
-                        # parse test_info.txt for landing page
-                        with io.open("test_info.txt", encoding="utf-8") as info:
-                            for line in info:
-                                if line.lower().startswith("landing page: "):
-                                    landing_page = line.split(": ", 1)[1].strip().encode("utf-8")
-                                    break
+            # run lithium reduce with strategies
+            # XXX: should check the DDBEGIN/DDEND lines to see whether it looks like markup
+            #      or script and adjust cutBefore/cutAfter accordingly
+            reduce_stages = (
+                (lithium.Minimize, lithium.TestcaseLine),
+                # CheckOnly is used in conjunction with beautification stage
+                # This verifies that beautification didn't break the testcase
+                (lithium.CheckOnly, lithium.TestcaseLine),
+                (lithium.CollapseEmptyBraces, lithium.TestcaseLine),
+                (lithium.Minimize, lithium.TestcaseJsStr),
+            )
+            for stage_num, (strategy_type, testcase_type) in enumerate(reduce_stages):
+                files_reduced = 0
+                for testcase_path in files_to_reduce:
+                    if stage_num == 1:
+                        if HAVE_JSBEAUTIFIER and testcase_path.endswith(".js"):
+                            # Beautify testcase
+                            with open(testcase_path) as f:
+                                original_testcase = f.read()
+
+                            beautified_testcase = jsbeautifier.beautify(original_testcase)
+                            # All try/catch pairs will be expanded on their own lines
+                            # Collapse these pairs when only a single instruction is contained
+                            #   within
+                            regex = r"(\s*try {)\n\s*(.*)\n\s*(}\s*catch.*)"
+                            beautified_testcase = re.sub(regex, r"\1 \2 \3", beautified_testcase)
+                            with open(testcase_path, 'w') as testcase_fp:
+                                testcase_fp.write(beautified_testcase)
+                            self.interesting.reduce_file = testcase_path
+                            reducer.strategy = strategy_type()
+                            reducer.testcase = testcase_type()
+                            reducer.testcase.readTestcase(testcase_path)
+                            log.info("Attempting to beautify %s", testcase_path)
+                            result = reducer.run()
+                            if result == 0:
+                                log.info("Beautification succeeded")
                             else:
-                                raise ReducerError("Couldn't find landing page in %s!" % os.path.abspath(info.name))
-                        reducer.conditionArgs[-1] = landing_page
-
-                        # find all files for reduction
-                        files_to_reduce = [landing_page]
-                        for file_name in _testcase_contents():
-                            if file_name == landing_page:
-                                continue
-                            with open(file_name, "rb") as tc_fp:
-                                for line in tc_fp:
-                                    if b"DDBEGIN" in line:
-                                        files_to_reduce.append(file_name)
-                                        break
-                        if len(files_to_reduce) > 1:
-                            # sort by descending size
-                            files_to_reduce.sort(key=lambda fn: os.stat(fn).st_size, reverse=True)
-                        original_size = sum(os.stat(fn).st_size for fn in files_to_reduce)
-
-                        # run lithium reduce with strategies
-                        # XXX: should check the DDBEGIN/DDEND lines to see whether it looks like markup
-                        #      or script and adjust cutBefore/cutAfter accordingly
-                        reduce_stages = (
-                            (lithium.Minimize, lithium.TestcaseLine),
-                            # CheckOnly is used in conjunction with beautification stage
-                            # This verifies that beautification didn't break the testcase
-                            (lithium.CheckOnly, lithium.TestcaseLine),
-                            (lithium.CollapseEmptyBraces, lithium.TestcaseLine),
-                            # (lithium.MinimizeSurroundingPairs, lithium.TestcaseSymbol),
-                            # (lithium.MinimizeBalancedPairs, lithium.TestcaseSymbol),
-                            # (lithium.Minimize, lithium.TestcaseChar),
-                            (lithium.Minimize, lithium.TestcaseJsStr),
-                        )
-                        report_quality = None
-                        for stage_num, (strategy_type, testcase_type) in enumerate(reduce_stages):
-                            files_reduced = 0
-                            for testcase_path in files_to_reduce:
-                                if stage_num == 1:
-                                    if testcase_path.endswith(".js"):
-                                        # Beautify testcase
-                                        with open(testcase_path) as f:
-                                            original_testcase = f.read()
-
-                                        beautified_testcase = jsbeautifier.beautify(original_testcase)
-                                        # All try/catch pairs will be expanded on their own lines
-                                        # Collapse these pairs when only a single instruction is contained within
-                                        regex = r"(\s*try {)\n\s*(.*)\n\s*(}\s*catch.*)"
-                                        beautified_testcase = re.sub(regex, r"\1 \2 \3", beautified_testcase)
-                                        with open(testcase_path, 'w') as f:
-                                            f.write(beautified_testcase)
-                                        reducer.conditionArgs[-3] = testcase_path
-                                        reducer.strategy = strategy_type()
-                                        reducer.testcase = testcase_type()
-                                        reducer.testcase.readTestcase(testcase_path)
-                                        log.info("Attempting to beautify %s", testcase_path)
-                                        result = reducer.run()
-                                        if result == 0:
-                                            log.info("Beautification succeeded")
-                                        else:
-                                            log.info("Beautification failed")
-                                            with open(testcase_path, 'w') as f:
-                                                f.write(original_testcase)
-                                    else:
-                                        # lithium.CollapseEmptyBraces is only effective with JS files
-                                        continue
-                                else:
-                                    log.info("Reducing %s with %s on %ss",
-                                             testcase_path, strategy_type.name, testcase_type.atom)
-                                    reducer.conditionArgs[-3] = testcase_path
-                                    reducer.strategy = strategy_type()
-                                    reducer.testcase = testcase_type()
-                                    reducer.testcase.readTestcase(testcase_path)
-                                    result = reducer.run()
-                                    if result != 0:
-                                        break
-                                    files_reduced += 1
-                            if result != 0:
-                                # reducer failed to repro the crash
-                                if stage_num == 0 and files_reduced == 0:
-                                    # first stage, couldn't repro at all
-                                    break  # try the next one
-                                else:
-                                    # subsequent stage, reducing broke the testcase?
-                                    # unclear how to recover from this.
-                                    # just report failure and hopefully we have another to try
-                                    self._change_quality(REDUCER_BROKE)
-                                    log.warning("%s + %s(%s) failed to reproduce. Previous stage broke the testcase?"
-                                                % (strategy_type.__name__,
-                                                   testcase_type.__name__,
-                                                   os.path.abspath(files_to_reduce[files_reduced])))
-                                    return False
+                                log.warning("Beautification failed")
+                                with open(testcase_path, 'w') as testcase_fp:
+                                    testcase_fp.write(original_testcase)
                         else:
-                            # all stages succeeded
-                            report_quality = REDUCED_RESULT
-                        if report_quality is not None:
-                            reduced_size = sum(os.stat(fn).st_size for fn in files_to_reduce)
-                            if reduced_size == original_size:
-                                raise ReducerError("Reducer succeeded but nothing was reduced!")
-                            crash_info = self._gather_reduced_crash_info(os.path.join(build_dir, "firefox"),
-                                                                         landing_page)
-                            self.reduced_id = self._report_result(crash_info, report_quality)
-                            # change original quality so unbucketed crashes don't reduce again
-                            self._change_quality(REDUCED_ORIGINAL)
-                            return True
-            log.warning("Could not reduce: None of the testcases were reproducible")
-            self._change_quality(NOT_REPRODUCIBLE)
-            return False
+                            # jsbeautifier is only effective with JS files
+                            continue
+                    else:
+                        log.info("Reducing %s with %s on %ss",
+                                 testcase_path, strategy_type.name, testcase_type.atom)
+                        self.interesting.reduce_file = testcase_path
+                        reducer.strategy = strategy_type()
+                        reducer.testcase = testcase_type()
+                        reducer.testcase.readTestcase(testcase_path)
+                        result = reducer.run()
+                        if result != 0:
+                            break
+                        files_reduced += 1
+
+                if result != 0:
+                    # reducer failed to repro the crash
+                    if stage_num == 0 and files_reduced == 0:
+                        # first stage, couldn't repro at all
+                        log.warning("Could not reduce: The testcase was not reproducible")
+                        self.result_code = quality.NOT_REPRODUCIBLE
+
+                    else:
+                        # subsequent stage, reducing broke the testcase?
+                        # unclear how to recover from this.
+                        # just report failure and hopefully we have another to try
+                        log.warning("%s + %s(%s) failed to reproduce. Previous stage broke the testcase?"
+                                    % (strategy_type.__name__,
+                                       testcase_type.__name__,
+                                       os.path.abspath(files_to_reduce[files_reduced])))
+                        self.result_code = quality.REDUCER_BROKE
+
+                    return False
+
+            # all stages succeeded
+            reduced_size = sum(os.stat(fn).st_size for fn in files_to_reduce)
+            if reduced_size == original_size:
+                raise ReducerError("Reducer succeeded but nothing was reduced!")
+
+            self._report_result(self.tcroot, self.interesting_prefix, quality.REDUCED_RESULT, force=True)
+
+            # change original quality so unbucketed crashes don't reduce again
+            self.result_code = quality.REDUCED_ORIGINAL
+            return True
+
         except ReducerError as exc:
             log.warning("Could not reduce: %s", exc)
-            self._change_quality(REDUCER_ERROR)
+            self.result_code = quality.REDUCER_ERROR
             return False
         except Exception:
             log.exception("Exception during reduce")
+            self.result_code = quality.REDUCER_ERROR
             self.reduced_id = None
             return False
         finally:
             self._report_other_crashes()
 
 
-def parse_args(args=None):
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("firefox", help="Path to the firefox binary to use")
-    arg_parser.add_argument("crash_id", type=int, help="FuzzManager crash ID to use")
-    arg_parser.add_argument("--report", action="store_true", help="Report results to FuzzManager")
-    arg_parser.add_argument("--no-harness", action="store_true", help="Don't use harness for timeout detection")
-    arg_parser.add_argument("-v", "--verbose", action="store_true", help="Show more information for debugging")
-    arg_parser.add_argument("-e", "--extension", required=True, help="Path to domfuzz extension")
-    arg_parser.add_argument("-p", "--prefs", help="Path to prefs file to use if none in testcase")
-    result = arg_parser.parse_args(args)
-    if not os.path.isfile(result.firefox):
-        arg_parser.error("File not found: " + result.firefox)
-    if os.path.basename(result.firefox) != "firefox":
-        arg_parser.error("Firefox bin not named 'firefox' .. not supported yet.")
-    if not os.path.isdir(result.extension):
-        arg_parser.error("Extension must be a folder")
-    return result
+def main(args):
+    if args.quiet and not bool(os.getenv("DEBUG")):
+        logging.getLogger().setLevel(logging.WARNING)
 
+    log.info("Starting Grizzly Reducer")
 
-def main(args=None):
-    args = parse_args(args)
-    logging.basicConfig(format="[%(asctime)s:%(levelname).1s] %(message)s",
-                        level=logging.DEBUG if args.verbose else logging.INFO)
-    while True:
-        save_path = os.path.join(os.path.realpath(os.getcwd()), time.strftime("reduce-results-%Y%m%d%H%M%S"))
-        try:
-            os.mkdir(save_path)
-            break
-        except OSError:
-            time.sleep(1)
-    log.info("Reduce results will be written to: %s", save_path)
-    results = [0]
+    if args.fuzzmanager:
+        reporter.FuzzManagerReporter.sanity_check(args.binary)
 
-    def save_results(crash_info, test_case, quality):
-        results[0] += 1
-        folder = "q%d - %s" % (quality, crash_info.createShortSignature())
-        # sanitize path name
-        folder = re.sub(r", (at )?(/[^/]+)+:\d+$", "", folder)
-        folder = re.sub(r"[?*/]", "_", folder)
-        folder = folder.replace("\\", "_")
-        folder = os.path.join(save_path, folder)
-        os.mkdir(folder)
-        shutil.copyfile(test_case, os.path.join(folder, "testcase.zip"))
-        with open(os.path.join(folder, "crash_info.txt"), "wb") as out:
-            out.write(str(crash_info))
-        if crash_info.rawStderr:
-            with open(os.path.join(folder, "stderr.txt"), "wb") as out:
-                out.write(b"\n".join(crash_info.rawStderr))
-        if crash_info.rawStdout:
-            with open(os.path.join(folder, "stdout.txt"), "wb") as out:
-                out.write(b"\n".join(crash_info.rawStdout))
-        if crash_info.rawCrashData:
-            with open(os.path.join(folder, "crash_data.txt"), "wb") as out:
-                out.write(b"\n".join(crash_info.rawCrashData))
+    if args.ignore:
+        log.info("Ignoring: %s", ", ".join(args.ignore))
+
+    # TODO: should these prints move?
+    if args.xvfb:
+        log.info("Running with Xvfb")
+    if args.valgrind:
+        log.info("Running with Valgrind. This will be SLOW!")
+
+    target = Target(
+        args.binary,
+        args.extension,
+        args.launch_timeout,
+        args.log_limit,
+        args.memory,
+        args.prefs,
+        args.relaunch,
+        False,  # rr
+        args.valgrind,
+        args.xvfb)
+
+    job = ReductionJob(
+        args.ignore,
+        target,
+        args.timeout,
+        args.no_harness,
+        args.any_crash,
+        args.skip,
+        args.min_crashes,
+        args.repeat,
+        args.idle_poll,
+        args.idle_threshold,
+        args.idle_timeout,
+        not args.no_cache)
 
     try:
-        ffp_args = []
-        if args.no_harness:
-            ffp_args.append("--no-harness")
-        failure_tmpd = None
-        with TempCWD(prefix="reducer") as tmpd:
-            job = ReductionJob(common.AttrDict(crash=args.crash_id, signature=None), report=args.report,
-                               extension_path=args.extension, prefs_path=args.prefs)
-            job.report_cb = save_results
-            if not job.run(firefox=args.firefox, condition_args=ffp_args):
-                tmpd.no_delete()
-                failure_tmpd = tmpd.new_dir
-        if failure_tmpd is not None:
-            results[0] += 1
-            tmp_result = os.path.join(save_path, os.path.basename(failure_tmpd))
-            try:
-                os.rename(failure_tmpd, tmp_result)
-            except OSError:
-                shutil.copytree(failure_tmpd, tmp_result)
-                try:
-                    shutil.rmtree(failure_tmpd)
-                except OSError as exc:
-                    log.warning("Error removing temporary folder: %s", exc.strerror)
-            log.warning("Error during reduce, reduce working files stored under %s", tmp_result)
+        # set this before the testcase, since the testcase may override it
+        if args.environ:
+            job.interesting.config_environ(args.environ)
+        job.config_testcase(args.input)
+        if args.sig is not None:
+            with io.open(args.sig, encoding="utf-8") as sig_fp:
+                job.config_signature(sig_fp.read)
+
+        if args.fuzzmanager:
+            log.info("Reporting issues via FuzzManager")
+            job.reporter = reporter.FuzzManagerReporter(
+                args.binary,
+                log_limit=Session.FM_LOG_SIZE_LIMIT)
+        else:
+            job.reporter = reporter.FilesystemReporter()
+
+        # detect soft assertions
+        if args.asserts:
+            job.interesting.target._puppet.add_abort_token("###!!! ASSERTION:")
+
+        result = job.run()
+
+        if result:
+            log.info("Reduction succeeded: %r", job.result_code)
+        else:
+            log.warning("Reduction failed: %r", job.result_code)
+
     finally:
-        if not results[0]:
-            log.info("No results, removing %s", save_path)
-            shutil.rmtree(save_path)
-
-
-if __name__ == "__main__":
-    main()
+        log.warning("Shutting down...")
+        job.close()

@@ -35,6 +35,7 @@ except ImportError as err:
     _boto_import_error = err
 
 from . import stack_hasher
+from .reduce import quality
 
 __all__ = ("FilesystemReporter", "FuzzManagerReporter", "S3FuzzManagerReporter")
 __author__ = "Tyson Smith"
@@ -325,6 +326,8 @@ class FuzzManagerReporter(Reporter):
     def __init__(self, target_binary, log_limit=0):
         Reporter.__init__(self, log_limit)
         self.target_binary = target_binary
+        self.quality = quality.UNREDUCED
+        self.force_report = False
 
 
     def _reset(self):
@@ -376,7 +379,8 @@ class FuzzManagerReporter(Reporter):
                 if cache_metadata["frequent"]:
                     log.info("Frequent crash matched existing signature: %s",
                              cache_metadata["shortDescription"])
-                    return
+                    if not self.force_report:
+                        return
                 # there is already a signature, initialize count
                 cache_metadata.setdefault("_grizzly_seen_count", 0)
             else:
@@ -388,6 +392,7 @@ class FuzzManagerReporter(Reporter):
                     "frequent": False,
                     "shortDescription": crash_info.createShortSignature()}
             if cache_sig_file is None and self._ignored():
+                # don't force report here because it's garbage. we should never report garbage
                 return
             assert cache_sig_file is not None, "Failed to create signature"
             # limit the number of times we report per cycle
@@ -430,7 +435,7 @@ class FuzzManagerReporter(Reporter):
                         arcname=os.path.join(arc_path, file_name))
 
         # submit results to the FuzzManager server
-        collector.submit(crash_info, testCase=zip_name, testCaseQuality=5)
+        collector.submit(crash_info, testCase=zip_name, testCaseQuality=self.quality)
         # TODO: add msg with cache_metadata["shortDescription"]
 
         # remove zipfile
