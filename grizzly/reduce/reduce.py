@@ -316,6 +316,9 @@ class ReductionJob(object):
             self.interesting.landing_page = self.testcase
             reducer.conditionScript = self.interesting
 
+            # set up tempdir manually so it doesn't go in cwd
+            reducer.tempDir = tempfile.mkdtemp(prefix="lithium-", dir=self.tmpdir)
+
             # if we are using a harness to iterate over multiple testcases, reduce that set of
             # testcases before anything else
             files_to_reduce = [self.testcase]
