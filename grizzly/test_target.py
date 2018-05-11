@@ -6,6 +6,8 @@ import logging
 import os
 import signal
 import tempfile
+import threading
+import time
 import unittest
 
 from ffpuppet import FFPuppet
@@ -203,3 +205,20 @@ class TargetTests(unittest.TestCase):
         target.launch("launch_page")
         target.dump_coverage()
         self.assertTrue(sig_catcher.CAUGHT)  # not sure if there is a race here...
+
+    def test_06(self):
+        "test poll_for_idle()"
+        target = Target(self.tmpfn, None, 300, 25, 5000, None, 10, False, False, False)
+        assert target.poll_for_idle(90, 0.2), "the test process should be mostly idle"
+        evt = threading.Event()
+        def busy_wait():
+            while not evt.is_set():
+                pass
+        waiter = threading.Thread(target=busy_wait)
+        try:
+            waiter.start()
+            time.sleep(0.1)
+            assert not target.poll_for_idle(10, 0.2), "the test process should be busy"
+        finally:
+            evt.set()
+            waiter.join()

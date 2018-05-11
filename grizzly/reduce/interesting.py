@@ -55,7 +55,6 @@ class Interesting(object):
         self.any_crash = any_crash
         self.idle_threshold = idle_threshold
         self.idle_timeout = idle_timeout
-        self.idle_timeout_event = threading.Event()
         # testcase cache remembers if we have seen this reduce_file before and if so return the same
         # interesting result
         self.use_result_cache = testcase_cache
@@ -95,35 +94,19 @@ class Interesting(object):
         self.skipped = None
         self.result_cache = {}
 
-    def keep_waiting(self):
-        return self.target._puppet.is_healthy() and not self.idle_timeout_event.is_set()
-
-    def monitor_process(self, iteration_done_event):
+    def monitor_process(self, iteration_done_event, idle_timeout_event):
         # Wait until timeout is hit before polling
         log.debug('Waiting %r before polling', self.idle_timeout)
         exp_time = time.time() + self.idle_timeout
-        while exp_time >= time.time():
-            if iteration_done_event.is_set():
-                return
+        while exp_time >= time.time() and not iteration_done_event.is_set():
             time.sleep(0.1)
 
-        pid = self.target._puppet.get_pid()
-        if pid is not None:
-            try:
-                process = psutil.Process(pid)
-                while not iteration_done_event.is_set():
-                    log.debug('Polling process...')
-                    cpu = all(process.cpu_percent(interval=0.1) <= self.idle_threshold
-                              for _ in range(self.idle_poll * 10))
-                    if cpu is True:
-                        log.info('Process utilized <= %d%% CPU for %ds.  Closing!',
-                                 self.idle_threshold, self.idle_poll)
-                        self.idle_timeout_event.set()
-                        break
-                    else:
-                        time.sleep(0.1)
-            except psutil.NoSuchProcess:
-                log.debug('Error polling process: %d no longer exists', pid)
+        while not iteration_done_event.is_set():
+            if self.target.poll_for_idle(self.idle_threshold, self.idle_poll):
+                idle_timeout_event.set()
+                break
+            else:
+                time.sleep(0.1)
 
     def update_timeout(self, run_time):
         # If run_time is less than poll-time, update it
@@ -259,10 +242,14 @@ class Interesting(object):
 
         try:
             start_time = time.time()
-            self.idle_timeout_event.clear()
+            idle_timeout_event = threading.Event()
             iteration_done_event = threading.Event()
-            poll = threading.Thread(target=self.monitor_process, args=(iteration_done_event,))
+            poll = threading.Thread(target=self.monitor_process,
+                                    args=(iteration_done_event, idle_timeout_event))
             poll.start()
+
+            def keep_waiting():
+                return self.target._puppet.is_healthy() and not idle_timeout_event.is_set()
 
             if self.no_harness:
                 # create a tmp file that will never be served
@@ -273,7 +260,7 @@ class Interesting(object):
                 try:
                     # serve the testcase
                     server_status, served = self.server.serve_path(self.wwwdir,
-                                                                   continue_cb=self.keep_waiting)
+                                                                   continue_cb=keep_waiting)
                 finally:
                     os.unlink(tempf)
 
@@ -281,7 +268,7 @@ class Interesting(object):
                 self.server.set_redirect("/next_test", self.landing_page, required=True)
                 # serve the testcase
                 server_status = self.server.serve_path(self.wwwdir,
-                                                       continue_cb=self.keep_waiting,
+                                                       continue_cb=keep_waiting,
                                                        optional_files=self.optional_files)[0]
 
             end_time = time.time()
