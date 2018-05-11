@@ -25,10 +25,9 @@ import lithium
 from FTB.Signatures.CrashInfo import CrashSignature
 
 from .interesting import Interesting
-from . import quality
 from ..core import Session
 from ..corpman import TestFile, TestCase
-from ..reporter import Report
+from ..reporter import FuzzManagerReporter, Report
 from ..target import Target
 from .. import reporter
 
@@ -302,7 +301,7 @@ class ReductionJob(object):
         After reduce is finished, report any alternate results (if they don't match the collector cache).
         """
         for entry in self.other_crashes.values():
-            self._report_result(entry["tcroot"], entry["prefix"], quality.UNREDUCED)
+            self._report_result(entry["tcroot"], entry["prefix"], FuzzManagerReporter.QUAL_UNREDUCED)
 
     def run(self):
         """Run reduction.
@@ -425,17 +424,17 @@ class ReductionJob(object):
                     if stage_num == 0 and files_reduced == 0:
                         # first stage, couldn't repro at all
                         log.warning("Could not reduce: The testcase was not reproducible")
-                        self.result_code = quality.NOT_REPRODUCIBLE
+                        self.result_code = FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
 
                     else:
                         # subsequent stage, reducing broke the testcase?
                         # unclear how to recover from this.
                         # just report failure and hopefully we have another to try
-                        log.warning("%s + %s(%s) failed to reproduce. Previous stage broke the testcase?"
-                                    % (strategy_type.__name__,
-                                       testcase_type.__name__,
-                                       os.path.abspath(files_to_reduce[files_reduced])))
-                        self.result_code = quality.REDUCER_BROKE
+                        log.warning("%s + %s(%s) failed to reproduce. Previous stage broke the "
+                                    "testcase?" % (strategy_type.__name__,
+                                                   testcase_type.__name__,
+                                                   os.path.abspath(files_to_reduce[files_reduced])))
+                        self.result_code = FuzzManagerReporter.QUAL_REDUCER_BROKE
 
                     return False
 
@@ -444,19 +443,22 @@ class ReductionJob(object):
             if reduced_size == original_size:
                 raise ReducerError("Reducer succeeded but nothing was reduced!")
 
-            self._report_result(self.tcroot, self.interesting_prefix, quality.REDUCED_RESULT, force=True)
+            self._report_result(self.tcroot,
+                                self.interesting_prefix,
+                                FuzzManagerReporter.QUAL_REDUCED_RESULT,
+                                force=True)
 
             # change original quality so unbucketed crashes don't reduce again
-            self.result_code = quality.REDUCED_ORIGINAL
+            self.result_code = FuzzManagerReporter.QUAL_REDUCED_ORIGINAL
             return True
 
         except ReducerError as exc:
             log.warning("Could not reduce: %s", exc)
-            self.result_code = quality.REDUCER_ERROR
+            self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             return False
         except Exception:
             log.exception("Exception during reduce")
-            self.result_code = quality.REDUCER_ERROR
+            self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             self.reduced_id = None
             return False
         finally:
@@ -531,9 +533,9 @@ def main(args):
         result = job.run()
 
         if result:
-            log.info("Reduction succeeded: %r", job.result_code)
+            log.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
         else:
-            log.warning("Reduction failed: %r", job.result_code)
+            log.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
 
     finally:
         log.warning("Shutting down...")
