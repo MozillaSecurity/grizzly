@@ -49,11 +49,11 @@ def _testcase_contents(path="."):
         # skip tmp folders
         if re.match(r"^tmp.+$", arc_path.split(os.sep, 1)[0]) is not None:
             continue
-        # skip core files
-        if re.match(r"^core.\d+$", os.path.basename(arc_path)) is not None:
-            continue
         for file_name in dir_files:
-            if arc_path == path:
+            # skip core files
+            if re.match(r"^core.\d+$", file_name) is not None:
+                continue
+            if arc_path == ".":
                 yield file_name
             else:
                 yield os.path.join(arc_path, file_name)
@@ -119,13 +119,20 @@ class ReductionJob(object):
             for line in info:
                 if line.lower().startswith("landing page: "):
                     landing_page = os.path.join(testpath,
-                                                line.split(": ", 1)[1].strip().encode("utf-8"))
+                                                line.split(": ", 1)[1].strip())
                     break
             else:
-                raise ReducerError("Couldn't find landing page in %s!"
+                raise ReducerError("Could not find landing page in %s!"
                                    % (os.path.abspath(info.name),))
-        assert os.path.isfile(landing_page)
+        if not os.path.isfile(landing_page):
+            raise ReducerError("Landing page %s does not exist in %s!"
+                               % (landing_page, os.path.abspath(info.name)))
         return landing_page
+
+    def _http_abspath(self, path):
+        """Return an absolute HTTP path to `path` relative to tcroot"""
+        path = os.path.relpath(path, self.tcroot)
+        return '/' + '/'.join(path.split(os.sep))
 
     def config_testcase(self, testcase):
         """Prepare a user provided testcase for reduction.
@@ -137,14 +144,17 @@ class ReductionJob(object):
             None
         """
         # extract the testcase if necessary
-        assert not os.path.exists(self.tcroot)
+        if os.path.exists(self.tcroot):
+            raise ReducerError("Testcase already configured?")
         if os.path.isfile(testcase):
-            assert testcase.endswith(".zip")
+            if not testcase.endswith(".zip"):
+                raise ReducerError("Testcase must be zip or directory")
             os.mkdir(self.tcroot)
             with zipfile.ZipFile(testcase) as zip_fp:
                 zip_fp.extractall(path=self.tcroot)
         else:
-            assert os.path.isdir(testcase)
+            if not os.path.isdir(testcase):
+                raise ReducerError("Testcase must be zip or directory")
             shutil.copytree(testcase, self.tcroot)
 
         self.input_fname = os.path.basename(testcase)
@@ -158,6 +168,8 @@ class ReductionJob(object):
             dirs = sorted([os.path.join(self.tcroot, entry) for entry in entries
                            if os.path.exists(os.path.join(self.tcroot, entry, "test_info.txt"))],
                           key=lambda x: -int(x.rsplit('-', 1)[1]))
+            if not dirs:
+                raise ReducerError("No testcase recognized at %r" % (testcase,))
 
         # check for included prefs and environment
         if "prefs.js" in os.listdir(dirs[0]):
@@ -172,7 +184,7 @@ class ReductionJob(object):
 
         # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
         # them all in order
-        pages = ['/' + posixpath.relpath(self._get_landing_page(d), self.tcroot) for d in dirs]
+        pages = [self._get_landing_page(d) for d in dirs]
         if len(pages) == 1:
             self.testcase = pages[0]
         else:
@@ -198,7 +210,7 @@ class ReductionJob(object):
                 "<script>",
                 "let _reduce_tests = [",
                 "//DDBEGIN",
-                "'" + "',\n'".join(pages) + "',",
+                "'" + "',\n'".join(self._http_abspath(p) for p in pages) + "',",
                 "//DDEND",
                 "]",
                 "function _reduce_next(){",
@@ -227,11 +239,10 @@ class ReductionJob(object):
         # prune unnecessary files from the testcase
         for root, _, files in os.walk(self.tcroot):
             for file in files:
-                if file in {"prefs.js", "env_vars.txt", "test_info.txt", "log_metadata.json",
-                            "grizzly_fuzz_harness.html", "screenlog.txt"} or \
+                if file in {"env_vars.txt", "grizzly_fuzz_harness.html", "log_metadata.json",
+                            "prefs.js", "screenlog.txt", "test_info.txt"} or \
                         (file.startswith("log_") and file.endswith(".txt")):
                     os.unlink(os.path.join(root, file))
-
 
     def close(self):
         """Clean up any resources used for this job.
@@ -243,7 +254,7 @@ class ReductionJob(object):
             None
         """
         if self.tmpdir is not None and os.path.isdir(self.tmpdir):
-            shutil.rmtree(self.tmpdir)
+            #shutil.rmtree(self.tmpdir)
             self.tmpdir = None
 
     def _report_result(self, tcroot, temp_prefix, quality_value, force=False):
@@ -254,9 +265,9 @@ class ReductionJob(object):
         testcase = TestCase(landing_page, "grizzly.reduce", input_fname=self.input_fname)
 
         # add testcase contents
-        for filename in _testcase_contents(tcroot):
-            with open(os.path.join(tcroot, filename)) as testfile_fp:
-                testcase.add_testfile(TestFile(filename, testfile_fp.read()))
+        for file_name in _testcase_contents(tcroot):
+            with open(os.path.join(tcroot, file_name)) as testfile_fp:
+                testcase.add_testfile(TestFile(file_name, testfile_fp.read()))
 
         # add prefs
         if self.interesting.target.prefs is not None:
@@ -293,7 +304,7 @@ class ReductionJob(object):
             out_dir = os.path.dirname(out)
             if not os.path.isdir(out_dir):
                 os.makedirs(out_dir)
-            shutil.copyfile(file_name, out)
+            shutil.copyfile(os.path.join(self.tcroot, file_name), out)
         self.other_crashes[crash_hash] = {"tcroot": os.path.realpath(tmpd), "prefix": temp_prefix}
 
     def _report_other_crashes(self):
