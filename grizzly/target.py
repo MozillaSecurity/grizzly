@@ -77,6 +77,26 @@ class Target(object):
         self._puppet.close()
 
 
+    def poll_for_idle(self, threshold, interval):
+        # return true if cpu usage of target is below threshold for interval seconds
+        pid = self._puppet.get_pid()
+        if pid is not None:
+            try:
+                process = psutil.Process(pid)
+                log.debug('Polling process...')
+                # poll for 100ms at a time so we can exit earlier if the threshold is exceeded
+                intervals = int(interval / 0.1)
+                result = all(process.cpu_percent(interval=0.1) <= threshold
+                             for _ in range(intervals))
+                if result:
+                    log.info('Process utilized <= %d%% CPU for %ds.', threshold, interval)
+                return result
+            except psutil.NoSuchProcess:
+                log.debug('Error polling process: %d no longer exists', pid)
+        # default to False if we could not measure cpu usage
+        return False
+
+
     def detect_failure(self, ignored, was_timeout):
         # attempt to detect a failure
         status = self.RESULT_NONE
