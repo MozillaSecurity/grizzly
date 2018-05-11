@@ -38,7 +38,6 @@ class Interesting(object):
         self.ignore = ignore  # things to ignore
         self.target = target  # a Puppet to run with
         self.server = None  # a server to serve with
-        self.wwwdir = None  # testcase root to serve
         self.orig_sig = None  # signature to reduce to (if specified)
         # alt_crash_cb (if set) will be called with args=(temp_prefix) for any crashes which do
         # not match the original signature (assuming --any-crash is not set)
@@ -71,7 +70,7 @@ class Interesting(object):
                 """
                 return item != self.landing_page
         self.optional_files = _all()
-        self.landing_page = None  # the file to point the target at
+        self._landing_page = None  # the file to point the target at
         self.reduce_file = None  # the file to reduce
 
     def config_environ(self, environ):
@@ -86,11 +85,27 @@ class Interesting(object):
                     value = None
                 self.env_mod[key] = value
 
+    @property
+    def wwwdir(self):
+        return os.path.dirname(os.path.realpath(self._landing_page))
+
+    @property
+    def landing_page(self):
+        return os.path.basename(self._landing_page)
+
+    @landing_page.setter
+    def landing_page(self, value):
+        self._landing_page = value
+
     def init(self, _):
         """Lithium initialization entrypoint
+
+        Args:
+            _args (unused): Command line arguments from Lithium (N/A)
+
+        Returns:
+            None
         """
-        self.wwwdir = os.path.dirname(os.path.realpath(self.landing_page))
-        self.landing_page = os.path.basename(self.landing_page)
         self.skipped = None
         self.result_cache = {}
 
@@ -176,8 +191,8 @@ class Interesting(object):
                 else:
                     log.info("Uninteresting (cached)")
                 return result
-        for i in range(n_tries):
-            if (n_tries - i) < (self.min_crashes - n_crashes):
+        for try_num in range(n_tries):
+            if (n_tries - try_num) < (self.min_crashes - n_crashes):
                 break  # no longer possible to get min_crashes, so stop
             if self._run(temp_prefix):
                 n_crashes += 1
@@ -327,7 +342,14 @@ class Interesting(object):
         return result
 
     def cleanup(self, _):
-        """Lithium cleanup entrypoint"""
+        """Lithium cleanup entrypoint
+
+        Args:
+            _args (unused): Command line arguments from Lithium (N/A)
+
+        Returns:
+            None
+        """
         try:
             if self.server is not None:
                 self.server.close()
