@@ -35,7 +35,6 @@ except ImportError as err:
     _boto_import_error = err
 
 from . import stack_hasher
-from .reduce import quality
 
 __all__ = ("FilesystemReporter", "FuzzManagerReporter", "S3FuzzManagerReporter")
 __author__ = "Tyson Smith"
@@ -322,11 +321,20 @@ class FuzzManagerReporter(Reporter):
     # max number of times to report a non-frequent signature to FuzzManager
     MAX_REPORTS = 10
 
+    # testcase quality values
+    QUAL_REDUCED_RESULT = 0  # the final reduced testcase
+    QUAL_REDUCED_ORIGINAL = 1  # the original used for successful reduction
+    QUAL_REPRODUCIBLE = 4  # the testcase was reproducible
+    QUAL_UNREDUCED = 5  # haven't attempted reduction yet
+    QUAL_REDUCER_BROKE = 8  # the testcase was reproducible, but broke during reduction
+    QUAL_REDUCER_ERROR = 9  # reducer error
+    QUAL_NOT_REPRODUCIBLE = 10  # could not reproduce the testcase
+
 
     def __init__(self, target_binary, log_limit=0):
         Reporter.__init__(self, log_limit)
         self.target_binary = target_binary
-        self.quality = quality.UNREDUCED
+        self.quality = self.QUAL_UNREDUCED
         self.force_report = False
 
 
@@ -344,6 +352,14 @@ class FuzzManagerReporter(Reporter):
         if not os.path.isfile("".join([bin_file, ".fuzzmanagerconf"])):
             raise IOError("Missing: %s" % "".join([bin_file, ".fuzzmanagerconf"]))
         ProgramConfiguration.fromBinary(bin_file)
+
+
+    @classmethod
+    def quality_name(cls, value):
+        for name in dir(cls):
+            if name.startswith("QUAL_") and getattr(cls, name) == value:
+                return name
+        return "unknown quality (%r)" % (value,)
 
 
     def _process_rr_trace(self):
