@@ -69,12 +69,3 @@ class ReducerArgs(CommonArgs):
 
         if args.reduce_file is None:
             args.reduce_file = args.input
-
-
-    @staticmethod
-    def parse_ffp_options(arguments):
-        self.parser.add_argument(
-            "testcase",
-            help="Testcase to reduce -- MUST BE LAST! (must be last only if not using lithium's --testcase option)")
-
-        return args
