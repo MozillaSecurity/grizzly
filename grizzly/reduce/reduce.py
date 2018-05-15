@@ -178,9 +178,9 @@ class ReductionJob(object):
             self.interesting.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
             log.warning("Using prefs included in testcase: %s", self.interesting.target.prefs)
         if "env_vars.txt" in os.listdir(dirs[0]):
-            self.interesting.config_environ(os.path.join(dirs[0], "environ.txt"))
+            self.interesting.config_environ(os.path.join(dirs[0], "env_vars.txt"))
             log.warning("Using environment included in testcase: %s",
-                        os.path.abspath(os.path.join(dirs[0], "environ.txt")))
+                        os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
 
         # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
         # them all in order
@@ -291,7 +291,7 @@ class ReductionJob(object):
         crash_info = Report.from_path(temp_prefix + "_logs") \
             .create_crash_info(self.interesting.target.binary)
         this_sig = crash_info.createCrashSignature(maxFrames=5)
-        crash_hash = hashlib.sha256(this_sig.rawSignature).hexdigest()[:10]
+        crash_hash = hashlib.sha256(this_sig.rawSignature.encode("utf-8")).hexdigest()[:10]
         tmpd = os.path.join(self.tmpdir, "alt", crash_hash)
         if crash_hash in self.other_crashes:
             shutil.rmtree(self.other_crashes[crash_hash]["tcroot"])
@@ -348,7 +348,7 @@ class ReductionJob(object):
                 reducer.testcase.readTestcase(self.testcase)
                 if len(reducer.testcase) == 1:
                     # we reduced this down to a single testcase, remove the harness
-                    testcase_rel = reducer.testcase.parts[0].strip()
+                    testcase_rel = reducer.testcase.parts[0].strip().decode("utf-8")
                     assert testcase_rel.startswith("'/")
                     assert testcase_rel.endswith("',")
                     testcase_rel = testcase_rel[2:-2]  # quoted, begins with / and ends with a comma
@@ -548,8 +548,10 @@ def main(args):
 
         if result:
             log.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
+            return 0
         else:
             log.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
+            return 1
 
     finally:
         log.warning("Shutting down...")
