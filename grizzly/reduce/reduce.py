@@ -254,7 +254,7 @@ class ReductionJob(object):
             None
         """
         if self.tmpdir is not None and os.path.isdir(self.tmpdir):
-            #shutil.rmtree(self.tmpdir)
+            shutil.rmtree(self.tmpdir)
             self.tmpdir = None
 
     def _report_result(self, tcroot, temp_prefix, quality_value, force=False):
