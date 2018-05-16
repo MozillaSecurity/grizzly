@@ -62,6 +62,7 @@ class Interesting(object):
         self.env_mod = None
 
         class _all(object):  # pylint: disable=too-few-public-methods
+
             @staticmethod
             def __contains__(item):
                 """
@@ -69,9 +70,10 @@ class Interesting(object):
                 always return True for 'in' except for the testcase itself
                 """
                 return item != self.landing_page
+
         self.optional_files = _all()
         self._landing_page = None  # the file to point the target at
-        self.reduce_file = None  # the file to reduce
+        self._reduce_file = None  # the file to reduce
 
     def config_environ(self, environ):
         self.env_mod = {}
@@ -96,6 +98,17 @@ class Interesting(object):
     @landing_page.setter
     def landing_page(self, value):
         self._landing_page = value
+
+    @property
+    def reduce_file(self):
+        return self._reduce_file
+
+    @reduce_file.setter
+    def reduce_file(self, value):
+        self._reduce_file = value
+        # landing page should default to same value as reduce file
+        if self._landing_page is None:
+            self._landing_page = value
 
     def init(self, _):
         """Lithium initialization entrypoint
@@ -247,21 +260,25 @@ class Interesting(object):
         # (re)launch FFPuppet
         if self.target.closed:
             # Try to launch the browser at most, 4 times
-            for _ in range(4):
+            for retries in reversed(range(4)):
                 try:
                     self.target.launch(self.location, env_mod=self.env_mod)
                     break
                 except ffpuppet.LaunchError as exc:
-                    log.warn(str(exc))
-                    time.sleep(15)
+                    if retries:
+                        log.warn(str(exc))
+                        time.sleep(15)
+                    else:
+                        raise
 
         try:
             start_time = time.time()
             idle_timeout_event = threading.Event()
             iteration_done_event = threading.Event()
-            poll = threading.Thread(target=self.monitor_process,
-                                    args=(iteration_done_event, idle_timeout_event))
-            poll.start()
+            if self.idle_poll:
+                poll = threading.Thread(target=self.monitor_process,
+                                        args=(iteration_done_event, idle_timeout_event))
+                poll.start()
 
             def keep_waiting():
                 return self.target._puppet.is_healthy() and not idle_timeout_event.is_set()
@@ -299,7 +316,8 @@ class Interesting(object):
 
                 # save logs
                 result_logs = temp_prefix + "_logs"
-                os.mkdir(result_logs)
+                if not os.path.exists(result_logs):
+                    os.mkdir(result_logs)
                 self.target.save_logs(result_logs, meta=True)
 
                 # create a CrashInfo
@@ -337,7 +355,8 @@ class Interesting(object):
 
         finally:
             iteration_done_event.set()
-            poll.join()
+            if self.idle_poll:
+                poll.join()
 
         return result
 

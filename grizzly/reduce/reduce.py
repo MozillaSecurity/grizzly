@@ -395,6 +395,7 @@ class ReductionJob(object):
                     if stage_num == 1:
                         if HAVE_JSBEAUTIFIER and testcase_path.endswith(".js"):
                             # Beautify testcase
+                            log.info("Attempting to beautify %s", testcase_path)
                             with open(testcase_path) as f:
                                 original_testcase = f.read()
 
@@ -410,7 +411,6 @@ class ReductionJob(object):
                             reducer.strategy = strategy_type()
                             reducer.testcase = testcase_type()
                             reducer.testcase.readTestcase(testcase_path)
-                            log.info("Attempting to beautify %s", testcase_path)
                             result = reducer.run()
                             if result == 0:
                                 log.info("Beautification succeeded")
@@ -480,6 +480,9 @@ class ReductionJob(object):
 
 
 def main(args):
+    # NOTE: grizzly.reduce.main mirrors this pretty closely
+    #       please check if updates here should go there too
+
     if args.quiet and not bool(os.getenv("DEBUG")):
         logging.getLogger().setLevel(logging.WARNING)
 
