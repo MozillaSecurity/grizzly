@@ -61,7 +61,7 @@ def test_interesting(tmpdir):
     assert obj.server is None
     assert obj.target._calls["close"] == 1
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
 
 
@@ -83,7 +83,7 @@ def test_not_interesting(tmpdir):
     assert obj.server is not None
     assert obj.target._calls["close"] == 0
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
 
 
@@ -105,7 +105,7 @@ def test_ignored(tmpdir):
     assert obj.server is not None
     assert obj.target._calls["close"] == 1
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
 
 
@@ -128,7 +128,7 @@ def test_target_relaunch(tmpdir):
     assert obj.server is not None
     assert obj.target._calls["launch"] > 1
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
 
 
 def test_no_harness(tmpdir):
@@ -143,7 +143,7 @@ def test_no_harness(tmpdir):
     assert obj.server is None
     assert obj.target._calls["close"] == 1
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
 
 
@@ -169,7 +169,7 @@ def test_skip(tmpdir):
     assert obj.target._calls["close"] == 2
     assert obj.server is not None
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
 
 
 def test_any_crash_false(tmpdir):
@@ -201,7 +201,7 @@ def test_any_crash_false(tmpdir):
     assert obj.target._calls["close"] == 2
     assert obj.server is not None
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
 
 
 def test_any_crash_true(tmpdir):
@@ -233,7 +233,7 @@ def test_any_crash_true(tmpdir):
     assert obj.target._calls["close"] == 2
     assert obj.server is not None
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
 
 
 def test_min_crashes_repro(tmpdir):
@@ -250,7 +250,7 @@ def test_min_crashes_repro(tmpdir):
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 4
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
 
 
 def test_min_crashes_norepro(tmpdir):
@@ -278,7 +278,7 @@ def test_min_crashes_norepro(tmpdir):
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 4
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
 
 
 def test_repeat_repro(tmpdir):
@@ -293,7 +293,7 @@ def test_repeat_repro(tmpdir):
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 4
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
 
 
 def test_repeat_norepro(tmpdir):
@@ -315,7 +315,7 @@ def test_repeat_norepro(tmpdir):
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 17 - 4 + 1
     obj.cleanup(None)
-    assert obj.target._calls["cleanup"] == 1
+    assert obj.target._calls["cleanup"] == 0
 
 
 def test_cache(tmpdir):
