@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
+import sys
 
 from .reduce import main
 from .args import ReducerArgs
@@ -16,4 +17,4 @@ if bool(os.getenv("DEBUG")):
     log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
 logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-main(ReducerArgs().parse_args())
+sys.exit(main(ReducerArgs().parse_args()))

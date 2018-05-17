@@ -5,18 +5,14 @@
 """
 Interesting script to use FFPuppet/Sapphire for fast reduction using lithium.
 """
-import argparse
 import glob
 import hashlib
 import logging
 import os
-import re
 import shutil
-import sys
 import tempfile
 import time
 import threading
-import psutil
 
 import ffpuppet
 import sapphire
@@ -211,7 +207,7 @@ class Interesting(object):
                 n_crashes += 1
                 if n_crashes >= self.min_crashes:
                     if self.interesting_cb is not None:
-                        self.interesting_cb(temp_prefix)
+                        self.interesting_cb(temp_prefix)  # pylint: disable=not-callable
                     if self.use_result_cache:
                         self.result_cache[cache_key] = {
                             'result': True,
@@ -291,8 +287,7 @@ class Interesting(object):
                 os.close(tempfd)
                 try:
                     # serve the testcase
-                    server_status, served = self.server.serve_path(self.wwwdir,
-                                                                   continue_cb=keep_waiting)
+                    server_status, _ = self.server.serve_path(self.wwwdir, continue_cb=keep_waiting)
                 finally:
                     os.unlink(tempf)
 
@@ -336,7 +331,7 @@ class Interesting(object):
                 else:
                     log.info("Uninteresting: different signature: %s", short_sig)
                     if self.alt_crash_cb is not None:
-                        self.alt_crash_cb(temp_prefix)
+                        self.alt_crash_cb(temp_prefix)  # pylint: disable=not-callable
 
             elif failure_detected == Target.RESULT_IGNORED:
                 log.info("Uninteresting: ignored")
