@@ -108,6 +108,7 @@ def main(args):
         def _on_interesting():
             if _was_interesting[0]:
                 return
+            log.info("Crash %d reproduced!", crash_id)
             if fm_reporter:
                 change_quality(crash_id, FuzzManagerReporter.QUAL_REPRODUCIBLE)
             _was_interesting[0] = True
