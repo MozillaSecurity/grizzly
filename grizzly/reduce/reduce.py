@@ -478,7 +478,7 @@ class ReductionJob(object):
             self._report_other_crashes()
 
 
-def main(args):
+def main(args, interesting_cb=None, result_cb=None):
     # NOTE: this mirrors grizzly.core.main pretty closely
     #       please check if updates here should go there too
 
@@ -546,7 +546,20 @@ def main(args):
         if args.asserts:
             job.interesting.target._puppet.add_abort_token("###!!! ASSERTION:")
 
+        # setup interesting callback if requested
+        if interesting_cb is not None:
+            orig_interesting_cb = job.interesting.interesting_cb
+            def _on_interesting(*args, **kwds):
+                if orig_interesting_cb is not None:
+                    orig_interesting_cb(*args, **kwds)
+                interesting_cb()
+            job.interesting.interesting_cb = _on_interesting
+
         result = job.run()
+
+        # report result out if callback requested
+        if result_cb is not None:
+            result_cb(result)
 
         if result:
             log.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))

@@ -11,23 +11,22 @@ import tempfile
 
 from Collector.Collector import Collector
 
-from .reduce import main as reduce_main
-from .args import BucketReducerArgs
+from .crash import main as reduce_crash
+from .args import ReducerFuzzManagerIDArgs
 
 
 log = logging.getLogger("grizzly.reduce.bucket")
 
 
-def download_all(bucket_id):
-    """
-    Download all testcases for the specified FuzzManager bucket.
+def bucket_crashes(bucket_id):
+    """Fetch all crash IDs for the specified FuzzManager bucket.
+    Only crashes with testcases are returned.
 
     Args:
         bucket_id (int): ID of the requested bucket on the server side
 
     Returns:
-        generator: generator of (crash_id, temp_filename) tuples
-                   caller must remove temp_filename
+        generator: generator of crash ID (int)
     """
     coll = Collector()
 
@@ -73,23 +72,9 @@ def download_all(bucket_id):
             log.warning("crash %d has no testcase, skipping", crash["id"])
             continue
 
-        log.debug("crash %d, downloading testcase...", crash["id"])
-
-        url = "%s://%s:%d/crashmanager/rest/crashes/%s/download/" \
-            % (coll.serverProtocol, coll.serverHost, coll.serverPort, crash["id"])
-
-        response = coll.get(url)
-
-        if 'content-disposition' not in response.headers:
-            raise RuntimeError("Server sent malformed response: %r" % (response,))
-
-        testcase_fd, testcase_fn = tempfile.mkstemp(suffix=os.path.splitext(crash["testcase"])[1])
-        with os.fdopen(testcase_fd, "wb") as testcase_fp:
-            testcase_fp.write(response.content)
-
         n_yielded += 1
         log.debug("yielding crash #%d", n_yielded)
-        yield (crash["id"], testcase_fn)
+        yield crash["id"]
 
 
 def get_signature(bucket_id):
@@ -126,17 +111,14 @@ def main(args):
         rm_sig = True
 
     try:
-        for crash_id, testcase in download_all(args.input):
-            try:
-                # reduce.main expects input to be a path to testcase
-                args.input = testcase
+        for crash_id in bucket_crashes(args.input):
 
-                if reduce_main(args) == 0:
-                    # success!
-                    return 0
+            # reduce.main expects input to be a crash ID
+            args.input = crash_id
 
-            finally:
-                os.unlink(testcase)
+            if reduce_crash(args) == 0:
+                # success!
+                return 0
 
         # none of the testcases reduced
         return 1
@@ -154,4 +136,4 @@ if __name__ == "__main__":
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
     logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    sys.exit(main(BucketReducerArgs().parse_args()))
+    sys.exit(main(ReducerFuzzManagerIDArgs().parse_args()))
