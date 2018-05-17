@@ -479,7 +479,7 @@ class ReductionJob(object):
 
 
 def main(args):
-    # NOTE: grizzly.main mirrors this pretty closely
+    # NOTE: this mirrors grizzly.core.main pretty closely
     #       please check if updates here should go there too
 
     if args.quiet and not bool(os.getenv("DEBUG")):

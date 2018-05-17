@@ -248,7 +248,7 @@ class Session(object):
 
 
 def main(args):
-    # NOTE: this mirrors grizzly.core.main pretty closely
+    # NOTE: grizzly.reduce.reduce.main mirrors this pretty closely
     #       please check if updates here should go there too
 
     if args.quiet and not bool(os.getenv("DEBUG")):
