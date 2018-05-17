@@ -14,7 +14,7 @@ __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]
 
 
-log = logging.getLogger("corpman_loader") # pylint: disable=invalid-name
+log = logging.getLogger("corpman_loader")  # pylint: disable=invalid-name
 
 
 class Loader(object):
@@ -30,7 +30,7 @@ class Loader(object):
         here = os.path.abspath(os.path.dirname(__file__))
         log.debug('looking for CorpusManagers in: %s', here)
         self._managers = {}
-        ignore_list = ('__init__.py', 'corpman.py', 'loader.py', 'tests.py')
+        ignore_list = ('__init__.py', 'corpman.py', 'loader.py', 'test_corpman.py')
         for sub in os.listdir(here):
             if sub.endswith(".py") and sub not in ignore_list:
                 log.debug('processing: %s', sub)
