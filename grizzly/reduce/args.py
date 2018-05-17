@@ -51,9 +51,10 @@ class ReducerArgs(CommonArgs):
     def sanity_check(self, args):
         CommonArgs.sanity_check(self, args)
 
-        if not (os.path.isdir(args.input)
-                or (os.path.isfile(args.input) and args.input.endswith(".zip"))):
-            self.parser.error("Testcase should be a folder or zip")
+        if "input" not in self._sanity_skip:
+            if not (os.path.isdir(args.input)
+                    or (os.path.isfile(args.input) and args.input.endswith(".zip"))):
+                self.parser.error("Testcase should be a folder or zip")
 
         if args.sig is not None and not os.path.isfile(args.sig):
             self.parser.error("file not found: %r" % args.sig)
@@ -69,3 +70,32 @@ class ReducerArgs(CommonArgs):
 
         if args.reduce_file is None:
             args.reduce_file = args.input
+
+
+class BucketReducerArgs(ReducerArgs):
+
+    def __init__(self):
+        ReducerArgs.__init__(self)
+
+        # madhax alert!
+        #
+        # we need to modify the meaning of the 'input' positional to accept an int bucket ID instead of a local testcase
+        # this is not possible with the public argparse API
+        #
+        # refs: https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
+        #       https://bugs.python.org/issue19462
+
+        # look up the action for the positional `input` arg
+        action = None
+        for arg in self.parser._actions:
+            if arg.dest == "input" and not arg.option_strings:
+                action = arg
+                break
+        assert action is not None
+
+        # modify it's type and help string
+        action.type = int
+        action.help = "FuzzManager bucket ID to reduce"
+
+        # ... and Bob's your uncle
+        self._sanity_skip.add("input")
