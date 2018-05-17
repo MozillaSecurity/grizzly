@@ -31,6 +31,8 @@ class CommonArgs(object):
     IGNORABLE = ("log-limit", "memory", "timeout")
 
     def __init__(self):
+        self._sanity_skip = set()
+
         self.parser = argparse.ArgumentParser(formatter_class=SortingHelpFormatter)
 
         self.parser.add_argument(
@@ -94,10 +96,11 @@ class CommonArgs(object):
             if ignore_token not in self.IGNORABLE:
                 self.parser.error("Unrecognized ignore value: %s" % ignore_token)
 
-        if not os.path.exists(args.input):
-            self.parser.error("%r does not exist" % args.input)
-        elif os.path.isdir(args.input) and not os.listdir(args.input):
-            self.parser.error("%r is empty" % args.input)
+        if "input" not in self._sanity_skip:
+            if not os.path.exists(args.input):
+                self.parser.error("%r does not exist" % args.input)
+            elif os.path.isdir(args.input) and not os.listdir(args.input):
+                self.parser.error("%r is empty" % args.input)
 
         if args.extension is not None:
             if not os.path.exists(args.extension):
