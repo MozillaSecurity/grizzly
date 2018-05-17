@@ -10,7 +10,6 @@ import hashlib
 import io
 import logging
 import os
-import posixpath
 import re
 import shutil
 import tempfile
@@ -230,19 +229,20 @@ class ReductionJob(object):
                 raise ReducerError("Unable to insert finish condition, please update pattern "
                                    "to match harness!")
             harness = new_harness
-            fp, harness_path = tempfile.mkstemp(prefix="harness_", suffix=".html", dir=self.tcroot)
-            os.close(fp)
+            harness_fp, harness_path = \
+                tempfile.mkstemp(prefix="harness_", suffix=".html", dir=self.tcroot)
+            os.close(harness_fp)
             with io.open(harness_path, "w", encoding="utf-8") as harness_fp:
                 harness_fp.write(harness)
             self.testcase = harness_path
 
         # prune unnecessary files from the testcase
         for root, _, files in os.walk(self.tcroot):
-            for file in files:
-                if file in {"env_vars.txt", "grizzly_fuzz_harness.html", "log_metadata.json",
-                            "prefs.js", "screenlog.txt", "test_info.txt"} or \
-                        (file.startswith("log_") and file.endswith(".txt")):
-                    os.unlink(os.path.join(root, file))
+            for file_ in files:
+                if file_ in {"env_vars.txt", "grizzly_fuzz_harness.html", "log_metadata.json",
+                             "prefs.js", "screenlog.txt", "test_info.txt"} or \
+                        (file_.startswith("log_") and file_.endswith(".txt")):
+                    os.unlink(os.path.join(root, file_))
 
     def close(self):
         """Clean up any resources used for this job.
@@ -396,8 +396,8 @@ class ReductionJob(object):
                         if HAVE_JSBEAUTIFIER and testcase_path.endswith(".js"):
                             # Beautify testcase
                             log.info("Attempting to beautify %s", testcase_path)
-                            with open(testcase_path) as f:
-                                original_testcase = f.read()
+                            with open(testcase_path) as testcase_fp:
+                                original_testcase = testcase_fp.read()
 
                             beautified_testcase = jsbeautifier.beautify(original_testcase)
                             # All try/catch pairs will be expanded on their own lines
@@ -445,9 +445,8 @@ class ReductionJob(object):
                         # unclear how to recover from this.
                         # just report failure and hopefully we have another to try
                         log.warning("%s + %s(%s) failed to reproduce. Previous stage broke the "
-                                    "testcase?" % (strategy_type.__name__,
-                                                   testcase_type.__name__,
-                                                   os.path.abspath(files_to_reduce[files_reduced])))
+                                    "testcase?", strategy_type.__name__, testcase_type.__name__,
+                                    os.path.abspath(files_to_reduce[files_reduced]))
                         self.result_code = FuzzManagerReporter.QUAL_REDUCER_BROKE
 
                     return False
@@ -470,7 +469,7 @@ class ReductionJob(object):
             log.warning("Could not reduce: %s", exc)
             self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             return False
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             log.exception("Exception during reduce")
             self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             self.reduced_id = None
@@ -480,7 +479,7 @@ class ReductionJob(object):
 
 
 def main(args):
-    # NOTE: grizzly.reduce.main mirrors this pretty closely
+    # NOTE: grizzly.main mirrors this pretty closely
     #       please check if updates here should go there too
 
     if args.quiet and not bool(os.getenv("DEBUG")):
@@ -533,7 +532,7 @@ def main(args):
         job.config_testcase(args.input)
         if args.sig is not None:
             with io.open(args.sig, encoding="utf-8") as sig_fp:
-                job.config_signature(sig_fp.read)
+                job.config_signature(sig_fp.read())
 
         if args.fuzzmanager:
             log.info("Reporting issues via FuzzManager")
@@ -552,9 +551,9 @@ def main(args):
         if result:
             log.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
             return 0
-        else:
-            log.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
-            return 1
+
+        log.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
+        return 1
 
     finally:
         log.warning("Shutting down...")
