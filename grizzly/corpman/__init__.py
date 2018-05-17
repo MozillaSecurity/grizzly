@@ -6,8 +6,6 @@
 from .corpman import CorpusManager, InputFile, ServerMap, TestCase, TestFile
 from .loader import Loader
 
-__all__ = ("CorpusManager", "InputFile", "loader", "ServerMap", "TestCase", "TestFile")
+__all__ = ("CorpusManager", "InputFile", "Loader", "ServerMap", "TestCase", "TestFile")
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber"]
-
-loader = Loader()

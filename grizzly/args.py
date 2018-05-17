@@ -63,9 +63,6 @@ class CommonArgs(object):
             "-p", "--prefs",
             help="prefs.js file to use")
         self.parser.add_argument(
-            "-q", "--quiet", action="store_true",
-            help="Output is minimal")
-        self.parser.add_argument(
             "--relaunch", type=int, default=1000,
             help="Number of iterations performed before relaunching the browser (default: %(default)s)")
         self.parser.add_argument(
@@ -114,13 +111,13 @@ class CommonArgs(object):
 
 
 class GrizzlyArgs(CommonArgs):
-    AVAIL_CORPMANS = sorted(corpman.loader.list())
-
     def __init__(self):
+        loader = corpman.Loader()
+        self.avail_corpmans = sorted(loader.list())
         CommonArgs.__init__(self)
         self.parser.add_argument(
             "corpus_manager",
-            help="Available corpus managers: %s" % ", ".join(self.AVAIL_CORPMANS))
+            help="Available corpus managers: %s" % ", ".join(self.avail_corpmans))
         self.parser.add_argument(
             "--accepted-extensions", nargs="+",
             help="Space separated list of supported file extensions. ie: html svg (default: all)")
@@ -147,7 +144,7 @@ class GrizzlyArgs(CommonArgs):
     def sanity_check(self, args):
         CommonArgs.sanity_check(self, args)
 
-        if args.corpus_manager.lower() not in self.AVAIL_CORPMANS:
+        if args.corpus_manager.lower() not in self.avail_corpmans:
             self.parser.error("%r corpus manager does not exist" % args.corpus_manager.lower())
 
         if args.fuzzmanager and args.s3_fuzzmanager:

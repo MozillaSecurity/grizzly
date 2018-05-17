@@ -63,7 +63,8 @@ class Session(object):
         assert self.adapter is None
         self.mime = mime_type
 
-        adpt_const = corpman.loader.get(name.lower())
+        loader = corpman.Loader()
+        adpt_const = loader.get(name.lower())
         if adpt_const is None:
             raise RuntimeError("Invalid corpus manager %r" % name)
 
@@ -250,10 +251,6 @@ class Session(object):
 def main(args):
     # NOTE: grizzly.reduce.reduce.main mirrors this pretty closely
     #       please check if updates here should go there too
-
-    if args.quiet and not bool(os.getenv("DEBUG")):
-        logging.getLogger().setLevel(logging.WARNING)
-
     log.info("Starting Grizzly")
     if args.fuzzmanager:
         reporter.FuzzManagerReporter.sanity_check(args.binary)
