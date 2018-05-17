@@ -72,15 +72,15 @@ class ReducerArgs(CommonArgs):
             args.reduce_file = args.input
 
 
-class BucketReducerArgs(ReducerArgs):
+class ReducerFuzzManagerIDArgs(ReducerArgs):
 
     def __init__(self):
         ReducerArgs.__init__(self)
 
         # madhax alert!
         #
-        # we need to modify the meaning of the 'input' positional to accept an int bucket ID instead of a local testcase
-        # this is not possible with the public argparse API
+        # We need to modify the meaning of the 'input' positional to accept an int ID instead of a
+        # local testcase. This is not possible with the public argparse API.
         #
         # refs: https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
         #       https://bugs.python.org/issue19462
@@ -95,7 +95,7 @@ class BucketReducerArgs(ReducerArgs):
 
         # modify it's type and help string
         action.type = int
-        action.help = "FuzzManager bucket ID to reduce"
+        action.help = "FuzzManager ID to reduce"
 
         # ... and Bob's your uncle
         self._sanity_skip.add("input")
