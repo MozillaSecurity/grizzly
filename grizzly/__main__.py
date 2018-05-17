@@ -8,12 +8,14 @@ import os
 from .core import main
 from .args import GrizzlyArgs
 
+def init_logger():
+    log_level = logging.INFO
+    log_fmt = "[%(asctime)s] %(message)s"
+    if bool(os.getenv("DEBUG")):
+        log_level = logging.DEBUG
+        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
+    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-log_level = logging.INFO
-log_fmt = "[%(asctime)s] %(message)s"
-if bool(os.getenv("DEBUG")):
-    log_level = logging.DEBUG
-    log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
-logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
+init_logger()
 main(GrizzlyArgs().parse_args())
