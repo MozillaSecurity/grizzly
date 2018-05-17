@@ -59,6 +59,7 @@ def _testcase_contents(path="."):
 
 
 class ReductionJob(object):
+    LOGGERS_TO_WATCH = ("ffpuppet", "grizzly", "lithium", "sapphire")
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
                  repeat, idle_poll, idle_threshold, idle_timeout, testcase_cache=True):
@@ -91,6 +92,54 @@ class ReductionJob(object):
         self.other_crashes = {}
         self.input_fname = None
         self.interesting_prefix = None
+        self.log_handler = self._start_log_capture()
+
+    def _start_log_capture(self):
+        """Add a log handler for grizzly and lithium messages generated during this job.
+        The handler is removed again by close()
+
+        Args:
+            None
+
+        Returns:
+            logging.Handler: The log handler to be removed later.
+        """
+        formatter = logging.Formatter("%(levelname).1s %(name)s [%(asctime)s] %(message)s")
+        handler = logging.FileHandler(os.path.join(self.tmpdir, "reducelog.txt"))
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(formatter)
+        for logname in self.LOGGERS_TO_WATCH:
+            logging.getLogger(logname).addHandler(handler)
+
+        # check that DEBUG messages will actually get through
+        # if the root logger level is > DEBUG, messages will not get through to our log handler
+        # set root to DEBUG, and propogate the old root level to each root handler
+        root_logger = logging.getLogger()
+        root_level = root_logger.getEffectiveLevel()
+        if root_level > logging.DEBUG:
+            root_logger.setLevel(logging.DEBUG)
+            for root_handler in root_logger.handlers:
+                if root_handler.level < root_level:
+                    root_handler.setLevel(root_level)
+
+        return handler
+
+    def _stop_log_capture(self):
+        """Stop handling reduce logs.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        if self.log_handler is None:
+            return
+        for logname in self.LOGGERS_TO_WATCH:
+            logging.getLogger(logname).removeHandler(self.log_handler)
+        self.log_handler.flush()
+        self.log_handler.close()
+        self.log_handler = None
 
     def config_signature(self, signature):
         """Configure a signature to use for reduction.  If none is given, an automatic signature is
@@ -253,13 +302,14 @@ class ReductionJob(object):
         Returns:
             None
         """
+        self._stop_log_capture()
         if self.tmpdir is not None and os.path.isdir(self.tmpdir):
             shutil.rmtree(self.tmpdir)
             self.tmpdir = None
         if self.interesting.target is not None:
             self.interesting.target.cleanup()
 
-    def _report_result(self, tcroot, temp_prefix, quality_value, force=False):
+    def _report_result(self, tcroot, temp_prefix, quality_value, force=False, include_logs=False):
         self.reporter.quality = quality_value
         self.reporter.force_report = force
 
@@ -270,6 +320,12 @@ class ReductionJob(object):
         for file_name in _testcase_contents(tcroot):
             with open(os.path.join(tcroot, file_name)) as testfile_fp:
                 testcase.add_testfile(TestFile(file_name, testfile_fp.read()))
+
+        # add reduce log
+        if include_logs:
+            log.info("Closing reduce log for report submission")
+            self._stop_log_capture()
+            testcase.add_environ_file(os.path.join(self.tmpdir, "reducelog.txt"), "reducelog.txt")
 
         # add prefs
         if self.interesting.target.prefs is not None:
@@ -462,7 +518,8 @@ class ReductionJob(object):
             self._report_result(self.tcroot,
                                 self.interesting_prefix,
                                 FuzzManagerReporter.QUAL_REDUCED_RESULT,
-                                force=True)
+                                force=True,
+                                include_logs=True)
 
             # change original quality so unbucketed crashes don't reduce again
             self.result_code = FuzzManagerReporter.QUAL_REDUCED_ORIGINAL
