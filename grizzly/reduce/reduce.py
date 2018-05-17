@@ -256,6 +256,8 @@ class ReductionJob(object):
         if self.tmpdir is not None and os.path.isdir(self.tmpdir):
             shutil.rmtree(self.tmpdir)
             self.tmpdir = None
+        if self.interesting.target is not None:
+            self.interesting.target.cleanup()
 
     def _report_result(self, tcroot, temp_prefix, quality_value, force=False):
         self.reporter.quality = quality_value
@@ -344,6 +346,7 @@ class ReductionJob(object):
                 if result != 0:
                     log.warning("Could not reduce: Iterating over history did not reproduce the "
                                 "issue")
+                    self.result_code = FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
                     return False
                 reducer.testcase.readTestcase(self.testcase)
                 if len(reducer.testcase) == 1:
@@ -469,11 +472,12 @@ class ReductionJob(object):
             log.warning("Could not reduce: %s", exc)
             self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             return False
+
         except Exception:  # pylint: disable=broad-except
             log.exception("Exception during reduce")
             self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
-            self.reduced_id = None
             return False
+
         finally:
             self._report_other_crashes()
 
