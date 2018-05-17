@@ -370,4 +370,4 @@ class Interesting(object):
                 self.server = None
         finally:
             if self.target is not None:
-                self.target.cleanup()
+                self.target.close()

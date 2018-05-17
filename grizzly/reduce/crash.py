@@ -79,7 +79,7 @@ def main(args):
 
     crash_id = args.input
     testcase = download_crash(crash_id)
-    fm_reporter = args.fuzzmanager or args.s3_fuzzmanager
+    fm_reporter = args.fuzzmanager
 
     try:
         # reduce.main expects input to be a path to testcase
