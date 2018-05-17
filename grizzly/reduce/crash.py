@@ -90,12 +90,8 @@ def main(args):
             if not fm_reporter:
                 return
 
-            # reduce succeeded, mark original crash as reduced
-            if result == FuzzManagerReporter.QUAL_REDUCED_RESULT:
-                change_quality(crash_id, FuzzManagerReporter.QUAL_REDUCED_ORIGINAL)
-
-            # not reproducible, mark it as such
-            elif result == FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE:
+            if result in {FuzzManagerReporter.QUAL_REDUCED_ORIGINAL,  # reduce succeeded
+                          FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE}:
                 change_quality(crash_id, result)
 
             # for these cases, something went wrong. a reduce log/result would be really valuable
