@@ -542,10 +542,6 @@ class ReductionJob(object):
 def main(args, interesting_cb=None, result_cb=None):
     # NOTE: this mirrors grizzly.core.main pretty closely
     #       please check if updates here should go there too
-
-    if args.quiet and not bool(os.getenv("DEBUG")):
-        logging.getLogger().setLevel(logging.WARNING)
-
     log.info("Starting Grizzly Reducer")
 
     if args.fuzzmanager:
