@@ -200,18 +200,20 @@ class Interesting(object):
                 else:
                     log.info("Uninteresting (cached)")
                 return result
+        run_prefix = None
         for try_num in range(n_tries):
             if (n_tries - try_num) < (self.min_crashes - n_crashes):
                 break  # no longer possible to get min_crashes, so stop
-            if self._run(temp_prefix):
+            run_prefix = "%s(%d)" % (temp_prefix, try_num)
+            if self._run(run_prefix):
                 n_crashes += 1
                 if n_crashes >= self.min_crashes:
                     if self.interesting_cb is not None:
-                        self.interesting_cb(temp_prefix)  # pylint: disable=not-callable
+                        self.interesting_cb(run_prefix)  # pylint: disable=not-callable
                     if self.use_result_cache:
                         self.result_cache[cache_key] = {
                             'result': True,
-                            'prefix': temp_prefix
+                            'prefix': run_prefix
                         }
                     return True
         if self.use_result_cache:
@@ -219,7 +221,7 @@ class Interesting(object):
             # But let's do it anyway to stay consistent
             self.result_cache[cache_key] = {
                 'result': False,
-                'prefix': temp_prefix
+                'prefix': run_prefix
             }
         return False
 

@@ -7,7 +7,7 @@ import os.path
 import zipfile
 import pytest
 
-from grizzly.reduce import reduce, ReducerError, ReductionJob
+from grizzly.reduce import reduce, strategies, ReducerError, ReductionJob
 from grizzly.reporter import Reporter, FuzzManagerReporter
 from grizzly.target import Target
 
@@ -410,7 +410,7 @@ def test_run_5(tmpdir, job):
     assert report_data["num_reports"] == 1
 
 
-@pytest.mark.skipif(not reduce.HAVE_JSBEAUTIFIER, reason="jsbeautifier required")
+@pytest.mark.skipif(not strategies.HAVE_JSBEAUTIFIER, reason="jsbeautifier required")
 def test_run_6(tmpdir, job):
     "test that jsbeautifier stage works"
     create_target_binary(job.interesting.target, tmpdir)
