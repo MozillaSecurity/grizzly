@@ -416,6 +416,6 @@ def test_idle_timeout(monkeypatch, tmpdir):
     obj.reduce_file = tmpdir.ensure("test.html").strpath
     obj.init(None)
     assert obj.interesting(None, tmpdir.ensure("lithium0", dir=True).strpath)
-    assert abs(first_poll[0] - 30) < 5, "polling started at %d" % (first_poll[0],)
+    assert abs(first_poll[0] - 30) <= 5, "polling started at %d" % (first_poll[0],)
     assert now[0] >= 45  # interesting did not return until poll_for_idle returned True
     obj.cleanup(None)
