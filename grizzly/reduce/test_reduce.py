@@ -97,7 +97,7 @@ def test_config_testcase_1(tmpdir, job):
     file.ensure(file=True)
     with pytest.raises(ReducerError) as exc:
         job.config_testcase(file.strpath)
-    assert "Testcase must be zip or directory" in str(exc)
+    assert "Testcase must be zip, html, or directory" in str(exc)
     file.remove()
 
 
@@ -217,6 +217,15 @@ def test_config_testcase_11(tmpdir, job):
     tmpdir.join("env_vars.txt").write("var=value\nfoo=bar")
     job.config_testcase(tmpdir.strpath)
     assert job.interesting.env_mod == dict(var="value", foo="bar")
+
+
+def test_config_testcase_12(tmpdir, job):
+    "html testcase is loaded ok"
+    tmpdir.join("test.html").write("hello")
+    job.config_testcase(tmpdir.join("test.html").strpath)
+    assert job.testcase == os.path.join(job.tcroot, "test.html")
+    with open(job.testcase) as tc_fp:
+        assert tc_fp.read() == "hello"
 
 
 def test_run_0(tmpdir, job):

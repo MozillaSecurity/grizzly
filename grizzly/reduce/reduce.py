@@ -183,7 +183,7 @@ class ReductionJob(object):
         """Prepare a user provided testcase for reduction.
 
         Args:
-            testcase (str): Path to a testcase. This should be a Grizzly testcase (zip or folder).
+            testcase (str): Path to a testcase. This should be a Grizzly testcase (zip or folder) or html file.
 
         Returns:
             None
@@ -192,15 +192,21 @@ class ReductionJob(object):
         if os.path.exists(self.tcroot):
             raise ReducerError("Testcase already configured?")
         if os.path.isfile(testcase):
-            if not testcase.endswith(".zip"):
-                raise ReducerError("Testcase must be zip or directory")
-            os.mkdir(self.tcroot)
-            with zipfile.ZipFile(testcase) as zip_fp:
-                zip_fp.extractall(path=self.tcroot)
-        else:
-            if not os.path.isdir(testcase):
-                raise ReducerError("Testcase must be zip or directory")
+            if testcase.lower().endswith(".html"):
+                os.mkdir(self.tcroot)
+                shutil.copy(testcase, self.tcroot)
+                with open(os.path.join(self.tcroot, "test_info.txt"), "w") as info_fp:
+                    info_fp.write("landing page: %s\n" % (os.path.basename(testcase),))
+            elif testcase.lower().endswith(".zip"):
+                os.mkdir(self.tcroot)
+                with zipfile.ZipFile(testcase) as zip_fp:
+                    zip_fp.extractall(path=self.tcroot)
+            else:
+                raise ReducerError("Testcase must be zip, html, or directory")
+        elif os.path.isdir(testcase):
             shutil.copytree(testcase, self.tcroot)
+        else:
+            raise ReducerError("Testcase must be zip, html or directory")
 
         self.input_fname = os.path.basename(testcase)
 

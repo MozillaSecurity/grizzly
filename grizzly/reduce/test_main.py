@@ -47,7 +47,7 @@ def test_parse_args(capsys, tmpdir):
     with pytest.raises(SystemExit):
         ReducerArgs().parse_args([exe.strpath, inp.strpath])
     _, err = capsys.readouterr()
-    assert "error: Testcase should be a folder or zip" in err
+    assert "error: Testcase should be a folder, zip, or html file" in err
     inp.remove()
     with pytest.raises(SystemExit):
         ReducerFuzzManagerIDArgs().parse_args([exe.strpath, inp.strpath])
