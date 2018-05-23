@@ -253,7 +253,7 @@ class Interesting(object):
                 with open(harness, 'rb') as harness_fp:
                     harness = harness_fp.read()
                 self.server.add_dynamic_response("/harness", lambda: harness, mime_type="text/html")
-                self.server.set_redirect("/first_test", self.landing_page, required=True)
+                self.server.set_redirect("/first_test", str(self.landing_page), required=True)
 
         # (re)launch FFPuppet
         if self.target.closed:
@@ -294,7 +294,7 @@ class Interesting(object):
                     os.unlink(tempf)
 
             else:
-                self.server.set_redirect("/next_test", self.landing_page, required=True)
+                self.server.set_redirect("/next_test", str(self.landing_page), required=True)
                 # serve the testcase
                 server_status = self.server.serve_path(self.wwwdir,
                                                        continue_cb=keep_waiting,
