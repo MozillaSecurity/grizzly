@@ -221,7 +221,7 @@ class ReductionJob(object):
             # move the file out of tcroot because we prune these non-testcase files later
             os.rename(os.path.join(dirs[0], "prefs.js"), os.path.join(self.tmpdir, "prefs.js"))
             self.interesting.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
-            log.warning("Using prefs included in testcase: %s", self.interesting.target.prefs)
+            log.warning("Using prefs included in testcase: %r", self.interesting.target.prefs)
         if "env_vars.txt" in os.listdir(dirs[0]):
             self.interesting.config_environ(os.path.join(dirs[0], "env_vars.txt"))
             log.warning("Using environment included in testcase: %s",
@@ -293,7 +293,7 @@ class ReductionJob(object):
                         (file_.startswith("log_") and file_.endswith(".txt")):
                     os.unlink(os.path.join(root, file_))
 
-    def close(self):
+    def close(self, keep_temp=False):
         """Clean up any resources used for this job.
 
         Args:
@@ -304,8 +304,11 @@ class ReductionJob(object):
         """
         self._stop_log_capture()
         if self.tmpdir is not None and os.path.isdir(self.tmpdir):
-            shutil.rmtree(self.tmpdir)
-            self.tmpdir = None
+            if keep_temp:
+                log.warning("Leaving working files at %r for inspection.", self.tmpdir)
+            else:
+                shutil.rmtree(self.tmpdir)
+                self.tmpdir = None
         if self.interesting.target is not None:
             self.interesting.target.cleanup()
 
@@ -577,6 +580,7 @@ def main(args, interesting_cb=None, result_cb=None):
         args.idle_timeout,
         not args.no_cache)
 
+    job_cancelled = False
     try:
         # set this before the testcase, since the testcase may override it
         if args.environ:
@@ -620,6 +624,12 @@ def main(args, interesting_cb=None, result_cb=None):
         log.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
         return 1
 
+    except KeyboardInterrupt:
+        job_cancelled = True
+
     finally:
         log.warning("Shutting down...")
-        job.close()
+        if not job_cancelled:
+            job_cancelled = job.result_code in {FuzzManagerReporter.QUAL_REDUCER_BROKE,
+                                                FuzzManagerReporter.QUAL_REDUCER_ERROR}
+        job.close(keep_temp=job_cancelled)
