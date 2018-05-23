@@ -53,8 +53,9 @@ class ReducerArgs(CommonArgs):
 
         if "input" not in self._sanity_skip:
             if not (os.path.isdir(args.input)
-                    or (os.path.isfile(args.input) and args.input.endswith(".zip"))):
-                self.parser.error("Testcase should be a folder or zip")
+                    or (os.path.isfile(args.input) and (args.input.lower().endswith(".zip")
+                                                        or args.input.lower().endswith(".html")))):
+                self.parser.error("Testcase should be a folder, zip, or html file")
 
         if args.sig is not None and not os.path.isfile(args.sig):
             self.parser.error("file not found: %r" % args.sig)
