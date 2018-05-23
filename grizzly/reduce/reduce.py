@@ -15,15 +15,11 @@ import shutil
 import tempfile
 import zipfile
 
-try:
-    import jsbeautifier
-    HAVE_JSBEAUTIFIER = True
-except ImportError:
-    HAVE_JSBEAUTIFIER = False
 import lithium
 from FTB.Signatures.CrashInfo import CrashSignature
 
 from .interesting import Interesting
+from . import strategies
 from ..core import Session
 from ..corpman import TestFile, TestCase
 from ..reporter import FuzzManagerReporter, Report
@@ -93,6 +89,7 @@ class ReductionJob(object):
         self.input_fname = None
         self.interesting_prefix = None
         self.log_handler = self._start_log_capture()
+        self.harness_created = None
 
     def _start_log_capture(self):
         """Add a log handler for grizzly and lithium messages generated during this job.
@@ -235,6 +232,8 @@ class ReductionJob(object):
         pages = [self._get_landing_page(d) for d in dirs]
         if len(pages) == 1:
             self.testcase = pages[0]
+            self.harness_created = False
+
         else:
             # create a harness to iterate over the whole history
             harness_path = os.path.join(os.path.dirname(__file__), '..', 'corpman', 'harness.html')
@@ -284,6 +283,7 @@ class ReductionJob(object):
             with io.open(harness_path, "w", encoding="utf-8") as harness_fp:
                 harness_fp.write(harness)
             self.testcase = harness_path
+            self.harness_created = True
 
         # prune unnecessary files from the testcase
         for root, _, files in os.walk(self.tcroot):
@@ -385,116 +385,112 @@ class ReductionJob(object):
             self.interesting.landing_page = self.testcase
             reducer.conditionScript = self.interesting
 
-            # set up tempdir manually so it doesn't go in cwd
-            reducer.tempDir = tempfile.mkdtemp(prefix="lithium-", dir=self.tmpdir)
+            class MinimizeHarness(strategies.MinimizeLines):
 
-            # if we are using a harness to iterate over multiple testcases, reduce that set of
-            # testcases before anything else
+                def should_skip(sub):  # pylint: disable=no-self-argument
+                    return not self.harness_created
+
+                def on_success(sub):  # pylint: disable=no-self-argument
+                    while files_to_reduce:
+                        files_to_reduce.pop()
+                    lines = lithium.TestcaseLine()
+                    lines.readTestcase(self.testcase)
+                    if len(lines) == 1:
+                        # we reduced this down to a single testcase, remove the harness
+                        testcase_rel = lines.parts[0].strip().decode("utf-8")
+                        assert testcase_rel.startswith("'/")
+                        assert testcase_rel.endswith("',")
+                        testcase_rel = testcase_rel[2:-2]  # trim chars asserted above
+                        testcase_path = testcase_rel.split('/')
+                        assert len(testcase_path) == 2
+                        self.tcroot = os.path.join(self.tcroot, testcase_path[0])
+                        self.testcase = os.path.join(self.tcroot, testcase_path[1])
+                        self.interesting.landing_page = self.testcase
+                        files_to_reduce.append(self.testcase)
+                        log.info("Reduced history to a single file: %s", testcase_path[1])
+                    else:
+                        # don't bother trying to reduce the harness further,
+                        #   leave harness out of files_to_reduce
+                        log.info("Reduced history down to %d testcases", len(reducer.testcase))
+
+            class ScanFilesToReduce(strategies.ReduceStage):
+
+                def __init__(sub):  # pylint: disable=no-self-argument
+                    # find all files for reduction
+                    for file_name in _testcase_contents(self.tcroot):
+                        file_name = os.path.join(self.tcroot, file_name)
+                        if file_name == self.testcase:
+                            continue
+                        with open(file_name, "rb") as tc_fp:
+                            for line in tc_fp:
+                                if b"DDBEGIN" in line:
+                                    files_to_reduce.append(file_name)
+                                    break
+                    if len(files_to_reduce) > 1:
+                        # sort by descending size
+                        files_to_reduce.sort(key=lambda fn: os.stat(fn).st_size, reverse=True)
+                    original_size[0] = sum(os.stat(fn).st_size for fn in files_to_reduce)
+
+                def read_testcase(sub, reducer, testcase_path):  # pylint: disable=no-self-argument
+                    pass
+
+                def should_skip(sub):  # pylint: disable=no-self-argument
+                    # no real reduce strategy, just used to scan for files
+                    return True
+
+            # if we created a harness to iterate over history, files_to_reduce is initially just
+            #   that harness
+            # otherwise, the first stage will be skipped and we will scan for all testcases to
+            #   reduce in the second stage
             files_to_reduce = [self.testcase]
-            if os.path.basename(self.testcase).startswith("harness_"):
-                self.interesting.reduce_file = self.testcase
-                log.info("Reducing %s with %s on %ss",
-                         self.testcase, lithium.Minimize.name, lithium.TestcaseLine.atom)
-                reducer.strategy = lithium.Minimize()
-                reducer.testcase = lithium.TestcaseLine()
-                reducer.testcase.readTestcase(self.testcase)
-                result = reducer.run()
-                if result != 0:
-                    log.warning("Could not reduce: Iterating over history did not reproduce the "
-                                "issue")
-                    self.result_code = FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
-                    return False
-                reducer.testcase.readTestcase(self.testcase)
-                if len(reducer.testcase) == 1:
-                    # we reduced this down to a single testcase, remove the harness
-                    testcase_rel = reducer.testcase.parts[0].strip().decode("utf-8")
-                    assert testcase_rel.startswith("'/")
-                    assert testcase_rel.endswith("',")
-                    testcase_rel = testcase_rel[2:-2]  # quoted, begins with / and ends with a comma
-                    testcase_path = testcase_rel.split('/')
-                    assert len(testcase_path) == 2
-                    self.tcroot = os.path.join(self.tcroot, testcase_path[0])
-                    self.testcase = os.path.join(self.tcroot, testcase_path[1])
-                    self.interesting.landing_page = self.testcase
-                    files_to_reduce = [self.testcase]
-                    log.info("Reduced history to a single file: %s", testcase_path[1])
-                else:
-                    files_to_reduce = []  # don't bother trying to reduce the harness further
-                    log.info("Reduced history down to %d testcases", len(reducer.testcase))
-
-            # find all files for reduction
-            for file_name in _testcase_contents(self.tcroot):
-                file_name = os.path.join(self.tcroot, file_name)
-                if file_name == self.testcase:
-                    continue
-                with open(file_name, "rb") as tc_fp:
-                    for line in tc_fp:
-                        if b"DDBEGIN" in line:
-                            files_to_reduce.append(file_name)
-                            break
-            if len(files_to_reduce) > 1:
-                # sort by descending size
-                files_to_reduce.sort(key=lambda fn: os.stat(fn).st_size, reverse=True)
-            original_size = sum(os.stat(fn).st_size for fn in files_to_reduce)
+            original_size = [None]
 
             # run lithium reduce with strategies
             # XXX: should check the DDBEGIN/DDEND lines to see whether it looks like markup
             #      or script and adjust cutBefore/cutAfter accordingly
             reduce_stages = (
-                (lithium.Minimize, lithium.TestcaseLine),
-                # CheckOnly is used in conjunction with beautification stage
-                # This verifies that beautification didn't break the testcase
-                (lithium.CheckOnly, lithium.TestcaseLine),
-                (lithium.CollapseEmptyBraces, lithium.TestcaseLine),
-                (lithium.Minimize, lithium.TestcaseJsStr),
+                MinimizeHarness,
+                ScanFilesToReduce,
+                strategies.MinimizeLines,
+                strategies.JSBeautify,
+                strategies.CollapseEmptyBraces,
+                strategies.MinimizeJSChars,
             )
-            for stage_num, (strategy_type, testcase_type) in enumerate(reduce_stages):
-                files_reduced = 0
-                for testcase_path in files_to_reduce:
-                    if stage_num == 1:
-                        if HAVE_JSBEAUTIFIER and testcase_path.endswith(".js"):
-                            # Beautify testcase
-                            log.info("Attempting to beautify %s", testcase_path)
-                            with open(testcase_path) as testcase_fp:
-                                original_testcase = testcase_fp.read()
 
-                            beautified_testcase = jsbeautifier.beautify(original_testcase)
-                            # All try/catch pairs will be expanded on their own lines
-                            # Collapse these pairs when only a single instruction is contained
-                            #   within
-                            regex = r"(\s*try {)\n\s*(.*)\n\s*(}\s*catch.*)"
-                            beautified_testcase = re.sub(regex, r"\1 \2 \3", beautified_testcase)
-                            with open(testcase_path, 'w') as testcase_fp:
-                                testcase_fp.write(beautified_testcase)
-                            self.interesting.reduce_file = testcase_path
-                            reducer.strategy = strategy_type()
-                            reducer.testcase = testcase_type()
-                            reducer.testcase.readTestcase(testcase_path)
-                            result = reducer.run()
-                            if result == 0:
-                                log.info("Beautification succeeded")
-                            else:
-                                log.warning("Beautification failed")
-                                with open(testcase_path, 'w') as testcase_fp:
-                                    testcase_fp.write(original_testcase)
-                        else:
-                            # jsbeautifier is only effective with JS files
-                            continue
-                    else:
-                        log.info("Reducing %s with %s on %ss",
-                                 testcase_path, strategy_type.name, testcase_type.atom)
-                        self.interesting.reduce_file = testcase_path
-                        reducer.strategy = strategy_type()
-                        reducer.testcase = testcase_type()
-                        reducer.testcase.readTestcase(testcase_path)
-                        result = reducer.run()
-                        if result != 0:
-                            break
+            files_reduced = 0
+            for strategy_type in reduce_stages:
+
+                result = -1
+                strategy = strategy_type()
+
+                for testcase_path in files_to_reduce:
+
+                    strategy.read_testcase(reducer, testcase_path)
+                    if strategy.should_skip():
+                        result = 0
+                        continue
+
+                    self.interesting.reduce_file = testcase_path
+                    # set up tempdir manually so it doesn't go in cwd
+                    reducer.tempDir = tempfile.mkdtemp(prefix="lithium-", dir=self.tmpdir)
+
+                    reducer.testCount = reducer.testTotal = 0
+                    result = reducer.run()
+
+                    if result == 0:
+                        strategy.on_success()
                         files_reduced += 1
+
+                    else:
+                        try:
+                            strategy.on_failure()
+                        except StopIteration:
+                            break
+                        result = 0  # if we passed on failure, don't fail below
 
                 if result != 0:
                     # reducer failed to repro the crash
-                    if stage_num == 0 and files_reduced == 0:
+                    if files_reduced == 0:
                         # first stage, couldn't repro at all
                         log.warning("Could not reduce: The testcase was not reproducible")
                         self.result_code = FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
@@ -503,16 +499,15 @@ class ReductionJob(object):
                         # subsequent stage, reducing broke the testcase?
                         # unclear how to recover from this.
                         # just report failure and hopefully we have another to try
-                        log.warning("%s + %s(%s) failed to reproduce. Previous stage broke the "
-                                    "testcase?", strategy_type.__name__, testcase_type.__name__,
-                                    os.path.abspath(files_to_reduce[files_reduced]))
+                        log.warning("%s failed to reproduce. Previous stage broke the testcase?",
+                                    strategy_type.__name__)
                         self.result_code = FuzzManagerReporter.QUAL_REDUCER_BROKE
 
                     return False
 
             # all stages succeeded
             reduced_size = sum(os.stat(fn).st_size for fn in files_to_reduce)
-            if reduced_size == original_size:
+            if reduced_size == original_size[0]:
                 raise ReducerError("Reducer succeeded but nothing was reduced!")
 
             self._report_result(self.tcroot,
@@ -616,7 +611,7 @@ def main(args, interesting_cb=None, result_cb=None):
 
         # report result out if callback requested
         if result_cb is not None:
-            result_cb(result)
+            result_cb(job.result_code)
 
         if result:
             log.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
