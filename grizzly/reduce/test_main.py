@@ -137,6 +137,32 @@ def test_main_prefs(monkeypatch, tmpdir):
     assert run_called[0] == 1
 
 
+def test_main_strategies(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+    "strategies list should be respected"
+    # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
+    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
+    report_data = {"num_reports": 0}
+
+    class FakeReporter(reporter.Reporter):
+        def _submit(self):
+            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
+            tc = self.test_cases[0]
+            assert len(tc._test_files) == 1, \
+                "too many test_files: %r" % (tc._test_files,)
+            assert tc.landing_page == "test.html"
+            assert tc._test_files[0].data == "'xxrequired'\n"
+            report_data["num_reports"] += 1
+    monkeypatch.setattr(reporter, "FilesystemReporter", FakeReporter)
+
+    exe = tmpdir.ensure("binary")
+    inp = tmpdir.ensure("input", dir=True)
+    inp.ensure("test_info.txt").write("landing page: test.html")
+    inp.ensure("test.html").write("fluff\n'xxrequired'\n")
+    args = ReducerArgs().parse_args([exe.strpath, inp.strpath, "--strategy", "line"])
+    assert reduce.main(args) == 0
+    assert report_data["num_reports"] == 1
+
+
 def test_bucket_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
     "bucket.main iterates using crash.main"
     main_called = [0]
