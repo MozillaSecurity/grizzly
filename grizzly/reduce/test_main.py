@@ -7,9 +7,9 @@ import zipfile
 import pytest
 
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs
-from grizzly.reduce import reduce, crash, bucket
+from grizzly.reduce import reduce, crash, bucket, ReductionJob
 from grizzly import reporter
-from .test_reduce import job  # noqa pylint: disable=unused-import
+from .test_reduce import job, FakeInteresting, FakeTarget  # noqa pylint: disable=unused-import
 
 
 def test_parse_args(capsys, tmpdir):
@@ -106,6 +106,35 @@ def test_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer
     inp.ensure("test.html").write("fluff\nrequired\n")
     args = ReducerArgs().parse_args([exe.strpath, inp.strpath])
     assert reduce.main(args) == 0
+
+
+def test_main_prefs(monkeypatch, tmpdir):
+    "cmd line prefs should override prefs in the testcase"
+    monkeypatch.setattr(reduce, "Interesting", FakeInteresting)
+    run_called = [0]
+
+    class MyReductionJob(ReductionJob):
+
+        def run(self, *args, **kwds):
+            result = ReductionJob.run(self, *args, **kwds)
+            with open(self.interesting.target.prefs) as prefs_fp:
+                assert "main prefs" == prefs_fp.read()
+            run_called[0] += 1
+            return result
+
+    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, False)
+    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
+
+    exe = tmpdir.ensure("binary")
+    inp = tmpdir.ensure("input", dir=True)
+    inp.ensure("test_info.txt").write("landing page: test.html")
+    inp.ensure("prefs.js").write("test prefs")
+    inp.ensure("test.html").write("fluff\nrequired\n")
+    tmpdir.ensure("prefs.js").write("main prefs")
+    args = ReducerArgs().parse_args([exe.strpath, inp.strpath,
+                                     "-p", tmpdir.join("prefs.js").strpath])
+    assert reduce.main(args) == 0
+    assert run_called[0] == 1
 
 
 def test_bucket_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name

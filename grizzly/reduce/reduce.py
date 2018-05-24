@@ -566,7 +566,7 @@ def main(args, interesting_cb=None, result_cb=None):
         args.launch_timeout,
         args.log_limit,
         args.memory,
-        args.prefs,
+        None,
         args.relaunch,
         False,  # rr
         args.valgrind,
@@ -588,10 +588,16 @@ def main(args, interesting_cb=None, result_cb=None):
 
     job_cancelled = False
     try:
-        # set this before the testcase, since the testcase may override it
-        if args.environ:
-            job.interesting.config_environ(args.environ)
         job.config_testcase(args.input)
+
+        # arguments for environ and prefs should override the testcase
+        if args.environ:
+            log.warning("Overriding environment with %r", args.environ)
+            job.interesting.config_environ(args.environ)
+        if args.prefs:
+            log.warning("Overriding prefs with %r", args.prefs)
+            job.interesting.target.prefs = os.path.abspath(args.prefs)
+
         if args.sig is not None:
             with io.open(args.sig, encoding="utf-8") as sig_fp:
                 job.config_signature(sig_fp.read())
