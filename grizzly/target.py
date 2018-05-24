@@ -36,7 +36,8 @@ class Target(object):
 
         assert self.binary is not None and os.path.isfile(self.binary)
         assert self.prefs is None or os.path.isfile(self.prefs)
-        log.info("Using prefs %r", self.prefs)
+        if self.prefs is not None:
+            log.info("Using prefs %r", self.prefs)
 
         # create Puppet object
         self._puppet = self.PUPPET(
