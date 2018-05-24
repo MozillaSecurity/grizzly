@@ -5,6 +5,8 @@
 import os.path
 
 from ..args import CommonArgs
+from .reduce import ReductionJob
+from .strategies import strategies_by_name
 
 
 class ReducerArgs(CommonArgs):
@@ -47,6 +49,10 @@ class ReducerArgs(CommonArgs):
         self.parser.add_argument(
             "--no-cache", action="store_true",
             help="Disable testcase caching")
+        self.parser.add_argument(
+            "--strategy", nargs="+", default=list(), metavar="STRATEGY", dest="strategies",
+            help="One or more strategies (space-separated). Available: %s (default: %s)"
+            % (" ".join(sorted(strategies_by_name())), " ".join(ReductionJob.DEFAULT_STRATEGIES)))
 
     def sanity_check(self, args):
         CommonArgs.sanity_check(self, args)
@@ -68,6 +74,14 @@ class ReducerArgs(CommonArgs):
 
         if args.environ is not None and not os.path.isfile(args.environ):
             self.parser.error("file not found: %r" % args.environ)
+
+        if args.strategies:
+            known_strategies = set(strategies_by_name())
+            for strategy in args.strategies:
+                if strategy not in known_strategies:
+                    self.parser.error("invalid strategy: %s" % (strategy,))
+        else:
+            args.strategies = None
 
         if args.reduce_file is None:
             args.reduce_file = args.input

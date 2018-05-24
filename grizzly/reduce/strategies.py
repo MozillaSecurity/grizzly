@@ -38,11 +38,13 @@ class ReduceStage(object):
 
 
 class MinimizeLines(ReduceStage):
+    name = "line"
     strategy_type = lithium.Minimize
     testcase_type = lithium.TestcaseLine
 
 
 class JSBeautify(ReduceStage):
+    name = "jsbeautify"
     strategy_type = lithium.CheckOnly
     testcase_type = lithium.TestcaseLine
 
@@ -85,10 +87,28 @@ class JSBeautify(ReduceStage):
 
 
 class CollapseEmptyBraces(ReduceStage):
+    name = "collapsebraces"
     strategy_type = lithium.CollapseEmptyBraces
     testcase_type = lithium.TestcaseLine
 
 
+class MinimizeChars(ReduceStage):
+    name = "char"
+    strategy_type = lithium.Minimize
+    testcase_type = lithium.TestcaseChar
+
+
 class MinimizeJSChars(ReduceStage):
+    name = "jschar"
     strategy_type = lithium.Minimize
     testcase_type = lithium.TestcaseJsStr
+
+
+def strategies_by_name():
+    result = {}
+    for cls in globals().values():
+        if isinstance(cls, type) and issubclass(cls, ReduceStage) and cls is not ReduceStage:
+            if cls.name in result:
+                raise RuntimeError("Duplicate strategy name: %s" % (cls.name,))
+            result[cls.name] = cls
+    return result

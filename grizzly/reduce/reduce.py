@@ -19,7 +19,7 @@ import lithium
 from FTB.Signatures.CrashInfo import CrashSignature
 
 from .interesting import Interesting
-from . import strategies
+from . import strategies as strategies_module
 from ..core import Session
 from ..corpman import TestFile, TestCase
 from ..reporter import FuzzManagerReporter, Report
@@ -56,6 +56,7 @@ def _testcase_contents(path="."):
 
 class ReductionJob(object):
     LOGGERS_TO_WATCH = ("ffpuppet", "grizzly", "lithium", "sapphire")
+    DEFAULT_STRATEGIES = ("line", "jsbeautify", "collapsebraces", "jschar")
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
                  repeat, idle_poll, idle_threshold, idle_timeout, working_path=None,
@@ -382,7 +383,7 @@ class ReductionJob(object):
         for entry in self.other_crashes.values():
             self._report_result(entry["tcroot"], entry["prefix"], FuzzManagerReporter.QUAL_UNREDUCED)
 
-    def run(self):
+    def run(self, strategies=None):
         """Run reduction.
         """
         assert self.testcase is not None
@@ -395,7 +396,7 @@ class ReductionJob(object):
             self.interesting.landing_page = self.testcase
             reducer.conditionScript = self.interesting
 
-            class MinimizeHarness(strategies.MinimizeLines):
+            class MinimizeHarness(strategies_module.MinimizeLines):
 
                 def should_skip(sub):  # pylint: disable=no-self-argument
                     return not self.harness_created
@@ -423,7 +424,7 @@ class ReductionJob(object):
                         #   leave harness out of files_to_reduce
                         log.info("Reduced history down to %d testcases", len(reducer.testcase))
 
-            class ScanFilesToReduce(strategies.ReduceStage):
+            class ScanFilesToReduce(strategies_module.ReduceStage):
 
                 def __init__(sub):  # pylint: disable=no-self-argument
                     # find all files for reduction
@@ -455,20 +456,22 @@ class ReductionJob(object):
             files_to_reduce = [self.testcase]
             original_size = [None]
 
+            # resolve list of strategies to apply
+            reduce_stages = [MinimizeHarness, ScanFilesToReduce]
+            if strategies is None:
+                strategies = self.DEFAULT_STRATEGIES
+            strategies_lut = strategies_module.strategies_by_name()
+            for strat in strategies:
+                try:
+                    strat = strategies_lut[strat]
+                except KeyError:
+                    raise ReducerError("Unknown strategy given: %r" % (strat,))
+                reduce_stages.append(strat)
+
             # run lithium reduce with strategies
-            # XXX: should check the DDBEGIN/DDEND lines to see whether it looks like markup
-            #      or script and adjust cutBefore/cutAfter accordingly
-            reduce_stages = (
-                MinimizeHarness,
-                ScanFilesToReduce,
-                strategies.MinimizeLines,
-                strategies.JSBeautify,
-                strategies.CollapseEmptyBraces,
-                strategies.MinimizeJSChars,
-            )
 
             files_reduced = 0
-            for strategy_type in reduce_stages:
+            for strategy_num, strategy_type in enumerate(reduce_stages):
 
                 result = -1
                 strategy = strategy_type()
@@ -482,7 +485,9 @@ class ReductionJob(object):
 
                     self.interesting.reduce_file = testcase_path
                     # set up tempdir manually so it doesn't go in cwd
-                    reducer.tempDir = tempfile.mkdtemp(prefix="lithium-", dir=self.tmpdir)
+                    reducer.tempDir = tempfile.mkdtemp(
+                        prefix="lith-%d-%s" % (strategy_num, strategy_type.name),
+                        dir=self.tmpdir)
 
                     reducer.testCount = reducer.testTotal = 0
                     result = reducer.run()
@@ -625,7 +630,7 @@ def main(args, interesting_cb=None, result_cb=None):
                 interesting_cb()
             job.interesting.interesting_cb = _on_interesting
 
-        result = job.run()
+        result = job.run(strategies=args.strategies)
 
         # report result out if callback requested
         if result_cb is not None:
