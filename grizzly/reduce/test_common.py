@@ -11,6 +11,7 @@ class FakeTarget(object):
     "Stub to fake parts of grizzly.target.Target needed for testing the reduce loop"
 
     def __init__(self, *args, **kwds):
+        self.rl_reset = 10
         self.closed = True
         self.binary = ""
         self.prefs = None
