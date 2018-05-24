@@ -58,7 +58,8 @@ class ReductionJob(object):
     LOGGERS_TO_WATCH = ("ffpuppet", "grizzly", "lithium", "sapphire")
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
-                 repeat, idle_poll, idle_threshold, idle_timeout, testcase_cache=True):
+                 repeat, idle_poll, idle_threshold, idle_timeout, working_path=None,
+                 testcase_cache=True):
         """Use lithium to reduce a testcase.
 
         Args:
@@ -83,7 +84,7 @@ class ReductionJob(object):
         self.interesting.alt_crash_cb = self._other_crash_found
         self.interesting.interesting_cb = self._interesting_crash
         self.testcase = None
-        self.tmpdir = tempfile.mkdtemp(prefix="grzreduce")
+        self.tmpdir = tempfile.mkdtemp(prefix="grzreduce", dir=working_path)
         self.tcroot = os.path.join(self.tmpdir, "tc")
         self.other_crashes = {}
         self.input_fname = None
@@ -584,6 +585,7 @@ def main(args, interesting_cb=None, result_cb=None):
         args.idle_poll,
         args.idle_threshold,
         args.idle_timeout,
+        args.working_path,
         not args.no_cache)
 
     job_cancelled = False

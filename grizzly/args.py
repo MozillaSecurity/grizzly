@@ -75,6 +75,10 @@ class CommonArgs(object):
             "--valgrind", action="store_true",
             help="Use Valgrind (Linux only)")
         self.parser.add_argument(
+            "-w", "--working-path",
+            help="Working directory. Intended to be used with ram-drives."
+                 " (default: %r)" % tempfile.gettempdir())
+        self.parser.add_argument(
             "--xvfb", action="store_true",
             help="Use Xvfb (Linux only)")
 
@@ -98,6 +102,9 @@ class CommonArgs(object):
                 self.parser.error("%r does not exist" % args.input)
             elif os.path.isdir(args.input) and not os.listdir(args.input):
                 self.parser.error("%r is empty" % args.input)
+
+        if args.working_path is not None and not os.path.isdir(args.working_path):
+            self.parser.error("%r is not a directory" % args.working_path)
 
         if args.extension is not None:
             if not os.path.exists(args.extension):
@@ -136,10 +143,6 @@ class GrizzlyArgs(CommonArgs):
         self.parser.add_argument(
             "--s3-fuzzmanager", action="store_true",
             help="Report large attachments (if any) to S3 and then the crash & S3 link to FuzzManager")
-        self.parser.add_argument(
-            "-w", "--working-path",
-            help="Working directory. Intended to be used with ram-drives."
-                 " (default: %r)" % tempfile.gettempdir())
 
     def sanity_check(self, args):
         CommonArgs.sanity_check(self, args)
@@ -149,6 +152,3 @@ class GrizzlyArgs(CommonArgs):
 
         if args.fuzzmanager and args.s3_fuzzmanager:
             self.parser.error("--fuzzmanager and --s3-fuzzmanager are mutually exclusive")
-
-        if args.working_path is not None and not os.path.isdir(args.working_path):
-            self.parser.error("%r is not a directory" % args.working_path)

@@ -79,7 +79,7 @@ def job(monkeypatch, request):
     "Pytest fixture to provide a ReductionJob object with dependencies stubbed and default values"
     interesting_cls = getattr(request, "param", FakeInteresting)
     monkeypatch.setattr(reduce, "Interesting", interesting_cls)
-    result = ReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, False)
+    result = ReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, False)
     yield result
     result.close()
 

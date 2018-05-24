@@ -122,7 +122,7 @@ def test_main_prefs(monkeypatch, tmpdir):
             run_called[0] += 1
             return result
 
-    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, False)
+    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, False)
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
 
     exe = tmpdir.ensure("binary")
