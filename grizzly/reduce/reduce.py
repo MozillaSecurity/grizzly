@@ -405,13 +405,12 @@ class ReductionJob(object):
                     if sub.should_skip():
                         return
 
-                    # we are running multiple testcases in a single "iteration", so we need to
-                    #   back-up and fix the timeout values
-                    sub._timeouts = self.interesting.iter_timeout, self.interesting.idle_timeout
-
                     strategies_module.MinimizeLines.read_testcase(sub, reducer, testcase_path)
 
-                    # start polling for idle after n-1 testcases have for sure finished
+                    # we are running multiple testcases in a single "iteration", so we need to
+                    #   fix the timeout values
+
+                    # start polling for idle after n-1 testcases have finished
                     self.interesting.idle_timeout += \
                         self.interesting.idle_timeout * (len(reducer.testcase) - 1)
 
@@ -421,7 +420,6 @@ class ReductionJob(object):
                         (self.interesting.iter_timeout + 10) * len(reducer.testcase)
 
                 def on_success(sub):  # pylint: disable=no-self-argument
-                    self.interesting.iter_timeout, self.interesting.idle_timeout = sub._timeouts
                     while files_to_reduce:
                         files_to_reduce.pop()
                     lines = lithium.TestcaseLine()
