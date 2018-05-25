@@ -451,7 +451,8 @@ class FuzzManagerReporter(Reporter):
                         arcname=os.path.join(arc_path, file_name))
 
         # submit results to the FuzzManager server
-        collector.submit(crash_info, testCase=zip_name, testCaseQuality=self.quality)
+        new_entry = collector.submit(crash_info, testCase=zip_name, testCaseQuality=self.quality)
+        log.info("Logged new crash %d with quality %d", new_entry["id"], self.quality)
         # TODO: add msg with cache_metadata["shortDescription"]
 
         # remove zipfile
@@ -469,7 +470,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
             s3 = boto3.resource("s3")
 
             s3_key = "rr-%s.tar.xz" % (self.minor,)
-            s3_url = "http://%s.s3.amazonaws.com/%s" % (S3_BUCKET, s3_key)
+            s3_url = "http://%s.s3.amazonaws.com/%s" % (self.S3_BUCKET, s3_key)
             try:
                 s3.Object(self.S3_BUCKET, s3_key).load()  # HEAD, doesn't fetch the whole object
             except botocore.exceptions.ClientError as exc:
