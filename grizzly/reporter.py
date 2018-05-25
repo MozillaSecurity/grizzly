@@ -286,21 +286,14 @@ class Reporter(object):
 class FilesystemReporter(Reporter):
     def __init__(self, log_limit=0, report_path=None):
         Reporter.__init__(self, log_limit)
-        self.report_path = report_path
+        self.report_path = os.path.join(os.getcwd(), "results") if report_path is None else report_path
 
 
     def _submit(self):
-        if self.report_path is None:
-            self.report_path = os.path.join(os.getcwd(), "results")
-
-        # create report directory if needed
-        if not os.path.isdir(self.report_path):
-            os.mkdir(self.report_path)
-
         # create major bucket directory in working directory if needed
         major_dir = os.path.join(self.report_path, self.major)
         if not os.path.isdir(major_dir):
-            os.mkdir(major_dir)
+            os.makedirs(major_dir)
 
         # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(self.test_cases):
