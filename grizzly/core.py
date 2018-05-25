@@ -27,7 +27,8 @@ import tempfile
 from ffpuppet import BrowserTerminatedError
 import sapphire
 
-from . import corpman, reporter
+from . import corpman
+from .reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
 from .status import Status
 from .target import Target
 
@@ -42,48 +43,22 @@ class Session(object):
     FM_LOG_SIZE_LIMIT = 0x40000  # max log size for log sent to FuzzManager (256KB)
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, cache_size, coverage, ignore, target, working_path=None):
-        self.adapter = None
+    def __init__(self, adapter, cache_size, coverage, ignore, reporter, target, working_path=None):
+        assert adapter is not None
+        assert reporter is not None
+        assert target is not None
+        self.adapter = adapter
         self.binary = None
         self.cache_size = max(cache_size, 1)  # testcase cache must be at least one
         self.coverage = coverage  # TODO: this should become part of the adapter???
         self.ignore = ignore
-        self.mime = None  # TODO: this should become part of adapter
-        self.reporter = None
+        self.reporter = reporter
         self.server = None
         self.status = Status()
         self.target = target
         self.test_cache = list()  # should contain len(cache) + 1 maximum
         self.wwwdir = None  # directory containing test files to be served
         self.working_path = working_path  # where test files will be stored
-
-
-    def config_adapter(self, name, input_path, iteration_timeout, accepted_extensions=None, mime_type=None):
-        log.debug("initializing the adapter")
-        assert self.adapter is None
-        self.mime = mime_type
-
-        loader = corpman.Loader()
-        adpt_const = loader.get(name.lower())
-        if adpt_const is None:
-            raise RuntimeError("Invalid corpus manager %r" % name)
-
-        self.adapter = adpt_const(
-            input_path,
-            accepted_extensions=accepted_extensions)
-
-        log.info("Found %d test cases", self.adapter.size())
-        if self.adapter.single_pass:
-            log.info("Running in REPLAY mode")
-        elif self.coverage:
-            log.info("Running in GCOV mode")
-            self.adapter.rotation_period = 1 # cover as many test cases as possible
-        else:
-            log.info("Running in FUZZING mode")
-
-        if (self.adapter.test_duration/1000.0) >= iteration_timeout:
-            raise RuntimeError("Test duration (%0.02fs) should be less than browser timeout (%ds)" % (
-                (self.adapter.test_duration/1000.0), iteration_timeout))
 
 
     def config_server(self, iteration_timeout):
@@ -109,20 +84,12 @@ class Session(object):
             self.server.close()
         if self.wwwdir and os.path.isdir(self.wwwdir):
             shutil.rmtree(self.wwwdir)
-        if self.target is not None:
-            self.target.cleanup()
-        if self.adapter is not None:
-            self.adapter.cleanup()
-        if self.target.use_rr:
-            if self.target.rr_path is not None and os.path.isdir(self.target.rr_path):
-                shutil.rmtree(self.target.rr_path)
 
 
     def process_result(self):
         self.status.results += 1
         log.info("Potential issue detected")
         log.debug("Current input: %s", self.adapter.active_file)
-        log.info("Reporting results...")
         # create working directory for current testcase
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
         if self.target.use_rr:
@@ -138,14 +105,13 @@ class Session(object):
             else:
                 log.warning("RR specified but no trace detected.")
         self.target.save_logs(result_logs, meta=True)
+        log.info("Reporting results...")
         self.reporter.submit(result_logs, reversed(self.test_cache))
         if os.path.isdir(result_logs):
             shutil.rmtree(result_logs)
 
 
     def run(self):
-        assert self.adapter is not None, "adapter is not configured"
-        assert self.reporter is not None, "reporter is not configured"
         assert self.server is not None, "server is not configured"
 
         while True:  # main fuzzing iteration loop
@@ -171,7 +137,7 @@ class Session(object):
 
             # generate testcase
             log.debug("calling self.adapter.generate()")
-            current_test = self.adapter.generate(mime_type=self.mime)
+            current_test = self.adapter.generate()
             if self.target.prefs is not None:
                 current_test.add_environ_file(self.target.prefs, fname="prefs.js")
 
@@ -253,14 +219,12 @@ def main(args):
     #       please check if updates here should go there too
     log.info("Starting Grizzly")
     if args.fuzzmanager:
-        reporter.FuzzManagerReporter.sanity_check(args.binary)
+        FuzzManagerReporter.sanity_check(args.binary)
     elif args.s3_fuzzmanager:
-        reporter.S3FuzzManagerReporter.sanity_check(args.binary)
+        S3FuzzManagerReporter.sanity_check(args.binary)
 
     if args.ignore:
         log.info("Ignoring: %s", ", ".join(args.ignore))
-
-    # TODO: should these prints move?
     if args.xvfb:
         log.info("Running with Xvfb")
     if args.valgrind:
@@ -268,45 +232,68 @@ def main(args):
     if args.rr:
         log.info("Running with RR")
 
-    target = Target(
-        args.binary,
-        args.extension,
-        args.launch_timeout,
-        args.log_limit,
-        args.memory,
-        args.prefs,
-        args.relaunch,
-        args.rr,
-        args.valgrind,
-        args.xvfb)
-
-    session = Session(
-        args.cache,
-        args.coverage,
-        args.ignore,
-        target,
-        working_path=args.working_path)
+    adapter = None
+    target = None
+    session = None
 
     try:
-        session.config_adapter(
-            args.corpus_manager,
-            args.input,
-            args.timeout,
-            accepted_extensions=args.accepted_extensions)
-        session.config_server(args.timeout)
+        log.debug("initializing the Adapter")
+        loader = corpman.Loader()
+        adpt_const = loader.get(args.corpus_manager.lower())
+        if adpt_const is None:
+            raise RuntimeError("Invalid corpus manager %r" % args.corpus_manager)
+        adapter = adpt_const(args.input, mime_type=args.mime, accepted_extensions=args.accepted_extensions)
+        if (adapter.test_duration/1000.0) >= args.timeout:
+            raise RuntimeError("Test duration (%0.02fs) should be less than browser timeout (%ds)" % (
+                (adapter.test_duration/1000.0), args.timeout))
 
+        log.info("Found %d test cases", adapter.size())
+        if adapter.single_pass:
+            log.info("Running in REPLAY mode")
+        elif args.coverage:
+            log.info("Running in GCOV mode")
+            adapter.rotation_period = 1  # cover as many testcases as possible
+        else:
+            log.info("Running in FUZZING mode")
+
+        log.debug("initializing the Target")
+        target = Target(
+            args.binary,
+            args.extension,
+            args.launch_timeout,
+            args.log_limit,
+            args.memory,
+            args.prefs,
+            args.relaunch,
+            args.rr,
+            args.valgrind,
+            args.xvfb)
+
+        log.debug("initializing the Reporter")
         if args.fuzzmanager:
             log.info("Reporting issues via FuzzManager")
-            session.reporter = reporter.FuzzManagerReporter(
+            reporter = FuzzManagerReporter(
                 args.binary,
                 log_limit=Session.FM_LOG_SIZE_LIMIT)
         elif args.s3_fuzzmanager:
             log.info("Reporting issues via FuzzManager w/ large attachments in S3")
-            session.reporter = reporter.S3FuzzManagerReporter(
+            reporter = S3FuzzManagerReporter(
                 args.binary,
                 log_limit=Session.FM_LOG_SIZE_LIMIT)
         else:
-            session.reporter = reporter.FilesystemReporter()
+            reporter = FilesystemReporter()
+
+        log.debug("initializing the Session")
+        session = Session(
+            adapter,
+            args.cache,
+            args.coverage,
+            args.ignore,
+            reporter,
+            target,
+            working_path=args.working_path)
+
+        session.config_server(args.timeout)
 
         session.adapter.br_mon.monitor_instance(session.target._puppet)
 
@@ -325,4 +312,11 @@ def main(args):
 
     finally:
         log.warning("Shutting down...")
-        session.close()
+        if session is not None:
+            session.close()
+        if target is not None:
+            if target.rr_path is not None and os.path.isdir(target.rr_path):
+                shutil.rmtree(target.rr_path)
+            target.cleanup()
+        if adapter is not None:
+            adapter.cleanup()

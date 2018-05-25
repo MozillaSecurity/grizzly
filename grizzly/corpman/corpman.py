@@ -223,7 +223,7 @@ class CorpusManager(object):
 
     key = None # this must be overloaded in the subclass
 
-    def __init__(self, path, accepted_extensions=None):
+    def __init__(self, path, mime_type=None, accepted_extensions=None):
         self.abort_tokens = list() # tokens that when added to the log with trigger an abort
         self.input_files = list() # fuzzed test cases will be based on these files
         self.br_mon = BrowserMonitor() # provide browser details
@@ -240,6 +240,7 @@ class CorpusManager(object):
         self._fuzzer = None # meant for fuzzer specific data
         self._generated = 0 # number of test cases generated
         self._harness = None # dict holding the name and data of the in browser grizzly test harness
+        self._mime = mime_type
         self._use_transition = True # use transition redirect to next test case
 
         self._scan_input(path, accepted_extensions)
@@ -258,7 +259,7 @@ class CorpusManager(object):
 
     def _add_suppressions(self):
         # Add suppression files to environment files
-        for san_opts in [san_opt for san_opt in os.environ if ("SAN_OPTIONS" in san_opt)]:
+        for san_opts in [san_opt for san_opt in os.environ if "SAN_OPTIONS" in san_opt]:
             env_var = os.environ.get(san_opts)
             if not env_var or "suppressions" not in env_var:
                 continue
@@ -370,7 +371,7 @@ class CorpusManager(object):
         raise NotImplementedError("_generate must be implemented in the subclass")
 
 
-    def generate(self, mime_type=None):
+    def generate(self):
         self._select_active_input()
 
         # create test case object and landing page names
@@ -406,7 +407,7 @@ class CorpusManager(object):
             test.add_testfile(
                 TestFile(self._harness["name"], self._harness["data"], required=False))
 
-        self._generate(test, redirect_page, mime_type=mime_type)
+        self._generate(test, redirect_page, mime_type=self._mime)
         self._generated += 1
 
         return test
