@@ -213,6 +213,7 @@ def test_crash_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined
     submitted = [False]
 
     class ReporterNoSubmit(reporter.FuzzManagerReporter):
+        FM_CONFIG = tmpdir.ensure(".fuzzmanagerconf").strpath
 
         def _submit(self):
             # check that the crash was already marked reproducible, but not yet marked reduced
