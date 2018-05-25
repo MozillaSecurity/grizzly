@@ -238,6 +238,12 @@ class Interesting(object):
         """
         result = False
 
+        # if target is closed and server is alive, we should restart it or else the first request
+        #   against /first_test will 404
+        if self.target.closed and self.server is not None:
+            self.server.close()
+            self.server = None
+
         # launch sapphire if needed
         if self.server is None:
             if self.no_harness:
