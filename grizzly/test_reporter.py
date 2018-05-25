@@ -337,6 +337,7 @@ class ReporterTests(TestCase):
         for _ in range(10):
             testcases.append(DummyTest())
         report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
+        report_dir = os.path.join(report_dir, "nested", "dir")
         reporter = FilesystemReporter(report_path=report_dir)
         reporter.submit(logs, testcases)
         # call report a 2nd time

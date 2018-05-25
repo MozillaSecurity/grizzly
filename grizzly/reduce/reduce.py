@@ -634,6 +634,7 @@ def main(args, interesting_cb=None, result_cb=None):
                 log_limit=Session.FM_LOG_SIZE_LIMIT)
         else:
             job.reporter = reporter.FilesystemReporter()
+            log.info("Results will be stored in %r", job.reporter.report_path)
 
         # detect soft assertions
         if args.asserts:

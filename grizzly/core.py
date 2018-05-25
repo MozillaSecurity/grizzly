@@ -282,6 +282,7 @@ def main(args):
                 log_limit=Session.FM_LOG_SIZE_LIMIT)
         else:
             reporter = FilesystemReporter()
+            log.info("Results will be stored in %r", reporter.report_path)
 
         log.debug("initializing the Session")
         session = Session(

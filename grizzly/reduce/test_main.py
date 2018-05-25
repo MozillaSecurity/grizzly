@@ -144,6 +144,9 @@ def test_main_strategies(job, monkeypatch, tmpdir):  # noqa pylint: disable=rede
     report_data = {"num_reports": 0}
 
     class FakeReporter(reporter.Reporter):
+        def __init__(self):
+            reporter.Reporter.__init__(self)
+            self.report_path = "foo"
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
