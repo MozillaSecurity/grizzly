@@ -20,6 +20,9 @@ class Target(object):
     RESULT_NONE = 0
     RESULT_FAILURE = 1
     RESULT_IGNORED = 2
+    POLL_BUSY = 0
+    POLL_IDLE = 1
+    POLL_ERROR = 2
 
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch,
                  use_rr, use_valgrind, use_xvfb):
@@ -79,7 +82,7 @@ class Target(object):
 
 
     def poll_for_idle(self, threshold, interval):
-        # return true if cpu usage of target is below threshold for interval seconds
+        # return POLL_IDLE if cpu usage of target is below threshold for interval seconds
         pid = self._puppet.get_pid()
         if pid is not None:
             try:
@@ -91,11 +94,12 @@ class Target(object):
                              for _ in range(intervals))
                 if result:
                     log.info('Process utilized <= %d%% CPU for %ds.', threshold, interval)
-                return result
+                    return self.POLL_IDLE
+                return self.POLL_BUSY
             except psutil.NoSuchProcess:
                 log.debug('Error polling process: %d no longer exists', pid)
         # default to False if we could not measure cpu usage
-        return False
+        return self.POLL_ERROR
 
 
     def detect_failure(self, ignored, was_timeout):

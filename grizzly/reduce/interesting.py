@@ -126,8 +126,12 @@ class Interesting(object):
             time.sleep(0.1)
 
         while not iteration_done_event.is_set():
-            if self.target.poll_for_idle(self.idle_threshold, self.idle_poll):
+            result = self.target.poll_for_idle(self.idle_threshold, self.idle_poll)
+            if result == Target.POLL_IDLE:
                 idle_timeout_event.set()
+                break
+            elif result == Target.POLL_ERROR:
+                log.warning('Error polling process for idle')
                 break
             else:
                 time.sleep(0.1)

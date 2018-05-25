@@ -218,7 +218,7 @@ class TargetTests(unittest.TestCase):
         try:
             waiter.start()
             time.sleep(0.1)
-            assert not target.poll_for_idle(10, 0.2), "the test process should be busy"
+            assert target.poll_for_idle(10, 0.2) == Target.POLL_BUSY, "the test process should be busy"
         finally:
             evt.set()
             waiter.join()
