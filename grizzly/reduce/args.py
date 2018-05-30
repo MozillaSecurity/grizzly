@@ -4,9 +4,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import os.path
 
-from ..args import CommonArgs
 from .reduce import ReductionJob
 from .strategies import strategies_by_name
+from ..args import CommonArgs
 
 
 class ReducerArgs(CommonArgs):

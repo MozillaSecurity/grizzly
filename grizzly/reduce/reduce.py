@@ -18,13 +18,12 @@ import zipfile
 import lithium
 from FTB.Signatures.CrashInfo import CrashSignature
 
-from .interesting import Interesting
 from . import strategies as strategies_module
+from .interesting import Interesting
 from ..core import Session
 from ..corpman import TestFile, TestCase
-from ..reporter import FuzzManagerReporter, Report
+from ..reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..target import Target
-from .. import reporter
 
 
 __author__ = "Jesse Schwartzentruber"
@@ -573,7 +572,7 @@ def main(args, interesting_cb=None, result_cb=None):
     log.info("Starting Grizzly Reducer")
 
     if args.fuzzmanager:
-        reporter.FuzzManagerReporter.sanity_check(args.binary)
+        FuzzManagerReporter.sanity_check(args.binary)
 
     if args.ignore:
         log.info("Ignoring: %s", ", ".join(args.ignore))
@@ -629,11 +628,11 @@ def main(args, interesting_cb=None, result_cb=None):
 
         if args.fuzzmanager:
             log.info("Reporting issues via FuzzManager")
-            job.reporter = reporter.FuzzManagerReporter(
+            job.reporter = FuzzManagerReporter(
                 args.binary,
                 log_limit=Session.FM_LOG_SIZE_LIMIT)
         else:
-            job.reporter = reporter.FilesystemReporter()
+            job.reporter = FilesystemReporter()
             log.info("Results will be stored in %r", job.reporter.report_path)
 
         # detect soft assertions

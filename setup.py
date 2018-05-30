@@ -31,6 +31,11 @@ if __name__ == '__main__':
             'Programming Language :: Python :: 3.6'
         ],
         description='A framework for developing and running browser fuzzers',
+        entry_points={
+            'console_scripts': [
+                'grizzly = grizzly.core:console_main'
+            ],
+        },
         extras_require=EXTRAS,
         install_requires=['ffpuppet', 'psutil', 'sapphire'],
         license='MPL 2.0',

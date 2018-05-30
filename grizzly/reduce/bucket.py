@@ -11,9 +11,9 @@ import tempfile
 
 from Collector.Collector import Collector
 
-from .crash import main as reduce_crash
 from .args import ReducerFuzzManagerIDArgs
-
+from .crash import main as reduce_crash
+from ..core import console_init_logging
 
 log = logging.getLogger("grizzly.reduce.bucket")
 
@@ -129,11 +129,5 @@ def main(args):
 
 
 if __name__ == "__main__":
-    log_level = logging.INFO
-    log_fmt = "[%(asctime)s] %(message)s"
-    if bool(os.getenv("DEBUG")):
-        log_level = logging.DEBUG
-        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
-    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
-
+    console_init_logging()
     sys.exit(main(ReducerFuzzManagerIDArgs().parse_args()))

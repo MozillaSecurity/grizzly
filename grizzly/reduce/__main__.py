@@ -8,13 +8,8 @@ import sys
 
 from .reduce import main
 from .args import ReducerArgs
+from ..core import console_init_logging
 
 
-log_level = logging.INFO
-log_fmt = "[%(asctime)s] %(message)s"
-if bool(os.getenv("DEBUG")):
-    log_level = logging.DEBUG
-    log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
-logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
-
+console_init_logging()
 sys.exit(main(ReducerArgs().parse_args()))

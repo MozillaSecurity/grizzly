@@ -7,7 +7,7 @@ import os.path
 import zipfile
 import pytest
 
-from grizzly.reduce import reduce, strategies, ReducerError, ReductionJob
+from grizzly.reduce import interesting, reduce, strategies, ReducerError, ReductionJob
 from grizzly.reporter import Reporter, FuzzManagerReporter
 from grizzly.target import Target
 
@@ -17,7 +17,7 @@ from .test_common import FakeTarget, create_target_binary
 logging.basicConfig(level=logging.DEBUG)
 
 
-class FakeInteresting(reduce.Interesting):
+class FakeInteresting(interesting.Interesting):
     "Stub to fake parts of grizzly.reduce.Interesting needed for testing the reduce loop"
 
     def init(self, _):

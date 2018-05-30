@@ -155,7 +155,7 @@ def test_main_strategies(job, monkeypatch, tmpdir):  # noqa pylint: disable=rede
             assert tc.landing_page == "test.html"
             assert tc._test_files[0].data == "'xxrequired'\n"
             report_data["num_reports"] += 1
-    monkeypatch.setattr(reporter, "FilesystemReporter", FakeReporter)
+    monkeypatch.setattr(reduce, "FilesystemReporter", FakeReporter)
 
     exe = tmpdir.ensure("binary")
     inp = tmpdir.ensure("input", dir=True)
@@ -246,7 +246,7 @@ def test_crash_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined
     # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
     monkeypatch.setattr(reporter, "Collector", FakeCollector)
-    monkeypatch.setattr(reporter, "FuzzManagerReporter", ReporterNoSubmit)
+    monkeypatch.setattr(reduce, "FuzzManagerReporter", ReporterNoSubmit)
     monkeypatch.setattr(crash, "Collector", FakeCollector)
 
     exe = tmpdir.ensure("binary")

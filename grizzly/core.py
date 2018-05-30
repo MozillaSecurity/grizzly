@@ -28,6 +28,7 @@ from ffpuppet import BrowserTerminatedError
 import sapphire
 
 from . import corpman
+from .args import GrizzlyArgs
 from .reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
 from .status import Status
 from .target import Target
@@ -214,6 +215,20 @@ class Session(object):
                 break
 
 
+def console_init_logging():
+    log_level = logging.INFO
+    log_fmt = "[%(asctime)s] %(message)s"
+    if bool(os.getenv("DEBUG")):
+        log_level = logging.DEBUG
+        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
+    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+
+
+def console_main():
+    console_init_logging()
+    return main(GrizzlyArgs().parse_args())
+
+
 def main(args):
     # NOTE: grizzly.reduce.reduce.main mirrors this pretty closely
     #       please check if updates here should go there too
@@ -321,3 +336,5 @@ def main(args):
             target.cleanup()
         if adapter is not None:
             adapter.cleanup()
+
+    return 0
