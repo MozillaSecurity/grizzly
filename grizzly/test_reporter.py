@@ -245,6 +245,30 @@ class ReportTests(TestCase):
         with open(os.path.join(self.tmpdir, log_map["aux"]), "r") as log_fp:
             self.assertIn("GOOD LOG", log_fp.read())
 
+    def test_10(self):
+        "test size_limit"
+        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log\n" * 200)
+        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log\n" * 200)
+        with open(os.path.join(self.tmpdir, "unrelated.txt"), "w") as log_fp:
+            log_fp.write("nothing burger\n" * 200)
+        os.mkdir(os.path.join(self.tmpdir, "rr-trace"))
+        size_limit = len("STDERR log\n")
+        report = Report.from_path(self.tmpdir, size_limit=size_limit)
+        self.assertEqual(report.path, self.tmpdir)
+        self.assertTrue(report.log_err.endswith("log_stderr.txt"))
+        self.assertTrue(report.log_out.endswith("log_stdout.txt"))
+        self.assertTrue(report.preferred.endswith("log_stderr.txt"))
+        self.assertIsNone(report.log_aux)
+        self.assertIsNone(report.stack)
+        size_limit += len("[LOG TAILED]\n")
+        self.assertEqual(os.stat(os.path.join(report.path, report.log_err)).st_size, size_limit)
+        self.assertEqual(os.stat(os.path.join(report.path, report.log_out)).st_size, size_limit)
+        self.assertEqual(os.stat(os.path.join(report.path, "unrelated.txt")).st_size, size_limit)
+        report.cleanup()
+        self.assertFalse(os.path.isdir(self.tmpdir))
+
 
 class ReporterTests(TestCase):
     def setUp(self):

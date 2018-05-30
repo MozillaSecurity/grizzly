@@ -66,7 +66,9 @@ class Report(object):
 
         if size_limit > 0 and os.path.isdir(log_path):
             for fname in os.listdir(log_path):
-                Report.tail(os.path.join(log_path, fname), size_limit)
+                log_file_path = os.path.join(log_path, fname)
+                if os.path.isfile(log_file_path):
+                    Report.tail(log_file_path, size_limit)
 
 
     def create_crash_info(self, target_binary):
