@@ -326,12 +326,12 @@ class FuzzManagerReporter(Reporter):
     QUAL_NOT_REPRODUCIBLE = 10  # could not reproduce the testcase
 
 
-    def __init__(self, target_binary, log_limit=0):
+    def __init__(self, target_binary, log_limit=0, tool=None):
         Reporter.__init__(self, log_limit)
-        self.target_binary = target_binary
-        self.quality = self.QUAL_UNREDUCED
         self.force_report = False
-        self.override_tool = None
+        self.quality = self.QUAL_UNREDUCED
+        self.target_binary = target_binary
+        self.tool = tool  # optional tool name
 
 
     def _reset(self):
@@ -342,7 +342,7 @@ class FuzzManagerReporter(Reporter):
     @staticmethod
     def sanity_check(bin_file):
         if _fm_import_error is not None:
-            raise _fm_import_error # pylint: disable=raising-bad-type
+            raise _fm_import_error  # pylint: disable=raising-bad-type
         if not os.path.isfile(FuzzManagerReporter.FM_CONFIG):
             raise IOError("Missing: %s" % FuzzManagerReporter.FM_CONFIG)
         if not os.path.isfile("".join([bin_file, ".fuzzmanagerconf"])):
@@ -453,8 +453,8 @@ class FuzzManagerReporter(Reporter):
                         arcname=os.path.join(arc_path, file_name))
 
         # override tool name if specified
-        if self.override_tool is not None:
-            collector.tool = self.override_tool
+        if self.tool is not None:
+            collector.tool = self.tool
 
         # submit results to the FuzzManager server
         new_entry = collector.submit(crash_info, testCase=zip_name, testCaseQuality=self.quality)
