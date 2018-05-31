@@ -636,6 +636,9 @@ def main(args, interesting_cb=None, result_cb=None):
         else:
             job.reporter = FilesystemReporter()
             log.info("Results will be stored in %r", job.reporter.report_path)
+        # override tool if give on cmd line
+        if args.tool is not None:
+            job.reporter.override_tool = args.tool
 
         # detect soft assertions
         if args.asserts:
