@@ -632,13 +632,11 @@ def main(args, interesting_cb=None, result_cb=None):
             log.info("Reporting issues via FuzzManager")
             job.reporter = FuzzManagerReporter(
                 args.binary,
-                log_limit=Session.FM_LOG_SIZE_LIMIT)
+                log_limit=Session.FM_LOG_SIZE_LIMIT,
+                tool=args.tool)
         else:
             job.reporter = FilesystemReporter()
             log.info("Results will be stored in %r", job.reporter.report_path)
-        # override tool if give on cmd line
-        if args.tool is not None:
-            job.reporter.override_tool = args.tool
 
         # detect soft assertions
         if args.asserts:

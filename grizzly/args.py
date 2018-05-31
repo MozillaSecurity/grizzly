@@ -73,7 +73,7 @@ class CommonArgs(object):
             help="Iteration timeout in seconds (default: %(default)s)")
         self.parser.add_argument(
             "--tool",
-            help="Override tool name used to report issues to FuzzManager")
+            help="Override tool name used when reporting issues to FuzzManager")
         self.parser.add_argument(
             "--valgrind", action="store_true",
             help="Use Valgrind (Linux only)")

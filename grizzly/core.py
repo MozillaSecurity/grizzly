@@ -289,18 +289,17 @@ def main(args):
             log.info("Reporting issues via FuzzManager")
             reporter = FuzzManagerReporter(
                 args.binary,
-                log_limit=Session.FM_LOG_SIZE_LIMIT)
+                log_limit=Session.FM_LOG_SIZE_LIMIT,
+                tool=args.tool)
         elif args.s3_fuzzmanager:
             log.info("Reporting issues via FuzzManager w/ large attachments in S3")
             reporter = S3FuzzManagerReporter(
                 args.binary,
-                log_limit=Session.FM_LOG_SIZE_LIMIT)
+                log_limit=Session.FM_LOG_SIZE_LIMIT,
+                tool=args.tool)
         else:
             reporter = FilesystemReporter()
             log.info("Results will be stored in %r", reporter.report_path)
-        # override tool if give on cmd line
-        if args.tool is not None:
-            reporter.override_tool = args.tool
 
         log.debug("initializing the Session")
         session = Session(
