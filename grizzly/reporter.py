@@ -331,6 +331,7 @@ class FuzzManagerReporter(Reporter):
         self.target_binary = target_binary
         self.quality = self.QUAL_UNREDUCED
         self.force_report = False
+        self.override_tool = None
 
 
     def _reset(self):
@@ -450,6 +451,10 @@ class FuzzManagerReporter(Reporter):
                     zip_fp.write(
                         os.path.join(dir_name, file_name),
                         arcname=os.path.join(arc_path, file_name))
+
+        # override tool name if specified
+        if self.override_tool is not None:
+            collector.tool = self.override_tool
 
         # submit results to the FuzzManager server
         new_entry = collector.submit(crash_info, testCase=zip_name, testCaseQuality=self.quality)

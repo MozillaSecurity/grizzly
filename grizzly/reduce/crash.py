@@ -18,6 +18,25 @@ from ..reporter import FuzzManagerReporter
 log = logging.getLogger("grizzly.reduce.crash")
 
 
+def crashentry_data(crash_id):
+    """Get the CrashEntry data for the specified FuzzManager crash
+
+    Args:
+        crash_id (int): ID of the requested crash on the server side
+
+    Returns:
+        dict: crash entry data (crashmanager.models.CrashEntry, without raw* fields)
+    """
+    coll = Collector()
+
+    log.debug("crash %d, downloading metadata...", crash_id)
+
+    url = "%s://%s:%d/crashmanager/rest/crashes/%s/" \
+        % (coll.serverProtocol, coll.serverHost, coll.serverPort, crash_id)
+
+    return coll.get(url, params={"include_raw": "0"}).json()
+
+
 def download_crash(crash_id):
     """Download testcase for the specified FuzzManager crash.
 
@@ -79,6 +98,10 @@ def main(args):
 
     crash_id = args.input
     testcase = download_crash(crash_id)
+    tool_override = args.tool is None
+    if tool_override:
+        args.tool = crashentry_data(crash_id)["tool"]
+        log.info("Using toolname from crash: %s", args.tool)
     fm_reporter = args.fuzzmanager
 
     try:
@@ -117,6 +140,8 @@ def main(args):
 
     finally:
         os.unlink(testcase)
+        if tool_override:
+            args.tool = None
 
 
 if __name__ == "__main__":

@@ -72,6 +72,9 @@ class CommonArgs(object):
             "-t", "--timeout", type=int, default=60,
             help="Iteration timeout in seconds (default: %(default)s)")
         self.parser.add_argument(
+            "--tool",
+            help="Override tool name used to report issues to FuzzManager")
+        self.parser.add_argument(
             "--valgrind", action="store_true",
             help="Use Valgrind (Linux only)")
         self.parser.add_argument(
@@ -116,12 +119,17 @@ class CommonArgs(object):
         if args.prefs is not None and not os.path.isfile(args.prefs):
             self.parser.error("file not found: %r" % args.prefs)
 
+        if "tool" not in self._sanity_skip:
+            if args.tool is not None and not args.fuzzmanager:
+                self.parser.error("--tool can only be given with --fuzzmanager")
+
 
 class GrizzlyArgs(CommonArgs):
     def __init__(self):
         loader = corpman.Loader()
         self.avail_corpmans = sorted(loader.list())
         CommonArgs.__init__(self)
+        self._sanity_skip.add("tool")
         self.parser.add_argument(
             "corpus_manager",
             help="Available corpus managers: %s" % ", ".join(self.avail_corpmans))
@@ -152,3 +160,6 @@ class GrizzlyArgs(CommonArgs):
 
         if args.fuzzmanager and args.s3_fuzzmanager:
             self.parser.error("--fuzzmanager and --s3-fuzzmanager are mutually exclusive")
+
+        if args.tool is not None and not (args.fuzzmanager or args.s3_fuzzmanager):
+            self.parser.error("--tool can only be given with --fuzzmanager/--s3-fuzzmanager")

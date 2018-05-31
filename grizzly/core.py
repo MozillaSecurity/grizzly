@@ -298,6 +298,9 @@ def main(args):
         else:
             reporter = FilesystemReporter()
             log.info("Results will be stored in %r", reporter.report_path)
+        # override tool if give on cmd line
+        if args.tool is not None:
+            reporter.override_tool = args.tool
 
         log.debug("initializing the Session")
         session = Session(
