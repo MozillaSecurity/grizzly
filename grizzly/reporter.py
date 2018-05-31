@@ -392,6 +392,12 @@ class FuzzManagerReporter(Reporter):
                              cache_metadata["shortDescription"])
                     if not self.force_report:
                         return
+                elif "bug__id" in cache_metadata:
+                    log.info("Crash matched existing signature (bug %s): %s",
+                             cache_metadata["bug__id"],
+                             cache_metadata["shortDescription"])
+                    # we will still report this one, but no more
+                    cache_metadata["frequent"] = True
                 # there is already a signature, initialize count
                 cache_metadata.setdefault("_grizzly_seen_count", 0)
             else:
