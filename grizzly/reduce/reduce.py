@@ -570,48 +570,49 @@ def main(args, interesting_cb=None, result_cb=None):
     # NOTE: this mirrors grizzly.core.main pretty closely
     #       please check if updates here should go there too
     log.info("Starting Grizzly Reducer")
-
     if args.fuzzmanager:
         FuzzManagerReporter.sanity_check(args.binary)
 
     if args.ignore:
         log.info("Ignoring: %s", ", ".join(args.ignore))
-
-    # TODO: should these prints move?
     if args.xvfb:
         log.info("Running with Xvfb")
     if args.valgrind:
         log.info("Running with Valgrind. This will be SLOW!")
 
-    target = Target(
-        args.binary,
-        args.extension,
-        args.launch_timeout,
-        args.log_limit,
-        args.memory,
-        None,
-        args.relaunch,
-        False,  # rr
-        args.valgrind,
-        args.xvfb)
-
-    job = ReductionJob(
-        args.ignore,
-        target,
-        args.timeout,
-        args.no_harness,
-        args.any_crash,
-        args.skip,
-        args.min_crashes,
-        args.repeat,
-        args.idle_poll,
-        args.idle_threshold,
-        args.idle_timeout,
-        args.working_path,
-        not args.no_cache)
+    target = None
+    job = None
 
     job_cancelled = False
     try:
+        log.debug("initializing the Target")
+        target = Target(
+            args.binary,
+            args.extension,
+            args.launch_timeout,
+            args.log_limit,
+            args.memory,
+            None,
+            args.relaunch,
+            False,  # rr
+            args.valgrind,
+            args.xvfb)
+
+        job = ReductionJob(
+            args.ignore,
+            target,
+            args.timeout,
+            args.no_harness,
+            args.any_crash,
+            args.skip,
+            args.min_crashes,
+            args.repeat,
+            args.idle_poll,
+            args.idle_threshold,
+            args.idle_timeout,
+            args.working_path,
+            not args.no_cache)
+
         job.config_testcase(args.input)
 
         # arguments for environ and prefs should override the testcase
@@ -626,6 +627,7 @@ def main(args, interesting_cb=None, result_cb=None):
             with io.open(args.sig, encoding="utf-8") as sig_fp:
                 job.config_signature(sig_fp.read())
 
+        log.debug("initializing the Reporter")
         if args.fuzzmanager:
             log.info("Reporting issues via FuzzManager")
             job.reporter = FuzzManagerReporter(
@@ -666,7 +668,11 @@ def main(args, interesting_cb=None, result_cb=None):
 
     finally:
         log.warning("Shutting down...")
-        if not job_cancelled:
+        if job is not None and not job_cancelled:
             job_cancelled = job.result_code in {FuzzManagerReporter.QUAL_REDUCER_BROKE,
                                                 FuzzManagerReporter.QUAL_REDUCER_ERROR}
-        job.close(keep_temp=job_cancelled)
+        if job is not None:
+            job.close(keep_temp=job_cancelled)
+        # job handles calling cleanup if it was created
+        if job is None and target is not None:
+            target.cleanup()
