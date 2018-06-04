@@ -175,11 +175,11 @@ def test_bucket_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefine
         serverHost = 'mozilla.org'
         serverPort = 8000
 
-        def get(self, _url, **kwds):
+        def get(self, url, **kwds):
             class response(object):
                 @staticmethod
                 def json():
-                    if "crashes" in _url:
+                    if "crashes" in url:
                         return {
                             "results": [
                                 {"testcase": None, "id": 123},
@@ -228,17 +228,21 @@ def test_crash_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined
         serverHost = 'mozilla.org'
         serverPort = 8000
 
-        def get(self, _url):
+        def get(self, _url, **kwds):
             class response(object):
                 class headers(object):
                     @staticmethod
                     def get(value, default):
                         assert value.lower() == 'content-disposition'
                         return 'attachment; filename="test.zip"'
+                @staticmethod
+                def json():
+                    return {'tool': 'test-tool'}
                 content = inp.join("test.zip").read('rb')
             return response
 
-        def patch(self, _url, data):
+        def patch(self, _url, **kwds):
+            data = kwds["data"]
             assert set(data.keys()) == {"testcase_quality"}
             assert expect_patch
             assert data["testcase_quality"] == expect_patch.pop(0)
