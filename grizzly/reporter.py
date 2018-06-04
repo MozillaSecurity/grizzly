@@ -339,12 +339,12 @@ class FuzzManagerReporter(Reporter):
         self._extra_metadata = {}
 
 
-    @staticmethod
-    def sanity_check(bin_file):
+    @classmethod
+    def sanity_check(cls, bin_file):
         if _fm_import_error is not None:
             raise _fm_import_error  # pylint: disable=raising-bad-type
-        if not os.path.isfile(FuzzManagerReporter.FM_CONFIG):
-            raise IOError("Missing: %s" % FuzzManagerReporter.FM_CONFIG)
+        if not os.path.isfile(cls.FM_CONFIG):
+            raise IOError("Missing: %s" % cls.FM_CONFIG)
         if not os.path.isfile("".join([bin_file, ".fuzzmanagerconf"])):
             raise IOError("Missing: %s" % "".join([bin_file, ".fuzzmanagerconf"]))
         ProgramConfiguration.fromBinary(bin_file)
