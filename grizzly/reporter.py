@@ -358,6 +358,17 @@ class FuzzManagerReporter(Reporter):
         return "unknown quality (%r)" % (value,)
 
 
+    @staticmethod
+    def signature_max_frames(crash_info, suggested_frames=8):
+        if set(crash_info.backtrace) & {
+                "std::panicking::rust_panic",
+                "std::panicking::rust_panic_with_hook",
+        }:
+            # rust panic adds 5-6 frames of noise at the top of the stack
+            suggested_frames += 6
+        return suggested_frames
+
+
     def _process_rr_trace(self):
         # don't report large files to FuzzManager
         trace_dir = os.path.join(self.report.path, "rr-trace")
@@ -404,7 +415,8 @@ class FuzzManagerReporter(Reporter):
             else:
                 # there is no signature, create one locally so we can count
                 # the number of times we've seen it
-                cache_sig_file = collector.generate(crash_info, numFrames=8)
+                max_frames = self.signature_max_frames(crash_info)
+                cache_sig_file = collector.generate(crash_info, numFrames=max_frames)
                 cache_metadata = {
                     "_grizzly_seen_count": 0,
                     "frequent": False,

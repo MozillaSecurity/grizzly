@@ -358,7 +358,8 @@ class ReductionJob(object):
         """
         crash_info = Report.from_path(temp_prefix + "_logs") \
             .create_crash_info(self.interesting.target.binary)
-        this_sig = crash_info.createCrashSignature(maxFrames=5)
+        max_frames = FuzzManagerReporter.signature_max_frames(crash_info, 5)
+        this_sig = crash_info.createCrashSignature(maxFrames=max_frames)
         crash_hash = hashlib.sha256(this_sig.rawSignature.encode("utf-8")).hexdigest()[:10]
         tmpd = os.path.join(self.tmpdir, "alt", crash_hash)
         if crash_hash in self.other_crashes:

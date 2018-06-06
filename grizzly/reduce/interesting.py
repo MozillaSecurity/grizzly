@@ -16,7 +16,7 @@ import threading
 
 import ffpuppet
 import sapphire
-from ..reporter import Report
+from ..reporter import FuzzManagerReporter, Report
 from ..target import Target
 
 
@@ -339,7 +339,8 @@ class Interesting(object):
                     result = True
                     log.info("Interesting: %s", short_sig)
                     if self.orig_sig is None and not self.any_crash:
-                        self.orig_sig = crash.createCrashSignature(maxFrames=5)
+                        max_frames = FuzzManagerReporter.signature_max_frames(crash, 5)
+                        self.orig_sig = crash.createCrashSignature(maxFrames=max_frames)
                     self.update_timeout(end_time - start_time)
                 else:
                     log.info("Uninteresting: different signature: %s", short_sig)
