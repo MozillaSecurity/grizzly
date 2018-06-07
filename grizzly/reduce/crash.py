@@ -18,14 +18,15 @@ from ..reporter import FuzzManagerReporter
 log = logging.getLogger("grizzly.reduce.crash")
 
 
-def crashentry_data(crash_id):
+def crashentry_data(crash_id, raw=False):
     """Get the CrashEntry data for the specified FuzzManager crash
 
     Args:
         crash_id (int): ID of the requested crash on the server side
+        raw (bool): include rawCrashData, rawStderr, rawStdout in result
 
     Returns:
-        dict: crash entry data (crashmanager.models.CrashEntry, without raw* fields)
+        dict: crash entry data (crashmanager.models.CrashEntry)
     """
     coll = Collector()
 
@@ -34,7 +35,7 @@ def crashentry_data(crash_id):
     url = "%s://%s:%d/crashmanager/rest/crashes/%s/" \
         % (coll.serverProtocol, coll.serverHost, coll.serverPort, crash_id)
 
-    return coll.get(url, params={"include_raw": "0"}).json()
+    return coll.get(url, params={"include_raw": "1" if raw else "0"}).json()
 
 
 def download_crash(crash_id):
