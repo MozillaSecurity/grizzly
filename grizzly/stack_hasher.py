@@ -338,7 +338,12 @@ class Stack(object):
         for line in reversed(input_text.split("\n")):
             if not line:
                 continue  # skip empty lines
-            frame = StackFrame.from_line(line, parse_mode=parse_mode)
+            try:
+                frame = StackFrame.from_line(line, parse_mode=parse_mode)
+            except Exception:
+                log.error("Error calling from_line() with: %r", line)
+                raise
+
             if frame is None:
                 continue
 
