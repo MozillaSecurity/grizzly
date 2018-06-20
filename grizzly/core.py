@@ -89,7 +89,7 @@ class Session(object):
 
     def process_result(self):
         self.status.results += 1
-        log.info("Potential issue detected")
+        log.info("Potential result detected")
         log.debug("Current input: %s", self.adapter.active_file)
         # create working directory for current testcase
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.working_path)
@@ -286,13 +286,13 @@ def main(args):
 
         log.debug("initializing the Reporter")
         if args.fuzzmanager:
-            log.info("Reporting issues via FuzzManager")
+            log.info("Results will be reported via FuzzManager")
             reporter = FuzzManagerReporter(
                 args.binary,
                 log_limit=Session.FM_LOG_SIZE_LIMIT,
                 tool=args.tool)
         elif args.s3_fuzzmanager:
-            log.info("Reporting issues via FuzzManager w/ large attachments in S3")
+            log.info("Results will be reported via FuzzManager w/ large attachments in S3")
             reporter = S3FuzzManagerReporter(
                 args.binary,
                 log_limit=Session.FM_LOG_SIZE_LIMIT,
