@@ -366,15 +366,20 @@ class CorpusManagerTests(unittest.TestCase):
             with open(env_file, "wb") as out_fp:
                 out_fp.write(b"stuff.blah=1;")
             tc.add_environ_file(env_file, fname="prefs.js")
+            self.assertEqual(len(tc.env_vars()), 3)
+            self.assertIn("ENVAR_REQ=test123", tc.env_vars())
+            self.assertIn("ENVAR_NOT_REQ=test321", tc.env_vars())
+            self.assertIn("ENVAR_EMPTY=", tc.env_vars())
+            self.assertNotIn("ENVAR_NOT_SET", tc.env_vars())
             tc.dump(tc_dir, include_details=True)
             dumped_tf = os.listdir(tc_dir)
             self.assertIn("prefs.js", dumped_tf)
             self.assertIn("env_vars.txt", dumped_tf)
             with open(os.path.join(tc_dir, "env_vars.txt"), "r") as in_fp:
                 env_vars = in_fp.read()
-            self.assertRegexpMatches(env_vars, "ENVAR_REQ=test123\n")
-            self.assertRegexpMatches(env_vars, "ENVAR_NOT_REQ=test321\n")
-            self.assertRegexpMatches(env_vars, "ENVAR_EMPTY=\n")
+            self.assertIn("ENVAR_REQ=test123\n", env_vars)
+            self.assertIn("ENVAR_NOT_REQ=test321\n", env_vars)
+            self.assertIn("ENVAR_EMPTY=\n", env_vars)
             self.assertNotIn("ENVAR_NOT_SET", env_vars)
         finally:
             os.environ.pop("ENVAR_EMPTY", None)

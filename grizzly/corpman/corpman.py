@@ -123,14 +123,15 @@ class ServerMap(object):
 
 
 class TestCase(object):
-    def __init__(self, landing_page, corpman_name, input_fname=None):
+    def __init__(self, landing_page, corpman_name, env_vars=None, input_fname=None):
+        assert env_vars is None or isinstance(env_vars, dict)
         self.corpman_name = corpman_name
         self.landing_page = landing_page
-        self.input_fname = input_fname # file that was use to create the test case
-        self._env_files = dict() # # environment files: prefs.js, etc...
-        self._env_vars = dict() # environment variables required
-        self._optional_files = [] # contains TestFile(s) that are not strictly required
-        self._test_files = [] # contains TestFile(s) that make up a test case
+        self.input_fname = input_fname  # file that was used to create the test case
+        self._env_files = dict()  # environment files: prefs.js, etc...
+        self._env_vars = dict() if env_vars is None else dict(env_vars)  # environment variables
+        self._optional_files = []  # contains TestFile(s) that are not strictly required
+        self._test_files = []  # contains TestFile(s) that make up a test case
 
 
     def add_environ_file(self, full_path, fname=None):
@@ -200,6 +201,10 @@ class TestCase(object):
         if self._optional_files:
             return self._optional_files
         return None
+
+
+    def env_vars(self):
+        return ["=".join(pair) for pair in self._env_vars.items()]
 
 
 class TestFile(object):
@@ -378,13 +383,8 @@ class CorpusManager(object):
         test = TestCase(
             self.landing_page(),
             corpman_name=self.key,
+            env_vars=self._environ,
             input_fname=self._active_input.file_name)
-
-        # add environment variable info to test case
-        # TODO: make this more like env_files
-        for key, (value, _) in self._environ.items():
-            if key in os.environ:
-                test.add_environ_var(key, value)
 
         for fname, fpath in self._environ_files.items():
             test.add_environ_file(fpath, fname)
@@ -412,6 +412,7 @@ class CorpusManager(object):
 
         return test
 
+
     @property
     def active_file(self):
         try:
@@ -432,7 +433,7 @@ class CorpusManager(object):
         var_name = var_name.upper()
         # grab currently set value if available
         if var_name in os.environ:
-            self._environ[var_name] = (os.environ[var_name], required)
+            self._environ[var_name] = os.environ[var_name]
         elif required:
             raise RuntimeError("Missing required environment variable %r" % var_name)
 
