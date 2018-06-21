@@ -87,7 +87,7 @@ class Session(object):
             shutil.rmtree(self.wwwdir)
 
 
-    def process_result(self):
+    def report_result(self):
         self.status.results += 1
         log.info("Potential result detected")
         log.debug("Current input: %s", self.adapter.active_file)
@@ -107,9 +107,11 @@ class Session(object):
                 log.warning("RR specified but no trace detected.")
         self.target.save_logs(result_logs, meta=True)
         log.info("Reporting results...")
-        self.reporter.submit(result_logs, reversed(self.test_cache))
+        self.test_cache.reverse()  # order testcases newest to oldest
+        self.reporter.submit(result_logs, self.test_cache)
         if os.path.isdir(result_logs):
             shutil.rmtree(result_logs)
+        self.test_cache = list()
 
 
     def run(self):
@@ -133,7 +135,7 @@ class Session(object):
                     # TODO: handle BrowserTimeoutError?
                 except BrowserTerminatedError:
                     # this result likely has nothing to do with grizzly
-                    self.process_result()
+                    self.report_result()
                     raise
 
             # generate testcase
@@ -192,7 +194,7 @@ class Session(object):
 
             # handle failure if detected
             if failure_detected == Target.RESULT_FAILURE:
-                self.process_result()
+                self.report_result()
             elif failure_detected == Target.RESULT_IGNORED:
                 self.status.ignored += 1
                 log.info("Ignored (%d)", self.status.ignored)

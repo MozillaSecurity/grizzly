@@ -274,6 +274,20 @@ class Reporter(object):
 
 
     def submit(self, log_path, test_cases):
+        """
+        Submit report containing results.
+
+        @type log_path: String
+        @param log_path: Path to logs from the target (FFPuppet).
+
+        @type test_cases: list
+        @param test_cases: A list of testcases, ordered newest to oldest,
+                           the newest being the mostly likely to trigger
+                           the result (crash, assert... etc)
+
+        @rtype: None
+        @return: None
+        """
         assert self.report is None
         assert self.test_cases is None
         if not os.path.isdir(log_path):
@@ -435,19 +449,17 @@ class FuzzManagerReporter(Reporter):
                 json.dump(cache_metadata, meta_fp)
 
         # dump test cases and the contained files to working directory
-        recorded_envvars = None
         test_case_meta = []
         for test_number, test_case in enumerate(self.test_cases):
-            if not recorded_envvars:
-                recorded_envvars = test_case.env_vars()
             test_case_meta.append([test_case.corpman_name, test_case.input_fname])
             dump_path = os.path.join(self.report.path, "%s-%d" % (self.prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
-        if recorded_envvars:
-            crash_info.configuration.addMetadata({"recorded_envvars": " ".join(recorded_envvars)})
+        if self.test_cases:
+            crash_info.configuration.addMetadata(
+                {"recorded_envvars": " ".join(self.test_cases[0].env_vars())})
         crash_info.configuration.addMetadata(self._extra_metadata)
 
         # grab screen log
