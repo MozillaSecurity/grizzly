@@ -443,6 +443,9 @@ class FuzzManagerReporter(Reporter):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
+        if self.test_cases:
+            crash_info.configuration.addMetadata(
+                {"recorded_envvars": " ".join(self.test_cases[0].env_vars())})
         crash_info.configuration.addMetadata(self._extra_metadata)
 
         # grab screen log
