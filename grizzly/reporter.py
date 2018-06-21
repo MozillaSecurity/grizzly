@@ -435,17 +435,19 @@ class FuzzManagerReporter(Reporter):
                 json.dump(cache_metadata, meta_fp)
 
         # dump test cases and the contained files to working directory
+        recorded_envvars = None
         test_case_meta = []
         for test_number, test_case in enumerate(self.test_cases):
+            if not recorded_envvars:
+                recorded_envvars = test_case.env_vars()
             test_case_meta.append([test_case.corpman_name, test_case.input_fname])
             dump_path = os.path.join(self.report.path, "%s-%d" % (self.prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
-        if self.test_cases:
-            crash_info.configuration.addMetadata(
-                {"recorded_envvars": " ".join(self.test_cases[0].env_vars())})
+        if recorded_envvars:
+            crash_info.configuration.addMetadata({"recorded_envvars": " ".join(recorded_envvars)})
         crash_info.configuration.addMetadata(self._extra_metadata)
 
         # grab screen log
