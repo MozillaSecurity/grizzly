@@ -363,6 +363,15 @@ class MinidumpStackFrameSupportTests(TestCase):
         self.assertEqual(frame.offset, "0x10588")
         self.assertEqual(frame.mode, StackFrame.MODE_MINIDUMP)
 
+    def test_03(self):
+        "test creating a StackFrame from a Minidump line without hg repo info"
+        frame = StackFrame.from_line("0|49|libxul.so|foo|/usr/x86_64-linux-gnu/test.h|85|0x5")
+        self.assertEqual(frame.stack_line, "49")
+        self.assertEqual(frame.function, "foo")
+        self.assertEqual(frame.location, "/usr/x86_64-linux-gnu/test.h")
+        self.assertEqual(frame.offset, "85")
+        self.assertEqual(frame.mode, StackFrame.MODE_MINIDUMP)
+
 
 class ValgrindStackFrameSupportTests(TestCase):
     def test_01(self):

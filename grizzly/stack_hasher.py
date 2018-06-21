@@ -205,7 +205,10 @@ class StackFrame(object):
             frame["function"] = func_name.strip()
 
         if file_name:
-            frame["location"] = os.path.basename(file_name.split(":")[-2])
+            if file_name.count(":") > 1:  # contains hg repo info
+                frame["location"] = os.path.basename(file_name.split(":")[-2])
+            else:
+                frame["location"] = file_name
         elif lib_name:
             frame["location"] = lib_name.strip()
 
