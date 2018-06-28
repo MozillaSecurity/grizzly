@@ -42,8 +42,10 @@ class CommonArgs(object):
             "input",
             help="Test case or directory containing test cases")
         self.parser.add_argument(
-            "-e", "--extension",
-            help="Install the fuzzPriv extension (specify path to fuzzpriv)")
+            "-e", "--extension", action="append",
+            help="Install an extension. Specify the path to the xpi or the directory"
+                 " containing the unpacked extension. To install multiple extensions"
+                 " specify multiple times")
         self.parser.add_argument(
             "--fuzzmanager", action="store_true",
             help="Report results to FuzzManager")
@@ -110,11 +112,11 @@ class CommonArgs(object):
             self.parser.error("%r is not a directory" % args.working_path)
 
         if args.extension is not None:
-            if not os.path.exists(args.extension):
-                self.parser.error("%r does not exist" % args.extension)
-            if not (os.path.isdir(args.extension)
-                    or (os.path.isfile(args.extension) and args.extension.endswith(".xpi"))):
-                self.parser.error("Extension must be a folder or .xpi")
+            for ext in args.extension:
+                if not os.path.exists(ext):
+                    self.parser.error("%r does not exist" % ext)
+                if not os.path.isdir(ext) or (os.path.isfile(ext) and ext.endswith(".xpi")):
+                    self.parser.error("Extension must be a folder or .xpi")
 
         if args.prefs is not None and not os.path.isfile(args.prefs):
             self.parser.error("file not found: %r" % args.prefs)
