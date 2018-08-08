@@ -25,6 +25,7 @@ class InputFile(object):
         if self.file_name is None or not os.path.isfile(file_name):
             raise IOError("File does %r does not exist" % self.file_name)
 
+        # TODO: add keyword arg to set self.extension?
         if "." in self.file_name:
             self.extension = os.path.splitext(self.file_name)[-1].lstrip(".")
 
@@ -130,8 +131,8 @@ class TestCase(object):
         self.input_fname = input_fname  # file that was used to create the test case
         self._env_files = dict()  # environment files: prefs.js, etc...
         self._env_vars = dict() if env_vars is None else dict(env_vars)  # environment variables
-        self._optional_files = []  # contains TestFile(s) that are not strictly required
-        self._test_files = []  # contains TestFile(s) that make up a test case
+        self._optional_files = list()  # contains TestFile(s) that are not strictly required
+        self._test_files = list()  # contains TestFile(s) that make up a test case
 
 
     def add_environ_file(self, full_path, fname=None):
@@ -156,6 +157,21 @@ class TestCase(object):
             self._optional_files.append(test_file.file_name)
 
 
+    def add_from_data(self, data, file_name, encoding="UTF-8", required=True):
+        self.add_testfile(TestFile.from_data(
+            data=data,
+            file_name=file_name,
+            encoding=encoding,
+            required=required))
+
+
+    def add_from_file(self, input_file, file_name, required=True):
+        self.add_testfile(TestFile.from_file(
+            input_file=input_file,
+            file_name=file_name,
+            required=required))
+
+
     def dump(self, log_dir, include_details=False):
         """
         dump(log_dir)
@@ -170,17 +186,11 @@ class TestCase(object):
 
         # save test file page
         for test_file in self._test_files:
-            target_path = os.path.join(log_dir, os.path.dirname(test_file.file_name))
-            if not os.path.isdir(target_path):
-                os.makedirs(target_path)
-            with open(os.path.join(log_dir, test_file.file_name), "wb") as out_fp:
-                if isinstance(test_file.data, bytes) or not test_file.encoding:
-                    out_fp.write(test_file.data)
-                else:
-                    out_fp.write(test_file.data.encode(test_file.encoding))
+            test_file.dump(log_dir)
 
         # save test case, input file, file information, environment info
         if include_details:
+            # TODO: make this metadata.json
             with open(os.path.join(log_dir, "test_info.txt"), "w") as out_fp:
                 out_fp.write("[Grizzly test case details]\n")
                 out_fp.write("Corpus Manager:    %s\n" % self.corpman_name)
@@ -192,10 +202,15 @@ class TestCase(object):
                 shutil.copyfile(env_path, os.path.join(log_dir, env_file))
 
             if self._env_vars:
+                # TODO: make this metadata.json
                 with open(os.path.join(log_dir, "env_vars.txt"), "w") as out_fp:
                     for env_var, env_val in self._env_vars.items():
                         out_fp.write("%s=%s\n" % (env_var, env_val))
 
+
+    def cleanup(self):
+        for test_file in self._test_files:
+            test_file.close()
 
     def get_optional(self):
         if self._optional_files:
@@ -208,16 +223,51 @@ class TestCase(object):
 
 
 class TestFile(object):
-    def __init__(self, file_name, data, encoding="UTF-8", required=True):
-        self.data = data
-        self.encoding = encoding
-        self.file_name = os.path.normpath(file_name) # name including path relative to wwwroot
-        self.required = required # this file must be served to complete test case
+    def __init__(self, file_name, required=True):
+        self._fp = tempfile.NamedTemporaryFile(prefix='grz_tf_')
+        self.file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
+        self.required = required  # this file must be served to complete test case
 
         # XXX: This is a naive fix for a larger path issue
         if "\\" in self.file_name:
             self.file_name.replace("\\", "/")
         self.file_name = self.file_name.lstrip("/")
+
+
+    @classmethod
+    def from_data(cls, data, file_name, encoding="UTF-8", required=True):
+        t_file = cls(file_name=file_name, required=required)
+        if data:
+            if isinstance(data, bytes) or not encoding:
+                t_file.write(data)
+            else:
+                t_file.write(data.encode(encoding))
+        return t_file
+
+
+    @classmethod
+    def from_file(cls, input_file, file_name, required=True):
+        t_file = cls(file_name=file_name, required=required)
+        with open(input_file, "rb") as src_fp:
+            shutil.copyfileobj(src_fp, t_file._fp, 0x10000)  # 64KB
+        return t_file
+
+
+    def close(self):
+        self._fp.close()
+
+
+    def dump(self, path):
+        target_path = os.path.join(path, os.path.dirname(self.file_name))
+        if not os.path.isdir(target_path):
+            os.makedirs(target_path)
+        self._fp.seek(0)
+        with open(os.path.join(path, self.file_name), "wb") as dst_fp:
+            shutil.copyfileobj(self._fp, dst_fp, 0x10000)  # 64KB
+
+
+    def write(self, data):
+        self._fp.write(data)
 
 
 class CorpusManager(object):
@@ -404,8 +454,7 @@ class CorpusManager(object):
             self.srv_map.add_redirect("first_test", self.landing_page(), required=False)
             self.srv_map.add_redirect("next_test", self.landing_page(next=True))
             # add harness to test case
-            test.add_testfile(
-                TestFile(self._harness["name"], self._harness["data"], required=False))
+            test.add_from_data(self._harness["data"], self._harness["name"], required=False)
 
         self._generate(test, redirect_page, mime_type=self._mime)
         self._generated += 1

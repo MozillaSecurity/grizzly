@@ -85,6 +85,8 @@ class Session(object):
             self.server.close()
         if self.wwwdir and os.path.isdir(self.wwwdir):
             shutil.rmtree(self.wwwdir)
+        for testcase in self.test_cache:
+            testcase.cleanup()
 
 
     def report_result(self):
@@ -185,7 +187,7 @@ class Session(object):
                 self.test_cache.append(current_test)
                 # manage test case cache size
                 if len(self.test_cache) > self.cache_size:
-                    self.test_cache.pop(0)
+                    self.test_cache.pop(0).cleanup()
 
             # attempt to detect a failure
             failure_detected = self.target.detect_failure(
