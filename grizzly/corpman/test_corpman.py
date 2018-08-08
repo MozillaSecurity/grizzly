@@ -23,7 +23,7 @@ class EnvVarCorpman(corpman.CorpusManager):
         self.record_envvar("ENVAR_NOT_REQ")
         self.record_envvar("ENVAR_NOT_SET")
     def _generate(self, testcase, redirect_page, mime_type=None):
-        testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
+        testcase.add_testfile(corpman.TestFile.from_data(redirect_page, testcase.landing_page))
         return testcase
 
 class SimpleCorpman(corpman.CorpusManager):
@@ -31,7 +31,7 @@ class SimpleCorpman(corpman.CorpusManager):
     def _init_fuzzer(self):
         self.add_abort_token("ABORT_TOKEN")
     def _generate(self, testcase, redirect_page, mime_type=None):
-        testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
+        testcase.add_from_data(redirect_page, testcase.landing_page)
         return testcase
 
 
@@ -41,8 +41,8 @@ class SinglePassCorpman(corpman.CorpusManager):
         self.rotation_period = 1
         self.single_pass = True
     def _generate(self, testcase, redirect_page, mime_type=None):
-        testcase.add_testfile(corpman.TestFile(self._active_input.file_name, self._active_input.get_data()))
-        testcase.add_testfile(corpman.TestFile(testcase.landing_page, redirect_page))
+        testcase.add_from_data(self._active_input.get_data(), self._active_input.file_name)
+        testcase.add_from_data(redirect_page, testcase.landing_page)
         return testcase
 
 
@@ -360,6 +360,7 @@ class CorpusManagerTests(unittest.TestCase):
             cm = EnvVarCorpman(corp_dir)
             self.addCleanup(cm.cleanup)
             tc = cm.generate()
+            self.addCleanup(tc.cleanup)
             with self.assertRaises(IOError):
                 tc.add_environ_file("nofile.js")
             env_file = os.path.join(prf_dir, "simple_prefs.js")
@@ -400,6 +401,7 @@ class CorpusManagerTests(unittest.TestCase):
             cm = SimpleCorpman(os.path.join(corp_dir, "template_01.bin"))
             self.addCleanup(cm.cleanup)
             tc = cm.generate()
+            self.addCleanup(tc.cleanup)
         finally:
             os.environ.pop("ASAN_OPTIONS", None)
         tc.dump(tc_dir, include_details=True)
@@ -465,6 +467,7 @@ class TestCaseTests(unittest.TestCase):
     def test_01(self):
         "test empty TestCase"
         tc = corpman.TestCase("dummy_page.html", "dummy_cm")
+        self.addCleanup(tc.cleanup)
         self.assertIsNone(tc.get_optional())
         tc.dump(self.tdir)
         self.assertFalse(os.listdir(self.tdir))
@@ -473,10 +476,11 @@ class TestCaseTests(unittest.TestCase):
 
     def test_02(self):
         "test TestCase with TestFiles"
-        tf1 = corpman.TestFile("testfile1.bin", "test_req")
-        tf2 = corpman.TestFile(os.path.join("test_dir", "testfile2.bin"), "test_nreq", required=False)
-        tf3 = corpman.TestFile("/testfile3.bin", "test_blah")
+        tf1 = corpman.TestFile.from_data("test_req", "testfile1.bin")
+        tf2 = corpman.TestFile.from_data("test_nreq", os.path.join("test_dir", "testfile2.bin"), required=False)
+        tf3 = corpman.TestFile.from_data("test_blah", "/testfile3.bin")
         tc = corpman.TestCase("land_page.html", "corp_name", input_fname="testinput.bin")
+        self.addCleanup(tc.cleanup)
         tc.add_testfile(tf1)
         tc.add_testfile(tf2)
         tc.add_testfile(tf3)
@@ -499,6 +503,7 @@ class TestCaseTests(unittest.TestCase):
     def test_03(self):
         "test TestCase add_environ_*()"
         tc = corpman.TestCase("land_page.html", "corp_name", input_fname="testinput.bin")
+        self.addCleanup(tc.cleanup)
         with self.assertRaisesRegexp(IOError, "Could not find environ file '.+?no_file.txt'"):
             tc.add_environ_file("no_file.txt")
         env_file = os.path.join(self.tdir, "env_file.txt")
@@ -540,6 +545,72 @@ class TestCaseTests(unittest.TestCase):
         self.assertEqual(in_file.get_fp().read(), b"test")
         in_file.close()
         self.assertIsNone(in_file.fp)
+
+
+class TestFileTests(unittest.TestCase):
+    def setUp(self):
+        self.tdir = tempfile.mkdtemp(prefix="cm_tests")
+
+    def tearDown(self):
+        if os.path.isdir(self.tdir):
+            shutil.rmtree(self.tdir)
+
+    def test_01(self):
+        "test simple TestFile"
+        tf = corpman.TestFile("test_file.txt")
+        self.addCleanup(tf.close)
+
+        self.assertEqual(tf.file_name, "test_file.txt")
+        self.assertTrue(tf.required)
+        self.assertFalse(tf._fp.closed)
+        tf.close()
+        self.assertTrue(tf._fp.closed)
+
+    def test_02(self):
+        "test write() and dump()"
+        tf = corpman.TestFile("test_file.txt")
+        self.addCleanup(tf.close)
+
+        out_file = os.path.join(self.tdir, "test_file.txt")
+        tf.write(b"foo")
+        self.assertFalse(os.path.isfile(out_file))
+        tf.dump(self.tdir)
+        self.assertTrue(os.path.isfile(out_file))
+        with open(out_file, "r") as in_fp:
+            self.assertEqual(in_fp.read(), "foo")
+        tf.write(b"bar")
+        tf.dump(self.tdir)
+        with open(out_file, "r") as in_fp:
+            self.assertEqual(in_fp.read(), "foobar")
+
+    def test_03(self):
+        "test from_data()"
+        # TODO: different encodings
+        tf = corpman.TestFile.from_data("foo", "test_file.txt", required=False)
+        self.addCleanup(tf.close)
+        self.assertFalse(tf.required)
+
+        out_file = os.path.join(self.tdir, "test_file.txt")
+        tf.dump(self.tdir)
+        self.assertTrue(os.path.isfile(out_file))
+        with open(out_file, "r") as in_fp:
+            self.assertEqual(in_fp.read(), "foo")
+
+    def test_04(self):
+        "test from_file()"
+        in_fp = tempfile.NamedTemporaryFile()
+        self.addCleanup(in_fp.close)
+        in_fp.write(b"foobar")
+        in_fp.flush()
+        tf = corpman.TestFile.from_file(in_fp.name, "test_file.txt", required=False)
+        self.addCleanup(tf.close)
+        self.assertFalse(tf.required)
+
+        out_file = os.path.join(self.tdir, "test_file.txt")
+        tf.dump(self.tdir)
+        self.assertTrue(os.path.isfile(out_file))
+        with open(out_file, "r") as in_fp:
+            self.assertEqual(in_fp.read(), "foobar")
 
 
 class LoaderTests(unittest.TestCase):
