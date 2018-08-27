@@ -30,6 +30,7 @@ class IOManagerTests(unittest.TestCase):
         self.assertFalse(iom._environ_files)  # pylint: disable=protected-access
         self.assertEqual(iom._generated, 0)  # pylint: disable=protected-access
         self.assertIsNone(iom._mime)  # pylint: disable=protected-access
+        self.assertEqual(iom._report_size, 1)  # pylint: disable=protected-access
 
     def test_02(self):
         "test scan_input()"
@@ -156,21 +157,25 @@ class IOManagerTests(unittest.TestCase):
         iom = IOManager()
         self.addCleanup(iom.cleanup)
         self.assertEqual(iom._generated, 0)  # pylint: disable=protected-access
+        self.assertEqual(iom._report_size, 1)  # pylint: disable=protected-access
+        self.assertFalse(iom.tests)
 
         # without a harness
-        tc = iom.create_testcase("test-adapter")
+        tc = iom.create_testcase("test-adapter", rotation_period=1)
         self.assertIsNotNone(tc)
         self.addCleanup(tc.cleanup)
         self.assertEqual(iom._generated, 1)  # pylint: disable=protected-access
+        self.assertEqual(len(iom.tests), 1)
         self.assertFalse(tc.get_optional())  # pylint: disable=protected-access
         self.assertIsNone(tc._started)  # pylint: disable=protected-access
 
         # with a harness
         iom.harness = TestFile.from_data(b"data", "h.htm")
         self.addCleanup(iom.harness.close)
-        tc = iom.create_testcase("test-adapter")
+        tc = iom.create_testcase("test-adapter", rotation_period=3)
         self.assertIsNotNone(tc)
         self.addCleanup(tc.cleanup)
+        self.assertEqual(len(iom.tests), 1)
         self.assertEqual(iom._generated, 2)  # pylint: disable=protected-access
         self.assertIn("h.htm", tc.get_optional())  # pylint: disable=protected-access
         self.assertIsNone(tc._started)  # pylint: disable=protected-access
