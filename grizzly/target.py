@@ -5,7 +5,7 @@ import signal
 import tempfile
 import time
 
-from ffpuppet import BrowserTerminatedError, FFPuppet, LaunchError
+from ffpuppet import FFPuppet, LaunchError
 import psutil
 
 
@@ -47,6 +47,13 @@ class Target(object):
             use_rr=self.use_rr,
             use_valgrind=use_valgrind,
             use_xvfb=use_xvfb)
+
+        # this is a readonly monitor that can be safely passed to Adapters
+        self.monitor = TargetMonitor.monitor(self._puppet)
+
+
+    def add_abort_token(self, token):
+        self._puppet.add_abort_token(token)
 
 
     def cleanup(self):
@@ -195,3 +202,58 @@ class Target(object):
 
     def save_logs(self, *args, **kwargs):
         self._puppet.save_logs(*args, **kwargs)
+
+
+class TargetMonitor(object):
+    def __init__(self):
+        self._fn_clone_log = None
+        self._fn_is_healthy = None
+        self._fn_is_running = None
+        self._fn_launches = None
+        self._fn_log_length = None
+
+
+    def clone_log(self, log_id, offset=0):
+        if self._fn_clone_log is None:
+            return None
+        return self._fn_clone_log(log_id, offset=offset)
+
+    @property
+    def launches(self):
+        return 0 if self._fn_launches is None else self._fn_launches()
+
+
+    def is_healthy(self):
+        return False if self._fn_is_healthy is None else self._fn_is_healthy()
+
+
+    def is_running(self):
+        return False if self._fn_is_running is None else self._fn_is_running()
+
+
+    def log_data(self, log_id, offset=0):
+        if self._fn_clone_log is None:
+            return None
+        log_file = self._fn_clone_log(log_id, offset=offset)
+        if log_file is None:
+            return None
+        try:
+            with open(log_file, "rb") as log_fp:
+                return log_fp.read()
+        finally:
+            os.remove(log_file)
+
+
+    def log_length(self, log_id):
+        return 0 if self._fn_log_length is None else self._fn_log_length(log_id)
+
+
+    @classmethod
+    def monitor(cls, target):
+        mon = TargetMonitor()
+        mon._fn_clone_log = target.clone_log  # pylint: disable=protected-access
+        mon._fn_is_healthy = target.is_healthy  # pylint: disable=protected-access
+        mon._fn_is_running = target.is_running  # pylint: disable=protected-access
+        mon._fn_launches = lambda: target.launches  # pylint: disable=protected-access
+        mon._fn_log_length = target.log_length  # pylint: disable=protected-access
+        return mon

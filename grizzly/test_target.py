@@ -2,7 +2,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import logging
 import os
 import signal
 import tempfile
@@ -11,15 +10,14 @@ import time
 import unittest
 
 from ffpuppet import FFPuppet
-from grizzly.target import Target
-
-logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
-log = logging.getLogger("grz_target_test")
+from .target import Target, TargetMonitor
 
 
-class StubTestPuppet(object):
+class FakePuppet(object):
     def __init__(self, use_rr, use_valgrind, use_xvfb):  # pylint: disable=unused-argument
         self.reason = FFPuppet.RC_CLOSED
+        self.running = False
+        self._launches = 0
         self.test_crashed = False  # used to control testing
         self.test_running = False  # used to control testing
         self.test_available_logs = list()  # used to control testing
@@ -32,6 +30,17 @@ class StubTestPuppet(object):
 
     def clean_up(self):
         self.close()
+
+
+    def clone_log(self, log_id, offset=0):  # pylint: disable=no-self-use,unused-argument
+        assert log_id is not None
+        tmp_fd, log_file = tempfile.mkstemp(
+            suffix="_log.txt",
+            prefix="test_")
+        os.close(tmp_fd)
+        with open(log_file, "wb") as log_fp:
+            log_fp.write(b"test")
+        return log_file
 
 
     def close(self):
@@ -52,7 +61,7 @@ class StubTestPuppet(object):
 
 
     def is_healthy(self):
-        return (not self.test_crashed) and self.test_running
+        return not self.test_crashed and self.test_running
 
 
     def is_running(self):
@@ -66,16 +75,22 @@ class StubTestPuppet(object):
         self.test_running = True
 
 
+    @property
+    def launches(self):
+        return self._launches
+
+
     def log_length(self, log_id):  # pylint: disable=no-self-use
         if log_id == "stderr":
             return 1024
         elif log_id == "stdout":
             return 100
+        return int(log_id.split("=")[1])
 
 
 class TargetTests(unittest.TestCase):
     def setUp(self):
-        Target.PUPPET = StubTestPuppet
+        Target.PUPPET = FakePuppet
         _fd, self.tmpfn = tempfile.mkstemp(prefix="grz_test_")
         os.close(_fd)
 
@@ -222,3 +237,30 @@ class TargetTests(unittest.TestCase):
         finally:
             evt.set()
             waiter.join()
+
+
+class TargetMonitorTests(unittest.TestCase):
+
+    def test_01(self):
+        "test a basic browser monitor"
+        tp = FakePuppet(False, False, False)
+        mon = TargetMonitor.monitor(tp)
+
+        test_log = mon.clone_log("test_log", offset=0)
+        self.addCleanup(os.remove, test_log)
+        self.assertTrue(os.path.isfile(test_log))
+        tp._launches += 1  # pylint: disable=protected-access
+        self.assertEqual(mon.launches, 1)
+        tp.test_running = True
+        self.assertTrue(mon.is_running())
+        self.assertEqual(mon.log_length("test_log=4"), 4)
+        self.assertEqual(mon.log_data("test_log"), b"test")
+
+    def test_02(self):
+        "test an uninitialized browser monitor"
+        mon = TargetMonitor()
+        self.assertIsNone(mon.clone_log("test_log", offset=0))
+        self.assertEqual(mon.launches, 0)
+        self.assertFalse(mon.is_running())
+        self.assertEqual(mon.log_length("test_log=2"), 0)
+        self.assertIsNone(mon.log_data("test_log"))

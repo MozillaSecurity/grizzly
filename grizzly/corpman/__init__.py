@@ -3,9 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from .corpman import CorpusManager, InputFile, ServerMap, TestCase, TestFile
-from .loader import Loader
+from .adapter import Adapter
+from .iomanager import IOManager, ServerMap
+from .storage import InputFile, TestCase, TestFile
 
-__all__ = ("CorpusManager", "InputFile", "Loader", "ServerMap", "TestCase", "TestFile")
+__all__ = ("Adapter", "IOManager", "InputFile", "ServerMap", "TestCase", "TestFile")
 __author__ = "Jesse Schwartzentruber"
-__credits__ = ["Jesse Schwartzentruber"]
+__credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]

@@ -1,0 +1,251 @@
+# coding=utf-8
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import os
+import random
+
+from .storage import InputFile, TestCase, TestFile
+
+__author__ = "Tyson Smith"
+__credits__ = ["Tyson Smith"]
+
+
+class ServerMap(object):
+    def __init__(self):
+        self._dynamic = dict()
+        self._include = dict()  # mapping of directories that can be requested
+        self._redirect = dict()  # document paths to map to file names using 307s
+
+
+    @property
+    def dynamic_responses(self):
+        out = list()
+        for url, (callback, mime) in self._dynamic.items():
+            out.append({"url":url, "callback":callback, "mime":mime})
+        return out
+
+
+    @property
+    def includes(self):
+        return list(self._include.items())
+
+
+    @property
+    def redirects(self):
+        out = list()
+        for url, (file_name, required) in self._redirect.items():
+            out.append({"url":url, "file_name":file_name, "required":required})
+        return out
+
+
+    def reset(self, dynamic_response=False, include=False, redirect=False):
+        assert dynamic_response or include or redirect, "At least one kwarg should be True"
+        if dynamic_response:
+            self._dynamic = dict()
+        if include:
+            self._include = dict()  # mapping of directories that can be requested
+        if redirect:
+            self._redirect = dict()  # document paths to map to file names using 307s
+
+
+    def remove_dynamic_response(self, url_path):
+        assert isinstance(url_path, str)
+        assert url_path in self._dynamic
+        self._dynamic.pop(url_path, None)
+
+
+    def remove_include(self, url_path):
+        assert isinstance(url_path, str)
+        assert url_path in self._include
+        self._include.pop(url_path, None)
+
+
+    def remove_redirect(self, url):
+        assert isinstance(url, str)
+        assert url in self._redirect
+        self._redirect.pop(url, None)
+
+
+    def set_dynamic_response(self, url_path, callback, mime_type="application/octet-stream"):
+        assert isinstance(url_path, str)
+        assert callable(callback)
+        assert isinstance(mime_type, str)
+        self._dynamic[url_path] = (callback, mime_type)
+
+
+    def set_include(self, url_path, target_path):
+        assert isinstance(url_path, str)
+        assert isinstance(target_path, str)
+        if not os.path.isdir(target_path):
+            raise IOError("%r does not exist" % target_path)
+        self._include[url_path] = os.path.abspath(target_path)
+
+
+    def set_redirect(self, url, file_name, required=True):
+        assert isinstance(file_name, str)
+        assert isinstance(required, bool)
+        assert isinstance(url, str)
+        self._redirect[url] = (file_name, required)
+
+
+class IOManager(object):
+    def __init__(self, report_size=1, mime_type=None, working_path=None):
+        assert report_size > 0
+        self.harness = None
+        self.input_files = list()  # paths to files to use as a corpus
+        self.server_map = ServerMap()  # manage redirects, include directories and dynamic responses
+        self.tests = list()
+        self.working_path = working_path
+        self._report_size = report_size
+        self._active = None  # current active input file
+        #self._environ = dict()  # recorded environment variables
+        self._environ_files = list()  # collection of files that should be added to the testcase
+        self._generated = 0  # number of test cases generated
+        self._mime = mime_type
+
+        self._add_suppressions()
+
+
+    def _add_suppressions(self):
+        # Add suppression files to environment files
+        for san_opts in [san_opt for san_opt in os.environ if "SAN_OPTIONS" in san_opt]:
+            env_var = os.environ.get(san_opts)
+            if not env_var or "suppressions" not in env_var:
+                continue
+            for opt in env_var.split(":"):
+                if not opt.startswith("suppressions"):
+                    continue
+                supp_file = opt.split("=")[-1]
+                if os.path.isfile(supp_file):
+                    fname = "%s.supp" % san_opts.split("_")[0].lower()
+                    self._environ_files.append(TestFile.from_file(supp_file, fname))
+                    break
+
+
+    def cleanup(self):
+        if self._active is not None:
+            self._active.close()
+        for e_file in self._environ_files:
+            e_file.close()
+        self.purge_tests()
+
+
+    def scan_input(self, scan_path, accepted_extensions=None, sort=False):
+        assert scan_path is not None, "scan_path should be a valid path"
+        assert not self.input_files, "input_files should be empty"
+
+        if os.path.isdir(scan_path):
+            # create a set of normalized file extensions to look in
+            if accepted_extensions is not None:
+                normalized_exts = set(ext.lstrip(".").lower() for ext in accepted_extensions)
+            else:
+                normalized_exts = set()
+
+            # ignored_list is a list of ignored files (usually auto generated OS files)
+            ignored_list = ("desktop.ini", "thumbs.db")
+            for d_name, _, filenames in os.walk(scan_path):
+                for f_name in filenames:
+                    # check for unwanted files
+                    if f_name.startswith(".") or f_name.lower() in ignored_list:
+                        continue
+                    if normalized_exts:
+                        ext = os.path.splitext(f_name)[1].lstrip(".").lower()
+                        if ext not in normalized_exts:
+                            continue
+                    input_file = os.path.abspath(os.path.join(d_name, f_name))
+                    # skip empty files
+                    if os.path.getsize(input_file) > 0:
+                        self.input_files.append(input_file)
+        elif os.path.isfile(scan_path) and os.path.getsize(scan_path) > 0:
+            self.input_files.append(os.path.abspath(scan_path))
+
+        if not self.input_files:
+            raise IOError("Could not find input file(s) at %s" % scan_path)
+
+        if sort and self.input_files:
+            self.input_files.sort(reverse=True)
+
+
+    def page_name(self, offset=0):
+        return "test_%04d.html" % (self._generated + offset)
+
+
+    def landing_page(self):
+        if self.harness is None:
+            return self.page_name()
+        return self.harness.file_name
+
+
+    def redirect_page(self):
+        return self.page_name(offset=1)
+
+
+    @property
+    def active_file(self):
+        return self._active.file_name if self._active is not None else None
+
+
+    def _rotation_required(self, rotation_period):
+        if not self.input_files:
+            return False  # only rotate if we have input files
+        elif self._active is None:
+            return True  # we need a file
+        elif not rotation_period:
+            return True  # single pass mode
+        elif len(self.input_files) < 2:
+            return False  # only rotate if we have more than one file
+        elif not self._generated % rotation_period:
+            return True
+        return False
+
+
+    def size(self):
+        return len(self.input_files)
+
+
+    def create_testcase(self, adapter_name, rotation_period=10):
+        # check if we should choose a new active input file
+        if self._rotation_required(rotation_period):
+            # close previous input if needed
+            if self._active is not None:
+                self._active.close()
+            if rotation_period > 0:
+                self._active = InputFile(random.choice(self.input_files))
+            else:
+                # single pass mode
+                self._active = InputFile(self.input_files.pop())
+
+        # create testcase object and landing page names
+        test = TestCase(
+            self.page_name(),
+            self.page_name(offset=1),
+            adapter_name=adapter_name,
+            input_fname=self.active_file)
+
+        for e_file in self._environ_files:
+            test.add_file(e_file.clone())
+
+        # reset redirect map
+        self.server_map.reset(redirect=True)
+        if self.harness is not None:
+            # setup redirects for harness
+            self.server_map.set_redirect("first_test", self.page_name(), required=False)
+            self.server_map.set_redirect("next_test", self.page_name(offset=1))
+            # add harness to testcase
+            test.add_file(self.harness.clone(), required=False)
+
+        self._generated += 1
+        self.tests.append(test)
+        # manage testcase cache size
+        if len(self.tests) > self._report_size:
+            self.tests.pop(0).cleanup()
+
+        return test
+
+
+    def purge_tests(self):
+        for testcase in self.tests:
+            testcase.cleanup()
+        self.tests = list()
