@@ -6,8 +6,7 @@ import argparse
 import os.path
 import tempfile
 
-from . import corpman
-
+from .corpman import adapters
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
 class SortingHelpFormatter(argparse.HelpFormatter):
@@ -128,13 +127,12 @@ class CommonArgs(object):
 
 class GrizzlyArgs(CommonArgs):
     def __init__(self):
-        loader = corpman.Loader()
-        self.avail_corpmans = sorted(loader.list())
+        self.adapters = sorted(adapters.names())
         CommonArgs.__init__(self)
         self._sanity_skip.add("tool")
         self.parser.add_argument(
-            "corpus_manager",
-            help="Available corpus managers: %s" % ", ".join(self.avail_corpmans))
+            "adapter",
+            help="Available adapters: %s" % ", ".join(self.adapters))
         self.parser.add_argument(
             "--accepted-extensions", nargs="+",
             help="Space separated list of supported file extensions. ie: html svg (default: all)")
@@ -157,8 +155,8 @@ class GrizzlyArgs(CommonArgs):
     def sanity_check(self, args):
         CommonArgs.sanity_check(self, args)
 
-        if args.corpus_manager.lower() not in self.avail_corpmans:
-            self.parser.error("%r corpus manager does not exist" % args.corpus_manager.lower())
+        if args.adapter.lower() not in self.adapters:
+            self.parser.error("%r adapter does not exist" % args.adapter.lower())
 
         if args.fuzzmanager and args.s3_fuzzmanager:
             self.parser.error("--fuzzmanager and --s3-fuzzmanager are mutually exclusive")
