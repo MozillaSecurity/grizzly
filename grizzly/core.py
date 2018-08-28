@@ -32,7 +32,7 @@ from .args import GrizzlyArgs
 from .reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
 from .status import Status
 from .corpman.storage import TestFile
-from .target import Target, TargetMonitor
+from .target import Target
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
@@ -138,7 +138,7 @@ class Session(object):
                 self.adapter.NAME,
                 rotation_period=self.adapter.ROTATION_PERIOD)
             log.debug("calling self.adapter.generate()")
-            self.adapter.generate(current_test, self.iomanager.server_map)
+            self.adapter.generate(current_test, self.iomanager.active_input, self.iomanager.server_map)
             if self.target.prefs is not None:
                 current_test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
             # update sapphire redirects from the adapter
@@ -146,18 +146,21 @@ class Session(object):
                 self.server.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
 
             # print iteration status
+            if self.iomanager.active_input is None:
+                active_file = None
+            else:
+                active_file = self.iomanager.active_input.file_name
             if not self.adapter.ROTATION_PERIOD:
                 log.info(
                     "[I%04d-L%02d-R%02d] %s",
                     self.status.iteration,
                     self.adapter.size(),
                     self.status.results,
-                    os.path.basename(self.adapter.active_file))
+                    os.path.basename(active_file))
             else:
-                if (self.iomanager.active_file is not None and
-                        self.status.test_name != self.iomanager.active_file):
-                    self.status.test_name = self.iomanager.active_file
-                    log.info("Now fuzzing: %s", os.path.basename(self.status.test_name))
+                if active_file and self.status.test_name != active_file:
+                    self.status.test_name = active_file
+                    log.info("Now fuzzing: %s", os.path.basename(active_file))
                 log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
             try:

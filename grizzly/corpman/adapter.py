@@ -51,7 +51,7 @@ class Adapter(object):
     # Methods to overload
     #############################
 
-    def generate(self, testcase, server_map):
+    def generate(self, testcase, input_file, server_map):
         raise NotImplementedError("Must be implemented by subclass")
 
 
