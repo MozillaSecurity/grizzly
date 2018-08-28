@@ -93,13 +93,13 @@ class ServerMap(object):
 class IOManager(object):
     def __init__(self, report_size=1, mime_type=None, working_path=None):
         assert report_size > 0
+        self.active_input = None  # current active input file
         self.harness = None
         self.input_files = list()  # paths to files to use as a corpus
         self.server_map = ServerMap()  # manage redirects, include directories and dynamic responses
         self.tests = list()
         self.working_path = working_path
         self._report_size = report_size
-        self._active = None  # current active input file
         #self._environ = dict()  # recorded environment variables
         self._environ_files = list()  # collection of files that should be added to the testcase
         self._generated = 0  # number of test cases generated
@@ -125,8 +125,8 @@ class IOManager(object):
 
 
     def cleanup(self):
-        if self._active is not None:
-            self._active.close()
+        if self.active_input is not None:
+            self.active_input.close()
         for e_file in self._environ_files:
             e_file.close()
         self.purge_tests()
@@ -182,15 +182,10 @@ class IOManager(object):
         return self.page_name(offset=1)
 
 
-    @property
-    def active_file(self):
-        return self._active.file_name if self._active is not None else None
-
-
     def _rotation_required(self, rotation_period):
         if not self.input_files:
             return False  # only rotate if we have input files
-        elif self._active is None:
+        elif self.active_input is None:
             return True  # we need a file
         elif not rotation_period:
             return True  # single pass mode
@@ -209,20 +204,20 @@ class IOManager(object):
         # check if we should choose a new active input file
         if self._rotation_required(rotation_period):
             # close previous input if needed
-            if self._active is not None:
-                self._active.close()
+            if self.active_input is not None:
+                self.active_input.close()
             if rotation_period > 0:
-                self._active = InputFile(random.choice(self.input_files))
+                self.active_input = InputFile(random.choice(self.input_files))
             else:
                 # single pass mode
-                self._active = InputFile(self.input_files.pop())
+                self.active_input = InputFile(self.input_files.pop())
 
         # create testcase object and landing page names
         test = TestCase(
             self.page_name(),
             self.page_name(offset=1),
             adapter_name=adapter_name,
-            input_fname=self.active_file)
+            input_fname=self.active_input.file_name if self.active_input else None)
 
         for e_file in self._environ_files:
             test.add_file(e_file.clone())

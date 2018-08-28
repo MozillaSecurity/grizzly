@@ -13,7 +13,7 @@ from .adapter import Adapter
 class SimpleAdapter(Adapter):
     NAME = "simple"
 
-    def generate(self, testcase, server_map):
+    def generate(self, testcase, input_file, server_map):
         pass
 
 
@@ -27,7 +27,7 @@ class AdapterTests(unittest.TestCase):
         self.assertIsNone(adpt.monitor)
         self.assertIsNone(adpt.get_harness())
         adpt.setup(None)
-        adpt.generate(None, None)
+        adpt.generate(None, None, None)
         adpt.on_served(None, None)
         adpt.on_timeout(None, None)
         adpt.cleanup()

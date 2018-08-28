@@ -24,7 +24,7 @@ class IOManagerTests(unittest.TestCase):
         iom = IOManager()
         self.addCleanup(iom.cleanup)
         self.assertEqual(iom.size(), 0)
-        self.assertIsNone(iom._active)  # pylint: disable=protected-access
+        self.assertIsNone(iom.active_input)  # pylint: disable=protected-access
         self.assertIsNotNone(iom.server_map)
         self.assertFalse(iom.input_files)
         self.assertFalse(iom._environ_files)  # pylint: disable=protected-access
@@ -91,7 +91,7 @@ class IOManagerTests(unittest.TestCase):
         self.assertEqual(iom.size(), 1)
         # skip rotation because we only have one input file
         iom._generated = 1  # pylint: disable=protected-access
-        iom._active = tf  # pylint: disable=protected-access
+        iom.active_input = tf  # pylint: disable=protected-access
         self.assertFalse(iom._rotation_required(1))  # pylint: disable=protected-access
 
         with open(os.path.join(self.tdir, "input_test.txt"), "wb") as out_fp:
@@ -101,19 +101,19 @@ class IOManagerTests(unittest.TestCase):
         self.assertEqual(iom.size(), 2)
 
         # pick a file
-        iom._active = None    # pylint: disable=protected-access
+        iom.active_input = None    # pylint: disable=protected-access
         self.assertTrue(iom._rotation_required(10))  # pylint: disable=protected-access
         # don't pick a file because of rotation
         iom._generated = 3  # pylint: disable=protected-access
-        iom._active = tf  # pylint: disable=protected-access
+        iom.active_input = tf  # pylint: disable=protected-access
         self.assertFalse(iom._rotation_required(10))  # pylint: disable=protected-access
         # pick a file because of rotation
         iom._generated = 2  # pylint: disable=protected-access
-        iom._active = tf  # pylint: disable=protected-access
+        iom.active_input = tf  # pylint: disable=protected-access
         self.assertTrue(iom._rotation_required(2))  # pylint: disable=protected-access
         # pick a file because of single pass
         iom._generated = 1  # pylint: disable=protected-access
-        iom._active = tf  # pylint: disable=protected-access
+        iom.active_input = tf  # pylint: disable=protected-access
         self.assertTrue(iom._rotation_required(0))  # pylint: disable=protected-access
 
 
