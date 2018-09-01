@@ -196,7 +196,6 @@ class Session(object):
                 # if nothing was served remove most recent
                 # test case from list to help maintain browser/fuzzer sync
                 self.iomanager.tests.pop().cleanup()
-                assert failure_detected != Target.RESULT_NONE
 
             # handle failure if detected
             if failure_detected == Target.RESULT_FAILURE:
