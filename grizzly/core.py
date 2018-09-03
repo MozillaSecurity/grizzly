@@ -24,7 +24,7 @@ import os
 import shutil
 import tempfile
 
-from ffpuppet import BrowserTerminatedError
+from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
 import sapphire
 
 from .corpman import adapters, IOManager
@@ -109,6 +109,8 @@ class Session(object):
 
     def run(self):
         assert self.server is not None, "server is not configured"
+        # used to track the number of consecutive launch timeouts
+        launch_timeouts = 0
 
         while True:  # main fuzzing loop
             self.status.report()
@@ -125,12 +127,21 @@ class Session(object):
                         self.target.rl_reset)
                     log.info("Launching target")
                     self.target.launch(location)
-                    # TODO: handle BrowserTimeoutError?
+                    launch_timeouts = 0
                 except BrowserTerminatedError:
                     # this result likely has nothing to do with grizzly
                     self.status.results += 1
                     log.info("Launch error detected")
                     self.report_result()
+                    raise
+                except BrowserTimeoutError:
+                    launch_timeouts += 1
+                    log.warning("Launch timeout detected")
+                    # likely has nothing to do with grizzly but is seen frequently
+                    # on machines under a high load
+                    # after 3 timeouts in a row something is likely wrong so raise
+                    if launch_timeouts < 3:
+                        continue
                     raise
 
             # generate testcase
