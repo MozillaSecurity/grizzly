@@ -243,14 +243,16 @@ def test_run_0(tmpdir, job):
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
-            assert len(tc._test_files) == 1, \
-                "too many test_files: %r" % (tc._test_files,)
+            assert len(tc._files["required"]) == 1, \
+                "too many test_files: %r" % (tc._files["required"],)
             assert tc.landing_page == "test.html"
-            assert tc._test_files[0].data == "required\n"
-            assert "prefs.js" in tc._env_files
-            assert os.path.isfile(tc._env_files["prefs.js"])
-            with open(tc._env_files["prefs.js"]) as prefs_fp:
-                assert prefs_fp.read() == "some prefs"
+            assert tc._files["required"][0].data == "required\n"
+            prefs_data = None
+            for meta_file in tc._files["meta"]:
+                if meta_file.file_name == "prefs.js":
+                    prefs_data = meta_file.data
+                    break
+            assert prefs_data == "some prefs"
             assert tc._env_vars == dict(var="value", foo="bar")
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
@@ -277,14 +279,16 @@ def test_run_1(tmpdir, job):
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
-            assert len(tc._test_files) == 1, \
-                "too many test_files: %r" % (tc._test_files,)
-            assert tc._test_files[0].data == "required\n"
+            assert len(tc._files["required"]) == 1, \
+                "too many test_files: %r" % (tc._files["required"],)
+            assert tc._files["required"][0].data == "required\n"
             assert tc.landing_page == "test.html"
-            assert "prefs.js" in tc._env_files
-            assert os.path.isfile(tc._env_files["prefs.js"])
-            with open(tc._env_files["prefs.js"]) as prefs_fp:
-                assert prefs_fp.read() == "some prefs"
+            prefs_data = None
+            for meta_file in tc._files["meta"]:
+                if meta_file.file_name == "prefs.js":
+                    prefs_data = meta_file.data
+                    break
+            assert prefs_data == "some prefs"
             assert tc._env_vars == dict(var="value", foo="bar")
             assert self.quality == FuzzManagerReporter.QUAL_UNREDUCED
             assert not self.force_report
@@ -309,10 +313,10 @@ def test_run_2(tmpdir, job):
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
-            assert len(tc._test_files) == 2, \
-                "expecting 2 test_files: %r" % (tc._test_files,)
+            assert len(tc._files["required"]) == 2, \
+                "expecting 2 test_files: %r" % (tc._files["required"],)
             assert tc.landing_page == "test.html"
-            assert {x.file_name: x.data for x in tc._test_files} \
+            assert {x.file_name: x.data for x in tc._files["required"]} \
                 == {"test.html": "required\n",
                     "test2.html": "fluff\nrequired\n"}
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
@@ -338,10 +342,10 @@ def test_run_3(tmpdir, job):
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
-            assert len(tc._test_files) == 2, \
-                "expecting 2 test_files: %r" % (tc._test_files,)
+            assert len(tc._files["required"]) == 2, \
+                "expecting 2 test_files: %r" % (tc._files["required"],)
             assert tc.landing_page == "test.html"
-            assert {x.file_name: x.data for x in tc._test_files} \
+            assert {x.file_name: x.data for x in tc._files["required"]} \
                 == {"test.html": "required\n",
                     "test2.html": "DDBEGIN\nrequired\nDDEND\n"}
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
@@ -371,13 +375,13 @@ def test_run_4(tmpdir, job):
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
-            assert len(tc._test_files) == 3, \
-                "expecting 3 test_files: %r" % (tc._test_files,)
+            assert len(tc._files["required"]) == 3, \
+                "expecting 3 test_files: %r" % (tc._files["required"],)
             assert tc.landing_page.startswith("harness_")
             assert tc.landing_page.endswith(".html")
-            harness_idx = [x.file_name for x in tc._test_files].index(tc.landing_page)
-            harness = tc._test_files.pop(harness_idx)
-            assert {x.file_name: x.data for x in tc._test_files} \
+            harness_idx = [x.file_name for x in tc._files["required"]].index(tc.landing_page)
+            harness = tc._files["required"].pop(harness_idx)
+            assert {x.file_name: x.data for x in tc._files["required"]} \
                 == {"-0/required.html": "DDBEGIN\nrequired\nDDEND\n",
                     "-1/required.html": "DDBEGIN\nrequired\nDDEND\n"}
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
@@ -406,10 +410,10 @@ def test_run_5(tmpdir, job):
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
-            assert len(tc._test_files) == 1, \
-                "too many test_files: %r" % (tc._test_files,)
+            assert len(tc._files["required"]) == 1, \
+                "too many test_files: %r" % (tc._files["required"],)
             assert tc.landing_page == "required.html"
-            assert tc._test_files[0].data == "-1\nDDBEGIN\nrequired\nDDEND\n"
+            assert tc._files["required"][0].data == "-1\nDDBEGIN\nrequired\nDDEND\n"
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -433,10 +437,10 @@ def test_run_6(tmpdir, job):
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
-            assert len(tc._test_files) == 1, \
-                "too many test_files: %r" % (tc._test_files,)
+            assert len(tc._files["required"]) == 1, \
+                "too many test_files: %r" % (tc._files["required"],)
             assert tc.landing_page == "test.js"
-            assert tc._test_files[0].data.lstrip(' ') == "'required'\n"
+            assert tc._files["required"][0].data.lstrip(' ') == "'required'\n"
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -459,11 +463,11 @@ def test_run_7(tmpdir, job):
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
-            assert len(tc._test_files) == 1, \
-                "too many test_files: %r" % (tc._test_files,)
+            assert len(tc._files["required"]) == 1, \
+                "too many test_files: %r" % (tc._files["required"],)
             assert tc.landing_page == "test.js"
             # strip() is required because jsbeautifier stage removes the newline (if installed)
-            assert tc._test_files[0].data.strip() == "var x = 'required'"
+            assert tc._files["required"][0].data.strip() == "var x = 'required'"
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
