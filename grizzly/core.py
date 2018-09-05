@@ -273,7 +273,7 @@ def main(args):
     try:
         log.debug("initializing the IOManager")
         iomanager = IOManager(
-            report_size=args.cache,
+            report_size=(max(args.cache, 0) + 1),
             mime_type=args.mime,
             working_path=args.working_path)
 
@@ -312,7 +312,7 @@ def main(args):
             args.valgrind,
             args.xvfb)
         adapter.monitor = target.monitor
-        if args.asserts:  # detect soft assertions
+        if args.soft_asserts:
             target.add_abort_token("###!!! ASSERTION:")
 
         log.debug("calling adapter setup()")
