@@ -639,7 +639,7 @@ def main(args, interesting_cb=None, result_cb=None):
             log.info("Results will be stored in %r", job.reporter.report_path)
 
         # detect soft assertions
-        if args.asserts:
+        if args.soft_asserts:
             job.interesting.target._puppet.add_abort_token("###!!! ASSERTION:")
 
         # setup interesting callback if requested
