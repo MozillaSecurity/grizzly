@@ -150,10 +150,10 @@ def test_main_strategies(job, monkeypatch, tmpdir):  # noqa pylint: disable=rede
         def _submit(self):
             assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
             tc = self.test_cases[0]
-            assert len(tc._test_files) == 1, \
-                "too many test_files: %r" % (tc._test_files,)
+            assert len(tc._files["required"]) == 1, \
+                "too many test_files: %r" % (tc._files["required"],)
             assert tc.landing_page == "test.html"
-            assert tc._test_files[0].data == "'xxrequired'\n"
+            assert tc._files["required"][0].data == "'xxrequired'\n"
             report_data["num_reports"] += 1
     monkeypatch.setattr(reduce, "FilesystemReporter", FakeReporter)
 

@@ -184,6 +184,17 @@ class TestFile(object):
         self._fp.close()
 
 
+    @property
+    def data(self):
+        # Not recommenced for large files
+        pos = self._fp.tell()
+        self._fp.flush()
+        self._fp.seek(0)
+        data = self._fp.read()
+        self._fp.seek(pos)
+        return data
+
+
     def dump(self, path):
         target_path = os.path.join(path, os.path.dirname(self.file_name))
         if not os.path.isdir(target_path):
