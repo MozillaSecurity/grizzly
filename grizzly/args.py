@@ -67,7 +67,7 @@ class CommonArgs(object):
             "--relaunch", type=int, default=1000,
             help="Number of iterations performed before relaunching the browser (default: %(default)s)")
         self.parser.add_argument(
-            "-s", "--asserts", action="store_true",
+            "--soft-asserts", action="store_true",
             help="Detect soft assertions")
         self.parser.add_argument(
             "-t", "--timeout", type=int, default=60,
@@ -137,8 +137,8 @@ class GrizzlyArgs(CommonArgs):
             "--accepted-extensions", nargs="+",
             help="Space separated list of supported file extensions. ie: html svg (default: all)")
         self.parser.add_argument(
-            "-c", "--cache", type=int, default=1,
-            help="Maximum number of previous test cases to dump after crash (default: %(default)s)")
+            "-c", "--cache", type=int, default=0,
+            help="Maximum number of additional test cases to include in report (default: %(default)s)")
         self.parser.add_argument(
             "--coverage", action="store_true",
             help="Enable coverage collection")
