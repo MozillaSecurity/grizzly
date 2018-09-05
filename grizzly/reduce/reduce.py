@@ -21,7 +21,7 @@ from FTB.Signatures.CrashInfo import CrashSignature
 from . import strategies as strategies_module
 from .interesting import Interesting
 from ..core import Session
-from ..corpman import TestFile, TestCase
+from ..corpman.storage import TestFile, TestCase
 from ..reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..target import Target
 
@@ -324,22 +324,21 @@ class ReductionJob(object):
         self.reporter.force_report = force
 
         landing_page = os.path.relpath(self.testcase, self.tcroot)
-        testcase = TestCase(landing_page, "grizzly.reduce", input_fname=self.input_fname)
+        testcase = TestCase(landing_page, None, "grizzly.reduce", input_fname=self.input_fname)
 
         # add testcase contents
         for file_name in _testcase_contents(tcroot):
-            with open(os.path.join(tcroot, file_name)) as testfile_fp:
-                testcase.add_testfile(TestFile(file_name, testfile_fp.read()))
+            testcase.add_file(TestFile.from_file(os.path.join(tcroot, file_name), file_name))
 
         # add reduce log
         if include_logs:
             log.info("Closing reduce log for report submission")
             self._stop_log_capture()
-            testcase.add_environ_file(os.path.join(self.tmpdir, "reducelog.txt"), "reducelog.txt")
+            testcase.add_meta(TestFile.from_file(os.path.join(self.tmpdir, "reducelog.txt"), "reducelog.txt"))
 
         # add prefs
         if self.interesting.target.prefs is not None:
-            testcase.add_environ_file(self.interesting.target.prefs, "prefs.js")
+            testcase.add_meta(TestFile.from_file(self.interesting.target.prefs, "prefs.js"))
 
         # add environment variables
         if self.interesting.env_mod is not None:
