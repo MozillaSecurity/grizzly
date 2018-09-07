@@ -66,7 +66,7 @@ class Session(object):
         assert self.adapter is not None, "adapter must be configured first"
         log.debug("starting sapphire server")
         # have client error pages (code 4XX) call window.close() after a few seconds
-        sapphire.Sapphire.CLOSE_CLIENT_ERROR = 2
+        sapphire.Sapphire.CLOSE_CLIENT_ERROR = 1
         # launch http server used to serve test cases
         self.server = sapphire.Sapphire(timeout=iteration_timeout)
         # add include paths to server
