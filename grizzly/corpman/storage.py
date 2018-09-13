@@ -73,7 +73,6 @@ class TestCase(object):
             "meta": list(),  # environment files such as prefs.js, etc...
             "optional": list(),
             "required": list()}
-        self._started = None  # approximate time execution began
 
 
     def add_meta(self, meta_file):
@@ -124,7 +123,7 @@ class TestCase(object):
             # TODO: make this metadata.json
             with open(os.path.join(log_dir, "test_info.txt"), "w") as out_fp:
                 out_fp.write("[Grizzly test case details]\n")
-                out_fp.write("Adapter:    %s\n" % self.adapter_name)
+                out_fp.write("Adapter:           %s\n" % self.adapter_name)
                 out_fp.write("Landing Page:      %s\n" % self.landing_page)
                 if self.input_fname is not None:
                     out_fp.write("Input File:        %s\n" % os.path.basename(self.input_fname))
@@ -138,10 +137,6 @@ class TestCase(object):
             # save meta files
             for meta_file in self._files["meta"]:
                 meta_file.dump(log_dir)
-
-
-    def set_started(self):
-        self._started = time.time()
 
 
     def cleanup(self):
