@@ -31,6 +31,10 @@ let main = function(){
   if (close_after != undefined) {
     close_after--;
   }
+  try {
+    let s_elm = document.getElementById('status');
+    s_elm.innerHTML = '&#x1f43b; &sdot; Grizzly Harness &sdot; &#x1f98a;';
+  } catch(e){}
   sub = open(req_url, 'GrizzlyFuzz');
   sub.addEventListener('beforeunload', function(){
     closed_tmr = setInterval(function(){
@@ -92,4 +96,7 @@ window.addEventListener('beforeunload', function(){
 });
 </script>
 </head>
+<body style='background-color:#E5E4E2'>
+<h4 id='status'>&#x1f43b; &sdot; Loading...</h4>
+</body>
 </html>
