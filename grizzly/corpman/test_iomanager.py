@@ -167,7 +167,6 @@ class IOManagerTests(unittest.TestCase):
         self.assertEqual(iom._generated, 1)  # pylint: disable=protected-access
         self.assertEqual(len(iom.tests), 1)
         self.assertFalse(tc.get_optional())  # pylint: disable=protected-access
-        self.assertIsNone(tc._started)  # pylint: disable=protected-access
 
         # with a harness
         iom.harness = TestFile.from_data(b"data", "h.htm")
@@ -178,7 +177,6 @@ class IOManagerTests(unittest.TestCase):
         self.assertEqual(len(iom.tests), 1)
         self.assertEqual(iom._generated, 2)  # pylint: disable=protected-access
         self.assertIn("h.htm", tc.get_optional())  # pylint: disable=protected-access
-        self.assertIsNone(tc._started)  # pylint: disable=protected-access
         tc.cleanup()
 
 

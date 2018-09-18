@@ -33,7 +33,6 @@ class TestCaseTests(unittest.TestCase):
         self.assertFalse(tc._files["optional"])  # pylint: disable=protected-access
         self.assertFalse(tc._files["required"])  # pylint: disable=protected-access
         self.assertFalse(tc._env_vars)  # pylint: disable=protected-access
-        self.assertIsNone(tc._started)  # pylint: disable=protected-access
         self.assertFalse(tc.get_optional())
         tc.dump(self.tdir)
         self.assertFalse(os.listdir(self.tdir))
