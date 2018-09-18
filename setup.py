@@ -37,7 +37,7 @@ if __name__ == '__main__':
             ],
         },
         extras_require=EXTRAS,
-        install_requires=['ffpuppet', 'psutil', 'sapphire'],
+        install_requires=['ffpuppet', 'psutil'],
         license='MPL 2.0',
         maintainer='Tyson Smith',
         maintainer_email='twsmith@mozilla.com',
@@ -46,6 +46,8 @@ if __name__ == '__main__':
             'grizzly',
             'grizzly.corpman',
             'grizzly.reduce',
+            'loki',
+            'sapphire',
         ],
         url='https://github.com/MozillaSecurity/grizzly',
         version='0.0.1')

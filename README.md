@@ -12,8 +12,6 @@ Installation
 ------------
 The following modules are required:
 * https://github.com/MozillaSecurity/ffpuppet
-* https://github.com/MozillaSecurity/loki
-* https://github.com/MozillaSecurity/sapphire
 * https://github.com/MozillaSecurity/avalanche
 
 For now add symlinks to the project folders and files as needed. NOTE: This will change. I am open to suggestions for how to make this simple. Perhaps submodules?
@@ -21,9 +19,7 @@ For now add symlinks to the project folders and files as needed. NOTE: This will
 ```
 cd grizzly
 ln -s <path_to_ffpuppet_dir> ffpuppet
-ln -s <path_to_sapphire_dir> sapphire
 cd corpman
-ln -s <path_to_loki_dir> loki
 ln -s <path_to_avalanche_dir> avalanche
 
 ```
