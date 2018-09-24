@@ -96,7 +96,11 @@ class ServeJob(object):
 
         if self.url_map[self.URL_INCLUDE]:
             last_split = 0
-            check_includes = len([x for x in self.url_map[self.URL_INCLUDE].keys() if x != ""])
+            check_includes = False
+            for include in self.url_map[self.URL_INCLUDE]:
+                if include != "":
+                    check_includes = True
+                    break
             while check_includes:
                 split_req = request.rsplit("/", last_split)
                 if len(split_req) != last_split + 1:
@@ -138,7 +142,9 @@ class ServeJob(object):
         self._complete.set()
 
 
-    def is_complete(self):
+    def is_complete(self, wait=None):
+        if wait is not None:
+            return self._complete.wait(wait)
         return self._complete.is_set()
 
 
@@ -373,8 +379,8 @@ class Sapphire(object):
             log.debug("200 %r (%d to go)", file_to_serve, serv_job.pending_files())
 
         except (socket.timeout, socket.error):
-            exc_type, exc_obj, tb = sys.exc_info()
-            log.debug("%s: %r (line %d)", exc_type.__name__, exc_obj, tb.tb_lineno)
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            log.debug("%s: %r (line %d)", exc_type.__name__, exc_obj, exc_tb.tb_lineno)
 
         except Exception:  # pylint: disable=broad-except
             serv_job.exceptions.put(sys.exc_info())
@@ -510,29 +516,25 @@ class Sapphire(object):
 
         status = None
         try:
-            while True:
-                # check for exceptions from workers
-                try:
-                    exc_type, exc_obj, exc_tb = job.exceptions.get_nowait()
-                    log.warning(
-                        "[sapphire worker] %s: %r (line %d)",
-                        exc_type.__name__,
-                        exc_obj,
-                        exc_tb.tb_lineno)
-                    raise exc_obj  # re-raise except from worker
-                except QueueEmpty:
-                    pass
+            # it is important to keep this loop fast because it can limit
+            # the total iteration rate of Grizzly
+            while not job.is_complete(wait=0.5):
                 # check for a timeout
                 if exp_time is not None and exp_time <= time.time():
                     status = SERVED_TIMEOUT
                     break
-                # check if all required files have been served
-                if job.is_complete():
-                    break
                 # check if callback returns False
                 if continue_cb is not None and not continue_cb():
                     break
-                time.sleep(0.05)
+            # check for exceptions from workers
+            if not job.exceptions.empty():
+                exc_type, exc_obj, exc_tb = job.exceptions.get()
+                log.warning(
+                    "[sapphire worker] %s: %r (line %d)",
+                    exc_type.__name__,
+                    exc_obj,
+                    exc_tb.tb_lineno)
+                raise exc_obj  # re-raise except from worker
         finally:
             if status is None:
                 status = job.get_status()
