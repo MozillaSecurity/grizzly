@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+from collections import defaultdict, namedtuple
 import errno
 import logging
 import mimetypes
@@ -30,31 +31,41 @@ SERVED_NONE = 1     # no requests for required files have been received
 SERVED_REQUEST = 2  # some requests for required files have been received
 SERVED_TIMEOUT = 3  # timeout occurred
 
+
+Tracker = namedtuple("Tracker", "files lock")
+UrlMap = namedtuple("UrlMap", "dynamic include redirect")
+WorkerHandle = namedtuple("WorkerHandle", "conn thread")
+
+
+class Resource(object):
+    def __init__(self, resource_type, target, mime=None, required=False):
+        self.mime = mime
+        self.required = required
+        self.target = target
+        self.type = resource_type
+        self._local_path = None
+
+
 class ServeJob(object):
-    URL_DYNAMIC = "dynamic"
-    URL_INCLUDE = "include"
-    URL_REDIRECT = "redirect"
+    URL_DYNAMIC = 0
+    URL_INCLUDE = 1
+    URL_REDIRECT = 2
 
     def __init__(self, base_path, dynamic_map, include_map, redirect_map, optional_files=None):
         assert isinstance(dynamic_map, dict)
         assert isinstance(include_map, dict)
         assert isinstance(redirect_map, dict)
         self._complete = threading.Event()
+        self._pending = Tracker(files=set(), lock=threading.Lock())
+        self._served = Tracker(files=defaultdict(int), lock=threading.Lock())
         self.base_path = os.path.abspath(base_path)  # wwwroot
         self.exceptions = Queue()
-        self.f_queue = {
-            "files": set(),  # files that need to be served
-            "lock": threading.Lock()}
-        self.f_served = {
-            "files": dict(),  # files that have been served
-            "lock": threading.Lock()}
         self.initial_queue_size = 0
-        self.url_map = {
-            "dynamic": dynamic_map,  # paths that map to a callback
-            "include": include_map,  # extra paths to serve from
-            "redirect": redirect_map}
+        self.url_map = UrlMap(
+            dynamic=dynamic_map,  # paths that map to a callback
+            include=include_map,  # extra paths to serve from
+            redirect=redirect_map)
         self.worker_complete = threading.Event()
-
         self._build_queue(optional_files)
 
 
@@ -62,80 +73,71 @@ class ServeJob(object):
         # build file list to track files that must be served
         for d_name, _, filenames in os.walk(self.base_path, followlinks=False):
             for f_name in filenames:
-                file_path = os.path.abspath(os.path.join(d_name, f_name))
                 # do not add optional files to queue of required files
                 if optional_files and f_name in optional_files:
-                    log.debug('optional: %r', f_name)
+                    log.debug("optional: %r", f_name)
                     continue
-                with self.f_queue["lock"]:
-                    self.f_queue["files"].add(file_path)
-                log.debug('required: %r', f_name)
+                file_path = os.path.abspath(os.path.join(d_name, f_name))
+                with self._pending.lock:
+                    self._pending.files.add(file_path)
+                log.debug("required: %r", f_name)
 
-        for redirect, (target, required) in self.url_map["redirect"].items():
-            if required:
-                with self.f_queue["lock"]:
-                    self.f_queue["files"].add(redirect)
-            log.debug('%s: %r -> %r', 'required' if required else 'optional', redirect, target)
+        for redirect, resource in self.url_map.redirect.items():
+            if resource.required:
+                with self._pending.lock:
+                    self._pending.files.add(redirect)
+            log.debug(
+                "%s: %r -> %r", "required" if resource.required else "optional",
+                redirect,
+                resource.target)
 
-        with self.f_queue["lock"]:
-            self.initial_queue_size = len(self.f_queue["files"])
-        log.debug('sapphire has %d files required to serve', self.initial_queue_size)
+        with self._pending.lock:
+            self.initial_queue_size = len(self._pending.files)
+        log.debug("sapphire has %d files required to serve", self.initial_queue_size)
 
 
     def check_url(self, request):
         log.debug("check_url with request %r", request)
-        try:
-            return self.URL_REDIRECT, self.url_map[self.URL_REDIRECT][request]
-        except KeyError:
-            pass
-
-        try:
-            return self.URL_DYNAMIC, self.url_map[self.URL_DYNAMIC][request]
-        except KeyError:
-            pass
-
-        if self.url_map[self.URL_INCLUDE]:
-            last_split = 0
+        if request in self.url_map.redirect:
+            return self.url_map.redirect[request]
+        elif request in self.url_map.dynamic:
+            return self.url_map.dynamic[request]
+        elif self.url_map.include:
             check_includes = False
-            for include in self.url_map[self.URL_INCLUDE]:
+            for include in self.url_map.include:
                 if include != "":
                     check_includes = True
                     break
+
+            last_split = 0
             while check_includes:
                 split_req = request.rsplit("/", last_split)
                 if len(split_req) != last_split + 1:
                     break
-                inc = split_req[0]
-                url_extra = split_req[1:]
+                inc_path = split_req[0]
+                target_path = split_req[1:]
 
-                log.debug("looking up %r in include map", inc)
-                try:
-                    fpath = "/".join([self.url_map[self.URL_INCLUDE][inc]] + url_extra)
-                    return self.URL_INCLUDE, fpath
-                except KeyError:
-                    log.debug("include map does not contain %r", inc)
+                log.debug("looking up %r in include map", inc_path)
+                if inc_path in self.url_map.include:
+                    return Resource(
+                        self.URL_INCLUDE,
+                        "/".join([self.url_map.include[inc_path].target] + target_path),
+                        mime=self.url_map.include[inc_path].mime,
+                        required=self.url_map.include[inc_path].required)
+                log.debug("include map does not contain %r", inc_path)
                 last_split += 1
 
             # check if this is a nested directory in a directory mounted at '/'
-            try:
-                log.debug("checking include map at '/'")
-                fpath = os.path.join(self.url_map[self.URL_INCLUDE][""], request.lstrip('/'))
-                return self.URL_INCLUDE, fpath
-            except KeyError:
-                log.debug("include map does not contain an entry at '/'")
+            log.debug("checking include map at '/'")
+            if "" in self.url_map.include:
+                return Resource(
+                    self.URL_INCLUDE,
+                    os.path.join(self.url_map.include[""].target, request.lstrip("/")),
+                    mime=self.url_map.include[""].mime,
+                    required=self.url_map.include[""].required)
+            log.debug("include map does not contain an entry at '/'")
 
         return None
-
-
-    def get_status(self):
-        with self.f_queue["lock"]:
-            queue_size = len(self.f_queue["files"])
-        if self.initial_queue_size > 0:
-            if queue_size == 0:
-                return SERVED_ALL
-            elif queue_size < self.initial_queue_size:
-                return SERVED_REQUEST
-        return SERVED_NONE
 
 
     def finish(self):
@@ -150,26 +152,38 @@ class ServeJob(object):
 
     def is_forbidden(self, target_file):
         target_file = os.path.abspath(target_file)
-        if not target_file.startswith(self.base_path):  # does the file live somewhere in wwwroot
-            for inc_path in self.url_map[self.URL_INCLUDE].values():
-                if target_file.startswith(inc_path):
+        # check if target_file lives somewhere in wwwroot
+        if not target_file.startswith(self.base_path):
+            for resources in self.url_map.include.values():
+                if target_file.startswith(resources.target):
                     return False  # this is a valid include path
             return True  # this is NOT a valid include path
         return False  # this is a valid path
 
 
     def pending_files(self):
-        with self.f_queue["lock"]:
-            return len(self.f_queue["files"])
+        with self._pending.lock:
+            return len(self._pending.files)
 
 
-    def remove_queue_file(self, file_name):
-        # only return True when the last item is removed (not before or after)
-        with self.f_queue["lock"]:
-            if not self.f_queue["files"]:
-                return False
-            self.f_queue["files"].discard(file_name)
-            return not self.f_queue["files"]
+    def remove_pending(self, file_name):
+        # return True when all file have been removed
+        with self._pending.lock:
+            if self._pending.files:
+                self._pending.files.discard(file_name)
+            return not self._pending.files
+
+
+    @property
+    def status(self):
+        if self.initial_queue_size > 0:
+            with self._pending.lock:
+                queue_size = len(self._pending.files)
+            if queue_size == 0:
+                return SERVED_ALL
+            elif queue_size < self.initial_queue_size:
+                return SERVED_REQUEST
+        return SERVED_NONE
 
 
 class Sapphire(object):
@@ -177,16 +191,16 @@ class Sapphire(object):
     CLOSE_CLIENT_ERROR = None  # used to automatically close client error (4XX code) pages
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
-    DEFAULT_WORKER_POOL_SIZE = 20
+    WORKER_POOL_LIMIT = 20
 
     _request = re.compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
 
 
     def __init__(self, allow_remote=False, port=None, timeout=60):
-        self._dr_map = {}
-        self._include_map = {}
-        self._redirect_map = {}
-        self._server_timeout = max(timeout, 1) if timeout else None  # set the minimum to 1 second
+        self._dr_map = dict()
+        self._include_map = dict()
+        self._redirect_map = dict()
+        self._server_timeout = max(timeout, 1) if timeout else None  # minimum 1 second
         self._socket = Sapphire._create_listening_socket(allow_remote, port)
 
 
@@ -299,42 +313,42 @@ class Sapphire(object):
             request = Sapphire._request.match(raw_request)
             if request is None:
                 conn.sendall(Sapphire._4xx_page(400, "Bad Request").encode("ascii"))
-                log.debug("400 request length %d (%d to go)", len(raw_request), serv_job.pending_files())
+                log.debug(
+                    "400 request length %d (%d to go)",
+                    len(raw_request),
+                    serv_job.pending_files())
                 return
             request = request.group("request").decode("ascii")
 
             file_to_serve = os.path.join(serv_job.base_path, request)
             # check if path maps to a file
             if not os.path.isfile(file_to_serve):
-                file_to_serve = None
                 # check if path maps to a callback, redirect or an include directory
-                url_info = serv_job.check_url(request)
-                log.debug("url_info %r", url_info)
-                if url_info is not None:
-                    url_type, target = url_info
-                else:
-                    url_type = None
-                    target = None
+                resourse = serv_job.check_url(request)
+                log.debug("resourse %r", resourse)
 
-                if url_type == serv_job.URL_REDIRECT:
-                    finish_job = serv_job.remove_queue_file(request)
-                    conn.sendall(Sapphire._307_redirect(target[0]).encode("ascii"))
-                    log.debug("307 %r -> %r (%d to go)", request, target[0], serv_job.pending_files())
+                if resourse is None:
+                    file_to_serve = None  # 404
+                elif resourse.type == serv_job.URL_REDIRECT:
+                    finish_job = serv_job.remove_pending(request)
+                    conn.sendall(Sapphire._307_redirect(resourse.target).encode("ascii"))
+                    log.debug(
+                        "307 %r -> %r (%d to go)",
+                        request,
+                        resourse.target,
+                        serv_job.pending_files())
                     return
-
-                elif url_type == serv_job.URL_DYNAMIC:
-                    target_cb, mime = target
-                    data = target_cb()
+                elif resourse.type == serv_job.URL_DYNAMIC:
+                    data = resourse.target()
                     if not isinstance(data, bytes):
                         log.debug("dynamic request: %r", request)
                         raise TypeError("dynamic request callback must return 'bytes'")
-                    conn.sendall(Sapphire._200_header(len(data), mime).encode("ascii"))
+                    conn.sendall(Sapphire._200_header(len(data), resourse.mime).encode("ascii"))
                     conn.sendall(data)
                     log.debug("200 %r (dynamic request)", request)
                     return
-
-                elif url_type == serv_job.URL_INCLUDE:
-                    file_to_serve = target
+                elif resourse.type == serv_job.URL_INCLUDE:
+                    file_to_serve = resourse.target
 
                 if file_to_serve is None or not os.path.isfile(file_to_serve):
                     conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
@@ -356,25 +370,21 @@ class Sapphire(object):
             # default to "application/octet-stream"
             c_type = mimetypes.guess_type(file_to_serve)[0] or "application/octet-stream"
 
-            # remove file from the pending queue
-            finish_job = serv_job.remove_queue_file(file_to_serve)
-
             # serve the file
             data_size = os.stat(file_to_serve).st_size
+            log.debug("sending file: %s bytes", format(data_size, ","))
             with open(file_to_serve, "rb") as in_fp:
-                log.debug("sending file: %s bytes", "{:,}".format(data_size))
                 conn.sendall(Sapphire._200_header(data_size, c_type).encode("ascii"))
                 offset = 0
                 while offset < data_size:
                     conn.sendall(in_fp.read(Sapphire.DEFAULT_TX_SIZE))
                     offset = in_fp.tell()
 
+            # remove file from the pending queue
+            finish_job = serv_job.remove_pending(file_to_serve)
             # update list of served files
-            with serv_job.f_served["lock"]:
-                if file_to_serve in serv_job.f_served["files"]:
-                    serv_job.f_served["files"][file_to_serve] += 1
-                else:
-                    serv_job.f_served["files"][file_to_serve] = 1
+            with serv_job._served.lock:
+                serv_job._served.files[file_to_serve] += 1
 
             log.debug("200 %r (%d to go)", file_to_serve, serv_job.pending_files())
 
@@ -394,12 +404,13 @@ class Sapphire(object):
 
     @staticmethod
     def _client_listener(serv_sock, serv_job):
-        w_conn = None  # current worker connection
-        w_pool = list()
+        worker_pool = list()
+        pool_size = 0
 
         log.debug("starting client_listener")
         try:
             while not serv_job.is_complete():
+                w_conn = None
                 try:
                     w_conn, _ = serv_sock.accept()
                     w_conn.settimeout(None)
@@ -408,7 +419,8 @@ class Sapphire(object):
                         target=Sapphire._handle_request,
                         args=(w_conn, serv_job))
                     w_thread.start()
-                    w_pool.append({"conn": w_conn, "thread": w_thread})
+                    worker_pool.append(WorkerHandle(conn=w_conn, thread=w_thread))
+                    pool_size = len(worker_pool)
                 except socket.timeout:
                     pass
                 except socket.error:
@@ -419,38 +431,40 @@ class Sapphire(object):
                         w_conn.close()
                     log.warning(
                         "ThreadError! pool size: %d, total active threads: %d",
-                        len(w_pool),
+                        pool_size,
                         threading.active_count())
                     if Sapphire.ABORT_ON_THREAD_ERROR:
                         raise
-                    time.sleep(0.1)  # wait for system resources to free up
+                    # wait for system resources to free up
+                    time.sleep(0.1)
 
                 # manage worker pool
-                pool_size = len(w_pool)
-                if pool_size >= Sapphire.DEFAULT_WORKER_POOL_SIZE:
+                if pool_size > Sapphire.WORKER_POOL_LIMIT:
                     log.debug("active pool size: %d, waiting for worker to finish...", pool_size)
                     serv_job.worker_complete.wait()
                     serv_job.worker_complete.clear()
                     # remove complete workers
                     log.debug("trimming worker pool")
-                    # sometimes the thread that triggered the event does quite cleanup in time
+                    # sometimes the thread that triggered the event doesn't quite cleanup in time
                     # so add a retry (10x with a 0.1 second sleep on failure)
                     for _ in range(10, 0, -1):
-                        for worker in w_pool:
-                            if not worker["thread"].is_alive():
+                        for worker in list(worker_pool):
+                            if not worker.thread.is_alive():
                                 # no need to call close() because worker threads do on exit
-                                worker["thread"].join()
-                                w_pool.remove(worker)
-                        if len(w_pool) < pool_size:
+                                worker.thread.join()
+                                worker_pool.remove(worker)
+                        if len(worker_pool) < pool_size:
                             break
                         time.sleep(0.1)
+                    else:
+                        raise RuntimeError("Failed to trim worker pool!")
+                    pool_size = len(worker_pool)
                     log.debug("done trimming worker pool")
-                    assert len(w_pool) < pool_size, "Failed to trim worker pool!"
         finally:
             log.debug("shutting down and cleaning up workers")
-            for worker in w_pool:
-                worker["conn"].close()
-                worker["thread"].join()
+            for worker in worker_pool:
+                worker.conn.close()
+                worker.thread.join()
 
 
     def serve_path(self, path, continue_cb=None, optional_files=None):
@@ -534,16 +548,16 @@ class Sapphire(object):
                     exc_type.__name__,
                     exc_obj,
                     exc_tb.tb_lineno)
-                raise exc_obj  # re-raise except from worker
+                raise exc_obj  # re-raise exception from worker
         finally:
             if status is None:
-                status = job.get_status()
+                status = job.status
             job.finish()
             listener.join()
 
-        self._redirect_map = {} # reset redirect map
+        self._redirect_map.clear()
 
-        return status, job.f_served["files"].keys()
+        return status, job._served.files.keys()
 
 
     @staticmethod
@@ -559,28 +573,28 @@ class Sapphire(object):
     def add_dynamic_response(self, url, callback, mime_type="application/octet-stream"):
         # check and sanitize url
         url = self._check_potential_url(url)
-
         if not callable(callback):
             raise TypeError("callback must be of type 'function'")
         if not isinstance(mime_type, str):
             raise TypeError("mime_type must be of type 'str'")
-
         log.debug("mapping dynamic response %r -> %r (%r)", url, callback, mime_type)
-        self._dr_map[url] = (callback, mime_type)
+        self._dr_map[url] = Resource(
+            ServeJob.URL_DYNAMIC,
+            callback,
+            mime=mime_type)
 
 
     def add_include(self, url, target_path):
-        if not os.path.isdir(target_path):
-            raise IOError("Include path not found: %s" % target_path)
-
         # check and sanitize mount point
         url = self._check_potential_url(url)
-
+        if not os.path.isdir(target_path):
+            raise IOError("Include path not found: %s" % target_path)
         if url in self._include_map:
             raise RuntimeError("%r already mapped to %r" % (url, self._include_map[url]))
-
         log.debug("mapping include %r -> %r", url, target_path)
-        self._include_map[url] = os.path.abspath(target_path)
+        self._include_map[url] = Resource(
+            ServeJob.URL_INCLUDE,
+            os.path.abspath(target_path))
 
 
     def set_redirect(self, url, target, required=True):
@@ -590,7 +604,10 @@ class Sapphire(object):
             raise TypeError("target must be of type 'str'")
         elif not target:
             raise TypeError("target must not be an empty string")
-        self._redirect_map[url] = (target, required)
+        self._redirect_map[url] = Resource(
+            ServeJob.URL_REDIRECT,
+            target,
+            required=required)
 
 
 def main():
