@@ -160,12 +160,11 @@ class TestFile(object):
 
     def __init__(self, file_name):
         self._fp = tempfile.SpooledTemporaryFile(max_size=self.CACHE_LIMIT, mode="r+b", prefix='grz_tf_')
-        self.file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
-
         # XXX: This is a naive fix for a larger path issue
-        if "\\" in self.file_name:
-            self.file_name.replace("\\", "/")
-        self.file_name = self.file_name.lstrip("/")
+        if "\\" in file_name:
+            file_name = file_name.replace("\\", "/")
+        file_name = file_name.lstrip("/")
+        self.file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
 
 
     def clone(self):

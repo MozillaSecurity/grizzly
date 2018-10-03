@@ -42,16 +42,18 @@ class TestCaseTests(unittest.TestCase):
     def test_02(self):
         "test TestCase with TestFiles"
         tf1 = TestFile.from_data("test_req", "testfile1.bin")
-        tf2 = TestFile.from_data("test_nreq", os.path.join("test_dir", "testfile2.bin"))
+        tf2 = TestFile.from_data("test_nreq", "test_dir/testfile2.bin")
         tf3 = TestFile.from_data("test_blah", "/testfile3.bin")
+        tf4 = TestFile.from_data("test_windows", "\\\\dir\\file.bin")
         tc = TestCase("land_page.html", "redirect.html", "test-adapter", input_fname="testinput.bin")
         self.addCleanup(tc.cleanup)
         tc.add_file(tf1)
         tc.add_file(tf2, required=False)
         tc.add_file(tf3)
+        tc.add_file(tf4)
         opt_files = tc.get_optional()
         self.assertEqual(len(opt_files), 1)
-        self.assertIn("test_dir/testfile2.bin", opt_files)
+        self.assertIn(os.path.join("test_dir", "testfile2.bin"), opt_files)
         tc.dump(self.tdir, include_details=True)
         self.assertTrue(os.path.isdir(os.path.join(self.tdir, "test_dir")))
         self.assertTrue(os.path.isfile(os.path.join(self.tdir, "test_info.txt")))
@@ -66,6 +68,9 @@ class TestCaseTests(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(self.tdir, "testfile3.bin")))
         with open(os.path.join(self.tdir, "testfile3.bin"), "r") as test_fp:
             self.assertEqual(test_fp.read(), "test_blah")
+        self.assertTrue(os.path.isfile(os.path.join(self.tdir, "dir", "file.bin")))
+        with open(os.path.join(self.tdir, "dir", "file.bin"), "r") as test_fp:
+            self.assertEqual(test_fp.read(), "test_windows")
 
     def test_03(self):
         "test TestCase add_meta()"
@@ -188,11 +193,11 @@ class TestFileTests(unittest.TestCase):
 
     def test_05(self):
         "test from_file()"
-        in_fp = tempfile.NamedTemporaryFile()
-        self.addCleanup(in_fp.close)
-        in_fp.write(b"foobar")
-        in_fp.flush()
-        tf = TestFile.from_file(in_fp.name, "test_file.txt")
+        _fd, in_file = tempfile.mkstemp(dir=self.tdir)
+        os.close(_fd)
+        with open(in_file, "w+b") as in_fp:
+            in_fp.write(b"foobar")
+        tf = TestFile.from_file(in_file, "test_file.txt")
         self.addCleanup(tf.close)
 
         out_file = os.path.join(self.tdir, "test_file.txt")
