@@ -4,92 +4,91 @@
 <meta charset=UTF-8>
 <title>&#x1f43b; &sdot; Grizzly &sdot; &#x1f98a;</title>
 <script>
-function grz_dump(msg){
+function grzDump(msg){
   dump('[grizzly harness][' + new Date().toGMTString() + '] ' + msg);
 }
-let limit_tmr, close_after, closed_tmr, sub, time_limit;
-let kvps = location.hash.substr(1).split(",")
+
+function setBanner(msg){
+  try { document.getElementById('status').innerHTML = msg; } catch(e){}
+}
+
+let limit_tmr, close_after, cur_loc, reloads, sub, time_limit;
+let kvps = location.hash.substr(1).split(',')
+let prev_loc = null;
 for (let entry in kvps) {
-  let kv = kvps[entry].split("=");
-  if (kv[0] == "timeout") {
+  let kv = kvps[entry].split('=');
+  if (kv[0] == 'timeout') {
     time_limit = Number(kv[1]);
   }
-  else if (kv[0] == "close_after") {
+  else if (kv[0] == 'close_after') {
     close_after = Number(kv[1]);
   }
 }
-let req_url = '/first_test';
-let prev_url = null;
 if (time_limit == undefined || time_limit <= 0) {
-  grz_dump('No time limit given, using default of 5s\n');
+  grzDump('No time limit given, using default of 5s\n');
   time_limit = 5000;
 } else {
-  grz_dump('Using time limit of ' + time_limit + '\n');
+  grzDump('Using time limit of ' + time_limit + '\n');
 }
+
 let main = function(){
-  let is_done = false;
-  if (close_after != undefined) {
-    close_after--;
+  if (sub != null && !sub.closed) {
+    setTimeout(main, 10);
+    return;
   }
-  try {
-    let s_elm = document.getElementById('status');
-    s_elm.innerHTML = '&#x1f43b; &sdot; Grizzly Harness &sdot; &#x1f98a;';
-  } catch(e){}
-  sub = open(req_url, 'GrizzlyFuzz');
+  if (close_after != undefined && close_after-- < 1) {
+    grzDump('Hit close limit.\n');
+    window.close();
+    return;
+  }
+
+  // open test
+  sub = open(sub != null ? '/next_test' : '/first_test', 'GrizzlyFuzz');
+  if (sub == null) {
+    setBanner('Error! Could not open window. Blocked by the popup blocker?');
+    grzDump('Could not open test! Blocked by the popup blocker?');
+    return;
+  }
   sub.addEventListener('beforeunload', function(){
-    closed_tmr = setInterval(function(){
-      if (!is_done && sub.closed) {
-        clearTimeout(limit_tmr);
-        clearInterval(closed_tmr);
-        is_done = true;
-        grz_dump('Test case closed itself\n');
-        if (close_after != undefined && close_after < 1) {
-          window.close();
-        }
-        else {
-          setTimeout(main, 0);
-        }
-      }
-    }, 10);
-  });
-  limit_tmr = setTimeout(function(){
-    if (!is_done) {
-      clearInterval(closed_tmr);
-      is_done = true;
-      grz_dump('Time limit exceeded\n');
-      let cur_loc = null;
-      if (!sub.closed && sub.location != null){
-        cur_loc = sub.location.toString();
-      }
-      if (cur_loc != null && cur_loc == prev_url){
-        // TODO: figure out why this happens
-        grz_dump('Potential browser/fuzzer sync issue detected\n');
-        grz_dump('Continued to request: ' + cur_loc + '\n');
-        prev_url = null;
-        req_url = '/first_test';
-      }
-      else {
-        prev_url = cur_loc;
-      }
-      if (!sub.closed){
-        grz_dump('Closing test case\n');
-        sub.close();
-      }
-      if (close_after != undefined && close_after < 1) {
+    clearTimeout(limit_tmr);
+    grzDump('Test case closed\n');
+    // check if we are reopening the same page
+    // this seems to be due to loosing sync with the web server
+    if (sub.location != null){
+      try { cur_loc = sub.location.toString(); } catch(err) {}
+    }
+    if (cur_loc == prev_loc) {
+      reloads++;
+      if (reloads > 2) {
+        grzDump('Lost sync! Closing Browser.');
         window.close();
-      }
-      else {
-        setTimeout(main, 0);
+        return;
       }
     }
+    else {
+      prev_loc = cur_loc;
+      reloads = 0;
+    }
+    setTimeout(main, 10);
+  });
+  limit_tmr = setTimeout(function(){
+    grzDump('Time limit exceeded\n');
+    if (!sub.closed){
+      grzDump('Closing test case\n');
+      sub.close();
+    }
   }, time_limit);
-  req_url = '/next_test';
 };
-window.onload = main;
+
+window.onload = function(){
+  // update banner
+  setBanner('&#x1f43b; &sdot; Grizzly Harness &sdot; &#x1f98a;');
+  main();
+}
+
 window.addEventListener('beforeunload', function(){
-  clearInterval(closed_tmr);
   clearTimeout(limit_tmr);
-  grz_dump('Cleaning up\n');
+  grzDump('Cleaning up\n');
   if (!sub.closed) {
     sub.close();
   }
