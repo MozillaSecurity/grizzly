@@ -77,7 +77,7 @@ class Target(object):
         wait = max(wait, 0)
         # if the corpus manager does not use the default harness
         # chances are it will hang here for 60 seconds
-        log.debug("relaunch will be triggered... waiting %d seconds", wait)
+        log.debug("relaunch will be triggered... waiting up to %d seconds", wait)
         for _ in range(wait):
             if not self._puppet.is_healthy():
                 break
