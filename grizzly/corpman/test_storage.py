@@ -29,9 +29,9 @@ class TestCaseTests(unittest.TestCase):
         self.assertEqual(tc.redirect_page, r_page)
         self.assertEqual(tc.adapter_name, adpt_name)
         self.assertIsNone(tc.input_fname)
-        self.assertFalse(tc._files["meta"])  # pylint: disable=protected-access
-        self.assertFalse(tc._files["optional"])  # pylint: disable=protected-access
-        self.assertFalse(tc._files["required"])  # pylint: disable=protected-access
+        self.assertFalse(tc._files.meta)  # pylint: disable=protected-access
+        self.assertFalse(tc._files.optional)  # pylint: disable=protected-access
+        self.assertFalse(tc._files.required)  # pylint: disable=protected-access
         self.assertFalse(tc._env_vars)  # pylint: disable=protected-access
         self.assertFalse(tc.get_optional())
         tc.dump(self.tdir)

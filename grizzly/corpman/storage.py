@@ -3,10 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from collections import namedtuple
 import os
 import shutil
 import tempfile
-import time
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -62,6 +62,8 @@ class InputFile(object):
         return self._fp
 
 
+TestFileMap = namedtuple("TestFileMap", "meta optional required")
+
 class TestCase(object):
     def __init__(self, landing_page, redirect_page, adapter_name, input_fname=None):
         self.adapter_name = adapter_name
@@ -69,15 +71,15 @@ class TestCase(object):
         self.redirect_page = redirect_page
         self.input_fname = input_fname  # file that was used to create the test case
         self._env_vars = dict()  # environment variables
-        self._files = {  # contains TestFile(s) that make up a test case
-            "meta": list(),  # environment files such as prefs.js, etc...
-            "optional": list(),
-            "required": list()}
+        self._files = TestFileMap(
+            meta=list(),  # environment files such as prefs.js, etc...
+            optional=list(),
+            required=list())
 
 
     def add_meta(self, meta_file):
         assert isinstance(meta_file, TestFile), "only accepts TestFiles"
-        self._files["meta"].append(meta_file)
+        self._files.meta.append(meta_file)
 
 
     def add_environ_var(self, var_name, value):
@@ -86,8 +88,10 @@ class TestCase(object):
 
     def add_file(self, test_file, required=True):
         assert isinstance(test_file, TestFile), "only accepts TestFiles"
-        key = "required" if required else "optional"
-        self._files[key].append(test_file)
+        if required:
+            self._files.required.append(test_file)
+        else:
+            self._files.optional.append(test_file)
 
 
     def add_from_data(self, data, file_name, encoding="UTF-8", required=True):
@@ -115,7 +119,7 @@ class TestCase(object):
         """
 
         # save test files to log_dir
-        for test_file in self._files["required"] + self._files["optional"]:
+        for test_file in self._files.required + self._files.optional:
             test_file.dump(log_dir)
 
         # save test case, input file, file information, environment info
@@ -135,19 +139,19 @@ class TestCase(object):
                         out_fp.write("%s=%s\n" % (env_var, env_val))
 
             # save meta files
-            for meta_file in self._files["meta"]:
+            for meta_file in self._files.meta:
                 meta_file.dump(log_dir)
 
 
     def cleanup(self):
         # close all the test files
-        for file_group in self._files.values():
+        for file_group in self._files:
             for test_file in file_group:
                 test_file.close()
 
 
     def get_optional(self):
-        return [x.file_name for x in self._files["optional"]]
+        return [x.file_name for x in self._files.optional]
 
 
     def env_vars(self):

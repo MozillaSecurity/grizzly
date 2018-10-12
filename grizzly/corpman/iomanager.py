@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from collections import deque
 import os
 import random
 
@@ -43,11 +44,11 @@ class ServerMap(object):
     def reset(self, dynamic_response=False, include=False, redirect=False):
         assert dynamic_response or include or redirect, "At least one kwarg should be True"
         if dynamic_response:
-            self._dynamic = dict()
+            self._dynamic.clear()
         if include:
-            self._include = dict()  # mapping of directories that can be requested
+            self._include.clear()  # mapping of directories that can be requested
         if redirect:
-            self._redirect = dict()  # document paths to map to file names using 307s
+            self._redirect.clear()  # document paths to map to file names using 307s
 
 
     def remove_dynamic_response(self, url_path):
@@ -97,29 +98,32 @@ class IOManager(object):
         self.harness = None
         self.input_files = list()  # paths to files to use as a corpus
         self.server_map = ServerMap()  # manage redirects, include directories and dynamic responses
-        self.tests = list()
+        self.tests = deque()
         self.working_path = working_path
         self._report_size = report_size
-        #self._environ = dict()  # recorded environment variables
         self._environ_files = list()  # collection of files that should be added to the testcase
         self._generated = 0  # number of test cases generated
         self._mime = mime_type
-
+        # used to record environment variable that directly impact the browser
+        self._tracked_env = list()
+        for e_var in ("GNOME_ACCESSIBILITY", "MOZ_CHAOSMODE"):
+            if e_var in os.environ:
+                self._tracked_env.append((e_var, os.environ[e_var]))
         self._add_suppressions()
 
 
     def _add_suppressions(self):
         # Add suppression files to environment files
-        for san_opts in [san_opt for san_opt in os.environ if "SAN_OPTIONS" in san_opt]:
-            env_var = os.environ.get(san_opts)
-            if not env_var or "suppressions" not in env_var:
+        for opt_var in (e_var for e_var in os.environ if "SAN_OPTIONS" in e_var):
+            opts = os.environ.get(opt_var)
+            if not opts or "suppressions" not in opts:
                 continue
-            for opt in env_var.split(":"):
+            for opt in opts.split(":"):
                 if not opt.startswith("suppressions"):
                     continue
                 supp_file = opt.split("=")[-1]
                 if os.path.isfile(supp_file):
-                    fname = "%s.supp" % san_opts.split("_")[0].lower()
+                    fname = "%s.supp" % opt_var.split("_")[0].lower()
                     self._environ_files.append(TestFile.from_file(supp_file, fname))
                     break
 
@@ -219,6 +223,9 @@ class IOManager(object):
             adapter_name=adapter_name,
             input_fname=self.active_input.file_name if self.active_input else None)
 
+        for e_name, e_value in self._tracked_env:
+            test.add_environ_var(e_name, e_value)
+
         for e_file in self._environ_files:
             test.add_file(e_file.clone())
 
@@ -235,7 +242,7 @@ class IOManager(object):
         self.tests.append(test)
         # manage testcase cache size
         if len(self.tests) > self._report_size:
-            self.tests.pop(0).cleanup()
+            self.tests.popleft().cleanup()
 
         return test
 
@@ -243,4 +250,4 @@ class IOManager(object):
     def purge_tests(self):
         for testcase in self.tests:
             testcase.cleanup()
-        self.tests = list()
+        self.tests.clear()
