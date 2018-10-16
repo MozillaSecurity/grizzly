@@ -5,47 +5,27 @@
 <title>&#x1f43b; &sdot; Grizzly &sdot; &#x1f98a;</title>
 <script>
 function grzDump(msg) {
-  dump('[grizzly harness][' + new Date().toGMTString() + '] ' + msg)
+  dump(`[grizzly harness][${new Date().toUTCString()}] ${msg}`)
 }
 
 function setBanner(msg) {
-  try { document.getElementById('banner').innerHTML = msg } catch(e) { grzDump('setBanner error: ' + e) }
-}
-
-let limit_tmr, close_after, retries, sub, time_limit, prev_loc = null
-for (let kv of location.hash.substr(1).split(',')) {
-  let [k, v] = kv.split('=')
-  if (k == 'timeout') {
-    time_limit = Number(v)
-  }
-  else if (k == 'close_after') {
-    close_after = Number(v)
-  }
-  else {
-    grzDump('unknown arg: ' + k)
-  }
-}
-if (time_limit == undefined || time_limit <= 0) {
-  grzDump('No time limit given, using default of 5s\n')
-  time_limit = 5000
-} else {
-  grzDump('Using time limit of ' + time_limit + '\n')
+  try { document.getElementById('banner').innerHTML = msg } catch(e) { grzDump(`setBanner error: ${e}`) }
 }
 
 function main() {
-  if (sub != null && !sub.closed) {
+  if (sub !== undefined && !sub.closed) {
     setTimeout(main, 10)
     return
   }
-  if (close_after != undefined && close_after-- < 1) {
+  if (close_after !== undefined && close_after-- < 1) {
     grzDump('Hit close limit.\n')
     window.close()
     return
   }
 
   // open test
-  sub = open(sub != null ? '/next_test' : '/first_test', 'GrizzlyFuzz')
-  if (sub == null) {
+  sub = open((sub !== undefined) ? '/next_test' : '/first_test', 'GrizzlyFuzz')
+  if (sub === undefined) {
     setBanner('Error! Could not open window. Blocked by the popup blocker?')
     grzDump('Could not open test! Blocked by the popup blocker?')
     return
@@ -57,14 +37,13 @@ function main() {
     // check if we are reopening the same page
     // this seems to be due to losing sync with the web server
     try { cur_loc = sub.location.toString() } catch(e) { cur_loc = prev_loc }
-    if (cur_loc == prev_loc) {
+    if (cur_loc === prev_loc) {
       if (++retries > 2) {
         grzDump('Lost sync! Closing Browser.')
         window.close()
         return
       }
-    }
-    else {
+    } else {
       prev_loc = cur_loc
       retries = 0
     }
@@ -77,6 +56,24 @@ function main() {
       sub.close()
     }
   }, time_limit)
+}
+
+let limit_tmr, close_after, retries, sub, time_limit, prev_loc
+for (let kv of location.hash.substr(1).split(',')) {
+  let [k, v] = kv.split('=')
+  if (k === 'timeout') {
+    time_limit = Number(v)
+  } else if (k === 'close_after') {
+    close_after = Number(v)
+  } else {
+    grzDump(`unknown arg: ${k}`)
+  }
+}
+if (time_limit === undefined || time_limit <= 0) {
+  grzDump('No time limit given, using default of 5s\n')
+  time_limit = 5000
+} else {
+  grzDump(`Using time limit of ${time_limit}\\n`)
 }
 
 window.onload = () => {
