@@ -259,18 +259,6 @@ class ReductionJob(object):
                 raise ReducerError("Unable to set time_limit in harness, please update pattern "
                                    "to match harness!")
             harness = new_harness
-            # insert the landing page loop
-            harness = harness.replace("<script>", "\n".join([
-                "<script>",
-                "let _reduce_tests = [",
-                "//DDBEGIN",
-                "'" + "',\n'".join(self._http_abspath(p) for p in pages) + "',",
-                "//DDEND",
-                "]",
-                "function _reduce_next(){",
-                "  return _reduce_tests.shift()",
-                "}"
-            ]))
             # make first test and next test grab from the array
             harness = harness.replace("'/first_test'", "_reduce_next()")
             harness = harness.replace("'/next_test'", "_reduce_next()")
@@ -280,10 +268,38 @@ class ReductionJob(object):
                                  r"if (req_url === undefined) window.close()\n\1",
                                  harness,
                                  flags=re.MULTILINE)
-            if new_harness == harness:
-                raise ReducerError("Unable to insert finish condition, please update pattern "
-                                   "to match harness!")
-            harness = new_harness
+            if new_harness != harness:
+                # insert the landing page loop
+                harness = new_harness.replace("<script>", "\n".join([
+                    "<script>",
+                    "let _reduce_tests = [",
+                    "//DDBEGIN",
+                    "'" + "',\n'".join(self._http_abspath(p) for p in pages) + "',",
+                    "//DDEND",
+                    "]",
+                    "function _reduce_next(){",
+                    "  return _reduce_tests.shift()",
+                    "}"
+                ]))
+            else:
+                # newer harness uses conditional operator in open() call
+                if re.match(r'open\(.*_reduce_next\(\)\s*:\s*_reduce_next\(\)', harness) is None:
+                    raise ReducerError("Unable to insert finish condition, please update pattern "
+                                       "to match harness!")
+                # insert the landing page loop V2
+                harness = harness.replace("<script>", "\n".join([
+                    "<script>",
+                    "let _reduce_tests = [",
+                    "//DDBEGIN",
+                    "'" + "',\n'".join(self._http_abspath(p) for p in pages) + "',",
+                    "//DDEND",
+                    "]",
+                    "function _reduce_next(){",
+                    "  if (!_reduce_tests.length) window.close()",
+                    "  return _reduce_tests.shift()",
+                    "}"
+                ]))
+
             harness_fp, harness_path = \
                 tempfile.mkstemp(prefix="harness_", suffix=".html", dir=self.tcroot)
             os.close(harness_fp)
