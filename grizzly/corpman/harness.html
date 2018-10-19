@@ -13,7 +13,7 @@ function setBanner(msg) {
 }
 
 function main() {
-  if (sub !== undefined && !sub.closed) {
+  if (sub !== null && !sub.closed) {
     setTimeout(main, 10)
     return
   }
@@ -24,8 +24,8 @@ function main() {
   }
 
   // open test
-  sub = open((sub !== undefined) ? '/next_test' : '/first_test', 'GrizzlyFuzz')
-  if (sub === undefined) {
+  sub = open((sub !== null) ? '/next_test' : '/first_test', 'GrizzlyFuzz')
+  if (sub === null) {
     setBanner('Error! Could not open window. Blocked by the popup blocker?')
     grzDump('Could not open test! Blocked by the popup blocker?')
     return
@@ -58,7 +58,8 @@ function main() {
   }, time_limit)
 }
 
-let limit_tmr, close_after, retries, sub, time_limit, prev_loc
+let limit_tmr, close_after, retries, time_limit, prev_loc
+let sub = null
 for (let kv of location.hash.substr(1).split(',')) {
   let [k, v] = kv.split('=')
   if (k === 'timeout') {
