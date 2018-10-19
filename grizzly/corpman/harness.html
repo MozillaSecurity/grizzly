@@ -58,7 +58,8 @@ function main() {
   }, time_limit)
 }
 
-let limit_tmr, close_after, retries, time_limit, prev_loc
+let close_after, limit_tmr, prev_loc, time_limit
+let retries = 0
 let sub = null
 for (let kv of location.hash.substr(1).split(',')) {
   let [k, v] = kv.split('=')
