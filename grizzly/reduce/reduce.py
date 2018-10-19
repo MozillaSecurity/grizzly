@@ -283,7 +283,7 @@ class ReductionJob(object):
                 ]))
             else:
                 # newer harness uses conditional operator in open() call
-                if re.match(r'open\(.*_reduce_next\(\)\s*:\s*_reduce_next\(\)', harness) is None:
+                if re.search(r'open\(.*_reduce_next\(\)\s*:\s*_reduce_next\(\)', harness) is None:
                     raise ReducerError("Unable to insert finish condition, please update pattern "
                                        "to match harness!")
                 # insert the landing page loop V2
