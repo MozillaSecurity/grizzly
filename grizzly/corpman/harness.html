@@ -37,17 +37,21 @@ function main() {
     // check if we are reopening the same page
     // this seems to be due to losing sync with the web server
     try { cur_loc = sub.location.toString() } catch(e) { cur_loc = prev_loc }
-    if (cur_loc === prev_loc) {
+    if (cur_loc === prev_loc && cur_loc !== orig_loc) {
       if (++retries > 2) {
         grzDump('Lost sync! Closing Browser.')
         window.close()
         return
       }
     } else {
+      if (orig_loc === undefined) {
+        // set origin location to detect if we are fuzzing (moving) or reducing
+        orig_loc = cur_loc;
+      }
       prev_loc = cur_loc
       retries = 0
     }
-    setTimeout(main, 10)
+    setTimeout(main, 0)
   })
   limit_tmr = setTimeout(() => {
     grzDump('Time limit exceeded\n')
@@ -58,7 +62,7 @@ function main() {
   }, time_limit)
 }
 
-let close_after, limit_tmr, prev_loc, time_limit
+let close_after, limit_tmr, orig_loc, prev_loc, time_limit
 let retries = 0
 let sub = null
 for (let kv of location.hash.substr(1).split(',')) {
