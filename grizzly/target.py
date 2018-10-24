@@ -118,12 +118,12 @@ class Target(object):
                 log.info("Target closed itself")
             elif (self._puppet.reason == FFPuppet.RC_WORKER
                   and "memory" in ignored
-                  and "ffp_worker_memory_limiter" in self._puppet.available_logs()):
+                  and "ffp_worker_memory_usage" in self._puppet.available_logs()):
                 status = self.RESULT_IGNORED
                 log.info("Memory limit exceeded")
             elif (self._puppet.reason == FFPuppet.RC_WORKER
                   and "log-limit" in ignored
-                  and "ffp_worker_log_size_limiter" in self._puppet.available_logs()):
+                  and "ffp_worker_log_size" in self._puppet.available_logs()):
                 status = self.RESULT_IGNORED
                 log.info("Log size limit exceeded")
             else:
