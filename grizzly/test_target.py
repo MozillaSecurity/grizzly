@@ -192,7 +192,7 @@ class TargetTests(unittest.TestCase):
         target.launch("launch_page")
         target._puppet.reason = FFPuppet.RC_WORKER  # pylint: disable=protected-access
         target._puppet.test_running = False  # pylint: disable=protected-access
-        target._puppet.test_available_logs = ["ffp_worker_memory_limiter"]  # pylint: disable=protected-access
+        target._puppet.test_available_logs = ["ffp_worker_memory_usage"]  # pylint: disable=protected-access
         self.assertEqual(target.detect_failure(["memory"], False), Target.RESULT_IGNORED)
         self.assertTrue(target.closed)
 
@@ -200,7 +200,7 @@ class TargetTests(unittest.TestCase):
         target.launch("launch_page")
         target._puppet.reason = FFPuppet.RC_WORKER  # pylint: disable=protected-access
         target._puppet.test_running = False  # pylint: disable=protected-access
-        target._puppet.test_available_logs = ["ffp_worker_log_size_limiter"]  # pylint: disable=protected-access
+        target._puppet.test_available_logs = ["ffp_worker_log_size"]  # pylint: disable=protected-access
         self.assertEqual(target.detect_failure(["log-limit"], False), Target.RESULT_IGNORED)
         self.assertTrue(target.closed)
 

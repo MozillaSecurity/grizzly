@@ -113,22 +113,25 @@ class Target(object):
         # attempt to detect a failure
         status = self.RESULT_NONE
         if not self._puppet.is_running():
-            self._puppet.close()
-            if self._puppet.reason == FFPuppet.RC_EXITED:
-                log.info("Target closed itself")
-            elif (self._puppet.reason == FFPuppet.RC_WORKER
-                  and "memory" in ignored
-                  and "ffp_worker_memory_usage" in self._puppet.available_logs()):
-                status = self.RESULT_IGNORED
-                log.info("Memory limit exceeded")
-            elif (self._puppet.reason == FFPuppet.RC_WORKER
-                  and "log-limit" in ignored
-                  and "ffp_worker_log_size" in self._puppet.available_logs()):
-                status = self.RESULT_IGNORED
-                log.info("Log size limit exceeded")
+            if self._puppet.reason == FFPuppet.RC_CLOSED:
+                log.info("target.close() was called")
             else:
-                log.debug("failure detected")
-                status = self.RESULT_FAILURE
+                self._puppet.close()
+                if self._puppet.reason == FFPuppet.RC_EXITED:
+                    log.info("Target closed itself")
+                elif (self._puppet.reason == FFPuppet.RC_WORKER
+                      and "memory" in ignored
+                      and "ffp_worker_memory_usage" in self._puppet.available_logs()):
+                    status = self.RESULT_IGNORED
+                    log.info("Memory limit exceeded")
+                elif (self._puppet.reason == FFPuppet.RC_WORKER
+                      and "log-limit" in ignored
+                      and "ffp_worker_log_size" in self._puppet.available_logs()):
+                    status = self.RESULT_IGNORED
+                    log.info("Log size limit exceeded")
+                else:
+                    log.debug("failure detected")
+                    status = self.RESULT_FAILURE
         elif not self._puppet.is_healthy():
             # this should be e10s only
             status = self.RESULT_FAILURE

@@ -263,6 +263,10 @@ class Interesting(object):
                 harness = os.path.join(os.path.dirname(__file__), '..', 'corpman', 'harness.html')
                 with open(harness, 'rb') as harness_fp:
                     harness = harness_fp.read()
+                def _dyn_resp_close():
+                    self.target.close()
+                    return b"<h1>Close Browser</h1>"
+                self.server.add_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
                 self.server.add_dynamic_response("/harness", lambda: harness, mime_type="text/html")
                 self.server.set_redirect("/first_test", str(self.landing_page), required=True)
 

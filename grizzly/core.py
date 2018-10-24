@@ -74,7 +74,14 @@ class Session(object):
             self.server.add_include(url_path, target_path)
         # add dynamic responses to the server
         for dyn_rsp in self.iomanager.server_map.dynamic_responses:
-            self.server.add_dynamic_response(dyn_rsp["url"], dyn_rsp["callback"], dyn_rsp["mime"])
+            self.server.add_dynamic_response(
+                dyn_rsp["url"],
+                dyn_rsp["callback"],
+                mime_type=dyn_rsp["mime"])
+        def _dyn_resp_close():
+            self.target.close()
+            return b"<h1>Close Browser</h1>"
+        self.server.add_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
 
 
     def close(self):

@@ -19,7 +19,7 @@ function main() {
   }
   if (close_after !== undefined && close_after-- < 1) {
     grzDump('Hit close limit.\n')
-    window.close()
+    window.location = '/close_browser'
     return
   }
 
@@ -40,7 +40,7 @@ function main() {
     if (cur_loc === prev_loc && cur_loc !== orig_loc) {
       if (++retries > 2) {
         grzDump('Lost sync! Closing Browser.')
-        window.close()
+        window.location = '/close_browser'
         return
       }
     } else {
