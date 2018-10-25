@@ -18,10 +18,11 @@ class FakePuppet(object):
         self.reason = FFPuppet.RC_CLOSED
         self.running = False
         self._launches = 0
+        self.test_check_abort = False  # used to control testing
         self.test_crashed = False  # used to control testing
         self.test_running = False  # used to control testing
         self.test_available_logs = list()  # used to control testing
-        self.test_received_signal = False
+
 
 
     def available_logs(self):
@@ -46,12 +47,20 @@ class FakePuppet(object):
     def close(self):
         # the reason code is dependent on the state of test_crashed and test_running
         # this MUST model FFPuppet.close()
+        if self.reason is not None:
+            self.test_check_abort = False
+            self.test_crashed = False
+            self.test_running = False
+            return
         if self.test_crashed:
             self.reason = FFPuppet.RC_ALERT
+        elif self.test_check_abort:
+            self.reason = FFPuppet.RC_WORKER
         elif self.test_running:
             self.reason = FFPuppet.RC_CLOSED
-        elif self.reason != FFPuppet.RC_WORKER:
+        else:
             self.reason = FFPuppet.RC_EXITED
+        self.test_check_abort = False
         self.test_crashed = False
         self.test_running = False
 
@@ -61,7 +70,7 @@ class FakePuppet(object):
 
 
     def is_healthy(self):
-        return not self.test_crashed and self.test_running
+        return not self.test_crashed and self.test_running and not self.test_check_abort
 
 
     def is_running(self):
@@ -149,9 +158,18 @@ class TargetTests(unittest.TestCase):
         self.addCleanup(target.cleanup)
         target.launch("launch_target_page")
         # no failures
+        self.assertEqual(target.detect_failure([], False), Target.RESULT_NONE)
         self.assertEqual(target.detect_failure(["memory"], False), Target.RESULT_NONE)
+        self.assertFalse(target.closed)
+        self.assertIsNone(target._puppet.reason)  # pylint: disable=protected-access
+        # test close
+        target.close()  # pylint: disable=protected-access
+        self.assertEqual(target.detect_failure([], False), Target.RESULT_NONE)
+        self.assertTrue(target.closed)
+        self.assertEqual(target._puppet.reason, FFPuppet.RC_CLOSED)  # pylint: disable=protected-access
 
         # test single process crash
+        target.launch("launch_page")
         target._puppet.test_crashed = True  # pylint: disable=protected-access
         target._puppet.test_running = False  # pylint: disable=protected-access
         self.assertEqual(target.detect_failure([], False), Target.RESULT_FAILURE)
@@ -161,12 +179,14 @@ class TargetTests(unittest.TestCase):
         target.launch("launch_page")
         target._puppet.test_crashed = True  # pylint: disable=protected-access
         self.assertEqual(target.detect_failure([], False), Target.RESULT_FAILURE)
+        self.assertEqual(target._puppet.reason, FFPuppet.RC_ALERT)  # pylint: disable=protected-access
         self.assertTrue(target.closed)
 
         # test exit with no crash logs
         target.launch("launch_page")
         target._puppet.test_running = False  # pylint: disable=protected-access
         self.assertEqual(target.detect_failure([], False), Target.RESULT_NONE)
+        self.assertEqual(target._puppet.reason, FFPuppet.RC_EXITED)  # pylint: disable=protected-access
         self.assertTrue(target.closed)
 
         # test timeout
@@ -183,26 +203,26 @@ class TargetTests(unittest.TestCase):
 
         # test worker
         target.launch("launch_page")
-        target._puppet.reason = FFPuppet.RC_WORKER  # pylint: disable=protected-access
-        target._puppet.test_running = False  # pylint: disable=protected-access
+        target._puppet.test_check_abort = True  # pylint: disable=protected-access
         self.assertEqual(target.detect_failure([], False), Target.RESULT_FAILURE)
+        self.assertEqual(target._puppet.reason, FFPuppet.RC_WORKER)  # pylint: disable=protected-access
         self.assertTrue(target.closed)
 
         # test memory ignored
         target.launch("launch_page")
-        target._puppet.reason = FFPuppet.RC_WORKER  # pylint: disable=protected-access
-        target._puppet.test_running = False  # pylint: disable=protected-access
+        target._puppet.test_check_abort = True  # pylint: disable=protected-access
         target._puppet.test_available_logs = ["ffp_worker_memory_usage"]  # pylint: disable=protected-access
         self.assertEqual(target.detect_failure(["memory"], False), Target.RESULT_IGNORED)
+        self.assertEqual(target._puppet.reason, FFPuppet.RC_WORKER)  # pylint: disable=protected-access
         self.assertTrue(target.closed)
 
         # test log-limit ignored
         target.launch("launch_page")
-        target._puppet.reason = FFPuppet.RC_WORKER  # pylint: disable=protected-access
-        target._puppet.test_running = False  # pylint: disable=protected-access
+        target._puppet.test_check_abort = True  # pylint: disable=protected-access
         target._puppet.test_available_logs = ["ffp_worker_log_size"]  # pylint: disable=protected-access
         self.assertEqual(target.detect_failure(["log-limit"], False), Target.RESULT_IGNORED)
         self.assertTrue(target.closed)
+
 
     def test_05(self):
         "test dump_coverage()"

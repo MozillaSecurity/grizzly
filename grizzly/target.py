@@ -110,37 +110,34 @@ class Target(object):
 
 
     def detect_failure(self, ignored, was_timeout):
-        # attempt to detect a failure
         status = self.RESULT_NONE
-        if not self._puppet.is_running():
+        is_healthy = self._puppet.is_healthy()
+        # check if there has been a crash, hang, etc...
+        if not is_healthy or was_timeout:
+            if self._puppet.is_running():
+                log.info("Terminating browser...")
+            self._puppet.close()
+        # if something has happened figure out what
+        if not is_healthy:
             if self._puppet.reason == FFPuppet.RC_CLOSED:
                 log.info("target.close() was called")
+            elif self._puppet.reason == FFPuppet.RC_EXITED:
+                log.info("Target closed itself")
+            elif (self._puppet.reason == FFPuppet.RC_WORKER
+                  and "memory" in ignored
+                  and "ffp_worker_memory_usage" in self._puppet.available_logs()):
+                status = self.RESULT_IGNORED
+                log.info("Memory limit exceeded")
+            elif (self._puppet.reason == FFPuppet.RC_WORKER
+                  and "log-limit" in ignored
+                  and "ffp_worker_log_size" in self._puppet.available_logs()):
+                status = self.RESULT_IGNORED
+                log.info("Log size limit exceeded")
             else:
-                self._puppet.close()
-                if self._puppet.reason == FFPuppet.RC_EXITED:
-                    log.info("Target closed itself")
-                elif (self._puppet.reason == FFPuppet.RC_WORKER
-                      and "memory" in ignored
-                      and "ffp_worker_memory_usage" in self._puppet.available_logs()):
-                    status = self.RESULT_IGNORED
-                    log.info("Memory limit exceeded")
-                elif (self._puppet.reason == FFPuppet.RC_WORKER
-                      and "log-limit" in ignored
-                      and "ffp_worker_log_size" in self._puppet.available_logs()):
-                    status = self.RESULT_IGNORED
-                    log.info("Log size limit exceeded")
-                else:
-                    log.debug("failure detected")
-                    status = self.RESULT_FAILURE
-        elif not self._puppet.is_healthy():
-            # this should be e10s only
-            status = self.RESULT_FAILURE
-            log.info("Browser is alive but has crash reports. Terminating...")
-            self._puppet.close()
+                log.debug("failure detected, ffpuppet return code: %r", self._puppet.reason)
+                status = self.RESULT_FAILURE
         elif was_timeout:
-            log.debug("timeout detected")
-            self._puppet.close()
-            # handle ignored timeouts
+            log.debug("timeout detected, potential browser hang")
             if ignored and "timeout" in ignored:
                 status = self.RESULT_IGNORED
                 log.info("Timed out")
