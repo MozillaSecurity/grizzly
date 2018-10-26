@@ -3,6 +3,7 @@ import os
 import shutil
 import signal
 import tempfile
+import threading
 import time
 
 from ffpuppet import FFPuppet, LaunchError
@@ -36,6 +37,7 @@ class Target(object):
         self.rl_reset = max(relaunch, 1)
         self.rr_path = None  # TODO: this should likely be in FFPuppet
         self.use_rr = use_rr
+        self._lock = threading.Lock()
 
         assert self.binary is not None and os.path.isfile(self.binary)
         assert self.prefs is None or os.path.isfile(self.prefs)
@@ -57,11 +59,15 @@ class Target(object):
 
 
     def cleanup(self):
-        self._puppet.clean_up()
+        # prevent parallel calls to FFPuppet.clean_up()
+        with self._lock:
+            self._puppet.clean_up()
 
 
     def close(self):
-        self._puppet.close()
+        # prevent parallel calls to FFPuppet.close()
+        with self._lock:
+            self._puppet.close()
 
 
     @property
@@ -85,7 +91,7 @@ class Target(object):
 
         if self._puppet.is_healthy():
             log.info("Forcing target relaunch")
-        self._puppet.close()
+        self.close()
 
 
     def poll_for_idle(self, threshold, interval):
@@ -116,7 +122,7 @@ class Target(object):
         if not is_healthy or was_timeout:
             if self._puppet.is_running():
                 log.info("Terminating browser...")
-            self._puppet.close()
+            self.close()
         # if something has happened figure out what
         if not is_healthy:
             if self._puppet.reason == FFPuppet.RC_CLOSED:
@@ -192,7 +198,7 @@ class Target(object):
                 extension=self.extension,
                 env_mod=env_mod)
         except LaunchError:
-            self._puppet.close()
+            self.close()
             raise
 
 
