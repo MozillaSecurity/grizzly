@@ -19,6 +19,7 @@ import socket
 import sys
 import threading
 import time
+import traceback
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -543,11 +544,9 @@ class Sapphire(object):
             # check for exceptions from workers
             if not job.exceptions.empty():
                 exc_type, exc_obj, exc_tb = job.exceptions.get()
-                log.warning(
-                    "[sapphire worker] %s: %r (line %d)",
-                    exc_type.__name__,
-                    exc_obj,
-                    exc_tb.tb_lineno)
+                log.error(
+                    "Sapphire worker exception:\n%s",
+                    "".join(traceback.format_exception(exc_type, exc_obj, exc_tb)))
                 raise exc_obj  # re-raise exception from worker
         finally:
             if status is None:
