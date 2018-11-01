@@ -19,20 +19,20 @@ try:
     from FTB.ProgramConfiguration import ProgramConfiguration
     from FTB.Signatures.CrashInfo import CrashInfo
     import fasteners
-    _fm_import_error = None
+    _fm_import_error = None  # pylint: disable=invalid-name
 except ImportError as err:
-    _fm_import_error = err
+    _fm_import_error = err  # pylint: disable=invalid-name
 
 # check if boto is available for S3FuzzManager reporter
 try:
     import boto3
     import botocore
-    _boto_import_error = None
+    _boto_import_error = None  # pylint: disable=invalid-name
     logging.getLogger("botocore").setLevel(logging.WARNING)
     logging.getLogger("boto3").setLevel(logging.WARNING)
     logging.getLogger("s3transfer").setLevel(logging.WARNING)
 except ImportError as err:
-    _boto_import_error = err
+    _boto_import_error = err  # pylint: disable=invalid-name
 
 from . import stack_hasher
 
@@ -165,7 +165,7 @@ class Report(object):
         # prefer ASan logs over minidump logs
         if logs["aux"] is None:
             re_dump_req = re.compile(r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump")
-            for fname in [log_file for log_file in log_files if "minidump" in log_file]:
+            for fname in (log_file for log_file in log_files if "minidump" in log_file):
                 with open(os.path.join(log_path, fname), "r") as log_fp:
                     log_data = log_fp.read(4096)
                     # this will select log that contains "Crash|SIGSEGV|" or
@@ -187,10 +187,8 @@ class Report(object):
         for fname in log_files:
             if "stderr" in fname:
                 logs["stderr"] = fname
-                continue
-            if "stdout" in fname:
+            elif "stdout" in fname:
                 logs["stdout"] = fname
-                continue
 
         return logs
 
@@ -198,12 +196,10 @@ class Report(object):
     @staticmethod
     def tail(in_file, size_limit):
         assert size_limit > 0
+        if os.stat(in_file).st_size <= size_limit:
+            return
         with open(in_file, "rb") as in_fp:
-            # check if tail is needed
             in_fp.seek(0, os.SEEK_END)
-            if in_fp.tell() <= size_limit:
-                return # no tail needed
-            # perform tail operation
             dump_pos = max((in_fp.tell() - size_limit), 0)
             in_fp.seek(dump_pos)
             out_fd, out_file = tempfile.mkstemp()
@@ -228,15 +224,21 @@ class Reporter(object):
 
     @property
     def major(self):
-        if self.report is not None and self.report.stack is not None and self.report.stack.frames:
-            return self.report.stack.major
+        try:
+            if self.report.stack.frames:
+                return self.report.stack.major
+        except AttributeError:
+            pass
         return self.DEFAULT_MAJOR
 
 
     @property
     def minor(self):
-        if self.report is not None and self.report.stack is not None and self.report.stack.frames:
-            return self.report.stack.minor
+        try:
+            if self.report.stack.frames:
+                return self.report.stack.minor
+        except AttributeError:
+            pass
         return self.DEFAULT_MINOR
 
 

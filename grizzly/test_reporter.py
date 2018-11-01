@@ -23,9 +23,6 @@ class TestCase(unittest.TestCase):
 
     if sys.version_info.major == 2:
 
-        def assertRegex(self, *args, **kwds):
-            return self.assertRegexpMatches(*args, **kwds)
-
         def assertRaisesRegex(self, *args, **kwds):
             return self.assertRaisesRegexp(*args, **kwds)
 
@@ -283,19 +280,19 @@ class ReporterTests(TestCase):
         reporter = Reporter()
         self.assertIsNotNone(Reporter.prefix)
         self.assertEqual(reporter.log_limit, 0)
-        with self.assertRaisesRegexp(IOError, "No such directory 'fake_dir'"):
+        with self.assertRaisesRegex(IOError, "No such directory 'fake_dir'"):
             reporter.submit("fake_dir", [])
 
         reporter = Reporter(1024)
         self.assertEqual(reporter.log_limit, 1024)
-        with self.assertRaisesRegexp(IOError, "No logs found in"):
+        with self.assertRaisesRegex(IOError, "No logs found in"):
             reporter.submit(self.tmpdir, [])
 
         test_log = os.path.join(self.tmpdir, "test.log.txt")
         with open(test_log, "w") as log_fp:
             log_fp.write("test log...\n123\n\n")
         reporter = Reporter()
-        with self.assertRaisesRegexp(NotImplementedError, "_submit must be implemented in the subclass"):
+        with self.assertRaisesRegex(NotImplementedError, "_submit must be implemented in the subclass"):
             reporter.submit(self.tmpdir, [])
 
     def test_02(self):
