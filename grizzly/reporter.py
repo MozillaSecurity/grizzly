@@ -45,7 +45,9 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class Report(object):
-    def __init__(self, log_path, log_map, size_limit=0):
+    MAX_LOG_SIZE = 1048576  # 1MB
+
+    def __init__(self, log_path, log_map, size_limit=MAX_LOG_SIZE):
         assert isinstance(log_map, dict)
         self.path = log_path
         self.log_aux = log_map.get("aux") if log_map is not None else None
@@ -54,17 +56,20 @@ class Report(object):
 
         # look through logs one by one until we find a stack
         # NOTE: order matters aux->stderr->stdout
-        stack = None
         for scan_log in (self.log_aux, self.log_err, self.log_out):
             if scan_log is None:
                 continue
             with open(os.path.join(log_path, scan_log), "rb") as log_fp:
                 stack = stack_hasher.Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
             if stack.frames:
+                self.stack = stack
                 break
-        self.stack = stack if stack is not None and stack.frames else None
+        else:
+            self.stack = None
 
-        if size_limit > 0 and os.path.isdir(log_path):
+        if size_limit < 1:
+            log.warning("No limit set on report log size!")
+        elif os.path.isdir(log_path):
             for fname in os.listdir(log_path):
                 log_file_path = os.path.join(log_path, fname)
                 if os.path.isfile(log_file_path):
@@ -93,7 +98,7 @@ class Report(object):
 
 
     @classmethod
-    def from_path(cls, path, size_limit=0):
+    def from_path(cls, path, size_limit=MAX_LOG_SIZE):
         return cls(path, Report.select_logs(path), size_limit=size_limit)
 
 
