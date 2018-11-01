@@ -403,8 +403,12 @@ class FuzzManagerReporter(Reporter):
         log_file = os.path.join(self.report.path, self.report.preferred)
         with open(log_file, "rb") as log_fp:
             log_data = log_fp.read().decode("utf-8", errors="ignore")
-        if "ERROR: Failed to mmap" in log_data and "#0 " not in log_data:
-            return True  # Likely a system OOM
+        mem_errs = (
+            "ERROR: Failed to mmap",
+            ": AddressSanitizer failed to allocate")
+        for msg in mem_errs:
+            if msg in log_data and "#0 " not in log_data:
+                return True
         return False
 
 
