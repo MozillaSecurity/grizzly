@@ -719,7 +719,7 @@ class ServeJobTests(unittest.TestCase):
     def test_01(self):
         "test creating an empty ServeJob"
         sj = ServeJob(self.test_dir, dict(), dict(), dict())
-        self.assertEqual(sj.status, SERVED_NONE)
+        self.assertEqual(sj.status, SERVED_ALL)
         self.assertIsNone(sj.check_url(""))
         self.assertIsNone(sj.check_url("test"))
         self.assertIsNone(sj.check_url("test/test/"))
@@ -837,7 +837,7 @@ class ServeJobTests(unittest.TestCase):
             "cb1": Resource(ServeJob.URL_DYNAMIC, _dyn_test_cb, mime="mime_type"),
             "cb2": Resource(ServeJob.URL_DYNAMIC, _dyn_test_cb, mime="mime_type"),}
         sj = ServeJob(srv_root, dynamics, dict(), dict())
-        self.assertEqual(sj.status, SERVED_NONE)
+        self.assertEqual(sj.status, SERVED_ALL)
         self.assertEqual(sj.pending_files(), 0)
         resource = sj.check_url("cb1")
         self.assertEqual(resource.type, sj.URL_DYNAMIC)
@@ -882,7 +882,7 @@ class ResponseDataTests(unittest.TestCase):
         self.assertIn("400!", output)
 
     def test_04(self):
-        "test _4xx_page() without close timeout"
+        "test _4xx_page() with close timeout"
         try:
             Sapphire.CLOSE_CLIENT_ERROR = 10
             output = Sapphire._4xx_page(404, "Not Found")  # pylint: disable=protected-access

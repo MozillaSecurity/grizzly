@@ -39,12 +39,13 @@ WorkerHandle = namedtuple("WorkerHandle", "conn thread")
 
 
 class Resource(object):
+    __slots__ = ("mime", "required", "target", "type")
+
     def __init__(self, resource_type, target, mime=None, required=False):
         self.mime = mime
         self.required = required
         self.target = target
         self.type = resource_type
-        self._local_path = None
 
 
 class ServeJob(object):
@@ -72,6 +73,7 @@ class ServeJob(object):
 
     def _build_queue(self, optional_files):
         # build file list to track files that must be served
+        # this is intended to only be called once by __init__()
         for d_name, _, filenames in os.walk(self.base_path, followlinks=False):
             for f_name in filenames:
                 # do not add optional files to queue of required files
@@ -79,21 +81,18 @@ class ServeJob(object):
                     log.debug("optional: %r", f_name)
                     continue
                 file_path = os.path.abspath(os.path.join(d_name, f_name))
-                with self._pending.lock:
-                    self._pending.files.add(file_path)
+                self._pending.files.add(file_path)
                 log.debug("required: %r", f_name)
 
         for redirect, resource in self.url_map.redirect.items():
             if resource.required:
-                with self._pending.lock:
-                    self._pending.files.add(redirect)
+                self._pending.files.add(redirect)
             log.debug(
-                "%s: %r -> %r", "required" if resource.required else "optional",
+                "%s: %r -> %r",
+                "required" if resource.required else "optional",
                 redirect,
                 resource.target)
-
-        with self._pending.lock:
-            self.initial_queue_size = len(self._pending.files)
+        self.initial_queue_size = len(self._pending.files)
         log.debug("sapphire has %d files required to serve", self.initial_queue_size)
 
 
@@ -101,9 +100,9 @@ class ServeJob(object):
         log.debug("check_url with request %r", request)
         if request in self.url_map.redirect:
             return self.url_map.redirect[request]
-        elif request in self.url_map.dynamic:
+        if request in self.url_map.dynamic:
             return self.url_map.dynamic[request]
-        elif self.url_map.include:
+        if self.url_map.include:
             check_includes = False
             for include in self.url_map.include:
                 if include != "":
@@ -177,13 +176,12 @@ class ServeJob(object):
 
     @property
     def status(self):
-        if self.initial_queue_size > 0:
-            with self._pending.lock:
-                queue_size = len(self._pending.files)
-            if queue_size == 0:
-                return SERVED_ALL
-            elif queue_size < self.initial_queue_size:
-                return SERVED_REQUEST
+        with self._pending.lock:
+            queue_size = len(self._pending.files)
+        if queue_size == 0:
+            return SERVED_ALL
+        if queue_size < self.initial_queue_size:
+            return SERVED_REQUEST
         return SERVED_NONE
 
 
@@ -192,7 +190,7 @@ class Sapphire(object):
     CLOSE_CLIENT_ERROR = None  # used to automatically close client error (4XX code) pages
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
-    WORKER_POOL_LIMIT = 20
+    WORKER_POOL_LIMIT = 10
 
     _request = re.compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
 
@@ -223,26 +221,20 @@ class Sapphire(object):
 
     @staticmethod
     def _4xx_page(code, hdr_msg):
-        assert code < 500 and code > 399
-        assert hdr_msg is not None
-
-        close_timeout = Sapphire.CLOSE_CLIENT_ERROR
-        assert close_timeout is None or close_timeout > -1
-
-        page = ["HTTP/1.1 %d %s\r\n" % (code, hdr_msg)]
-        if close_timeout is not None:
+        assert 399 < code < 500
+        if Sapphire.CLOSE_CLIENT_ERROR is not None:
+            assert Sapphire.CLOSE_CLIENT_ERROR >= 0
+            close_timeout = Sapphire.CLOSE_CLIENT_ERROR
             content = "<script>window.setTimeout(window.close, %d)</script>\n" \
                       "<body style=\"background-color:#ffffe0\">\n" \
                       "<h3>%d! - Calling window.close() in %0.1f seconds</h3>\n" \
                       "</body>\n" % (int(close_timeout * 1000), code, close_timeout)
         else:
             content = "<h3>%d!</h3>" % code
-        page.append("Content-Length: %d\r\n" % len(content))
-        page.append("Content-Type: text/html\r\n")
-        page.append("Connection: close\r\n\r\n")
-        page.append(content)
-
-        return "".join(page)
+        return "HTTP/1.1 %d %s\r\n" \
+               "Content-Length: %d\r\n" \
+               "Content-Type: text/html\r\n" \
+               "Connection: close\r\n\r\n%s" % (code, hdr_msg, len(content), content)
 
 
     @staticmethod
@@ -269,7 +261,6 @@ class Sapphire(object):
                     continue
                 raise
             break
-
         return sock
 
 
@@ -331,8 +322,8 @@ class Sapphire(object):
                 if resourse is None:
                     file_to_serve = None  # 404
                 elif resourse.type == serv_job.URL_REDIRECT:
-                    finish_job = serv_job.remove_pending(request)
                     conn.sendall(Sapphire._307_redirect(resourse.target).encode("ascii"))
+                    finish_job = serv_job.remove_pending(request)
                     log.debug(
                         "307 %r -> %r (%d to go)",
                         request,
@@ -381,11 +372,11 @@ class Sapphire(object):
                     conn.sendall(in_fp.read(Sapphire.DEFAULT_TX_SIZE))
                     offset = in_fp.tell()
 
-            # remove file from the pending queue
-            finish_job = serv_job.remove_pending(file_to_serve)
             # update list of served files
             with serv_job._served.lock:
                 serv_job._served.files[file_to_serve] += 1
+            # remove file from the pending queue
+            finish_job = serv_job.remove_pending(file_to_serve)
 
             log.debug("200 %r (%d to go)", file_to_serve, serv_job.pending_files())
 
@@ -465,6 +456,7 @@ class Sapphire(object):
             log.debug("shutting down and cleaning up workers")
             for worker in worker_pool:
                 worker.conn.close()
+            for worker in worker_pool:
                 worker.thread.join()
 
 
@@ -519,14 +511,13 @@ class Sapphire(object):
             try:
                 listener.start()
             except threading.ThreadError:
-                tries -= 1
                 log.warning(
                     "ThreadError launching listener, active threads: %d",
                     threading.active_count())
-                if tries > 0:
-                    time.sleep(0.1)  # wait for system resources to free up
-                    continue
-                raise
+                tries -= 1
+                if tries < 1:
+                    raise
+                time.sleep(0.1)  # wait for system resources to free up
             break
 
         status = None
@@ -561,8 +552,6 @@ class Sapphire(object):
 
     @staticmethod
     def _check_potential_url(url_path):
-        if not isinstance(url_path, str):
-            raise TypeError("url_path must be of type 'str' not %r" % type(url_path))
         url_path = url_path.strip("/")
         if re.search(r"\W", url_path) is not None:
             raise RuntimeError("Invalid character, only alpha-numeric characters accepted.")
