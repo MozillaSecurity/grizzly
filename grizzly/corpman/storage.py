@@ -15,7 +15,6 @@ class InputFile(object):
     CACHE_LIMIT = 0x100000  # 1MB
 
     def __init__(self, file_name):
-        assert file_name is not None
         self.extension = None
         self.file_name = file_name
         self._fp = None
@@ -162,12 +161,15 @@ class TestFile(object):
     CACHE_LIMIT = 0x40000  # data cache limit per file: 256KB
     XFER_BUF = 0x10000  # transfer buffer size: 64KB
 
+    __slots__ = ("_fp", "file_name")
+
     def __init__(self, file_name):
-        self._fp = tempfile.SpooledTemporaryFile(max_size=self.CACHE_LIMIT, mode="r+b", prefix='grz_tf_')
+        self._fp = tempfile.SpooledTemporaryFile(max_size=self.CACHE_LIMIT, prefix='grz_tf_')
         # XXX: This is a naive fix for a larger path issue
         if "\\" in file_name:
             file_name = file_name.replace("\\", "/")
-        file_name = file_name.lstrip("/")
+        if file_name.startswith("/"):
+            file_name = file_name.lstrip("/")
         self.file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
 
 
