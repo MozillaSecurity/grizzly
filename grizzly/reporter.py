@@ -48,11 +48,19 @@ class Report(object):
     MAX_LOG_SIZE = 1048576  # 1MB
 
     def __init__(self, log_path, log_map, size_limit=MAX_LOG_SIZE):
-        assert isinstance(log_map, dict)
         self.path = log_path
         self.log_aux = log_map.get("aux") if log_map is not None else None
         self.log_err = log_map.get("stderr") if log_map is not None else None
         self.log_out = log_map.get("stdout") if log_map is not None else None
+
+        # tail logs if needed
+        if size_limit < 1:
+            log.warning("No limit set on report log size!")
+        elif os.path.isdir(log_path):
+            for fname in os.listdir(log_path):
+                log_file_path = os.path.join(log_path, fname)
+                if os.path.isfile(log_file_path):
+                    Report.tail(log_file_path, size_limit)
 
         # look through logs one by one until we find a stack
         # NOTE: order matters aux->stderr->stdout
@@ -66,14 +74,6 @@ class Report(object):
                 break
         else:
             self.stack = None
-
-        if size_limit < 1:
-            log.warning("No limit set on report log size!")
-        elif os.path.isdir(log_path):
-            for fname in os.listdir(log_path):
-                log_file_path = os.path.join(log_path, fname)
-                if os.path.isfile(log_file_path):
-                    Report.tail(log_file_path, size_limit)
 
 
     def create_crash_info(self, target_binary):
