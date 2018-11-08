@@ -412,7 +412,7 @@ class Sapphire(object):
                         args=(w_conn, serv_job))
                     w_thread.start()
                     worker_pool.append(WorkerHandle(conn=w_conn, thread=w_thread))
-                    pool_size = len(worker_pool)
+                    pool_size += 1
                 except socket.timeout:
                     pass
                 except socket.error:
@@ -543,7 +543,8 @@ class Sapphire(object):
             if status is None:
                 status = job.status
             job.finish()
-            listener.join()
+            if listener.ident is not None:
+                listener.join()
 
         self._redirect_map.clear()
 
