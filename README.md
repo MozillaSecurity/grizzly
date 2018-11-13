@@ -17,13 +17,14 @@ Installation
 The following modules are required:
 * https://github.com/MozillaSecurity/ffpuppet
 * https://github.com/giampaolo/psutil
-To support reporting results via FuzzManager:
-https://github.com/MozillaSecurity/FuzzManager
 
-FFPuppet must be installed first. Steps can be found [here](https://github.com/MozillaSecurity/ffpuppet#to-install-after-cloning-the-repository)
+The FuzzManager module is required to support reporting results via FM:
+ * https://github.com/MozillaSecurity/FuzzManager
+
+FFPuppet must be installed first. Steps can be found [here](https://github.com/MozillaSecurity/ffpuppet#installation)
 
 ##### To install after cloning the repository
-pip install --user -e <grizzly_repository>
+    pip install --user -e <grizzly_repository>
 
 Usage
 -----
