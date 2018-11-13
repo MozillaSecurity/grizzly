@@ -1,10 +1,14 @@
 Grizzly
 =======
 
-Grizzly is a general purpose browser fuzzer made of up of multiple modules. The intention is to create a platform that can be extended by the creation of corpus managers to fuzz different components of the browsers.
-Grizzly is not meant to be much more than the automation glue code between the modules.
-A corpus manager is used to wrap an existing fuzzer to allow it to be run with grizzly. Corpus managers take the content output by fuzzers and transform it into a format that can be served to and processed by a browser.
-Cross platform compatibility should be maintained for Windows, Linux and OSX. However not all features may be available.
+Grizzly is a general purpose browser fuzzer made up of multiple modules.
+The intention is to create a platform that can be extended by the creation of adapters to support
+different fuzzers that target the browser.
+An adapter is used to wrap an existing fuzzer to allow it to be run via Grizzly.
+Adapters take the content output by fuzzers and transform it (if needed) into a format that can
+be served to and processed by the browser.
+Cross platform compatibility should be maintained for Windows, Linux and OSX.
+However not all features may be available.
 
 NOTE: Grizzly is under development at the moment and may still undergo major changes.
 
@@ -12,67 +16,75 @@ Installation
 ------------
 The following modules are required:
 * https://github.com/MozillaSecurity/ffpuppet
-* https://github.com/MozillaSecurity/avalanche
+* https://github.com/giampaolo/psutil
+To support reporting results via FuzzManager:
+https://github.com/MozillaSecurity/FuzzManager
 
-For now add symlinks to the project folders and files as needed. NOTE: This will change. I am open to suggestions for how to make this simple. Perhaps submodules?
+FFPuppet must be installed first. Steps can be found [here](https://github.com/MozillaSecurity/ffpuppet#to-install-after-cloning-the-repository)
 
-```
-cd grizzly
-ln -s <path_to_ffpuppet_dir> ffpuppet
-cd corpman
-ln -s <path_to_avalanche_dir> avalanche
-
-```
+##### To install after cloning the repository
+pip install --user -e <grizzly_repository>
 
 Usage
 -----
 ```
-usage: grizzly.py [-h] [-a AGGRESSION] [-c CACHE] [-e EXTENSION]
-                  [--fuzzmanager] [--ignore-timeouts]
-                  [--launch-timeout LAUNCH_TIMEOUT] [-m MEMORY] [--mime MIME]
-                  [-p PREFS] [-q] [-v] [--replay] [--relaunch RELAUNCH]
-                  [--rotate ROTATE] [-s] [-t TIMEOUT] [--valgrind] [--windbg]
-                  [--xvfb]
-                  binary input corpus_manager
+$ python -m grizzly -h
+usage: __main__.py
+                   [--accepted-extensions ACCEPTED_EXTENSIONS [ACCEPTED_EXTENSIONS ...]]
+                   [-c CACHE] [--coverage] [-e EXTENSION] [--fuzzmanager] [-h]
+                   [--ignore IGNORE [IGNORE ...]]
+                   [--launch-timeout LAUNCH_TIMEOUT] [--log-limit LOG_LIMIT]
+                   [-m MEMORY] [--mime MIME] [-p PREFS] [--relaunch RELAUNCH]
+                   [--rr] [--s3-fuzzmanager] [--soft-asserts] [-t TIMEOUT]
+                   [--tool TOOL] [--valgrind] [-w WORKING_PATH] [--xvfb]
+                   binary input adapter
 
 positional arguments:
   binary                Firefox binary to run
   input                 Test case or directory containing test cases
-  corpus_manager        Available corpus managers: audio, image,
-                        video, font ... all available corpus managers
+  adapter               Available adapters: <list of adapters>
 
 optional arguments:
-  -h, --help            show this help message and exit
-  -a AGGRESSION, --aggression AGGRESSION
-                        0.001 == 1/1000 (default: 0.001)
+  --accepted-extensions ACCEPTED_EXTENSIONS [ACCEPTED_EXTENSIONS ...]
+                        Space separated list of supported file extensions. ie:
+                        html svg (default: all)
   -c CACHE, --cache CACHE
-                        Maximum number of previous test cases to dump after
-                        crash (default: 1)
+                        Maximum number of additional test cases to include in
+                        report (default: 0)
+  --coverage            Enable coverage collection
   -e EXTENSION, --extension EXTENSION
-                        Install the fuzzPriv extension (specify path to
-                        funfuzz/dom/extension)
+                        Install an extension. Specify the path to the xpi or
+                        the directory containing the unpacked extension. To
+                        install multiple extensions specify multiple times
   --fuzzmanager         Report results to FuzzManager
-  --ignore-timeouts     Don't save the logs/results from a timeout
+  -h, --help            show this help message and exit
+  --ignore IGNORE [IGNORE ...]
+                        Space separated ignore list. ie: log-limit memory
+                        timeout (default: nothing)
   --launch-timeout LAUNCH_TIMEOUT
                         Number of seconds to wait before LaunchError is raised
                         (default: 300)
+  --log-limit LOG_LIMIT
+                        Log file size limit in MBs (default: 'no limit')
   -m MEMORY, --memory MEMORY
-                        Browser process memory limit in MBs (default: No
-                        limit)
+                        Browser process memory limit in MBs (default: 'no
+                        limit')
   --mime MIME           Specify a mime type
   -p PREFS, --prefs PREFS
                         prefs.js file to use
-  -q, --quiet           Output is minimal
-  -v, --verbose         Output is less minimal
-  --replay              Replay do not fuzz the test cases
   --relaunch RELAUNCH   Number of iterations performed before relaunching the
                         browser (default: 1000)
-  --rotate ROTATE       Number of iterations per test case before rotating
-                        (default: 10)
-  -s, --asserts         Detect soft assertions
+  --rr                  Use RR (Linux only)
+  --s3-fuzzmanager      Report large attachments (if any) to S3 and then the
+                        crash & S3 link to FuzzManager
+  --soft-asserts        Detect soft assertions
   -t TIMEOUT, --timeout TIMEOUT
                         Iteration timeout in seconds (default: 60)
-  --valgrind            Use valgrind
-  --windbg              Collect crash log with WinDBG (Windows only)
-  --xvfb                Use xvfb (Linux only)
+  --tool TOOL           Override tool name used when reporting issues to
+                        FuzzManager
+  --valgrind            Use Valgrind (Linux only)
+  -w WORKING_PATH, --working-path WORKING_PATH
+                        Working directory. Intended to be used with ram-
+                        drives. (default: '/tmp')
+  --xvfb                Use Xvfb (Linux only)
 ```
