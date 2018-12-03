@@ -156,9 +156,11 @@ class Interesting(object):
     def location(self):
         if self.no_harness:
             return "http://127.0.0.1:%d/%s" % (self.server.get_port(), self.landing_page)
-        return "http://127.0.0.1:%d/harness?timeout=%d&close_after=%d" % (self.server.get_port(),
-                                                                          self.iter_timeout * 1000,
-                                                                          self.target.rl_reset)
+        return "".join((
+            "http://127.0.0.1:%d/harness?" % self.server.get_port(),
+            "timeout=%d&" % (self.iter_timeout * 1000,),
+            "close_after=%d&" % self.target.rl_reset,
+            "force_close=%s" % os.getenv("GRZ_FORCE_CLOSE", "1")))
 
     def interesting(self, _, temp_prefix):
         """Lithium main iteration entrypoint.

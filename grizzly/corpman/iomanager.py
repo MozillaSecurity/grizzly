@@ -106,7 +106,7 @@ class IOManager(object):
         self._mime = mime_type
         # used to record environment variable that directly impact the browser
         self._tracked_env = list()
-        for e_var in ("GNOME_ACCESSIBILITY", "MOZ_CHAOSMODE"):
+        for e_var in ("GNOME_ACCESSIBILITY", "GRZ_FORCE_CLOSE", "MOZ_CHAOSMODE"):
             if e_var in os.environ:
                 self._tracked_env.append((e_var, os.environ[e_var]))
         self._add_suppressions()
