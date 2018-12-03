@@ -131,13 +131,14 @@ class Session(object):
             if self.target.closed:
                 self.iomanager.purge_tests()
                 try:
-                    location = "http://127.0.0.1:%d/%s?timeout=%d&close_after=%d" % (
-                        self.server.get_port(),
+                    location = (
+                        "http://127.0.0.1:%d/" % self.server.get_port(),
                         self.iomanager.landing_page(),
-                        self.adapter.TEST_DURATION * 1000,
-                        self.target.rl_reset)
+                        "?timeout=%d&" % (self.adapter.TEST_DURATION * 1000),
+                        "close_after=%d&" % self.target.rl_reset,
+                        "force_close=%s" % os.getenv("GRZ_FORCE_CLOSE", "1"))
                     log.info("Launching target")
-                    self.target.launch(location)
+                    self.target.launch("".join(location))
                     launch_timeouts = 0
                 except BrowserTerminatedError:
                     # this result likely has nothing to do with grizzly

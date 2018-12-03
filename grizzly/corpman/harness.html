@@ -5,6 +5,7 @@
 <title>&#x1f43b; &sdot; Grizzly &sdot; &#x1f98a;</title>
 <script>
 let close_after, limit_tmr, time_limit
+let force_close = true
 let sub = null
 
 let grzDump = (msg) => {
@@ -46,7 +47,11 @@ let main = () => {
 
   if ((close_after !== undefined) && (close_after-- < 1)) {
     grzDump('Hit close limit.')
-    window.location.href = '/close_browser'
+    if (force_close) {
+      window.location.href = '/close_browser'
+    } else {
+      setTimeout(window.close, 0)
+    }
     return
   }
 
@@ -81,6 +86,10 @@ window.addEventListener('load', () => {
         time_limit = Number(v)
       } else if (k === 'close_after') {
         close_after = Number(v)
+      } else if (k === 'force_close') {
+        if (v === 'false' || v === '0') {
+          force_close = false
+        }
       } else {
         grzDump(`unknown arg '${k}'`)
       }
