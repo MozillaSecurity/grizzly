@@ -210,9 +210,10 @@ class Session(object):
                 self.ignore,
                 server_status == sapphire.SERVED_TIMEOUT)
 
-            if not files_served:
+            if not files_served and self.adapter.IGNORE_UNSERVED:
                 # if nothing was served remove most recent
                 # test case from list to help maintain browser/fuzzer sync
+                log.info("Ignoring test case since nothing was served")
                 self.iomanager.tests.pop().cleanup()
 
             # handle failure if detected

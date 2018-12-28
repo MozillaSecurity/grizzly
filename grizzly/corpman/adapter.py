@@ -12,6 +12,7 @@ __credits__ = ["Tyson Smith"]
 
 class Adapter(object):
     HARNESS_FILE = os.path.join(os.path.dirname(__file__), "harness.html")
+    IGNORE_UNSERVED = True  # Only report test cases with served content
     NAME = None  # must be set by subclass
     ROTATION_PERIOD = 10  # iterations per input file before switching
     TEST_DURATION = 30  # maximum execution time per test
