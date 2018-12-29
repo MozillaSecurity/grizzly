@@ -100,8 +100,10 @@ def main(args):
     crash_id = args.input
     testcase = download_crash(crash_id)
     tool_override = args.tool is None
+    crash = crashentry_data(crash_id)
+    quality = crash["testcase_quality"]
     if tool_override:
-        args.tool = crashentry_data(crash_id)["tool"]
+        args.tool = crash["tool"]
         log.info("Using toolname from crash: %s", args.tool)
     fm_reporter = args.fuzzmanager
 
@@ -114,8 +116,14 @@ def main(args):
             if not fm_reporter:
                 return
 
-            if result in {FuzzManagerReporter.QUAL_REDUCED_ORIGINAL,  # reduce succeeded
-                          FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE}:
+            if result == FuzzManagerReporter.QUAL_REDUCED_ORIGINAL:
+                # reduce succeeded
+                change_quality(crash_id, result)
+
+            elif result == FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE:
+                if quality == FuzzManagerReporter.QUAL_UNREDUCED:
+                    # override result to request platform specific reduction
+                    result = FuzzManagerReporter.QUAL_REQUEST_SPECIFIC
                 change_quality(crash_id, result)
 
             # for these cases, something went wrong. a reduce log/result would be really valuable

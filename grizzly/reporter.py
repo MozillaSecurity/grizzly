@@ -341,7 +341,8 @@ class FuzzManagerReporter(Reporter):
     QUAL_REDUCED_RESULT = 0  # the final reduced testcase
     QUAL_REDUCED_ORIGINAL = 1  # the original used for successful reduction
     QUAL_REPRODUCIBLE = 4  # the testcase was reproducible
-    QUAL_UNREDUCED = 5  # haven't attempted reduction yet
+    QUAL_UNREDUCED = 5  # haven't attempted reduction yet (1st attempt, generic reducer)
+    QUAL_REQUEST_SPECIFIC = 6  # platform specific reduction requested (2nd attempt)
     QUAL_REDUCER_BROKE = 8  # the testcase was reproducible, but broke during reduction
     QUAL_REDUCER_ERROR = 9  # reducer error
     QUAL_NOT_REPRODUCIBLE = 10  # could not reproduce the testcase

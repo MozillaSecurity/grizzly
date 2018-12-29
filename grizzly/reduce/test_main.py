@@ -208,7 +208,7 @@ def test_bucket_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefine
     assert main_called[0] == 1
 
 
-def test_crash_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     # expect Collector.patch to be called with these qualities
     expect_patch = [reporter.FuzzManagerReporter.QUAL_REPRODUCIBLE,
@@ -237,7 +237,9 @@ def test_crash_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined
                         return 'attachment; filename="test.zip"'
                 @staticmethod
                 def json():
-                    return {'tool': 'test-tool'}
+                    return {
+                        'testcase_quality': reporter.FuzzManagerReporter.QUAL_UNREDUCED,
+                        'tool': 'test-tool'}
                 content = inp.join("test.zip").read('rb')
             return response
 
@@ -270,3 +272,119 @@ def test_crash_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined
     assert crash.main(args) == 0
     assert not expect_patch
     assert submitted[0]
+
+
+def test_crash_main_no_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+    "crash.main --fuzzmanager updates quality"
+
+    class ReporterNoSubmit(reporter.FuzzManagerReporter):
+        FM_CONFIG = tmpdir.ensure(".fuzzmanagerconf").strpath
+
+        def _submit(self):
+            # make sure _submit() is not called
+            assert False
+
+    class FakeCollector(object):
+        serverProtocol = 'https'
+        serverHost = 'mozilla.org'
+        serverPort = 8000
+
+        def get(self, _url, **kwds):
+            class response(object):
+                class headers(object):
+                    @staticmethod
+                    def get(value, default):
+                        assert value.lower() == 'content-disposition'
+                        return 'attachment; filename="test.zip"'
+                @staticmethod
+                def json():
+                    return {
+                        'testcase_quality': reporter.FuzzManagerReporter.QUAL_UNREDUCED,
+                        'tool': 'test-tool'}
+                content = inp.join("test.zip").read('rb')
+            return response
+
+        def patch(self, _url, **kwds):
+            data = kwds["data"]
+            assert set(data.keys()) == {"testcase_quality"}
+            assert data["testcase_quality"] == reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC
+
+    # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
+    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
+    monkeypatch.setattr(reporter, "Collector", FakeCollector)
+    monkeypatch.setattr(reduce, "FuzzManagerReporter", ReporterNoSubmit)
+    monkeypatch.setattr(crash, "Collector", FakeCollector)
+
+    exe = tmpdir.ensure("binary")
+    tmpdir.join("binary.fuzzmanagerconf").write(
+        "[Main]\n"
+        "platform = x86-64\n"
+        "product = mozilla-central\n"
+        "os = linux\n"
+    )
+    inp = tmpdir.ensure("input", dir=True)
+    inp.ensure("test_info.txt").write("landing page: test.html")
+    inp.ensure("test.html").write("fluff\n")
+    with zipfile.ZipFile(inp.join("test.zip").strpath, "w") as zip_fp:
+        zip_fp.write(inp.join("test_info.txt").strpath, "test_info.txt")
+        zip_fp.write(inp.join("test.html").strpath, "test.html")
+    args = ReducerFuzzManagerIDArgs().parse_args([exe.strpath, '1234', '--fuzzmanager'])
+    assert crash.main(args) == 1
+
+
+def test_crash_main_no_repro_specific(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+    "crash.main --fuzzmanager updates quality"
+
+    class ReporterNoSubmit(reporter.FuzzManagerReporter):
+        FM_CONFIG = tmpdir.ensure(".fuzzmanagerconf").strpath
+
+        def _submit(self):
+            # make sure _submit() is not called
+            assert False
+
+    class FakeCollector(object):
+        serverProtocol = 'https'
+        serverHost = 'mozilla.org'
+        serverPort = 8000
+
+        def get(self, _url, **kwds):
+            class response(object):
+                class headers(object):
+                    @staticmethod
+                    def get(value, default):
+                        assert value.lower() == 'content-disposition'
+                        return 'attachment; filename="test.zip"'
+                @staticmethod
+                def json():
+                    return {
+                        'testcase_quality': reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC,
+                        'tool': 'test-tool'}
+                content = inp.join("test.zip").read('rb')
+            return response
+
+        def patch(self, _url, **kwds):
+            data = kwds["data"]
+            assert set(data.keys()) == {"testcase_quality"}
+            assert data["testcase_quality"] == reporter.FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
+
+    # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
+    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
+    monkeypatch.setattr(reporter, "Collector", FakeCollector)
+    monkeypatch.setattr(reduce, "FuzzManagerReporter", ReporterNoSubmit)
+    monkeypatch.setattr(crash, "Collector", FakeCollector)
+
+    exe = tmpdir.ensure("binary")
+    tmpdir.join("binary.fuzzmanagerconf").write(
+        "[Main]\n"
+        "platform = x86-64\n"
+        "product = mozilla-central\n"
+        "os = linux\n"
+    )
+    inp = tmpdir.ensure("input", dir=True)
+    inp.ensure("test_info.txt").write("landing page: test.html")
+    inp.ensure("test.html").write("fluff\n")
+    with zipfile.ZipFile(inp.join("test.zip").strpath, "w") as zip_fp:
+        zip_fp.write(inp.join("test_info.txt").strpath, "test_info.txt")
+        zip_fp.write(inp.join("test.html").strpath, "test.html")
+    args = ReducerFuzzManagerIDArgs().parse_args([exe.strpath, '1234', '--fuzzmanager'])
+    assert crash.main(args) == 1
