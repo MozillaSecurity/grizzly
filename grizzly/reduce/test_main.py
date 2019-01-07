@@ -276,6 +276,7 @@ def test_crash_main_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=red
 
 def test_crash_main_no_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
+    expect_patch = [reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC]
 
     class ReporterNoSubmit(reporter.FuzzManagerReporter):
         FM_CONFIG = tmpdir.ensure(".fuzzmanagerconf").strpath
@@ -307,7 +308,8 @@ def test_crash_main_no_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=
         def patch(self, _url, **kwds):
             data = kwds["data"]
             assert set(data.keys()) == {"testcase_quality"}
-            assert data["testcase_quality"] == reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC
+            assert expect_patch
+            assert data["testcase_quality"] == expect_patch.pop(0)
 
     # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
@@ -334,6 +336,7 @@ def test_crash_main_no_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=
 
 def test_crash_main_no_repro_specific(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
+    expect_patch = [reporter.FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE]
 
     class ReporterNoSubmit(reporter.FuzzManagerReporter):
         FM_CONFIG = tmpdir.ensure(".fuzzmanagerconf").strpath
@@ -365,7 +368,8 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmpdir):  # noqa pylint:
         def patch(self, _url, **kwds):
             data = kwds["data"]
             assert set(data.keys()) == {"testcase_quality"}
-            assert data["testcase_quality"] == reporter.FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
+            assert expect_patch
+            assert data["testcase_quality"] == expect_patch.pop(0)
 
     # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
