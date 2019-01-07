@@ -332,6 +332,7 @@ def test_crash_main_no_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=
         zip_fp.write(inp.join("test.html").strpath, "test.html")
     args = ReducerFuzzManagerIDArgs().parse_args([exe.strpath, '1234', '--fuzzmanager'])
     assert crash.main(args) == 1
+    assert not expect_patch
 
 
 def test_crash_main_no_repro_specific(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
@@ -392,3 +393,4 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmpdir):  # noqa pylint:
         zip_fp.write(inp.join("test.html").strpath, "test.html")
     args = ReducerFuzzManagerIDArgs().parse_args([exe.strpath, '1234', '--fuzzmanager'])
     assert crash.main(args) == 1
+    assert not expect_patch
