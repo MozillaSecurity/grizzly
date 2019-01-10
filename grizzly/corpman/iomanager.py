@@ -92,6 +92,13 @@ class ServerMap(object):
 
 
 class IOManager(object):
+    TRACKED_ENVVARS = (
+        "ASAN_OPTIONS",
+        "GNOME_ACCESSIBILITY",
+        "GRZ_FORCE_CLOSE",
+        "MOZ_CHAOSMODE")
+
+
     def __init__(self, report_size=1, mime_type=None, working_path=None):
         assert report_size > 0
         self.active_input = None  # current active input file
@@ -105,10 +112,7 @@ class IOManager(object):
         self._generated = 0  # number of test cases generated
         self._mime = mime_type
         # used to record environment variable that directly impact the browser
-        self._tracked_env = list()
-        for e_var in ("GNOME_ACCESSIBILITY", "GRZ_FORCE_CLOSE", "MOZ_CHAOSMODE"):
-            if e_var in os.environ:
-                self._tracked_env.append((e_var, os.environ[e_var]))
+        self._tracked_env = self.tracked_environ()
         self._add_suppressions()
 
 
@@ -223,7 +227,7 @@ class IOManager(object):
             adapter_name=adapter_name,
             input_fname=self.active_input.file_name if self.active_input else None)
 
-        for e_name, e_value in self._tracked_env:
+        for e_name, e_value in self._tracked_env.items():
             test.add_environ_var(e_name, e_value)
 
         for e_file in self._environ_files:
@@ -251,3 +255,27 @@ class IOManager(object):
         for testcase in self.tests:
             testcase.cleanup()
         self.tests.clear()
+
+
+    @staticmethod
+    def tracked_environ():
+        # Scan os.environ and collect environment variables
+        # that are relevant to Grizzly or the test case.
+        env = dict()
+        for e_var in IOManager.TRACKED_ENVVARS:
+            if e_var not in os.environ:
+                continue
+
+            if e_var == "ASAN_OPTIONS":
+                # strip unwanted ASAN_OPTIONS
+                # FFPuppet ensures that this is formatted correctly
+                track = ("detect_leaks",)
+                opts = list()
+                for opt in os.environ[e_var].split(":"):
+                    if opt.split("=")[0] in track:
+                        opts.append(opt)
+                env[e_var] = ":".join(opts)
+            else:
+                env[e_var] = os.environ[e_var]
+
+        return env

@@ -179,6 +179,26 @@ class IOManagerTests(unittest.TestCase):
         self.assertIn("h.htm", tc.get_optional())  # pylint: disable=protected-access
         tc.cleanup()
 
+    def test_08(self):
+        "test tracked_environ()"
+        try:
+            org_tracked = IOManager.TRACKED_ENVVARS
+            IOManager.TRACKED_ENVVARS = ()
+            os.environ["ASAN_OPTIONS"] = "blah=1:detect_leaks=1:foo=2"
+            os.environ["TEST_GOOD"] = "PASS"
+            os.environ["TEST_BAD"] = "FAIL"
+            self.assertFalse(IOManager.tracked_environ())
+            IOManager.TRACKED_ENVVARS = ("ASAN_OPTIONS", "TEST_GOOD")
+            tracked = IOManager.tracked_environ()
+            self.assertIn("ASAN_OPTIONS", tracked)
+            self.assertEqual(tracked["ASAN_OPTIONS"], "detect_leaks=1")
+            self.assertIn("TEST_GOOD", tracked)
+            self.assertEqual(tracked["TEST_GOOD"], "PASS")
+        finally:
+            IOManager.TRACKED_ENVVARS = org_tracked
+            os.environ.pop("ASAN_OPTIONS", None)
+            os.environ.pop("TEST_GOOD", None)
+            os.environ.pop("TEST_BAD", None)
 
 
 class TestServerMap(unittest.TestCase):
