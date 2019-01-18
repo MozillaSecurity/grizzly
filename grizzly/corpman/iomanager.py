@@ -94,6 +94,7 @@ class ServerMap(object):
 class IOManager(object):
     TRACKED_ENVVARS = (
         "ASAN_OPTIONS",
+        "LSAN_OPTIONS",
         "GNOME_ACCESSIBILITY",
         "GRZ_FORCE_CLOSE",
         "MOZ_CHAOSMODE")
@@ -266,8 +267,8 @@ class IOManager(object):
             if e_var not in os.environ:
                 continue
 
-            if e_var == "ASAN_OPTIONS":
-                # strip unwanted ASAN_OPTIONS
+            if e_var in ("ASAN_OPTIONS", "LSAN_OPTIONS"):
+                # strip unwanted options
                 # FFPuppet ensures that this is formatted correctly
                 track = ("detect_leaks",)
                 opts = list()
