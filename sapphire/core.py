@@ -60,6 +60,8 @@ class ServeJob(object):
         self._complete = threading.Event()
         self._pending = Tracker(files=set(), lock=threading.Lock())
         self._served = Tracker(files=defaultdict(int), lock=threading.Lock())
+        self.accepting = threading.Event()
+        self.accepting.set()
         self.base_path = os.path.abspath(base_path)  # wwwroot
         self.exceptions = Queue()
         self.initial_queue_size = 0
@@ -144,6 +146,12 @@ class ServeJob(object):
         self._complete.set()
 
 
+    def increment_served(self, target):
+        # update list of served files
+        with self._served.lock:
+            self._served.files[target] += 1
+
+
     def is_complete(self, wait=None):
         if wait is not None:
             return self._complete.wait(wait)
@@ -190,6 +198,7 @@ class Sapphire(object):
     CLOSE_CLIENT_ERROR = None  # used to automatically close client error (4XX code) pages
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
+    SHUTDOWN_DELAY = 0.25  # allow extra time before closing socket if needed
     WORKER_POOL_LIMIT = 10
 
     _request = re.compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
@@ -247,7 +256,7 @@ class Sapphire(object):
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sock.settimeout(0.05)
+                sock.settimeout(0.25)
                 # find an unused port and avoid blocked ports
                 # see: dxr.mozilla.org/mozilla-central/source/netwerk/base/nsIOService.cpp
                 port = random.randint(0x2000, 0xFFFF) if requested_port is None else requested_port
@@ -290,47 +299,59 @@ class Sapphire(object):
         try:
             # receive all the incoming data
             raw_request = conn.recv(Sapphire.DEFAULT_REQUEST_LIMIT)
-
-            # the intention here is to avoid losing sync with the browser...
-            # for example: test_1 is served and redirects to test_2 and test_2 is requested before
-            # the call to serve_path() for test_1 completes (no chance for test_2 to be generated)
-            if serv_job.is_complete():
-                log.debug("no files remaining in queue")
-                return
-
             if not raw_request:
                 log.debug("raw_request was empty")
+                serv_job.accepting.set()
                 return
 
             request = Sapphire._request.match(raw_request)
             if request is None:
+                serv_job.accepting.set()
                 conn.sendall(Sapphire._4xx_page(400, "Bad Request").encode("ascii"))
                 log.debug(
                     "400 request length %d (%d to go)",
                     len(raw_request),
                     serv_job.pending_files())
                 return
-            request = request.group("request").decode("ascii")
 
-            file_to_serve = os.path.join(serv_job.base_path, request)
+            request = request.group("request").decode("ascii")
             # check if path maps to a file
-            if not os.path.isfile(file_to_serve):
-                # check if path maps to a callback, redirect or an include directory
+            file_to_serve = os.path.join(serv_job.base_path, request)
+            is_file = os.path.isfile(file_to_serve)
+
+            if not is_file:
+                # check if path maps to a redirect or an include directory
                 resourse = serv_job.check_url(request)
                 log.debug("resourse %r", resourse)
-
                 if resourse is None:
                     file_to_serve = None  # 404
+                elif resourse.type == serv_job.URL_INCLUDE:
+                    file_to_serve = resourse.target
+                    finish_job = serv_job.remove_pending(file_to_serve)
                 elif resourse.type == serv_job.URL_REDIRECT:
-                    conn.sendall(Sapphire._307_redirect(resourse.target).encode("ascii"))
                     finish_job = serv_job.remove_pending(request)
+                else:
+                    file_to_serve = None
+            else:
+                resourse = None
+                finish_job = serv_job.remove_pending(file_to_serve)
+
+            if not finish_job:
+                serv_job.accepting.set()
+            else:
+                log.debug("expecting to finish")
+
+            # send response to a callback, redirect, or an include directory (404)
+            if resourse is not None:
+                if resourse.type == serv_job.URL_REDIRECT:
+                    conn.sendall(Sapphire._307_redirect(resourse.target).encode("ascii"))
                     log.debug(
                         "307 %r -> %r (%d to go)",
                         request,
                         resourse.target,
                         serv_job.pending_files())
                     return
-                elif resourse.type == serv_job.URL_DYNAMIC:
+                if resourse.type == serv_job.URL_DYNAMIC:
                     data = resourse.target()
                     if not isinstance(data, bytes):
                         log.debug("dynamic request: %r", request)
@@ -339,16 +360,18 @@ class Sapphire(object):
                     conn.sendall(data)
                     log.debug("200 %r (dynamic request)", request)
                     return
-                elif resourse.type == serv_job.URL_INCLUDE:
-                    file_to_serve = resourse.target
+                if resourse.type == serv_job.URL_INCLUDE:
+                    is_file = os.path.isfile(file_to_serve)
+                else:
+                    raise RuntimeError("Unknown resource type %r" % resourse.type)
 
-                if file_to_serve is None or not os.path.isfile(file_to_serve):
-                    conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
-                    log.debug(
-                        "404 %r (%d to go)",
-                        file_to_serve if file_to_serve else request,
-                        serv_job.pending_files())
-                    return
+            if not is_file:
+                conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
+                log.debug(
+                    "404 %r (%d to go)",
+                    file_to_serve if file_to_serve else request,
+                    serv_job.pending_files())
+                return
 
             if serv_job.is_forbidden(file_to_serve):
                 # NOTE: this does info leak if files exist on disk.
@@ -357,6 +380,7 @@ class Sapphire(object):
                 conn.sendall(Sapphire._4xx_page(403, "Forbidden").encode("ascii"))
                 log.debug("403 %r (%d to go)", request, serv_job.pending_files())
                 return
+
             # at this point we know file_to_serve maps to a file on disk
 
             # default to "application/octet-stream"
@@ -371,14 +395,8 @@ class Sapphire(object):
                 while offset < data_size:
                     conn.sendall(in_fp.read(Sapphire.DEFAULT_TX_SIZE))
                     offset = in_fp.tell()
-
-            # update list of served files
-            with serv_job._served.lock:
-                serv_job._served.files[file_to_serve] += 1
-            # remove file from the pending queue
-            finish_job = serv_job.remove_pending(file_to_serve)
-
             log.debug("200 %r (%d to go)", file_to_serve, serv_job.pending_files())
+            serv_job.increment_served(file_to_serve)
 
         except (socket.timeout, socket.error):
             exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -402,6 +420,8 @@ class Sapphire(object):
         log.debug("starting client_listener")
         try:
             while not serv_job.is_complete():
+                if not serv_job.accepting.wait(0.05):
+                    continue
                 w_conn = None
                 try:
                     w_conn, _ = serv_sock.accept()
@@ -410,6 +430,7 @@ class Sapphire(object):
                     w_thread = threading.Thread(
                         target=Sapphire._handle_request,
                         args=(w_conn, serv_job))
+                    serv_job.accepting.clear()
                     w_thread.start()
                     worker_pool.append(WorkerHandle(conn=w_conn, thread=w_thread))
                     pool_size += 1
@@ -451,10 +472,15 @@ class Sapphire(object):
                     else:
                         raise RuntimeError("Failed to trim worker pool!")
                     pool_size = len(worker_pool)
-                    log.debug("done trimming worker pool")
+                    log.debug("trimmed worker pool (size: %d)", pool_size)
         finally:
             log.debug("shutting down and cleaning up workers")
+            deadline = time.time() + Sapphire.SHUTDOWN_DELAY
             for worker in worker_pool:
+                # avoid cutting off connections
+                while worker.thread.is_alive() and time.time() < deadline:
+                    log.debug("delaying shutdown...")
+                    time.sleep(0.01)
                 worker.conn.close()
             for worker in worker_pool:
                 worker.thread.join()
