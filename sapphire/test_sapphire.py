@@ -623,34 +623,84 @@ class SapphireTests(unittest.TestCase):
 
 
     def test_23(self):
-        "test requesting multiple via multiple connection"
+        "test requesting multiple files via multiple connections"
         default_pool_limit = Sapphire.WORKER_POOL_LIMIT
+        default_rx_size = SimpleClient.RX_SIZE
         self.serv = Sapphire(timeout=10)
         try:
-            Sapphire.WORKER_POOL_LIMIT = 3  # set low so it is hit during the test
-            expect_served = 200  # number of files available to serve
-            files_to_serve = list()
+            Sapphire.WORKER_POOL_LIMIT = 20
+            SimpleClient.RX_SIZE = 1
+            expect_served = 2  # number of files available to serve
+            to_serve = list()
             for i in range(expect_served):
-                files_to_serve.append(_create_test("test_%03d.html" % i, self.test_dir, data=b"A"))
-            test_clients = list()
+                to_serve.append(_create_test("test_%03d.html" % i, self.test_dir, data=b"AAAA"))
+            clients = list()
             try:
-                for _ in range(100): # number of clients to spawn
-                    test_clients.append(SimpleClient())
-                    test_clients[-1].launch("127.0.0.1", self.serv.get_port(), files_to_serve)
+                for _ in range(Sapphire.WORKER_POOL_LIMIT):  # number of clients to spawn
+                    clients.append(SimpleClient())
+                for client in clients:
+                    client.launch("127.0.0.1", self.serv.get_port(), to_serve, in_order=True, throttle=0.05)
                 status, served_list = self.serv.serve_path(self.test_dir)
             finally:
-                for test_client in test_clients:
-                    test_client.close()
+                for client in clients:
+                    client.close()
             self.assertEqual(status, SERVED_ALL)
             self.assertEqual(expect_served, len(served_list))
-            for t_file in files_to_serve:
+            for t_file in to_serve:
                 self.assertEqual(t_file.code, 200)
                 self.assertEqual(t_file.len_srv, t_file.len_org)
         finally:
             Sapphire.WORKER_POOL_LIMIT = default_pool_limit
+            SimpleClient.RX_SIZE = default_rx_size
 
 
     def test_24(self):
+        "test all request types via multiple connections"
+        def _dyn_test_cb():
+            return b"A" if random.getrandbits(1) else b"AA"
+
+        self.serv = Sapphire(timeout=10)
+        default_pool_limit = Sapphire.WORKER_POOL_LIMIT
+        default_rx_size = SimpleClient.RX_SIZE
+        try:
+            SimpleClient.RX_SIZE = 1
+            Sapphire.WORKER_POOL_LIMIT = 10
+            to_serve = list()
+            for i in range(50):
+                # add required files
+                to_serve.append(_create_test("test_%03d.html" % i, self.test_dir, data=b"A" * ((i % 2) + 1)))
+                # add a missing files
+                to_serve.append(_TestFile("missing_%03d.html" % i))
+                # add optional files
+                opt = os.path.join(self.test_dir, "opt_%03d.html" % i)
+                with open(opt, "w") as out_fp:
+                    out_fp.write("A" * ((i % 2) + 1))
+                to_serve.append(_TestFile(os.path.basename(opt)))
+                # add redirects
+                redir_target = _create_test("redir_%03d.html" % i, self.test_dir, data=b"AA")
+                to_serve.append(_TestFile("redir_%03d" % i))
+                self.serv.set_redirect(to_serve[-1].url, redir_target.url, required=random.getrandbits(1) > 0)
+                # add dynamic responses
+                to_serve.append(_TestFile("dynm_%03d" % i))
+                self.serv.add_dynamic_response(to_serve[-1].url, _dyn_test_cb, mime_type="text/plain")
+
+            clients = list()
+            try:
+                for _ in range(100):  # number of clients to spawn
+                    clients.append(SimpleClient())
+                    throttle = 0.05 if random.getrandbits(1) else 0
+                    clients[-1].launch("127.0.0.1", self.serv.get_port(), to_serve, throttle=throttle)
+                status, served_list = self.serv.serve_path(self.test_dir)
+            finally:
+                for client in clients:
+                    client.close()
+            self.assertEqual(status, SERVED_ALL)
+        finally:
+            SimpleClient.RX_SIZE = default_rx_size
+            Sapphire.WORKER_POOL_LIMIT = default_pool_limit
+
+
+    def test_25(self):
         "test dynamic response with bad callbacks"
         def _dyn_none_cb():
             return None
@@ -665,7 +715,7 @@ class SapphireTests(unittest.TestCase):
             self.serv.serve_path(self.test_dir)
 
 
-    def test_25(self):
+    def test_26(self):
         "test serving to a slow client"
         default_rx_size = SimpleClient.RX_SIZE
         self.serv = Sapphire(timeout=10)
@@ -687,7 +737,7 @@ class SapphireTests(unittest.TestCase):
             SimpleClient.RX_SIZE = default_rx_size
 
 
-    def test_26(self):
+    def test_27(self):
         "test timeout while requesting multiple test cases"
         default_rx_size = SimpleClient.RX_SIZE
         files_to_serve = list()
