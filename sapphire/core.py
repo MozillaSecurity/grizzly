@@ -50,8 +50,9 @@ class Resource(object):
 
 class ServeJob(object):
     URL_DYNAMIC = 0
-    URL_INCLUDE = 1
-    URL_REDIRECT = 2
+    URL_FILE = 1
+    URL_INCLUDE = 2
+    URL_REDIRECT = 3
 
     def __init__(self, base_path, dynamic_map, include_map, redirect_map, optional_files=None):
         assert isinstance(dynamic_map, dict)
@@ -98,8 +99,13 @@ class ServeJob(object):
         log.debug("sapphire has %d files required to serve", self.initial_queue_size)
 
 
-    def check_url(self, request):
-        log.debug("check_url with request %r", request)
+    def check_request(self, request):
+        to_serve = os.path.join(self.base_path, request)
+        if os.path.isfile(to_serve):
+            res = Resource(self.URL_FILE, to_serve)
+            with self._pending.lock:
+                res.required = to_serve in self._pending.files
+            return res
         if request in self.url_map.redirect:
             return self.url_map.redirect[request]
         if request in self.url_map.dynamic:
@@ -315,88 +321,71 @@ class Sapphire(object):
                 return
 
             request = request.group("request").decode("ascii")
-            # check if path maps to a file
-            file_to_serve = os.path.join(serv_job.base_path, request)
-            is_file = os.path.isfile(file_to_serve)
-
-            if not is_file:
-                # check if path maps to a redirect or an include directory
-                resourse = serv_job.check_url(request)
-                log.debug("resourse %r", resourse)
-                if resourse is None:
-                    file_to_serve = None  # 404
-                elif resourse.type == serv_job.URL_INCLUDE:
-                    file_to_serve = resourse.target
-                    finish_job = serv_job.remove_pending(file_to_serve)
-                elif resourse.type == serv_job.URL_REDIRECT:
-                    finish_job = serv_job.remove_pending(request)
-                else:
-                    file_to_serve = None
-            else:
-                resourse = None
-                finish_job = serv_job.remove_pending(file_to_serve)
+            log.debug("check_request(%r)", request)
+            resource = serv_job.check_request(request)
+            if resource is None:
+                log.debug("resource is None")  # 404
+            elif resource.type in (serv_job.URL_FILE, serv_job.URL_INCLUDE):
+                finish_job = serv_job.remove_pending(resource.target)
+            elif resource.type == serv_job.URL_REDIRECT:
+                finish_job = serv_job.remove_pending(request)
 
             if not finish_job:
                 serv_job.accepting.set()
             else:
                 log.debug("expecting to finish")
 
-            # send response to a callback, redirect, or an include directory (404)
-            if resourse is not None:
-                if resourse.type == serv_job.URL_REDIRECT:
-                    conn.sendall(Sapphire._307_redirect(resourse.target).encode("ascii"))
-                    log.debug(
-                        "307 %r -> %r (%d to go)",
-                        request,
-                        resourse.target,
-                        serv_job.pending_files())
-                    return
-                if resourse.type == serv_job.URL_DYNAMIC:
-                    data = resourse.target()
-                    if not isinstance(data, bytes):
-                        log.debug("dynamic request: %r", request)
-                        raise TypeError("dynamic request callback must return 'bytes'")
-                    conn.sendall(Sapphire._200_header(len(data), resourse.mime).encode("ascii"))
-                    conn.sendall(data)
-                    log.debug("200 %r (dynamic request)", request)
-                    return
-                if resourse.type == serv_job.URL_INCLUDE:
-                    is_file = os.path.isfile(file_to_serve)
-                else:
-                    raise RuntimeError("Unknown resource type %r" % resourse.type)
-
-            if not is_file:
+            if resource is None:
                 conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
+                log.debug("404 %r (%d to go)", request, serv_job.pending_files())
+                return
+            if resource.type in (serv_job.URL_FILE, serv_job.URL_INCLUDE):
+                log.debug("target %r", resource.target)
+                if not os.path.isfile(resource.target):
+                    conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
+                    log.debug("404 %r (%d to go)", request, serv_job.pending_files())
+                    return
+                if serv_job.is_forbidden(resource.target):
+                    # NOTE: this does info leak if files exist on disk.
+                    # We could replace 403 with 404 if it turns out we care but this
+                    # is meant to run locally and only be accessible from localhost
+                    conn.sendall(Sapphire._4xx_page(403, "Forbidden").encode("ascii"))
+                    log.debug("403 %r (%d to go)", request, serv_job.pending_files())
+                    return
+            elif resource.type == serv_job.URL_REDIRECT:
+                conn.sendall(Sapphire._307_redirect(resource.target).encode("ascii"))
                 log.debug(
-                    "404 %r (%d to go)",
-                    file_to_serve if file_to_serve else request,
+                    "307 %r -> %r (%d to go)",
+                    request,
+                    resource.target,
                     serv_job.pending_files())
                 return
-
-            if serv_job.is_forbidden(file_to_serve):
-                # NOTE: this does info leak if files exist on disk.
-                # We could replace 403 with 404 if it turns out we care but this is meant to run
-                # locally and only be accessible from localhost
-                conn.sendall(Sapphire._4xx_page(403, "Forbidden").encode("ascii"))
-                log.debug("403 %r (%d to go)", request, serv_job.pending_files())
+            elif resource.type == serv_job.URL_DYNAMIC:
+                data = resource.target()
+                if not isinstance(data, bytes):
+                    log.debug("dynamic request: %r", request)
+                    raise TypeError("dynamic request callback must return 'bytes'")
+                conn.sendall(Sapphire._200_header(len(data), resource.mime).encode("ascii"))
+                conn.sendall(data)
+                log.debug("200 %r (dynamic request)", request)
                 return
+            else:
+                raise RuntimeError("Unknown resource type %r" % resource.type)
 
-            # at this point we know file_to_serve maps to a file on disk
-
+            # at this point we know "resource.target" maps to a file on disk
             # default to "application/octet-stream"
-            c_type = mimetypes.guess_type(file_to_serve)[0] or "application/octet-stream"
-
+            c_type = mimetypes.guess_type(resource.target)[0] or "application/octet-stream"
             # serve the file
-            data_size = os.stat(file_to_serve).st_size
+            data_size = os.stat(resource.target).st_size
             log.debug("sending file: %s bytes", format(data_size, ","))
-            with open(file_to_serve, "rb") as in_fp:
+            with open(resource.target, "rb") as in_fp:
                 conn.sendall(Sapphire._200_header(data_size, c_type).encode("ascii"))
                 offset = 0
                 while offset < data_size:
                     conn.sendall(in_fp.read(Sapphire.DEFAULT_TX_SIZE))
                     offset = in_fp.tell()
-            log.debug("200 %r (%d to go)", file_to_serve, serv_job.pending_files())
-            serv_job.increment_served(file_to_serve)
+            log.debug("200 %r (%d to go)", resource.target, serv_job.pending_files())
+            serv_job.increment_served(resource.target)
 
         except (socket.timeout, socket.error):
             exc_type, exc_obj, exc_tb = sys.exc_info()
