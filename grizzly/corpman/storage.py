@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import namedtuple
+import json
 import os
 import shutil
 import tempfile
@@ -121,25 +122,35 @@ class TestCase(object):
         for test_file in self._files.required + self._files.optional:
             test_file.dump(log_dir)
 
-        # save test case, input file, file information, environment info
+        # save test case files and meta data including:
+        # adapter used, input file, environment info and files
         if include_details:
-            # TODO: make this metadata.json
+            details = dict()
+            details["adapter"] = self.adapter_name
+            details["env"] = dict()
+            details["input"] = os.path.basename(self.input_fname) if self.input_fname else None
+            details["suppressions"] = list()
+            details["target"] = self.landing_page
+            for env_var, env_val in self._env_vars.items():
+                details["env"][env_var] = env_val
+            with open(os.path.join(log_dir, "test_info.json"), "w") as out_fp:
+                json.dump(details, out_fp, indent=2, sort_keys=True)
+            # save meta files
+            for meta_file in self._files.meta:
+                meta_file.dump(log_dir)
+
+            # WARNING: test_info.txt will be are deprecated and will be removed
+            # TODO: remove this section
             with open(os.path.join(log_dir, "test_info.txt"), "w") as out_fp:
                 out_fp.write("[Grizzly test case details]\n")
                 out_fp.write("Adapter:           %s\n" % self.adapter_name)
                 out_fp.write("Landing Page:      %s\n" % self.landing_page)
                 if self.input_fname is not None:
                     out_fp.write("Input File:        %s\n" % os.path.basename(self.input_fname))
-
             if self._env_vars:
-                # TODO: make this metadata.json
                 with open(os.path.join(log_dir, "env_vars.txt"), "w") as out_fp:
                     for env_var, env_val in self._env_vars.items():
                         out_fp.write("%s=%s\n" % (env_var, env_val))
-
-            # save meta files
-            for meta_file in self._files.meta:
-                meta_file.dump(log_dir)
 
 
     def cleanup(self):
