@@ -232,7 +232,7 @@ class IOManager(object):
             test.add_environ_var(e_name, e_value)
 
         for e_file in self._environ_files:
-            test.add_file(e_file.clone())
+            test.add_meta(e_file.clone())
 
         # reset redirect map
         self.server_map.reset(redirect=True)
