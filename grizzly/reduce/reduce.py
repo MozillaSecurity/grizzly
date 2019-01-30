@@ -14,6 +14,7 @@ import re
 import shutil
 import tempfile
 import zipfile
+import zlib
 
 import lithium
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -200,8 +201,11 @@ class ReductionJob(object):
                     info_fp.write("landing page: %s\n" % (os.path.basename(testcase),))
             elif testcase.lower().endswith(".zip"):
                 os.mkdir(self.tcroot)
-                with zipfile.ZipFile(testcase) as zip_fp:
-                    zip_fp.extractall(path=self.tcroot)
+                try:
+                    with zipfile.ZipFile(testcase) as zip_fp:
+                        zip_fp.extractall(path=self.tcroot)
+                except zlib.error:
+                    raise ReducerError("Testcase is corrupted")
             else:
                 raise ReducerError("Testcase must be zip, html, or directory")
         elif os.path.isdir(testcase):
