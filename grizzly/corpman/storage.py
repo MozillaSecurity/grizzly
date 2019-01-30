@@ -75,11 +75,22 @@ class TestCase(object):
             meta=list(),  # environment files such as prefs.js, etc...
             optional=list(),
             required=list())
+        self._existing_paths = set()  # file paths in use
+
+
+    def _add(self, target, test_file):
+        """
+        Add test file to test case and perform sanity checks
+        """
+        assert isinstance(test_file, TestFile), "only accepts TestFiles"
+        if test_file.file_name in self._existing_paths:
+            raise RuntimeError("file exists in test %r" % test_file.file_name)
+        self._existing_paths.add(test_file.file_name)
+        target.append(test_file)
 
 
     def add_meta(self, meta_file):
-        assert isinstance(meta_file, TestFile), "only accepts TestFiles"
-        self._files.meta.append(meta_file)
+        self._add(self._files.meta, meta_file)
 
 
     def add_environ_var(self, var_name, value):
@@ -87,11 +98,10 @@ class TestCase(object):
 
 
     def add_file(self, test_file, required=True):
-        assert isinstance(test_file, TestFile), "only accepts TestFiles"
         if required:
-            self._files.required.append(test_file)
+            self._add(self._files.required, test_file)
         else:
-            self._files.optional.append(test_file)
+            self._add(self._files.optional, test_file)
 
 
     def add_from_data(self, data, file_name, encoding="UTF-8", required=True):
@@ -129,7 +139,6 @@ class TestCase(object):
             details["adapter"] = self.adapter_name
             details["env"] = dict()
             details["input"] = os.path.basename(self.input_fname) if self.input_fname else None
-            details["suppressions"] = list()
             details["target"] = self.landing_page
             for env_var, env_val in self._env_vars.items():
                 details["env"][env_var] = env_val
@@ -139,7 +148,7 @@ class TestCase(object):
             for meta_file in self._files.meta:
                 meta_file.dump(log_dir)
 
-            # WARNING: test_info.txt will be are deprecated and will be removed
+            # WARNING: test_info.txt and env_vars.txt are deprecated and will be removed
             # TODO: remove this section
             with open(os.path.join(log_dir, "test_info.txt"), "w") as out_fp:
                 out_fp.write("[Grizzly test case details]\n")

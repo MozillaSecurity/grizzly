@@ -42,12 +42,16 @@ class TestCaseTests(unittest.TestCase):
     def test_02(self):
         "test TestCase with TestFiles"
         tf1 = TestFile.from_data("test_req", "testfile1.bin")
+        tfd = TestFile.from_data("test_dup", "testfile1.bin")
+        self.addCleanup(tfd.close)
         tf2 = TestFile.from_data("test_nreq", "test_dir/testfile2.bin")
         tf3 = TestFile.from_data("test_blah", "/testfile3.bin")
         tf4 = TestFile.from_data("test_windows", "\\\\dir\\file.bin")
         tc = TestCase("land_page.html", "redirect.html", "test-adapter", input_fname="testinput.bin")
         self.addCleanup(tc.cleanup)
         tc.add_file(tf1)
+        with self.assertRaises(RuntimeError):
+            tc.add_file(tfd)
         tc.add_file(tf2, required=False)
         tc.add_file(tf3)
         tc.add_file(tf4)
@@ -56,6 +60,7 @@ class TestCaseTests(unittest.TestCase):
         self.assertIn(os.path.join("test_dir", "testfile2.bin"), opt_files)
         tc.dump(self.tdir, include_details=True)
         self.assertTrue(os.path.isdir(os.path.join(self.tdir, "test_dir")))
+        self.assertTrue(os.path.isfile(os.path.join(self.tdir, "test_info.json")))
         self.assertTrue(os.path.isfile(os.path.join(self.tdir, "test_info.txt")))
         with open(os.path.join(self.tdir, "test_info.txt"), "r") as test_fp:
             self.assertIn("testinput.bin", test_fp.read())
