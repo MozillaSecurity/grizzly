@@ -416,3 +416,33 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylin
     args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
     assert crash.main(args) == 1
     assert not expect_patch
+
+
+def test_environ_and_suppressions(monkeypatch, tmpdir):
+    ""
+    run_called = [0]
+
+    class MyReductionJob(ReductionJob):
+
+        def run(self, *args, **kwds):
+            assert len(self.interesting.env_mod) == 2
+            assert "GRZ_FORCE_CLOSE" in self.interesting.env_mod
+            assert self.interesting.env_mod["GRZ_FORCE_CLOSE"] == "0"
+            assert "LSAN_OPTIONS" in self.interesting.env_mod
+            assert len(self.interesting.env_mod["LSAN_OPTIONS"].split(":")) == 2
+            assert "detect_leaks=1" in self.interesting.env_mod["LSAN_OPTIONS"]
+            assert "lsan.supp" in self.interesting.env_mod["LSAN_OPTIONS"]
+            run_called[0] += 1
+
+    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, False)
+    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
+
+    exe = tmpdir.ensure("binary")
+    inp = tmpdir.ensure("input", dir=True)
+    inp.ensure("env_vars.txt").write("LSAN_OPTIONS=detect_leaks=1\nGRZ_FORCE_CLOSE=0")
+    inp.ensure("test_info.txt").write("landing page: test.html")
+    inp.ensure("lsan.supp").write("foo")
+    inp.ensure("test.html").write("fluff\nrequired\n")
+    args = ReducerArgs().parse_args([exe.strpath, inp.strpath])
+    reduce.main(args)
+    assert run_called[0] == 1

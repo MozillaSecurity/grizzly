@@ -82,6 +82,12 @@ class Interesting(object):
                 if not value:
                     value = None
                 self.env_mod[key] = value
+        # known sanitizer suppression files
+        known_suppressions = ('lsan.supp', 'ubsan.supp')
+        working_dir = os.path.dirname(environ)
+        for file_name in os.listdir(working_dir):
+            if file_name in known_suppressions:
+                self._add_san_suppressions(os.path.join(working_dir, file_name))
 
     @property
     def wwwdir(self):
@@ -117,6 +123,20 @@ class Interesting(object):
         """
         self.skipped = None
         self.result_cache = {}
+
+    def _add_san_suppressions(self, supp_file):
+        # Update the sanitizer *SAN_OPTIONS environment variable to use provided
+        # suppressions file
+        opt_key = '%s_OPTIONS' % os.path.basename(supp_file).split('.')[0].upper()
+        opt_val = self.env_mod.get(opt_key, '')
+        updated = list()
+        for opt in opt_val.split(':'):
+            if opt != 'suppressions':
+                updated.append(opt)
+                continue
+        updated.append('suppressions=%s' % supp_file)
+        self.env_mod[opt_key] = ':'.join(updated)
+        assert False, self.env_mod
 
     def monitor_process(self, iteration_done_event, idle_timeout_event):
         # Wait until timeout is hit before polling
