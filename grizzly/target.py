@@ -29,6 +29,7 @@ class Target(object):
                  use_rr, use_valgrind, use_xvfb):
         self.binary = binary
         self.extension = extension
+        self.forced_close = os.getenv("GRZ_FORCED_CLOSE", "1").lower() not in ("false", "0")
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit * 0x100000 if log_limit and log_limit > 0 else 0
         self.memory_limit = memory_limit * 0x100000 if memory_limit and memory_limit > 0 else 0
@@ -77,22 +78,24 @@ class Target(object):
 
 
     def check_relaunch(self, wait=60):
-        # this should be called once per iteration
-        self.rl_countdown -= 1
         if self.rl_countdown > 0:
             return
-        wait = max(wait, 0)
         # if the corpus manager does not use the default harness
-        # chances are it will hang here for 60 seconds
-        log.debug("relaunch will be triggered... waiting up to %d seconds", wait)
-        for _ in range(wait):
-            if not self._puppet.is_healthy():
+        # or close the browser it will hang here for 60 seconds
+        log.debug("relaunch will be triggered... waiting up to %0.2f seconds", wait)
+        deadline = time.time() + wait
+        while self._puppet.is_healthy():
+            if time.time() >= deadline:
+                log.info("Forcing target relaunch")
                 break
             time.sleep(1)
-
-        if self._puppet.is_healthy():
-            log.info("Forcing target relaunch")
         self.close()
+
+
+    @property
+    def expect_close(self):
+        # This is used to indicate if the browser will self close after the current iteration
+        return self.rl_countdown < 1 and not self.forced_close
 
 
     def poll_for_idle(self, threshold, interval):
@@ -118,6 +121,9 @@ class Target(object):
 
     def detect_failure(self, ignored, was_timeout):
         status = self.RESULT_NONE
+        if self.expect_close and not was_timeout:
+            # give the browser a moment to close if needed
+            self._puppet.wait(timeout=30)
         is_healthy = self._puppet.is_healthy()
         # check if there has been a crash, hang, etc...
         if not is_healthy or was_timeout:
@@ -209,6 +215,11 @@ class Target(object):
 
     def save_logs(self, *args, **kwargs):
         self._puppet.save_logs(*args, **kwargs)
+
+
+    def step(self):
+        # this should be called once per iteration
+        self.rl_countdown -= 1
 
 
 class TargetMonitor(object):

@@ -96,7 +96,7 @@ class IOManager(object):
         "ASAN_OPTIONS",
         "LSAN_OPTIONS",
         "GNOME_ACCESSIBILITY",
-        "GRZ_FORCE_CLOSE",
+        "GRZ_FORCED_CLOSE",
         "MOZ_CHAOSMODE")
 
 

@@ -24,8 +24,11 @@ class FakeTarget(object):
         self.rl_reset = 10
         self.closed = True
         self.binary = ""
+        self.forced_close = os.getenv("GRZ_FORCED_CLOSE", "1").lower() not in ("false", "0")
         self.prefs = None
+        self.rl_countdown = 0
         self.use_valgrind = False
+
         self._calls = {
             "save_logs": 0,
             "poll_for_idle": 0,
@@ -71,6 +74,13 @@ class FakeTarget(object):
     def detect_failure(self, *args, **kwds):
         self._calls["detect_failure"] += 1
         return Target.RESULT_FAILURE
+
+    @property
+    def expect_close(self):
+        return self.rl_countdown < 1 and not self.forced_close
+
+    def step(self):
+        self.rl_countdown -= 1
 
 
 def create_target_binary(target, tmp_path):
