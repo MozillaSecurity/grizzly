@@ -136,7 +136,7 @@ class Session(object):
                         self.iomanager.landing_page(),
                         "?timeout=%d&" % (self.adapter.TEST_DURATION * 1000),
                         "close_after=%d&" % self.target.rl_reset,
-                        "force_close=%s" % os.getenv("GRZ_FORCE_CLOSE", "1"))
+                        "forced_close=0" if not self.target.forced_close else "")
                     log.info("Launching target")
                     self.target.launch("".join(location))
                     launch_timeouts = 0
@@ -155,6 +155,7 @@ class Session(object):
                     if launch_timeouts < 3:
                         continue
                     raise
+            self.target.step()
 
             # generate testcase
             current_test = self.iomanager.create_testcase(

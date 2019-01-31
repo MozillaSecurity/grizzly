@@ -92,9 +92,13 @@ class FakePuppet(object):
     def log_length(self, log_id):  # pylint: disable=no-self-use
         if log_id == "stderr":
             return 1024
-        elif log_id == "stdout":
+        if log_id == "stdout":
             return 100
         return int(log_id.split("=")[1])
+
+
+    def wait(self, timeout=0):
+        return 1234  # successful wait()
 
 
 class TargetTests(unittest.TestCase):
@@ -109,17 +113,23 @@ class TargetTests(unittest.TestCase):
 
     def test_01(self):
         "test creating a simple Target"
-        target = Target(self.tmpfn, None, 300, 25, 5000, None, 25, False, False, False)
-        self.addCleanup(target.cleanup)
-        self.assertTrue(target.closed)
-        self.assertEqual(target.detect_failure([], None), Target.RESULT_NONE)
-        self.assertEqual(target.log_size(), 1124)
-        target.check_relaunch()
+        os.environ["GRZ_FORCED_CLOSE"] = "0"
+        try:
+            target = Target(self.tmpfn, None, 300, 25, 5000, None, 25, False, False, False)
+            self.addCleanup(target.cleanup)
+            self.assertTrue(target.closed)
+            self.assertFalse(target.forced_close)
+            self.assertEqual(target.detect_failure([], None), Target.RESULT_NONE)
+            self.assertEqual(target.log_size(), 1124)
+            target.check_relaunch()
+        finally:
+            os.environ.pop("GRZ_FORCED_CLOSE", None)
 
     def test_02(self):
         "test creating and launching a simple Target"
         relaunch = 25
         target = Target(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
+        self.assertTrue(target.forced_close)
         self.addCleanup(target.cleanup)
         target.launch("launch_target_page")
         self.assertEqual(target.detect_failure([], None), Target.RESULT_NONE)
@@ -128,18 +138,20 @@ class TargetTests(unittest.TestCase):
         self.assertTrue(target.closed)
 
     def test_03(self):
-        "test check_relaunch()"
+        "test check_relaunch() and step()"
         relaunch = 25
         target = Target(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
         self.addCleanup(target.cleanup)
         target.launch("launch_target_page")
         # test skipping relaunch
         self.assertEqual(target.rl_countdown, relaunch)
+        target.step()
         target.check_relaunch(wait=60)
         self.assertEqual(target.rl_countdown, relaunch - 1)
         self.assertFalse(target.closed)
         # test triggering relaunch
         target.rl_countdown = 0
+        target.step()
         target.check_relaunch(wait=0)
         self.assertEqual(target.rl_countdown, -1)
         self.assertTrue(target.closed)
@@ -148,6 +160,7 @@ class TargetTests(unittest.TestCase):
         self.assertFalse(target.closed)
         target._puppet.test_crashed = True  # pylint: disable=protected-access
         target.rl_countdown = 0
+        target.step()
         target.check_relaunch(wait=5)  # should not block
         self.assertTrue(target.closed)
 
@@ -222,6 +235,20 @@ class TargetTests(unittest.TestCase):
         target._puppet.test_available_logs = ["ffp_worker_log_size"]  # pylint: disable=protected-access
         self.assertEqual(target.detect_failure(["log-limit"], False), Target.RESULT_IGNORED)
         self.assertTrue(target.closed)
+
+        # test browser closing test case
+        target.cleanup()
+        os.environ["GRZ_FORCED_CLOSE"] = "0"
+        try:
+            target = Target(self.tmpfn, None, 300, 25, 5000, None, 1, False, False, False)
+            self.addCleanup(target.cleanup)
+            target.launch("launch_page")
+            target.step()
+            self.assertTrue(target.expect_close)
+            self.assertEqual(target.detect_failure([], False), Target.RESULT_NONE)
+            target.close()
+        finally:
+            os.environ.pop("GRZ_FORCED_CLOSE", None)
 
 
     def test_05(self):

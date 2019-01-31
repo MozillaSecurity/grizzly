@@ -136,7 +136,6 @@ class Interesting(object):
                 continue
         updated.append('suppressions=%s' % supp_file)
         self.env_mod[opt_key] = ':'.join(updated)
-        assert False, self.env_mod
 
     def monitor_process(self, iteration_done_event, idle_timeout_event):
         # Wait until timeout is hit before polling
@@ -180,7 +179,7 @@ class Interesting(object):
             "http://127.0.0.1:%d/harness?" % self.server.get_port(),
             "timeout=%d&" % (self.iter_timeout * 1000,),
             "close_after=%d&" % self.target.rl_reset,
-            "force_close=%s" % os.getenv("GRZ_FORCE_CLOSE", "1")))
+            "forced_close=0" if not self.target.forced_close else ""))
 
     def interesting(self, _, temp_prefix):
         """Lithium main iteration entrypoint.
@@ -305,6 +304,7 @@ class Interesting(object):
                         time.sleep(15)
                     else:
                         raise
+            self.target.step()
 
         try:
             start_time = time.time()

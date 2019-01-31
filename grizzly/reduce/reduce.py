@@ -256,6 +256,8 @@ class ReductionJob(object):
                 self.interesting.config_environ(os.path.join(dirs[0], "env_vars.txt"))
                 LOG.warning("Using environment included in testcase: %s",
                             os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
+                self.interesting.target.forced_close = \
+                self.interesting.env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
 
             # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
             # them all in order
