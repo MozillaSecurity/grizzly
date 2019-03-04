@@ -5,7 +5,7 @@
 <title>&#x1f43b; &sdot; Grizzly &sdot; &#x1f98a;</title>
 <script>
 function grzDump(msg) {
-  dump(`[grizzly harness][${new Date().toUTCString()}] ${msg}`)
+  dump(`[grz harness][${new Date().toUTCString()}] ${msg}\n`)
 }
 
 function setBanner(msg) {
@@ -19,7 +19,7 @@ function main() {
   }
 
   if (close_after !== undefined && close_after-- < 1) {
-    grzDump('Hit close limit.\n')
+    grzDump('Hit close limit.')
     window.location = '/close_browser'
     return
   }
@@ -34,13 +34,14 @@ function main() {
 
   sub.addEventListener('unload', function () {
     clearTimeout(limit_tmr)
-    grzDump('Test case closed\n')
+    grzDump('Test case closed')
     setTimeout(main, 0)
   })
+
   limit_tmr = setTimeout(() => {
-    grzDump('Time limit exceeded\n')
+    grzDump('Time limit exceeded')
     if (!sub.closed){
-      grzDump('Closing test case\n')
+      grzDump('Closing test case')
       sub.close()
     }
   }, time_limit)
@@ -59,21 +60,21 @@ for (let kv of location.hash.substr(1).split(',')) {
   }
 }
 if (time_limit === undefined || time_limit <= 0) {
-  grzDump('No time limit given, using default of 5s\n')
+  grzDump('No time limit given, using default of 5s')
   time_limit = 5000
 } else {
-  grzDump(`Using time limit of ${time_limit}\\n`)
+  grzDump(`Using time limit of ${time_limit}`)
 }
 
 window.onload = () => {
   // update banner
   setBanner('&#x1f43b; &sdot; Grizzly Harness &sdot; &#x1f98a;')
-  setTimeout(main, 5000)
+  main()
 }
 
 window.addEventListener('beforeunload', () => {
   clearTimeout(limit_tmr)
-  grzDump('Cleaning up\n')
+  grzDump('Cleaning up')
   if (!sub.closed) {
     sub.close()
   }
