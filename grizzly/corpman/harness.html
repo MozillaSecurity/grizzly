@@ -20,7 +20,7 @@ function main() {
 
   if (close_after !== undefined && close_after-- < 1) {
     grzDump('Hit close limit.')
-    window.location = '/close_browser'
+    window.location.href = '/close_browser'
     return
   }
 
