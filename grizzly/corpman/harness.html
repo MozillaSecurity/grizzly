@@ -17,6 +17,7 @@ function main() {
     setTimeout(main, 10)
     return
   }
+
   if (close_after !== undefined && close_after-- < 1) {
     grzDump('Hit close limit.\n')
     window.location = '/close_browser'
@@ -30,13 +31,16 @@ function main() {
     grzDump('Could not open test! Blocked by the popup blocker?')
     return
   }
-  sub.addEventListener('beforeunload', () => {
-    let cur_loc
+
+  sub.addEventListener('DOMContentLoaded', function () {
+    try { cur_loc = sub.location.toString() } catch (e) { cur_loc = prev_loc }
+  })
+
+  sub.addEventListener('unload', function () {
     clearTimeout(limit_tmr)
     grzDump('Test case closed\n')
     // check if we are reopening the same page
     // this seems to be due to losing sync with the web server
-    try { cur_loc = sub.location.toString() } catch(e) { cur_loc = prev_loc }
     if (cur_loc === prev_loc && cur_loc !== orig_loc) {
       if (++retries > 2) {
         grzDump('Lost sync! Closing Browser.')
@@ -65,6 +69,7 @@ function main() {
 let close_after, limit_tmr, orig_loc, prev_loc, time_limit
 let retries = 0
 let sub = null
+let cur_loc
 for (let kv of location.hash.substr(1).split(',')) {
   let [k, v] = kv.split('=')
   if (k === 'timeout') {
