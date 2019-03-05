@@ -13,8 +13,9 @@ function setBanner(msg) {
 }
 
 function main() {
-  if (sub !== null && !sub.closed) {
-    setTimeout(main, 10)
+  // poll sub and wait until closed
+  if (sub && !sub.closed) {
+    setTimeout(main, 50)
     return
   }
 
@@ -22,6 +23,11 @@ function main() {
     grzDump('Hit close limit.')
     window.location.href = '/close_browser'
     return
+  }
+
+  // if limit_tmr is set, clear it before opening a new tab
+  if (limit_tmr !== undefined) {
+    clearTimeout(limit_tmr)
   }
 
   // open test
@@ -32,14 +38,6 @@ function main() {
     return
   }
 
-  sub.addEventListener('unload', (evt) => {
-    if (evt.target.location.href !== 'about:blank') {
-      clearTimeout(limit_tmr)
-      grzDump('Test case closed')
-      setTimeout(main, 0)
-    }
-  })
-
   limit_tmr = setTimeout(() => {
     grzDump('Time limit exceeded')
     if (!sub.closed){
@@ -47,6 +45,8 @@ function main() {
       sub.close()
     }
   }, time_limit)
+
+  setTimeout(main, 50)
 }
 
 let close_after, limit_tmr, time_limit
