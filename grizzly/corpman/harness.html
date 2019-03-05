@@ -32,10 +32,12 @@ function main() {
     return
   }
 
-  sub.addEventListener('unload', function () {
-    clearTimeout(limit_tmr)
-    grzDump('Test case closed')
-    setTimeout(main, 0)
+  sub.addEventListener('unload', (evt) => {
+    if (evt.target.location.href !== 'about:blank') {
+      clearTimeout(limit_tmr)
+      grzDump('Test case closed')
+      setTimeout(main, 0)
+    }
   })
 
   limit_tmr = setTimeout(() => {
