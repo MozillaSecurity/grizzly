@@ -131,9 +131,8 @@ class Interesting(object):
         opt_val = self.env_mod.get(opt_key, '')
         updated = list()
         for opt in opt_val.split(':'):
-            if opt != 'suppressions':
+            if opt and opt != 'suppressions':
                 updated.append(opt)
-                continue
         updated.append('suppressions=%s' % supp_file)
         self.env_mod[opt_key] = ':'.join(updated)
 
