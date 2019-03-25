@@ -311,6 +311,7 @@ class ReductionJob(object):
                 harness_fp.write(harness)
             self.testcase = harness_path
             self.harness_created = True
+            self.interesting.no_harness = True
 
         # prune unnecessary files from the testcase
         for root, _, files in os.walk(self.tcroot):
