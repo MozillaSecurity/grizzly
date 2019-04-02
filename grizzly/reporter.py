@@ -162,6 +162,13 @@ class Report(object):
             if logs["aux"] is None and os.stat(os.path.join(log_path, fname)).st_size:
                 logs["aux"] = fname
 
+        # look for Valgrind logs
+        if logs["aux"] is None:
+            for fname in (log_file for log_file in log_files if "valgrind" in log_file):
+                if os.stat(os.path.join(log_path, fname)).st_size:
+                    logs["aux"] = fname
+                    break
+
         # prefer ASan logs over minidump logs
         if logs["aux"] is None:
             re_dump_req = re.compile(r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump")

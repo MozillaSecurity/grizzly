@@ -37,6 +37,7 @@ class Target(object):
         self.rl_reset = max(relaunch, 1)
         self.rr_path = None  # TODO: this should likely be in FFPuppet
         self.use_rr = use_rr
+        self.use_valgrind = use_valgrind
         self._lock = threading.Lock()
 
         assert self.binary is not None and os.path.isfile(self.binary)

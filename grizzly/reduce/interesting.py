@@ -345,7 +345,10 @@ class Interesting(object):
                     if self.orig_sig is None and not self.any_crash:
                         max_frames = FuzzManagerReporter.signature_max_frames(crash, 5)
                         self.orig_sig = crash.createCrashSignature(maxFrames=max_frames)
-                    self.update_timeout(end_time - start_time)
+                    # the amount of time it can take to replay a test case can vary
+                    # when under Valgrind so do not update the timeout in that case
+                    if not self.use_valgrind:
+                        self.update_timeout(end_time - start_time)
                 else:
                     log.info("Uninteresting: different signature: %s", short_sig)
                     if self.alt_crash_cb is not None:
