@@ -2,15 +2,14 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import unicode_literals
 import logging
 import os.path
 import zipfile
 import pytest
-
 from grizzly.reduce import interesting, reduce, strategies, ReducerError, ReductionJob
 from grizzly.reporter import Reporter, FuzzManagerReporter
 from grizzly.target import Target
-
 from .test_common import FakeTarget, create_target_binary
 
 
@@ -18,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class FakeInteresting(interesting.Interesting):
-    "Stub to fake parts of grizzly.reduce.Interesting needed for testing the reduce loop"
+    """Stub to fake parts of grizzly.reduce.Interesting needed for testing the reduce loop"""
 
     def init(self, _):
         pass
@@ -35,7 +34,7 @@ class FakeInteresting(interesting.Interesting):
 
 
 class FakeInterestingAlt(FakeInteresting):
-    "Version of FakeInteresting that only reports alternate crashes"
+    """Version of FakeInteresting that only reports alternate crashes"""
 
     def init(self, _):
         self.__first_run = True
@@ -54,7 +53,7 @@ class FakeInterestingAlt(FakeInteresting):
 
 
 class FakeInterestingKeepHarness(FakeInteresting):
-    "Version of FakeInteresting that keeps the entire harness"
+    """Version of FakeInteresting that keeps the entire harness"""
 
     def init(self, _):
         self.__init_data = None
@@ -76,7 +75,7 @@ class FakeInterestingKeepHarness(FakeInteresting):
 
 @pytest.fixture
 def job(monkeypatch, request):
-    "Pytest fixture to provide a ReductionJob object with dependencies stubbed and default values"
+    """Pytest fixture to provide a ReductionJob object with dependencies stubbed and default values"""
     interesting_cls = getattr(request, "param", FakeInteresting)
     monkeypatch.setattr(reduce, "Interesting", interesting_cls)
     result = ReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, False)
@@ -84,90 +83,90 @@ def job(monkeypatch, request):
     result.close()
 
 
-def test_config_testcase_0(tmpdir, job):
-    "empty directory fails config_testcase"
+def test_config_testcase_0(tmp_path, job):
+    """empty directory fails config_testcase"""
     with pytest.raises(ReducerError) as exc:
-        job.config_testcase(tmpdir.strpath)
+        job.config_testcase(str(tmp_path))
     assert "No testcase recognized" in str(exc)
 
 
-def test_config_testcase_1(tmpdir, job):
-    "non-zip file fails config_testcase"
-    file = tmpdir.join("test.txt")
-    file.ensure(file=True)
+def test_config_testcase_1(tmp_path, job):
+    """non-zip file fails config_testcase"""
+    file = tmp_path / "test.txt"
+    file.touch()
     with pytest.raises(ReducerError) as exc:
-        job.config_testcase(file.strpath)
+        job.config_testcase(str(file))
     assert "Testcase must be zip, html, or directory" in str(exc)
-    file.remove()
+    file.unlink()
 
 
-def test_config_testcase_2(tmpdir, job):
-    "config_testcase can't be called twice"
+def test_config_testcase_2(tmp_path, job):
+    """config_testcase can't be called twice"""
     with pytest.raises(ReducerError) as exc:
-        job.config_testcase(tmpdir.strpath)
+        job.config_testcase(str(tmp_path))
     with pytest.raises(ReducerError) as exc:
-        job.config_testcase(tmpdir.strpath)
+        job.config_testcase(str(tmp_path))
     assert "Testcase already configured?" in str(exc)
 
 
-def test_config_testcase_3(tmpdir, job):
-    "bad zip file fails config_testcase"
-    file = tmpdir.join("test.zip")
-    file.ensure(file=True)
+def test_config_testcase_3(tmp_path, job):
+    """bad zip file fails config_testcase"""
+    file = tmp_path / "test.zip"
+    file.touch()
     with pytest.raises(zipfile.error):
-        job.config_testcase(file.strpath)
+        job.config_testcase(str(file))
 
 
-def test_config_testcase_4(tmpdir, job):
-    "missing landing page causes failure"
-    file = tmpdir.join("test_info.txt")
-    file.ensure(file=True)
+def test_config_testcase_4(tmp_path, job):
+    """missing landing page causes failure"""
+    file = tmp_path / "test_info.txt"
+    file.touch()
     with pytest.raises(ReducerError) as exc:
-        job.config_testcase(tmpdir.strpath)
+        job.config_testcase(str(tmp_path))
     assert "Could not find landing page" in str(exc)
 
 
-def test_config_testcase_5(tmpdir, job):
-    "missing landing page causes failure"
-    file = tmpdir.join("test_info.txt")
-    file.write("landing page: ")
+def test_config_testcase_5(tmp_path, job):
+    """missing landing page causes failure"""
+    file = tmp_path / "test_info.txt"
+    file.write_text("landing page: ")
     with pytest.raises(ReducerError) as exc:
-        job.config_testcase(tmpdir.strpath)
+        job.config_testcase(str(tmp_path))
     assert "Landing page"
     assert "does not exist" in str(exc)
 
 
-def test_config_testcase_6(tmpdir, job):
-    "single testcase is loaded ok"
-    file = tmpdir.join("test_info.txt")
-    file.write("landing page: test.html")
-    tmpdir.join("test.html").write("hello")
-    job.config_testcase(tmpdir.strpath)
+def test_config_testcase_6(tmp_path, job):
+    """single testcase is loaded ok"""
+    file = tmp_path / "test_info.txt"
+    file.write_text("landing page: test.html")
+    (tmp_path / "test.html").write_text("hello")
+    job.config_testcase(str(tmp_path))
     assert job.testcase == os.path.join(job.tcroot, "test.html")
     with open(job.testcase) as tc_fp:
         assert tc_fp.read() == "hello"
 
 
-def test_config_testcase_7(tmpdir, job):
-    "single testcase in numbered subdir is loaded ok"
-    tmpdir.join("-0").ensure(dir=True)
-    file = tmpdir.join("-0", "test_info.txt")
-    file.write("landing page: test.html")
-    tmpdir.join("-0", "test.html").write("hello")
-    job.config_testcase(tmpdir.strpath)
+def test_config_testcase_7(tmp_path, job):
+    """single testcase in numbered subdir is loaded ok"""
+    (tmp_path / "-0").mkdir()
+    file = tmp_path / "-0" / "test_info.txt"
+    file.write_text("landing page: test.html")
+    (tmp_path / "-0" / "test.html").write_text("hello")
+    job.config_testcase(str(tmp_path))
     assert job.testcase == os.path.join(job.tcroot, "-0", "test.html")
     with open(job.testcase) as tc_fp:
         assert tc_fp.read() == "hello"
 
 
-def test_config_testcase_8(tmpdir, job):
-    "multiple testcase in numbered subdir creates a harness"
+def test_config_testcase_8(tmp_path, job):
+    """multiple testcase in numbered subdir creates a harness"""
     for subdir in ("-0", "-1"):
-        tmpdir.join(subdir).ensure(dir=True)
-        file = tmpdir.join(subdir, "test_info.txt")
-        file.write("landing page: test.html")
-        tmpdir.join(subdir, "test.html").write("hello")
-    job.config_testcase(tmpdir.strpath)
+        (tmp_path / subdir).mkdir()
+        file = tmp_path / subdir / "test_info.txt"
+        file.write_text("landing page: test.html")
+        (tmp_path / subdir / "test.html").write_text("hello")
+    job.config_testcase(str(tmp_path))
     assert job.testcase.startswith(os.path.join(job.tcroot, "harness_"))
     assert job.testcase.endswith(".html")
     for subdir in ("-0", "-1"):
@@ -180,63 +179,63 @@ def test_config_testcase_8(tmpdir, job):
     assert loc1 < loc0, "testcases should occur in harness in descending order"
 
 
-def test_config_testcase_9(tmpdir, job):
-    "single testcase is loaded from zip ok"
-    file = tmpdir.join("test_info.txt")
-    file.write("landing page: test.html")
-    tmpdir.join("test.html").write("hello")
-    with zipfile.ZipFile(tmpdir.join("test.zip").strpath, "w") as zip_fp:
-        zip_fp.write(tmpdir.join("test_info.txt").strpath, "test_info.txt")
-        zip_fp.write(tmpdir.join("test.html").strpath, "test.html")
-    job.config_testcase(tmpdir.join("test.zip").strpath)
+def test_config_testcase_9(tmp_path, job):
+    """single testcase is loaded from zip ok"""
+    file = tmp_path / "test_info.txt"
+    file.write_text("landing page: test.html")
+    (tmp_path / "test.html").write_text("hello")
+    with zipfile.ZipFile(str(tmp_path / "test.zip"), "w") as zip_fp:
+        zip_fp.write(str(tmp_path / "test_info.txt"), "test_info.txt")
+        zip_fp.write(str(tmp_path / "test.html"), "test.html")
+    job.config_testcase(str(tmp_path / "test.zip"))
     assert job.testcase == os.path.join(job.tcroot, "test.html")
     with open(job.testcase) as tc_fp:
         assert tc_fp.read() == "hello"
 
 
-def test_config_testcase_10(tmpdir, job):
-    "prefs from testcase are used and take precedence over target prefs"
-    tmpdir.join("orig_prefs.js").write("orig prefs")
-    job.interesting.target.prefs = tmpdir.join("orig_prefs.js").strpath
-    file = tmpdir.join("test_info.txt")
-    file.write("landing page: test.html")
-    tmpdir.join("test.html").write("hello")
-    tmpdir.join("prefs.js").write("some prefs")
-    job.config_testcase(tmpdir.strpath)
+def test_config_testcase_10(tmp_path, job):
+    """prefs from testcase are used and take precedence over target prefs"""
+    (tmp_path / "orig_prefs.js").write_text("orig prefs")
+    job.interesting.target.prefs = str(tmp_path / "orig_prefs.js")
+    file = tmp_path / "test_info.txt"
+    file.write_text("landing page: test.html")
+    (tmp_path / "test.html").write_text("hello")
+    (tmp_path / "prefs.js").write_text("some prefs")
+    job.config_testcase(str(tmp_path))
     assert os.path.normpath(job.interesting.target.prefs) \
-        != os.path.normpath(tmpdir.join("prefs.js").strpath)
+        != os.path.normpath(str(tmp_path / "prefs.js"))
     with open(job.interesting.target.prefs) as prefs_fp:
         assert prefs_fp.read() == "some prefs"
 
 
-def test_config_testcase_11(tmpdir, job):
-    "env vars from testcase are used"
-    file = tmpdir.join("test_info.txt")
-    file.write("landing page: test.html")
-    tmpdir.join("test.html").write("hello")
-    tmpdir.join("env_vars.txt").write("var=value\nfoo=bar")
-    job.config_testcase(tmpdir.strpath)
+def test_config_testcase_11(tmp_path, job):
+    """env vars from testcase are used"""
+    file = tmp_path / "test_info.txt"
+    file.write_text("landing page: test.html")
+    (tmp_path / "test.html").write_text("hello")
+    (tmp_path / "env_vars.txt").write_text("var=value\nfoo=bar")
+    job.config_testcase(str(tmp_path))
     assert job.interesting.env_mod == dict(var="value", foo="bar")
 
 
-def test_config_testcase_12(tmpdir, job):
-    "html testcase is loaded ok"
-    tmpdir.join("test.html").write("hello")
-    job.config_testcase(tmpdir.join("test.html").strpath)
+def test_config_testcase_12(tmp_path, job):
+    """html testcase is loaded ok"""
+    (tmp_path / "test.html").write_text("hello")
+    job.config_testcase(str(tmp_path / "test.html"))
     assert job.testcase == os.path.join(job.tcroot, "test.html")
     with open(job.testcase) as tc_fp:
         assert tc_fp.read() == "hello"
 
 
-def test_run_0(tmpdir, job):
-    "single required testcase is reduced and reported"
-    create_target_binary(job.interesting.target, tmpdir)
-    tmpdir.ensure("tc", dir=True)
-    tmpdir.join("tc", "test_info.txt").write("landing page: test.html")
-    tmpdir.join("tc", "test.html").write("fluff\nrequired\n")
-    tmpdir.join("tc", "prefs.js").write("some prefs")
-    tmpdir.join("tc", "env_vars.txt").write("var=value\nfoo=bar")
-    job.config_testcase(tmpdir.join("tc").strpath)
+def test_run_0(tmp_path, job):
+    """single required testcase is reduced and reported"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
+    (tmp_path / "tc" / "prefs.js").write_text("some prefs")
+    (tmp_path / "tc" / "env_vars.txt").write_text("var=value\nfoo=bar")
+    job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
     class FakeReporter(Reporter):
@@ -264,15 +263,15 @@ def test_run_0(tmpdir, job):
 
 
 @pytest.mark.parametrize("job", [FakeInterestingAlt], indirect=["job"])
-def test_run_1(tmpdir, job):
-    "other crashes are reported as unreduced crashes"
-    create_target_binary(job.interesting.target, tmpdir)
-    tmpdir.ensure("tc", dir=True)
-    tmpdir.join("tc", "test_info.txt").write("landing page: test.html")
-    tmpdir.join("tc", "test.html").write("fluff\nrequired\n")
-    tmpdir.join("tc", "prefs.js").write("some prefs")
-    tmpdir.join("tc", "env_vars.txt").write("var=value\nfoo=bar")
-    job.config_testcase(tmpdir.join("tc").strpath)
+def test_run_1(tmp_path, job):
+    """other crashes are reported as unreduced crashes"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
+    (tmp_path / "tc" / "prefs.js").write_text("some prefs")
+    (tmp_path / "tc" / "env_vars.txt").write_text("var=value\nfoo=bar")
+    job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
     class FakeReporter(Reporter):
@@ -299,14 +298,14 @@ def test_run_1(tmpdir, job):
     assert report_data["num_reports"] == 1
 
 
-def test_run_2(tmpdir, job):
-    "other files in testcase are not reduced without DDBEGIN/END"
-    create_target_binary(job.interesting.target, tmpdir)
-    tmpdir.ensure("tc", dir=True)
-    tmpdir.join("tc", "test_info.txt").write("landing page: test.html")
-    tmpdir.join("tc", "test.html").write("fluff\nrequired\n")
-    tmpdir.join("tc", "test2.html").write("fluff\nrequired\n")
-    job.config_testcase(tmpdir.join("tc").strpath)
+def test_run_2(tmp_path, job):
+    """other files in testcase are not reduced without DDBEGIN/END"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
+    (tmp_path / "tc" / "test2.html").write_text("fluff\nrequired\n")
+    job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
     class FakeReporter(Reporter):
@@ -328,14 +327,14 @@ def test_run_2(tmpdir, job):
     assert report_data["num_reports"] == 1
 
 
-def test_run_3(tmpdir, job):
-    "other files in testcase are reduced with DDBEGIN/END"
-    create_target_binary(job.interesting.target, tmpdir)
-    tmpdir.ensure("tc", dir=True)
-    tmpdir.join("tc", "test_info.txt").write("landing page: test.html")
-    tmpdir.join("tc", "test.html").write("fluff\nrequired\n")
-    tmpdir.join("tc", "test2.html").write("DDBEGIN\nfluff\nrequired\nDDEND\n")
-    job.config_testcase(tmpdir.join("tc").strpath)
+def test_run_3(tmp_path, job):
+    """other files in testcase are reduced with DDBEGIN/END"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
+    (tmp_path / "tc" / "test2.html").write_text("DDBEGIN\nfluff\nrequired\nDDEND\n")
+    job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
     class FakeReporter(Reporter):
@@ -358,17 +357,17 @@ def test_run_3(tmpdir, job):
 
 
 @pytest.mark.parametrize("job", [FakeInterestingKeepHarness], indirect=["job"])
-def test_run_4(tmpdir, job):
-    "multiple testcases result in harness being reported"
-    create_target_binary(job.interesting.target, tmpdir)
-    tmpdir.ensure("tc", dir=True)
-    tmpdir.join("tc").ensure("-0", dir=True)
-    tmpdir.join("tc").ensure("-1", dir=True)
-    tmpdir.join("tc", "-0", "test_info.txt").write("landing page: required.html")
-    tmpdir.join("tc", "-0", "required.html").write("DDBEGIN\nfluff\nrequired\nDDEND\n")
-    tmpdir.join("tc", "-1", "test_info.txt").write("landing page: required.html")
-    tmpdir.join("tc", "-1", "required.html").write("DDBEGIN\nfluff\nrequired\nDDEND\n")
-    job.config_testcase(tmpdir.join("tc").strpath)
+def test_run_4(tmp_path, job):
+    """multiple testcases result in harness being reported"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "-0").mkdir()
+    (tmp_path / "tc" / "-1").mkdir()
+    (tmp_path / "tc" / "-0" / "test_info.txt").write_text("landing page: required.html")
+    (tmp_path / "tc" / "-0" / "required.html").write_text("DDBEGIN\nfluff\nrequired\nDDEND\n")
+    (tmp_path / "tc" / "-1" / "test_info.txt").write_text("landing page: required.html")
+    (tmp_path / "tc" / "-1" / "required.html").write_text("DDBEGIN\nfluff\nrequired\nDDEND\n")
+    job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
     class FakeReporter(Reporter):
@@ -393,17 +392,17 @@ def test_run_4(tmpdir, job):
     assert report_data["num_reports"] == 1
 
 
-def test_run_5(tmpdir, job):
-    "multiple testcases reducing to 1 file will have harness removed"
-    create_target_binary(job.interesting.target, tmpdir)
-    tmpdir.ensure("tc", dir=True)
-    tmpdir.join("tc").ensure("-0", dir=True)
-    tmpdir.join("tc").ensure("-1", dir=True)
-    tmpdir.join("tc", "-0", "test_info.txt").write("landing page: test.html")
-    tmpdir.join("tc", "-0", "test.html").write("-0\nDDBEGIN\nfluff\nrequired\nDDEND\n")
-    tmpdir.join("tc", "-1", "test_info.txt").write("landing page: required.html")
-    tmpdir.join("tc", "-1", "required.html").write("-1\nDDBEGIN\nfluff\nrequired\nDDEND\n")
-    job.config_testcase(tmpdir.join("tc").strpath)
+def test_run_5(tmp_path, job):
+    """multiple testcases reducing to 1 file will have harness removed"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "-0").mkdir()
+    (tmp_path / "tc" / "-1").mkdir()
+    (tmp_path / "tc" / "-0" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "-0" / "test.html").write_text("-0\nDDBEGIN\nfluff\nrequired\nDDEND\n")
+    (tmp_path / "tc" / "-1" / "test_info.txt").write_text("landing page: required.html")
+    (tmp_path / "tc" / "-1" / "required.html").write_text("-1\nDDBEGIN\nfluff\nrequired\nDDEND\n")
+    job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
     class FakeReporter(Reporter):
@@ -424,13 +423,13 @@ def test_run_5(tmpdir, job):
 
 
 @pytest.mark.skipif(not strategies.HAVE_JSBEAUTIFIER, reason="jsbeautifier required")
-def test_run_6(tmpdir, job):
-    "test that jsbeautifier stage works"
-    create_target_binary(job.interesting.target, tmpdir)
-    tmpdir.ensure("tc", dir=True)
-    tmpdir.join("tc", "test_info.txt").write("landing page: test.js")
-    tmpdir.join("tc", "test.js").write("try{'fluff';'required'}catch(e){}\n")
-    job.config_testcase(tmpdir.join("tc").strpath)
+def test_run_6(tmp_path, job):
+    """test that jsbeautifier stage works"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.js")
+    (tmp_path / "tc" / "test.js").write_text("try{'fluff';'required'}catch(e){}\n")
+    job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
     class FakeReporter(Reporter):
@@ -450,13 +449,13 @@ def test_run_6(tmpdir, job):
     assert report_data["num_reports"] == 1
 
 
-def test_run_7(tmpdir, job):
-    "test that jschar stage works"
-    create_target_binary(job.interesting.target, tmpdir)
-    tmpdir.ensure("tc", dir=True)
-    tmpdir.join("tc", "test_info.txt").write("landing page: test.js")
-    tmpdir.join("tc", "test.js").write("var x = 'xrequiredx'\n")
-    job.config_testcase(tmpdir.join("tc").strpath)
+def test_run_7(tmp_path, job):
+    """test that jschar stage works"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.js")
+    (tmp_path / "tc" / "test.js").write_text("var x = 'xrequiredx'\n")
+    job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
     class FakeReporter(Reporter):

@@ -2,113 +2,116 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import unicode_literals
 import zipfile
-
 import pytest
-
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs
 from grizzly.reduce import reduce, crash, bucket, ReductionJob
 from grizzly import reporter
 from .test_reduce import job, FakeInteresting, FakeTarget  # noqa pylint: disable=unused-import
 
 
-def test_parse_args(capsys, tmpdir):
+def test_parse_args(capsys, tmp_path):
     "test that grizzly.reduce args are accepted and validated"
-    exe = tmpdir.join("binary")
-    inp = tmpdir.join("input")
+    exe = tmp_path / "binary"
+    inp = tmp_path / "input"
 
     # missing arg tests
     with pytest.raises(SystemExit):
         ReducerArgs().parse_args([])
     _, err = capsys.readouterr()
     with pytest.raises(SystemExit):
-        ReducerArgs().parse_args([exe.strpath])
+        ReducerArgs().parse_args([str(exe)])
     _, err = capsys.readouterr()
 
     # invalid binary tests
     with pytest.raises(SystemExit):
-        ReducerArgs().parse_args([exe.strpath, inp.strpath])
+        ReducerArgs().parse_args([str(exe), str(inp)])
     _, err = capsys.readouterr()
-    assert "error: file not found: '%s'" % (exe.strpath,) in err
-    exe.ensure(dir=True)
+    assert "error: file not found: '%s'" % (str(exe),) in err
+    exe.mkdir()
     with pytest.raises(SystemExit):
-        ReducerArgs().parse_args([exe.strpath, inp.strpath])
+        ReducerArgs().parse_args([str(exe), str(inp)])
     _, err = capsys.readouterr()
-    assert "error: file not found: '%s'" % (exe.strpath,) in err
-    exe.remove()
-    exe.ensure()
+    assert "error: file not found: '%s'" % (str(exe),) in err
+    exe.rmdir()
+    exe.touch()
 
     # invalid input tests
     with pytest.raises(SystemExit):
-        ReducerArgs().parse_args([exe.strpath, inp.strpath])
+        ReducerArgs().parse_args([str(exe), str(inp)])
     _, err = capsys.readouterr()
-    assert "error: '%s' does not exist" % (inp.strpath,) in err
-    inp.ensure()
+    assert "error: '%s' does not exist" % (str(inp),) in err
+    inp.touch()
     with pytest.raises(SystemExit):
-        ReducerArgs().parse_args([exe.strpath, inp.strpath])
+        ReducerArgs().parse_args([str(exe), str(inp)])
     _, err = capsys.readouterr()
     assert "error: Testcase should be a folder, zip, or html file" in err
-    inp.remove()
+    inp.unlink()
     with pytest.raises(SystemExit):
-        ReducerFuzzManagerIDArgs().parse_args([exe.strpath, inp.strpath])
+        ReducerFuzzManagerIDArgs().parse_args([str(exe), str(inp)])
     _, err = capsys.readouterr()
     assert "invalid int value" in err
 
     # valid binary & inputs
-    zipf = tmpdir.ensure("input.zip")
-    ReducerArgs().parse_args([exe.strpath, zipf.strpath])
-    zipf.remove()
-    inp.ensure(dir=True).ensure("test_info.txt")
-    ReducerArgs().parse_args([exe.strpath, inp.strpath])
-    ReducerFuzzManagerIDArgs().parse_args([exe.strpath, '123'])
+    (tmp_path / "input.zip").touch()
+    zipf = tmp_path / "input.zip"
+    ReducerArgs().parse_args([str(exe), str(zipf)])
+    zipf.unlink()
+    inp.mkdir()
+    (inp / "test_info.txt").touch()
+    ReducerArgs().parse_args([str(exe), str(inp)])
+    ReducerFuzzManagerIDArgs().parse_args([str(exe), '123'])
 
     # sig/environ tests
-    fname = tmpdir.join("file.txt")
+    fname = tmp_path / "file.txt"
     for arg in ("--sig", "--environ"):
         with pytest.raises(SystemExit):
-            ReducerArgs().parse_args([exe.strpath, inp.strpath, arg, fname.strpath])
+            ReducerArgs().parse_args([str(exe), str(inp), arg, str(fname)])
         _, err = capsys.readouterr()
-        assert "error: file not found: '%s'" % (fname.strpath,) in err
-        fname.ensure(dir=True)
+        assert "error: file not found: '%s'" % (str(fname),) in err
+        fname.mkdir()
         with pytest.raises(SystemExit):
-            ReducerArgs().parse_args([exe.strpath, inp.strpath, arg, fname.strpath])
+            ReducerArgs().parse_args([str(exe), str(inp), arg, str(fname)])
         _, err = capsys.readouterr()
-        assert "error: file not found: '%s'" % (fname.strpath,) in err
-        fname.remove()
-        fname.ensure()
-        ReducerArgs().parse_args([exe.strpath, inp.strpath, arg, fname.strpath])
-        fname.remove()
+        assert "error: file not found: '%s'" % (str(fname),) in err
+        fname.rmdir()
+        fname.touch()
+        ReducerArgs().parse_args([str(exe), str(inp), arg, str(fname)])
+        fname.unlink()
 
     # repeat/min-crashes tests
     for arg in ("--repeat", "--min-crashes"):
         with pytest.raises(SystemExit):
-            ReducerArgs().parse_args([exe.strpath, inp.strpath, arg, "abc"])
+            ReducerArgs().parse_args([str(exe), str(inp), arg, "abc"])
         with pytest.raises(SystemExit):
-            ReducerArgs().parse_args([exe.strpath, inp.strpath, arg, "-1"])
+            ReducerArgs().parse_args([str(exe), str(inp), arg, "-1"])
         _, err = capsys.readouterr()
         assert "'%s' value must be positive" % (arg,) in err
         with pytest.raises(SystemExit):
-            ReducerArgs().parse_args([exe.strpath, inp.strpath, arg, "0"])
+            ReducerArgs().parse_args([str(exe), str(inp), arg, "0"])
         _, err = capsys.readouterr()
         assert "'%s' value must be positive" % (arg,) in err
-        ReducerArgs().parse_args([exe.strpath, inp.strpath, arg, "1"])
-        ReducerArgs().parse_args([exe.strpath, inp.strpath, arg, "10"])
+        ReducerArgs().parse_args([str(exe), str(inp), arg, "1"])
+        ReducerArgs().parse_args([str(exe), str(inp), arg, "10"])
 
 
-def test_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+def test_main(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "simple test that main functions"
     # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
 
-    exe = tmpdir.ensure("binary")
-    inp = tmpdir.ensure("input", dir=True)
-    inp.ensure("test_info.txt").write("landing page: test.html")
-    inp.ensure("test.html").write("fluff\nrequired\n")
-    args = ReducerArgs().parse_args([exe.strpath, inp.strpath])
+    (tmp_path / "binary").touch()
+    exe = tmp_path / "binary"
+    (tmp_path / "input").mkdir()
+    inp = tmp_path / "input"
+    (inp / "test_info.txt").write_text("landing page: test.html")
+    (inp / "test.html").write_text("fluff\nrequired\n")
+    args = ReducerArgs().parse_args([str(exe), str(inp)])
     assert reduce.main(args) == 0
 
 
-def test_main_prefs(monkeypatch, tmpdir):
+def test_main_prefs(monkeypatch, tmp_path):
     "cmd line prefs should override prefs in the testcase"
     monkeypatch.setattr(reduce, "Interesting", FakeInteresting)
     run_called = [0]
@@ -125,19 +128,21 @@ def test_main_prefs(monkeypatch, tmpdir):
     job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, False)
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
 
-    exe = tmpdir.ensure("binary")
-    inp = tmpdir.ensure("input", dir=True)
-    inp.ensure("test_info.txt").write("landing page: test.html")
-    inp.ensure("prefs.js").write("test prefs")
-    inp.ensure("test.html").write("fluff\nrequired\n")
-    tmpdir.ensure("prefs.js").write("main prefs")
-    args = ReducerArgs().parse_args([exe.strpath, inp.strpath,
-                                     "-p", tmpdir.join("prefs.js").strpath])
+    (tmp_path / "binary").touch()
+    exe = tmp_path / "binary"
+    (tmp_path / "input").mkdir()
+    inp = tmp_path / "input"
+    (inp / "test_info.txt").write_text("landing page: test.html")
+    (inp / "prefs.js").write_text("test prefs")
+    (inp / "test.html").write_text("fluff\nrequired\n")
+    (tmp_path / "prefs.js").write_text("main prefs")
+    args = ReducerArgs().parse_args([str(exe), str(inp),
+                                     "-p", str(tmp_path / "prefs.js")])
     assert reduce.main(args) == 0
     assert run_called[0] == 1
 
 
-def test_main_strategies(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+def test_main_strategies(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "strategies list should be respected"
     # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
@@ -157,16 +162,18 @@ def test_main_strategies(job, monkeypatch, tmpdir):  # noqa pylint: disable=rede
             report_data["num_reports"] += 1
     monkeypatch.setattr(reduce, "FilesystemReporter", FakeReporter)
 
-    exe = tmpdir.ensure("binary")
-    inp = tmpdir.ensure("input", dir=True)
-    inp.ensure("test_info.txt").write("landing page: test.html")
-    inp.ensure("test.html").write("fluff\n'xxrequired'\n")
-    args = ReducerArgs().parse_args([exe.strpath, inp.strpath, "--strategy", "line"])
+    (tmp_path / "binary").touch()
+    exe = tmp_path / "binary"
+    (tmp_path / "input").mkdir()
+    inp = tmp_path / "input"
+    (inp / "test_info.txt").write_text("landing page: test.html")
+    (inp / "test.html").write_text("fluff\n'xxrequired'\n")
+    args = ReducerArgs().parse_args([str(exe), str(inp), "--strategy", "line"])
     assert reduce.main(args) == 0
     assert report_data["num_reports"] == 1
 
 
-def test_bucket_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+def test_bucket_main(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "bucket.main iterates using crash.main"
     main_called = [0]
 
@@ -202,13 +209,14 @@ def test_bucket_main(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefine
     monkeypatch.setattr(bucket, "Collector", FakeCollector)
     monkeypatch.setattr(bucket, "reduce_crash", crash_main)
 
-    exe = tmpdir.ensure("binary")
-    args = ReducerFuzzManagerIDArgs().parse_args([exe.strpath, '789'])
+    (tmp_path / "binary").touch()
+    exe = tmp_path / "binary"
+    args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '789'])
     assert bucket.main(args) == 0
     assert main_called[0] == 1
 
 
-def test_crash_main_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     # expect Collector.patch to be called with these qualities
     expect_patch = [reporter.FuzzManagerReporter.QUAL_REPRODUCIBLE,
@@ -216,7 +224,8 @@ def test_crash_main_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=red
     submitted = [False]
 
     class ReporterNoSubmit(reporter.FuzzManagerReporter):
-        FM_CONFIG = tmpdir.ensure(".fuzzmanagerconf").strpath
+        (tmp_path / ".fuzzmanagerconf").touch()
+        FM_CONFIG = str(tmp_path / ".fuzzmanagerconf")
 
         def _submit(self):
             # check that the crash was already marked reproducible, but not yet marked reduced
@@ -240,7 +249,7 @@ def test_crash_main_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=red
                     return {
                         'testcase_quality': reporter.FuzzManagerReporter.QUAL_UNREDUCED,
                         'tool': 'test-tool'}
-                content = inp.join("test.zip").read('rb')
+                content = (inp / "test.zip").read_bytes()
             return response
 
         def patch(self, _url, **kwds):
@@ -255,31 +264,34 @@ def test_crash_main_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=red
     monkeypatch.setattr(reduce, "FuzzManagerReporter", ReporterNoSubmit)
     monkeypatch.setattr(crash, "Collector", FakeCollector)
 
-    exe = tmpdir.ensure("binary")
-    tmpdir.join("binary.fuzzmanagerconf").write(
+    (tmp_path / "binary").touch()
+    exe = tmp_path / "binary"
+    (tmp_path / "binary.fuzzmanagerconf").write_text(
         "[Main]\n"
         "platform = x86-64\n"
         "product = mozilla-central\n"
         "os = linux\n"
     )
-    inp = tmpdir.ensure("input", dir=True)
-    inp.ensure("test_info.txt").write("landing page: test.html")
-    inp.ensure("test.html").write("fluff\nrequired\n")
-    with zipfile.ZipFile(inp.join("test.zip").strpath, "w") as zip_fp:
-        zip_fp.write(inp.join("test_info.txt").strpath, "test_info.txt")
-        zip_fp.write(inp.join("test.html").strpath, "test.html")
-    args = ReducerFuzzManagerIDArgs().parse_args([exe.strpath, '1234', '--fuzzmanager'])
+    (tmp_path / "input").mkdir()
+    inp = tmp_path / "input"
+    (inp / "test_info.txt").write_text("landing page: test.html")
+    (inp / "test.html").write_text("fluff\nrequired\n")
+    with zipfile.ZipFile(str(inp / "test.zip"), "w") as zip_fp:
+        zip_fp.write(str(inp / "test_info.txt"), "test_info.txt")
+        zip_fp.write(str(inp / "test.html"), "test.html")
+    args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
     assert crash.main(args) == 0
     assert not expect_patch
     assert submitted[0]
 
 
-def test_crash_main_no_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_no_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     expect_patch = [reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC]
 
     class ReporterNoSubmit(reporter.FuzzManagerReporter):
-        FM_CONFIG = tmpdir.ensure(".fuzzmanagerconf").strpath
+        (tmp_path / ".fuzzmanagerconf").touch()
+        FM_CONFIG = str(tmp_path / ".fuzzmanagerconf")
 
         def _submit(self):
             # make sure _submit() is not called
@@ -302,7 +314,7 @@ def test_crash_main_no_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=
                     return {
                         'testcase_quality': reporter.FuzzManagerReporter.QUAL_UNREDUCED,
                         'tool': 'test-tool'}
-                content = inp.join("test.zip").read('rb')
+                content = (inp / "test.zip").read_bytes()
             return response
 
         def patch(self, _url, **kwds):
@@ -317,30 +329,33 @@ def test_crash_main_no_repro(job, monkeypatch, tmpdir):  # noqa pylint: disable=
     monkeypatch.setattr(reduce, "FuzzManagerReporter", ReporterNoSubmit)
     monkeypatch.setattr(crash, "Collector", FakeCollector)
 
-    exe = tmpdir.ensure("binary")
-    tmpdir.join("binary.fuzzmanagerconf").write(
+    (tmp_path / "binary").touch()
+    exe = tmp_path / "binary"
+    (tmp_path / "binary.fuzzmanagerconf").write_text(
         "[Main]\n"
         "platform = x86-64\n"
         "product = mozilla-central\n"
         "os = linux\n"
     )
-    inp = tmpdir.ensure("input", dir=True)
-    inp.ensure("test_info.txt").write("landing page: test.html")
-    inp.ensure("test.html").write("fluff\n")
-    with zipfile.ZipFile(inp.join("test.zip").strpath, "w") as zip_fp:
-        zip_fp.write(inp.join("test_info.txt").strpath, "test_info.txt")
-        zip_fp.write(inp.join("test.html").strpath, "test.html")
-    args = ReducerFuzzManagerIDArgs().parse_args([exe.strpath, '1234', '--fuzzmanager'])
+    (tmp_path / "input").mkdir()
+    inp = tmp_path / "input"
+    (inp / "test_info.txt").write_text("landing page: test.html")
+    (inp / "test.html").write_text("fluff\n")
+    with zipfile.ZipFile(str(inp / "test.zip"), "w") as zip_fp:
+        zip_fp.write(str(inp / "test_info.txt"), "test_info.txt")
+        zip_fp.write(str(inp / "test.html"), "test.html")
+    args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
     assert crash.main(args) == 1
     assert not expect_patch
 
 
-def test_crash_main_no_repro_specific(job, monkeypatch, tmpdir):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     expect_patch = [reporter.FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE]
 
     class ReporterNoSubmit(reporter.FuzzManagerReporter):
-        FM_CONFIG = tmpdir.ensure(".fuzzmanagerconf").strpath
+        (tmp_path / ".fuzzmanagerconf").touch()
+        FM_CONFIG = str(tmp_path / ".fuzzmanagerconf")
 
         def _submit(self):
             # make sure _submit() is not called
@@ -363,7 +378,7 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmpdir):  # noqa pylint:
                     return {
                         'testcase_quality': reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC,
                         'tool': 'test-tool'}
-                content = inp.join("test.zip").read('rb')
+                content = (inp / "test.zip").read_bytes()
             return response
 
         def patch(self, _url, **kwds):
@@ -378,19 +393,21 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmpdir):  # noqa pylint:
     monkeypatch.setattr(reduce, "FuzzManagerReporter", ReporterNoSubmit)
     monkeypatch.setattr(crash, "Collector", FakeCollector)
 
-    exe = tmpdir.ensure("binary")
-    tmpdir.join("binary.fuzzmanagerconf").write(
+    (tmp_path / "binary").touch()
+    exe = tmp_path / "binary"
+    (tmp_path / "binary.fuzzmanagerconf").write_text(
         "[Main]\n"
         "platform = x86-64\n"
         "product = mozilla-central\n"
         "os = linux\n"
     )
-    inp = tmpdir.ensure("input", dir=True)
-    inp.ensure("test_info.txt").write("landing page: test.html")
-    inp.ensure("test.html").write("fluff\n")
-    with zipfile.ZipFile(inp.join("test.zip").strpath, "w") as zip_fp:
-        zip_fp.write(inp.join("test_info.txt").strpath, "test_info.txt")
-        zip_fp.write(inp.join("test.html").strpath, "test.html")
-    args = ReducerFuzzManagerIDArgs().parse_args([exe.strpath, '1234', '--fuzzmanager'])
+    (tmp_path / "input").mkdir()
+    inp = tmp_path / "input"
+    (inp / "test_info.txt").write_text("landing page: test.html")
+    (inp / "test.html").write_text("fluff\n")
+    with zipfile.ZipFile(str(inp / "test.zip"), "w") as zip_fp:
+        zip_fp.write(str(inp / "test_info.txt"), "test_info.txt")
+        zip_fp.write(str(inp / "test.html"), "test.html")
+    args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
     assert crash.main(args) == 1
     assert not expect_patch

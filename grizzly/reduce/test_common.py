@@ -2,8 +2,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import unicode_literals
 import os
-
 from grizzly.target import Target
 
 
@@ -63,11 +63,11 @@ class FakeTarget(object):
         return Target.RESULT_FAILURE
 
 
-def create_target_binary(target, tmpdir):
-    tmpdir.join("firefox.fuzzmanagerconf").write(
+def create_target_binary(target, tmp_path):
+    (tmp_path / "firefox.fuzzmanagerconf").write_text(
         "[Main]\n"
         "platform = x86-64\n"
         "product = mozilla-central\n"
         "os = linux\n"
     )
-    target.binary = tmpdir.join("firefox").strpath
+    target.binary = str(tmp_path / "firefox")
