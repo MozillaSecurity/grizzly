@@ -416,6 +416,89 @@ class ReductionJob(object):
             self.interesting.landing_page = self.testcase
             reducer.conditionScript = self.interesting
 
+            class _AnalyzeReliability(lithium.Strategy):
+                name = "reliability-analysis"
+                ITERATIONS = 10
+
+                def main(sub, testcase, interesting, tempFilename):
+                    if self.interesting.no_harness:
+                        LOG.warning("--no-harness was given, skipping analysis")
+                        return 0
+                    if self.interesting.min_crashes != 1:
+                        LOG.warning("--min-crashes=%d was given, skipping analysis", self.interesting.min_crashes)
+                        return 0
+                    if self.interesting.repeat != 1:
+                        LOG.warning("--repeat=%d was given, skipping analysis", self.interesting.repeat)
+                        return 0
+
+                    assert sub.ITERATIONS > 0
+
+                    harness_crashes = 0
+                    non_harness_crashes = 0
+
+                    LOG.info("Running for %d iterations to assess reliability using harness.", sub.ITERATIONS)
+                    for _ in range(sub.ITERATIONS):
+                        result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
+                        LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
+                        if result:
+                            harness_crashes += 1
+                    LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
+                             100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
+
+                    self.interesting.target.cleanup()  # destroy target since we may be changing parameters
+
+                    if harness_crashes != sub.ITERATIONS:
+
+                        # try without harness
+                        self.interesting.no_harness = True
+
+                        LOG.info("Running for %d iterations to assess reliability without harness.", sub.ITERATIONS)
+                        for _ in range(sub.ITERATIONS):
+                            result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
+                            LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
+                            if result:
+                                non_harness_crashes += 1
+                        LOG.info("Testcase was interesting %0.1f%% of %d attempts without harness.",
+                                 100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
+
+                        self.interesting.target.cleanup()  # destroy target since we may be changing parameters
+
+                    if harness_crashes == 0 and non_harness_crashes == 0:
+                        return 1  # no crashes ever?
+
+                    # should we use the harness? go with whichever crashed more
+                    self.interesting.no_harness = non_harness_crashes > harness_crashes
+                    crashes_percent = 1.0 * max(non_harness_crashes, harness_crashes) / sub.ITERATIONS
+
+                    # adjust repeat/min-crashes depending on how reliable the testcase was
+                    if crashes_percent >= 0.9:
+                        self.interesting.min_crashes = 2
+                        self.interesting.repeat = 2
+                    else:
+                        self.interesting.min_crashes = int(crashes_percent * 10)
+                        self.interesting.repeat = 10
+
+                    # set relaunch to min(relaunch, repeat)
+                    self.interesting.target.rl_reset = min(self.interesting.target.rl_reset, self.interesting.repeat)
+
+                    LOG.info("Analysis results:")
+                    if harness_crashes == sub.ITERATIONS:
+                        LOG.info("* testcase was perfectly reliable with the harness (--no-harness not assessed)")
+                    elif harness_crashes == non_harness_crashes:
+                        LOG.info("* testcase was equally reliable with/without the harness")
+                    else:
+                        LOG.info("* testcase was %s reliable with the harness",
+                                 "less" if self.interesting.no_harness else "more")
+                    LOG.info("* adjusted parameters: --min-crashes=%d --repeat=%d --relaunch=%d",
+                             self.interesting.min_crashes, self.interesting.repeat, self.interesting.target.rl_reset)
+
+                    return 0
+
+            class AnalyzeTestcase(strategies_module.ReduceStage):
+                name = "analyze"
+                strategy_type = _AnalyzeReliability
+                testcase_type = lithium.TestcaseLine
+
             class MinimizeHarness(strategies_module.MinimizeLines):
 
                 def should_skip(sub):  # pylint: disable=no-self-argument
@@ -495,7 +578,7 @@ class ReductionJob(object):
             original_size = [None]
 
             # resolve list of strategies to apply
-            reduce_stages = [MinimizeHarness, ScanFilesToReduce]
+            reduce_stages = [AnalyzeTestcase, MinimizeHarness, ScanFilesToReduce]
             if strategies is None:
                 strategies = self.DEFAULT_STRATEGIES
             strategies_lut = strategies_module.strategies_by_name()
