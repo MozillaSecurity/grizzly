@@ -22,6 +22,10 @@ class FakeInteresting(interesting.Interesting):
     def init(self, _):
         pass
 
+    @property
+    def location(self):
+        return "127.0.0.1" if self.no_harness else "127.0.0.1/harness"
+
     def _run(self, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
@@ -71,6 +75,24 @@ class FakeInterestingKeepHarness(FakeInteresting):
         else:
             with open(self.reduce_file) as fp:
                 return "required" in fp.read()
+
+
+class FakeInterestingSemiReliable(FakeInteresting):
+    """Version of FakeInteresting that returns interesting N times only"""
+
+    def set_n(self, n, require_no_harness=False):
+        self.interesting_times = n
+        self.interesting_count = 0
+        self.require_no_harness = require_no_harness
+
+    def _run(self, temp_prefix):
+        result_logs = temp_prefix + "_logs"
+        os.mkdir(result_logs)
+        self.target.save_logs(result_logs, meta=True)
+        if self.require_no_harness and "harness" in self.location:
+            return False
+        self.interesting_count += 1
+        return self.interesting_count <= self.interesting_times
 
 
 @pytest.fixture
@@ -474,3 +496,47 @@ def test_run_7(tmp_path, job):
 
     assert job.run()
     assert report_data["num_reports"] == 1
+
+
+@pytest.mark.parametrize("job", [FakeInterestingSemiReliable], indirect=["job"])
+def test_run_8(tmp_path, job):
+    """test that analyze stage works"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
+    (tmp_path / "tc" / "prefs.js").write_text("some prefs")
+    (tmp_path / "tc" / "env_vars.txt").write_text("var=value\nfoo=bar")
+    job.config_testcase(str(tmp_path / "tc"))
+
+    class FakeReporter(Reporter):
+        def _submit(self):
+            pass
+    job.reporter = FakeReporter()
+
+    # try a 50% reliable testcase
+    job.interesting.min_crashes = 1
+    job.interesting.repeat = 1
+    job.interesting.set_n(5)
+    job.run()
+    assert job.interesting.min_crashes == 5
+    assert job.interesting.repeat == 10
+    assert not job.interesting.no_harness
+
+    # try a 90% reliable testcase
+    job.interesting.min_crashes = 1
+    job.interesting.repeat = 1
+    job.interesting.set_n(9)
+    job.run()
+    assert job.interesting.min_crashes == 2
+    assert job.interesting.repeat == 2
+    assert not job.interesting.no_harness
+
+    # try a 90% reliable testcase that doesn't repro with the harness
+    job.interesting.min_crashes = 1
+    job.interesting.repeat = 1
+    job.interesting.set_n(9, require_no_harness=True)
+    job.run()
+    assert job.interesting.min_crashes == 2
+    assert job.interesting.repeat == 2
+    assert job.interesting.no_harness

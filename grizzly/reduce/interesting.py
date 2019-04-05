@@ -177,6 +177,7 @@ class Interesting(object):
         Returns:
             bool: True if reduced testcase is still interesting.
         """
+        self.target.close()  # ensure the target is closed so "repeat" and "relaunch" never get out of sync
         if self.skip:
             if self.skipped is None:
                 self.skipped = 0
