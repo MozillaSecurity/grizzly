@@ -128,7 +128,10 @@ class Interesting(object):
         # Update the sanitizer *SAN_OPTIONS environment variable to use provided
         # suppressions file
         opt_key = '%s_OPTIONS' % os.path.basename(supp_file).split('.')[0].upper()
-        opt_val = self.env_mod.get(opt_key, '')
+        # the value matching *SAN_OPTIONS can be set to None
+        opt_val = self.env_mod.get(opt_key, None)
+        if opt_val is None:
+            opt_val = ''
         updated = list()
         for opt in opt_val.split(':'):
             if opt and opt != 'suppressions':
