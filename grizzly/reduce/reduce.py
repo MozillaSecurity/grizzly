@@ -31,7 +31,7 @@ __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber", "Jason Kratzer"]
 
 
-log = logging.getLogger("grizzly.reduce")  # pylint: disable=invalid-name
+LOG = logging.getLogger("grizzly.reduce")
 
 
 class ReducerError(Exception):
@@ -232,10 +232,10 @@ class ReductionJob(object):
             # move the file out of tcroot because we prune these non-testcase files later
             os.rename(os.path.join(dirs[0], "prefs.js"), os.path.join(self.tmpdir, "prefs.js"))
             self.interesting.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
-            log.warning("Using prefs included in testcase: %r", self.interesting.target.prefs)
+            LOG.warning("Using prefs included in testcase: %r", self.interesting.target.prefs)
         if "env_vars.txt" in os.listdir(dirs[0]):
             self.interesting.config_environ(os.path.join(dirs[0], "env_vars.txt"))
-            log.warning("Using environment included in testcase: %s",
+            LOG.warning("Using environment included in testcase: %s",
                         os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
 
         # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
@@ -333,7 +333,7 @@ class ReductionJob(object):
         self._stop_log_capture()
         if self.tmpdir is not None and os.path.isdir(self.tmpdir):
             if keep_temp:
-                log.warning("Leaving working files at %r for inspection.", self.tmpdir)
+                LOG.warning("Leaving working files at %r for inspection.", self.tmpdir)
             else:
                 shutil.rmtree(self.tmpdir)
                 self.tmpdir = None
@@ -353,7 +353,7 @@ class ReductionJob(object):
 
         # add reduce log
         if include_logs:
-            log.info("Closing reduce log for report submission")
+            LOG.info("Closing reduce log for report submission")
             self._stop_log_capture()
             testcase.add_meta(TestFile.from_file(os.path.join(self.tmpdir, "reducelog.txt"), "reducelog.txt"))
 
@@ -384,9 +384,9 @@ class ReductionJob(object):
         tmpd = os.path.join(self.tmpdir, "alt", crash_hash)
         if crash_hash in self.other_crashes:
             shutil.rmtree(self.other_crashes[crash_hash]["tcroot"])
-            log.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
+            LOG.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
         else:
-            log.info("Found alternate crash: %s", crash_info.createShortSignature())
+            LOG.info("Found alternate crash: %s", crash_info.createShortSignature())
         os.makedirs(tmpd)
         for file_name in _testcase_contents(self.tcroot):
             out = os.path.join(tmpd, file_name)
@@ -456,11 +456,11 @@ class ReductionJob(object):
                         self.testcase = os.path.join(self.tcroot, testcase_path[1])
                         self.interesting.landing_page = self.testcase
                         files_to_reduce.append(self.testcase)
-                        log.info("Reduced history to a single file: %s", testcase_path[1])
+                        LOG.info("Reduced history to a single file: %s", testcase_path[1])
                     else:
                         # don't bother trying to reduce the harness further,
                         #   leave harness out of files_to_reduce
-                        log.info("Reduced history down to %d testcases", len(reducer.testcase))
+                        LOG.info("Reduced history down to %d testcases", len(reducer.testcase))
 
             class ScanFilesToReduce(strategies_module.ReduceStage):
 
@@ -545,14 +545,14 @@ class ReductionJob(object):
                     # reducer failed to repro the crash
                     if files_reduced == 0:
                         # first stage, couldn't repro at all
-                        log.warning("Could not reduce: The testcase was not reproducible")
+                        LOG.warning("Could not reduce: The testcase was not reproducible")
                         self.result_code = FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
 
                     else:
                         # subsequent stage, reducing broke the testcase?
                         # unclear how to recover from this.
                         # just report failure and hopefully we have another to try
-                        log.warning("%s failed to reproduce. Previous stage broke the testcase?",
+                        LOG.warning("%s failed to reproduce. Previous stage broke the testcase?",
                                     strategy_type.__name__)
                         self.result_code = FuzzManagerReporter.QUAL_REDUCER_BROKE
 
@@ -574,12 +574,12 @@ class ReductionJob(object):
             return True
 
         except ReducerError as exc:
-            log.warning("Could not reduce: %s", exc)
+            LOG.warning("Could not reduce: %s", exc)
             self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             return False
 
         except Exception:  # pylint: disable=broad-except
-            log.exception("Exception during reduce")
+            LOG.exception("Exception during reduce")
             self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             return False
 
@@ -590,23 +590,23 @@ class ReductionJob(object):
 def main(args, interesting_cb=None, result_cb=None):
     # NOTE: this mirrors grizzly.core.main pretty closely
     #       please check if updates here should go there too
-    log.info("Starting Grizzly Reducer")
+    LOG.info("Starting Grizzly Reducer")
     if args.fuzzmanager:
         FuzzManagerReporter.sanity_check(args.binary)
 
     if args.ignore:
-        log.info("Ignoring: %s", ", ".join(args.ignore))
+        LOG.info("Ignoring: %s", ", ".join(args.ignore))
     if args.xvfb:
-        log.info("Running with Xvfb")
+        LOG.info("Running with Xvfb")
     if args.valgrind:
-        log.info("Running with Valgrind. This will be SLOW!")
+        LOG.info("Running with Valgrind. This will be SLOW!")
 
     target = None
     job = None
 
     job_cancelled = False
     try:
-        log.debug("initializing the Target")
+        LOG.debug("initializing the Target")
         target = Target(
             args.binary,
             args.extension,
@@ -638,26 +638,26 @@ def main(args, interesting_cb=None, result_cb=None):
 
         # arguments for environ and prefs should override the testcase
         if args.environ:
-            log.warning("Overriding environment with %r", args.environ)
+            LOG.warning("Overriding environment with %r", args.environ)
             job.interesting.config_environ(args.environ)
         if args.prefs:
-            log.warning("Overriding prefs with %r", args.prefs)
+            LOG.warning("Overriding prefs with %r", args.prefs)
             job.interesting.target.prefs = os.path.abspath(args.prefs)
 
         if args.sig is not None:
             with io.open(args.sig, encoding="utf-8") as sig_fp:
                 job.config_signature(sig_fp.read())
 
-        log.debug("initializing the Reporter")
+        LOG.debug("initializing the Reporter")
         if args.fuzzmanager:
-            log.info("Reporting issues via FuzzManager")
+            LOG.info("Reporting issues via FuzzManager")
             job.reporter = FuzzManagerReporter(
                 args.binary,
                 log_limit=Session.FM_LOG_SIZE_LIMIT,
                 tool=args.tool)
         else:
             job.reporter = FilesystemReporter()
-            log.info("Results will be stored in %r", job.reporter.report_path)
+            LOG.info("Results will be stored in %r", job.reporter.report_path)
 
         # detect soft assertions
         if args.soft_asserts:
@@ -679,17 +679,17 @@ def main(args, interesting_cb=None, result_cb=None):
             result_cb(job.result_code)
 
         if result:
-            log.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
+            LOG.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
             return 0
 
-        log.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
+        LOG.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
         return 1
 
     except KeyboardInterrupt:
         job_cancelled = True
 
     finally:
-        log.warning("Shutting down...")
+        LOG.warning("Shutting down...")
         if job is not None and not job_cancelled:
             job_cancelled = job.result_code in {FuzzManagerReporter.QUAL_REDUCER_BROKE,
                                                 FuzzManagerReporter.QUAL_REDUCER_ERROR}

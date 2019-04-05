@@ -15,7 +15,8 @@ from .reduce import main as reduce_main
 from ..core import console_init_logging
 from ..reporter import FuzzManagerReporter
 
-log = logging.getLogger("grizzly.reduce.crash")
+
+LOG = logging.getLogger("grizzly.reduce.crash")
 
 
 def crashentry_data(crash_id, raw=False):
@@ -30,7 +31,7 @@ def crashentry_data(crash_id, raw=False):
     """
     coll = Collector()
 
-    log.debug("crash %d, downloading metadata...", crash_id)
+    LOG.debug("crash %d, downloading metadata...", crash_id)
 
     url = "%s://%s:%d/crashmanager/rest/crashes/%s/" \
         % (coll.serverProtocol, coll.serverHost, coll.serverPort, crash_id)
@@ -49,7 +50,7 @@ def download_crash(crash_id):
     """
     coll = Collector()
 
-    log.debug("crash %d, downloading testcase...", crash_id)
+    LOG.debug("crash %d, downloading testcase...", crash_id)
 
     url = "%s://%s:%d/crashmanager/rest/crashes/%s/download/" \
         % (coll.serverProtocol, coll.serverHost, coll.serverPort, crash_id)
@@ -79,7 +80,7 @@ def change_quality(crash_id, quality):
     Returns:
         None
     """
-    log.info("Updating crash %d to quality %s", crash_id, FuzzManagerReporter.quality_name(quality))
+    LOG.info("Updating crash %d to quality %s", crash_id, FuzzManagerReporter.quality_name(quality))
     coll = Collector()
 
     url = "%s://%s:%d/crashmanager/rest/crashes/%d/" \
@@ -89,13 +90,13 @@ def change_quality(crash_id, quality):
     except RuntimeError as exc:
         # let 404's go .. evidently the crash was deleted
         if str(exc) == "Unexpected HTTP response: 404":
-            log.warning("Failed to update (404), does the crash still exist?")
+            LOG.warning("Failed to update (404), does the crash still exist?")
         else:
             raise
 
 
 def main(args):
-    log.info("Trying crash %d", args.input)
+    LOG.info("Trying crash %d", args.input)
 
     crash_id = args.input
     testcase = download_crash(crash_id)
@@ -104,7 +105,7 @@ def main(args):
     quality = crash["testcase_quality"]
     if tool_override:
         args.tool = crash["tool"]
-        log.info("Using toolname from crash: %s", args.tool)
+        LOG.info("Using toolname from crash: %s", args.tool)
     fm_reporter = args.fuzzmanager
 
     try:
@@ -133,14 +134,14 @@ def main(args):
                 change_quality(crash_id, result)
 
             else:
-                log.error("Got unhandled quality: %s", FuzzManagerReporter.quality_name(result))
+                LOG.error("Got unhandled quality: %s", FuzzManagerReporter.quality_name(result))
 
         _was_interesting = [False]
 
         def _on_interesting():
             if _was_interesting[0]:
                 return
-            log.info("Crash %d reproduced!", crash_id)
+            LOG.info("Crash %d reproduced!", crash_id)
             if fm_reporter:
                 change_quality(crash_id, FuzzManagerReporter.QUAL_REPRODUCIBLE)
             _was_interesting[0] = True
