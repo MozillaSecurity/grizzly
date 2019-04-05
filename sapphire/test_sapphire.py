@@ -791,7 +791,7 @@ class ServeJobTests(unittest.TestCase):
         with open(req1, "w") as out_fp:
             out_fp.write("a")
         os.mkdir(os.path.join(self.test_dir, "test"))
-        req2 = os.path.join(self.test_dir, "test", "req_file_2.txt")
+        req2 = os.path.join(self.test_dir, "test", "req_file_2.txt?q=123")
         with open(req2, "w") as out_fp:
             out_fp.write("a")
         sj = ServeJob(self.test_dir, dict(), dict(), dict(), optional_files=[os.path.basename(opt)])
@@ -826,9 +826,11 @@ class ServeJobTests(unittest.TestCase):
             "two": Resource(ServeJob.URL_REDIRECT, "reqfile.txt", required=True)}
         sj = ServeJob(self.test_dir, dict(), dict(), redirs)
         self.assertEqual(sj.status, SERVED_NONE)
-        for redir in redirs:
-            resource = sj.check_request(redir)
-            self.assertEqual(resource.type, sj.URL_REDIRECT)
+        resource = sj.check_request("one")
+        self.assertEqual(resource.type, sj.URL_REDIRECT)
+        resource = sj.check_request("two?q=123")
+        self.assertIsNotNone(resource)
+        self.assertEqual(resource.type, sj.URL_REDIRECT)
         self.assertEqual(sj.pending_files(), 1)
         self.assertTrue(sj.remove_pending("two"))
         self.assertEqual(sj.pending_files(), 0)
@@ -852,7 +854,7 @@ class ServeJobTests(unittest.TestCase):
         nst_1 = os.path.join(srv_include_nested, "nested_file.txt")
         with open(nst_1, "w") as out_fp:
             out_fp.write("c")
-        inc_2 = os.path.join(srv_include_2, "test_file_2.txt")
+        inc_2 = os.path.join(srv_include_2, "test_file_2.txt?q=123")
         with open(inc_2, "w") as out_fp:
             out_fp.write("d")
         includes = {
@@ -871,7 +873,7 @@ class ServeJobTests(unittest.TestCase):
             self.assertEqual(resource.type, sj.URL_INCLUDE)
             self.assertEqual(resource.target, inc_1)
         # test nested include path pointing to a different include
-        resource = sj.check_request("testinc/inc2/test_file2.txt")
+        resource = sj.check_request("testinc/inc2/test_file2.txt?q=123")
         self.assertEqual(resource.type, sj.URL_INCLUDE)
         self.assertEqual(resource.target, os.path.join(srv_include_2, "test_file2.txt"))
         # test redirect root without leading '/'
@@ -897,6 +899,11 @@ class ServeJobTests(unittest.TestCase):
         self.assertEqual(sj.status, SERVED_ALL)
         self.assertEqual(sj.pending_files(), 0)
         resource = sj.check_request("cb1")
+        self.assertEqual(resource.type, sj.URL_DYNAMIC)
+        self.assertTrue(callable(resource.target))
+        self.assertTrue(isinstance(resource.mime, str))
+        resource = sj.check_request("cb2?q=123")
+        self.assertIsNotNone(resource)
         self.assertEqual(resource.type, sj.URL_DYNAMIC)
         self.assertTrue(callable(resource.target))
         self.assertTrue(isinstance(resource.mime, str))

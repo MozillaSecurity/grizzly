@@ -159,7 +159,7 @@ class Interesting(object):
     def location(self):
         if self.no_harness:
             return "http://127.0.0.1:%d/%s" % (self.server.get_port(), self.landing_page)
-        return "http://127.0.0.1:%d/harness#timeout=%d,close_after=%d" % (self.server.get_port(),
+        return "http://127.0.0.1:%d/harness?timeout=%d&close_after=%d" % (self.server.get_port(),
                                                                           self.iter_timeout * 1000,
                                                                           self.target.rl_reset)
 
