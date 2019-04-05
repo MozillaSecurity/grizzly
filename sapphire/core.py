@@ -392,6 +392,8 @@ class Sapphire(object):
         except (socket.timeout, socket.error):
             exc_type, exc_obj, exc_tb = sys.exc_info()
             log.debug("%s: %r (line %d)", exc_type.__name__, exc_obj, exc_tb.tb_lineno)
+            if not finish_job:
+                serv_job.accepting.set()
 
         except Exception:  # pylint: disable=broad-except
             serv_job.exceptions.put(sys.exc_info())
