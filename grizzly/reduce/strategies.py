@@ -13,7 +13,7 @@ except ImportError:
 import lithium
 
 
-log = logging.getLogger("grizzly.reduce.strategies")  # pylint: disable=invalid-name
+LOG = logging.getLogger("grizzly.reduce.strategies")
 
 
 class ReduceStage(object):
@@ -23,7 +23,7 @@ class ReduceStage(object):
     def read_testcase(self, reducer, testcase_path):
         reducer.strategy = self.strategy_type()  # pylint: disable=not-callable
         reducer.testcase = self.testcase_type()  # pylint: disable=not-callable
-        log.info("Reducing %s with %s on %ss",
+        LOG.info("Reducing %s with %s on %ss",
                  testcase_path, self.strategy_type.name, self.testcase_type.atom)
         reducer.testcase.readTestcase(testcase_path)
 
@@ -31,7 +31,7 @@ class ReduceStage(object):
         return False
 
     def on_success(self):
-        log.info("%s succeeded", type(self).__name__)
+        LOG.info("%s succeeded", type(self).__name__)
 
     def on_failure(self):
         raise StopIteration()
@@ -54,7 +54,7 @@ class JSBeautify(ReduceStage):
         if self.should_skip():
             return
 
-        log.info("Attempting to beautify %s", testcase_path)
+        LOG.info("Attempting to beautify %s", testcase_path)
 
         reducer.strategy = self.strategy_type()  # pylint: disable=not-callable
         reducer.testcase = self.testcase_type()  # pylint: disable=not-callable
@@ -81,7 +81,7 @@ class JSBeautify(ReduceStage):
         return True
 
     def on_failure(self):
-        log.warning("Beautification failed (reverting)")
+        LOG.warning("Beautification failed (reverting)")
         with open(self.testcase_path, 'w') as testcase_fp:
             testcase_fp.write(self.original_testcase)
 

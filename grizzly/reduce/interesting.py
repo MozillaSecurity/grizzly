@@ -24,7 +24,7 @@ __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber", "Jason Kratzer"]
 
 
-log = logging.getLogger("grizzly.reduce.interesting")  # pylint: disable=invalid-name
+LOG = logging.getLogger("grizzly.reduce.interesting")
 
 
 class Interesting(object):
@@ -120,7 +120,7 @@ class Interesting(object):
 
     def monitor_process(self, iteration_done_event, idle_timeout_event):
         # Wait until timeout is hit before polling
-        log.debug('Waiting %r before polling', self.idle_timeout)
+        LOG.debug('Waiting %r before polling', self.idle_timeout)
         exp_time = time.time() + self.idle_timeout
         while exp_time >= time.time() and not iteration_done_event.is_set():
             time.sleep(0.1)
@@ -131,24 +131,24 @@ class Interesting(object):
                 idle_timeout_event.set()
                 break
             elif result == Target.POLL_ERROR:
-                log.warning('Error polling process for idle')
+                LOG.warning('Error polling process for idle')
                 break
             else:
                 time.sleep(0.1)
 
     def update_timeout(self, run_time):
         # If run_time is less than poll-time, update it
-        log.debug('Run took %r', run_time)
+        LOG.debug('Run took %r', run_time)
         new_poll_timeout = max(10, min(run_time * 1.5, self.idle_timeout))
         if new_poll_timeout < self.idle_timeout:
-            log.info("Updating poll timeout to: %r", new_poll_timeout)
+            LOG.info("Updating poll timeout to: %r", new_poll_timeout)
             self.idle_timeout = new_poll_timeout
         # If run_time * 2 is less than iter_timeout, update it
         # in other words, decrease the timeout if this ran in less than half the timeout
         # (floored at 10s)
         new_iter_timeout = max(10, min(run_time * 2, self.iter_timeout))
         if new_iter_timeout < self.iter_timeout:
-            log.info("Updating max timeout to: %r", new_iter_timeout)
+            LOG.info("Updating max timeout to: %r", new_iter_timeout)
             self.iter_timeout = new_iter_timeout
             if self.server is not None:
                 self.server.close()
@@ -191,7 +191,7 @@ class Interesting(object):
             if cache_key in self.result_cache:
                 result = self.result_cache[cache_key]['result']
                 if result:
-                    log.info("Interesting (cached)")
+                    LOG.info("Interesting (cached)")
                     cached_prefix = self.result_cache[cache_key]['prefix']
                     for filename in glob.glob(r"%s_*" % cached_prefix):
                         suffix = os.path.basename(filename).split("_", 1)
@@ -203,7 +203,7 @@ class Interesting(object):
                             raise RuntimeError("Cannot copy non-file/non-directory: %s"
                                                % (filename,))
                 else:
-                    log.info("Uninteresting (cached)")
+                    LOG.info("Uninteresting (cached)")
                 return result
         run_prefix = None
         for try_num in range(n_tries):
@@ -279,7 +279,7 @@ class Interesting(object):
                     break
                 except ffpuppet.LaunchError as exc:
                     if retries:
-                        log.warn(str(exc))
+                        LOG.warn(str(exc))
                         time.sleep(15)
                     else:
                         raise
@@ -338,10 +338,10 @@ class Interesting(object):
                 short_sig = crash.createShortSignature()
                 if short_sig == "No crash detected":
                     # XXX: need to change this to support reducing timeouts?
-                    log.info("Uninteresting: no crash detected")
+                    LOG.info("Uninteresting: no crash detected")
                 elif self.orig_sig is None or self.orig_sig.matches(crash):
                     result = True
-                    log.info("Interesting: %s", short_sig)
+                    LOG.info("Interesting: %s", short_sig)
                     if self.orig_sig is None and not self.any_crash:
                         max_frames = FuzzManagerReporter.signature_max_frames(crash, 5)
                         self.orig_sig = crash.createCrashSignature(maxFrames=max_frames)
@@ -350,12 +350,12 @@ class Interesting(object):
                     if not self.target.use_valgrind:
                         self.update_timeout(end_time - start_time)
                 else:
-                    log.info("Uninteresting: different signature: %s", short_sig)
+                    LOG.info("Uninteresting: different signature: %s", short_sig)
                     if self.alt_crash_cb is not None:
                         self.alt_crash_cb(temp_prefix)  # pylint: disable=not-callable
 
             elif failure_detected == Target.RESULT_IGNORED:
-                log.info("Uninteresting: ignored")
+                LOG.info("Uninteresting: ignored")
                 self.target.close()
 
                 # save logs
@@ -364,7 +364,7 @@ class Interesting(object):
                 self.target.save_logs(result_logs, meta=True)
 
             else:
-                log.info("Uninteresting: no failure detected")
+                LOG.info("Uninteresting: no failure detected")
 
             # trigger relaunch by closing the browser if needed
             self.target.check_relaunch()
