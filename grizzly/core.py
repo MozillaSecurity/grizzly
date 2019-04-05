@@ -127,7 +127,7 @@ class Session(object):
             if self.target.closed:
                 self.iomanager.purge_tests()
                 try:
-                    location = "http://127.0.0.1:%d/%s#timeout=%d,close_after=%d" % (
+                    location = "http://127.0.0.1:%d/%s?timeout=%d&close_after=%d" % (
                         self.server.get_port(),
                         self.iomanager.landing_page(),
                         self.adapter.TEST_DURATION * 1000,

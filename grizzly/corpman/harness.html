@@ -51,7 +51,7 @@ function main() {
 
 let close_after, limit_tmr, time_limit
 let sub = null
-for (let kv of location.hash.substr(1).split(',')) {
+for (let kv of location.search.replace('?', '').split('&')) {
   let [k, v] = kv.split('=')
   if (k === 'timeout') {
     time_limit = Number(v)
