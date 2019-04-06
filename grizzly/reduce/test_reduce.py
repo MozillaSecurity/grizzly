@@ -95,12 +95,17 @@ class FakeInterestingSemiReliable(FakeInteresting):
         return self.interesting_count <= self.interesting_times
 
 
+class FakeInterestingSemiReliableWithCache(FakeInterestingSemiReliable):
+    USE_TESTCASE_CACHE = True
+
+
 @pytest.fixture
 def job(monkeypatch, request):
     """Pytest fixture to provide a ReductionJob object with dependencies stubbed and default values"""
     interesting_cls = getattr(request, "param", FakeInteresting)
+    use_testcase_cache = getattr(interesting_cls, "USE_TESTCASE_CACHE", False)
     monkeypatch.setattr(reduce, "Interesting", interesting_cls)
-    result = ReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, False)
+    result = ReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, use_testcase_cache)
     yield result
     result.close()
 
@@ -539,4 +544,31 @@ def test_run_8(tmp_path, job):
     job.run()
     assert job.interesting.min_crashes == 2
     assert job.interesting.repeat == 2
+    assert job.interesting.no_harness
+
+
+@pytest.mark.parametrize("job", [FakeInterestingSemiReliableWithCache], indirect=["job"])
+def test_run_9(tmp_path, job):
+    """test that analyze stage works with multiple testcases"""
+    create_target_binary(job.interesting.target, tmp_path)
+    (tmp_path / "tc").mkdir()
+    (tmp_path / "tc" / "-0").mkdir()
+    (tmp_path / "tc" / "-1").mkdir()
+    (tmp_path / "tc" / "-0" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "-0" / "test.html").write_text("-0\nDDBEGIN\nfluff\nrequired\nDDEND\n")
+    (tmp_path / "tc" / "-1" / "test_info.txt").write_text("landing page: required.html")
+    (tmp_path / "tc" / "-1" / "required.html").write_text("-1\nDDBEGIN\nfluff\nrequired\nDDEND\n")
+    job.config_testcase(str(tmp_path / "tc"))
+
+    class FakeReporter(Reporter):
+        def _submit(self):
+            pass
+    job.reporter = FakeReporter()
+
+    job.interesting.min_crashes = 1
+    job.interesting.repeat = 1
+    job.interesting.set_n(5)
+    job.run()
+    assert job.interesting.min_crashes == 5
+    assert job.interesting.repeat == 10
     assert job.interesting.no_harness

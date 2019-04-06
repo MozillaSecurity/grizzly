@@ -421,9 +421,6 @@ class ReductionJob(object):
                 ITERATIONS = 10
 
                 def main(sub, testcase, interesting, tempFilename):
-                    if self.interesting.no_harness:
-                        LOG.warning("--no-harness was given, skipping analysis")
-                        return 0
                     if self.interesting.min_crashes != 1:
                         LOG.warning("--min-crashes=%d was given, skipping analysis", self.interesting.min_crashes)
                         return 0
@@ -432,23 +429,28 @@ class ReductionJob(object):
                         return 0
 
                     assert sub.ITERATIONS > 0
+                    no_harness_already_set = self.interesting.no_harness
+
+                    # disable result cache setting
+                    use_result_cache = self.interesting.use_result_cache
+                    self.interesting.use_result_cache = False
 
                     harness_crashes = 0
                     non_harness_crashes = 0
 
-                    LOG.info("Running for %d iterations to assess reliability using harness.", sub.ITERATIONS)
-                    for _ in range(sub.ITERATIONS):
-                        result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
-                        LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
-                        if result:
-                            harness_crashes += 1
-                    LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
-                             100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
+                    if not no_harness_already_set:
+                        LOG.info("Running for %d iterations to assess reliability using harness.", sub.ITERATIONS)
+                        for _ in range(sub.ITERATIONS):
+                            result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
+                            LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
+                            if result:
+                                harness_crashes += 1
+                        LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
+                                 100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
 
-                    self.interesting.target.cleanup()  # destroy target since we may be changing parameters
+                        self.interesting.target.cleanup()  # destroy target since we may be changing parameters
 
                     if harness_crashes != sub.ITERATIONS:
-
                         # try without harness
                         self.interesting.no_harness = True
 
@@ -459,9 +461,12 @@ class ReductionJob(object):
                             if result:
                                 non_harness_crashes += 1
                         LOG.info("Testcase was interesting %0.1f%% of %d attempts without harness.",
-                                 100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
+                                 100.0 * non_harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
 
                         self.interesting.target.cleanup()  # destroy target since we may be changing parameters
+
+                    # restore result cache setting
+                    self.interesting.use_result_cache = use_result_cache
 
                     if harness_crashes == 0 and non_harness_crashes == 0:
                         return 1  # no crashes ever?
@@ -486,6 +491,8 @@ class ReductionJob(object):
                         LOG.info("* testcase was perfectly reliable with the harness (--no-harness not assessed)")
                     elif harness_crashes == non_harness_crashes:
                         LOG.info("* testcase was equally reliable with/without the harness")
+                    elif no_harness_already_set:
+                        LOG.info("* --no-harness was already set")
                     else:
                         LOG.info("* testcase was %s reliable with the harness",
                                  "less" if self.interesting.no_harness else "more")
