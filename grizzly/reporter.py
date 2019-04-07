@@ -260,7 +260,7 @@ class Reporter(object):
 
     @property
     def prefix(self):
-        return "_".join([self.minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S")])
+        return "%s_%s" % (self.minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S"))
 
 
     def _process_rr_trace(self):
@@ -335,7 +335,7 @@ class FilesystemReporter(Reporter):
         # move logs into bucket directory
         shutil.move(
             self.report.path,
-            os.path.join(major_dir, "_".join([self.prefix, "logs"])))
+            os.path.join(major_dir, "%s_%s" % (self.prefix, "logs")))
 
 
 class FuzzManagerReporter(Reporter):
@@ -419,6 +419,9 @@ class FuzzManagerReporter(Reporter):
         for msg in mem_errs:
             if msg in log_data and "#0 " not in log_data:
                 return True
+        if log_data.startswith("VEX temporary storage exhausted."):
+            # ignore Valgrind crashes
+            return True
         return False
 
 
@@ -454,10 +457,12 @@ class FuzzManagerReporter(Reporter):
                     "_grizzly_seen_count": 0,
                     "frequent": False,
                     "shortDescription": crash_info.createShortSignature()}
-            if cache_sig_file is None and self._ignored():
-                # don't force report here because it's garbage. we should never report garbage
-                return
-            assert cache_sig_file is not None, "Failed to create signature"
+            if cache_sig_file is None:
+                if self._ignored():
+                    log.info("Report is unsupported and is in ignore list")
+                    return
+                log.warning("Report is unsupported by FM, saved to %r", self.report.path)
+                raise RuntimeError("Failed to create FM signature")
             # limit the number of times we report per cycle
             cache_metadata["_grizzly_seen_count"] += 1
             if cache_metadata["_grizzly_seen_count"] >= self.MAX_REPORTS:
