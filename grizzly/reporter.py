@@ -223,6 +223,7 @@ class Reporter(object):
     DEFAULT_MINOR = "0"
 
     def __init__(self, log_limit=0):
+        self._prefix = None
         self.log_limit = max(log_limit, 0)  # maximum log file size
         self.report = None
         self.test_cases = None
@@ -260,7 +261,9 @@ class Reporter(object):
 
     @property
     def prefix(self):
-        return "%s_%s" % (self.minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S"))
+        if self._prefix is None:
+            self._prefix = "%s_%s" % (self.minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S"))
+        return self._prefix
 
 
     def _process_rr_trace(self):
