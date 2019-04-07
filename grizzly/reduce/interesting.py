@@ -347,7 +347,7 @@ class Interesting(object):
                         self.orig_sig = crash.createCrashSignature(maxFrames=max_frames)
                     # the amount of time it can take to replay a test case can vary
                     # when under Valgrind so do not update the timeout in that case
-                    if not self.use_valgrind:
+                    if not self.target.use_valgrind:
                         self.update_timeout(end_time - start_time)
                 else:
                     log.info("Uninteresting: different signature: %s", short_sig)

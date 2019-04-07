@@ -15,6 +15,7 @@ class FakeTarget(object):
         self.closed = True
         self.binary = ""
         self.prefs = None
+        self.use_valgrind = False
         self._calls = {
             "save_logs": 0,
             "poll_for_idle": 0,
