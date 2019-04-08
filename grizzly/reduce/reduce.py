@@ -448,7 +448,7 @@ class ReductionJob(object):
                         LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
                                  100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
 
-                        self.interesting.target.cleanup()  # destroy target since we may be changing parameters
+                        self.interesting.target.close()  # destroy target since we may be changing parameters
 
                     if harness_crashes != sub.ITERATIONS:
                         # try without harness
@@ -463,7 +463,7 @@ class ReductionJob(object):
                         LOG.info("Testcase was interesting %0.1f%% of %d attempts without harness.",
                                  100.0 * non_harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
 
-                        self.interesting.target.cleanup()  # destroy target since we may be changing parameters
+                        self.interesting.target.close()  # destroy target since we may be changing parameters
 
                     # restore result cache setting
                     self.interesting.use_result_cache = use_result_cache

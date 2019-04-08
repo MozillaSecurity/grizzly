@@ -177,7 +177,8 @@ class Interesting(object):
         Returns:
             bool: True if reduced testcase is still interesting.
         """
-        self.target.close()  # ensure the target is closed so "repeat" and "relaunch" never get out of sync
+        if not self.target.closed:
+            self.target.close()  # ensure the target is closed so "repeat" and "relaunch" never get out of sync
         if self.skip:
             if self.skipped is None:
                 self.skipped = 0
@@ -295,7 +296,7 @@ class Interesting(object):
                 poll.start()
 
             def keep_waiting():
-                return self.target._puppet.is_healthy() and not idle_timeout_event.is_set()
+                return self.target.monitor.is_healthy() and not idle_timeout_event.is_set()
 
             if self.no_harness:
                 # create a tmp file that will never be served
