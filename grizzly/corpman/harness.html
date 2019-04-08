@@ -4,6 +4,9 @@
 <meta charset=UTF-8>
 <title>&#x1f43b; &sdot; Grizzly &sdot; &#x1f98a;</title>
 <script>
+let close_after, limit_tmr, time_limit
+let sub = null
+
 let grzDump = (msg) => {
   dump(`[grz harness][${new Date().toUTCString()}] ${msg}\n`)
 }
@@ -63,35 +66,36 @@ let main = () => {
 
   // set the test case timeout once the test loading ends
   sub.addEventListener('abort', setTestTimeout)
-  sub.addEventListener('load', setTestTimeout)
   sub.addEventListener('error', setTestTimeout)
+  sub.addEventListener('load', setTestTimeout)
 
   setTimeout(main, 50)
 }
 
-let close_after, limit_tmr, time_limit
-let sub = null
-for (let kv of window.location.search.replace('?', '').split('&')) {
-  let [k, v] = kv.split('=')
-  if (k === 'timeout') {
-    time_limit = Number(v)
-  } else if (k === 'close_after') {
-    close_after = Number(v)
-  } else {
-    grzDump(`unknown arg: ${k}`)
-  }
-}
-
-if ((time_limit === undefined) || (time_limit < 0)) {
-  time_limit = 15000
-  grzDump(`No valid time limit given, using default of ${time_limit}`)
-} else if (time_limit > 0) {
-  grzDump(`Using test case time limit of ${time_limit}`)
-} else {
-  grzDump(`Test case time limit diabled`)
-}
-
 window.addEventListener('load', () => {
+  let args = window.location.search.replace('?', '')
+  if (args) {
+    for (let kv of args.split('&')) {
+      let [k, v] = kv.split('=')
+      if (k === 'timeout') {
+        time_limit = Number(v)
+      } else if (k === 'close_after') {
+        close_after = Number(v)
+      } else {
+        grzDump(`unknown arg '${k}'`)
+      }
+    }
+  }
+
+  if ((time_limit === undefined) || (time_limit < 0)) {
+    time_limit = 15000
+    grzDump(`No valid time limit given, using default of ${time_limit}`)
+  } else if (time_limit > 0) {
+    grzDump(`Using test case time limit of ${time_limit}`)
+  } else {
+    grzDump(`Test case time limit diabled`)
+  }
+
   // update banner
   setBanner('&#x1f43b; &sdot; Grizzly Harness &sdot; &#x1f98a;')
   main()
