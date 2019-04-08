@@ -4,22 +4,44 @@
 <meta charset=UTF-8>
 <title>&#x1f43b; &sdot; Grizzly &sdot; &#x1f98a;</title>
 <script>
-function grzDump(msg) {
+let grzDump = (msg) => {
   dump(`[grz harness][${new Date().toUTCString()}] ${msg}\n`)
 }
 
-function setBanner(msg) {
-  try { document.getElementById('banner').innerHTML = msg } catch(e) { grzDump(`setBanner error: ${e}`) }
+let setBanner = (msg) => {
+  try {
+    document.getElementById('banner').innerHTML = msg
+  } catch(e) {
+    grzDump(`setBanner error: ${e}`)
+  }
 }
 
-function main() {
+let setTestTimeout = () => {
+  if (limit_tmr !== undefined) {
+    grzDump('Test case time limit already set')
+    return
+  }
+  if (time_limit === 0) {
+    // test case time limit disabled
+    return
+  }
+  limit_tmr = setTimeout(() => {
+    grzDump('Test case time limit exceeded')
+    if (!sub.closed){
+      grzDump('Closing test case')
+      sub.close()
+    }
+  }, time_limit)
+}
+
+let main = () => {
   // poll sub and wait until closed
   if (sub && !sub.closed) {
     setTimeout(main, 50)
     return
   }
 
-  if (close_after !== undefined && close_after-- < 1) {
+  if ((close_after !== undefined) && (close_after-- < 1)) {
     grzDump('Hit close limit.')
     window.location.href = '/close_browser'
     return
@@ -28,6 +50,7 @@ function main() {
   // if limit_tmr is set, clear it before opening a new tab
   if (limit_tmr !== undefined) {
     clearTimeout(limit_tmr)
+    limit_tmr = undefined
   }
 
   // open test
@@ -38,20 +61,17 @@ function main() {
     return
   }
 
-  limit_tmr = setTimeout(() => {
-    grzDump('Time limit exceeded')
-    if (!sub.closed){
-      grzDump('Closing test case')
-      sub.close()
-    }
-  }, time_limit)
+  // set the test case timeout once the test loading ends
+  sub.addEventListener('abort', setTestTimeout)
+  sub.addEventListener('load', setTestTimeout)
+  sub.addEventListener('error', setTestTimeout)
 
   setTimeout(main, 50)
 }
 
 let close_after, limit_tmr, time_limit
 let sub = null
-for (let kv of location.search.replace('?', '').split('&')) {
+for (let kv of window.location.search.replace('?', '').split('&')) {
   let [k, v] = kv.split('=')
   if (k === 'timeout') {
     time_limit = Number(v)
@@ -61,22 +81,27 @@ for (let kv of location.search.replace('?', '').split('&')) {
     grzDump(`unknown arg: ${k}`)
   }
 }
-if (time_limit === undefined || time_limit <= 0) {
-  grzDump('No time limit given, using default of 5s')
-  time_limit = 5000
+
+if ((time_limit === undefined) || (time_limit < 0)) {
+  time_limit = 15000
+  grzDump(`No valid time limit given, using default of ${time_limit}`)
+} else if (time_limit > 0) {
+  grzDump(`Using test case time limit of ${time_limit}`)
 } else {
-  grzDump(`Using time limit of ${time_limit}`)
+  grzDump(`Test case time limit diabled`)
 }
 
-window.onload = () => {
+window.addEventListener('load', () => {
   // update banner
   setBanner('&#x1f43b; &sdot; Grizzly Harness &sdot; &#x1f98a;')
   main()
-}
+})
 
 window.addEventListener('beforeunload', () => {
-  clearTimeout(limit_tmr)
   grzDump('Cleaning up')
+  if (limit_tmr !== undefined) {
+    clearTimeout(limit_tmr)
+  }
   if (!sub.closed) {
     sub.close()
   }
