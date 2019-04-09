@@ -60,7 +60,7 @@ def test_interesting(tmp_path):
     (tmp_path / "lithium").mkdir()
     assert obj.interesting(None, str(tmp_path / "lithium"))
     assert obj.server is None
-    assert obj.target._calls["close"] == 2
+    assert obj.target._calls["close"] == 1
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
@@ -84,7 +84,7 @@ def test_not_interesting(tmp_path):
     (tmp_path / "lithium").mkdir()
     assert not obj.interesting(None, str(tmp_path / "lithium"))
     assert obj.server is not None
-    assert obj.target._calls["close"] == 1
+    assert obj.target._calls["close"] == 0
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
@@ -108,7 +108,7 @@ def test_ignored(tmp_path):
     (tmp_path / "lithium").mkdir()
     assert not obj.interesting(None, str(tmp_path / "lithium"))
     assert obj.server is not None
-    assert obj.target._calls["close"] == 2
+    assert obj.target._calls["close"] == 1
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
@@ -150,7 +150,7 @@ def test_no_harness(tmp_path):
     obj.init(None)
     assert obj.interesting(None, str(prefix))
     assert obj.server is None
-    assert obj.target._calls["close"] == 2
+    assert obj.target._calls["close"] == 1
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
@@ -169,7 +169,7 @@ def test_skip(tmp_path):
     prefix.mkdir()
     assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 1
-    assert obj.target._calls["close"] == 2
+    assert obj.target._calls["close"] == 1
     assert obj.server is None
     for _ in range(7):
         assert not obj.interesting(None, None)
@@ -178,7 +178,7 @@ def test_skip(tmp_path):
     prefix.mkdir()
     assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 2
-    assert obj.target._calls["close"] == 11
+    assert obj.target._calls["close"] == 2
     assert obj.server is not None
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
@@ -206,14 +206,14 @@ def test_any_crash_false(tmp_path):
     prefix.mkdir()
     assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 1
-    assert obj.target._calls["close"] == 2
+    assert obj.target._calls["close"] == 1
     assert obj.server is None
     prefix = tmp_path / "lithium1"
     prefix.mkdir()
     stderr = "Assertion failure: some other thing happened, at test.c:456"
     assert not obj.interesting(None, str(prefix))  # doesn't match original sig
     assert obj.target._calls["launch"] == 2
-    assert obj.target._calls["close"] == 4
+    assert obj.target._calls["close"] == 2
     assert obj.server is not None
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
@@ -241,14 +241,14 @@ def test_any_crash_true(tmp_path):
     prefix.mkdir()
     assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 1
-    assert obj.target._calls["close"] == 2
+    assert obj.target._calls["close"] == 1
     assert obj.server is None
     prefix = tmp_path / "lithium1"
     prefix.mkdir()
     stderr = "Assertion failure: some other thing happened, at test.c:456"
     assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 2
-    assert obj.target._calls["close"] == 4
+    assert obj.target._calls["close"] == 2
     assert obj.server is not None
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
@@ -266,7 +266,7 @@ def test_min_crashes_repro(tmp_path):
     prefix.mkdir()
     assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 4
-    assert obj.target._calls["close"] == 5
+    assert obj.target._calls["close"] == 4
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 4
     obj.cleanup(None)
@@ -296,7 +296,7 @@ def test_min_crashes_norepro(tmp_path):
     prefix.mkdir()
     assert not obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 4
-    assert obj.target._calls["close"] == 4
+    assert obj.target._calls["close"] == 3
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 4
     obj.cleanup(None)
