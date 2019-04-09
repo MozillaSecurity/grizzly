@@ -730,7 +730,8 @@ def main(args, interesting_cb=None, result_cb=None):
             args.idle_threshold,
             args.idle_timeout,
             args.working_path,
-            not args.no_cache)
+            not args.no_cache,
+            args.no_analysis)
 
         job.config_testcase(args.input)
 

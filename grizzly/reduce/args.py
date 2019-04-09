@@ -50,6 +50,9 @@ class ReducerArgs(CommonArgs):
             "--no-cache", action="store_true",
             help="Disable testcase caching")
         self.parser.add_argument(
+            "--no-analysis", action="store_true",
+            help="Disable analysis to auto-set --repeat/--min-crashes.")
+        self.parser.add_argument(
             "--strategy", nargs="+", default=list(), metavar="STRATEGY", dest="strategies",
             help="One or more strategies (space-separated). Available: %s (default: %s)"
             % (" ".join(sorted(strategies_by_name())), " ".join(ReductionJob.DEFAULT_STRATEGIES)))
