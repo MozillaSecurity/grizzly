@@ -2,11 +2,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import unicode_literals
 import os
 import time
-
 import pytest
-
 import ffpuppet
 import sapphire
 from grizzly.reduce.interesting import Interesting
@@ -51,13 +50,15 @@ def fake_timesleep(monkeypatch):
 pytestmark = pytest.mark.usefixtures("fake_sapphire", "fake_timesleep")
 
 
-def test_interesting(tmpdir):
+def test_interesting(tmp_path):
     "simple case where the test is interesting"
     obj = Interesting([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0)
-    create_target_binary(obj.target, tmpdir)
-    obj.reduce_file = tmpdir.ensure("test.html").strpath
+    create_target_binary(obj.target, tmp_path)
+    (tmp_path / "test.html").touch()
+    obj.reduce_file = str(tmp_path / "test.html")
     obj.init(None)
-    assert obj.interesting(None, tmpdir.ensure("lithium", dir=True).strpath)
+    (tmp_path / "lithium").mkdir()
+    assert obj.interesting(None, str(tmp_path / "lithium"))
     assert obj.server is None
     assert obj.target._calls["close"] == 1
     obj.cleanup(None)
@@ -65,7 +66,7 @@ def test_interesting(tmpdir):
     assert obj.target._calls["detect_failure"] == 1
 
 
-def test_not_interesting(tmpdir):
+def test_not_interesting(tmp_path):
     "simple case where the test is not interesting"
 
     class MyTarget(FakeTarget):
@@ -75,11 +76,13 @@ def test_not_interesting(tmpdir):
             return Target.RESULT_NONE
 
     obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0)
-    create_target_binary(obj.target, tmpdir)
+    create_target_binary(obj.target, tmp_path)
     obj.target._is_healthy = True
-    obj.reduce_file = tmpdir.ensure("test.html").strpath
+    (tmp_path / "test.html").touch()
+    obj.reduce_file = str(tmp_path / "test.html")
     obj.init(None)
-    assert not obj.interesting(None, tmpdir.ensure("lithium", dir=True).strpath)
+    (tmp_path / "lithium").mkdir()
+    assert not obj.interesting(None, str(tmp_path / "lithium"))
     assert obj.server is not None
     assert obj.target._calls["close"] == 0
     obj.cleanup(None)
@@ -87,7 +90,7 @@ def test_not_interesting(tmpdir):
     assert obj.target._calls["detect_failure"] == 1
 
 
-def test_ignored(tmpdir):
+def test_ignored(tmp_path):
     "if target says ignored, it's not interesting"
 
     class MyTarget(FakeTarget):
@@ -98,10 +101,12 @@ def test_ignored(tmpdir):
             return Target.RESULT_IGNORED
 
     obj = Interesting(["foo", "bar"], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0)
-    create_target_binary(obj.target, tmpdir)
-    obj.reduce_file = tmpdir.ensure("test.html").strpath
+    create_target_binary(obj.target, tmp_path)
+    (tmp_path / "test.html").touch()
+    obj.reduce_file = str(tmp_path / "test.html")
     obj.init(None)
-    assert not obj.interesting(None, tmpdir.ensure("lithium", dir=True).strpath)
+    (tmp_path / "lithium").mkdir()
+    assert not obj.interesting(None, str(tmp_path / "lithium"))
     assert obj.server is not None
     assert obj.target._calls["close"] == 1
     obj.cleanup(None)
@@ -109,7 +114,7 @@ def test_ignored(tmpdir):
     assert obj.target._calls["detect_failure"] == 1
 
 
-def test_target_relaunch(tmpdir):
+def test_target_relaunch(tmp_path):
     "target should be launched more than once on error"
 
     class MyTarget(FakeTarget):
@@ -119,27 +124,31 @@ def test_target_relaunch(tmpdir):
             raise ffpuppet.LaunchError()
 
     obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0)
-    create_target_binary(obj.target, tmpdir)
-    prefix = tmpdir.ensure("lithium", dir=True)
-    obj.reduce_file = tmpdir.ensure("test.html").strpath
+    create_target_binary(obj.target, tmp_path)
+    prefix = tmp_path / "lithium"
+    prefix.mkdir()
+    (tmp_path / "test.html").touch()
+    obj.reduce_file = str(tmp_path / "test.html")
     obj.init(None)
     with pytest.raises(ffpuppet.LaunchError):
-        obj.interesting(None, prefix.strpath)
+        obj.interesting(None, str(prefix))
     assert obj.server is not None
     assert obj.target._calls["launch"] > 1
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
 
 
-def test_no_harness(tmpdir):
+def test_no_harness(tmp_path):
     "simple case where harness is not used"
     obj = Interesting([], FakeTarget(), 30, True, False, 0, 1, 1, 0, 0, 0)
-    create_target_binary(obj.target, tmpdir)
-    prefix = tmpdir.ensure("lithium", dir=True)
-    reduce_file = tmpdir.ensure("test.html")
-    obj.reduce_file = reduce_file.strpath
+    create_target_binary(obj.target, tmp_path)
+    prefix = tmp_path / "lithium"
+    prefix.mkdir()
+    reduce_file = tmp_path / "test.html"
+    reduce_file.touch()
+    obj.reduce_file = str(reduce_file)
     obj.init(None)
-    assert obj.interesting(None, prefix.strpath)
+    assert obj.interesting(None, str(prefix))
     assert obj.server is None
     assert obj.target._calls["close"] == 1
     obj.cleanup(None)
@@ -147,24 +156,27 @@ def test_no_harness(tmpdir):
     assert obj.target._calls["detect_failure"] == 1
 
 
-def test_skip(tmpdir):
+def test_skip(tmp_path):
     "skip should assume interesting for the first n calls, without launching the target"
     obj = Interesting([], FakeTarget(), 30, False, False, 7, 1, 1, 0, 0, 0, False)
-    create_target_binary(obj.target, tmpdir)
-    reduce_file = tmpdir.ensure("test.html")
-    obj.reduce_file = reduce_file.strpath
+    create_target_binary(obj.target, tmp_path)
+    reduce_file = tmp_path / "test.html"
+    reduce_file.touch()
+    obj.reduce_file = str(reduce_file)
     obj.init(None)
     # first call is real, regardless of skip, since that is the initial repro
-    prefix = tmpdir.ensure("lithium0", dir=True)
-    assert obj.interesting(None, prefix.strpath)
+    prefix = tmp_path / "lithium0"
+    prefix.mkdir()
+    assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 1
     assert obj.target._calls["close"] == 1
     assert obj.server is None
     for _ in range(7):
         assert not obj.interesting(None, None)
     assert obj.target._calls["launch"] == 1
-    prefix = tmpdir.ensure("lithium1", dir=True)
-    assert obj.interesting(None, prefix.strpath)
+    prefix = tmp_path / "lithium1"
+    prefix.mkdir()
+    assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 2
     assert obj.target._calls["close"] == 2
     assert obj.server is not None
@@ -172,7 +184,7 @@ def test_skip(tmpdir):
     assert obj.target._calls["cleanup"] == 0
 
 
-def test_any_crash_false(tmpdir):
+def test_any_crash_false(tmp_path):
     "subsequent crashes must match the original if any_crash is False"
     stderr = "Assertion failure: bad thing happened, at test.c:123"
 
@@ -184,19 +196,22 @@ def test_any_crash_false(tmpdir):
                 log_fp.write(stderr)
 
     obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, False)
-    create_target_binary(obj.target, tmpdir)
-    reduce_file = tmpdir.ensure("test.html")
-    obj.reduce_file = reduce_file.strpath
+    create_target_binary(obj.target, tmp_path)
+    reduce_file = tmp_path / "test.html"
+    reduce_file.touch()
+    obj.reduce_file = str(reduce_file)
     obj.init(None)
     # first call is real, regardless of skip, since that is the initial repro
-    prefix = tmpdir.ensure("lithium0", dir=True)
-    assert obj.interesting(None, prefix.strpath)
+    prefix = tmp_path / "lithium0"
+    prefix.mkdir()
+    assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 1
     assert obj.target._calls["close"] == 1
     assert obj.server is None
-    prefix = tmpdir.ensure("lithium1", dir=True)
+    prefix = tmp_path / "lithium1"
+    prefix.mkdir()
     stderr = "Assertion failure: some other thing happened, at test.c:456"
-    assert not obj.interesting(None, prefix.strpath)  # doesn't match original sig
+    assert not obj.interesting(None, str(prefix))  # doesn't match original sig
     assert obj.target._calls["launch"] == 2
     assert obj.target._calls["close"] == 2
     assert obj.server is not None
@@ -204,7 +219,7 @@ def test_any_crash_false(tmpdir):
     assert obj.target._calls["cleanup"] == 0
 
 
-def test_any_crash_true(tmpdir):
+def test_any_crash_true(tmp_path):
     "subsequent crashes need not match the original if any_crash is True"
     stderr = "Assertion failure: bad thing happened, at test.c:123"
 
@@ -216,19 +231,22 @@ def test_any_crash_true(tmpdir):
                 log_fp.write(stderr)
 
     obj = Interesting([], MyTarget(), 30, False, True, 0, 1, 1, 0, 0, 0, False)
-    create_target_binary(obj.target, tmpdir)
-    reduce_file = tmpdir.ensure("test.html")
-    obj.reduce_file = reduce_file.strpath
+    create_target_binary(obj.target, tmp_path)
+    reduce_file = tmp_path / "test.html"
+    reduce_file.touch()
+    obj.reduce_file = str(reduce_file)
     obj.init(None)
     # first call is real, regardless of skip, since that is the initial repro
-    prefix = tmpdir.ensure("lithium0", dir=True)
-    assert obj.interesting(None, prefix.strpath)
+    prefix = tmp_path / "lithium0"
+    prefix.mkdir()
+    assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 1
     assert obj.target._calls["close"] == 1
     assert obj.server is None
-    prefix = tmpdir.ensure("lithium1", dir=True)
+    prefix = tmp_path / "lithium1"
+    prefix.mkdir()
     stderr = "Assertion failure: some other thing happened, at test.c:456"
-    assert obj.interesting(None, prefix.strpath)
+    assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 2
     assert obj.target._calls["close"] == 2
     assert obj.server is not None
@@ -236,15 +254,17 @@ def test_any_crash_true(tmpdir):
     assert obj.target._calls["cleanup"] == 0
 
 
-def test_min_crashes_repro(tmpdir):
+def test_min_crashes_repro(tmp_path):
     "min_crashes will force n iterations if crash repros"
     obj = Interesting([], FakeTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, False)
-    create_target_binary(obj.target, tmpdir)
-    reduce_file = tmpdir.ensure("test.html")
-    obj.reduce_file = reduce_file.strpath
+    create_target_binary(obj.target, tmp_path)
+    reduce_file = tmp_path / "test.html"
+    reduce_file.touch()
+    obj.reduce_file = str(reduce_file)
     obj.init(None)
-    prefix = tmpdir.ensure("lithium", dir=True)
-    assert obj.interesting(None, prefix.strpath)
+    prefix = tmp_path / "lithium"
+    prefix.mkdir()
+    assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 4
     assert obj.target._calls["close"] == 4
     assert obj.server is not None
@@ -253,7 +273,7 @@ def test_min_crashes_repro(tmpdir):
     assert obj.target._calls["cleanup"] == 0
 
 
-def test_min_crashes_norepro(tmpdir):
+def test_min_crashes_norepro(tmp_path):
     "min_crashes will return uninteresting if crash repros n-1 times"
 
     class MyTarget(FakeTarget):
@@ -267,12 +287,14 @@ def test_min_crashes_norepro(tmpdir):
             return Target.RESULT_FAILURE
 
     obj = Interesting([], MyTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, False)
-    create_target_binary(obj.target, tmpdir)
-    reduce_file = tmpdir.ensure("test.html")
-    obj.reduce_file = reduce_file.strpath
+    create_target_binary(obj.target, tmp_path)
+    reduce_file = tmp_path / "test.html"
+    reduce_file.touch()
+    obj.reduce_file = str(reduce_file)
     obj.init(None)
-    prefix = tmpdir.ensure("lithium", dir=True)
-    assert not obj.interesting(None, prefix.strpath)
+    prefix = tmp_path / "lithium"
+    prefix.mkdir()
+    assert not obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 4
     assert obj.target._calls["close"] == 3
     assert obj.server is not None
@@ -281,22 +303,24 @@ def test_min_crashes_norepro(tmpdir):
     assert obj.target._calls["cleanup"] == 0
 
 
-def test_repeat_repro(tmpdir):
+def test_repeat_repro(tmp_path):
     "repeat will stop at min_crashes if crash repros"
     obj = Interesting([], FakeTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, False)
-    create_target_binary(obj.target, tmpdir)
-    reduce_file = tmpdir.ensure("test.html")
-    obj.reduce_file = reduce_file.strpath
+    create_target_binary(obj.target, tmp_path)
+    reduce_file = tmp_path / "test.html"
+    reduce_file.touch()
+    obj.reduce_file = str(reduce_file)
     obj.init(None)
-    prefix = tmpdir.ensure("lithium", dir=True)
-    assert obj.interesting(None, prefix.strpath)
+    prefix = tmp_path / "lithium"
+    prefix.mkdir()
+    assert obj.interesting(None, str(prefix))
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 4
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
 
 
-def test_repeat_norepro(tmpdir):
+def test_repeat_norepro(tmp_path):
     "repeat will force repeat - min_crashes + 1 iterations if crash doesn't repro"
 
     class MyTarget(FakeTarget):
@@ -306,43 +330,51 @@ def test_repeat_norepro(tmpdir):
             return Target.RESULT_NONE
 
     obj = Interesting([], MyTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, False)
-    create_target_binary(obj.target, tmpdir)
-    reduce_file = tmpdir.ensure("test.html")
-    obj.reduce_file = reduce_file.strpath
+    create_target_binary(obj.target, tmp_path)
+    reduce_file = tmp_path / "test.html"
+    reduce_file.touch()
+    obj.reduce_file = str(reduce_file)
     obj.init(None)
-    prefix = tmpdir.ensure("lithium", dir=True)
-    assert not obj.interesting(None, prefix.strpath)
+    prefix = tmp_path / "lithium"
+    prefix.mkdir()
+    assert not obj.interesting(None, str(prefix))
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 17 - 4 + 1
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
 
 
-def test_cache(tmpdir):
+def test_cache(tmp_path):
     "cache will be hit if same file is given twice"
     obj = Interesting([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0)
-    create_target_binary(obj.target, tmpdir)
-    obj.reduce_file = tmpdir.ensure("test.html").strpath
+    create_target_binary(obj.target, tmp_path)
+    (tmp_path / "test.html").touch()
+    obj.reduce_file = str(tmp_path / "test.html")
     obj.init(None)
-    assert obj.interesting(None, tmpdir.ensure("lithium0", dir=True).strpath)
-    assert obj.interesting(None, tmpdir.ensure("lithium1", dir=True).strpath)
+    (tmp_path / "lithium0").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium0")
+    (tmp_path / "lithium1").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium1")
     assert obj.target._calls["detect_failure"] == 1
     obj.cleanup(None)
 
 
-def test_no_cache(tmpdir):
+def test_no_cache(tmp_path):
     "testcase_cache=False will disable cache"
     obj = Interesting([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, False)
-    create_target_binary(obj.target, tmpdir)
-    obj.reduce_file = tmpdir.ensure("test.html").strpath
+    create_target_binary(obj.target, tmp_path)
+    (tmp_path / "test.html").touch()
+    obj.reduce_file = str(tmp_path / "test.html")
     obj.init(None)
-    assert obj.interesting(None, tmpdir.ensure("lithium0", dir=True).strpath)
-    assert obj.interesting(None, tmpdir.ensure("lithium1", dir=True).strpath)
+    (tmp_path / "lithium0").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium0")
+    (tmp_path / "lithium1").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium1")
     assert obj.target._calls["detect_failure"] == 2
     obj.cleanup(None)
 
 
-def test_timeout_update(monkeypatch, tmpdir):
+def test_timeout_update(monkeypatch, tmp_path):
     "timeout will be updated based on time to crash"
     monkeypatch.setattr(time, "time", lambda: 0)  # run time will be calculated as 0
     failure_result = Target.RESULT_NONE
@@ -354,36 +386,41 @@ def test_timeout_update(monkeypatch, tmpdir):
             return failure_result
 
     obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 30, False)
-    create_target_binary(obj.target, tmpdir)
-    obj.reduce_file = tmpdir.ensure("test.html").strpath
+    create_target_binary(obj.target, tmp_path)
+    (tmp_path / "test.html").touch()
+    obj.reduce_file = str(tmp_path / "test.html")
     obj.init(None)
     assert obj.idle_timeout == 30
-    assert not obj.interesting(None, tmpdir.ensure("lithium0", dir=True).strpath)
+    (tmp_path / "lithium0").mkdir()
+    assert not obj.interesting(None, tmp_path / "lithium0")
     assert obj.idle_timeout == 30
     assert obj.server is not None
     last_timeout = FakeServer._last_timeout
     assert last_timeout >= 30
     failure_result = Target.RESULT_FAILURE
-    assert obj.interesting(None, tmpdir.ensure("lithium1", dir=True).strpath)
+    (tmp_path / "lithium1").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium1")
     assert obj.idle_timeout < 30
     idle_timeout = obj.idle_timeout
     assert obj.server is None  # killed to update timeout
     assert FakeServer._last_timeout == last_timeout
     last_timeout = FakeServer._last_timeout
-    assert obj.interesting(None, tmpdir.ensure("lithium2", dir=True).strpath)
+    (tmp_path / "lithium2").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium2")
     assert obj.idle_timeout == idle_timeout
     assert FakeServer._last_timeout  # assert that there is actually a timeout
     assert FakeServer._last_timeout < last_timeout
     last_timeout = FakeServer._last_timeout
     assert obj.server is not None
-    assert obj.interesting(None, tmpdir.ensure("lithium3", dir=True).strpath)
+    (tmp_path / "lithium3").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium3")
     assert obj.idle_timeout == idle_timeout
     assert FakeServer._last_timeout == last_timeout
     assert obj.server is not None
     obj.cleanup(None)
 
 
-def test_idle_timeout(monkeypatch, tmpdir):
+def test_idle_timeout(monkeypatch, tmp_path):
     "idle is not polled until idle_timeout has passed, and idle_poll results in timeout"
     now = [0]
     first_poll = []
@@ -412,10 +449,12 @@ def test_idle_timeout(monkeypatch, tmpdir):
     monkeypatch.setattr(sapphire, "Sapphire", MyServer)
 
     obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 10, 25, 30, False)
-    create_target_binary(obj.target, tmpdir)
-    obj.reduce_file = tmpdir.ensure("test.html").strpath
+    create_target_binary(obj.target, tmp_path)
+    (tmp_path / "test.html").touch()
+    obj.reduce_file = str(tmp_path / "test.html")
     obj.init(None)
-    assert obj.interesting(None, tmpdir.ensure("lithium0", dir=True).strpath)
+    (tmp_path / "lithium0").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium0")
     assert abs(first_poll[0] - 30) <= 5, "polling started at %d" % (first_poll[0],)
     assert now[0] >= 45  # interesting did not return until poll_for_idle returned True
     obj.cleanup(None)

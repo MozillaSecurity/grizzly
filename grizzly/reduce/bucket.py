@@ -15,7 +15,8 @@ from .args import ReducerFuzzManagerIDArgs
 from .crash import main as reduce_crash
 from ..core import console_init_logging
 
-log = logging.getLogger("grizzly.reduce.bucket")
+
+LOG = logging.getLogger("grizzly.reduce.bucket")
 
 
 def bucket_crashes(bucket_id):
@@ -41,7 +42,7 @@ def bucket_crashes(bucket_id):
         Returns:
             generator: objects returned by FuzzManager (as dicts)
         """
-        log.debug("first request to /%s/", endpoint)
+        LOG.debug("first request to /%s/", endpoint)
 
         url = "%s://%s:%d/crashmanager/rest/%s/" \
             % (coll.serverProtocol, coll.serverHost, coll.serverPort, endpoint)
@@ -49,14 +50,14 @@ def bucket_crashes(bucket_id):
         response = coll.get(url, params=params).json()
 
         while True:
-            log.debug("got %d/%d %s", len(response["results"]), response["count"], endpoint)
+            LOG.debug("got %d/%d %s", len(response["results"]), response["count"], endpoint)
             while response["results"]:
                 yield response["results"].pop()
 
             if response["next"] is None:
                 break
 
-            log.debug("next request to /%s/", endpoint)
+            LOG.debug("next request to /%s/", endpoint)
             response = coll.get(response["next"]).json()
 
     # Get all crashes for bucket
@@ -69,11 +70,11 @@ def bucket_crashes(bucket_id):
     for crash in _get_results("crashes", params={"query": query, "include_raw": "0"}):
 
         if not crash["testcase"]:
-            log.warning("crash %d has no testcase, skipping", crash["id"])
+            LOG.warning("crash %d has no testcase, skipping", crash["id"])
             continue
 
         n_yielded += 1
-        log.debug("yielding crash #%d", n_yielded)
+        LOG.debug("yielding crash #%d", n_yielded)
         yield crash["id"]
 
 
@@ -102,7 +103,7 @@ def get_signature(bucket_id):
 
 
 def main(args):
-    log.info("Trying all crashes in bucket %d until one reduces", args.input)
+    LOG.info("Trying all crashes in bucket %d until one reduces", args.input)
 
     # if no signature specified, download the signature from FM
     rm_sig = False

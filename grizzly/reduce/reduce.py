@@ -9,6 +9,7 @@ from __future__ import absolute_import
 import hashlib
 import io
 import logging
+import math
 import os
 import re
 import shutil
@@ -31,7 +32,7 @@ __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber", "Jason Kratzer"]
 
 
-log = logging.getLogger("grizzly.reduce")  # pylint: disable=invalid-name
+LOG = logging.getLogger("grizzly.reduce")
 
 
 class ReducerError(Exception):
@@ -60,7 +61,7 @@ class ReductionJob(object):
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
                  repeat, idle_poll, idle_threshold, idle_timeout, working_path=None,
-                 testcase_cache=True):
+                 testcase_cache=True, skip_analysis=False):
         """Use lithium to reduce a testcase.
 
         Args:
@@ -92,6 +93,7 @@ class ReductionJob(object):
         self.interesting_prefix = None
         self.log_handler = self._start_log_capture()
         self.harness_created = None
+        self.skip_analysis = skip_analysis
 
     def _start_log_capture(self):
         """Add a log handler for grizzly and lithium messages generated during this job.
@@ -232,10 +234,10 @@ class ReductionJob(object):
             # move the file out of tcroot because we prune these non-testcase files later
             os.rename(os.path.join(dirs[0], "prefs.js"), os.path.join(self.tmpdir, "prefs.js"))
             self.interesting.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
-            log.warning("Using prefs included in testcase: %r", self.interesting.target.prefs)
+            LOG.warning("Using prefs included in testcase: %r", self.interesting.target.prefs)
         if "env_vars.txt" in os.listdir(dirs[0]):
             self.interesting.config_environ(os.path.join(dirs[0], "env_vars.txt"))
-            log.warning("Using environment included in testcase: %s",
+            LOG.warning("Using environment included in testcase: %s",
                         os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
 
         # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
@@ -333,7 +335,7 @@ class ReductionJob(object):
         self._stop_log_capture()
         if self.tmpdir is not None and os.path.isdir(self.tmpdir):
             if keep_temp:
-                log.warning("Leaving working files at %r for inspection.", self.tmpdir)
+                LOG.warning("Leaving working files at %r for inspection.", self.tmpdir)
             else:
                 shutil.rmtree(self.tmpdir)
                 self.tmpdir = None
@@ -353,7 +355,7 @@ class ReductionJob(object):
 
         # add reduce log
         if include_logs:
-            log.info("Closing reduce log for report submission")
+            LOG.info("Closing reduce log for report submission")
             self._stop_log_capture()
             testcase.add_meta(TestFile.from_file(os.path.join(self.tmpdir, "reducelog.txt"), "reducelog.txt"))
 
@@ -384,9 +386,9 @@ class ReductionJob(object):
         tmpd = os.path.join(self.tmpdir, "alt", crash_hash)
         if crash_hash in self.other_crashes:
             shutil.rmtree(self.other_crashes[crash_hash]["tcroot"])
-            log.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
+            LOG.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
         else:
-            log.info("Found alternate crash: %s", crash_info.createShortSignature())
+            LOG.info("Found alternate crash: %s", crash_info.createShortSignature())
         os.makedirs(tmpd)
         for file_name in _testcase_contents(self.tcroot):
             out = os.path.join(tmpd, file_name)
@@ -415,6 +417,100 @@ class ReductionJob(object):
             self.interesting.orig_sig = self.signature
             self.interesting.landing_page = self.testcase
             reducer.conditionScript = self.interesting
+
+            class _AnalyzeReliability(lithium.Strategy):
+                name = "reliability-analysis"
+                ITERATIONS = 11  # number of iterations to analyze
+                MIN_CRASHES = 2  # --min-crashes value when analysis is used
+                TARGET_PROBABILITY = 0.95  # probability that successful reduction will observe the crash
+                # to see the worst case, run the `self.interesting.repeat` calculation below using
+                # crashes_percent = 1.0/ITERATIONS
+
+                def main(sub, testcase, interesting, tempFilename):
+                    if self.interesting.min_crashes != 1:
+                        LOG.warning("--min-crashes=%d was given, skipping analysis", self.interesting.min_crashes)
+                        return 0
+                    if self.interesting.repeat != 1:
+                        LOG.warning("--repeat=%d was given, skipping analysis", self.interesting.repeat)
+                        return 0
+
+                    assert sub.ITERATIONS > 0
+                    no_harness_already_set = self.interesting.no_harness
+
+                    # disable result cache setting
+                    use_result_cache = self.interesting.use_result_cache
+                    self.interesting.use_result_cache = False
+
+                    harness_crashes = 0
+                    non_harness_crashes = 0
+
+                    if not no_harness_already_set:
+                        LOG.info("Running for %d iterations to assess reliability using harness.", sub.ITERATIONS)
+                        for _ in range(sub.ITERATIONS):
+                            result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
+                            LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
+                            if result:
+                                harness_crashes += 1
+                        LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
+                                 100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
+
+                        if not self.interesting.target.closed:
+                            self.interesting.target.close()  # destroy target since we may be changing parameters
+
+                    if harness_crashes != sub.ITERATIONS:
+                        # try without harness
+                        self.interesting.no_harness = True
+
+                        LOG.info("Running for %d iterations to assess reliability without harness.", sub.ITERATIONS)
+                        for _ in range(sub.ITERATIONS):
+                            result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
+                            LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
+                            if result:
+                                non_harness_crashes += 1
+                        LOG.info("Testcase was interesting %0.1f%% of %d attempts without harness.",
+                                 100.0 * non_harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
+
+                        if not self.interesting.target.closed:
+                            self.interesting.target.close()  # destroy target since we may be changing parameters
+
+                    # restore result cache setting
+                    self.interesting.use_result_cache = use_result_cache
+
+                    if harness_crashes == 0 and non_harness_crashes == 0:
+                        return 1  # no crashes ever?
+
+                    # should we use the harness? go with whichever crashed more
+                    self.interesting.no_harness = non_harness_crashes > harness_crashes
+                    # this is max 99% to avoid domain errors in the calculation below
+                    crashes_percent = min(1.0 * max(non_harness_crashes, harness_crashes) / sub.ITERATIONS, 0.99)
+
+                    # adjust repeat/min-crashes depending on how reliable the testcase was
+                    self.interesting.min_crashes = sub.MIN_CRASHES
+                    self.interesting.repeat = int(math.log(1 - sub.TARGET_PROBABILITY, 1 - crashes_percent) + 0.5) \
+                        * sub.MIN_CRASHES
+
+                    # set relaunch to min(relaunch, repeat)
+                    self.interesting.target.rl_reset = min(self.interesting.target.rl_reset, self.interesting.repeat)
+
+                    LOG.info("Analysis results:")
+                    if harness_crashes == sub.ITERATIONS:
+                        LOG.info("* testcase was perfectly reliable with the harness (--no-harness not assessed)")
+                    elif harness_crashes == non_harness_crashes:
+                        LOG.info("* testcase was equally reliable with/without the harness")
+                    elif no_harness_already_set:
+                        LOG.info("* --no-harness was already set")
+                    else:
+                        LOG.info("* testcase was %s reliable with the harness",
+                                 "less" if self.interesting.no_harness else "more")
+                    LOG.info("* adjusted parameters: --min-crashes=%d --repeat=%d --relaunch=%d",
+                             self.interesting.min_crashes, self.interesting.repeat, self.interesting.target.rl_reset)
+
+                    return 0
+
+            class AnalyzeTestcase(strategies_module.ReduceStage):
+                name = "analyze"
+                strategy_type = _AnalyzeReliability
+                testcase_type = lithium.TestcaseLine
 
             class MinimizeHarness(strategies_module.MinimizeLines):
 
@@ -456,11 +552,11 @@ class ReductionJob(object):
                         self.testcase = os.path.join(self.tcroot, testcase_path[1])
                         self.interesting.landing_page = self.testcase
                         files_to_reduce.append(self.testcase)
-                        log.info("Reduced history to a single file: %s", testcase_path[1])
+                        LOG.info("Reduced history to a single file: %s", testcase_path[1])
                     else:
                         # don't bother trying to reduce the harness further,
                         #   leave harness out of files_to_reduce
-                        log.info("Reduced history down to %d testcases", len(reducer.testcase))
+                        LOG.info("Reduced history down to %d testcases", len(reducer.testcase))
 
             class ScanFilesToReduce(strategies_module.ReduceStage):
 
@@ -496,6 +592,8 @@ class ReductionJob(object):
 
             # resolve list of strategies to apply
             reduce_stages = [MinimizeHarness, ScanFilesToReduce]
+            if not self.skip_analysis:
+                reduce_stages.insert(0, AnalyzeTestcase)
             if strategies is None:
                 strategies = self.DEFAULT_STRATEGIES
             strategies_lut = strategies_module.strategies_by_name()
@@ -545,14 +643,14 @@ class ReductionJob(object):
                     # reducer failed to repro the crash
                     if files_reduced == 0:
                         # first stage, couldn't repro at all
-                        log.warning("Could not reduce: The testcase was not reproducible")
+                        LOG.warning("Could not reduce: The testcase was not reproducible")
                         self.result_code = FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
 
                     else:
                         # subsequent stage, reducing broke the testcase?
                         # unclear how to recover from this.
                         # just report failure and hopefully we have another to try
-                        log.warning("%s failed to reproduce. Previous stage broke the testcase?",
+                        LOG.warning("%s failed to reproduce. Previous stage broke the testcase?",
                                     strategy_type.__name__)
                         self.result_code = FuzzManagerReporter.QUAL_REDUCER_BROKE
 
@@ -574,12 +672,12 @@ class ReductionJob(object):
             return True
 
         except ReducerError as exc:
-            log.warning("Could not reduce: %s", exc)
+            LOG.warning("Could not reduce: %s", exc)
             self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             return False
 
         except Exception:  # pylint: disable=broad-except
-            log.exception("Exception during reduce")
+            LOG.exception("Exception during reduce")
             self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             return False
 
@@ -590,23 +688,23 @@ class ReductionJob(object):
 def main(args, interesting_cb=None, result_cb=None):
     # NOTE: this mirrors grizzly.core.main pretty closely
     #       please check if updates here should go there too
-    log.info("Starting Grizzly Reducer")
+    LOG.info("Starting Grizzly Reducer")
     if args.fuzzmanager:
         FuzzManagerReporter.sanity_check(args.binary)
 
     if args.ignore:
-        log.info("Ignoring: %s", ", ".join(args.ignore))
+        LOG.info("Ignoring: %s", ", ".join(args.ignore))
     if args.xvfb:
-        log.info("Running with Xvfb")
+        LOG.info("Running with Xvfb")
     if args.valgrind:
-        log.info("Running with Valgrind. This will be SLOW!")
+        LOG.info("Running with Valgrind. This will be SLOW!")
 
     target = None
     job = None
 
     job_cancelled = False
     try:
-        log.debug("initializing the Target")
+        LOG.debug("initializing the Target")
         target = Target(
             args.binary,
             args.extension,
@@ -632,32 +730,33 @@ def main(args, interesting_cb=None, result_cb=None):
             args.idle_threshold,
             args.idle_timeout,
             args.working_path,
-            not args.no_cache)
+            not args.no_cache,
+            args.no_analysis)
 
         job.config_testcase(args.input)
 
         # arguments for environ and prefs should override the testcase
         if args.environ:
-            log.warning("Overriding environment with %r", args.environ)
+            LOG.warning("Overriding environment with %r", args.environ)
             job.interesting.config_environ(args.environ)
         if args.prefs:
-            log.warning("Overriding prefs with %r", args.prefs)
+            LOG.warning("Overriding prefs with %r", args.prefs)
             job.interesting.target.prefs = os.path.abspath(args.prefs)
 
         if args.sig is not None:
             with io.open(args.sig, encoding="utf-8") as sig_fp:
                 job.config_signature(sig_fp.read())
 
-        log.debug("initializing the Reporter")
+        LOG.debug("initializing the Reporter")
         if args.fuzzmanager:
-            log.info("Reporting issues via FuzzManager")
+            LOG.info("Reporting issues via FuzzManager")
             job.reporter = FuzzManagerReporter(
                 args.binary,
                 log_limit=Session.FM_LOG_SIZE_LIMIT,
                 tool=args.tool)
         else:
             job.reporter = FilesystemReporter()
-            log.info("Results will be stored in %r", job.reporter.report_path)
+            LOG.info("Results will be stored in %r", job.reporter.report_path)
 
         # detect soft assertions
         if args.soft_asserts:
@@ -679,17 +778,17 @@ def main(args, interesting_cb=None, result_cb=None):
             result_cb(job.result_code)
 
         if result:
-            log.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
+            LOG.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
             return 0
 
-        log.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
+        LOG.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
         return 1
 
     except KeyboardInterrupt:
         job_cancelled = True
 
     finally:
-        log.warning("Shutting down...")
+        LOG.warning("Shutting down...")
         if job is not None and not job_cancelled:
             job_cancelled = job.result_code in {FuzzManagerReporter.QUAL_REDUCER_BROKE,
                                                 FuzzManagerReporter.QUAL_REDUCER_ERROR}
