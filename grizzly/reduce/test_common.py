@@ -27,13 +27,13 @@ class FakeTarget(object):
         }
         self._is_healthy = False
 
-        class FakePuppet(object):  # pylint: disable=too-few-public-methods
+        class FakeMonitor(object):  # pylint: disable=too-few-public-methods
 
             @staticmethod
             def is_healthy():
                 return self._is_healthy
 
-        self._puppet = FakePuppet()
+        self.monitor = FakeMonitor()
 
     def save_logs(self, dest, **kwds):
         self._calls["save_logs"] += 1

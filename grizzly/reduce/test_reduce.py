@@ -79,6 +79,7 @@ class FakeInterestingKeepHarness(FakeInteresting):
 
 class FakeInterestingSemiReliable(FakeInteresting):
     """Version of FakeInteresting that returns interesting N times only"""
+    USE_ANALYZE = True
 
     def set_n(self, n, require_no_harness=False):
         self.interesting_times = n
@@ -104,8 +105,10 @@ def job(monkeypatch, request):
     """Pytest fixture to provide a ReductionJob object with dependencies stubbed and default values"""
     interesting_cls = getattr(request, "param", FakeInteresting)
     use_testcase_cache = getattr(interesting_cls, "USE_TESTCASE_CACHE", False)
+    use_analysis = getattr(interesting_cls, "USE_ANALYZE", False)
     monkeypatch.setattr(reduce, "Interesting", interesting_cls)
-    result = ReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, use_testcase_cache)
+    result = ReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, use_testcase_cache,
+                          not use_analysis)
     yield result
     result.close()
 
@@ -524,7 +527,7 @@ def test_run_8(tmp_path, job):
     job.interesting.repeat = 1
     job.interesting.set_n(5)
     job.run()
-    assert job.interesting.min_crashes == 5
+    assert job.interesting.min_crashes == 2
     assert job.interesting.repeat == 10
     assert not job.interesting.no_harness
 
@@ -534,13 +537,13 @@ def test_run_8(tmp_path, job):
     job.interesting.set_n(9)
     job.run()
     assert job.interesting.min_crashes == 2
-    assert job.interesting.repeat == 2
+    assert job.interesting.repeat == 4
     assert not job.interesting.no_harness
 
-    # try a 90% reliable testcase that doesn't repro with the harness
+    # try a 100% reliable testcase that doesn't repro with the harness
     job.interesting.min_crashes = 1
     job.interesting.repeat = 1
-    job.interesting.set_n(9, require_no_harness=True)
+    job.interesting.set_n(11, require_no_harness=True)
     job.run()
     assert job.interesting.min_crashes == 2
     assert job.interesting.repeat == 2
@@ -569,6 +572,6 @@ def test_run_9(tmp_path, job):
     job.interesting.repeat = 1
     job.interesting.set_n(5)
     job.run()
-    assert job.interesting.min_crashes == 5
+    assert job.interesting.min_crashes == 2
     assert job.interesting.repeat == 10
     assert job.interesting.no_harness

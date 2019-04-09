@@ -9,6 +9,7 @@ from __future__ import absolute_import
 import hashlib
 import io
 import logging
+import math
 import os
 import re
 import shutil
@@ -60,7 +61,7 @@ class ReductionJob(object):
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
                  repeat, idle_poll, idle_threshold, idle_timeout, working_path=None,
-                 testcase_cache=True):
+                 testcase_cache=True, skip_analysis=False):
         """Use lithium to reduce a testcase.
 
         Args:
@@ -92,6 +93,7 @@ class ReductionJob(object):
         self.interesting_prefix = None
         self.log_handler = self._start_log_capture()
         self.harness_created = None
+        self.skip_analysis = skip_analysis
 
     def _start_log_capture(self):
         """Add a log handler for grizzly and lithium messages generated during this job.
@@ -418,7 +420,11 @@ class ReductionJob(object):
 
             class _AnalyzeReliability(lithium.Strategy):
                 name = "reliability-analysis"
-                ITERATIONS = 10
+                ITERATIONS = 11  # number of iterations to analyze
+                MIN_CRASHES = 2  # --min-crashes value when analysis is used
+                TARGET_PROBABILITY = 0.95  # probability that successful reduction will observe the crash
+                # to see the worst case, run the `self.interesting.repeat` calculation below using
+                # crashes_percent = 1.0/ITERATIONS
 
                 def main(sub, testcase, interesting, tempFilename):
                     if self.interesting.min_crashes != 1:
@@ -448,7 +454,8 @@ class ReductionJob(object):
                         LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
                                  100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
 
-                        self.interesting.target.close()  # destroy target since we may be changing parameters
+                        if not self.interesting.target.closed:
+                            self.interesting.target.close()  # destroy target since we may be changing parameters
 
                     if harness_crashes != sub.ITERATIONS:
                         # try without harness
@@ -463,7 +470,8 @@ class ReductionJob(object):
                         LOG.info("Testcase was interesting %0.1f%% of %d attempts without harness.",
                                  100.0 * non_harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
 
-                        self.interesting.target.close()  # destroy target since we may be changing parameters
+                        if not self.interesting.target.closed:
+                            self.interesting.target.close()  # destroy target since we may be changing parameters
 
                     # restore result cache setting
                     self.interesting.use_result_cache = use_result_cache
@@ -473,15 +481,13 @@ class ReductionJob(object):
 
                     # should we use the harness? go with whichever crashed more
                     self.interesting.no_harness = non_harness_crashes > harness_crashes
-                    crashes_percent = 1.0 * max(non_harness_crashes, harness_crashes) / sub.ITERATIONS
+                    # this is max 99% to avoid domain errors in the calculation below
+                    crashes_percent = min(1.0 * max(non_harness_crashes, harness_crashes) / sub.ITERATIONS, 0.99)
 
                     # adjust repeat/min-crashes depending on how reliable the testcase was
-                    if crashes_percent >= 0.9:
-                        self.interesting.min_crashes = 2
-                        self.interesting.repeat = 2
-                    else:
-                        self.interesting.min_crashes = int(crashes_percent * 10)
-                        self.interesting.repeat = 10
+                    self.interesting.min_crashes = sub.MIN_CRASHES
+                    self.interesting.repeat = int(math.log(1 - sub.TARGET_PROBABILITY, 1 - crashes_percent) + 0.5) \
+                        * sub.MIN_CRASHES
 
                     # set relaunch to min(relaunch, repeat)
                     self.interesting.target.rl_reset = min(self.interesting.target.rl_reset, self.interesting.repeat)
@@ -585,7 +591,9 @@ class ReductionJob(object):
             original_size = [None]
 
             # resolve list of strategies to apply
-            reduce_stages = [AnalyzeTestcase, MinimizeHarness, ScanFilesToReduce]
+            reduce_stages = [MinimizeHarness, ScanFilesToReduce]
+            if not self.skip_analysis:
+                reduce_stages.insert(0, AnalyzeTestcase)
             if strategies is None:
                 strategies = self.DEFAULT_STRATEGIES
             strategies_lut = strategies_module.strategies_by_name()
