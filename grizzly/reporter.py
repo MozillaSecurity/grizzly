@@ -483,6 +483,8 @@ class FuzzManagerReporter(Reporter):
         if test_cases:
             crash_info.configuration.addMetadata(
                 {"recorded_envvars": " ".join(test_cases[0].env_vars())})
+        else:
+            self.quality = self.QUAL_NO_TESTCASE
         crash_info.configuration.addMetadata(self._extra_metadata)
 
         # grab screen log
