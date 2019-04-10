@@ -45,13 +45,15 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class Report(object):
+    DEFAULT_MAJOR = "NO_STACK"
+    DEFAULT_MINOR = "0"
     MAX_LOG_SIZE = 1048576  # 1MB
 
     def __init__(self, log_path, log_map, size_limit=MAX_LOG_SIZE):
-        self.path = log_path
         self.log_aux = log_map.get("aux") if log_map is not None else None
         self.log_err = log_map.get("stderr") if log_map is not None else None
         self.log_out = log_map.get("stdout") if log_map is not None else None
+        self.path = log_path
 
         # tail logs if needed
         if size_limit < 1:
@@ -70,10 +72,12 @@ class Report(object):
             with open(os.path.join(log_path, scan_log), "rb") as log_fp:
                 stack = stack_hasher.Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
             if stack.frames:
+                self.prefix = "%s_%s" % (stack.minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S"))
                 self.stack = stack
                 break
         else:
             self.stack = None
+            self.prefix = "%s_%s" % (self.DEFAULT_MINOR, time.strftime("%Y-%m-%d_%H-%M-%S"))
 
 
     def create_crash_info(self, target_binary):
@@ -100,6 +104,26 @@ class Report(object):
     @classmethod
     def from_path(cls, path, size_limit=MAX_LOG_SIZE):
         return cls(path, Report.select_logs(path), size_limit=size_limit)
+
+
+    @property
+    def major(self):
+        try:
+            if self.stack.major is not None:
+                return self.stack.major
+        except AttributeError:
+            pass
+        return self.DEFAULT_MAJOR
+
+
+    @property
+    def minor(self):
+        try:
+            if self.stack.minor is not None:
+                return self.stack.minor
+        except AttributeError:
+            pass
+        return self.DEFAULT_MINOR
 
 
     @property
@@ -219,35 +243,10 @@ class Report(object):
 
 
 class Reporter(object):
-    DEFAULT_MAJOR = "NO_STACK"
-    DEFAULT_MINOR = "0"
-
     def __init__(self, log_limit=0):
-        self._prefix = None
         self.log_limit = max(log_limit, 0)  # maximum log file size
         self.report = None
         self.test_cases = None
-        self._reset()
-
-
-    @property
-    def major(self):
-        try:
-            if self.report.stack.frames:
-                return self.report.stack.major
-        except AttributeError:
-            pass
-        return self.DEFAULT_MAJOR
-
-
-    @property
-    def minor(self):
-        try:
-            if self.report.stack.frames:
-                return self.report.stack.minor
-        except AttributeError:
-            pass
-        return self.DEFAULT_MINOR
 
 
     @staticmethod
@@ -257,13 +256,6 @@ class Reporter(object):
         return sorted(
             (lfn for lfn in iterable if lfn not in {os.path.basename(meta_file), "rr-trace"}),
             key=lambda x: meta[x][sort_property])
-
-
-    @property
-    def prefix(self):
-        if self._prefix is None:
-            self._prefix = "%s_%s" % (self.minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S"))
-        return self._prefix
 
 
     def _process_rr_trace(self):
@@ -324,21 +316,22 @@ class FilesystemReporter(Reporter):
 
     def _submit(self):
         # create major bucket directory in working directory if needed
-        major_dir = os.path.join(self.report_path, self.major)
+        major_dir = os.path.join(self.report_path, self.report.major)
         if not os.path.isdir(major_dir):
             os.makedirs(major_dir)
 
         # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(self.test_cases):
-            dump_path = os.path.join(major_dir, "%s-%d" % (self.prefix, test_number))
+            dump_path = os.path.join(major_dir, "%s-%d" % (self.report.prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
 
         # move logs into bucket directory
-        shutil.move(
-            self.report.path,
-            os.path.join(major_dir, "%s_%s" % (self.prefix, "logs")))
+        target_dir = os.path.join(major_dir, "%s_%s" % (self.report.prefix, "logs"))
+        if os.path.isdir(target_dir):
+            log.warning("Report log path exists %r", target_dir)
+        shutil.move(self.report.path, target_dir)
 
 
 class FuzzManagerReporter(Reporter):
@@ -479,7 +472,7 @@ class FuzzManagerReporter(Reporter):
         test_case_meta = []
         for test_number, test_case in enumerate(self.test_cases):
             test_case_meta.append([test_case.adapter_name, test_case.input_fname])
-            dump_path = os.path.join(self.report.path, "%s-%d" % (self.prefix, test_number))
+            dump_path = os.path.join(self.report.path, "%s-%d" % (self.report.prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
@@ -498,7 +491,7 @@ class FuzzManagerReporter(Reporter):
                 Report.tail(target_log, 10240)  # limit to last 10K
 
         # add results to a zip file
-        zip_name = ".".join([self.prefix, "zip"])
+        zip_name = "%s.zip" % (self.report.prefix,)
         with zipfile.ZipFile(zip_name, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_fp:
             # add test files
             for dir_name, _, dir_files in os.walk(self.report.path):
@@ -531,7 +524,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
             # check for existing minor hash in S3
             s3 = boto3.resource("s3")
 
-            s3_key = "rr-%s.tar.xz" % (self.minor,)
+            s3_key = "rr-%s.tar.xz" % (self.report.minor,)
             s3_url = "http://%s.s3.amazonaws.com/%s" % (self.S3_BUCKET, s3_key)
             try:
                 s3.Object(self.S3_BUCKET, s3_key).load()  # HEAD, doesn't fetch the whole object

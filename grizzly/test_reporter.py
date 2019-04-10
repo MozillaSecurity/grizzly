@@ -6,7 +6,6 @@ import glob
 import logging
 import json
 import os
-import platform
 import random
 import shutil
 import subprocess
@@ -29,8 +28,8 @@ class TestCase(unittest.TestCase):
 
 class ReportTests(TestCase):
     def setUp(self):
-        fd, self.tmpfn = tempfile.mkstemp(prefix="grz_test_")
-        os.close(fd)
+        tmpfd, self.tmpfn = tempfile.mkstemp(prefix="grz_test_")
+        os.close(tmpfd)
         self.tmpdir = tempfile.mkdtemp(prefix="grz_test")
 
     def tearDown(self):
@@ -51,7 +50,7 @@ class ReportTests(TestCase):
         report.cleanup()
 
     def test_02(self):
-        "test from_path() with boring logs"
+        "test from_path() with boring logs (no stack)"
         with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
             log_fp.write("STDERR log")
         with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
@@ -63,6 +62,9 @@ class ReportTests(TestCase):
         self.assertTrue(report.preferred.endswith("log_stderr.txt"))
         self.assertIsNone(report.log_aux)
         self.assertIsNone(report.stack)
+        self.assertEqual(Report.DEFAULT_MAJOR, report.major)
+        self.assertEqual(Report.DEFAULT_MINOR, report.minor)
+        self.assertIsNotNone(report.prefix)
         report.cleanup()
         self.assertFalse(os.path.isdir(self.tmpdir))
 
@@ -82,6 +84,9 @@ class ReportTests(TestCase):
         self.assertTrue(report.log_out.endswith("log_stdout.txt"))
         self.assertTrue(report.preferred.endswith("log_asan_blah.txt"))
         self.assertIsNotNone(report.stack)
+        self.assertNotEqual(Report.DEFAULT_MAJOR, report.major)
+        self.assertNotEqual(Report.DEFAULT_MINOR, report.minor)
+        self.assertIsNotNone(report.prefix)
         report.cleanup()
 
     def test_04(self):
@@ -278,8 +283,9 @@ class ReporterTests(TestCase):
     def test_01(self):
         "test creating a simple Reporter"
         reporter = Reporter()
-        self.assertIsNotNone(Reporter.prefix)
         self.assertEqual(reporter.log_limit, 0)
+        self.assertIsNone(reporter.report)
+        self.assertIsNone(reporter.test_cases)
         with self.assertRaisesRegex(IOError, "No such directory 'fake_dir'"):
             reporter.submit("fake_dir", [])
 
@@ -296,33 +302,6 @@ class ReporterTests(TestCase):
             reporter.submit(self.tmpdir, [])
 
     def test_02(self):
-        "test Reporter with boring files (no stack)"
-        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
-            log_fp.write("STDERR log")
-        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
-            log_fp.write("STDOUT log")
-        reporter = Reporter()
-        reporter.report = Report.from_path(self.tmpdir)
-        self.assertEqual(Reporter.DEFAULT_MAJOR, reporter.major)
-        self.assertEqual(Reporter.DEFAULT_MINOR, reporter.minor)
-        self.assertIsNotNone(Reporter.prefix)
-
-    def test_03(self):
-        "test Reporter"
-        with open(os.path.join(self.tmpdir, "log_stderr.txt"), "w") as log_fp:
-            log_fp.write("STDERR log")
-        with open(os.path.join(self.tmpdir, "log_stdout.txt"), "w") as log_fp:
-            log_fp.write("STDOUT log")
-        with open(os.path.join(self.tmpdir, "log_asan_blah.txt"), "w") as log_fp:
-            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
-            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
-        reporter = Reporter()
-        reporter.report = Report.from_path(self.tmpdir)
-        self.assertNotEqual(Reporter.DEFAULT_MAJOR, reporter.major)
-        self.assertNotEqual(Reporter.DEFAULT_MINOR, reporter.minor)
-        self.assertIsNotNone(Reporter.prefix)
-
-    def test_04(self):
         "test FilesystemReporter without testcases"
         logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
         with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
@@ -335,8 +314,10 @@ class ReporterTests(TestCase):
         report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
         reporter = FilesystemReporter(report_path=report_dir)
         reporter.submit(logs, [])
+        self.assertIsNone(reporter.report)
+        self.assertIsNone(reporter.test_cases)
 
-    def test_05(self):
+    def test_03(self):
         "test FilesystemReporter with testcases"
         class DummyTest(object):  # pylint: disable=too-few-public-methods
             def __init__(self):
@@ -361,6 +342,8 @@ class ReporterTests(TestCase):
         report_dir = os.path.join(report_dir, "nested", "dir")
         reporter = FilesystemReporter(report_path=report_dir)
         reporter.submit(logs, testcases)
+        self.assertIsNone(reporter.report)
+        self.assertIsNone(reporter.test_cases)
         # call report a 2nd time
         logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
         with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
@@ -373,10 +356,11 @@ class ReporterTests(TestCase):
         for _ in range(10):
             testcases.append(DummyTest())
         reporter.submit(logs, testcases)
+        self.assertIsNone(reporter.report)
+        self.assertIsNone(reporter.test_cases)
 
-    @unittest.skipIf(not platform.system().lower().startswith("linux"),
-                     "RR only supported on Linux")
-    def test_06(self):
+    @unittest.skipIf(not sys.platform.startswith("linux"), "RR only supported on Linux")
+    def test_04(self):
         "test packaging rr traces"
         rr_dir = tempfile.mkdtemp(prefix="tst_rr", dir=self.tmpdir)
         try:
@@ -405,7 +389,7 @@ class ReporterTests(TestCase):
         self.assertFalse(os.path.islink(os.path.join(report_log_dir, "rr-trace")))
         self.assertTrue(os.path.isfile(os.path.join(report_log_dir, "rr.tar.xz")))
 
-    def test_07(self):
+    def test_05(self):
         "test meta_sort()"
         meta_file = os.path.join(self.tmpdir, "meta.json")
         meta_data = {
