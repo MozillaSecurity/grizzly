@@ -92,8 +92,19 @@ class ReductionJob(object):
         self.input_fname = None
         self.interesting_prefix = None
         self.log_handler = self._start_log_capture()
-        self.harness_created = None
+        self.cache_iter_harness_created = None
         self.skip_analysis = skip_analysis
+        if not self.skip_analysis:
+            # see if any of the args tweaked by analysis were overridden
+            # --relaunch is regarded as a maximum, so overriding the default is not a deal-breaker for analysis
+            if self.interesting.min_crashes != 1:
+                LOG.warning("--min-crashes=%d was given, skipping analysis", self.interesting.min_crashes)
+                self.skip_analysis = True
+            elif self.interesting.repeat != 1:
+                LOG.warning("--repeat=%d was given, skipping analysis", self.interesting.repeat)
+                self.skip_analysis = True
+        self.original_relaunch = target.rl_reset
+        self.force_no_harness = self.interesting.no_harness
 
     def _start_log_capture(self):
         """Add a log handler for grizzly and lithium messages generated during this job.
@@ -245,7 +256,7 @@ class ReductionJob(object):
         pages = [self._get_landing_page(d) for d in dirs]
         if len(pages) == 1:
             self.testcase = pages[0]
-            self.harness_created = False
+            self.cache_iter_harness_created = False
 
         else:
             # create a harness to iterate over the whole history
@@ -294,8 +305,7 @@ class ReductionJob(object):
             with io.open(harness_path, "w", encoding="utf-8") as harness_fp:
                 harness_fp.write(harness)
             self.testcase = harness_path
-            self.harness_created = True
-            self.interesting.no_harness = True
+            self.cache_iter_harness_created = True
 
         # prune unnecessary files from the testcase
         for root, _, files in os.walk(self.tcroot):
@@ -409,24 +419,28 @@ class ReductionJob(object):
                 # crashes_percent = 1.0/ITERATIONS
 
                 def main(sub, testcase, interesting, tempFilename):
-                    if self.interesting.min_crashes != 1:
-                        LOG.warning("--min-crashes=%d was given, skipping analysis", self.interesting.min_crashes)
-                        return 0
-                    if self.interesting.repeat != 1:
-                        LOG.warning("--repeat=%d was given, skipping analysis", self.interesting.repeat)
-                        return 0
 
                     assert sub.ITERATIONS > 0
-                    no_harness_already_set = self.interesting.no_harness
 
                     # disable result cache setting
                     use_result_cache = self.interesting.use_result_cache
                     self.interesting.use_result_cache = False
 
+                    # reset parameters
+                    # use repeat=1 & relaunch=ITERATIONS because this is closer to how we will run post-analysis
+                    # we're only using repeat=1 instead of repeat=ITERATIONS so we can get feedback on every
+                    # call to interesting
+                    self.interesting.repeat = 1
+                    self.interesting.min_crashes = 1
+                    self.interesting.target.rl_reset = min(self.original_relaunch, sub.ITERATIONS)
+
                     harness_crashes = 0
                     non_harness_crashes = 0
 
-                    if not no_harness_already_set:
+                    if not self.interesting.target.closed:
+                        self.interesting.target.close()  # destroy target since we may be changing parameters
+
+                    if not self.force_no_harness:
                         LOG.info("Running for %d iterations to assess reliability using harness.", sub.ITERATIONS)
                         for _ in range(sub.ITERATIONS):
                             result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
@@ -472,14 +486,14 @@ class ReductionJob(object):
                         * sub.MIN_CRASHES
 
                     # set relaunch to min(relaunch, repeat)
-                    self.interesting.target.rl_reset = min(self.interesting.target.rl_reset, self.interesting.repeat)
+                    self.interesting.target.rl_reset = min(self.original_relaunch, self.interesting.repeat)
 
                     LOG.info("Analysis results:")
                     if harness_crashes == sub.ITERATIONS:
                         LOG.info("* testcase was perfectly reliable with the harness (--no-harness not assessed)")
                     elif harness_crashes == non_harness_crashes:
                         LOG.info("* testcase was equally reliable with/without the harness")
-                    elif no_harness_already_set:
+                    elif self.force_no_harness:
                         LOG.info("* --no-harness was already set")
                     else:
                         LOG.info("* testcase was %s reliable with the harness",
@@ -494,10 +508,10 @@ class ReductionJob(object):
                 strategy_type = _AnalyzeReliability
                 testcase_type = lithium.TestcaseLine
 
-            class MinimizeHarness(strategies_module.MinimizeLines):
+            class MinimizeCacheIterHarness(strategies_module.MinimizeLines):
 
                 def should_skip(sub):  # pylint: disable=no-self-argument
-                    return not self.harness_created
+                    return not self.cache_iter_harness_created
 
                 def read_testcase(sub, reducer, testcase_path):  # pylint: disable=no-self-argument
                     if sub.should_skip():
@@ -573,9 +587,12 @@ class ReductionJob(object):
             original_size = [None]
 
             # resolve list of strategies to apply
-            reduce_stages = [MinimizeHarness, ScanFilesToReduce]
+            reduce_stages = [MinimizeCacheIterHarness, ScanFilesToReduce]
             if not self.skip_analysis:
-                reduce_stages.insert(0, AnalyzeTestcase)
+                if self.cache_iter_harness_created:
+                    # if we created a cache iterator harness analyze that first
+                    reduce_stages.insert(0, AnalyzeTestcase)
+                reduce_stages.append(AnalyzeTestcase)
             if strategies is None:
                 strategies = self.DEFAULT_STRATEGIES
             strategies_lut = strategies_module.strategies_by_name()

@@ -574,4 +574,4 @@ def test_run_9(tmp_path, job):
     job.run()
     assert job.interesting.min_crashes == 2
     assert job.interesting.repeat == 10
-    assert job.interesting.no_harness
+    assert not job.interesting.no_harness
