@@ -80,6 +80,7 @@ class Report(object):
             self.prefix = "%s_%s" % (self.DEFAULT_MINOR, time.strftime("%Y-%m-%d_%H-%M-%S"))
 
 
+    # TODO: move to FuzzManagerReporter
     def create_crash_info(self, target_binary):
         # read in the log files and create a CrashInfo object
         aux_data = None
@@ -245,8 +246,6 @@ class Report(object):
 class Reporter(object):
     def __init__(self, log_limit=0):
         self.log_limit = max(log_limit, 0)  # maximum log file size
-        self.report = None
-        self.test_cases = None
 
 
     @staticmethod
@@ -258,28 +257,26 @@ class Reporter(object):
             key=lambda x: meta[x][sort_property])
 
 
-    def _process_rr_trace(self):
-        trace_dir = os.path.join(self.report.path, "rr-trace")
+    # TODO: untangle '_process_rr_trace()' mess
+    def _process_rr_trace(self, report):
+        trace_dir = os.path.join(report.path, "rr-trace")
         if os.path.isdir(trace_dir):
             log.debug("calling: rr pack %s", trace_dir)
             subprocess.check_output(["rr", "pack", trace_dir])
             log.debug("calling: tar cf rr.tar %s", trace_dir)
-            rr_tar = os.path.join(self.report.path, "rr.tar.xz")
+            rr_tar = os.path.join(report.path, "rr.tar.xz")
             subprocess.check_call(["tar", "-C", trace_dir, "-caf", rr_tar, "."])
             os.unlink(trace_dir)
             return rr_tar
         return None
 
 
-    def _submit(self):
-        raise NotImplementedError("_submit must be implemented in the subclass")
-
-
     def _reset(self):
-        if self.report is not None:
-            self.report.cleanup()
-        self.report = None
-        self.test_cases = None
+        raise NotImplementedError("_reset not implemented in the subclass")
+
+
+    def _submit(self, report, test_cases):
+        raise NotImplementedError("_submit must be implemented in the subclass")
 
 
     def submit(self, log_path, test_cases):
@@ -287,7 +284,7 @@ class Reporter(object):
         Submit report containing results.
 
         @type log_path: String
-        @param log_path: Path to logs from the target (FFPuppet).
+        @param log_path: Path to logs from the Target.
 
         @type test_cases: list
         @param test_cases: A list of testcases, ordered newest to oldest,
@@ -297,14 +294,14 @@ class Reporter(object):
         @rtype: None
         @return: None
         """
-        assert self.report is None
-        assert self.test_cases is None
+
         if not os.path.isdir(log_path):
             raise IOError("No such directory %r" % log_path)
-        self.report = Report.from_path(log_path, self.log_limit)
-        self.test_cases = test_cases
-        self._process_rr_trace()
-        self._submit()
+        report = Report.from_path(log_path, self.log_limit)
+        self._process_rr_trace(report)
+        self._submit(report, test_cases)
+        if report is not None:
+            report.cleanup()
         self._reset()
 
 
@@ -314,24 +311,28 @@ class FilesystemReporter(Reporter):
         self.report_path = os.path.join(os.getcwd(), "results") if report_path is None else report_path
 
 
-    def _submit(self):
+    def _reset(self):
+        pass
+
+
+    def _submit(self, report, test_cases):
         # create major bucket directory in working directory if needed
-        major_dir = os.path.join(self.report_path, self.report.major)
+        major_dir = os.path.join(self.report_path, report.major)
         if not os.path.isdir(major_dir):
             os.makedirs(major_dir)
 
         # dump test cases and the contained files to working directory
-        for test_number, test_case in enumerate(self.test_cases):
-            dump_path = os.path.join(major_dir, "%s-%d" % (self.report.prefix, test_number))
+        for test_number, test_case in enumerate(test_cases):
+            dump_path = os.path.join(major_dir, "%s-%d" % (report.prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
 
         # move logs into bucket directory
-        target_dir = os.path.join(major_dir, "%s_%s" % (self.report.prefix, "logs"))
+        target_dir = os.path.join(major_dir, "%s_%s" % (report.prefix, "logs"))
         if os.path.isdir(target_dir):
             log.warning("Report log path exists %r", target_dir)
-        shutil.move(self.report.path, target_dir)
+        shutil.move(report.path, target_dir)
 
 
 class FuzzManagerReporter(Reporter):
@@ -353,6 +354,7 @@ class FuzzManagerReporter(Reporter):
 
     def __init__(self, target_binary, log_limit=0, tool=None):
         Reporter.__init__(self, log_limit)
+        self._extra_metadata = {}
         self.force_report = False
         self.quality = self.QUAL_UNREDUCED
         self.target_binary = target_binary
@@ -360,7 +362,6 @@ class FuzzManagerReporter(Reporter):
 
 
     def _reset(self):
-        Reporter._reset(self)
         self._extra_metadata = {}
 
 
@@ -394,19 +395,20 @@ class FuzzManagerReporter(Reporter):
         return suggested_frames
 
 
-    def _process_rr_trace(self):
+    def _process_rr_trace(self, report):
         # don't report large files to FuzzManager
-        trace_dir = os.path.join(self.report.path, "rr-trace")
+        trace_dir = os.path.join(report.path, "rr-trace")
         if os.path.isdir(trace_dir):
             self._extra_metadata["rr-trace"] = "ignored"
             os.unlink(trace_dir)
         return None
 
 
-    def _ignored(self):
+    @staticmethod
+    def _ignored(report):
         # This is here to prevent reporting stack-less crashes
         # that were caused by system OOM or bogus other crashes
-        log_file = os.path.join(self.report.path, self.report.preferred)
+        log_file = os.path.join(report.path, report.preferred)
         with open(log_file, "rb") as log_fp:
             log_data = log_fp.read().decode("utf-8", errors="ignore")
         mem_errs = (
@@ -421,9 +423,9 @@ class FuzzManagerReporter(Reporter):
         return False
 
 
-    def _submit(self):
+    def _submit(self, report, test_cases):
         # prepare data for submission as CrashInfo
-        crash_info = self.report.create_crash_info(self.target_binary)
+        crash_info = report.create_crash_info(self.target_binary)
 
         # search for a cached signature match and if the signature
         # is already in the cache and marked as frequent, don't bother submitting
@@ -454,10 +456,10 @@ class FuzzManagerReporter(Reporter):
                     "frequent": False,
                     "shortDescription": crash_info.createShortSignature()}
             if cache_sig_file is None:
-                if self._ignored():
+                if self._ignored(report):
                     log.info("Report is unsupported and is in ignore list")
                     return
-                log.warning("Report is unsupported by FM, saved to %r", self.report.path)
+                log.warning("Report is unsupported by FM, saved to %r", report.path)
                 raise RuntimeError("Failed to create FM signature")
             # limit the number of times we report per cycle
             cache_metadata["_grizzly_seen_count"] += 1
@@ -470,32 +472,32 @@ class FuzzManagerReporter(Reporter):
 
         # dump test cases and the contained files to working directory
         test_case_meta = []
-        for test_number, test_case in enumerate(self.test_cases):
+        for test_number, test_case in enumerate(test_cases):
             test_case_meta.append([test_case.adapter_name, test_case.input_fname])
-            dump_path = os.path.join(self.report.path, "%s-%d" % (self.report.prefix, test_number))
+            dump_path = os.path.join(report.path, "%s-%d" % (report.prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
-        if self.test_cases:
+        if test_cases:
             crash_info.configuration.addMetadata(
-                {"recorded_envvars": " ".join(self.test_cases[0].env_vars())})
+                {"recorded_envvars": " ".join(test_cases[0].env_vars())})
         crash_info.configuration.addMetadata(self._extra_metadata)
 
         # grab screen log
         if os.getenv("WINDOW") is not None:
             screen_log = ".".join(["screenlog", os.getenv("WINDOW")])
             if os.path.isfile(screen_log):
-                target_log = os.path.join(self.report.path, "screenlog.txt")
+                target_log = os.path.join(report.path, "screenlog.txt")
                 shutil.copyfile(screen_log, target_log)
                 Report.tail(target_log, 10240)  # limit to last 10K
 
         # add results to a zip file
-        zip_name = "%s.zip" % (self.report.prefix,)
+        zip_name = "%s.zip" % (report.prefix,)
         with zipfile.ZipFile(zip_name, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_fp:
             # add test files
-            for dir_name, _, dir_files in os.walk(self.report.path):
-                arc_path = os.path.relpath(dir_name, self.report.path)
+            for dir_name, _, dir_files in os.walk(report.path):
+                arc_path = os.path.relpath(dir_name, report.path)
                 for file_name in dir_files:
                     zip_fp.write(
                         os.path.join(dir_name, file_name),
@@ -518,13 +520,13 @@ class FuzzManagerReporter(Reporter):
 class S3FuzzManagerReporter(FuzzManagerReporter):
     S3_BUCKET = "grizzly.fuzzing.mozilla.org"
 
-    def _process_rr_trace(self):
-        trace_dir = os.path.join(self.report.path, "rr-trace")
+    def _process_rr_trace(self, report):
+        trace_dir = os.path.join(report.path, "rr-trace")
         if os.path.isdir(trace_dir):
             # check for existing minor hash in S3
             s3 = boto3.resource("s3")
 
-            s3_key = "rr-%s.tar.xz" % (self.report.minor,)
+            s3_key = "rr-%s.tar.xz" % (report.minor,)
             s3_url = "http://%s.s3.amazonaws.com/%s" % (self.S3_BUCKET, s3_key)
             try:
                 s3.Object(self.S3_BUCKET, s3_key).load()  # HEAD, doesn't fetch the whole object
@@ -543,7 +545,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
                 return s3_url
 
             # Upload to S3
-            rr_path = Reporter._process_rr_trace(self)
+            rr_path = Reporter._process_rr_trace(self, report)
             s3.meta.client.upload_file(rr_path, self.S3_BUCKET, s3_key, ExtraArgs={"ACL": "public-read"})
             self._extra_metadata["rr-trace"] = s3_url
             os.remove(rr_path)

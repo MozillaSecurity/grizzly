@@ -284,8 +284,6 @@ class ReporterTests(TestCase):
         "test creating a simple Reporter"
         reporter = Reporter()
         self.assertEqual(reporter.log_limit, 0)
-        self.assertIsNone(reporter.report)
-        self.assertIsNone(reporter.test_cases)
         with self.assertRaisesRegex(IOError, "No such directory 'fake_dir'"):
             reporter.submit("fake_dir", [])
 
@@ -314,8 +312,6 @@ class ReporterTests(TestCase):
         report_dir = tempfile.mkdtemp(prefix="grz_fs_reporter", dir=self.tmpdir)
         reporter = FilesystemReporter(report_path=report_dir)
         reporter.submit(logs, [])
-        self.assertIsNone(reporter.report)
-        self.assertIsNone(reporter.test_cases)
 
     def test_03(self):
         "test FilesystemReporter with testcases"
@@ -342,8 +338,6 @@ class ReporterTests(TestCase):
         report_dir = os.path.join(report_dir, "nested", "dir")
         reporter = FilesystemReporter(report_path=report_dir)
         reporter.submit(logs, testcases)
-        self.assertIsNone(reporter.report)
-        self.assertIsNone(reporter.test_cases)
         # call report a 2nd time
         logs = tempfile.mkdtemp(prefix="tst_logs", dir=self.tmpdir)
         with open(os.path.join(logs, "log_stderr.txt"), "w") as log_fp:
@@ -356,8 +350,6 @@ class ReporterTests(TestCase):
         for _ in range(10):
             testcases.append(DummyTest())
         reporter.submit(logs, testcases)
-        self.assertIsNone(reporter.report)
-        self.assertIsNone(reporter.test_cases)
 
     @unittest.skipIf(not sys.platform.startswith("linux"), "RR only supported on Linux")
     def test_04(self):
