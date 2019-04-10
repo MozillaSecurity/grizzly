@@ -24,7 +24,7 @@ import os
 import shutil
 import tempfile
 
-from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
+from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, LaunchError
 import sapphire
 
 from .corpman import adapters, IOManager
@@ -42,6 +42,10 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class Session(object):
+    EXIT_SUCCESS = 0
+    EXIT_ERROR = 1
+    EXIT_ABORT = 3
+    EXIT_LAUNCH_FAILURE = 7
     FM_LOG_SIZE_LIMIT = 0x40000  # max log size for log sent to FuzzManager (256KB)
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
@@ -360,6 +364,10 @@ def main(args):
 
     except KeyboardInterrupt:
         log.warning("Iterations attempted: %d", session.status.iteration)
+        return Session.EXIT_ABORT
+
+    except LaunchError:
+        return Session.EXIT_LAUNCH_FAILURE
 
     finally:
         log.warning("Shutting down...")
@@ -374,4 +382,4 @@ def main(args):
         if iomanager is not None:
             iomanager.cleanup()
 
-    return 0
+    return Session.EXIT_SUCCESS
