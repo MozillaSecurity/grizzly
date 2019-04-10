@@ -7,7 +7,7 @@ import logging
 import os.path
 import zipfile
 import pytest
-from grizzly.reduce import interesting, reduce, strategies, ReducerError, ReductionJob
+from grizzly.reduce import interesting, reduce, strategies, NoTestcaseError, ReducerError, ReductionJob
 from grizzly.reporter import Reporter, FuzzManagerReporter
 from grizzly.target import Target
 from .test_common import FakeTarget, create_target_binary
@@ -115,9 +115,10 @@ def job(monkeypatch, request):
 
 def test_config_testcase_0(tmp_path, job):
     """empty directory fails config_testcase"""
-    with pytest.raises(ReducerError) as exc:
+    with pytest.raises(NoTestcaseError) as exc:
         job.config_testcase(str(tmp_path))
     assert "No testcase recognized" in str(exc)
+    assert job.result_code == FuzzManagerReporter.QUAL_NO_TESTCASE
 
 
 def test_config_testcase_1(tmp_path, job):
@@ -128,6 +129,7 @@ def test_config_testcase_1(tmp_path, job):
         job.config_testcase(str(file))
     assert "Testcase must be zip, html, or directory" in str(exc)
     file.unlink()
+    assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_2(tmp_path, job):
@@ -137,6 +139,7 @@ def test_config_testcase_2(tmp_path, job):
     with pytest.raises(ReducerError) as exc:
         job.config_testcase(str(tmp_path))
     assert "Testcase already configured?" in str(exc)
+    assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_3(tmp_path, job):
@@ -145,6 +148,7 @@ def test_config_testcase_3(tmp_path, job):
     file.touch()
     with pytest.raises(zipfile.error):
         job.config_testcase(str(file))
+    assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_4(tmp_path, job):
@@ -154,6 +158,7 @@ def test_config_testcase_4(tmp_path, job):
     with pytest.raises(ReducerError) as exc:
         job.config_testcase(str(tmp_path))
     assert "Could not find landing page" in str(exc)
+    assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_5(tmp_path, job):
@@ -164,6 +169,7 @@ def test_config_testcase_5(tmp_path, job):
         job.config_testcase(str(tmp_path))
     assert "Landing page"
     assert "does not exist" in str(exc)
+    assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_6(tmp_path, job):
@@ -175,6 +181,7 @@ def test_config_testcase_6(tmp_path, job):
     assert job.testcase == os.path.join(job.tcroot, "test.html")
     with open(job.testcase) as tc_fp:
         assert tc_fp.read() == "hello"
+    assert job.result_code is None
 
 
 def test_config_testcase_7(tmp_path, job):
@@ -187,6 +194,7 @@ def test_config_testcase_7(tmp_path, job):
     assert job.testcase == os.path.join(job.tcroot, "-0", "test.html")
     with open(job.testcase) as tc_fp:
         assert tc_fp.read() == "hello"
+    assert job.result_code is None
 
 
 def test_config_testcase_8(tmp_path, job):
@@ -207,6 +215,7 @@ def test_config_testcase_8(tmp_path, job):
     loc0 = harness.index("'/-0/test.html',")
     loc1 = harness.index("'/-1/test.html',")
     assert loc1 < loc0, "testcases should occur in harness in descending order"
+    assert job.result_code is None
 
 
 def test_config_testcase_9(tmp_path, job):
@@ -221,6 +230,7 @@ def test_config_testcase_9(tmp_path, job):
     assert job.testcase == os.path.join(job.tcroot, "test.html")
     with open(job.testcase) as tc_fp:
         assert tc_fp.read() == "hello"
+    assert job.result_code is None
 
 
 def test_config_testcase_10(tmp_path, job):
@@ -236,6 +246,7 @@ def test_config_testcase_10(tmp_path, job):
         != os.path.normpath(str(tmp_path / "prefs.js"))
     with open(job.interesting.target.prefs) as prefs_fp:
         assert prefs_fp.read() == "some prefs"
+    assert job.result_code is None
 
 
 def test_config_testcase_11(tmp_path, job):
@@ -246,6 +257,7 @@ def test_config_testcase_11(tmp_path, job):
     (tmp_path / "env_vars.txt").write_text("var=value\nfoo=bar")
     job.config_testcase(str(tmp_path))
     assert job.interesting.env_mod == dict(var="value", foo="bar")
+    assert job.result_code is None
 
 
 def test_config_testcase_12(tmp_path, job):
@@ -255,6 +267,7 @@ def test_config_testcase_12(tmp_path, job):
     assert job.testcase == os.path.join(job.tcroot, "test.html")
     with open(job.testcase) as tc_fp:
         assert tc_fp.read() == "hello"
+    assert job.result_code is None
 
 
 def test_run_0(tmp_path, job):
