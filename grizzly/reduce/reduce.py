@@ -17,6 +17,7 @@ import tempfile
 import zipfile
 import zlib
 
+import ffpuppet
 import lithium
 from FTB.Signatures.CrashInfo import CrashSignature
 
@@ -794,17 +795,21 @@ def main(args, interesting_cb=None, result_cb=None):
 
         if result:
             LOG.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
-            return 0
+            return Session.EXIT_SUCCESS
 
         LOG.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
-        return 1
+        return Session.EXIT_ERROR
 
     except NoTestcaseError:
-        return 1
+        return Session.EXIT_ERROR
 
     except KeyboardInterrupt:
         job_cancelled = True
-        return 1
+        return Session.EXIT_ABORT
+
+    except ffpuppet.LaunchError as exc:
+        LOG.error("Error launching target: %s", exc)
+        return Session.EXIT_LAUNCH_FAILURE
 
     finally:
         LOG.warning("Shutting down...")
