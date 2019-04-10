@@ -39,6 +39,10 @@ class ReducerError(Exception):
     pass
 
 
+class NoTestcaseError(ReducerError):
+    pass
+
+
 def _testcase_contents(path="."):
     for dir_name, _, dir_files in os.walk(path):
         arc_path = os.path.relpath(dir_name, path)
@@ -203,117 +207,126 @@ class ReductionJob(object):
         Returns:
             None
         """
-        # extract the testcase if necessary
-        if os.path.exists(self.tcroot):
-            raise ReducerError("Testcase already configured?")
-        if os.path.isfile(testcase):
-            if testcase.lower().endswith(".html"):
-                os.mkdir(self.tcroot)
-                shutil.copy(testcase, self.tcroot)
-                with open(os.path.join(self.tcroot, "test_info.txt"), "w") as info_fp:
-                    info_fp.write("landing page: %s\n" % (os.path.basename(testcase),))
-            elif testcase.lower().endswith(".zip"):
-                os.mkdir(self.tcroot)
-                try:
-                    with zipfile.ZipFile(testcase) as zip_fp:
-                        zip_fp.extractall(path=self.tcroot)
-                except zlib.error:
-                    raise ReducerError("Testcase is corrupted")
+        try:
+            # extract the testcase if necessary
+            if os.path.exists(self.tcroot):
+                raise ReducerError("Testcase already configured?")
+            if os.path.isfile(testcase):
+                if testcase.lower().endswith(".html"):
+                    os.mkdir(self.tcroot)
+                    shutil.copy(testcase, self.tcroot)
+                    with open(os.path.join(self.tcroot, "test_info.txt"), "w") as info_fp:
+                        info_fp.write("landing page: %s\n" % (os.path.basename(testcase),))
+                elif testcase.lower().endswith(".zip"):
+                    os.mkdir(self.tcroot)
+                    try:
+                        with zipfile.ZipFile(testcase) as zip_fp:
+                            zip_fp.extractall(path=self.tcroot)
+                    except zlib.error:
+                        raise ReducerError("Testcase is corrupted")
+                else:
+                    raise ReducerError("Testcase must be zip, html, or directory")
+            elif os.path.isdir(testcase):
+                shutil.copytree(testcase, self.tcroot)
             else:
-                raise ReducerError("Testcase must be zip, html, or directory")
-        elif os.path.isdir(testcase):
-            shutil.copytree(testcase, self.tcroot)
-        else:
-            raise ReducerError("Testcase must be zip, html or directory")
+                raise ReducerError("Testcase must be zip, html or directory")
 
-        self.input_fname = os.path.basename(testcase)
+            self.input_fname = os.path.basename(testcase)
 
-        # get a list of all directories containing testcases (1-n, depending on how much history
-        # grizzly saved)
-        entries = set(os.listdir(self.tcroot))
-        if "test_info.txt" in entries:
-            dirs = [self.tcroot]
-        else:
-            dirs = sorted([os.path.join(self.tcroot, entry) for entry in entries
-                           if os.path.exists(os.path.join(self.tcroot, entry, "test_info.txt"))],
-                          key=lambda x: -int(x.rsplit('-', 1)[1]))
-            if not dirs:
-                raise ReducerError("No testcase recognized at %r" % (testcase,))
+            # get a list of all directories containing testcases (1-n, depending on how much history
+            # grizzly saved)
+            entries = set(os.listdir(self.tcroot))
+            if "test_info.txt" in entries:
+                dirs = [self.tcroot]
+            else:
+                dirs = sorted([os.path.join(self.tcroot, entry) for entry in entries
+                               if os.path.exists(os.path.join(self.tcroot, entry, "test_info.txt"))],
+                              key=lambda x: -int(x.rsplit('-', 1)[1]))
+                if not dirs:
+                    raise NoTestcaseError("No testcase recognized at %r" % (testcase,))
 
-        # check for included prefs and environment
-        if "prefs.js" in os.listdir(dirs[0]):
-            # move the file out of tcroot because we prune these non-testcase files later
-            os.rename(os.path.join(dirs[0], "prefs.js"), os.path.join(self.tmpdir, "prefs.js"))
-            self.interesting.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
-            LOG.warning("Using prefs included in testcase: %r", self.interesting.target.prefs)
-        if "env_vars.txt" in os.listdir(dirs[0]):
-            self.interesting.config_environ(os.path.join(dirs[0], "env_vars.txt"))
-            LOG.warning("Using environment included in testcase: %s",
-                        os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
+            # check for included prefs and environment
+            if "prefs.js" in os.listdir(dirs[0]):
+                # move the file out of tcroot because we prune these non-testcase files later
+                os.rename(os.path.join(dirs[0], "prefs.js"), os.path.join(self.tmpdir, "prefs.js"))
+                self.interesting.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
+                LOG.warning("Using prefs included in testcase: %r", self.interesting.target.prefs)
+            if "env_vars.txt" in os.listdir(dirs[0]):
+                self.interesting.config_environ(os.path.join(dirs[0], "env_vars.txt"))
+                LOG.warning("Using environment included in testcase: %s",
+                            os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
 
-        # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
-        # them all in order
-        pages = [self._get_landing_page(d) for d in dirs]
-        if len(pages) == 1:
-            self.testcase = pages[0]
-            self.cache_iter_harness_created = False
+            # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
+            # them all in order
+            pages = [self._get_landing_page(d) for d in dirs]
+            if len(pages) == 1:
+                self.testcase = pages[0]
+                self.cache_iter_harness_created = False
 
-        else:
-            # create a harness to iterate over the whole history
-            harness_path = os.path.join(os.path.dirname(__file__), '..', 'corpman', 'harness.html')
-            with io.open(harness_path, encoding="utf-8") as harness_fp:
-                harness = harness_fp.read()
-            # change dump string so that logs can be told apart
-            harness = harness.replace("[grz harness]", "[cache iter]")
-            # change the window name so that window.open doesn't clobber self
-            harness = harness.replace("'GrizzlyFuzz'", "'CacheIterator'")
-            # insert the iteration timeout. insert it directly because we can't set a hash value
-            new_harness = re.sub(r"^(\s*let\s.*\btime_limit\b)",
-                                 r"\1 = %d" % (self.interesting.iter_timeout * 1000),
-                                 harness,
-                                 flags=re.MULTILINE)
-            if new_harness == harness:
-                raise ReducerError("Unable to set time_limit in harness, please update pattern "
-                                   "to match harness!")
-            harness = new_harness
-            # make first test and next test grab from the array
-            harness = harness.replace("'/first_test'", "_reduce_next()")
-            harness = harness.replace("'/next_test'", "_reduce_next()")
-            # insert the close condition. we are iterating over the array of landing pages,
-            # undefined means we hit the end and the harness should close
-            # newer harness uses conditional operator in open() call
-            if re.search(r'open\(.*_reduce_next\(\)\s*:\s*_reduce_next\(\)', harness) is None:
-                raise ReducerError("Unable to insert finish condition, please update pattern "
+            else:
+                # create a harness to iterate over the whole history
+                harness_path = os.path.join(os.path.dirname(__file__), '..', 'corpman', 'harness.html')
+                with io.open(harness_path, encoding="utf-8") as harness_fp:
+                    harness = harness_fp.read()
+                # change dump string so that logs can be told apart
+                harness = harness.replace("[grz harness]", "[cache iter]")
+                # change the window name so that window.open doesn't clobber self
+                harness = harness.replace("'GrizzlyFuzz'", "'CacheIterator'")
+                # insert the iteration timeout. insert it directly because we can't set a hash value
+                new_harness = re.sub(r"^(\s*let\s.*\btime_limit\b)",
+                                     r"\1 = %d" % (self.interesting.iter_timeout * 1000),
+                                     harness,
+                                     flags=re.MULTILINE)
+                if new_harness == harness:
+                    raise ReducerError("Unable to set time_limit in harness, please update pattern "
                                        "to match harness!")
-            # insert the landing page loop
-            harness = harness.replace("<script>", "\n".join([
-                "<script>",
-                "let _reduce_tests = [",
-                "//DDBEGIN",
-                "'" + "',\n'".join(self._http_abspath(p) for p in pages) + "',",
-                "//DDEND",
-                "]",
-                "let _reduce_next = () => {",
-                "  if (!_reduce_tests.length) window.close()",
-                "  return _reduce_tests.shift()",
-                "}"
-            ]))
+                harness = new_harness
+                # make first test and next test grab from the array
+                harness = harness.replace("'/first_test'", "_reduce_next()")
+                harness = harness.replace("'/next_test'", "_reduce_next()")
+                # insert the close condition. we are iterating over the array of landing pages,
+                # undefined means we hit the end and the harness should close
+                # newer harness uses conditional operator in open() call
+                if re.search(r'open\(.*_reduce_next\(\)\s*:\s*_reduce_next\(\)', harness) is None:
+                    raise ReducerError("Unable to insert finish condition, please update pattern "
+                                           "to match harness!")
+                # insert the landing page loop
+                harness = harness.replace("<script>", "\n".join([
+                    "<script>",
+                    "let _reduce_tests = [",
+                    "//DDBEGIN",
+                    "'" + "',\n'".join(self._http_abspath(p) for p in pages) + "',",
+                    "//DDEND",
+                    "]",
+                    "let _reduce_next = () => {",
+                    "  if (!_reduce_tests.length) window.close()",
+                    "  return _reduce_tests.shift()",
+                    "}"
+                ]))
 
-            harness_fp, harness_path = \
-                tempfile.mkstemp(prefix="harness_", suffix=".html", dir=self.tcroot)
-            os.close(harness_fp)
-            with io.open(harness_path, "w", encoding="utf-8") as harness_fp:
-                harness_fp.write(harness)
-            self.testcase = harness_path
-            self.cache_iter_harness_created = True
+                harness_fp, harness_path = \
+                    tempfile.mkstemp(prefix="harness_", suffix=".html", dir=self.tcroot)
+                os.close(harness_fp)
+                with io.open(harness_path, "w", encoding="utf-8") as harness_fp:
+                    harness_fp.write(harness)
+                self.testcase = harness_path
+                self.cache_iter_harness_created = True
 
-        # prune unnecessary files from the testcase
-        for root, _, files in os.walk(self.tcroot):
-            for file_ in files:
-                if file_ in {"env_vars.txt", "grizzly_fuzz_harness.html", "log_metadata.json",
-                             "prefs.js", "screenlog.txt", "test_info.txt"} or \
-                        (file_.startswith("log_") and file_.endswith(".txt")):
-                    os.unlink(os.path.join(root, file_))
+            # prune unnecessary files from the testcase
+            for root, _, files in os.walk(self.tcroot):
+                for file_ in files:
+                    if file_ in {"env_vars.txt", "grizzly_fuzz_harness.html", "log_metadata.json",
+                                 "prefs.js", "screenlog.txt", "test_info.txt"} or \
+                            (file_.startswith("log_") and file_.endswith(".txt")):
+                        os.unlink(os.path.join(root, file_))
+        except NoTestcaseError as exc:
+            LOG.warning("Could not set-up testcase: %s", exc)
+            self.result_code = FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
+            raise
+        except ReducerError as exc:
+            LOG.warning("Could not set-up testcase: %s", exc)
+            self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
+            raise
 
     def close(self, keep_temp=False):
         """Clean up any resources used for this job.
@@ -783,8 +796,12 @@ def main(args, interesting_cb=None, result_cb=None):
         LOG.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
         return 1
 
+    except NoTestcaseError:
+        return 1
+
     except KeyboardInterrupt:
         job_cancelled = True
+        return 1
 
     finally:
         LOG.warning("Shutting down...")
