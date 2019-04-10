@@ -510,10 +510,12 @@ class FuzzManagerReporter(Reporter):
         if self.tool is not None:
             collector.tool = self.tool
 
+        # announce shortDescription if crash is not in a bucket
+        if cache_metadata["_grizzly_seen_count"] == 1 and not cache_metadata["frequent"]:
+            log.info("Submitting new crash %r", cache_metadata["shortDescription"])
         # submit results to the FuzzManager server
         new_entry = collector.submit(crash_info, testCase=zip_name, testCaseQuality=self.quality)
-        log.info("Logged new crash %d with quality %d", new_entry["id"], self.quality)
-        # TODO: add msg with cache_metadata["shortDescription"]
+        log.info("Logged %d with quality %d", new_entry["id"], self.quality)
 
         # remove zipfile
         if os.path.isfile(zip_name):
