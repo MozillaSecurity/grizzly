@@ -321,9 +321,9 @@ class ReductionJob(object):
                         os.unlink(os.path.join(root, file_))
         except NoTestcaseError as exc:
             LOG.warning("Could not set-up testcase: %s", exc)
-            self.result_code = FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
+            self.result_code = FuzzManagerReporter.QUAL_NO_TESTCASE
             raise
-        except ReducerError as exc:
+        except Exception as exc:
             LOG.warning("Could not set-up testcase: %s", exc)
             self.result_code = FuzzManagerReporter.QUAL_REDUCER_ERROR
             raise
