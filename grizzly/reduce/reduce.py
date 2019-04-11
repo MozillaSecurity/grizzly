@@ -525,6 +525,10 @@ class ReductionJob(object):
                 strategy_type = _AnalyzeReliability
                 testcase_type = lithium.TestcaseLine
 
+                def on_success(sub):  # pylint: disable=no-self-argument
+                    super(AnalyzeTestcase, sub).on_success()
+                    raise StopIteration()  # only run this strategy once, not once per reducible file in the testcase
+
             class MinimizeCacheIterHarness(strategies_module.MinimizeLines):
 
                 def should_skip(sub):  # pylint: disable=no-self-argument
@@ -644,16 +648,17 @@ class ReductionJob(object):
                     reducer.testCount = reducer.testTotal = 0
                     result = reducer.run()
 
-                    if result == 0:
-                        strategy.on_success()
-                        files_reduced += 1
+                    try:
+                        if result == 0:
+                            strategy.on_success()
+                            files_reduced += 1
 
-                    else:
-                        try:
+                        else:
                             strategy.on_failure()
-                        except StopIteration:
-                            break
-                        result = 0  # if we passed on failure, don't fail below
+                            result = 0  # if we passed on failure, don't fail below
+
+                    except StopIteration:
+                        break
 
                 if result != 0:
                     # reducer failed to repro the crash
