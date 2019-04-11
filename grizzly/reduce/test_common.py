@@ -5,6 +5,16 @@
 from __future__ import unicode_literals
 import os
 from grizzly.target import Target
+from grizzly.reporter import Reporter
+
+
+class BaseFakeReporter(Reporter):
+
+    def _reset(self):
+        pass
+
+    def _submit(self, *_args, **_kwds):
+        pass
 
 
 class FakeTarget(object):

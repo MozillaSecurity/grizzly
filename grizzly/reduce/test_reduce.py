@@ -8,9 +8,9 @@ import os.path
 import zipfile
 import pytest
 from grizzly.reduce import interesting, reduce, strategies, NoTestcaseError, ReducerError, ReductionJob
-from grizzly.reporter import Reporter, FuzzManagerReporter
+from grizzly.reporter import FuzzManagerReporter
 from grizzly.target import Target
-from .test_common import FakeTarget, create_target_binary
+from .test_common import BaseFakeReporter, FakeTarget, create_target_binary
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -281,10 +281,10 @@ def test_run_0(tmp_path, job):
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
-            tc = self.test_cases[0]
+    class FakeReporter(BaseFakeReporter):
+        def _submit(self, _report, test_cases):
+            assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+            tc = test_cases[0]
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.html"
@@ -317,10 +317,10 @@ def test_run_1(tmp_path, job):
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
-            tc = self.test_cases[0]
+    class FakeReporter(BaseFakeReporter):
+        def _submit(self, _report, test_cases):
+            assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+            tc = test_cases[0]
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc._files.required[0].data == "required\n"
@@ -351,10 +351,10 @@ def test_run_2(tmp_path, job):
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
-            tc = self.test_cases[0]
+    class FakeReporter(BaseFakeReporter):
+        def _submit(self, _report, test_cases):
+            assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+            tc = test_cases[0]
             assert len(tc._files.required) == 2, \
                 "expecting 2 test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.html"
@@ -380,10 +380,10 @@ def test_run_3(tmp_path, job):
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
-            tc = self.test_cases[0]
+    class FakeReporter(BaseFakeReporter):
+        def _submit(self, _report, test_cases):
+            assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+            tc = test_cases[0]
             assert len(tc._files.required) == 2, \
                 "expecting 2 test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.html"
@@ -413,10 +413,10 @@ def test_run_4(tmp_path, job):
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
-            tc = self.test_cases[0]
+    class FakeReporter(BaseFakeReporter):
+        def _submit(self, _report, test_cases):
+            assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+            tc = test_cases[0]
             assert len(tc._files.required) == 3, \
                 "expecting 3 test_files: %r" % (tc._files.required,)
             assert tc.landing_page.startswith("harness_")
@@ -448,10 +448,10 @@ def test_run_5(tmp_path, job):
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
-            tc = self.test_cases[0]
+    class FakeReporter(BaseFakeReporter):
+        def _submit(self, _report, test_cases):
+            assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+            tc = test_cases[0]
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "required.html"
@@ -475,10 +475,10 @@ def test_run_6(tmp_path, job):
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
-            tc = self.test_cases[0]
+    class FakeReporter(BaseFakeReporter):
+        def _submit(self, _report, test_cases):
+            assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+            tc = test_cases[0]
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.js"
@@ -501,10 +501,10 @@ def test_run_7(tmp_path, job):
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
-            tc = self.test_cases[0]
+    class FakeReporter(BaseFakeReporter):
+        def _submit(self, _report, test_cases):
+            assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+            tc = test_cases[0]
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.js"
@@ -530,10 +530,7 @@ def test_run_8(tmp_path, job):
     (tmp_path / "tc" / "env_vars.txt").write_text("var=value\nfoo=bar")
     job.config_testcase(str(tmp_path / "tc"))
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            pass
-    job.reporter = FakeReporter()
+    job.reporter = BaseFakeReporter()
 
     # try a 50% reliable testcase
     job.interesting.min_crashes = 1
@@ -576,10 +573,7 @@ def test_run_9(tmp_path, job):
     (tmp_path / "tc" / "-1" / "required.html").write_text("-1\nDDBEGIN\nfluff\nrequired\nDDEND\n")
     job.config_testcase(str(tmp_path / "tc"))
 
-    class FakeReporter(Reporter):
-        def _submit(self):
-            pass
-    job.reporter = FakeReporter()
+    job.reporter = BaseFakeReporter()
 
     job.interesting.min_crashes = 1
     job.interesting.repeat = 1

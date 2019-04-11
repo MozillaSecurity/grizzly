@@ -7,7 +7,8 @@ import zipfile
 import pytest
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs
 from grizzly.reduce import reduce, crash, bucket, ReductionJob
-from grizzly import reporter
+from grizzly.reporter import FuzzManagerReporter
+from .test_common import BaseFakeReporter
 from .test_reduce import job, FakeInteresting, FakeTarget  # noqa pylint: disable=unused-import
 
 
@@ -148,13 +149,13 @@ def test_main_strategies(job, monkeypatch, tmp_path):  # noqa pylint: disable=re
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
     report_data = {"num_reports": 0}
 
-    class FakeReporter(reporter.Reporter):
-        def __init__(self):
-            reporter.Reporter.__init__(self)
+    class FakeReporter(BaseFakeReporter):
+        def __init__(self, *args, **kwds):
+            super(FakeReporter, self).__init__(*args, **kwds)
             self.report_path = "foo"
-        def _submit(self):
-            assert len(self.test_cases) == 1, "too many test_cases: %r" % (self.test_cases,)
-            tc = self.test_cases[0]
+        def _submit(self, _report, test_cases):
+            assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+            tc = test_cases[0]
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.html"
@@ -219,17 +220,17 @@ def test_bucket_main(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefi
 def test_crash_main_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     # expect Collector.patch to be called with these qualities
-    expect_patch = [reporter.FuzzManagerReporter.QUAL_REPRODUCIBLE,
-                    reporter.FuzzManagerReporter.QUAL_REDUCED_ORIGINAL]
+    expect_patch = [FuzzManagerReporter.QUAL_REPRODUCIBLE,
+                    FuzzManagerReporter.QUAL_REDUCED_ORIGINAL]
     submitted = [False]
 
-    class ReporterNoSubmit(reporter.FuzzManagerReporter):
+    class ReporterNoSubmit(FuzzManagerReporter):
         (tmp_path / ".fuzzmanagerconf").touch()
         FM_CONFIG = str(tmp_path / ".fuzzmanagerconf")
 
-        def _submit(self):
+        def _submit(self, *_args, **_kwds):
             # check that the crash was already marked reproducible, but not yet marked reduced
-            assert expect_patch == [reporter.FuzzManagerReporter.QUAL_REDUCED_ORIGINAL]
+            assert expect_patch == [FuzzManagerReporter.QUAL_REDUCED_ORIGINAL]
             submitted[0] = True
 
     class FakeCollector(object):
@@ -247,7 +248,7 @@ def test_crash_main_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=r
                 @staticmethod
                 def json():
                     return {
-                        'testcase_quality': reporter.FuzzManagerReporter.QUAL_UNREDUCED,
+                        'testcase_quality': FuzzManagerReporter.QUAL_UNREDUCED,
                         'tool': 'test-tool'}
                 content = (inp / "test.zip").read_bytes()
             return response
@@ -287,13 +288,15 @@ def test_crash_main_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=r
 
 def test_crash_main_no_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
-    expect_patch = [reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC]
+    expect_patch = [FuzzManagerReporter.QUAL_REQUEST_SPECIFIC]
 
-    class ReporterNoSubmit(reporter.FuzzManagerReporter):
+    class ReporterNoSubmit(FuzzManagerReporter):
         (tmp_path / ".fuzzmanagerconf").touch()
         FM_CONFIG = str(tmp_path / ".fuzzmanagerconf")
 
-        def _submit(self):
+        def _reset(self):
+            pass
+        def _submit(self, *_args, **_kwds):
             # make sure _submit() is not called
             assert False
 
@@ -312,7 +315,7 @@ def test_crash_main_no_repro(job, monkeypatch, tmp_path):  # noqa pylint: disabl
                 @staticmethod
                 def json():
                     return {
-                        'testcase_quality': reporter.FuzzManagerReporter.QUAL_UNREDUCED,
+                        'testcase_quality': FuzzManagerReporter.QUAL_UNREDUCED,
                         'tool': 'test-tool'}
                 content = (inp / "test.zip").read_bytes()
             return response
@@ -351,13 +354,15 @@ def test_crash_main_no_repro(job, monkeypatch, tmp_path):  # noqa pylint: disabl
 
 def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
-    expect_patch = [reporter.FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE]
+    expect_patch = [FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE]
 
-    class ReporterNoSubmit(reporter.FuzzManagerReporter):
+    class ReporterNoSubmit(FuzzManagerReporter):
         (tmp_path / ".fuzzmanagerconf").touch()
         FM_CONFIG = str(tmp_path / ".fuzzmanagerconf")
 
-        def _submit(self):
+        def _reset(self):
+            pass
+        def _submit(self, *_args, **_kwds):
             # make sure _submit() is not called
             assert False
 
@@ -376,7 +381,7 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylin
                 @staticmethod
                 def json():
                     return {
-                        'testcase_quality': reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC,
+                        'testcase_quality': FuzzManagerReporter.QUAL_REQUEST_SPECIFIC,
                         'tool': 'test-tool'}
                 content = (inp / "test.zip").read_bytes()
             return response
