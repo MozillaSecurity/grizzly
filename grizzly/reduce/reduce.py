@@ -384,8 +384,9 @@ class ReductionJob(object):
         If we hit an alternate crash, store the testcase in a tmp folder.
         If the same crash is encountered again, only keep the newest one.
         """
-        crash_info = Report.from_path(temp_prefix + "_logs") \
-            .create_crash_info(self.interesting.target.binary)
+        crash_info = FuzzManagerReporter.create_crash_info(
+            Report.from_path(temp_prefix + "_logs"),
+            self.interesting.target.binary)
         max_frames = FuzzManagerReporter.signature_max_frames(crash_info, 5)
         this_sig = crash_info.createCrashSignature(maxFrames=max_frames)
         crash_hash = hashlib.sha256(this_sig.rawSignature.encode("utf-8")).hexdigest()[:10]

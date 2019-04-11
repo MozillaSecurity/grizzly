@@ -80,23 +80,6 @@ class Report(object):
             self.prefix = "%s_%s" % (self.DEFAULT_MINOR, time.strftime("%Y-%m-%d_%H-%M-%S"))
 
 
-    # TODO: move to FuzzManagerReporter
-    def create_crash_info(self, target_binary):
-        # read in the log files and create a CrashInfo object
-        aux_data = None
-        if self.log_aux is not None:
-            with open(os.path.join(self.path, self.log_aux), "rb") as log_fp:
-                aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
-        stderr_file = os.path.join(self.path, self.log_err)
-        stdout_file = os.path.join(self.path, self.log_out)
-        with open(stderr_file, "rb") as err_fp, open(stdout_file, "rb") as out_fp:
-            return CrashInfo.fromRawCrashData(
-                out_fp.read().decode("utf-8", errors="ignore").splitlines(),
-                err_fp.read().decode("utf-8", errors="ignore").splitlines(),
-                ProgramConfiguration.fromBinary(target_binary),
-                auxCrashData=aux_data)
-
-
     def cleanup(self):
         if os.path.isdir(self.path):
             shutil.rmtree(self.path)
@@ -362,6 +345,23 @@ class FuzzManagerReporter(Reporter):
         self.tool = tool  # optional tool name
 
 
+    @staticmethod
+    def create_crash_info(report, target_binary):
+        # read in the log files and create a CrashInfo object
+        aux_data = None
+        if report.log_aux is not None:
+            with open(os.path.join(report.path, report.log_aux), "rb") as log_fp:
+                aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
+        stderr_file = os.path.join(report.path, report.log_err)
+        stdout_file = os.path.join(report.path, report.log_out)
+        with open(stderr_file, "rb") as err_fp, open(stdout_file, "rb") as out_fp:
+            return CrashInfo.fromRawCrashData(
+                out_fp.read().decode("utf-8", errors="ignore").splitlines(),
+                err_fp.read().decode("utf-8", errors="ignore").splitlines(),
+                ProgramConfiguration.fromBinary(target_binary),
+                auxCrashData=aux_data)
+
+
     def _reset(self):
         self._extra_metadata = {}
 
@@ -426,7 +426,7 @@ class FuzzManagerReporter(Reporter):
 
     def _submit(self, report, test_cases):
         # prepare data for submission as CrashInfo
-        crash_info = report.create_crash_info(self.target_binary)
+        crash_info = self.create_crash_info(report, self.target_binary)
 
         # search for a cached signature match and if the signature
         # is already in the cache and marked as frequent, don't bother submitting

@@ -336,7 +336,9 @@ class Interesting(object):
                 self.target.save_logs(result_logs, meta=True)
 
                 # create a CrashInfo
-                crash = Report.from_path(result_logs).create_crash_info(self.target.binary)
+                crash = FuzzManagerReporter.create_crash_info(
+                    Report.from_path(result_logs),
+                    self.target.binary)
 
                 short_sig = crash.createShortSignature()
                 if short_sig == "No crash detected":
