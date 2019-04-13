@@ -134,9 +134,9 @@ class Session(object):
                     location = (
                         "http://127.0.0.1:%d/" % self.server.get_port(),
                         self.iomanager.landing_page(),
-                        "?timeout=%d&" % (self.adapter.TEST_DURATION * 1000),
-                        "close_after=%d&" % self.target.rl_reset,
-                        "forced_close=0" if not self.target.forced_close else "")
+                        "?timeout=%d" % (self.adapter.TEST_DURATION * 1000),
+                        "&close_after=%d" % self.target.rl_reset,
+                        "&forced_close=0" if not self.target.forced_close else "")
                     log.info("Launching target")
                     self.target.launch("".join(location))
                     launch_timeouts = 0
