@@ -6,6 +6,7 @@
 from collections import deque
 import os
 import random
+import re
 
 from .storage import InputFile, TestCase, TestFile
 
@@ -123,10 +124,10 @@ class IOManager(object):
             opts = os.environ.get(opt_var)
             if not opts or "suppressions" not in opts:
                 continue
-            for opt in opts.split(":"):
+            for opt in re.split(r":(?![\\|/])", opts):
                 if not opt.startswith("suppressions"):
                     continue
-                supp_file = opt.split("=")[-1]
+                supp_file = opt.split("=")[-1].strip("'\"")
                 if os.path.isfile(supp_file):
                     fname = "%s.supp" % opt_var.split("_")[0].lower()
                     self._environ_files.append(TestFile.from_file(supp_file, fname))
@@ -272,7 +273,7 @@ class IOManager(object):
                 # FFPuppet ensures that this is formatted correctly
                 track = ("detect_leaks",)
                 opts = list()
-                for opt in os.environ[e_var].split(":"):
+                for opt in re.split(r":(?![\\|/])", os.environ[e_var]):
                     if opt.split("=")[0] in track:
                         opts.append(opt)
                 env[e_var] = ":".join(opts)

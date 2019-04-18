@@ -9,6 +9,7 @@ import glob
 import hashlib
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -129,14 +130,14 @@ class Interesting(object):
         # suppressions file
         opt_key = '%s_OPTIONS' % os.path.basename(supp_file).split('.')[0].upper()
         # the value matching *SAN_OPTIONS can be set to None
-        opt_val = self.env_mod.get(opt_key, None)
-        if opt_val is None:
-            opt_val = ''
+        san_opts = self.env_mod.get(opt_key, None)
+        if san_opts is None:
+            san_opts = ''
         updated = list()
-        for opt in opt_val.split(':'):
+        for opt in re.split(r":(?![\\|/])", san_opts):
             if opt and opt != 'suppressions':
                 updated.append(opt)
-        updated.append('suppressions=%s' % supp_file)
+        updated.append('suppressions=\'%s\'' % supp_file)
         self.env_mod[opt_key] = ':'.join(updated)
 
     def monitor_process(self, iteration_done_event, idle_timeout_event):

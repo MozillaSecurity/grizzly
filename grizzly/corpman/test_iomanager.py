@@ -138,13 +138,13 @@ class IOManagerTests(unittest.TestCase):
 
     def test_06(self):
         "test _add_suppressions()"
-        supp_file = os.path.join(self.tdir, "supp_file.txt")
+        supp_file = os.path.abspath(os.path.join(self.tdir, "supp_file.txt"))
         with open(supp_file, "w") as out_fp:
             out_fp.write("# test\n")
         iom = IOManager()
         self.addCleanup(iom.cleanup)
         try:
-            os.environ["ASAN_OPTIONS"] = "blah=1:suppressions=%s:foo=2" % supp_file
+            os.environ["ASAN_OPTIONS"] = "blah=1:suppressions='%s':foo=2" % supp_file
             self.assertFalse(iom._environ_files)  # pylint: disable=protected-access
             iom._add_suppressions()  # pylint: disable=protected-access
         finally:
@@ -184,19 +184,24 @@ class IOManagerTests(unittest.TestCase):
         try:
             org_tracked = IOManager.TRACKED_ENVVARS
             IOManager.TRACKED_ENVVARS = ()
-            os.environ["ASAN_OPTIONS"] = "blah=1:detect_leaks=1:foo=2"
+            os.environ["ASAN_OPTIONS"] = "blah='z:/a':detect_leaks=1:foo=2"
+            os.environ["LSAN_OPTIONS"] = "detect_leaks='x:\\a.1':a=1"
             os.environ["TEST_GOOD"] = "PASS"
             os.environ["TEST_BAD"] = "FAIL"
             self.assertFalse(IOManager.tracked_environ())
-            IOManager.TRACKED_ENVVARS = ("ASAN_OPTIONS", "TEST_GOOD")
+            IOManager.TRACKED_ENVVARS = ("ASAN_OPTIONS", "LSAN_OPTIONS", "TEST_GOOD")
             tracked = IOManager.tracked_environ()
+            self.assertNotIn("TEST_BAD", tracked)
             self.assertIn("ASAN_OPTIONS", tracked)
             self.assertEqual(tracked["ASAN_OPTIONS"], "detect_leaks=1")
+            self.assertIn("LSAN_OPTIONS", tracked)
+            self.assertEqual(tracked["LSAN_OPTIONS"], "detect_leaks='x:\\a.1'")
             self.assertIn("TEST_GOOD", tracked)
             self.assertEqual(tracked["TEST_GOOD"], "PASS")
         finally:
             IOManager.TRACKED_ENVVARS = org_tracked
             os.environ.pop("ASAN_OPTIONS", None)
+            os.environ.pop("LSAN_OPTIONS", None)
             os.environ.pop("TEST_GOOD", None)
             os.environ.pop("TEST_BAD", None)
 
