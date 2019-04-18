@@ -363,7 +363,6 @@ def main(args):
         session.run()
 
     except KeyboardInterrupt:
-        log.warning("Iterations attempted: %d", session.status.iteration)
         return Session.EXIT_ABORT
 
     except LaunchError:
