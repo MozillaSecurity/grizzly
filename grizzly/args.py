@@ -156,7 +156,12 @@ class GrizzlyArgs(CommonArgs):
         CommonArgs.sanity_check(self, args)
 
         if args.adapter.lower() not in self.adapters:
-            self.parser.error("%r adapter does not exist" % args.adapter.lower())
+            msg = ["Adapter %r does not exist." % args.adapter.lower()]
+            if self.adapters:
+                msg.append("Available adapters: %s" % ", ".join(self.adapters))
+            else:
+                msg.append("No adapters available.")
+            self.parser.error(" ".join(msg))
 
         if args.fuzzmanager and args.s3_fuzzmanager:
             self.parser.error("--fuzzmanager and --s3-fuzzmanager are mutually exclusive")
