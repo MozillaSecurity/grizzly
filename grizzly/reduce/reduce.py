@@ -316,11 +316,12 @@ class ReductionJob(object):
                 self.cache_iter_harness_created = True
 
             # prune unnecessary files from the testcase
+            prune = {"env_vars.txt", "grizzly_fuzz_harness.html",
+                     "log_metadata.json", "prefs.js", "reducelog.txt",
+                     "screenlog.txt", "test_info.json", "test_info.txt"}
             for root, _, files in os.walk(self.tcroot):
                 for file_ in files:
-                    if file_ in {"env_vars.txt", "grizzly_fuzz_harness.html", "log_metadata.json",
-                                 "prefs.js", "reducelog.txt", "screenlog.txt", "test_info.txt"} or \
-                            (file_.startswith("log_") and file_.endswith(".txt")):
+                    if file_ in prune or (file_.startswith("log_") and file_.endswith(".txt")):
                         os.unlink(os.path.join(root, file_))
         except NoTestcaseError as exc:
             LOG.warning("Could not set-up testcase: %s", exc)
