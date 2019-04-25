@@ -93,8 +93,10 @@ class TestCase(object):
         self._add(self._files.meta, meta_file)
 
 
-    def add_environ_var(self, var_name, value):
-        self._env_vars[var_name] = value
+    def add_environ_var(self, name, value):
+        assert isinstance(name, str)
+        assert value is None or isinstance(value, str)
+        self._env_vars[name] = value
 
 
     def add_file(self, test_file, required=True):
@@ -159,7 +161,10 @@ class TestCase(object):
             if self._env_vars:
                 with open(os.path.join(log_dir, "env_vars.txt"), "w") as out_fp:
                     for env_var, env_val in self._env_vars.items():
-                        out_fp.write("%s=%s\n" % (env_var, env_val))
+                        if env_val is None:
+                            out_fp.write("%s=\n" % env_var)
+                        else:
+                            out_fp.write("%s=%s\n" % (env_var, env_val))
 
 
     def cleanup(self):
@@ -174,7 +179,7 @@ class TestCase(object):
 
 
     def env_vars(self):
-        return ["=".join(pair) for pair in self._env_vars.items()]
+        return ["=".join((k, v)) for k, v in self._env_vars.items() if v is not None]
 
 
 class TestFile(object):

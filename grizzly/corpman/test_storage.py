@@ -93,17 +93,23 @@ class TestCaseTests(unittest.TestCase):
             self.assertEqual(test_fp.read(), meta_data)
 
     def test_04(self):
-        "test TestCase add_environ_var()"
+        "test TestCase add_environ_var() and env_vars()"
         tc = TestCase("land_page.html", "redirect.html", "test-adapter")
         self.addCleanup(tc.cleanup)
         tc.add_environ_var("TEST_ENV_VAR", "1")
+        self.assertEqual(len(tc.env_vars()), 1)
+        tc.add_environ_var("TEST_NONE", None)
+        self.assertEqual(len(tc.env_vars()), 1)
+        self.assertEqual(len(tc._env_vars), 2)  # pylint: disable=protected-access
         dmp_dir = os.path.join(self.tdir, "dmp_test")
         os.mkdir(dmp_dir)
         tc.dump(dmp_dir, include_details=True)
         dmp_contents = os.listdir(dmp_dir)
         self.assertIn("env_vars.txt", dmp_contents)
         with open(os.path.join(dmp_dir, "env_vars.txt"), "r") as test_fp:
-            self.assertIn("TEST_ENV_VAR=1\n", test_fp.read())
+            data = test_fp.read()
+        self.assertIn("TEST_ENV_VAR=1\n", data)
+        self.assertIn("TEST_NONE=\n", data)
 
 
 class InputFileTests(unittest.TestCase):
