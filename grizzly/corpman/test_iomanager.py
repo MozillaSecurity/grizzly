@@ -189,7 +189,7 @@ class IOManagerTests(unittest.TestCase):
             os.environ["TEST_GOOD"] = "PASS"
             os.environ["TEST_BAD"] = "FAIL"
             self.assertFalse(IOManager.tracked_environ())
-            IOManager.TRACKED_ENVVARS = ("ASAN_OPTIONS", "LSAN_OPTIONS", "TEST_GOOD")
+            IOManager.TRACKED_ENVVARS = ("ASAN_OPTIONS", "LSAN_OPTIONS", "TEST_GOOD", "TEST_MISSING")
             tracked = IOManager.tracked_environ()
             self.assertNotIn("TEST_BAD", tracked)
             self.assertIn("ASAN_OPTIONS", tracked)
@@ -198,6 +198,9 @@ class IOManagerTests(unittest.TestCase):
             self.assertEqual(tracked["LSAN_OPTIONS"], "detect_leaks='x:\\a.1'")
             self.assertIn("TEST_GOOD", tracked)
             self.assertEqual(tracked["TEST_GOOD"], "PASS")
+            IOManager.TRACKED_ENVVARS = ("ASAN_OPTIONS",)
+            os.environ["ASAN_OPTIONS"] = "ignored=x"
+            self.assertFalse(IOManager.tracked_environ())
         finally:
             IOManager.TRACKED_ENVVARS = org_tracked
             os.environ.pop("ASAN_OPTIONS", None)

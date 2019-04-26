@@ -267,7 +267,6 @@ class IOManager(object):
         for e_var in IOManager.TRACKED_ENVVARS:
             if e_var not in os.environ:
                 continue
-
             if e_var in ("ASAN_OPTIONS", "LSAN_OPTIONS"):
                 # strip unwanted options
                 # FFPuppet ensures that this is formatted correctly
@@ -276,7 +275,9 @@ class IOManager(object):
                 for opt in re.split(r":(?![\\|/])", os.environ[e_var]):
                     if opt.split("=")[0] in track:
                         opts.append(opt)
-                env[e_var] = ":".join(opts)
+                # only record *SAN_OPTIONS if there are options
+                if opts:
+                    env[e_var] = ":".join(opts)
             else:
                 env[e_var] = os.environ[e_var]
 
