@@ -223,7 +223,7 @@ class ReductionJob(object):
                     try:
                         with zipfile.ZipFile(testcase) as zip_fp:
                             zip_fp.extractall(path=self.tcroot)
-                    except zlib.error:
+                    except (zlib.error, zipfile.BadZipfile):
                         raise ReducerError("Testcase is corrupted")
                 else:
                     raise ReducerError("Testcase must be zip, html, or directory")
