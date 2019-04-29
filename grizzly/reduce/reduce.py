@@ -23,6 +23,7 @@ from FTB.Signatures.CrashInfo import CrashSignature
 
 from . import strategies as strategies_module
 from .interesting import Interesting
+from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..core import Session
 from ..corpman.storage import TestFile, TestCase
 from ..reporter import FilesystemReporter, FuzzManagerReporter, Report
@@ -34,14 +35,6 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber", "Jason Kratzer"]
 
 
 LOG = logging.getLogger("grizzly.reduce")
-
-
-class ReducerError(Exception):
-    pass
-
-
-class NoTestcaseError(ReducerError):
-    pass
 
 
 def _testcase_contents(path="."):
@@ -224,7 +217,7 @@ class ReductionJob(object):
                         with zipfile.ZipFile(testcase) as zip_fp:
                             zip_fp.extractall(path=self.tcroot)
                     except (zlib.error, zipfile.BadZipfile):
-                        raise ReducerError("Testcase is corrupted")
+                        raise CorruptTestcaseError("Testcase is corrupted")
                 else:
                     raise ReducerError("Testcase must be zip, html, or directory")
             elif os.path.isdir(testcase):
