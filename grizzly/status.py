@@ -154,14 +154,14 @@ class StatusReporter(object):
 
     def _summary(self, runtime=True, sysinfo=False, timestamp=False):
         exp = time.time() - self.AGE_LIMIT
-        reports = [x for x in self.reports if x.date > exp]
+        reports = tuple(x for x in self.reports if x.date > exp)
 
         # calculate totals
-        ignored = [x.ignored for x in reports]
-        iterations = [x.iteration for x in reports]
-        log_sizes = [x.log_size for x in reports]
-        rates = [x.rate for x in reports]
-        results = [x.results for x in reports]
+        ignored = tuple(x.ignored for x in reports)
+        iterations = tuple(x.iteration for x in reports)
+        log_sizes = tuple(x.log_size for x in reports)
+        rates = tuple(x.rate for x in reports)
+        results = tuple(x.results for x in reports)
 
         count = len(reports)
         total_iters = sum(iterations)
