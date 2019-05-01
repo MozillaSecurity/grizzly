@@ -8,8 +8,8 @@ import pytest
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs
 from grizzly.reduce import reduce, crash, bucket, ReductionJob
 from grizzly import reporter
-from .test_common import BaseFakeReporter
-from .test_reduce import FakeInteresting, FakeTarget
+from .test_common import BaseFakeReporter, FakeTarget
+from .test_reduce import FakeInteresting
 
 
 def test_parse_args(capsys, tmp_path):
