@@ -1,0 +1,16 @@
+[MESSAGES CONTROL]
+disable=
+    duplicate-code,
+    missing-docstring,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-branches,
+    too-many-instance-attributes,
+    too-many-locals,
+    too-many-nested-blocks,
+    too-many-return-statements,
+    too-many-statements,
+    useless-object-inheritance,
+
+[FORMAT]
+max-line-length=110
