@@ -28,6 +28,7 @@ class SortingHelpFormatter(argparse.HelpFormatter):
 
 class CommonArgs(object):
     IGNORABLE = ("log-limit", "memory", "timeout")
+    PLATFORMS = ("local",)
 
     def __init__(self):
         self._sanity_skip = set()
@@ -60,6 +61,9 @@ class CommonArgs(object):
         self.parser.add_argument(
             "-m", "--memory", type=int,
             help="Browser process memory limit in MBs (default: 'no limit')")
+        self.parser.add_argument(
+            "--platform", default="local",
+            help="Platforms available: %s (default: %%(default)s)" % ", ".join(self.PLATFORMS))
         self.parser.add_argument(
             "-p", "--prefs",
             help="prefs.js file to use")
@@ -116,6 +120,9 @@ class CommonArgs(object):
                     self.parser.error("%r does not exist" % ext)
                 if not os.path.isdir(ext) or (os.path.isfile(ext) and ext.endswith(".xpi")):
                     self.parser.error("Extension must be a folder or .xpi")
+
+        if args.platform.lower() not in self.PLATFORMS:
+            self.parser.error("Unsupported platform %r" % args.platform)
 
         if args.prefs is not None and not os.path.isfile(args.prefs):
             self.parser.error("file not found: %r" % args.prefs)

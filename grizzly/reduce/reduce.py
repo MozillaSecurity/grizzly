@@ -27,7 +27,7 @@ from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..core import Session
 from ..corpman.storage import TestFile, TestCase
 from ..reporter import FilesystemReporter, FuzzManagerReporter, Report
-from ..target import Target
+from ..target import PuppetTarget
 
 
 __author__ = "Jesse Schwartzentruber"
@@ -732,17 +732,18 @@ def main(args, interesting_cb=None, result_cb=None):
     job_cancelled = False
     try:
         LOG.debug("initializing the Target")
-        target = Target(
-            args.binary,
-            args.extension,
-            args.launch_timeout,
-            args.log_limit,
-            args.memory,
-            None,
-            args.relaunch,
-            False,  # rr
-            args.valgrind,
-            args.xvfb)
+        if args.platform == "local":
+            target = PuppetTarget(
+                args.binary,
+                args.extension,
+                args.launch_timeout,
+                args.log_limit,
+                args.memory,
+                None,  # prefs
+                args.relaunch,
+                False,  # rr
+                args.valgrind,
+                args.xvfb)
 
         job = ReductionJob(
             args.ignore,
@@ -787,7 +788,7 @@ def main(args, interesting_cb=None, result_cb=None):
 
         # detect soft assertions
         if args.soft_asserts:
-            job.interesting.target._puppet.add_abort_token("###!!! ASSERTION:")
+            job.interesting.target.add_abort_token("###!!! ASSERTION:")
 
         # setup interesting callback if requested
         if interesting_cb is not None:

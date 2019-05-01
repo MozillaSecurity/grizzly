@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import unicode_literals
 import os
-from grizzly.target import Target
+from grizzly.target.target import Target
 from grizzly.reporter import Reporter
 
 

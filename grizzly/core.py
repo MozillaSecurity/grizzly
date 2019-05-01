@@ -32,7 +32,8 @@ from .args import GrizzlyArgs
 from .reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
 from .status import Status
 from .corpman.storage import TestFile
-from .target import Target
+from .target import PuppetTarget
+
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
@@ -223,11 +224,11 @@ class Session(object):
                 self.iomanager.tests.pop().cleanup()
 
             # handle failure if detected
-            if failure_detected == Target.RESULT_FAILURE:
+            if failure_detected == self.target.RESULT_FAILURE:
                 self.status.results += 1
                 log.info("Result detected")
                 self.report_result()
-            elif failure_detected == Target.RESULT_IGNORED:
+            elif failure_detected == self.target.RESULT_IGNORED:
                 self.status.ignored += 1
                 log.info("Ignored (%d)", self.status.ignored)
 
@@ -314,17 +315,18 @@ def main(args):
             log.info("Running in FUZZING mode")
 
         log.debug("initializing the Target")
-        target = Target(
-            args.binary,
-            args.extension,
-            args.launch_timeout,
-            args.log_limit,
-            args.memory,
-            args.prefs,
-            args.relaunch,
-            args.rr,
-            args.valgrind,
-            args.xvfb)
+        if args.platform == "local":
+            target = PuppetTarget(
+                args.binary,
+                args.extension,
+                args.launch_timeout,
+                args.log_limit,
+                args.memory,
+                args.prefs,
+                args.relaunch,
+                args.rr,
+                args.valgrind,
+                args.xvfb)
         adapter.monitor = target.monitor
         if args.soft_asserts:
             target.add_abort_token("###!!! ASSERTION:")
@@ -375,7 +377,7 @@ def main(args):
         if session is not None:
             session.close()
         if target is not None:
-            if target.rr_path is not None and os.path.isdir(target.rr_path):
+            if target.use_rr and target.rr_path is not None and os.path.isdir(target.rr_path):
                 shutil.rmtree(target.rr_path)
             target.cleanup()
         if adapter is not None:

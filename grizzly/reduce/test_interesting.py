@@ -9,7 +9,7 @@ import pytest
 import ffpuppet
 import sapphire
 from grizzly.reduce.interesting import Interesting
-from grizzly.target import Target
+from grizzly.target.target import Target
 from .test_common import FakeTarget, create_target_binary
 
 

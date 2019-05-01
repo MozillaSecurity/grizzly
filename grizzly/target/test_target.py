@@ -1,7 +1,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 import os
 import signal
 import tempfile
@@ -10,7 +9,9 @@ import time
 import unittest
 
 from ffpuppet import FFPuppet
-from .target import Target, TargetMonitor
+
+from .puppet_target import PuppetTarget
+from .target import Target
 
 
 class FakePuppet(object):
@@ -23,15 +24,11 @@ class FakePuppet(object):
         self.test_running = False  # used to control testing
         self.test_available_logs = list()  # used to control testing
 
-
-
     def available_logs(self):
         return self.test_available_logs
 
-
     def clean_up(self):
         self.close()
-
 
     def clone_log(self, log_id, offset=0):  # pylint: disable=no-self-use,unused-argument
         assert log_id is not None
@@ -42,7 +39,6 @@ class FakePuppet(object):
         with open(log_file, "wb") as log_fp:
             log_fp.write(b"test")
         return log_file
-
 
     def close(self):
         # the reason code is dependent on the state of test_crashed and test_running
@@ -64,18 +60,14 @@ class FakePuppet(object):
         self.test_crashed = False
         self.test_running = False
 
-
     def get_pid(self):  # pylint: disable=no-self-use
         return os.getpid()
-
 
     def is_healthy(self):
         return not self.test_crashed and self.test_running and not self.test_check_abort
 
-
     def is_running(self):
         return self.test_running
-
 
     def launch(self, binary, launch_timeout=0, location=None, log_limit=0, memory_limit=0,  # pylint: disable=unused-argument,too-many-arguments
                prefs_js=None, extension=None, env_mod=None):  # pylint: disable=unused-argument,too-many-arguments
@@ -83,11 +75,9 @@ class FakePuppet(object):
         self.test_crashed = False
         self.test_running = True
 
-
     @property
     def launches(self):
         return self._launches
-
 
     def log_length(self, log_id):  # pylint: disable=no-self-use
         if log_id == "stderr":
@@ -96,14 +86,14 @@ class FakePuppet(object):
             return 100
         return int(log_id.split("=")[1])
 
-
     def wait(self, timeout=0):
         return 1234  # successful wait()
 
 
+# TODO: split Target and PuppetTarget
 class TargetTests(unittest.TestCase):
     def setUp(self):
-        Target.PUPPET = FakePuppet
+        PuppetTarget.PUPPET = FakePuppet
         _fd, self.tmpfn = tempfile.mkstemp(prefix="grz_test_")
         os.close(_fd)
 
@@ -115,12 +105,13 @@ class TargetTests(unittest.TestCase):
         "test creating a simple Target"
         os.environ["GRZ_FORCED_CLOSE"] = "0"
         try:
-            target = Target(self.tmpfn, None, 300, 25, 5000, None, 25, False, False, False)
+            target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 25, False, False, False)
             self.addCleanup(target.cleanup)
             self.assertTrue(target.closed)
             self.assertFalse(target.forced_close)
             self.assertEqual(target.detect_failure([], None), Target.RESULT_NONE)
             self.assertEqual(target.log_size(), 1124)
+            self.assertIsNotNone(target.monitor)
             target.check_relaunch()
         finally:
             os.environ.pop("GRZ_FORCED_CLOSE", None)
@@ -128,7 +119,7 @@ class TargetTests(unittest.TestCase):
     def test_02(self):
         "test creating and launching a simple Target"
         relaunch = 25
-        target = Target(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
         self.assertTrue(target.forced_close)
         self.addCleanup(target.cleanup)
         target.launch("launch_target_page")
@@ -140,7 +131,7 @@ class TargetTests(unittest.TestCase):
     def test_03(self):
         "test check_relaunch() and step()"
         relaunch = 25
-        target = Target(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
         self.addCleanup(target.cleanup)
         target.launch("launch_target_page")
         # test skipping relaunch
@@ -167,7 +158,7 @@ class TargetTests(unittest.TestCase):
     def test_04(self):
         "test detect_failure()"
         relaunch = 25
-        target = Target(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
         self.addCleanup(target.cleanup)
         target.launch("launch_target_page")
         # no failures
@@ -240,7 +231,7 @@ class TargetTests(unittest.TestCase):
         target.cleanup()
         os.environ["GRZ_FORCED_CLOSE"] = "0"
         try:
-            target = Target(self.tmpfn, None, 300, 25, 5000, None, 1, False, False, False)
+            target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 1, False, False, False)
             self.addCleanup(target.cleanup)
             target.launch("launch_page")
             target.step()
@@ -249,7 +240,6 @@ class TargetTests(unittest.TestCase):
             target.close()
         finally:
             os.environ.pop("GRZ_FORCED_CLOSE", None)
-
 
     def test_05(self):
         "test dump_coverage()"
@@ -261,7 +251,7 @@ class TargetTests(unittest.TestCase):
 
         sig_catcher = SigCatcher()
         signal.signal(signal.SIGUSR1, sig_catcher.signal_handler)
-        target = Target(self.tmpfn, None, 300, 25, 5000, None, 10, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 10, False, False, False)
         target.dump_coverage()
         self.assertFalse(sig_catcher.CAUGHT)
         target.launch("launch_page")
@@ -270,7 +260,7 @@ class TargetTests(unittest.TestCase):
 
     def test_06(self):
         "test poll_for_idle()"
-        target = Target(self.tmpfn, None, 300, 25, 5000, None, 10, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 10, False, False, False)
         assert target.poll_for_idle(90, 0.2), "the test process should be mostly idle"
         evt = threading.Event()
         def busy_wait():
@@ -284,30 +274,3 @@ class TargetTests(unittest.TestCase):
         finally:
             evt.set()
             waiter.join()
-
-
-class TargetMonitorTests(unittest.TestCase):
-
-    def test_01(self):
-        "test a basic browser monitor"
-        tp = FakePuppet(False, False, False)
-        mon = TargetMonitor.monitor(tp)
-
-        test_log = mon.clone_log("test_log", offset=0)
-        self.addCleanup(os.remove, test_log)
-        self.assertTrue(os.path.isfile(test_log))
-        tp._launches += 1  # pylint: disable=protected-access
-        self.assertEqual(mon.launches, 1)
-        tp.test_running = True
-        self.assertTrue(mon.is_running())
-        self.assertEqual(mon.log_length("test_log=4"), 4)
-        self.assertEqual(mon.log_data("test_log"), b"test")
-
-    def test_02(self):
-        "test an uninitialized browser monitor"
-        mon = TargetMonitor()
-        self.assertIsNone(mon.clone_log("test_log", offset=0))
-        self.assertEqual(mon.launches, 0)
-        self.assertFalse(mon.is_running())
-        self.assertEqual(mon.log_length("test_log=2"), 0)
-        self.assertIsNone(mon.log_data("test_log"))

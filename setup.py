@@ -39,7 +39,7 @@ if __name__ == '__main__':
             ],
         },
         extras_require=EXTRAS,
-        install_requires=['ffpuppet', 'psutil'],
+        install_requires=['ffpuppet', 'psutil', 'six'],
         license='MPL 2.0',
         maintainer='Tyson Smith',
         maintainer_email='twsmith@mozilla.com',

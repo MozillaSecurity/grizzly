@@ -18,7 +18,7 @@ import threading
 import ffpuppet
 import sapphire
 from ..reporter import FuzzManagerReporter, Report
-from ..target import Target
+from ..target.target import Target
 
 
 __author__ = "Jesse Schwartzentruber"
@@ -295,7 +295,7 @@ class Interesting(object):
                 self.server.add_dynamic_response("/harness", lambda: harness, mime_type="text/html")
                 self.server.set_redirect("/first_test", str(self.landing_page), required=True)
 
-        # (re)launch FFPuppet
+        # (re)launch Target
         if self.target.closed:
             # Try to launch the browser at most, 4 times
             for retries in reversed(range(4)):
@@ -375,7 +375,7 @@ class Interesting(object):
                         self.orig_sig = crash.createCrashSignature(maxFrames=max_frames)
                     # the amount of time it can take to replay a test case can vary
                     # when under Valgrind so do not update the timeout in that case
-                    if not self.target.use_valgrind:
+                    if not getattr(self.target, "use_valgrind", False):
                         self.update_timeout(end_time - start_time)
                 else:
                     LOG.info("Uninteresting: different signature: %s", short_sig)
