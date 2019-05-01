@@ -3,14 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import unicode_literals
-import logging
 import os.path
 import zipfile
 import pytest
-from grizzly.reduce import exceptions, interesting, reduce, strategies, ReductionJob
+from grizzly.reduce import exceptions, interesting, strategies
 from grizzly.reporter import FuzzManagerReporter
-from grizzly.target import Target
-from .test_common import BaseFakeReporter, FakeTarget, create_target_binary
+from .test_common import BaseFakeReporter, create_target_binary
 
 
 class FakeInteresting(interesting.Interesting):
@@ -95,19 +93,6 @@ class FakeInterestingSemiReliable(FakeInteresting):
 
 class FakeInterestingSemiReliableWithCache(FakeInterestingSemiReliable):
     USE_TESTCASE_CACHE = True
-
-
-@pytest.fixture
-def job(monkeypatch, request):
-    """Pytest fixture to provide a ReductionJob object with dependencies stubbed and default values"""
-    interesting_cls = getattr(request, "param", FakeInteresting)
-    use_testcase_cache = getattr(interesting_cls, "USE_TESTCASE_CACHE", False)
-    use_analysis = getattr(interesting_cls, "USE_ANALYZE", False)
-    monkeypatch.setattr(reduce, "Interesting", interesting_cls)
-    result = ReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, use_testcase_cache,
-                          not use_analysis)
-    yield result
-    result.close()
 
 
 def test_config_testcase_0(tmp_path, job):
@@ -419,7 +404,7 @@ def test_run_4(tmp_path, job):
             assert tc.landing_page.startswith("harness_")
             assert tc.landing_page.endswith(".html")
             harness_idx = [x.file_name for x in tc._files.required].index(tc.landing_page)
-            harness = tc._files.required.pop(harness_idx)
+            tc._files.required.pop(harness_idx)
             assert {x.file_name: x.data for x in tc._files.required} \
                 == {"-0/required.html": "DDBEGIN\nrequired\nDDEND\n",
                     "-1/required.html": "DDBEGIN\nrequired\nDDEND\n"}

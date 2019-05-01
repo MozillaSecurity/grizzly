@@ -287,6 +287,7 @@ class Interesting(object):
                 harness = os.path.join(os.path.dirname(__file__), '..', 'corpman', 'harness.html')
                 with open(harness, 'rb') as harness_fp:
                     harness = harness_fp.read()
+
                 def _dyn_resp_close():
                     self.target.close()
                     return b"<h1>Close Browser</h1>"

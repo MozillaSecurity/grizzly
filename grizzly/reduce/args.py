@@ -42,10 +42,12 @@ class ReducerArgs(CommonArgs):
             help="CPU usage threshold to mark the process as idle (default: %(default)s)")
         self.parser.add_argument(
             "--environ",
-            help="File containing line separated environment variables (VAR=value) to be set in the firefox process.")
+            help="File containing line separated environment variables (VAR=value) to be set in the "
+            "firefox process.")
         self.parser.add_argument(
             "--reduce-file",
-            help="Value passed to lithium's --testcase option, needed for testcase cache (default: input param)")
+            help="Value passed to lithium's --testcase option, needed for testcase cache "
+            "(default: input param)")
         self.parser.add_argument(
             "--no-cache", action="store_true",
             help="Disable testcase caching")

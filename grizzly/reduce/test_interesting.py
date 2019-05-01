@@ -41,7 +41,6 @@ def fake_sapphire(monkeypatch):
     FakeServer._last_timeout = None
 
 
-real_sleep = time.sleep
 @pytest.fixture
 def fake_timesleep(monkeypatch):
     monkeypatch.setattr(time, "sleep", lambda x: None)

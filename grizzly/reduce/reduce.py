@@ -94,7 +94,7 @@ class ReductionJob(object):
         self.skip_analysis = skip_analysis
         if not self.skip_analysis:
             # see if any of the args tweaked by analysis were overridden
-            # --relaunch is regarded as a maximum, so overriding the default is not a deal-breaker for analysis
+            # --relaunch is regarded as a maximum, so overriding the default is not a deal-breaker for this
             if self.interesting.min_crashes != 1:
                 LOG.warning("--min-crashes=%d was given, skipping analysis", self.interesting.min_crashes)
                 self.skip_analysis = True
@@ -196,7 +196,8 @@ class ReductionJob(object):
         """Prepare a user provided testcase for reduction.
 
         Args:
-            testcase (str): Path to a testcase. This should be a Grizzly testcase (zip or folder) or html file.
+            testcase (str): Path to a testcase. This should be a Grizzly testcase (zip or folder) or html
+                            file.
 
         Returns:
             None
@@ -250,7 +251,7 @@ class ReductionJob(object):
                 LOG.warning("Using environment included in testcase: %s",
                             os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
                 self.interesting.target.forced_close = \
-                self.interesting.env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
+                    self.interesting.env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
 
             # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
             # them all in order
@@ -285,7 +286,7 @@ class ReductionJob(object):
                 # newer harness uses conditional operator in open() call
                 if re.search(r'open\(.*_reduce_next\(\)\s*:\s*_reduce_next\(\)', harness) is None:
                     raise ReducerError("Unable to insert finish condition, please update pattern "
-                                           "to match harness!")
+                                       "to match harness!")
                 # insert the landing page loop
                 harness = harness.replace("<script>", "\n".join([
                     "<script>",
@@ -437,10 +438,11 @@ class ReductionJob(object):
                     use_result_cache = self.interesting.use_result_cache
                     self.interesting.use_result_cache = False
 
-                    # reset parameters
-                    # use repeat=1 & relaunch=ITERATIONS because this is closer to how we will run post-analysis
-                    # we're only using repeat=1 instead of repeat=ITERATIONS so we can get feedback on every
-                    # call to interesting
+                    # Reset parameters.
+                    # Use repeat=1 & relaunch=ITERATIONS because this is closer to how we will run
+                    #   post-analysis.
+                    # We're only using repeat=1 instead of repeat=ITERATIONS so we can get feedback on every
+                    #   call to interesting.
                     self.interesting.repeat = 1
                     self.interesting.min_crashes = 1
                     self.interesting.target.rl_reset = min(self.original_relaunch, sub.ITERATIONS)
@@ -453,14 +455,16 @@ class ReductionJob(object):
                         self.interesting.target.close()
 
                     if not self.force_no_harness:
-                        LOG.info("Running for %d iterations to assess reliability using harness.", sub.ITERATIONS)
+                        LOG.info("Running for %d iterations to assess reliability using harness.",
+                                 sub.ITERATIONS)
                         for _ in range(sub.ITERATIONS):
                             result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
                             LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
                             if result:
                                 harness_crashes += 1
-                        LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
-                                 100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
+                        LOG.info(
+                            "Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
+                            100.0 * harness_crashes / sub.ITERATIONS, sub.ITERATIONS)
 
                         # close target so new parameters take effect
                         if not self.interesting.target.closed:
@@ -470,7 +474,8 @@ class ReductionJob(object):
                         # try without harness
                         self.interesting.no_harness = True
 
-                        LOG.info("Running for %d iterations to assess reliability without harness.", sub.ITERATIONS)
+                        LOG.info("Running for %d iterations to assess reliability without harness.",
+                                 sub.ITERATIONS)
                         for _ in range(sub.ITERATIONS):
                             result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
                             LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
@@ -492,19 +497,21 @@ class ReductionJob(object):
                     # should we use the harness? go with whichever crashed more
                     self.interesting.no_harness = non_harness_crashes > harness_crashes
                     # this is max 99% to avoid domain errors in the calculation below
-                    crashes_percent = min(1.0 * max(non_harness_crashes, harness_crashes) / sub.ITERATIONS, 0.99)
+                    crashes_percent = \
+                        min(1.0 * max(non_harness_crashes, harness_crashes) / sub.ITERATIONS, 0.99)
 
                     # adjust repeat/min-crashes depending on how reliable the testcase was
                     self.interesting.min_crashes = sub.MIN_CRASHES
-                    self.interesting.repeat = int(math.log(1 - sub.TARGET_PROBABILITY, 1 - crashes_percent) + 0.5) \
-                        * sub.MIN_CRASHES
+                    self.interesting.repeat = \
+                        int(math.log(1 - sub.TARGET_PROBABILITY, 1 - crashes_percent) + 0.5) * sub.MIN_CRASHES
 
                     # set relaunch to min(relaunch, repeat)
                     self.interesting.target.rl_reset = min(self.original_relaunch, self.interesting.repeat)
 
                     LOG.info("Analysis results:")
                     if harness_crashes == sub.ITERATIONS:
-                        LOG.info("* testcase was perfectly reliable with the harness (--no-harness not assessed)")
+                        LOG.info("* testcase was perfectly reliable with the harness "
+                                 "(--no-harness not assessed)")
                     elif harness_crashes == non_harness_crashes:
                         LOG.info("* testcase was equally reliable with/without the harness")
                     elif self.force_no_harness:
@@ -513,7 +520,8 @@ class ReductionJob(object):
                         LOG.info("* testcase was %s reliable with the harness",
                                  "less" if self.interesting.no_harness else "more")
                     LOG.info("* adjusted parameters: --min-crashes=%d --repeat=%d --relaunch=%d",
-                             self.interesting.min_crashes, self.interesting.repeat, self.interesting.target.rl_reset)
+                             self.interesting.min_crashes, self.interesting.repeat,
+                             self.interesting.target.rl_reset)
 
                     return 0
 
@@ -524,7 +532,8 @@ class ReductionJob(object):
 
                 def on_success(sub):  # pylint: disable=no-self-argument
                     super(AnalyzeTestcase, sub).on_success()
-                    raise StopIteration()  # only run this strategy once, not once per reducible file in the testcase
+                    # only run this strategy once, not once per reducible file in the testcase
+                    raise StopIteration()
 
             class MinimizeCacheIterHarness(strategies_module.MinimizeLines):
 
@@ -783,6 +792,7 @@ def main(args, interesting_cb=None, result_cb=None):
         # setup interesting callback if requested
         if interesting_cb is not None:
             orig_interesting_cb = job.interesting.interesting_cb
+
             def _on_interesting(*args, **kwds):
                 if orig_interesting_cb is not None:
                     orig_interesting_cb(*args, **kwds)

@@ -9,7 +9,7 @@ from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs
 from grizzly.reduce import reduce, crash, bucket, ReductionJob
 from grizzly import reporter
 from .test_common import BaseFakeReporter
-from .test_reduce import job, FakeInteresting, FakeTarget  # noqa pylint: disable=unused-import
+from .test_reduce import FakeInteresting, FakeTarget
 
 
 def test_parse_args(capsys, tmp_path):
@@ -150,9 +150,11 @@ def test_main_strategies(job, monkeypatch, tmp_path):  # noqa pylint: disable=re
     report_data = {"num_reports": 0}
 
     class FakeReporter(BaseFakeReporter):
+
         def __init__(self, *args, **kwds):
             super(FakeReporter, self).__init__(*args, **kwds)
             self.report_path = "foo"
+
         def _submit(self, _report, test_cases):
             assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
             tc = test_cases[0]
@@ -239,12 +241,16 @@ def test_crash_main_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=r
         serverPort = 8000
 
         def get(self, _url, **kwds):
+
             class response(object):
+
                 class headers(object):
+
                     @staticmethod
                     def get(value, default):
                         assert value.lower() == 'content-disposition'
                         return 'attachment; filename="test.zip"'
+
                 @staticmethod
                 def json():
                     return {
@@ -296,6 +302,7 @@ def test_crash_main_no_repro(job, monkeypatch, tmp_path):  # noqa pylint: disabl
 
         def _reset(self):
             pass
+
         def _submit(self, *_args, **_kwds):
             # make sure _submit() is not called
             assert False
@@ -306,12 +313,16 @@ def test_crash_main_no_repro(job, monkeypatch, tmp_path):  # noqa pylint: disabl
         serverPort = 8000
 
         def get(self, _url, **kwds):
+
             class response(object):
+
                 class headers(object):
+
                     @staticmethod
                     def get(value, default):
                         assert value.lower() == 'content-disposition'
                         return 'attachment; filename="test.zip"'
+
                 @staticmethod
                 def json():
                     return {
@@ -362,6 +373,7 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylin
 
         def _reset(self):
             pass
+
         def _submit(self, *_args, **_kwds):
             # make sure _submit() is not called
             assert False
@@ -372,12 +384,16 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylin
         serverPort = 8000
 
         def get(self, _url, **kwds):
+
             class response(object):
+
                 class headers(object):
+
                     @staticmethod
                     def get(value, default):
                         assert value.lower() == 'content-disposition'
                         return 'attachment; filename="test.zip"'
+
                 @staticmethod
                 def json():
                     return {
