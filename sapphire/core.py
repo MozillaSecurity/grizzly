@@ -1,4 +1,7 @@
-#!/usr/bin/env python
+# coding=utf-8
+"""
+Sapphire HTTP server
+"""
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -9,10 +12,10 @@ import errno
 import logging
 import mimetypes
 import os
-try: # py 2-3 compatibility
-    from Queue import Queue, Empty as QueueEmpty
+try:  # py 2-3 compatibility
+    from Queue import Queue
 except ImportError:
-    from queue import Queue, Empty as QueueEmpty
+    from queue import Queue
 import random
 import re
 import socket
@@ -24,7 +27,7 @@ import traceback
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-log = logging.getLogger("sapphire") # pylint: disable=invalid-name
+LOG = logging.getLogger("sapphire")  # pylint: disable=invalid-name
 
 # status codes
 SERVED_ALL = 0      # all expected requests for required files have been received
@@ -73,7 +76,6 @@ class ServeJob(object):
         self.worker_complete = threading.Event()
         self._build_queue(optional_files)
 
-
     def _build_queue(self, optional_files):
         # build file list to track files that must be served
         # this is intended to only be called once by __init__()
@@ -81,23 +83,22 @@ class ServeJob(object):
             for f_name in filenames:
                 # do not add optional files to queue of required files
                 if optional_files and f_name in optional_files:
-                    log.debug("optional: %r", f_name)
+                    LOG.debug("optional: %r", f_name)
                     continue
                 file_path = os.path.abspath(os.path.join(d_name, f_name))
                 self._pending.files.add(file_path)
-                log.debug("required: %r", f_name)
+                LOG.debug("required: %r", f_name)
 
         for redirect, resource in self.url_map.redirect.items():
             if resource.required:
                 self._pending.files.add(redirect)
-            log.debug(
+            LOG.debug(
                 "%s: %r -> %r",
                 "required" if resource.required else "optional",
                 redirect,
                 resource.target)
         self.initial_queue_size = len(self._pending.files)
-        log.debug("sapphire has %d files required to serve", self.initial_queue_size)
-
+        LOG.debug("sapphire has %d files required to serve", self.initial_queue_size)
 
     def check_request(self, request):
         if "?" in request:
@@ -127,44 +128,40 @@ class ServeJob(object):
                 inc_path = split_req[0]
                 target_path = split_req[1:]
 
-                log.debug("looking up %r in include map", inc_path)
+                LOG.debug("looking up %r in include map", inc_path)
                 if inc_path in self.url_map.include:
                     return Resource(
                         self.URL_INCLUDE,
                         "/".join([self.url_map.include[inc_path].target] + target_path),
                         mime=self.url_map.include[inc_path].mime,
                         required=self.url_map.include[inc_path].required)
-                log.debug("include map does not contain %r", inc_path)
+                LOG.debug("include map does not contain %r", inc_path)
                 last_split += 1
 
             # check if this is a nested directory in a directory mounted at '/'
-            log.debug("checking include map at '/'")
+            LOG.debug("checking include map at '/'")
             if "" in self.url_map.include:
                 return Resource(
                     self.URL_INCLUDE,
                     os.path.join(self.url_map.include[""].target, request.lstrip("/")),
                     mime=self.url_map.include[""].mime,
                     required=self.url_map.include[""].required)
-            log.debug("include map does not contain an entry at '/'")
+            LOG.debug("include map does not contain an entry at '/'")
 
         return None
 
-
     def finish(self):
         self._complete.set()
-
 
     def increment_served(self, target):
         # update list of served files
         with self._served.lock:
             self._served.files[target] += 1
 
-
     def is_complete(self, wait=None):
         if wait is not None:
             return self._complete.wait(wait)
         return self._complete.is_set()
-
 
     def is_forbidden(self, target_file):
         target_file = os.path.abspath(target_file)
@@ -176,11 +173,9 @@ class ServeJob(object):
             return True  # this is NOT a valid include path
         return False  # this is a valid path
 
-
     def pending_files(self):
         with self._pending.lock:
             return len(self._pending.files)
-
 
     def remove_pending(self, file_name):
         # return True when all file have been removed
@@ -188,7 +183,6 @@ class ServeJob(object):
             if self._pending.files:
                 self._pending.files.discard(file_name)
             return not self._pending.files
-
 
     @property
     def status(self):
@@ -211,14 +205,12 @@ class Sapphire(object):
 
     _request = re.compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
 
-
     def __init__(self, allow_remote=False, port=None, timeout=60):
         self._dr_map = dict()
         self._include_map = dict()
         self._redirect_map = dict()
         self._server_timeout = max(timeout, 1) if timeout else None  # minimum 1 second
         self._socket = Sapphire._create_listening_socket(allow_remote, port)
-
 
     @staticmethod
     def _200_header(c_length, c_type):
@@ -228,13 +220,11 @@ class Sapphire(object):
                "Content-Type: %s\r\n" \
                "Connection: close\r\n\r\n" % (c_length, c_type)
 
-
     @staticmethod
     def _307_redirect(redirct_to):
         return "HTTP/1.1 307 Temporary Redirect\r\n" \
                "Location: %s\r\n" \
                "Connection: close\r\n\r\n" % (redirct_to)
-
 
     @staticmethod
     def _4xx_page(code, hdr_msg):
@@ -252,7 +242,6 @@ class Sapphire(object):
                "Content-Length: %d\r\n" \
                "Content-Type: text/html\r\n" \
                "Connection: close\r\n\r\n%s" % (code, hdr_msg, len(content), content)
-
 
     @staticmethod
     def _create_listening_socket(allow_remote, requested_port):
@@ -280,7 +269,6 @@ class Sapphire(object):
             break
         return sock
 
-
     def close(self):
         """
         close()
@@ -289,7 +277,6 @@ class Sapphire(object):
         """
         if self._socket is not None:
             self._socket.close()
-
 
     def get_port(self):
         """
@@ -300,7 +287,6 @@ class Sapphire(object):
 
         return self._socket.getsockname()[1]
 
-
     @staticmethod
     def _handle_request(conn, serv_job):
         finish_job = False  # call finish() on return
@@ -308,7 +294,7 @@ class Sapphire(object):
             # receive all the incoming data
             raw_request = conn.recv(Sapphire.DEFAULT_REQUEST_LIMIT)
             if not raw_request:
-                log.debug("raw_request was empty")
+                LOG.debug("raw_request was empty")
                 serv_job.accepting.set()
                 return
 
@@ -316,17 +302,17 @@ class Sapphire(object):
             if request is None:
                 serv_job.accepting.set()
                 conn.sendall(Sapphire._4xx_page(400, "Bad Request").encode("ascii"))
-                log.debug(
+                LOG.debug(
                     "400 request length %d (%d to go)",
                     len(raw_request),
                     serv_job.pending_files())
                 return
 
             request = request.group("request").decode("ascii")
-            log.debug("check_request(%r)", request)
+            LOG.debug("check_request(%r)", request)
             resource = serv_job.check_request(request)
             if resource is None:
-                log.debug("resource is None")  # 404
+                LOG.debug("resource is None")  # 404
             elif resource.type in (serv_job.URL_FILE, serv_job.URL_INCLUDE):
                 finish_job = serv_job.remove_pending(resource.target)
             elif resource.type == serv_job.URL_REDIRECT:
@@ -335,28 +321,28 @@ class Sapphire(object):
             if not finish_job:
                 serv_job.accepting.set()
             else:
-                log.debug("expecting to finish")
+                LOG.debug("expecting to finish")
 
             if resource is None:
                 conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
-                log.debug("404 %r (%d to go)", request, serv_job.pending_files())
+                LOG.debug("404 %r (%d to go)", request, serv_job.pending_files())
                 return
             if resource.type in (serv_job.URL_FILE, serv_job.URL_INCLUDE):
-                log.debug("target %r", resource.target)
+                LOG.debug("target %r", resource.target)
                 if not os.path.isfile(resource.target):
                     conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
-                    log.debug("404 %r (%d to go)", request, serv_job.pending_files())
+                    LOG.debug("404 %r (%d to go)", request, serv_job.pending_files())
                     return
                 if serv_job.is_forbidden(resource.target):
                     # NOTE: this does info leak if files exist on disk.
                     # We could replace 403 with 404 if it turns out we care but this
                     # is meant to run locally and only be accessible from localhost
                     conn.sendall(Sapphire._4xx_page(403, "Forbidden").encode("ascii"))
-                    log.debug("403 %r (%d to go)", request, serv_job.pending_files())
+                    LOG.debug("403 %r (%d to go)", request, serv_job.pending_files())
                     return
             elif resource.type == serv_job.URL_REDIRECT:
                 conn.sendall(Sapphire._307_redirect(resource.target).encode("ascii"))
-                log.debug(
+                LOG.debug(
                     "307 %r -> %r (%d to go)",
                     request,
                     resource.target,
@@ -365,11 +351,11 @@ class Sapphire(object):
             elif resource.type == serv_job.URL_DYNAMIC:
                 data = resource.target()
                 if not isinstance(data, bytes):
-                    log.debug("dynamic request: %r", request)
+                    LOG.debug("dynamic request: %r", request)
                     raise TypeError("dynamic request callback must return 'bytes'")
                 conn.sendall(Sapphire._200_header(len(data), resource.mime).encode("ascii"))
                 conn.sendall(data)
-                log.debug("200 %r (dynamic request)", request)
+                LOG.debug("200 %r (dynamic request)", request)
                 return
             else:
                 raise RuntimeError("Unknown resource type %r" % resource.type)
@@ -379,19 +365,19 @@ class Sapphire(object):
             c_type = mimetypes.guess_type(resource.target)[0] or "application/octet-stream"
             # serve the file
             data_size = os.stat(resource.target).st_size
-            log.debug("sending file: %s bytes", format(data_size, ","))
+            LOG.debug("sending file: %s bytes", format(data_size, ","))
             with open(resource.target, "rb") as in_fp:
                 conn.sendall(Sapphire._200_header(data_size, c_type).encode("ascii"))
                 offset = 0
                 while offset < data_size:
                     conn.sendall(in_fp.read(Sapphire.DEFAULT_TX_SIZE))
                     offset = in_fp.tell()
-            log.debug("200 %r (%d to go)", resource.target, serv_job.pending_files())
+            LOG.debug("200 %r (%d to go)", resource.target, serv_job.pending_files())
             serv_job.increment_served(resource.target)
 
         except (socket.timeout, socket.error):
             exc_type, exc_obj, exc_tb = sys.exc_info()
-            log.debug("%s: %r (line %d)", exc_type.__name__, exc_obj, exc_tb.tb_lineno)
+            LOG.debug("%s: %r (line %d)", exc_type.__name__, exc_obj, exc_tb.tb_lineno)
             if not finish_job:
                 serv_job.accepting.set()
 
@@ -404,13 +390,12 @@ class Sapphire(object):
                 serv_job.finish()
             serv_job.worker_complete.set()
 
-
     @staticmethod
     def _client_listener(serv_sock, serv_job):
         worker_pool = list()
         pool_size = 0
 
-        log.debug("starting client_listener")
+        LOG.debug("starting client_listener")
         try:
             while not serv_job.is_complete():
                 if not serv_job.accepting.wait(0.05):
@@ -435,7 +420,7 @@ class Sapphire(object):
                 except threading.ThreadError:
                     if w_conn is not None:
                         w_conn.close()
-                    log.warning(
+                    LOG.warning(
                         "ThreadError! pool size: %d, total active threads: %d",
                         pool_size,
                         threading.active_count())
@@ -446,11 +431,11 @@ class Sapphire(object):
 
                 # manage worker pool
                 if pool_size > Sapphire.WORKER_POOL_LIMIT:
-                    log.debug("active pool size: %d, waiting for worker to finish...", pool_size)
+                    LOG.debug("active pool size: %d, waiting for worker to finish...", pool_size)
                     serv_job.worker_complete.wait()
                     serv_job.worker_complete.clear()
                     # remove complete workers
-                    log.debug("trimming worker pool")
+                    LOG.debug("trimming worker pool")
                     # sometimes the thread that triggered the event doesn't quite cleanup in time
                     # so add a retry (10x with a 0.1 second sleep on failure)
                     for _ in range(10, 0, -1):
@@ -465,19 +450,18 @@ class Sapphire(object):
                     else:
                         raise RuntimeError("Failed to trim worker pool!")
                     pool_size = len(worker_pool)
-                    log.debug("trimmed worker pool (size: %d)", pool_size)
+                    LOG.debug("trimmed worker pool (size: %d)", pool_size)
         finally:
-            log.debug("shutting down and cleaning up workers")
+            LOG.debug("shutting down and cleaning up workers")
             deadline = time.time() + Sapphire.SHUTDOWN_DELAY
             for worker in worker_pool:
                 # avoid cutting off connections
                 while worker.thread.is_alive() and time.time() < deadline:
-                    log.debug("delaying shutdown...")
+                    LOG.debug("delaying shutdown...")
                     time.sleep(0.01)
                 worker.conn.close()
             for worker in worker_pool:
                 worker.thread.join()
-
 
     def serve_path(self, path, continue_cb=None, optional_files=None):
         """
@@ -495,7 +479,7 @@ class Sapphire(object):
         files served is a list of the files that were served
         """
 
-        log.debug("serve_path: %s", path)
+        LOG.debug("serve_path: %s", path)
 
         if continue_cb is not None and not callable(continue_cb):
             raise TypeError("continue_cb must be of type 'function'")
@@ -530,7 +514,7 @@ class Sapphire(object):
             try:
                 listener.start()
             except threading.ThreadError:
-                log.warning(
+                LOG.warning(
                     "ThreadError launching listener, active threads: %d",
                     threading.active_count())
                 tries -= 1
@@ -554,7 +538,7 @@ class Sapphire(object):
             # check for exceptions from workers
             if not job.exceptions.empty():
                 exc_type, exc_obj, exc_tb = job.exceptions.get()
-                log.error(
+                LOG.error(
                     "Sapphire worker exception:\n%s",
                     "".join(traceback.format_exception(exc_type, exc_obj, exc_tb)))
                 raise exc_obj  # re-raise exception from worker
@@ -567,8 +551,7 @@ class Sapphire(object):
 
         self._redirect_map.clear()
 
-        return status, job._served.files.keys()
-
+        return status, job._served.files.keys()  # pylint: disable=protected-access
 
     @staticmethod
     def _check_potential_url(url_path):
@@ -577,7 +560,6 @@ class Sapphire(object):
             raise RuntimeError("Invalid character, only alpha-numeric characters accepted.")
         return url_path
 
-
     def add_dynamic_response(self, url, callback, mime_type="application/octet-stream"):
         # check and sanitize url
         url = self._check_potential_url(url)
@@ -585,12 +567,11 @@ class Sapphire(object):
             raise TypeError("callback must be of type 'function'")
         if not isinstance(mime_type, str):
             raise TypeError("mime_type must be of type 'str'")
-        log.debug("mapping dynamic response %r -> %r (%r)", url, callback, mime_type)
+        LOG.debug("mapping dynamic response %r -> %r (%r)", url, callback, mime_type)
         self._dr_map[url] = Resource(
             ServeJob.URL_DYNAMIC,
             callback,
             mime=mime_type)
-
 
     def add_include(self, url, target_path):
         # check and sanitize mount point
@@ -599,11 +580,10 @@ class Sapphire(object):
             raise IOError("Include path not found: %s" % target_path)
         if url in self._include_map:
             raise RuntimeError("%r already mapped to %r" % (url, self._include_map[url]))
-        log.debug("mapping include %r -> %r", url, target_path)
+        LOG.debug("mapping include %r -> %r", url, target_path)
         self._include_map[url] = Resource(
             ServeJob.URL_INCLUDE,
             os.path.abspath(target_path))
-
 
     def set_redirect(self, url, target, required=True):
         # check and sanitize url
@@ -640,18 +620,18 @@ def main():
     serv = None
     try:
         serv = Sapphire(allow_remote=args.remote, port=args.port, timeout=args.timeout)
-        log.info(
+        LOG.info(
             "Serving %r @ http://%s:%d/",
             os.path.abspath(args.path),
             socket.gethostname() if args.remote else "127.0.0.1",
             serv.get_port())
         status = serv.serve_path(args.path)
         if status == SERVED_ALL:
-            log.info("All test case content was served")
+            LOG.info("All test case content was served")
         else:
-            log.warning("Failed to serve all test content")
+            LOG.warning("Failed to serve all test content")
     except KeyboardInterrupt:
-        log.warning("Ctrl+C detected. Shutting down...")
+        LOG.warning("Ctrl+C detected. Shutting down...")
     finally:
         if serv is not None:
             serv.close()
