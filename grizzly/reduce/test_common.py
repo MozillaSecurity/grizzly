@@ -85,6 +85,9 @@ class FakeTarget(object):
     def expect_close(self):
         return self.rl_countdown < 1 and not self.forced_close
 
+    def reverse(self, *_):
+        pass
+
     def step(self):
         self.rl_countdown -= 1
 

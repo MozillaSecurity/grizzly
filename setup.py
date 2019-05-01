@@ -40,6 +40,7 @@ if __name__ == '__main__':
             ],
             'grizzly_targets': [
                 'ffpuppet = grizzly.target.puppet_target:PuppetTarget',
+                'adb = grizzly.target.adb_target:ADBTarget',
             ],
         },
         extras_require=EXTRAS,
