@@ -15,7 +15,7 @@ EXTRAS = {
     's3': ['boto3'],
 }
 EXTRAS['all'] = list(set(itertools.chain.from_iterable(EXTRAS.values())))
-EXTRAS['test'] = ['pytest>=3.9']
+EXTRAS['test'] = ['pytest>=3.9', 'pytest-mock']
 
 
 if __name__ == '__main__':
@@ -36,6 +36,9 @@ if __name__ == '__main__':
         entry_points={
             'console_scripts': [
                 'grizzly = grizzly.core:console_main'
+            ],
+            'grizzly_targets': [
+                'ffpuppet = grizzly.target.puppet_target:PuppetTarget',
             ],
         },
         extras_require=EXTRAS,

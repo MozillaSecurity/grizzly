@@ -105,7 +105,7 @@ class TargetTests(unittest.TestCase):
         "test creating a simple Target"
         os.environ["GRZ_FORCED_CLOSE"] = "0"
         try:
-            target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 25, False, False, False)
+            target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 25)
             self.addCleanup(target.cleanup)
             self.assertTrue(target.closed)
             self.assertFalse(target.forced_close)
@@ -119,7 +119,7 @@ class TargetTests(unittest.TestCase):
     def test_02(self):
         "test creating and launching a simple Target"
         relaunch = 25
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch)
         self.assertTrue(target.forced_close)
         self.addCleanup(target.cleanup)
         target.launch("launch_target_page")
@@ -131,7 +131,7 @@ class TargetTests(unittest.TestCase):
     def test_03(self):
         "test check_relaunch() and step()"
         relaunch = 25
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch)
         self.addCleanup(target.cleanup)
         target.launch("launch_target_page")
         # test skipping relaunch
@@ -158,7 +158,7 @@ class TargetTests(unittest.TestCase):
     def test_04(self):
         "test detect_failure()"
         relaunch = 25
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch)
         self.addCleanup(target.cleanup)
         target.launch("launch_target_page")
         # no failures
@@ -231,7 +231,7 @@ class TargetTests(unittest.TestCase):
         target.cleanup()
         os.environ["GRZ_FORCED_CLOSE"] = "0"
         try:
-            target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 1, False, False, False)
+            target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 1)
             self.addCleanup(target.cleanup)
             target.launch("launch_page")
             target.step()
@@ -251,7 +251,7 @@ class TargetTests(unittest.TestCase):
 
         sig_catcher = SigCatcher()
         signal.signal(signal.SIGUSR1, sig_catcher.signal_handler)
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 10, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 10)
         target.dump_coverage()
         self.assertFalse(sig_catcher.CAUGHT)
         target.launch("launch_page")
@@ -260,7 +260,7 @@ class TargetTests(unittest.TestCase):
 
     def test_06(self):
         "test poll_for_idle()"
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 10, False, False, False)
+        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 10)
         assert target.poll_for_idle(90, 0.2), "the test process should be mostly idle"
         evt = threading.Event()
         def busy_wait():

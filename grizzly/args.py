@@ -7,6 +7,7 @@ import os.path
 import tempfile
 
 from .corpman import adapters
+from .target import available as available_targets
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
 class SortingHelpFormatter(argparse.HelpFormatter):
@@ -28,7 +29,6 @@ class SortingHelpFormatter(argparse.HelpFormatter):
 
 class CommonArgs(object):
     IGNORABLE = ("log-limit", "memory", "timeout")
-    PLATFORMS = ("local",)
 
     def __init__(self):
         self._sanity_skip = set()
@@ -62,8 +62,8 @@ class CommonArgs(object):
             "-m", "--memory", type=int,
             help="Browser process memory limit in MBs (default: 'no limit')")
         self.parser.add_argument(
-            "--platform", default="local",
-            help="Platforms available: %s (default: %%(default)s)" % ", ".join(self.PLATFORMS))
+            "--platform", default="ffpuppet",
+            help="Platforms available: %s (default: %%(default)s)" % ", ".join(available_targets()))
         self.parser.add_argument(
             "-p", "--prefs",
             help="prefs.js file to use")
@@ -121,7 +121,7 @@ class CommonArgs(object):
                 if not os.path.isdir(ext) or (os.path.isfile(ext) and ext.endswith(".xpi")):
                     self.parser.error("Extension must be a folder or .xpi")
 
-        if args.platform.lower() not in self.PLATFORMS:
+        if args.platform.lower() not in set(available_targets()):
             self.parser.error("Unsupported platform %r" % args.platform)
 
         if args.prefs is not None and not os.path.isfile(args.prefs):

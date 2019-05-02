@@ -71,6 +71,7 @@ optional arguments:
                         Browser process memory limit in MBs (default: 'no
                         limit')
   --mime MIME           Specify a mime type
+  --platform PLATFORM   Platforms available: ffpuppet (default: ffpuppet)
   -p PREFS, --prefs PREFS
                         prefs.js file to use
   --relaunch RELAUNCH   Number of iterations performed before relaunching the
@@ -89,3 +90,8 @@ optional arguments:
                         drives. (default: '/tmp')
   --xvfb                Use Xvfb (Linux only)
 ```
+
+Other platforms
+-------
+Other target platforms can be defined as [setuptools entry-points](https://setuptools.readthedocs.io/en/latest/setuptools.html#dynamic-discovery-of-services-and-plugins),
+using the name "grizzly_targets".  Targets must implement `grizzly.target.Target`.
