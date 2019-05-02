@@ -23,18 +23,21 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 class PuppetTarget(Target):
     PUPPET = FFPuppet  # used in unit tests
 
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch,
-                 use_rr, use_valgrind, use_xvfb):
+    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch, **kwds):
         super(PuppetTarget, self).__init__(binary, extension, launch_timeout, log_limit,
                                            memory_limit, prefs, relaunch)
         self.rr_path = None  # TODO: this should be in FFPuppet
-        self.use_rr = use_rr
-        self.use_valgrind = use_valgrind
+        self.use_rr = kwds.pop('rr', False)
+        self.use_valgrind = kwds.pop('valgrind', False)
+        use_xvfb = kwds.pop('xvfb', False)
+
+        if kwds:
+            log.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
 
         # create Puppet object
         self._puppet = self.PUPPET(
             use_rr=self.use_rr,
-            use_valgrind=use_valgrind,
+            use_valgrind=self.use_valgrind,
             use_xvfb=use_xvfb)
 
     def add_abort_token(self, token):

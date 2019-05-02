@@ -32,7 +32,7 @@ from .args import GrizzlyArgs
 from .reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
 from .status import Status
 from .corpman.storage import TestFile
-from .target import PuppetTarget
+from .target import load as load_target
 
 
 __author__ = "Tyson Smith"
@@ -315,18 +315,17 @@ def main(args):
             log.info("Running in FUZZING mode")
 
         log.debug("initializing the Target")
-        if args.platform == "local":
-            target = PuppetTarget(
-                args.binary,
-                args.extension,
-                args.launch_timeout,
-                args.log_limit,
-                args.memory,
-                args.prefs,
-                args.relaunch,
-                args.rr,
-                args.valgrind,
-                args.xvfb)
+        target = load_target(args.platform)(
+            args.binary,
+            args.extension,
+            args.launch_timeout,
+            args.log_limit,
+            args.memory,
+            args.prefs,
+            args.relaunch,
+            rr=args.rr,
+            valgrind=args.valgrind,
+            xvfb=args.xvfb)
         adapter.monitor = target.monitor
         if args.soft_asserts:
             target.add_abort_token("###!!! ASSERTION:")

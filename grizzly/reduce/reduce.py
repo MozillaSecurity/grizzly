@@ -27,7 +27,7 @@ from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..core import Session
 from ..corpman.storage import TestFile, TestCase
 from ..reporter import FilesystemReporter, FuzzManagerReporter, Report
-from ..target import PuppetTarget
+from ..target import load as load_target
 
 
 __author__ = "Jesse Schwartzentruber"
@@ -732,18 +732,17 @@ def main(args, interesting_cb=None, result_cb=None):
     job_cancelled = False
     try:
         LOG.debug("initializing the Target")
-        if args.platform == "local":
-            target = PuppetTarget(
-                args.binary,
-                args.extension,
-                args.launch_timeout,
-                args.log_limit,
-                args.memory,
-                None,  # prefs
-                args.relaunch,
-                False,  # rr
-                args.valgrind,
-                args.xvfb)
+
+        target = load_target(args.platform)(
+            args.binary,
+            args.extension,
+            args.launch_timeout,
+            args.log_limit,
+            args.memory,
+            None,  # prefs
+            args.relaunch,
+            valgrind=args.valgrind,
+            xvfb=args.xvfb)
 
         job = ReductionJob(
             args.ignore,
