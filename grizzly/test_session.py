@@ -35,8 +35,10 @@ def test_session_00(mocker):
     session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
     session.config_server(5)
     session.run()
+    session.close()
 
     fake_iomgr.create_testcase.assert_called_once()
     fake_server.assert_called_once()
     fake_server.return_value.serve_path.assert_called_once()
+    fake_server.return_value.close.assert_called_once()
     fake_target.detect_failure.assert_called_once()
