@@ -51,10 +51,6 @@ class Session(object):
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
     def __init__(self, adapter, coverage, ignore, iomanager, reporter, target):
-        assert adapter is not None
-        assert iomanager is not None
-        assert reporter is not None
-        assert target is not None
         self.adapter = adapter
         self.coverage = coverage
         self.ignore = ignore  # TODO: this should be part of the reporter
@@ -66,10 +62,6 @@ class Session(object):
 
 
     def check_results(self, unserved, was_timeout):
-        assert self.adapter is not None
-        assert self.iomanager is not None
-        assert self.status is not None
-        assert self.target is not None
         # attempt to detect a failure
         failure_detected = self.target.detect_failure(self.ignore, was_timeout)
         if unserved and self.adapter.IGNORE_UNSERVED:
@@ -88,9 +80,7 @@ class Session(object):
 
 
     def config_server(self, iteration_timeout):
-        log.debug("initializing the server")
         assert self.server is None
-        assert self.adapter is not None, "adapter must be configured first"
         log.debug("starting sapphire server")
         # have client error pages (code 4XX) call window.close() after a few seconds
         sapphire.Sapphire.CLOSE_CLIENT_ERROR = 1
@@ -118,6 +108,7 @@ class Session(object):
 
 
     def generate_testcase(self, dump_path):
+        log.debug("calling iomanager.create_testcase()")
         test = self.iomanager.create_testcase(self.adapter.NAME, rotation_period=self.adapter.ROTATION_PERIOD)
         log.debug("calling self.adapter.generate()")
         self.adapter.generate(test, self.iomanager.active_input, self.iomanager.server_map)
@@ -132,8 +123,6 @@ class Session(object):
 
 
     def launch_target(self):
-        assert self.status is not None
-        assert self.target is not None
         assert self.target.closed
         launch_timeouts = 0
         while True:
@@ -158,7 +147,6 @@ class Session(object):
 
     @property
     def location(self):
-        assert self.iomanager is not None
         assert self.server is not None
         location = ["http://127.0.0.1:%d/" % self.server.get_port(), self.iomanager.landing_page()]
         if self.iomanager.harness is not None:
@@ -170,9 +158,6 @@ class Session(object):
 
 
     def report_result(self):
-        assert self.iomanager is not None
-        assert self.reporter is not None
-        assert self.target is not None
         # create working directory for current testcase
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
         self.target.save_logs(result_logs, meta=True)
@@ -186,7 +171,6 @@ class Session(object):
 
     def run(self):
         assert self.server is not None, "server is not configured"
-
         while True:  # main fuzzing loop
             self.status.report()
             self.status.iteration += 1
@@ -195,28 +179,27 @@ class Session(object):
                 self.launch_target()
             self.target.step()
 
-            # print iteration status
-            if self.iomanager.active_input is None:
-                active_file = None
-            else:
-                active_file = self.iomanager.active_input.file_name
-            if not self.adapter.ROTATION_PERIOD:
-                log.info(
-                    "[I%04d-L%02d-R%02d] %s",
-                    self.status.iteration,
-                    self.adapter.size(),
-                    self.status.results,
-                    os.path.basename(active_file))
-            else:
-                if active_file and self.status.test_name != active_file:
-                    self.status.test_name = active_file
-                    log.info("Now fuzzing: %s", os.path.basename(active_file))
-                log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
-
             # create and populate a test case
             wwwdir = tempfile.mkdtemp(prefix="grz_test_", dir=self.iomanager.working_path)
             try:
                 current_test = self.generate_testcase(wwwdir)
+                # print iteration status
+                if self.iomanager.active_input is None:
+                    active_file = None
+                else:
+                    active_file = self.iomanager.active_input.file_name
+                if not self.adapter.ROTATION_PERIOD:
+                    log.info(
+                        "[I%04d-L%02d-R%02d] %s",
+                        self.status.iteration,
+                        self.adapter.size(),
+                        self.status.results,
+                        os.path.basename(active_file))
+                else:
+                    if active_file and self.status.test_name != active_file:
+                        self.status.test_name = active_file
+                        log.info("Now fuzzing: %s", os.path.basename(active_file))
+                    log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
                 # use Sapphire to serve the most recent test case
                 server_status, files_served = self.server.serve_path(
                     wwwdir,
