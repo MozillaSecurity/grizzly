@@ -65,6 +65,28 @@ class Session(object):
         self.target = target
 
 
+    def check_results(self, unserved, was_timeout):
+        assert self.adapter is not None
+        assert self.iomanager is not None
+        assert self.status is not None
+        assert self.target is not None
+        # attempt to detect a failure
+        failure_detected = self.target.detect_failure(self.ignore, was_timeout)
+        if unserved and self.adapter.IGNORE_UNSERVED:
+            # if nothing was served remove most recent
+            # test case from list to help maintain browser/fuzzer sync
+            log.info("Ignoring test case since nothing was served")
+            self.iomanager.tests.pop().cleanup()
+        # handle failure if detected
+        if failure_detected == self.target.RESULT_FAILURE:
+            self.status.results += 1
+            log.info("Result detected")
+            self.report_result()
+        elif failure_detected == self.target.RESULT_IGNORED:
+            self.status.ignored += 1
+            log.info("Ignored (%d)", self.status.ignored)
+
+
     def config_server(self, iteration_timeout):
         log.debug("initializing the server")
         assert self.server is None
@@ -95,7 +117,62 @@ class Session(object):
             self.server.close()
 
 
+    def generate_testcase(self, dump_path):
+        test = self.iomanager.create_testcase(self.adapter.NAME, rotation_period=self.adapter.ROTATION_PERIOD)
+        log.debug("calling self.adapter.generate()")
+        self.adapter.generate(test, self.iomanager.active_input, self.iomanager.server_map)
+        if self.target.prefs is not None:
+            test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
+        # update sapphire redirects from the adapter
+        for redirect in self.iomanager.server_map.redirects:
+            self.server.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
+        # dump test case files to filesystem to be served
+        test.dump(dump_path)
+        return test
+
+
+    def launch_target(self):
+        assert self.status is not None
+        assert self.target is not None
+        assert self.target.closed
+        launch_timeouts = 0
+        while True:
+            try:
+                log.info("Launching target")
+                self.target.launch(self.location)
+            except BrowserTerminatedError:
+                # this result likely has nothing to do with Grizzly
+                self.status.results += 1
+                log.error("Launch error detected")
+                self.report_result()
+                raise
+            except BrowserTimeoutError:
+                launch_timeouts += 1
+                log.warning("Launch timeout detected (attempt #%d)", launch_timeouts)
+                # likely has nothing to do with Grizzly but is seen frequently on machines under a high load
+                # after 3 timeouts in a row something is likely wrong so raise
+                if launch_timeouts < 3:
+                    continue
+                raise
+            break
+
+    @property
+    def location(self):
+        assert self.iomanager is not None
+        assert self.server is not None
+        location = ["http://127.0.0.1:%d/" % self.server.get_port(), self.iomanager.landing_page()]
+        if self.iomanager.harness is not None:
+            location.append("?timeout=%d" % (self.adapter.TEST_DURATION * 1000))
+            location.append("&close_after=%d" % self.target.rl_reset)
+            if not self.target.forced_close:
+                location.append("&forced_close=0")
+        return "".join(location)
+
+
     def report_result(self):
+        assert self.iomanager is not None
+        assert self.reporter is not None
+        assert self.target is not None
         # create working directory for current testcase
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
         self.target.save_logs(result_logs, meta=True)
@@ -109,54 +186,14 @@ class Session(object):
 
     def run(self):
         assert self.server is not None, "server is not configured"
-        # used to track the number of consecutive launch timeouts
-        launch_timeouts = 0
 
         while True:  # main fuzzing loop
             self.status.report()
             self.status.iteration += 1
 
-            # launch the target
             if self.target.closed:
-                self.iomanager.purge_tests()
-                try:
-                    location = (
-                        "http://127.0.0.1:%d/" % self.server.get_port(),
-                        self.iomanager.landing_page(),
-                        "?timeout=%d" % (self.adapter.TEST_DURATION * 1000),
-                        "&close_after=%d" % self.target.rl_reset,
-                        "&forced_close=0" if not self.target.forced_close else "")
-                    log.info("Launching target")
-                    self.target.launch("".join(location))
-                    launch_timeouts = 0
-                except BrowserTerminatedError:
-                    # this result likely has nothing to do with grizzly
-                    self.status.results += 1
-                    log.info("Launch error detected")
-                    self.report_result()
-                    raise
-                except BrowserTimeoutError:
-                    launch_timeouts += 1
-                    log.warning("Launch timeout detected")
-                    # likely has nothing to do with grizzly but is seen frequently
-                    # on machines under a high load
-                    # after 3 timeouts in a row something is likely wrong so raise
-                    if launch_timeouts < 3:
-                        continue
-                    raise
+                self.launch_target()
             self.target.step()
-
-            # generate testcase
-            current_test = self.iomanager.create_testcase(
-                self.adapter.NAME,
-                rotation_period=self.adapter.ROTATION_PERIOD)
-            log.debug("calling self.adapter.generate()")
-            self.adapter.generate(current_test, self.iomanager.active_input, self.iomanager.server_map)
-            if self.target.prefs is not None:
-                current_test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
-            # update sapphire redirects from the adapter
-            for redirect in self.iomanager.server_map.redirects:
-                self.server.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
 
             # print iteration status
             if self.iomanager.active_input is None:
@@ -176,13 +213,10 @@ class Session(object):
                     log.info("Now fuzzing: %s", os.path.basename(active_file))
                 log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
+            # create and populate a test case
+            wwwdir = tempfile.mkdtemp(prefix="grz_test_", dir=self.iomanager.working_path)
             try:
-                # create working directory for current test case
-                wwwdir = tempfile.mkdtemp(
-                    prefix="grz_test_",
-                    dir=self.iomanager.working_path)
-                # dump test case files to filesystem to be served
-                current_test.dump(wwwdir)
+                current_test = self.generate_testcase(wwwdir)
                 # use Sapphire to serve the most recent test case
                 server_status, files_served = self.server.serve_path(
                     wwwdir,
@@ -192,7 +226,6 @@ class Session(object):
                 # remove test case working directory
                 if os.path.isdir(wwwdir):
                     shutil.rmtree(wwwdir)
-
             if server_status == sapphire.SERVED_TIMEOUT:
                 log.debug("calling self.adapter.on_timeout()")
                 self.adapter.on_timeout(current_test, files_served)
@@ -200,25 +233,8 @@ class Session(object):
                 log.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, files_served)
 
-            # attempt to detect a failure
-            failure_detected = self.target.detect_failure(
-                self.ignore,
-                server_status == sapphire.SERVED_TIMEOUT)
-
-            if not files_served and self.adapter.IGNORE_UNSERVED:
-                # if nothing was served remove most recent
-                # test case from list to help maintain browser/fuzzer sync
-                log.info("Ignoring test case since nothing was served")
-                self.iomanager.tests.pop().cleanup()
-
-            # handle failure if detected
-            if failure_detected == self.target.RESULT_FAILURE:
-                self.status.results += 1
-                log.info("Result detected")
-                self.report_result()
-            elif failure_detected == self.target.RESULT_IGNORED:
-                self.status.ignored += 1
-                log.info("Ignored (%d)", self.status.ignored)
+            # check for results and report as necessary
+            self.check_results(not files_served, server_status == sapphire.SERVED_TIMEOUT)
 
             # warn about large browser logs
             self.status.log_size = self.target.log_size()
