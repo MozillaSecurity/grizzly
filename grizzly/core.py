@@ -108,6 +108,7 @@ class Session(object):
 
 
     def generate_testcase(self, dump_path):
+        assert self.server is not None
         log.debug("calling iomanager.create_testcase()")
         test = self.iomanager.create_testcase(self.adapter.NAME, rotation_period=self.adapter.ROTATION_PERIOD)
         log.debug("calling self.adapter.generate()")
