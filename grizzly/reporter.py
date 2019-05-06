@@ -142,7 +142,7 @@ class Report(object):
         # stack-overflow, BUS, failed to allocate, detected memory leaks
         interesting_sanitizer_tokens = (
             "use-after-", "-buffer-overflow on", ": SEGV on ", "access-violation on ",
-            "negative-size-param", "attempting free on ", "memcpy-param-overlap")
+            "negative-size-param", "attempting free on ", "-param-overlap")
 
         # look for sanitizer (ASan, UBSan, etc...) logs
         for fname in (log_file for log_file in log_files if "asan" in log_file):
