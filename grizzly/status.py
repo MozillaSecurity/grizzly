@@ -3,6 +3,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Merge multiple Grizzly status reports into one report."""
 
 import argparse
 import datetime
@@ -11,19 +12,16 @@ import os
 import re
 import sys
 import time
+import traceback
 
-try:
-    import psutil
-except ImportError:
-    psutil = None
+import psutil
 
 __all__ = ("Status",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 class Status(object):
-    """
-    Status holds status information for the grizzly session.
+    """Status holds status information for the Grizzly session.
     """
     FILE_PREFIX = "grz_status_"
     FILE_EXT = ".json"
@@ -45,11 +43,27 @@ class Status(object):
             self.report_path = "%s%d%s" % (self.FILE_PREFIX, os.getpid(), self.FILE_EXT)
 
     def cleanup(self):
+        """Remove files that are no longer needed.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         if os.path.isfile(self.report_path):
             os.remove(self.report_path)
 
     @classmethod
     def load(cls, fname):
+        """Read Grizzly status report.
+
+        Args:
+            fname (str): JSON file to load Grizzly status from.
+
+        Returns:
+            None
+        """
         if not os.path.isfile(fname):
             return None
         try:
@@ -68,11 +82,20 @@ class Status(object):
         return report
 
     def report(self, report_freq=None):
+        """Write Grizzly status report. Reports are only written when the duration
+        of time since the previous report was created exceeds `report_freq` seconds
+
+        Args:
+            report_freq (int): Minimum number of seconds between writes.
+
+        Returns:
+            None
+        """
         if self._start_time is None:
             # don't report data loaded from disk
             return
         if report_freq is None:
-            report_freq = Status.REPORT_FREQ
+            report_freq = self.REPORT_FREQ
         now = time.time()
         if now < (self._last_report + report_freq):
             return
@@ -89,34 +112,63 @@ class Status(object):
 
 
 class StatusReporter(object):
-    REPORT_PATTERN = re.compile(r"%s\d+%s" % (Status.FILE_PREFIX, Status.FILE_EXT))
+    """Read and merge Grizzly status reports, including tracebacks if found.
+    Output is a single textual report, e.g. for submission to EC2SpotManager.
+    """
     AGE_LIMIT = 600  # 10 minutes
-
-    CPU_INTERVAL = 1
+    CPU_POLL_INTERVAL = 1
     DISPLAY_LIMIT_LOG = 10  # don't include log results unless size exceeds 10MBs
     READ_BUF_SIZE = 0x10000  # 64KB
-    REPORT_LIMIT = 4095  # maximum output size of the report in bytes
+    REPORT_PATTERN = re.compile(r"%s\d+%s" % (Status.FILE_PREFIX, Status.FILE_EXT))
 
     def __init__(self):
-        self.path = None
         self.reports = None
+        self.tracebacks = None
 
     def dump_specific(self, filename):
+        """Write out merged reports.
+
+        Args:
+            filename (str): Path where output should be written.
+
+        Returns:
+            None
+        """
         with open(filename, "w") as ofp:
             ofp.write(self._specific())
 
     def dump_summary(self, filename, runtime=False, sysinfo=True, timestamp=True):
+        """Write out summary merged reports.
+
+        Args:
+            filename (str): Path where output should be written.
+            runtime (bool): Include total runtime in output
+            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output
+            timestamp (bool): Include time stamp in output
+
+        Returns:
+            None
+        """
         with open(filename, "w") as ofp:
             ofp.write(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
-    def load_reports(self, path):
+    def load_reports(self, path, tracebacks=False):
+        """Read Grizzly status reports.
+
+        Args:
+            path (str): Directory containing Grizzly status JSON files.
+
+        Returns:
+            None
+        """
         if not os.path.isdir(path):
+            self.reports = None
             return
-        self.path = path
         self.reports = list()
         for fname in self._scan(path, self.REPORT_PATTERN):
             self.reports.append(Status.load(fname))
-        self.reports.sort(key=lambda x: x.duration, reverse=True)
+        if tracebacks:
+            self._tracebacks(path)
 
     def print_specific(self):
         print(self._specific())
@@ -139,10 +191,23 @@ class StatusReporter(object):
                 yield full_path
 
     def _specific(self):
+        """Merged and generate formatted output of status reports.
+
+        Args:
+            None
+
+        Returns:
+            str: A formatted report
+        """
+        if not self.reports:
+            return "No status reports loaded"
+        exp = time.time() - self.AGE_LIMIT
+        self.reports.sort(key=lambda x: x.duration, reverse=True)
+        self.reports.sort(key=lambda x: x.date < exp)
         txt = list()
         for num, report in enumerate(self.reports, start=1):
             txt.append("#%02d Report %r" % (num, os.path.basename(report.report_path)))
-            if report.date < (time.time() - (Status.REPORT_FREQ + self.AGE_LIMIT)):
+            if report.date < exp:
                 txt.append(" (EXPIRED)\n")
                 continue
             txt.append(" (%s)\n" % str(datetime.timedelta(seconds=int(report.duration))))
@@ -153,17 +218,28 @@ class StatusReporter(object):
         return "".join(txt)
 
     def _summary(self, runtime=True, sysinfo=False, timestamp=False):
+        """Merge and generate a summary of status reports.
+
+        Args:
+            filename (str): Path where output should be written.
+            runtime (bool): Include total runtime in output
+            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output
+            timestamp (bool): Include time stamp in output
+
+        Returns:
+            str: A summary of merged reports
+        """
+        if not self.reports:
+            return "No status reports loaded"
         exp = time.time() - self.AGE_LIMIT
         reports = tuple(x for x in self.reports if x.date > exp)
-
         # calculate totals
-        ignored = tuple(x.ignored for x in reports)
         iterations = tuple(x.iteration for x in reports)
         log_sizes = tuple(x.log_size for x in reports)
         rates = tuple(x.rate for x in reports)
         results = tuple(x.results for x in reports)
-
         count = len(reports)
+        total_ignored = sum(x.ignored for x in reports)
         total_iters = sum(iterations)
 
         txt = list()
@@ -179,8 +255,7 @@ class StatusReporter(object):
         txt.append("\n")
         # Results and ignored
         txt.append("   Results : %d" % sum(results))
-        if ignored:
-            total_ignored = sum(ignored)
+        if total_ignored:
             ignore_pct = (total_ignored/float(total_iters)) * 100
             txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, ignore_pct))
         # Runtime
@@ -197,35 +272,149 @@ class StatusReporter(object):
                 txt.append(" (%0.2fMB, %0.2fMB)" % (
                     max(log_sizes)/1048576.0,
                     min(log_sizes)/1048576.0))
-        # dump system info if psutil is available
-        if sysinfo and psutil is not None:
+        if sysinfo:
             txt.append("\n")
-            txt.append("CPU & Load : %d @ %0.1f%%" % (
-                psutil.cpu_count(),
-                psutil.cpu_percent(interval=self.CPU_INTERVAL)))
-            try:
-                txt.append(" %s\n" % str(os.getloadavg()))
-            except AttributeError:
-                txt.append("\n")
-            mem_usage = psutil.virtual_memory()
-            txt.append("    Memory : ")
-            if mem_usage.available < 1073741824:  # < 1GB
-                txt.append("%dMB" % (mem_usage.available/1048576))
-            else:
-                txt.append("%0.1fGB" % (mem_usage.available/1073741824.0))
-            txt.append(" of %0.1fGB free\n" % (mem_usage.total/1073741824.0))
-            disk_usage = psutil.disk_usage("/")
-            txt.append("      Disk : ")
-            if disk_usage.free < 1073741824:  # < 1GB
-                txt.append("%dMB" % (disk_usage.free/1048576))
-            else:
-                txt.append("%0.1fGB" % (disk_usage.free/1073741824.0))
-            txt.append(" of %0.1fGB free" % (disk_usage.total/1073741824.0))
+            txt.append(self._sys_info())
         if timestamp:
             txt.append("\n")
             txt.append(" Timestamp : %s" % (time.strftime("%Y/%m/%d %X %z", time.gmtime())))
+        if self.tracebacks:
+            txt.append("\n\nWARNING Tracebacks detected!")
+            for tbr in self.tracebacks:
+                txt.append("\n")
+                txt.append(str(tbr))
         return "".join(txt)
 
+    @staticmethod
+    def _sys_info():
+        """Collect and format system information.
+
+        Args:
+            None
+
+        Returns:
+            str: System information formatted to match output from _summary()
+        """
+        txt = list()
+        txt.append("CPU & Load : %d @ %0.1f%%" % (
+            psutil.cpu_count(),
+            psutil.cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL)))
+        try:
+            txt.append(" %s\n" % str(os.getloadavg()))
+        except AttributeError:
+            txt.append("\n")
+        mem_usage = psutil.virtual_memory()
+        txt.append("    Memory : ")
+        if mem_usage.available < 1073741824:  # < 1GB
+            txt.append("%dMB" % (mem_usage.available/1048576))
+        else:
+            txt.append("%0.1fGB" % (mem_usage.available/1073741824.0))
+        txt.append(" of %0.1fGB free\n" % (mem_usage.total/1073741824.0))
+        disk_usage = psutil.disk_usage("/")
+        txt.append("      Disk : ")
+        if disk_usage.free < 1073741824:  # < 1GB
+            txt.append("%dMB" % (disk_usage.free/1048576))
+        else:
+            txt.append("%0.1fGB" % (disk_usage.free/1073741824.0))
+        txt.append(" of %0.1fGB free" % (disk_usage.total/1073741824.0))
+        return "".join(txt)
+
+    def _tracebacks(self, path, ignore_kbi=True, max_preceeding=5):
+        """Search screen logs for tracebacks.
+
+        Args:
+            path (str): Directory containing log files.
+            ignore_kbi (bool): Do not include KeyboardInterupts in results
+            max_preceeding (int): Maximum number of lines preceding traceback to include.
+
+        Returns:
+            None
+        """
+        self.tracebacks = list()
+        for screen_log in self._scan(path, re.compile(r"screenlog\.\d+")):
+            tbr = TracebackReport.from_file(screen_log, max_preceeding=max_preceeding)
+            if tbr is None:
+                continue
+            if ignore_kbi and tbr.is_kbi:
+                continue
+            self.tracebacks.append(tbr)
+
+
+class TracebackReport(object):
+    MAX_LINES = 15
+    READ_LIMIT = 0x10000  # 64KB
+
+    def __init__(self, file_name, lines, is_kbi=False, prev_lines=None):
+        assert isinstance(lines, list)
+        self.file_name = file_name
+        self.lines = lines
+        self.prev_lines = list() if prev_lines is None else prev_lines
+        self.is_kbi = is_kbi
+
+    @classmethod
+    def from_file(cls, input_log, max_preceeding=5):
+        """Create TracebackReport from a text file containing a Python traceback.
+        Only the first traceback in the file will be parsed.
+
+        Args:
+            input_log (str): File to parse.
+            max_preceeding (int): Number of lines to collect leading up to the traceback.
+
+        Returns:
+            TracebackReport: Contains data from input_log.
+        """
+        token_traceback = "Traceback (most recent call last):"
+        try:
+            with open(input_log, "r") as in_fp:
+                for line in iter(in_fp.readline, ""):
+                    if token_traceback in line:
+                        # seek 2KB before tb
+                        in_fp.seek(max(in_fp.tell() - 2048, 0))
+                        data = in_fp.read(cls.READ_LIMIT).splitlines()
+                        break
+                else:
+                    # no traceback here, move along
+                    return None
+        except IOError:
+            # in case the file goes away
+            return None
+
+        is_kbi = False
+        tb_start = None
+        tb_end = None
+        line_count = len(data)
+        for line_num, log_line in enumerate(data):
+            if tb_start is None and token_traceback in log_line:
+                tb_start = line_num
+                continue
+            elif tb_start is not None:
+                log_line = log_line.strip()
+                if not log_line:
+                    # stop at first empty line
+                    tb_end = min(line_num, line_count)
+                    break
+                is_kbi = log_line.startswith("KeyboardInterrupt")
+                if is_kbi or re.match(r"^\w+(\.\w+)*\:\s", log_line) is not None:
+                    # stop after error message
+                    tb_end = min(line_num + 1, line_count)
+                    break
+        assert tb_start is not None
+        if max_preceeding > 0:
+            prev_start = max(tb_start - max_preceeding, 0)
+            prev_lines = data[prev_start:tb_start]
+        else:
+            prev_lines = None
+        if tb_end is None:
+            # limit if the end is not identified (failsafe)
+            tb_end = max(line_count, cls.MAX_LINES)
+        if tb_end - tb_start > cls.MAX_LINES:
+            lines = ["..."] + data[tb_end - cls.MAX_LINES:tb_end]
+        else:
+            lines = data[tb_start:tb_end]
+        return cls(input_log, lines, is_kbi=is_kbi, prev_lines=prev_lines)
+
+    def __str__(self):
+        return "\n".join(["Log: %r" % self.file_name] + self.prev_lines + self.lines)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -238,20 +427,30 @@ def main():
     parser.add_argument(
         "--system-report", action="store_true",
         help="Output summary and system information")
+    parser.add_argument(
+        "--tracebacks", action="store_true",
+        help="Include Python tracebacks found in screenlog.# files")
     args = parser.parse_args()
     if not os.path.isdir(args.path):
         parser.error("Directory %r does not exist" % args.path)
 
     reporter = StatusReporter()
-    reporter.load_reports(args.path)
+    reporter.load_reports(args.path, tracebacks=args.tracebacks)
     if args.dump:
-        reporter.dump_summary(args.dump)
+        try:
+            reporter.dump_summary(args.dump)
+        except Exception:  # pylint: disable=broad-except
+            with open(args.dump, "w") as out_fp:
+                out_fp.write("Something went wrong!\n\n")
+                out_fp.write(traceback.format_exc())
+                out_fp.write("\n")
+            raise
         return 0
     if not reporter.reports:
-        print("No reports to display found in %r" % reporter.path)
+        print("No reports to display found in %r" % args.path)
         return 0
     if not args.system_report:
-        print("Grizzly Status %r\n" % os.path.abspath(reporter.path))
+        print("Grizzly Status %r\n" % os.path.abspath(args.path))
         print("Instances")
         print("---------")
         reporter.print_specific()
