@@ -7,7 +7,7 @@
 
 import re
 
-from .status import Status, StatusReporter, TracebackReport
+from .status import main, Status, StatusReporter, TracebackReport
 
 def test_status_01(tmp_path):
     """test Status report()"""
@@ -75,7 +75,7 @@ def test_status_03(tmp_path):
 
 def test_status_reporter_01(tmp_path):
     """test basic StatusReporter"""
-    st_rpt = StatusReporter()
+    st_rpt = StatusReporter(list())
     out = st_rpt._specific()
     assert "No status reports loaded" in out
     report = tmp_path / "output.txt"
@@ -90,12 +90,12 @@ def test_status_reporter_01(tmp_path):
     st_rpt.print_summary()
 
 def test_status_reporter_02(tmp_path):
-    """test StatusReporter.load_reports()"""
-    st_rpt = StatusReporter()
-    st_rpt.load_reports("no_dir", tracebacks=True)
-    assert st_rpt.reports is None
+    """test StatusReporter.load()"""
+    st_rpt = StatusReporter.load("no_dir", tracebacks=False)
+    assert isinstance(st_rpt.reports, list)
+    assert not st_rpt.reports
     assert st_rpt.tracebacks is None
-    st_rpt.load_reports(str(tmp_path), tracebacks=True)
+    st_rpt = StatusReporter.load(str(tmp_path), tracebacks=True)
     assert isinstance(st_rpt.reports, list)
     assert isinstance(st_rpt.tracebacks, list)
 
@@ -143,10 +143,9 @@ def test_status_reporter_05(tmp_path):
         "Logsize": 0,
         "Rate": 0.1,
         "Results": 0}""")
-    rptr = StatusReporter()
-    assert rptr.reports is None
-    rptr.load_reports(str(tmp_path))
+    rptr = StatusReporter.load(str(tmp_path))
     assert rptr.reports is not None
+    assert len(rptr.reports) == 1
     output = rptr._summary(runtime=False)
     lines = output.split("\n")
     assert lines
@@ -165,7 +164,7 @@ def test_status_reporter_05(tmp_path):
         "Logsize": 86900000,
         "Rate": 0.121,
         "Results": 0}""")
-    rptr.load_reports(str(tmp_path))
+    rptr = StatusReporter.load(str(tmp_path))
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
     lines = output.split("\n")
@@ -193,9 +192,7 @@ def test_status_reporter_06(tmp_path):
         "Logsize": 0,
         "Rate": 0.1,
         "Results": 0}""")
-    rptr = StatusReporter()
-    assert rptr.reports is None
-    rptr.load_reports(str(tmp_path))
+    rptr = StatusReporter.load(str(tmp_path))
     assert rptr.reports is not None
     output = rptr._specific()
     lines = output.split("\n")[:-1]
@@ -221,7 +218,7 @@ def test_status_reporter_06(tmp_path):
         "Logsize": 86900000,
         "Rate": 1.1,
         "Results": 213}""")
-    rptr.load_reports(str(tmp_path))
+    rptr = StatusReporter.load(str(tmp_path))
     assert len(rptr.reports) == 3
     # test expired reports
     for rpt in rptr.reports:
@@ -256,9 +253,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter()
-    assert rptr.tracebacks is None
-    rptr.load_reports(str(tmp_path), tracebacks=True)
+    rptr = StatusReporter.load(str(tmp_path), tracebacks=True)
     assert len(rptr.tracebacks) == 1
     # create second screenlog
     test_log = tmp_path / "screenlog.1234"
@@ -266,7 +261,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"foo.bar.error: blah\n")
-    rptr.load_reports(str(tmp_path), tracebacks=True)
+    rptr = StatusReporter.load(str(tmp_path), tracebacks=True)
     assert len(rptr.tracebacks) == 2
     # create third screenlog
     test_log = tmp_path / "screenlog.3"
@@ -274,7 +269,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"KeyboardInterrupt\n")
-    rptr.load_reports(str(tmp_path), tracebacks=True)
+    rptr = StatusReporter.load(str(tmp_path), tracebacks=True)
     assert len(rptr.tracebacks) == 2
     merged_log = rptr._summary()
     assert len(merged_log.splitlines()) == 14
@@ -390,3 +385,33 @@ def test_traceback_report_05(tmp_path):
     assert len(output.splitlines()) == 17
     assert "..." in output
     assert "func_%d" % (TracebackReport.MAX_LINES * 2 - 1) in output
+
+def test_main_01(tmp_path):
+    """test main() with no reports"""
+    main(["--path", str(tmp_path)])
+
+def test_main_02(tmp_path):
+    """test main() with a report"""
+    report = tmp_path / "grz_status_1.json"
+    report.write_bytes(b"""{
+        "Duration": 0.0,
+        "Ignored": 0,
+        "Iteration": 1,
+        "Logsize": 0,
+        "Rate": 0.1,
+        "Results": 0}""")
+    main(["--path", str(tmp_path)])
+
+def test_main_03(tmp_path):
+    """test main() --dump"""
+    report = tmp_path / "grz_status_1.json"
+    report.write_bytes(b"""{
+        "Duration": 0.0,
+        "Ignored": 0,
+        "Iteration": 1,
+        "Logsize": 0,
+        "Rate": 0.1,
+        "Results": 0}""")
+    dump_file = tmp_path / "output.txt"
+    main(["--path", str(tmp_path), "--dump", str(dump_file)])
+    assert dump_file.is_file()
