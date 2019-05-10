@@ -3,8 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import glob
-import logging
-import json
 import os
 import random
 import shutil
@@ -13,10 +11,8 @@ import sys
 import tempfile
 import unittest
 
-from grizzly.reporter import FilesystemReporter, Reporter, Report
+from .reporter import FilesystemReporter, Reporter, Report
 
-logging.basicConfig(level=logging.DEBUG if bool(os.getenv("DEBUG")) else logging.INFO)
-log = logging.getLogger("grz_report_test")
 
 class TestCase(unittest.TestCase):
 
@@ -282,21 +278,17 @@ class ReporterTests(TestCase):
 
     def test_01(self):
         "test creating a simple Reporter"
-        reporter = Reporter()
-        self.assertEqual(reporter.log_limit, 0)
+        class SimpleReporter(Reporter):
+            def _pre_submit(self, report):
+                pass
+            def _reset(self):
+                pass
+            def _submit(self, report, test_cases):
+                pass
+        reporter = SimpleReporter()
         with self.assertRaisesRegex(IOError, "No such directory 'fake_dir'"):
             reporter.submit("fake_dir", [])
-
-        reporter = Reporter(1024)
-        self.assertEqual(reporter.log_limit, 1024)
         with self.assertRaisesRegex(IOError, "No logs found in"):
-            reporter.submit(self.tmpdir, [])
-
-        test_log = os.path.join(self.tmpdir, "test.log.txt")
-        with open(test_log, "w") as log_fp:
-            log_fp.write("test log...\n123\n\n")
-        reporter = Reporter()
-        with self.assertRaisesRegex(NotImplementedError, "_submit must be implemented in the subclass"):
             reporter.submit(self.tmpdir, [])
 
     def test_02(self):
