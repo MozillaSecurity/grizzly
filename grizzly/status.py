@@ -16,7 +16,7 @@ import traceback
 
 import psutil
 
-__all__ = ("Status",)
+__all__ = ("Status", "StatusReporter")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -121,9 +121,9 @@ class StatusReporter(object):
     READ_BUF_SIZE = 0x10000  # 64KB
     REPORT_PATTERN = re.compile(r"%s\d+%s" % (Status.FILE_PREFIX, Status.FILE_EXT))
 
-    def __init__(self):
-        self.reports = None
-        self.tracebacks = None
+    def __init__(self, reports, tracebacks=None):
+        self.reports = reports
+        self.tracebacks = tracebacks
 
     def dump_specific(self, filename):
         """Write out merged reports.
@@ -152,23 +152,22 @@ class StatusReporter(object):
         with open(filename, "w") as ofp:
             ofp.write(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
-    def load_reports(self, path, tracebacks=False):
-        """Read Grizzly status reports.
+    @classmethod
+    def load(cls, path, tracebacks=False):
+        """Read Grizzly status reports and create a StatusReporter object
 
         Args:
             path (str): Directory containing Grizzly status JSON files.
+            tracebacks (bool): Scan for and include Python tracebacks
 
         Returns:
-            None
+            StatusReporter: Contains status reports and traceback reports that were found
         """
-        if not os.path.isdir(path):
-            self.reports = None
-            return
-        self.reports = list()
-        for fname in self._scan(path, self.REPORT_PATTERN):
-            self.reports.append(Status.load(fname))
-        if tracebacks:
-            self._tracebacks(path)
+        reports = list()
+        for fname in cls._scan(path, cls.REPORT_PATTERN):
+            reports.append(Status.load(fname))
+        tb_reports = cls._tracebacks(path) if tracebacks else None
+        return cls(reports, tb_reports)
 
     def print_specific(self):
         print(self._specific())
@@ -319,7 +318,8 @@ class StatusReporter(object):
         txt.append(" of %0.1fGB free" % (disk_usage.total/1073741824.0))
         return "".join(txt)
 
-    def _tracebacks(self, path, ignore_kbi=True, max_preceeding=5):
+    @staticmethod
+    def _tracebacks(path, ignore_kbi=True, max_preceeding=5):
         """Search screen logs for tracebacks.
 
         Args:
@@ -328,19 +328,23 @@ class StatusReporter(object):
             max_preceeding (int): Maximum number of lines preceding traceback to include.
 
         Returns:
-            None
+            list: A list of TracebackReports
         """
-        self.tracebacks = list()
-        for screen_log in self._scan(path, re.compile(r"screenlog\.\d+")):
+        tracebacks = list()
+        for screen_log in StatusReporter._scan(path, re.compile(r"screenlog\.\d+")):
             tbr = TracebackReport.from_file(screen_log, max_preceeding=max_preceeding)
             if tbr is None:
                 continue
             if ignore_kbi and tbr.is_kbi:
                 continue
-            self.tracebacks.append(tbr)
+            tracebacks.append(tbr)
+        return tracebacks
 
 
 class TracebackReport(object):
+    """Read Python tracebacks from log files and store it in a manner that is helpful
+    when generating reports.
+    """
     MAX_LINES = 15
     READ_LIMIT = 0x10000  # 64KB
 
@@ -416,8 +420,17 @@ class TracebackReport(object):
     def __str__(self):
         return "\n".join(["Log: %r" % self.file_name] + self.prev_lines + self.lines)
 
-def main():
-    parser = argparse.ArgumentParser()
+
+def main(args=None):
+    """Merge Grizzly status files into a single report (main entrypoint).
+
+    Args:
+        args (list/None): Argument list to parse instead of sys.argv (for testing).
+
+    Returns:
+        None
+    """
+    parser = argparse.ArgumentParser(description="Grizzly status report generator")
     parser.add_argument(
         "--dump",
         help="File to write report to")
@@ -430,12 +443,11 @@ def main():
     parser.add_argument(
         "--tracebacks", action="store_true",
         help="Include Python tracebacks found in screenlog.# files")
-    args = parser.parse_args()
+    args = parser.parse_args(args)
     if not os.path.isdir(args.path):
         parser.error("Directory %r does not exist" % args.path)
 
-    reporter = StatusReporter()
-    reporter.load_reports(args.path, tracebacks=args.tracebacks)
+    reporter = StatusReporter.load(args.path, tracebacks=args.tracebacks)
     if args.dump:
         try:
             reporter.dump_summary(args.dump)
