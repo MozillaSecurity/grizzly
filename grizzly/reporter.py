@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import abc
 import json
 import logging
 import os
@@ -12,6 +13,8 @@ import subprocess
 import tempfile
 import time
 import zipfile
+
+import six
 
 # check if required FuzzManager modules are available
 try:
@@ -39,7 +42,6 @@ from .stack_hasher import Stack
 __all__ = ("FilesystemReporter", "FuzzManagerReporter", "S3FuzzManagerReporter")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
-
 
 log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
@@ -117,13 +119,12 @@ class Report(object):
 
     @staticmethod
     def select_logs(log_path):
-        logs = {"aux": None, "stderr": None, "stdout": None}
-
         if not os.path.isdir(log_path):
             raise IOError("log_path does not exist %r" % log_path)
         log_files = os.listdir(log_path)
         if not log_files:
             raise IOError("No logs found in %r" % log_path)
+        logs = {"aux": None, "stderr": None, "stdout": None}
 
         # order by creation date because the oldest log is likely the cause of the issue
         log_files.sort(key=lambda x: os.stat(os.path.join(log_path, x)).st_mtime)
@@ -223,32 +224,19 @@ class Report(object):
         shutil.move(out_file, in_file)
 
 
+@six.add_metaclass(abc.ABCMeta)
 class Reporter(object):
-    def __init__(self, log_limit=0):
-        self.log_limit = max(log_limit, 0)  # maximum log file size
+    @abc.abstractmethod
+    def _pre_submit(self, report):
+        pass
 
-
-    # TODO: untangle '_process_rr_trace()' mess
-    def _process_rr_trace(self, report):
-        trace_dir = os.path.join(report.path, "rr-trace")
-        if os.path.isdir(trace_dir):
-            log.debug("calling: rr pack %s", trace_dir)
-            subprocess.check_output(["rr", "pack", trace_dir])
-            log.debug("calling: tar cf rr.tar %s", trace_dir)
-            rr_tar = os.path.join(report.path, "rr.tar.xz")
-            subprocess.check_call(["tar", "-C", trace_dir, "-caf", rr_tar, "."])
-            os.unlink(trace_dir)
-            return rr_tar
-        return None
-
-
+    @abc.abstractmethod
     def _reset(self):
-        raise NotImplementedError("_reset not implemented in the subclass")
+        pass
 
-
+    @abc.abstractmethod
     def _submit(self, report, test_cases):
-        raise NotImplementedError("_submit must be implemented in the subclass")
-
+        pass
 
     def submit(self, log_path, test_cases):
         """
@@ -265,11 +253,10 @@ class Reporter(object):
         @rtype: None
         @return: None
         """
-
         if not os.path.isdir(log_path):
             raise IOError("No such directory %r" % log_path)
-        report = Report.from_path(log_path, self.log_limit)
-        self._process_rr_trace(report)
+        report = Report.from_path(log_path)
+        self._pre_submit(report)
         self._submit(report, test_cases)
         if report is not None:
             report.cleanup()
@@ -277,14 +264,27 @@ class Reporter(object):
 
 
 class FilesystemReporter(Reporter):
-    def __init__(self, log_limit=0, report_path=None):
-        Reporter.__init__(self, log_limit)
+    def __init__(self, report_path=None):
         self.report_path = os.path.join(os.getcwd(), "results") if report_path is None else report_path
 
+    def _pre_submit(self, report):
+        self.compress_rr_trace(os.path.join(report.path, "rr-trace"), report.path)
+
+    @staticmethod
+    def compress_rr_trace(path, dest, rm_path=False):
+        if not os.path.isdir(path):
+            return None
+        log.debug("calling: rr pack %s", path)
+        subprocess.check_output(["rr", "pack", path])
+        log.debug("calling: tar cf rr.tar %s", path)
+        rr_tar = os.path.join(dest, "rr.tar.xz")
+        subprocess.check_call(["tar", "-C", path, "-caf", rr_tar, dest])
+        if rm_path:
+            shutil.rmtree(path)
+        return rr_tar
 
     def _reset(self):
         pass
-
 
     def _submit(self, report, test_cases):
         # create major bucket directory in working directory if needed
@@ -323,7 +323,6 @@ class FuzzManagerReporter(Reporter):
     QUAL_REDUCER_ERROR = 9  # reducer error
     QUAL_NOT_REPRODUCIBLE = 10  # could not reproduce the testcase
 
-
     def __init__(self, target_binary, log_limit=0, tool=None):
         Reporter.__init__(self, log_limit)
         self._extra_metadata = {}
@@ -331,7 +330,6 @@ class FuzzManagerReporter(Reporter):
         self.quality = self.QUAL_UNREDUCED
         self.target_binary = target_binary
         self.tool = tool  # optional tool name
-
 
     @staticmethod
     def create_crash_info(report, target_binary):
@@ -349,10 +347,8 @@ class FuzzManagerReporter(Reporter):
                 ProgramConfiguration.fromBinary(target_binary),
                 auxCrashData=aux_data)
 
-
     def _reset(self):
         self._extra_metadata = {}
-
 
     @classmethod
     def sanity_check(cls, bin_file):
@@ -364,14 +360,12 @@ class FuzzManagerReporter(Reporter):
             raise IOError("Missing: %s" % "".join([bin_file, ".fuzzmanagerconf"]))
         ProgramConfiguration.fromBinary(bin_file)
 
-
     @classmethod
     def quality_name(cls, value):
         for name in dir(cls):
             if name.startswith("QUAL_") and getattr(cls, name) == value:
                 return name
         return "unknown quality (%r)" % (value,)
-
 
     @staticmethod
     def signature_max_frames(crash_info, suggested_frames=8):
@@ -383,6 +377,8 @@ class FuzzManagerReporter(Reporter):
             suggested_frames += 6
         return suggested_frames
 
+    def _pre_submit(self, report):
+        self._process_rr_trace(report)
 
     def _process_rr_trace(self, report):
         # don't report large files to FuzzManager
@@ -390,8 +386,6 @@ class FuzzManagerReporter(Reporter):
         if os.path.isdir(trace_dir):
             self._extra_metadata["rr-trace"] = "ignored"
             os.unlink(trace_dir)
-        return None
-
 
     @staticmethod
     def _ignored(report):
@@ -410,7 +404,6 @@ class FuzzManagerReporter(Reporter):
             # ignore Valgrind crashes
             return True
         return False
-
 
     def _submit(self, report, test_cases):
         # prepare data for submission as CrashInfo
@@ -511,45 +504,45 @@ class FuzzManagerReporter(Reporter):
 
 
 class S3FuzzManagerReporter(FuzzManagerReporter):
-    S3_BUCKET = "grizzly.fuzzing.mozilla.org"
+    def _pre_submit(self, report):
+        self._process_rr_trace(report)
 
     def _process_rr_trace(self, report):
         trace_dir = os.path.join(report.path, "rr-trace")
-        if os.path.isdir(trace_dir):
-            # check for existing minor hash in S3
-            s3 = boto3.resource("s3")
-
-            s3_key = "rr-%s.tar.xz" % (report.minor,)
-            s3_url = "http://%s.s3.amazonaws.com/%s" % (self.S3_BUCKET, s3_key)
-            try:
-                s3.Object(self.S3_BUCKET, s3_key).load()  # HEAD, doesn't fetch the whole object
-            except botocore.exceptions.ClientError as exc:
-                if exc.response["Error"]["Code"] == "404":
-                    # The object does not exist.
-                    pass
-                else:
-                    # Something else has gone wrong.
-                    raise
+        if not os.path.isdir(trace_dir):
+            return None
+        s3_bucket = os.environ.get("GRZ_S3_BUCKET")
+        # check for existing minor hash in S3
+        s3 = boto3.resource("s3")
+        s3_key = "rr-%s.tar.xz" % (report.minor,)
+        s3_url = "http://%s.s3.amazonaws.com/%s" % (s3_bucket, s3_key)
+        try:
+            s3.Object(s3_bucket, s3_key).load()  # HEAD, doesn't fetch the whole object
+        except botocore.exceptions.ClientError as exc:
+            if exc.response["Error"]["Code"] == "404":
+                # The object does not exist.
+                pass
             else:
-                # The object already exists.
-                log.info("RR trace exists at %s", s3_url)
-                self._extra_metadata["rr-trace"] = s3_url
-                os.unlink(trace_dir)
-                return s3_url
-
-            # Upload to S3
-            rr_path = Reporter._process_rr_trace(self, report)
-            s3.meta.client.upload_file(rr_path, self.S3_BUCKET, s3_key, ExtraArgs={"ACL": "public-read"})
+                # Something else has gone wrong.
+                raise
+        else:
+            # The object already exists.
+            log.info("RR trace exists at %s", s3_url)
             self._extra_metadata["rr-trace"] = s3_url
-            os.remove(rr_path)
-            log.info("RR trace uploaded at %s", s3_url)
+            shutil.rmtree(trace_dir)
             return s3_url
 
-        return None
-
+        # Upload to S3
+        rr_path = FilesystemReporter.compress_rr_trace(os.path.join(report.path, "rr-trace"), report.path)
+        s3.meta.client.upload_file(rr_path, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"})
+        self._extra_metadata["rr-trace"] = s3_url
+        log.info("RR trace uploaded at %s", s3_url)
+        return s3_url
 
     @staticmethod
     def sanity_check(bin_file):
+        if os.environ.get("GRZ_S3_BUCKET") is None:
+            raise EnvironmentError("'GRZ_S3_BUCKET' is not set in environment")
         if _boto_import_error is not None:
             raise _boto_import_error  # pylint: disable=raising-bad-type
         FuzzManagerReporter.sanity_check(bin_file)
