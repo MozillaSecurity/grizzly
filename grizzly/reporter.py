@@ -125,11 +125,8 @@ class Report(object):
         if not log_files:
             raise IOError("No logs found in %r" % log_path)
 
-        # order log files by creation date because the oldest log is likely the cause of the issue
-        # log_metadata file name can be found in ffpuppet/puppet_logger.py
-        log_metadata = os.path.join(log_path, "log_metadata.json")
-        if os.path.isfile(log_metadata):
-            log_files = Reporter.meta_sort(log_metadata, log_files)
+        # order by creation date because the oldest log is likely the cause of the issue
+        log_files.sort(key=lambda x: os.stat(os.path.join(log_path, x)).st_mtime)
 
         # pattern to identify the ASan crash triggered when the parent process goes away
         re_e10s_forced = re.compile(r"""
@@ -166,7 +163,7 @@ class Report(object):
             if ": runtime error: " in log_data:
                 logs["aux"] = fname
 
-            # catch all (choose the one with the most info for now)
+            # catch all (choose the one with info for now)
             if logs["aux"] is None and os.stat(os.path.join(log_path, fname)).st_size:
                 logs["aux"] = fname
 
@@ -229,15 +226,6 @@ class Report(object):
 class Reporter(object):
     def __init__(self, log_limit=0):
         self.log_limit = max(log_limit, 0)  # maximum log file size
-
-
-    @staticmethod
-    def meta_sort(meta_file, iterable, sort_property="st_ctime"):
-        with open(meta_file, "r") as json_fp:
-            meta = json.load(json_fp)
-        return sorted(
-            (lfn for lfn in iterable if lfn not in {os.path.basename(meta_file), "rr-trace"}),
-            key=lambda x: meta[x][sort_property])
 
 
     # TODO: untangle '_process_rr_trace()' mess

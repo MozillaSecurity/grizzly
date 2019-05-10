@@ -380,26 +380,3 @@ class ReporterTests(TestCase):
         report_log_dir = report_log_dirs[0]
         self.assertFalse(os.path.islink(os.path.join(report_log_dir, "rr-trace")))
         self.assertTrue(os.path.isfile(os.path.join(report_log_dir, "rr.tar.xz")))
-
-    def test_05(self):
-        "test meta_sort()"
-        meta_file = os.path.join(self.tmpdir, "meta.json")
-        meta_data = {
-            "b": {"st_ctime": 123.123},
-            "c": {"st_ctime": 223.0},
-            "d": {"st_ctime": 323, "blah":None},
-            "a": {"st_ctime": 023.123},
-            os.path.basename(meta_file): {"st_ctime": 0}}
-        with open(meta_file, "w") as json_fp:
-            json.dump(meta_data, json_fp)
-        # verify test setup data
-        unsorted_data = sorted(meta_data.keys(), reverse=True)
-        self.assertEqual(len(unsorted_data), 5)
-        self.assertNotEqual(unsorted_data[0], "a")
-        # verify meta_sort() results
-        sorted_data = Reporter.meta_sort(meta_file, unsorted_data)
-        self.assertEqual(len(sorted_data), 4)
-        self.assertEqual(sorted_data[0], "a")
-        self.assertEqual(sorted_data[1], "b")
-        self.assertEqual(sorted_data[2], "c")
-        self.assertEqual(sorted_data[3], "d")
