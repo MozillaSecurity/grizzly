@@ -6,6 +6,7 @@
 # pylint: disable=protected-access
 
 import re
+import time
 
 from .status import main, Status, StatusReporter, TracebackReport
 
@@ -54,22 +55,24 @@ def test_status_03(tmp_path):
     # create simple report
     status = Status(str(report))
     assert status is not None
+    assert status.timestamp == 0
     status.duration = 10.0
     status.ignored = 1
     status.iteration = 10
     status.log_size = 1
     status.results = 2
     status.report()
+    assert status.timestamp > 0
     assert report.is_file()
     # load simple report
     ld_status = Status.load(str(report))
-    assert ld_status.date is not None
     assert ld_status.duration > 0
     assert ld_status.ignored == status.ignored
     assert ld_status.iteration == status.iteration
     assert ld_status.log_size == status.log_size
     assert ld_status.rate > 0
     assert ld_status.results == status.results
+    assert ld_status.timestamp == status.timestamp
     ld_status.cleanup()
     assert not report.is_file()
 
@@ -142,13 +145,12 @@ def test_status_reporter_05(tmp_path):
         "Iteration": 1,
         "Logsize": 0,
         "Rate": 0.1,
-        "Results": 0}""")
+        "Results": 0,
+        "Timestamp": %0.4f}""" % (time.time(),))
     rptr = StatusReporter.load(str(tmp_path))
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     output = rptr._summary(runtime=False)
-    lines = output.split("\n")
-    assert lines
     assert "Iteration" in output
     assert "Rate" in output
     assert "Results" in output
@@ -156,6 +158,7 @@ def test_status_reporter_05(tmp_path):
     assert "Logs" not in output
     assert "Runtime" not in output
     assert "Timestamp" not in output
+    assert len(output.split("\n")) == 3
     report = tmp_path / "grz_status_9999.json"
     report.write_bytes(b"""{
         "Duration": 66.0,
@@ -163,12 +166,11 @@ def test_status_reporter_05(tmp_path):
         "Iteration": 8,
         "Logsize": 86900000,
         "Rate": 0.121,
-        "Results": 0}""")
+        "Results": 0,
+        "Timestamp": %0.4f}""" % (time.time(),))
     rptr = StatusReporter.load(str(tmp_path))
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
-    lines = output.split("\n")
-    assert lines
     assert "Iteration" in output
     assert "Rate" in output
     assert "Results" in output
@@ -176,10 +178,12 @@ def test_status_reporter_05(tmp_path):
     assert "Logs" in output
     assert "Runtime" in output
     assert "Timestamp" in output
+    lines = output.split("\n")
+    assert len(lines) == 9
     # verify alignment
     position = len(lines[0].split(":")[0])
     for line in lines:
-        assert line[position] == ":"
+        assert re.match(r"\s:\s\S", line[position - 1:])
 
 def test_status_reporter_06(tmp_path):
     """test StatusReporter._specific()"""
@@ -191,7 +195,8 @@ def test_status_reporter_06(tmp_path):
         "Iteration": 1,
         "Logsize": 0,
         "Rate": 0.1,
-        "Results": 0}""")
+        "Results": 0,
+        "Timestamp": %0.4f}""" % (time.time(),))
     rptr = StatusReporter.load(str(tmp_path))
     assert rptr.reports is not None
     output = rptr._specific()
@@ -209,7 +214,8 @@ def test_status_reporter_06(tmp_path):
         "Iteration": 0,
         "Logsize": 0,
         "Rate": 0,
-        "Results": 0}""")
+        "Results": 0,
+        "Timestamp": 0}""")
     report = tmp_path / "grz_status_321.json"
     report.write_bytes(b"""{
         "Duration": 864123.2,
@@ -217,14 +223,10 @@ def test_status_reporter_06(tmp_path):
         "Iteration": 432422,
         "Logsize": 86900000,
         "Rate": 1.1,
-        "Results": 213}""")
+        "Results": 123,
+        "Timestamp": %0.4f}""" % (time.time(),))
     rptr = StatusReporter.load(str(tmp_path))
     assert len(rptr.reports) == 3
-    # test expired reports
-    for rpt in rptr.reports:
-        if rpt.duration == 1234:
-            rpt.date = 0
-            break
     output = rptr._specific()
     lines = output.split("\n")[:-1]
     assert len(lines) == 5
@@ -243,7 +245,8 @@ def test_status_reporter_07(tmp_path):
         "Iteration": 1,
         "Logsize": 0,
         "Rate": 0.1,
-        "Results": 0}""")
+        "Results": 0,
+        "Timestamp": 0}""")
     # create boring screenlog
     test_log = tmp_path / "screenlog.0"
     test_log.write_bytes(b"boring\ntest\n123\n")
@@ -399,7 +402,8 @@ def test_main_02(tmp_path):
         "Iteration": 1,
         "Logsize": 0,
         "Rate": 0.1,
-        "Results": 0}""")
+        "Results": 0,
+        "Timestamp": 0}""")
     main(["--path", str(tmp_path)])
 
 def test_main_03(tmp_path):
@@ -411,7 +415,8 @@ def test_main_03(tmp_path):
         "Iteration": 1,
         "Logsize": 0,
         "Rate": 0.1,
-        "Results": 0}""")
+        "Results": 0,
+        "Timestamp": 0}""")
     dump_file = tmp_path / "output.txt"
     main(["--path", str(tmp_path), "--dump", str(dump_file)])
     assert dump_file.is_file()

@@ -28,7 +28,6 @@ class Status(object):
     REPORT_FREQ = 60
 
     def __init__(self, report_name=None, start_time=True):
-        self.date = None
         self.duration = None
         self.ignored = 0
         self.iteration = 0
@@ -37,7 +36,7 @@ class Status(object):
         self.report_path = report_name
         self.results = 0
         self.test_name = None
-        self._last_report = 0
+        self.timestamp = 0
         self._start_time = time.time() if start_time else None
         if self.report_path is None:
             self.report_path = "%s%d%s" % (self.FILE_PREFIX, os.getpid(), self.FILE_EXT)
@@ -72,16 +71,16 @@ class Status(object):
         except (IOError, ValueError):
             return None
         report = cls(report_name=fname, start_time=False)
-        report.date = os.stat(fname).st_mtime
         report.duration = data["Duration"]
         report.ignored = data["Ignored"]
         report.iteration = data["Iteration"]
         report.log_size = data["Logsize"]
         report.rate = data["Rate"]
         report.results = data["Results"]
+        report.timestamp = data["Timestamp"]
         return report
 
-    def report(self, report_freq=None):
+    def report(self, report_freq=REPORT_FREQ):
         """Write Grizzly status report. Reports are only written when the duration
         of time since the previous report was created exceeds `report_freq` seconds
 
@@ -94,12 +93,10 @@ class Status(object):
         if self._start_time is None:
             # don't report data loaded from disk
             return
-        if report_freq is None:
-            report_freq = self.REPORT_FREQ
         now = time.time()
-        if now < (self._last_report + report_freq):
+        if now < (self.timestamp + report_freq):
             return
-        self._last_report = now
+        self.timestamp = now
         duration = now - self._start_time
         with open(self.report_path, "w") as log_fp:
             json.dump({
@@ -108,7 +105,8 @@ class Status(object):
                 "Iteration": self.iteration,
                 "Logsize": self.log_size,
                 "Rate": (self.iteration/duration) if duration > 0 else 0,
-                "Results": self.results}, log_fp)
+                "Results": self.results,
+                "Timestamp": self.timestamp}, log_fp)
 
 
 class StatusReporter(object):
@@ -202,11 +200,11 @@ class StatusReporter(object):
             return "No status reports loaded"
         exp = time.time() - self.AGE_LIMIT
         self.reports.sort(key=lambda x: x.duration, reverse=True)
-        self.reports.sort(key=lambda x: x.date < exp)
+        self.reports.sort(key=lambda x: x.timestamp < exp)
         txt = list()
         for num, report in enumerate(self.reports, start=1):
             txt.append("#%02d Report %r" % (num, os.path.basename(report.report_path)))
-            if report.date < exp:
+            if report.timestamp < exp:
                 txt.append(" (EXPIRED)\n")
                 continue
             txt.append(" (%s)\n" % str(datetime.timedelta(seconds=int(report.duration))))
@@ -231,7 +229,7 @@ class StatusReporter(object):
         if not self.reports:
             return "No status reports loaded"
         exp = time.time() - self.AGE_LIMIT
-        reports = tuple(x for x in self.reports if x.date > exp)
+        reports = tuple(x for x in self.reports if x.timestamp > exp)
         # calculate totals
         iterations = tuple(x.iteration for x in reports)
         log_sizes = tuple(x.log_size for x in reports)
