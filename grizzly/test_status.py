@@ -11,70 +11,91 @@ import time
 from .status import main, Status, StatusReporter, TracebackReport
 
 def test_status_01(tmp_path):
-    """test Status report()"""
-    status = Status()
-    # fake loading report from file and try to report
-    report = tmp_path / "report.json"
-    status.report_path = str(report)
-    status._start_time = None
-    status.report()
-    assert not report.is_file(), "overwrote file the data was loaded from"
-    # normal operation
-    status._start_time = 0
-    status.report()
-    assert report.is_file()
-    # write report when a previous report exists (update)
-    status._last_report = 0
-    status.report()
-    assert report.is_file()
-    report.unlink()
-    # verify report has not been written because report_freq has not elapsed
-    status.report(report_freq=100)
-    assert not report.is_file()
+    """test Status.start()"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    # create db
+    assert not test_db.is_file()
+    status = Status.start()
+    assert status._id == 1
+    # existing db
+    assert test_db.is_file()
+    status = Status.start()
+    assert status._id == 2
 
 def test_status_02(tmp_path):
-    """test Status cleanup()"""
-    report = tmp_path / "report.json"
-    status = Status(str(report))
+    """test Status.report()"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    # report with empty db
+    Status(123).report()
+    # normal report
+    status = Status.start()
     status.report()
-    assert report.is_file()
-    status.cleanup()
-    assert not report.is_file()
-    # nothing to cleanup
-    status.cleanup()
+    # try to report before REPORT_FREQ elapses
+    status.report()
+    # try to report 'loaded' report
+    status.timestamp = 0
+    status._start_time = None
+    status.report()
 
 def test_status_03(tmp_path):
-    """test Status load()"""
-    # load missing file
-    assert Status.load("no_file.json") is None
-    # load empty file
-    report = tmp_path / "report.json"
-    report.touch()
-    assert Status.load(str(report)) is None
-    report.unlink()
+    """test Status.load()"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    # load no db
+    assert Status.load(1) is None
     # create simple report
-    status = Status(str(report))
+    status = Status.start()
+    assert status._id == 1
+    # invalid uid
+    assert Status.load(1337) is None
+    # load default status report
+    status = Status.load(status._id)
     assert status is not None
-    assert status.timestamp == 0
-    status.duration = 10.0
+    assert status.timestamp > 0
+    status.duration = 0
+    status.ignored = 0
+    status.iteration = 0
+    status.log_size = 0
+    status.results = 0
+
+def test_status_04(tmp_path):
+    """test Status.load() and Status.report()"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = Status.start()
+    status.duration = 10
     status.ignored = 1
-    status.iteration = 10
-    status.log_size = 1
-    status.results = 2
+    status.iteration = 5
+    status.log_size = 2
+    status.results = 3
+    assert status.timestamp == 0
     status.report()
     assert status.timestamp > 0
-    assert report.is_file()
-    # load simple report
-    ld_status = Status.load(str(report))
+    ld_status = Status.load(status._id)
+    assert ld_status._id == status._id
     assert ld_status.duration > 0
     assert ld_status.ignored == status.ignored
     assert ld_status.iteration == status.iteration
     assert ld_status.log_size == status.log_size
     assert ld_status.rate > 0
     assert ld_status.results == status.results
-    assert ld_status.timestamp == status.timestamp
-    ld_status.cleanup()
-    assert not report.is_file()
+    assert ld_status.timestamp == int(status.timestamp)
+
+def test_status_05(tmp_path):
+    """test Status.cleanup()"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    # report with empty db
+    Status(123).cleanup()
+    # normal operation
+    status = Status.start()
+    assert Status.load(status._id) is not None
+    status.cleanup()
+    assert Status.load(status._id) is None
+    # nothing to cleanup
+    status.cleanup()
 
 def test_status_reporter_01(tmp_path):
     """test basic StatusReporter"""
@@ -94,13 +115,18 @@ def test_status_reporter_01(tmp_path):
 
 def test_status_reporter_02(tmp_path):
     """test StatusReporter.load()"""
-    st_rpt = StatusReporter.load("no_dir", tracebacks=False)
-    assert isinstance(st_rpt.reports, list)
-    assert not st_rpt.reports
-    assert st_rpt.tracebacks is None
-    st_rpt = StatusReporter.load(str(tmp_path), tracebacks=True)
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    st_rpt = StatusReporter.load(tb_path="no_dir", db_file=str(test_db))
     assert isinstance(st_rpt.reports, list)
     assert isinstance(st_rpt.tracebacks, list)
+    assert not st_rpt.reports
+    assert not st_rpt.tracebacks
+    st_rpt = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    assert isinstance(st_rpt.reports, list)
+    assert isinstance(st_rpt.tracebacks, list)
+    assert not st_rpt.reports
+    assert not st_rpt.tracebacks
 
 def test_status_reporter_03():
     """test StatusReporter._sys_info()"""
@@ -138,16 +164,17 @@ def test_status_reporter_04(tmp_path):
 def test_status_reporter_05(tmp_path):
     """test StatusReporter._summary()"""
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    report = tmp_path / "grz_status_1.json"
-    report.write_bytes(b"""{
-        "Duration": 0.0,
-        "Ignored": 0,
-        "Iteration": 1,
-        "Logsize": 0,
-        "Rate": 0.1,
-        "Results": 0,
-        "Timestamp": %0.4f}""" % (time.time(),))
-    rptr = StatusReporter.load(str(tmp_path))
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = Status.start()
+    status.duration = 0.0
+    status.ignored = 0
+    status.iteration = 1
+    status.log_size = 0
+    status.rate = 0.1
+    status.results = 0
+    status.report()
+    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     output = rptr._summary(runtime=False)
@@ -159,16 +186,15 @@ def test_status_reporter_05(tmp_path):
     assert "Runtime" not in output
     assert "Timestamp" not in output
     assert len(output.split("\n")) == 3
-    report = tmp_path / "grz_status_9999.json"
-    report.write_bytes(b"""{
-        "Duration": 66.0,
-        "Ignored": 1,
-        "Iteration": 8,
-        "Logsize": 86900000,
-        "Rate": 0.121,
-        "Results": 0,
-        "Timestamp": %0.4f}""" % (time.time(),))
-    rptr = StatusReporter.load(str(tmp_path))
+    status = Status.start()
+    status.duration = 66.0
+    status.ignored = 1
+    status.iteration = 8
+    status.log_size = 86900000
+    status.rate = 0.121
+    status.results = 0
+    status.report()
+    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
     assert "Iteration" in output
@@ -188,16 +214,17 @@ def test_status_reporter_05(tmp_path):
 def test_status_reporter_06(tmp_path):
     """test StatusReporter._specific()"""
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    report = tmp_path / "grz_status_123.json"
-    report.write_bytes(b"""{
-        "Duration": 0.0,
-        "Ignored": 0,
-        "Iteration": 1,
-        "Logsize": 0,
-        "Rate": 0.1,
-        "Results": 0,
-        "Timestamp": %0.4f}""" % (time.time(),))
-    rptr = StatusReporter.load(str(tmp_path))
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = Status.start()
+    status.duration = 0.0
+    status.ignored = 0
+    status.iteration = 1
+    status.log_size = 0
+    status.rate = 0.1
+    status.results = 0
+    status.report()
+    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
     assert rptr.reports is not None
     output = rptr._specific()
     lines = output.split("\n")[:-1]
@@ -207,46 +234,37 @@ def test_status_reporter_06(tmp_path):
     assert "Rate" in output
     assert "Results" in output
     assert "EXPIRED" not in output
-    report = tmp_path / "grz_status_213.json"
-    report.write_bytes(b"""{
-        "Duration": 1234,
-        "Ignored": 0,
-        "Iteration": 0,
-        "Logsize": 0,
-        "Rate": 0,
-        "Results": 0,
-        "Timestamp": 0}""")
-    report = tmp_path / "grz_status_321.json"
-    report.write_bytes(b"""{
-        "Duration": 864123.2,
-        "Ignored": 1,
-        "Iteration": 432422,
-        "Logsize": 86900000,
-        "Rate": 1.1,
-        "Results": 123,
-        "Timestamp": %0.4f}""" % (time.time(),))
-    rptr = StatusReporter.load(str(tmp_path))
-    assert len(rptr.reports) == 3
+    status = Status.start()
+    status.duration = 864123.2
+    status.ignored = 1
+    status.iteration = 432422
+    status.log_size = 86900000
+    status.rate = 1.1
+    status.results = 123
+    status._start_time = time.time() - 68000
+    status.report()
+    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    assert len(rptr.reports) == 2
     output = rptr._specific()
     lines = output.split("\n")[:-1]
-    assert len(lines) == 5
+    assert len(lines) == 4
     assert "Ignored" in output
     assert "Iteration" in output
     assert "Rate" in output
     assert "Results" in output
-    assert "EXPIRED" in output and "EXPIRED" in lines[-1]
 
 def test_status_reporter_07(tmp_path):
     """test StatusReporter.load_reports() with traceback"""
-    report = tmp_path / "grz_status_1.json"
-    report.write_bytes(b"""{
-        "Duration": 0.0,
-        "Ignored": 0,
-        "Iteration": 1,
-        "Logsize": 0,
-        "Rate": 0.1,
-        "Results": 0,
-        "Timestamp": 0}""")
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = Status.start()
+    status.duration = 0.0
+    status.ignored = 0
+    status.iteration = 1
+    status.log_size = 0
+    status.rate = 0.1
+    status.results = 0
+    status.report()
     # create boring screenlog
     test_log = tmp_path / "screenlog.0"
     test_log.write_bytes(b"boring\ntest\n123\n")
@@ -256,7 +274,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(str(tmp_path), tracebacks=True)
+    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
     assert len(rptr.tracebacks) == 1
     # create second screenlog
     test_log = tmp_path / "screenlog.1234"
@@ -264,7 +282,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"foo.bar.error: blah\n")
-    rptr = StatusReporter.load(str(tmp_path), tracebacks=True)
+    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
     assert len(rptr.tracebacks) == 2
     # create third screenlog
     test_log = tmp_path / "screenlog.3"
@@ -272,7 +290,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"KeyboardInterrupt\n")
-    rptr = StatusReporter.load(str(tmp_path), tracebacks=True)
+    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
     assert len(rptr.tracebacks) == 2
     merged_log = rptr._summary()
     assert len(merged_log.splitlines()) == 14
@@ -340,7 +358,7 @@ def test_traceback_report_03(tmp_path):
     assert "screenlog.0" in output
     assert "foo.bar.error" in output
     assert "junk" not in output
-
+    # kbi
     with test_log.open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  File \"foo.py\", line 556, in <module>\n")
@@ -391,32 +409,36 @@ def test_traceback_report_05(tmp_path):
 
 def test_main_01(tmp_path):
     """test main() with no reports"""
-    main(["--path", str(tmp_path)])
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    main([])
 
 def test_main_02(tmp_path):
     """test main() with a report"""
-    report = tmp_path / "grz_status_1.json"
-    report.write_bytes(b"""{
-        "Duration": 0.0,
-        "Ignored": 0,
-        "Iteration": 1,
-        "Logsize": 0,
-        "Rate": 0.1,
-        "Results": 0,
-        "Timestamp": 0}""")
-    main(["--path", str(tmp_path)])
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = Status.start()
+    status.duration = 0.0
+    status.ignored = 0
+    status.iteration = 1
+    status.log_size = 0
+    status.rate = 0.1
+    status.results = 0
+    status.report()
+    main([])
 
 def test_main_03(tmp_path):
     """test main() --dump"""
-    report = tmp_path / "grz_status_1.json"
-    report.write_bytes(b"""{
-        "Duration": 0.0,
-        "Ignored": 0,
-        "Iteration": 1,
-        "Logsize": 0,
-        "Rate": 0.1,
-        "Results": 0,
-        "Timestamp": 0}""")
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = Status.start()
+    status.duration = 0.0
+    status.ignored = 0
+    status.iteration = 1
+    status.log_size = 0
+    status.rate = 0.1
+    status.results = 0
+    status.report()
     dump_file = tmp_path / "output.txt"
-    main(["--path", str(tmp_path), "--dump", str(dump_file)])
+    main(["--dump", str(dump_file)])
     assert dump_file.is_file()
