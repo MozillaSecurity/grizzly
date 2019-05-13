@@ -3,13 +3,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-"""Merge multiple Grizzly status reports into one report."""
+"""Manage Grizzly status reports."""
 
 import argparse
 import datetime
-import json
 import os
 import re
+import sqlite3
 import sys
 import time
 import traceback
@@ -23,26 +23,59 @@ __credits__ = ["Tyson Smith"]
 class Status(object):
     """Status holds status information for the Grizzly session.
     """
-    FILE_PREFIX = "grz_status_"
-    FILE_EXT = ".json"
+    AGE_LIMIT = 3600  # 1 hour
+    DB_FILE = "grz-status.db"
     REPORT_FREQ = 60
 
-    def __init__(self, report_name=None, start_time=True):
+    def __init__(self, uid, start_time=True):
+        assert isinstance(uid, int)
+        self._id = uid
         self.duration = None
         self.ignored = 0
         self.iteration = 0
         self.log_size = 0
         self.rate = None
-        self.report_path = report_name
         self.results = 0
         self.test_name = None
         self.timestamp = 0
         self._start_time = time.time() if start_time else None
-        if self.report_path is None:
-            self.report_path = "%s%d%s" % (self.FILE_PREFIX, os.getpid(), self.FILE_EXT)
+
+    @classmethod
+    def start(cls):
+        """Create a unique Status object.
+
+        Args:
+            None
+
+        Returns:
+            Status: Ready to be used to report Grizzly Status
+        """
+        conn = sqlite3.connect(cls.DB_FILE)
+        try:
+            conn.execute("""CREATE TABLE IF NOT EXISTS status
+                            (id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                             duration   REAL    DEFAULT 0,
+                             ignored    INTEGER DEFAULT 0,
+                             iteration  INTEGER DEFAULT 0,
+                             log_size   INTEGER DEFAULT 0,
+                             rate       REAL    DEFAULT 0,
+                             results    INTEGER DEFAULT 0,
+                             time_stamp INTEGER DEFAULT 0);""")
+            conn.commit()
+            cur = conn.cursor()
+            # remove old reports
+            cur.execute("""DELETE FROM status
+                           WHERE time_stamp < ?;""", (int(time.time()) - cls.AGE_LIMIT,))
+            # create new status entry
+            cur = conn.execute("""INSERT INTO status (time_stamp)
+                                  VALUES (?);""", (int(time.time()),))
+            conn.commit()
+            return cls(cur.lastrowid)
+        finally:
+            conn.close()
 
     def cleanup(self):
-        """Remove files that are no longer needed.
+        """Remove entries that are no longer needed.
 
         Args:
             None
@@ -50,34 +83,48 @@ class Status(object):
         Returns:
             None
         """
-        if os.path.isfile(self.report_path):
-            os.remove(self.report_path)
+        conn = sqlite3.connect(self.DB_FILE)
+        try:
+            cur = conn.cursor()
+            cur.execute("""DELETE FROM status WHERE id = ?;""", (self._id,))
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        finally:
+            conn.close()
 
     @classmethod
-    def load(cls, fname):
+    def load(cls, uid):
         """Read Grizzly status report.
 
         Args:
-            fname (str): JSON file to load Grizzly status from.
+            uid (int): Unique ID of Grizzly status to load.
 
         Returns:
-            None
+            Status: Grizzly Status object or None if uid is unused.
         """
-        if not os.path.isfile(fname):
-            return None
+        assert isinstance(uid, int)
+        conn = sqlite3.connect(cls.DB_FILE)
         try:
-            with open(fname, "r") as in_fp:
-                data = json.load(in_fp)
-        except (IOError, ValueError):
+            cur = conn.cursor()
+            cur.execute("""SELECT duration, ignored, iteration, log_size,
+                                  rate, results, time_stamp
+                           FROM status WHERE id = ?;""", (uid,))
+            row = cur.fetchone()
+        except sqlite3.OperationalError:
             return None
-        report = cls(report_name=fname, start_time=False)
-        report.duration = data["Duration"]
-        report.ignored = data["Ignored"]
-        report.iteration = data["Iteration"]
-        report.log_size = data["Logsize"]
-        report.rate = data["Rate"]
-        report.results = data["Results"]
-        report.timestamp = data["Timestamp"]
+        finally:
+            conn.close()
+        if row is None:
+            return None
+        report = cls(uid, start_time=False)
+        report.duration = float(row[0])
+        report.ignored = int(row[1])
+        report.iteration = int(row[2])
+        report.log_size = int(row[3])
+        report.rate = float(row[4])
+        report.results = int(row[5])
+        report.timestamp = int(row[6])
         return report
 
     def report(self, report_freq=REPORT_FREQ):
@@ -98,26 +145,36 @@ class Status(object):
             return
         self.timestamp = now
         duration = now - self._start_time
-        with open(self.report_path, "w") as log_fp:
-            json.dump({
-                "Duration": duration,
-                "Ignored": self.ignored,
-                "Iteration": self.iteration,
-                "Logsize": self.log_size,
-                "Rate": (self.iteration/duration) if duration > 0 else 0,
-                "Results": self.results,
-                "Timestamp": self.timestamp}, log_fp)
+        conn = sqlite3.connect(self.DB_FILE)
+        try:
+            cur = conn.cursor()
+            cur.execute("""UPDATE status
+                           SET duration = ?,
+                               ignored = ?,
+                               iteration = ?,
+                               log_size = ?,
+                               rate = ?,
+                               results = ?,
+                               time_stamp = ?
+                           WHERE id = ?;""",
+                        (duration, self.ignored, self.iteration, self.log_size,
+                         ((self.iteration/duration) if duration > 0 else 0), self.results,
+                         int(self.timestamp), self._id))
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        finally:
+            conn.close()
 
 
 class StatusReporter(object):
     """Read and merge Grizzly status reports, including tracebacks if found.
     Output is a single textual report, e.g. for submission to EC2SpotManager.
     """
-    AGE_LIMIT = 600  # 10 minutes
     CPU_POLL_INTERVAL = 1
     DISPLAY_LIMIT_LOG = 10  # don't include log results unless size exceeds 10MBs
+    EXP_LIMIT = 600  # expiration limit, ignore older reports
     READ_BUF_SIZE = 0x10000  # 64KB
-    REPORT_PATTERN = re.compile(r"%s\d+%s" % (Status.FILE_PREFIX, Status.FILE_EXT))
 
     def __init__(self, reports, tracebacks=None):
         self.reports = reports
@@ -151,21 +208,31 @@ class StatusReporter(object):
             ofp.write(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
     @classmethod
-    def load(cls, path, tracebacks=False):
+    def load(cls, db_file=Status.DB_FILE, tb_path=None):
         """Read Grizzly status reports and create a StatusReporter object
 
         Args:
-            path (str): Directory containing Grizzly status JSON files.
-            tracebacks (bool): Scan for and include Python tracebacks
+            db_file (str): sqlite database containing Grizzly status info.
+            tb_path (str): Directory to scan for file containing Python tracebacks
 
         Returns:
             StatusReporter: Contains status reports and traceback reports that were found
         """
         reports = list()
-        for fname in cls._scan(path, cls.REPORT_PATTERN):
-            reports.append(Status.load(fname))
-        tb_reports = cls._tracebacks(path) if tracebacks else None
-        return cls(reports, tb_reports)
+        conn = sqlite3.connect(db_file)
+        try:
+            cur = conn.cursor()
+            cur.execute("""SELECT id FROM status;""")
+            for row in cur:
+                status = Status.load(int(row[0]))
+                if status is not None:
+                    reports.append(status)
+        except sqlite3.OperationalError:
+            pass
+        finally:
+            conn.close()
+        tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
+        return cls(reports, tracebacks)
 
     def print_specific(self):
         print(self._specific())
@@ -198,16 +265,16 @@ class StatusReporter(object):
         """
         if not self.reports:
             return "No status reports loaded"
-        exp = time.time() - self.AGE_LIMIT
+        exp = time.time() - self.EXP_LIMIT
         self.reports.sort(key=lambda x: x.duration, reverse=True)
         self.reports.sort(key=lambda x: x.timestamp < exp)
         txt = list()
         for num, report in enumerate(self.reports, start=1):
-            txt.append("#%02d Report %r" % (num, os.path.basename(report.report_path)))
+            txt.append("#%02d" % (num,))
             if report.timestamp < exp:
                 txt.append(" (EXPIRED)\n")
                 continue
-            txt.append(" (%s)\n" % str(datetime.timedelta(seconds=int(report.duration))))
+            txt.append(" Runtime %s\n" % str(datetime.timedelta(seconds=int(report.duration))))
             txt.append(" * Iterations: %03d" % report.iteration)
             txt.append(" - Rate: %0.2f" % report.rate)
             txt.append(" - Ignored: %02d" % report.ignored)
@@ -228,7 +295,7 @@ class StatusReporter(object):
         """
         if not self.reports:
             return "No status reports loaded"
-        exp = time.time() - self.AGE_LIMIT
+        exp = time.time() - self.EXP_LIMIT
         reports = tuple(x for x in self.reports if x.timestamp > exp)
         # calculate totals
         iterations = tuple(x.iteration for x in reports)
@@ -433,19 +500,14 @@ def main(args=None):
         "--dump",
         help="File to write report to")
     parser.add_argument(
-        "--path", default=".",
-        help="Directory to search for status report %r files" % Status.FILE_EXT)
-    parser.add_argument(
         "--system-report", action="store_true",
         help="Output summary and system information")
     parser.add_argument(
-        "--tracebacks", action="store_true",
-        help="Include Python tracebacks found in screenlog.# files")
+        "--tracebacks",
+        help="Scan path for Python tracebacks found in screenlog.# files")
     args = parser.parse_args(args)
-    if not os.path.isdir(args.path):
-        parser.error("Directory %r does not exist" % args.path)
 
-    reporter = StatusReporter.load(args.path, tracebacks=args.tracebacks)
+    reporter = StatusReporter.load(tb_path=args.tracebacks)
     if args.dump:
         try:
             reporter.dump_summary(args.dump)
@@ -457,18 +519,14 @@ def main(args=None):
             raise
         return 0
     if not reporter.reports:
-        print("No reports to display found in %r" % args.path)
+        print("No status Grizzly reports to display")
         return 0
-    if not args.system_report:
-        print("Grizzly Status %r\n" % os.path.abspath(args.path))
-        print("Instances")
-        print("---------")
-        reporter.print_specific()
-        print("Summary")
-        print("-------")
-    reporter.print_summary(
-        sysinfo=args.system_report,
-        timestamp=args.system_report)
+    print("Grizzly Status Report")
+    print("---------------------")
+    reporter.print_specific()
+    print("Summary")
+    print("-------")
+    reporter.print_summary(sysinfo=args.system_report)
     return 0
 
 

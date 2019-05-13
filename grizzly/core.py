@@ -61,7 +61,7 @@ class Session(object):
         self.iomanager = iomanager
         self.reporter = reporter
         self.server = None
-        self.status = Status()
+        self.status = Status.start()
         self.target = target
 
 
