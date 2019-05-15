@@ -18,6 +18,7 @@ def test_status_01(tmp_path):
     assert not test_db.is_file()
     status = Status.start()
     assert status._id == 1
+    assert status._start_time is not None
     # existing db
     assert test_db.is_file()
     status = Status.start()
@@ -38,6 +39,7 @@ def test_status_02(tmp_path):
     status.timestamp = 0
     status._start_time = None
     status.report()
+    assert status.timestamp == 0
 
 def test_status_03(tmp_path):
     """test Status.load()"""
@@ -53,12 +55,13 @@ def test_status_03(tmp_path):
     # load default status report
     status = Status.load(status._id)
     assert status is not None
+    assert status._start_time is None
     assert status.timestamp > 0
-    status.duration = 0
-    status.ignored = 0
-    status.iteration = 0
-    status.log_size = 0
-    status.results = 0
+    assert status.duration == 0
+    assert status.ignored == 0
+    assert status.iteration == 0
+    assert status.log_size == 0
+    assert status.results == 0
 
 def test_status_04(tmp_path):
     """test Status.load() and Status.report()"""
@@ -418,6 +421,8 @@ def test_main_02(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
+    assert status._start_time is not None
+    assert status.timestamp == 0
     status.duration = 0.0
     status.ignored = 0
     status.iteration = 1
@@ -425,6 +430,8 @@ def test_main_02(tmp_path):
     status.rate = 0.1
     status.results = 0
     status.report()
+    assert status.timestamp != 0
+    assert test_db.is_file()
     main([])
 
 def test_main_03(tmp_path):
@@ -439,6 +446,7 @@ def test_main_03(tmp_path):
     status.rate = 0.1
     status.results = 0
     status.report()
+    assert test_db.is_file()
     dump_file = tmp_path / "output.txt"
     main(["--dump", str(dump_file)])
     assert dump_file.is_file()
