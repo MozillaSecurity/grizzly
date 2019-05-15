@@ -7,7 +7,8 @@
 
 import re
 
-from .status_reporter import main, Status, StatusReporter, TracebackReport
+from .status_reporter import main, ReduceStatus, ReduceStatusReporter
+from .status_reporter import Status, StatusReporter, TracebackReport
 
 def test_status_reporter_01(tmp_path):
     """test basic StatusReporter"""
@@ -29,12 +30,12 @@ def test_status_reporter_02(tmp_path):
     """test StatusReporter.load()"""
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
-    st_rpt = StatusReporter.load(tb_path="no_dir", db_file=str(test_db))
+    st_rpt = StatusReporter.load(str(test_db), tb_path="no_dir")
     assert isinstance(st_rpt.reports, list)
     assert isinstance(st_rpt.tracebacks, list)
     assert not st_rpt.reports
     assert not st_rpt.tracebacks
-    st_rpt = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    st_rpt = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
     assert isinstance(st_rpt.reports, list)
     assert isinstance(st_rpt.tracebacks, list)
     assert not st_rpt.reports
@@ -79,12 +80,13 @@ def test_status_reporter_05(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
+    status.timestamp = 0  # force exp
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.results = 0
     status.report()
-    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     output = rptr._summary(runtime=False)
@@ -97,14 +99,14 @@ def test_status_reporter_05(tmp_path):
     assert "Timestamp" not in output
     assert len(output.split("\n")) == 3
     status = Status.start()
+    status.timestamp = 0  # force exp
     status.start_time += 66.0
     status.ignored = 1
     status.iteration = 8
     status.log_size = 86900000
     status.results = 0
-    status.timestamp = 0  # force report exp
     status.report()
-    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
     assert "Iteration" in output
@@ -127,12 +129,13 @@ def test_status_reporter_06(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
+    status.timestamp = 0  # force exp
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.results = 0
     status.report()
-    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    rptr = StatusReporter.load(str(test_db))
     assert rptr.reports is not None
     output = rptr._specific()
     lines = output.split("\n")[:-1]
@@ -143,11 +146,12 @@ def test_status_reporter_06(tmp_path):
     assert "Results" in output
     assert "EXPIRED" not in output
     status = Status.start()
+    status.timestamp = 0  # force exp
     status.ignored = 1
     status.iteration = 432422
     status.results = 123
     status.report()
-    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    rptr = StatusReporter.load(str(test_db))
     assert len(rptr.reports) == 2
     output = rptr._specific()
     lines = output.split("\n")[:-1]
@@ -176,7 +180,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 1
     # create second screenlog
     test_log = tmp_path / "screenlog.1234"
@@ -184,7 +188,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"foo.bar.error: blah\n")
-    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
     # create third screenlog
     test_log = tmp_path / "screenlog.3"
@@ -192,7 +196,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"KeyboardInterrupt\n")
-    rptr = StatusReporter.load(tb_path=str(tmp_path), db_file=str(test_db))
+    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
     merged_log = rptr._summary()
     assert len(merged_log.splitlines()) == 14
@@ -201,6 +205,96 @@ def test_status_reporter_07(tmp_path):
     assert "IndexError" in merged_log
     assert "foo.bar.error" in merged_log
     assert "screenlog.3" not in merged_log
+
+def test_reduce_status_reporter_01(tmp_path):
+    """test empty ReduceStatusReporter"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    rptr = ReduceStatusReporter.load(str(test_db))
+    assert not rptr.reports
+    output = rptr._specific()
+    assert "No status reports loaded" in output
+    output = rptr._summary()
+    assert "No status reports loaded" in output
+
+def test_reduce_status_reporter_02(tmp_path):
+    """test ReduceStatusReporter._specific()"""
+    ReduceStatusReporter.CPU_POLL_INTERVAL = 0.01
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = ReduceStatus.start()
+    status._status.timestamp = 0  # force exp
+    status.iteration = 1
+    status.report()
+    rptr = ReduceStatusReporter.load(str(test_db))
+    assert rptr.reports is not None
+    output = rptr._specific()
+    lines = output.split("\n")[:-1]
+    assert len(lines) == 2
+    assert "Iteration" in output
+    assert "Rate" in output
+    status = ReduceStatus.start()
+    status._status.timestamp = 0  # force exp
+    status.ignored = 12
+    status.iteration = 432422
+    status.results = 123
+    status.report()
+    rptr = ReduceStatusReporter.load(str(test_db))
+    assert len(rptr.reports) == 2
+    output = rptr._specific()
+    lines = output.split("\n")[:-1]
+    assert len(lines) == 4
+    assert "Iteration" in output
+    assert "Rate" in output
+
+def test_reduce_status_reporter_03(tmp_path):
+    """test ReduceStatusReporter._summary()"""
+    ReduceStatusReporter.CPU_POLL_INTERVAL = 0.01
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = ReduceStatus.start()
+    status._status.timestamp = 0  # force exp
+    status.iteration = 1
+    status.report()
+    rptr = ReduceStatusReporter.load(str(test_db))
+    assert rptr.reports is not None
+    assert len(rptr.reports) == 1
+    output = rptr._summary(runtime=False)
+    assert "Iteration" in output
+    assert "Rate" in output
+    #assert "Results" in output
+    #assert "ignored" not in output
+    assert "Runtime" not in output
+    assert "Timestamp" not in output
+    assert len(output.split("\n")) == 5
+    status = ReduceStatus.start()
+    status._status.timestamp = 0  # force exp
+    status.reduce_error = 1
+    status.reduce_fail = 2
+    status.reduce_pass = 10
+    status.ignored = 4
+    status.iteration = 13
+    status.results = 3
+    status._status.start_time += 1234
+    status.report()
+    rptr = ReduceStatusReporter.load(str(test_db))
+    assert len(rptr.reports) == 2
+    output = rptr._summary(sysinfo=True, timestamp=True)
+    assert "Reduced" in output
+    assert "No Repro" in output
+    assert "Error" in output
+    assert "Iteration" in output
+    assert "Rate" in output
+    #assert "Results" in output
+    #assert "ignored" in output
+    assert "Runtime" in output
+    assert "Timestamp" in output
+    lines = output.split("\n")
+    assert len(lines) == 10
+    # verify alignment
+    position = len(lines[0].split(":")[0])
+    for line in lines:
+        assert re.match(r"\s:\s\S", line[position - 1:])
 
 def test_traceback_report_01():
     """test simple TracebackReport"""
@@ -343,3 +437,13 @@ def test_main_03(tmp_path):
     dump_file = tmp_path / "output.txt"
     main(["--dump", str(dump_file)])
     assert dump_file.is_file()
+
+def test_main_04(tmp_path):
+    """test main() with --mode reduce-status"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = ReduceStatus.start()
+    status.iteration = 1
+    status.report()
+    assert test_db.is_file()
+    main(["--mode", "reduce-status"])

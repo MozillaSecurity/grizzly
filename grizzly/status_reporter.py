@@ -17,6 +17,7 @@ import traceback
 import psutil
 
 from .status import Status
+from .reduce import ReduceStatus
 
 __all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"
@@ -73,7 +74,12 @@ class StatusReporter(object):
         Returns:
             StatusReporter: Contains status reports and traceback reports that were found
         """
-        reports = list()
+        reports = list(cls._load(db_file))
+        tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
+        return cls(reports, tracebacks)
+
+    @staticmethod
+    def _load(db_file):
         conn = sqlite3.connect(db_file)
         try:
             cur = conn.cursor()
@@ -81,13 +87,11 @@ class StatusReporter(object):
             for row in cur:
                 status = Status.load(int(row[0]))
                 if status is not None:
-                    reports.append(status)
+                    yield status
         except sqlite3.OperationalError:
             pass
         finally:
             conn.close()
-        tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
-        return cls(reports, tracebacks)
 
     def print_specific(self):
         print(self._specific())
@@ -261,6 +265,121 @@ class StatusReporter(object):
         return tracebacks
 
 
+class ReduceStatusReporter(StatusReporter):
+    @staticmethod
+    def _load(db_file):
+        conn = sqlite3.connect(db_file)
+        try:
+            cur = conn.cursor()
+            cur.execute("""SELECT id FROM reduce_status;""")
+            for row in cur:
+                status = ReduceStatus.load(int(row[0]))
+                if status is not None:
+                    yield status
+        except sqlite3.OperationalError:
+            pass
+        finally:
+            conn.close()
+
+    def _specific(self):
+        """Merged and generate formatted output of status reports.
+
+        Args:
+            None
+
+        Returns:
+            str: A formatted report
+        """
+        if not self.reports:
+            return "No status reports loaded"
+        exp = time.time() - self.EXP_LIMIT
+        self.reports.sort(key=lambda x: x.duration, reverse=True)
+        self.reports.sort(key=lambda x: x.timestamp < exp)
+        txt = list()
+        for num, report in enumerate(self.reports, start=1):
+            txt.append("#%02d" % (num,))
+            if report.timestamp < exp:
+                txt.append(" (EXPIRED)\n")
+                continue
+            txt.append(" Runtime %s\n" % str(datetime.timedelta(seconds=int(report.duration))))
+            txt.append(" * Iterations: %03d" % report.iteration)
+            txt.append(" - Rate: %0.2f" % report.rate)
+            txt.append("\n")
+            #txt.append(" - Ignored: %02d" % report.ignored)
+            #txt.append(" - Results: %d\n" % report.results)
+        return "".join(txt)
+
+    def _summary(self, runtime=True, sysinfo=False, timestamp=False):
+        """Merge and generate a summary of status reports.
+
+        Args:
+            filename (str): Path where output should be written.
+            runtime (bool): Include total runtime in output
+            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output
+            timestamp (bool): Include time stamp in output
+
+        Returns:
+            str: A summary of merged reports
+        """
+        if not self.reports:
+            return "No status reports loaded"
+        exp = time.time() - self.EXP_LIMIT
+        # filter out expired reports
+        reports = tuple(x for x in self.reports if x.timestamp > exp)
+        # calculate totals
+        iterations = tuple(x.iteration for x in reports)
+        rates = tuple(x.rate for x in reports)
+        count = len(reports)
+        total_iters = sum(iterations)
+
+        r_error = tuple(x.reduce_error for x in reports)
+        r_fail = tuple(x.reduce_fail for x in reports)
+        r_pass = tuple(x.reduce_pass for x in reports)
+
+        txt = list()
+        # Reduced successfully
+        txt.append("   Reduced : %d" % (sum(r_pass),))
+        if count > 1:
+            txt.append(" (%s, %s)" % (max(r_pass), min(r_pass)))
+        txt.append("\n")
+        # Failed to reproduce
+        txt.append("  No Repro : %d" % (sum(r_fail),))
+        if count > 1:
+            txt.append(" (%s, %s)" % (max(r_fail), min(r_fail)))
+        txt.append("\n")
+        # Error during reduction
+        txt.append("    Errors : %d" % (sum(r_error),))
+        if count > 1:
+            txt.append(" (%s, %s)" % (max(r_error), min(r_error)))
+        txt.append("\n")
+        # Iterations
+        txt.append("Iterations : %d" % (total_iters,))
+        if count > 1:
+            txt.append(" (%s, %s)" % (max(iterations), min(iterations)))
+        txt.append("\n")
+        # Rate
+        txt.append("      Rate : %d @ %0.2f" % (count, sum(rates)))
+        if count > 1:
+            txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
+        # Runtime
+        if runtime:
+            txt.append("\n")
+            total_runtime = sum((x.duration for x in reports))
+            txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(total_runtime))),))
+        if sysinfo:
+            txt.append("\n")
+            txt.append(self._sys_info())
+        if timestamp:
+            txt.append("\n")
+            txt.append(" Timestamp : %s" % (time.strftime("%Y/%m/%d %X %z", time.gmtime()),))
+        if self.tracebacks:
+            txt.append("\n\nWARNING Tracebacks detected!")
+            for tbr in self.tracebacks:
+                txt.append("\n")
+                txt.append(str(tbr))
+        return "".join(txt)
+
+
 class TracebackReport(object):
     """Read Python tracebacks from log files and store it in a manner that is helpful
     when generating reports.
@@ -350,10 +469,14 @@ def main(args=None):
     Returns:
         None
     """
+    modes = ("reduce-status", "status")
     parser = argparse.ArgumentParser(description="Grizzly status report generator")
     parser.add_argument(
         "--dump",
         help="File to write report to")
+    parser.add_argument(
+        "--mode", default="status",
+        help="Status loading mode. Available modes: %s (default: 'status')" % (", ".join(modes),))
     parser.add_argument(
         "--system-report", action="store_true",
         help="Output summary and system information")
