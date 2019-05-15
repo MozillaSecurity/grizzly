@@ -27,9 +27,10 @@ class Status(object):
     DB_FILE = "grz-status.db"
     REPORT_FREQ = 60
 
-    def __init__(self, uid, start_time=True):
+    def __init__(self, uid, start_time=None):
         assert isinstance(uid, int)
         self._id = uid
+        self._start_time = start_time
         self.duration = None
         self.ignored = 0
         self.iteration = 0
@@ -38,19 +39,10 @@ class Status(object):
         self.results = 0
         self.test_name = None
         self.timestamp = 0
-        self._start_time = time.time() if start_time else None
 
-    @classmethod
-    def start(cls):
-        """Create a unique Status object.
-
-        Args:
-            None
-
-        Returns:
-            Status: Ready to be used to report Grizzly Status
-        """
-        conn = sqlite3.connect(cls.DB_FILE)
+    @staticmethod
+    def _create_db(db_file):
+        conn = sqlite3.connect(db_file)
         try:
             conn.execute("""CREATE TABLE IF NOT EXISTS status
                             (id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,15 +54,6 @@ class Status(object):
                              results    INTEGER DEFAULT 0,
                              time_stamp INTEGER DEFAULT 0);""")
             conn.commit()
-            cur = conn.cursor()
-            # remove old reports
-            cur.execute("""DELETE FROM status
-                           WHERE time_stamp < ?;""", (int(time.time()) - cls.AGE_LIMIT,))
-            # create new status entry
-            cur = conn.execute("""INSERT INTO status (time_stamp)
-                                  VALUES (?);""", (int(time.time()),))
-            conn.commit()
-            return cls(cur.lastrowid)
         finally:
             conn.close()
 
@@ -117,7 +100,7 @@ class Status(object):
             conn.close()
         if row is None:
             return None
-        report = cls(uid, start_time=False)
+        report = cls(uid)
         report.duration = float(row[0])
         report.ignored = int(row[1])
         report.iteration = int(row[2])
@@ -166,6 +149,32 @@ class Status(object):
         finally:
             conn.close()
 
+    @classmethod
+    def start(cls):
+        """Create a unique Status object.
+
+        Args:
+            None
+
+        Returns:
+            Status: Ready to be used to report Grizzly Status
+        """
+        cls._create_db(cls.DB_FILE)
+        conn = sqlite3.connect(cls.DB_FILE)
+        try:
+            cur = conn.cursor()
+            now = time.time()
+            # remove old reports
+            cur.execute("""DELETE FROM status
+                           WHERE time_stamp < ?;""", (int(now) - cls.AGE_LIMIT,))
+            # create new status entry
+            cur = conn.execute("""INSERT INTO status (time_stamp)
+                                  VALUES (?);""", (int(now),))
+            conn.commit()
+            return cls(cur.lastrowid, start_time=now)
+        finally:
+            conn.close()
+
 
 class StatusReporter(object):
     """Read and merge Grizzly status reports, including tracebacks if found.
@@ -208,7 +217,7 @@ class StatusReporter(object):
             ofp.write(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
     @classmethod
-    def load(cls, db_file=Status.DB_FILE, tb_path=None):
+    def load(cls, db_file, tb_path=None):
         """Read Grizzly status reports and create a StatusReporter object
 
         Args:
@@ -507,7 +516,7 @@ def main(args=None):
         help="Scan path for Python tracebacks found in screenlog.# files")
     args = parser.parse_args(args)
 
-    reporter = StatusReporter.load(tb_path=args.tracebacks)
+    reporter = StatusReporter.load(Status.DB_FILE, tb_path=args.tracebacks)
     if args.dump:
         try:
             reporter.dump_summary(args.dump)
