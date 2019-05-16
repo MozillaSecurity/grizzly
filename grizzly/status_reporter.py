@@ -124,7 +124,7 @@ class StatusReporter(object):
         """
         if not self.reports:
             return "No status reports loaded"
-        exp = time.time() - self.EXP_LIMIT
+        exp = int(time.time()) - self.EXP_LIMIT
         self.reports.sort(key=lambda x: x.duration, reverse=True)
         self.reports.sort(key=lambda x: x.timestamp < exp)
         txt = list()
@@ -154,7 +154,7 @@ class StatusReporter(object):
         """
         if not self.reports:
             return "No status reports loaded"
-        exp = time.time() - self.EXP_LIMIT
+        exp = int(time.time()) - self.EXP_LIMIT
         reports = tuple(x for x in self.reports if x.timestamp > exp)
         # calculate totals
         iterations = tuple(x.iteration for x in reports)
@@ -292,7 +292,7 @@ class ReduceStatusReporter(StatusReporter):
         """
         if not self.reports:
             return "No status reports loaded"
-        exp = time.time() - self.EXP_LIMIT
+        exp = int(time.time()) - self.EXP_LIMIT
         self.reports.sort(key=lambda x: x.duration, reverse=True)
         self.reports.sort(key=lambda x: x.timestamp < exp)
         txt = list()
@@ -323,14 +323,13 @@ class ReduceStatusReporter(StatusReporter):
         """
         if not self.reports:
             return "No status reports loaded"
-        exp = time.time() - self.EXP_LIMIT
+        exp = int(time.time()) - self.EXP_LIMIT
         # filter out expired reports
         reports = tuple(x for x in self.reports if x.timestamp > exp)
         # calculate totals
         iterations = tuple(x.iteration for x in reports)
         rates = tuple(x.rate for x in reports)
         count = len(reports)
-        total_iters = sum(iterations)
 
         r_error = tuple(x.reduce_error for x in reports)
         r_fail = tuple(x.reduce_fail for x in reports)
@@ -353,7 +352,7 @@ class ReduceStatusReporter(StatusReporter):
             txt.append(" (%s, %s)" % (max(r_error), min(r_error)))
         txt.append("\n")
         # Iterations
-        txt.append("Iterations : %d" % (total_iters,))
+        txt.append("Iterations : %d" % (sum(iterations),))
         if count > 1:
             txt.append(" (%s, %s)" % (max(iterations), min(iterations)))
         txt.append("\n")
@@ -485,7 +484,10 @@ def main(args=None):
         help="Scan path for Python tracebacks found in screenlog.# files")
     args = parser.parse_args(args)
 
-    reporter = StatusReporter.load(Status.DB_FILE, tb_path=args.tracebacks)
+    if args.mode == "reduce-status":
+        reporter = ReduceStatusReporter.load(Status.DB_FILE, tb_path=args.tracebacks)
+    else:
+        reporter = StatusReporter.load(Status.DB_FILE, tb_path=args.tracebacks)
     if args.dump:
         try:
             reporter.dump_summary(args.dump)
@@ -497,10 +499,11 @@ def main(args=None):
             raise
         return 0
     if not reporter.reports:
-        print("No status Grizzly reports to display")
+        print("No status reports to display")
         return 0
     print("Grizzly Status Report")
     print("---------------------")
+    print("Status report frequency: %ds\n" % (Status.REPORT_FREQ,))
     reporter.print_specific()
     print("Summary")
     print("-------")
