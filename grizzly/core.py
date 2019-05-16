@@ -98,18 +98,6 @@ class Session(object):
     def report_result(self):
         # create working directory for current testcase
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
-        if self.target.use_rr:
-            # symlink the RR trace into the log path so the Reporter can detect it
-            # and process if needed.
-            rrtrace = None
-            if self.target.rr_path is not None:
-                rrtrace = os.path.realpath(os.path.join(self.target.rr_path, "latest-trace"))
-                if not os.path.isdir(rrtrace):
-                    rrtrace = None
-            if rrtrace is not None:
-                os.symlink(rrtrace, os.path.join(result_logs, "rr-trace"))
-            else:
-                log.warning("RR specified but no trace detected.")
         self.target.save_logs(result_logs, meta=True)
         log.info("Reporting results...")
         self.iomanager.tests.reverse()  # order test cases newest to oldest
