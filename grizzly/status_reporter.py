@@ -12,14 +12,13 @@ import re
 import sqlite3
 import sys
 import time
-import traceback
 
 import psutil
 
 from .status import Status
 from .reduce import ReduceStatus
 
-__all__ = ("StatusReporter",)
+__all__ = ("ReduceStatusReporter", "StatusReporter")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -489,14 +488,7 @@ def main(args=None):
     else:
         reporter = StatusReporter.load(Status.DB_FILE, tb_path=args.tracebacks)
     if args.dump:
-        try:
-            reporter.dump_summary(args.dump)
-        except Exception:  # pylint: disable=broad-except
-            with open(args.dump, "w") as out_fp:
-                out_fp.write("Something went wrong!\n\n")
-                out_fp.write(traceback.format_exc())
-                out_fp.write("\n")
-            raise
+        reporter.dump_summary(args.dump)
         return 0
     if not reporter.reports:
         print("No status reports to display")
