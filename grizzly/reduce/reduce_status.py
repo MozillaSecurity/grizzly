@@ -78,18 +78,19 @@ class ReduceStatus(object):
         report.reduce_pass = int(row[2])
         return report
 
-    def report(self, report_freq=REPORT_FREQ):
+    def report(self, force=False, report_freq=REPORT_FREQ):
         """Write Grizzly status report. Reports are only written when the duration
         of time since the previous report was created exceeds `report_freq` seconds
 
         Args:
+            force (bool): Ignore report frequently limiting.
             report_freq (int): Minimum number of seconds between writes.
 
         Returns:
             None
         """
         assert self._status is not None
-        if not self._status.report(report_freq=report_freq):
+        if not self._status.report(force=force, report_freq=report_freq):
             return
         conn = sqlite3.connect(self._status.DB_FILE)
         try:

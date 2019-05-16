@@ -97,9 +97,7 @@ def test_reduce_status_06(tmp_path):
     status.reduce_fail = 22
     status.reduce_pass = 11
     status.results = 10
-    status._status.timestamp = 0  # force report exp
-    status.report()
-    assert status.timestamp > 0
+    status.report(force=True)
     ld_status = ReduceStatus.load(status.uid)
     assert ld_status.uid == status.uid
     assert status.ignored == 1
@@ -118,12 +116,10 @@ def test_reduce_status_07(tmp_path):
     Status.DB_FILE = str(test_db)
     status = Status.start()
     status.iteration = 11
-    status.timestamp = 0  # force report exp
-    status.report()
+    status.report(force=True)
     status = ReduceStatus.start()
     status.iteration = 22
-    status._status.timestamp = 0  # force report exp
-    status.report()
+    status.report(force=True)
     ld_status = ReduceStatus.load(status.uid)
     assert ld_status.uid == status.uid
     assert ld_status.iteration == 22

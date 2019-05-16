@@ -80,12 +80,11 @@ def test_status_reporter_05(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
-    status.timestamp = 0  # force exp
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.results = 0
-    status.report()
+    status.report(force=True)
     rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
@@ -99,13 +98,12 @@ def test_status_reporter_05(tmp_path):
     assert "Timestamp" not in output
     assert len(output.split("\n")) == 3
     status = Status.start()
-    status.timestamp = 0  # force exp
     status.start_time += 66.0
     status.ignored = 1
     status.iteration = 8
     status.log_size = 86900000
     status.results = 0
-    status.report()
+    status.report(force=True)
     rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
@@ -129,12 +127,11 @@ def test_status_reporter_06(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
-    status.timestamp = 0  # force exp
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.results = 0
-    status.report()
+    status.report(force=True)
     rptr = StatusReporter.load(str(test_db))
     assert rptr.reports is not None
     output = rptr._specific()
@@ -146,11 +143,10 @@ def test_status_reporter_06(tmp_path):
     assert "Results" in output
     assert "EXPIRED" not in output
     status = Status.start()
-    status.timestamp = 0  # force exp
     status.ignored = 1
     status.iteration = 432422
     status.results = 123
-    status.report()
+    status.report(force=True)
     rptr = StatusReporter.load(str(test_db))
     assert len(rptr.reports) == 2
     output = rptr._specific()
@@ -223,9 +219,8 @@ def test_reduce_status_reporter_02(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = ReduceStatus.start()
-    status._status.timestamp = 0  # force exp
     status.iteration = 1
-    status.report()
+    status.report(force=True)
     rptr = ReduceStatusReporter.load(str(test_db))
     assert rptr.reports is not None
     output = rptr._specific()
@@ -234,11 +229,10 @@ def test_reduce_status_reporter_02(tmp_path):
     assert "Iteration" in output
     assert "Rate" in output
     status = ReduceStatus.start()
-    status._status.timestamp = 0  # force exp
     status.ignored = 12
     status.iteration = 432422
     status.results = 123
-    status.report()
+    status.report(force=True)
     rptr = ReduceStatusReporter.load(str(test_db))
     assert len(rptr.reports) == 2
     output = rptr._specific()
@@ -253,9 +247,8 @@ def test_reduce_status_reporter_03(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = ReduceStatus.start()
-    status._status.timestamp = 0  # force exp
     status.iteration = 1
-    status.report()
+    status.report(force=True)
     rptr = ReduceStatusReporter.load(str(test_db))
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
@@ -268,7 +261,6 @@ def test_reduce_status_reporter_03(tmp_path):
     assert "Timestamp" not in output
     assert len(output.split("\n")) == 5
     status = ReduceStatus.start()
-    status._status.timestamp = 0  # force exp
     status.reduce_error = 1
     status.reduce_fail = 2
     status.reduce_pass = 10
@@ -276,7 +268,7 @@ def test_reduce_status_reporter_03(tmp_path):
     status.iteration = 13
     status.results = 3
     status._status.start_time += 1234
-    status.report()
+    status.report(force=True)
     rptr = ReduceStatusReporter.load(str(test_db))
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)

@@ -5,6 +5,8 @@
 """test Grizzly status reports"""
 # pylint: disable=protected-access
 
+import time
+
 from .status import Status
 
 def test_status_01(tmp_path):
@@ -41,8 +43,18 @@ def test_status_02(tmp_path):
     # normal report
     status = Status.start()
     status.report()
-    # try to report before REPORT_FREQ elapses
+    # REPORT_FREQ elapses
+    status.timestamp = 0
     status.report()
+    assert status.timestamp > 0
+    # try to report before REPORT_FREQ elapses
+    future = int(time.time()) + 1000
+    status.timestamp = future
+    status.report()
+    assert status.timestamp == future
+    # force report
+    status.report(force=True)
+    assert status.timestamp < future
 
 def test_status_03(tmp_path):
     """test Status.load()"""
@@ -77,9 +89,7 @@ def test_status_04(tmp_path):
     status.results = 3
     assert status.start_time > 0
     assert status.timestamp == status.start_time
-    status.timestamp = 0  # force report exp
-    status.report()
-    assert status.timestamp > 0
+    status.report(force=True)
     ld_status = Status.load(status.uid)
     assert ld_status.uid == status.uid
     assert ld_status.ignored == status.ignored
