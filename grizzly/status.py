@@ -140,7 +140,7 @@ class Status(object):
         return True
 
     @classmethod
-    def start(cls):
+    def start(cls, uid=None):
         """Create a unique Status object.
 
         Args:
@@ -152,7 +152,7 @@ class Status(object):
         conn = sqlite3.connect(cls.DB_FILE)
         try:
             conn.execute("""CREATE TABLE IF NOT EXISTS status
-                            (id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                            (id         INTEGER PRIMARY KEY,
                              ignored    INTEGER DEFAULT 0,
                              iteration  INTEGER DEFAULT 0,
                              log_size   INTEGER DEFAULT 0,
@@ -166,8 +166,13 @@ class Status(object):
             cur.execute("""DELETE FROM status
                            WHERE time_stamp < ?;""", (now - cls.AGE_LIMIT,))
             # create new status entry
-            cur = conn.execute("""INSERT INTO status (start_time, time_stamp)
-                                  VALUES (?, ?);""", (now, now))
+            if uid is None:
+                cur = conn.execute("""INSERT INTO status (start_time, time_stamp)
+                                      VALUES (?, ?);""", (now, now))
+            else:
+                assert isinstance(uid, int)
+                cur = conn.execute("""INSERT INTO status (id, start_time, time_stamp)
+                                      VALUES (?, ?, ?);""", (uid, now, now))
             conn.commit()
             return cls(cur.lastrowid, now)
         finally:
