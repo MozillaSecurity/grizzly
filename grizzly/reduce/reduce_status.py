@@ -107,7 +107,7 @@ class ReduceStatus(object):
             conn.close()
 
     @classmethod
-    def start(cls):
+    def start(cls, uid=None):
         """Create a unique ReduceStatus object.
 
         Args:
@@ -116,7 +116,7 @@ class ReduceStatus(object):
         Returns:
             ReduceStatus: Ready to be used to report Grizzly status
         """
-        status = Status.start()
+        status = Status.start(uid=uid)
         assert status is not None
         conn = sqlite3.connect(status.DB_FILE)
         try:

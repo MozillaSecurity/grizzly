@@ -28,6 +28,9 @@ def test_status_01(tmp_path):
     assert test_db.is_file()
     status = Status.start()
     assert status.uid == 2
+    # pass uid
+    status = Status.start(uid=1234)
+    assert status.uid == 1234
 
 def test_status_02(tmp_path):
     """test Status.report()"""
