@@ -106,18 +106,19 @@ class Status(object):
         duration = self.duration
         return self.iteration / float(duration) if duration > 0 else 0
 
-    def report(self, report_freq=REPORT_FREQ):
+    def report(self, force=False, report_freq=REPORT_FREQ):
         """Write Grizzly status report. Reports are only written when the duration
         of time since the previous report was created exceeds `report_freq` seconds
 
         Args:
+            force (bool): Ignore report frequently limiting.
             report_freq (int): Minimum number of seconds between writes.
 
         Returns:
             bool: Returns true if the report was successful otherwise false
         """
         now = int(time.time())
-        if now < (self.timestamp + report_freq):
+        if not force and now < (self.timestamp + report_freq):
             return False
         self.timestamp = now
         conn = sqlite3.connect(self.DB_FILE)
