@@ -13,6 +13,7 @@ crash id (1st hash) and a bug id (2nd hash). This is not perfect but works very
 well in most cases.
 """
 
+__all__ = ("Stack", "StackFrame")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 

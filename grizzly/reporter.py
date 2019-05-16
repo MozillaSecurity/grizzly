@@ -34,7 +34,7 @@ try:
 except ImportError as err:
     _boto_import_error = err  # pylint: disable=invalid-name
 
-from . import stack_hasher
+from .stack_hasher import Stack
 
 __all__ = ("FilesystemReporter", "FuzzManagerReporter", "S3FuzzManagerReporter")
 __author__ = "Tyson Smith"
@@ -70,7 +70,7 @@ class Report(object):
             if scan_log is None:
                 continue
             with open(os.path.join(log_path, scan_log), "rb") as log_fp:
-                stack = stack_hasher.Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
+                stack = Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
             if stack.frames:
                 self.prefix = "%s_%s" % (stack.minor[:8], time.strftime("%Y-%m-%d_%H-%M-%S"))
                 self.stack = stack
