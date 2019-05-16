@@ -4,9 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
-import shutil
 import signal
-import tempfile
 
 import psutil
 
@@ -26,7 +24,6 @@ class PuppetTarget(Target):
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch, **kwds):
         super(PuppetTarget, self).__init__(binary, extension, launch_timeout, log_limit,
                                            memory_limit, prefs, relaunch)
-        self.rr_path = None  # TODO: this should be in FFPuppet
         self.use_rr = kwds.pop('rr', False)
         self.use_valgrind = kwds.pop('valgrind', False)
         use_xvfb = kwds.pop('xvfb', False)
@@ -159,18 +156,10 @@ class PuppetTarget(Target):
     def launch(self, location, env_mod=None):
         self.rl_countdown = self.rl_reset
         env_mod = dict(env_mod or [])  # if passed, make a copy so modifications aren't passed out
-
         # do not allow network connections to non local endpoints
         env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
         # TODO: move to FFPuppet?
         env_mod["MOZ_CRASHREPORTER_SHUTDOWN"] = "1"
-
-        if self.use_rr:
-            if self.rr_path is not None and os.path.isdir(self.rr_path):
-                shutil.rmtree(self.rr_path)
-            self.rr_path = tempfile.mkdtemp(prefix="grz_rr")
-            env_mod["_RR_TRACE_DIR"] = self.rr_path
-
         try:
             self._puppet.launch(
                 self.binary,
