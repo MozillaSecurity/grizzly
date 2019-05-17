@@ -121,7 +121,7 @@ def test_status_reporter_05(tmp_path):
     # verify alignment
     position = len(lines[0].split(":")[0])
     for line in lines:
-        assert re.match(r"\s:\s\S", line[position - 1:])
+        assert re.match(r"\S\s:\s\S", line[position - 2:])
 
 def test_status_reporter_06(tmp_path):
     """test StatusReporter._specific()"""
@@ -255,6 +255,7 @@ def test_reduce_status_reporter_03(tmp_path):
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     output = rptr._summary(runtime=False)
+    assert "Processed" in output
     assert "Active" in output
     assert "Iteration" in output
     assert "Mismatch" in output
@@ -262,7 +263,7 @@ def test_reduce_status_reporter_03(tmp_path):
     assert "Runtime" in output
     assert "ignored" not in output
     assert "Timestamp" not in output
-    assert len(output.split("\n")) == 8
+    assert len(output.split("\n")) == 9
     status = ReduceStatus.start()
     status.reduce_error = 1
     status.reduce_fail = 2
@@ -274,6 +275,7 @@ def test_reduce_status_reporter_03(tmp_path):
     rptr = ReduceStatusReporter.load(str(test_db))
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
+    assert "Processed" in output
     assert "Reduced" in output
     assert "No Repro" in output
     assert "Error" in output
@@ -284,12 +286,13 @@ def test_reduce_status_reporter_03(tmp_path):
     assert "Runtime" in output
     assert "Timestamp" in output
     lines = output.split("\n")
-    assert len(lines) == 12
+    assert len(lines) == 13
     # verify alignment
-    lines.pop(3)  # remove "--- Active ---" line
-    position = len(lines[0].split(":")[0])
+    position = len(lines[1].split(":")[0])
     for line in lines:
-        assert re.match(r"\s:\s\S", line[position - 1:])
+        if line.startswith("-"):
+            continue
+        assert re.match(r"\S\s:\s\S", line[position - 2:])
 
 def test_reduce_status_reporter_04(tmp_path):
     """test ReduceStatusReporter._summary() ignore inactive"""
@@ -305,6 +308,7 @@ def test_reduce_status_reporter_04(tmp_path):
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     output = rptr._summary(sysinfo=True, timestamp=True)
+    assert "Processed" in output
     assert "Reduced" in output
     assert "No Repro" in output
     assert "Error" in output
@@ -316,11 +320,13 @@ def test_reduce_status_reporter_04(tmp_path):
     assert "Runtime" not in output
     assert "ignored" not in output
     lines = output.split("\n")
-    assert len(lines) == 7
+    assert len(lines) == 8
     # verify alignment
-    position = len(lines[0].split(":")[0])
+    position = len(lines[1].split(":")[0])
     for line in lines:
-        assert re.match(r"\s:\s\S", line[position - 1:])
+        if line.startswith("-"):
+            continue
+        assert re.match(r"\S\s:\s\S", line[position - 2:])
 
 def test_traceback_report_01():
     """test simple TracebackReport"""

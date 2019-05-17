@@ -336,6 +336,7 @@ class ReduceStatusReporter(StatusReporter):
 
         txt = list()
         # Overall status
+        txt.append("---- Processed (%d)\n" % (sum(r_pass) + sum(r_fail) + sum(r_error),))
         # Reduced successfully
         txt.append("   Reduced : %d" % (sum(r_pass),))
         if count > 1:
@@ -355,7 +356,7 @@ class ReduceStatusReporter(StatusReporter):
         reports = tuple(x for x in reports if x.duration > 0 or x.iteration > 0)
         if reports:
             count = len(reports)
-            txt.append("\n    --- Active ---\n")
+            txt.append("\n------- Active\n")
             # Iterations
             iterations = tuple(x.iteration for x in reports)
             total_iters = sum(iterations)
