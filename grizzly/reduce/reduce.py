@@ -394,6 +394,8 @@ class ReductionJob(object):
         if crash_hash in self.other_crashes:
             shutil.rmtree(self.other_crashes[crash_hash]["tcroot"])
             LOG.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
+            # already counted when initially found
+            self.status.ignored += 1
         else:
             LOG.info("Found alternate crash: %s", crash_info.createShortSignature())
             self.status.results += 1
@@ -734,7 +736,7 @@ def main(args, interesting_cb=None, result_cb=None):
     job = None
 
     # attempt to load status (used by automation)
-    status_uid = os.environ.get("GRZ_STATUS_UID", None)
+    status_uid = os.getenv("GRZ_STATUS_UID")
     if status_uid is not None:
         status_uid = int(status_uid)
         status = ReduceStatus.load(status_uid)
@@ -824,11 +826,9 @@ def main(args, interesting_cb=None, result_cb=None):
         # update status
         if result:
             status.reduce_pass += 1
-        elif job.result_code == 10:
+        elif job.result_code in (6, 10):
             status.reduce_fail += 1
-        elif job.result_code == 6:
-            status.ignored += 1
-        elif job.result_code in (8, 9):
+        elif job.result_code in (7, 8, 9):
             status.reduce_error += 1
 
         if result:
@@ -863,7 +863,7 @@ def main(args, interesting_cb=None, result_cb=None):
         if job is None and target is not None:
             target.cleanup()
         # call cleanup if we are unlikely to be using status again
-        if job_cancelled or "GRZ_STATUS_UID" not in os.environ:
+        if "GRZ_STATUS_UID" not in os.environ:
             status.cleanup()
         else:
-            status.report(force=True)
+            status.report(reset_status=True)

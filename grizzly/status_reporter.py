@@ -16,7 +16,7 @@ import time
 import psutil
 
 from .status import Status
-from .reduce import ReduceStatus
+from .reduce.reduce_status import ReduceStatus
 
 __all__ = ("ReduceStatusReporter", "StatusReporter")
 __author__ = "Tyson Smith"
@@ -326,15 +326,13 @@ class ReduceStatusReporter(StatusReporter):
         # filter out expired reports
         reports = tuple(x for x in self.reports if x.timestamp > exp)
         # calculate totals
-        iterations = tuple(x.iteration for x in reports)
-        rates = tuple(x.rate for x in reports)
         count = len(reports)
-
         r_error = tuple(x.reduce_error for x in reports)
         r_fail = tuple(x.reduce_fail for x in reports)
         r_pass = tuple(x.reduce_pass for x in reports)
 
         txt = list()
+        # Overall status
         # Reduced successfully
         txt.append("   Reduced : %d" % (sum(r_pass),))
         if count > 1:
@@ -349,21 +347,40 @@ class ReduceStatusReporter(StatusReporter):
         txt.append("    Errors : %d" % (sum(r_error),))
         if count > 1:
             txt.append(" (%s, %s)" % (max(r_error), min(r_error)))
-        txt.append("\n")
-        # Iterations
-        txt.append("Iterations : %d" % (sum(iterations),))
-        if count > 1:
-            txt.append(" (%s, %s)" % (max(iterations), min(iterations)))
-        txt.append("\n")
-        # Rate
-        txt.append("      Rate : %d @ %0.2f" % (count, sum(rates)))
-        if count > 1:
-            txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
-        # Runtime
-        if runtime:
+        # Job specific status
+        # filter out inactive
+        reports = tuple(x for x in reports if x.duration > 0 or x.iteration > 0)
+        if reports:
+            count = len(reports)
+            txt.append("\n    --- Active ---\n")
+            # Iterations
+            iterations = tuple(x.iteration for x in reports)
+            total_iters = sum(iterations)
+            txt.append("Iterations : %d" % (total_iters,))
+            if count > 1:
+                txt.append(" (%s, %s)" % (max(iterations), min(iterations)))
             txt.append("\n")
-            total_runtime = sum((x.duration for x in reports))
-            txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(total_runtime))),))
+            # Rate
+            rates = tuple(x.rate for x in reports)
+            txt.append("      Rate : %d @ %0.2f" % (count, sum(rates)))
+            if count > 1:
+                txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
+            txt.append("\n")
+            # Runtime
+            durations = tuple(x.duration for x in reports)
+            if count > 1:
+                max_duration = str(datetime.timedelta(seconds=int(max(durations))))
+                min_duration = str(datetime.timedelta(seconds=int(min(durations))))
+                txt.append("   Runtime : (%s, %s)" % (max_duration, min_duration))
+            else:
+                txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(durations[0]))),))
+            txt.append("\n")
+            # Results (Signature mismatch) and ignored
+            txt.append("  Mismatch : %d" % (sum(x.results for x in reports),))
+            total_ignored = sum(x.ignored for x in reports)
+            if total_ignored:
+                ignore_pct = (total_ignored / float(total_iters)) * 100
+                txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, ignore_pct))
         if sysinfo:
             txt.append("\n")
             txt.append(self._sys_info())

@@ -79,6 +79,35 @@ def test_status_03(tmp_path):
     assert status.results == 0
 
 def test_status_04(tmp_path):
+    """test Status.reset()"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    # reset with empty db
+    Status(123, 1557934564).reset()
+    status = Status.start()
+    status.ignored = 1
+    status.iteration = 5
+    status.log_size = 2
+    status.results = 3
+    assert status.start_time > 0
+    assert status.timestamp == status.start_time
+    status.report(force=True)
+    status.reset()
+    assert status.uid == status.uid
+    assert status.ignored == 0
+    assert status.iteration == 0
+    assert status.log_size == 0
+    assert status.results == 0
+    ld_status = Status.load(status.uid)
+    assert ld_status.uid == status.uid
+    assert ld_status.ignored == status.ignored
+    assert ld_status.iteration == status.iteration
+    assert ld_status.log_size == status.log_size
+    assert ld_status.results == status.results
+    assert ld_status.start_time == status.start_time
+    assert ld_status.timestamp == status.timestamp
+
+def test_status_05(tmp_path):
     """test Status.load() and Status.report()"""
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
@@ -102,7 +131,7 @@ def test_status_04(tmp_path):
     assert ld_status.duration > 0
     assert ld_status.rate > 0
 
-def test_status_05(tmp_path):
+def test_status_06(tmp_path):
     """test Status.cleanup()"""
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
@@ -116,7 +145,7 @@ def test_status_05(tmp_path):
     # nothing to cleanup
     status.cleanup()
 
-def test_status_06(tmp_path):
+def test_status_07(tmp_path):
     """test Status.duration and Status.rate calculations"""
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)

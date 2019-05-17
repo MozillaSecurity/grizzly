@@ -234,8 +234,8 @@ class Interesting(object):
         for try_num in range(n_tries):
             if (n_tries - try_num) < (self.min_crashes - n_crashes):
                 break  # no longer possible to get min_crashes, so stop
-            self.status.iteration += 1
             self.status.report()
+            self.status.iteration += 1
             run_prefix = "%s(%d)" % (temp_prefix, try_num)
             if self._run(run_prefix):
                 n_crashes += 1
