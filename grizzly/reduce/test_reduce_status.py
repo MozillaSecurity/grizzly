@@ -131,9 +131,9 @@ def test_reduce_status_07(tmp_path):
     assert ld_status.ignored == 0
     assert ld_status.iteration == 0
     assert ld_status.results == 0
-    assert ld_status.reduce_error == status.reduce_error
-    assert ld_status.reduce_fail == status.reduce_fail
-    assert ld_status.reduce_pass == status.reduce_pass
+    assert ld_status.reduce_error == 33
+    assert ld_status.reduce_fail == 22
+    assert ld_status.reduce_pass == 11
 
 def test_reduce_status_08(tmp_path):
     """test ReduceStatus.load() with Status and ReduceStatus"""
