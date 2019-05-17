@@ -24,6 +24,7 @@ from FTB.Signatures.CrashInfo import CrashSignature
 from . import strategies as strategies_module
 from .interesting import Interesting
 from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
+from .reduce_status import ReduceStatus
 from ..core import Session
 from ..corpman.storage import TestFile, TestCase
 from ..reporter import FilesystemReporter, FuzzManagerReporter, Report
@@ -58,7 +59,7 @@ class ReductionJob(object):
     DEFAULT_STRATEGIES = ("line", "jsbeautify", "collapsebraces", "jschar")
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
-                 repeat, idle_poll, idle_threshold, idle_timeout, working_path=None,
+                 repeat, idle_poll, idle_threshold, idle_timeout, status, working_path=None,
                  testcase_cache=True, skip_analysis=False):
         """Use lithium to reduce a testcase.
 
@@ -68,6 +69,7 @@ class ReductionJob(object):
         self.reporter = None
         self.result_code = None
         self.signature = None
+        self.status = status
         self.interesting = Interesting(
             ignore,
             target,
@@ -80,6 +82,7 @@ class ReductionJob(object):
             idle_poll,
             idle_threshold,
             idle_timeout,
+            status,
             testcase_cache)
         self.interesting.alt_crash_cb = self._other_crash_found
         self.interesting.interesting_cb = self._interesting_crash
@@ -123,7 +126,7 @@ class ReductionJob(object):
 
         # check that DEBUG messages will actually get through
         # if the root logger level is > DEBUG, messages will not get through to our log handler
-        # set root to DEBUG, and propogate the old root level to each root handler
+        # set root to DEBUG, and propagate the old root level to each root handler
         root_logger = logging.getLogger()
         root_level = root_logger.getEffectiveLevel()
         if root_level > logging.DEBUG:
@@ -393,6 +396,7 @@ class ReductionJob(object):
             LOG.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
         else:
             LOG.info("Found alternate crash: %s", crash_info.createShortSignature())
+            self.status.results += 1
         os.makedirs(tmpd)
         for file_name in _testcase_contents(self.tcroot):
             out = os.path.join(tmpd, file_name)
@@ -729,6 +733,17 @@ def main(args, interesting_cb=None, result_cb=None):
     target = None
     job = None
 
+    # attempt to load status (used by automation)
+    status_uid = os.environ.get("GRZ_STATUS_UID", None)
+    if status_uid is not None:
+        status_uid = int(status_uid)
+        status = ReduceStatus.load(status_uid)
+    else:
+        status = None
+    if status is None:
+        # create new status object
+        status = ReduceStatus.start(uid=status_uid)
+
     job_cancelled = False
     try:
         LOG.debug("initializing the Target")
@@ -756,6 +771,7 @@ def main(args, interesting_cb=None, result_cb=None):
             args.idle_poll,
             args.idle_threshold,
             args.idle_timeout,
+            status,
             args.working_path,
             not args.no_cache,
             args.no_analysis)
@@ -805,6 +821,16 @@ def main(args, interesting_cb=None, result_cb=None):
         if result_cb is not None:
             result_cb(job.result_code)
 
+        # update status
+        if result:
+            status.reduce_pass += 1
+        elif job.result_code == 10:
+            status.reduce_fail += 1
+        elif job.result_code == 6:
+            status.ignored += 1
+        elif job.result_code in (8, 9):
+            status.reduce_error += 1
+
         if result:
             LOG.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
             return Session.EXIT_SUCCESS
@@ -813,6 +839,8 @@ def main(args, interesting_cb=None, result_cb=None):
         return Session.EXIT_ERROR
 
     except NoTestcaseError:
+        status.reduce_error += 1
+        # TODO: test should be marked as Q7
         return Session.EXIT_ERROR
 
     except KeyboardInterrupt:
@@ -821,6 +849,7 @@ def main(args, interesting_cb=None, result_cb=None):
 
     except ffpuppet.LaunchError as exc:
         LOG.error("Error launching target: %s", exc)
+        status.reduce_error += 1
         return Session.EXIT_LAUNCH_FAILURE
 
     finally:
@@ -833,3 +862,8 @@ def main(args, interesting_cb=None, result_cb=None):
         # job handles calling cleanup if it was created
         if job is None and target is not None:
             target.cleanup()
+        # call cleanup if we are unlikely to be using status again
+        if job_cancelled or "GRZ_STATUS_UID" not in os.environ:
+            status.cleanup()
+        else:
+            status.report(force=True)
