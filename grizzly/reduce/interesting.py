@@ -31,9 +31,10 @@ LOG = logging.getLogger("grizzly.reduce.interesting")
 class Interesting(object):
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
-                 repeat, idle_poll, idle_threshold, idle_timeout, testcase_cache=True):
+                 repeat, idle_poll, idle_threshold, idle_timeout, status, testcase_cache=True):
         self.ignore = ignore  # things to ignore
         self.target = target  # a Puppet to run with
+        self.status = status  # ReduceStatus to track progress
         self.server = None  # a server to serve with
         self.orig_sig = None  # signature to reduce to (if specified)
         # alt_crash_cb (if set) will be called with args=(temp_prefix) for any crashes which do
@@ -233,6 +234,8 @@ class Interesting(object):
         for try_num in range(n_tries):
             if (n_tries - try_num) < (self.min_crashes - n_crashes):
                 break  # no longer possible to get min_crashes, so stop
+            self.status.iteration += 1
+            self.status.report()
             run_prefix = "%s(%d)" % (temp_prefix, try_num)
             if self._run(run_prefix):
                 n_crashes += 1

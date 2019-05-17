@@ -17,6 +17,38 @@ class BaseFakeReporter(Reporter):
         pass
 
 
+class FakeReduceStatus(object):
+    "Stub to fake parts of ReduceStatus"
+
+    def __init__(self):
+        self.uid = 0
+        self.duration = 0
+        self.iteration = 0
+        self.rate = 0
+        self.results = 0
+        self.reduce_error = 0
+        self.reduce_fail = 0
+        self.reduce_pass = 0
+        self.start_time = 1558051385
+        self.timestamp = 1558051385
+
+    def cleanup(self):
+        pass
+
+    @classmethod
+    def load(cls, uid):
+        return cls.start(uid=uid) if uid > 0 else None
+
+    def report(self, force=False):
+        pass
+
+    @classmethod
+    def start(cls, uid=None):
+        status = FakeReduceStatus()
+        status.uid = 123 if uid is None else uid
+        return status
+
+
 class FakeTarget(object):
     "Stub to fake parts of grizzly.target.Target needed for testing the reduce loop"
 

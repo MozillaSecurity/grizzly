@@ -8,6 +8,7 @@ import pytest
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs
 from grizzly.reduce import reduce, crash, bucket, ReductionJob
 from grizzly import reporter
+from .reduce_status import ReduceStatus
 from .test_common import BaseFakeReporter, FakeTarget
 from .test_reduce import FakeInteresting
 
@@ -126,7 +127,8 @@ def test_main_prefs(monkeypatch, tmp_path):
             run_called[0] += 1
             return result
 
-    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, False)
+    status = ReduceStatus.start()
+    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, status, None, False)
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
 
     (tmp_path / "binary").touch()
@@ -451,7 +453,8 @@ def test_environ_and_suppressions(monkeypatch, tmpdir):
             assert "lsan.supp" in self.interesting.env_mod["LSAN_OPTIONS"]
             run_called[0] += 1
 
-    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, None, False)
+    status = ReduceStatus.start()
+    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, status, None, False)
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
     assert job.interesting.target.forced_close
 
