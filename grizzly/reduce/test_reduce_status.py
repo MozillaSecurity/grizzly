@@ -55,7 +55,7 @@ def test_reduce_status_03(tmp_path):
     assert status.uid == 1
     # invalid uid
     assert ReduceStatus.load(1337) is None
-    # load default status report
+    # load default reduce status report
     status = ReduceStatus.load(status.uid)
     assert status is not None
     assert status.start_time > 0
@@ -101,6 +101,7 @@ def test_reduce_status_06(tmp_path):
     ld_status = ReduceStatus.load(status.uid)
     assert ld_status.uid == status.uid
     assert status.ignored == 1
+    assert status.results == 10
     assert ld_status.ignored == status.ignored
     assert ld_status.iteration == status.iteration
     assert ld_status.reduce_error == status.reduce_error
@@ -111,6 +112,30 @@ def test_reduce_status_06(tmp_path):
     assert ld_status.timestamp == status.timestamp
 
 def test_reduce_status_07(tmp_path):
+    """test ReduceStatus.report(reset_status=True)"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = ReduceStatus.start()
+    status.ignored += 1
+    status.iteration = 12345
+    status.reduce_error = 33
+    status.reduce_fail = 22
+    status.reduce_pass = 11
+    status.results = 10
+    status.report(force=True)
+    ld_status = ReduceStatus.load(status.uid)
+    ld_status.report(reset_status=True)
+    ld_status = ReduceStatus.load(status.uid)
+    assert ld_status.uid == status.uid
+    assert ld_status.duration == 0
+    assert ld_status.ignored == 0
+    assert ld_status.iteration == 0
+    assert ld_status.results == 0
+    assert ld_status.reduce_error == 33
+    assert ld_status.reduce_fail == 22
+    assert ld_status.reduce_pass == 11
+
+def test_reduce_status_08(tmp_path):
     """test ReduceStatus.load() with Status and ReduceStatus"""
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)

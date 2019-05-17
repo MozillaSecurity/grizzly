@@ -20,9 +20,11 @@ class ReduceStatus(object):
 
     def __init__(self, status):
         assert isinstance(status, Status)
-        self.reduce_fail = 0  # Q5 or Q6 -> Q10
-        self.reduce_pass = 0  # Q5 or Q6 -> Q0
-        self.reduce_error = 0  # any Q# -> Q8 or Q9
+        # track overall reduce status with these properties
+        self.reduce_fail = 0  # Q6, Q10
+        self.reduce_pass = 0  # Q0
+        self.reduce_error = 0  # Q7, Q8 or Q9
+        # track specific (per testcase) status in self._status
         self._status = status
 
     def cleanup(self):
@@ -50,7 +52,7 @@ class ReduceStatus(object):
 
     @classmethod
     def load(cls, uid):
-        """Read Grizzly status report.
+        """Read Grizzly reduce status report.
 
         Args:
             uid (int): Unique ID of Grizzly ReduceStatus to load.
@@ -78,19 +80,22 @@ class ReduceStatus(object):
         report.reduce_pass = int(row[2])
         return report
 
-    def report(self, force=False, report_freq=REPORT_FREQ):
-        """Write Grizzly status report. Reports are only written when the duration
+    def report(self, force=False, report_freq=REPORT_FREQ, reset_status=False):
+        """Write Grizzly reduce status report. Reports are only written when the duration
         of time since the previous report was created exceeds `report_freq` seconds
 
         Args:
             force (bool): Ignore report frequently limiting.
             report_freq (int): Minimum number of seconds between writes.
+            reset_status: Reset Status (implies force=True)
 
         Returns:
             None
         """
         assert self._status is not None
-        if not self._status.report(force=force, report_freq=report_freq):
+        if reset_status:
+            self._status.reset()
+        elif not self._status.report(force=force, report_freq=report_freq):
             return
         conn = sqlite3.connect(self._status.DB_FILE)
         try:

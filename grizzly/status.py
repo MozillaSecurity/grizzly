@@ -140,6 +140,40 @@ class Status(object):
             conn.close()
         return True
 
+    def reset(self):
+        """Reset Grizzly status to initial state.
+
+        Args:
+            None
+
+        Returns:
+            bool: Returns true if the reset was successful otherwise false
+        """
+        now = int(time.time())
+        conn = sqlite3.connect(self.DB_FILE)
+        try:
+            cur = conn.cursor()
+            cur.execute("""UPDATE status
+                           SET ignored = 0,
+                               iteration = 0,
+                               log_size = 0,
+                               results = 0,
+                               start_time = ?,
+                               time_stamp = ?
+                           WHERE id = ?;""",
+                        (now, now, self.uid))
+            conn.commit()
+            self.ignored = 0
+            self.iteration = 0
+            self.log_size = 0
+            self.results = 0
+            self.start_time = self.timestamp = now
+        except sqlite3.OperationalError:
+            return False
+        finally:
+            conn.close()
+        return True
+
     @classmethod
     def start(cls, uid=None):
         """Create a unique Status object.

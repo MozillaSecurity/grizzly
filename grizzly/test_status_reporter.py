@@ -253,13 +253,14 @@ def test_reduce_status_reporter_03(tmp_path):
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     output = rptr._summary(runtime=False)
+    assert "Active" in output
     assert "Iteration" in output
+    assert "Mismatch" in output
     assert "Rate" in output
-    #assert "Results" in output
-    #assert "ignored" not in output
-    assert "Runtime" not in output
+    assert "Runtime" in output
+    assert "ignored" not in output
     assert "Timestamp" not in output
-    assert len(output.split("\n")) == 5
+    assert len(output.split("\n")) == 8
     status = ReduceStatus.start()
     status.reduce_error = 1
     status.reduce_fail = 2
@@ -267,7 +268,6 @@ def test_reduce_status_reporter_03(tmp_path):
     status.ignored = 4
     status.iteration = 13
     status.results = 3
-    status._status.start_time += 1234
     status.report(force=True)
     rptr = ReduceStatusReporter.load(str(test_db))
     assert len(rptr.reports) == 2
@@ -277,12 +277,44 @@ def test_reduce_status_reporter_03(tmp_path):
     assert "Error" in output
     assert "Iteration" in output
     assert "Rate" in output
-    #assert "Results" in output
-    #assert "ignored" in output
+    assert "Mismatch" in output
+    assert "ignored" in output
     assert "Runtime" in output
     assert "Timestamp" in output
     lines = output.split("\n")
-    assert len(lines) == 10
+    assert len(lines) == 12
+    # verify alignment
+    lines.pop(3)  # remove "--- Active ---" line
+    position = len(lines[0].split(":")[0])
+    for line in lines:
+        assert re.match(r"\s:\s\S", line[position - 1:])
+
+def test_reduce_status_reporter_04(tmp_path):
+    """test ReduceStatusReporter._summary() ignore inactive"""
+    ReduceStatusReporter.CPU_POLL_INTERVAL = 0.01
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = ReduceStatus.start()
+    status.reduce_error = 1
+    status.reduce_fail = 2
+    status.reduce_pass = 10
+    status.report(force=True)
+    rptr = ReduceStatusReporter.load(str(test_db))
+    assert rptr.reports is not None
+    assert len(rptr.reports) == 1
+    output = rptr._summary(sysinfo=True, timestamp=True)
+    assert "Reduced" in output
+    assert "No Repro" in output
+    assert "Error" in output
+    assert "Timestamp" in output
+    assert "Active" not in output
+    assert "Iteration" not in output
+    assert "Mismatch" not in output
+    assert "Rate" not in output
+    assert "Runtime" not in output
+    assert "ignored" not in output
+    lines = output.split("\n")
+    assert len(lines) == 7
     # verify alignment
     position = len(lines[0].split(":")[0])
     for line in lines:
