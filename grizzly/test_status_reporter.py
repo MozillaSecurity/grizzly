@@ -7,6 +7,8 @@
 
 import re
 
+import pytest
+
 from .status_reporter import main, ReduceStatus, ReduceStatusReporter
 from .status_reporter import Status, StatusReporter, TracebackReport
 
@@ -471,3 +473,14 @@ def test_main_04(tmp_path):
     status.report()
     assert test_db.is_file()
     main(["--mode", "reduce-status"])
+
+def test_main_05(tmp_path):
+    """test main() with invalid mode"""
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    status = Status.start()
+    status.iteration = 1
+    status.report()
+    assert test_db.is_file()
+    with pytest.raises(SystemExit):
+        main(["--mode", "invalid"])

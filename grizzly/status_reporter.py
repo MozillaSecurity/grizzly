@@ -16,7 +16,10 @@ import time
 import psutil
 
 from .status import Status
-from .reduce.reduce_status import ReduceStatus
+try:
+    from .reduce.reduce_status import ReduceStatus
+except ImportError:
+    ReduceStatus = None
 
 __all__ = ("ReduceStatusReporter", "StatusReporter")
 __author__ = "Tyson Smith"
@@ -484,7 +487,9 @@ def main(args=None):
     Returns:
         None
     """
-    modes = ("reduce-status", "status")
+    modes = ["status"]
+    if ReduceStatus is not None:
+        modes += ["reduce-status"]
     parser = argparse.ArgumentParser(description="Grizzly status report generator")
     parser.add_argument(
         "--dump",
@@ -500,6 +505,8 @@ def main(args=None):
         help="Scan path for Python tracebacks found in screenlog.# files")
     args = parser.parse_args(args)
 
+    if args.mode not in modes:
+        parser.error("Invalid mode %r" % args.mode)
     if args.mode == "reduce-status":
         reporter = ReduceStatusReporter.load(Status.DB_FILE, tb_path=args.tracebacks)
     else:
