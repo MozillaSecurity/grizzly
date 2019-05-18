@@ -406,18 +406,24 @@ def test_traceback_report_04(tmp_path):
     test_log = tmp_path / "screenlog.0"
     with test_log.open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
-        for _ in range(TracebackReport.MAX_LINES * 2):
-            test_fp.write(b"  File \"foo.py\", line 556, in <module>\n")
-            test_fp.write(b"    main()\n")
-        test_fp.write(b"  File \"foo.py\", line 207, in bar\n")
-        test_fp.write(b"    a = b[10]\n")
+        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b"    first()\n")
+        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b"    second()\n")
+        for i in reversed(range(TracebackReport.MAX_LINES)):
+            test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+            test_fp.write(b"    func_%02d()\n" % i)
         test_fp.write(b"END_WITH_BLANK_LINE\n\n")
         test_fp.write(b"end junk\n")
     tbr = TracebackReport.from_file(str(test_log))
     assert not tbr.is_kbi
     output = str(tbr)
-    assert len(output.splitlines()) == 17
-    assert "..." in output
+    assert len(output.splitlines()) == 18
+    assert "<--- TRACEBACK TRIMMED--->" in output
+    assert "first()" in output
+    assert "func_05()" in output
+    assert "second()" not in output
+    assert "func_06()" not in output
     assert "END_WITH_BLANK_LINE" in output
 
 def test_traceback_report_05(tmp_path):
@@ -425,14 +431,16 @@ def test_traceback_report_05(tmp_path):
     test_log = tmp_path / "screenlog.0"
     with test_log.open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
+        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b"    first()\n")
         for i in range(TracebackReport.MAX_LINES * 2):
             test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
             test_fp.write(b"    func_%d()\n" % i)
     tbr = TracebackReport.from_file(str(test_log))
     assert not tbr.is_kbi
     output = str(tbr)
-    assert len(output.splitlines()) == 17
-    assert "..." in output
+    assert len(output.splitlines()) == 18
+    assert "first()" in output
     assert "func_%d" % (TracebackReport.MAX_LINES * 2 - 1) in output
 
 def test_main_01(tmp_path):

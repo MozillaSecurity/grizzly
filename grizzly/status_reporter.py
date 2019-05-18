@@ -403,7 +403,7 @@ class TracebackReport(object):
     """Read Python tracebacks from log files and store it in a manner that is helpful
     when generating reports.
     """
-    MAX_LINES = 15
+    MAX_LINES = 16  # should be no less than 6
     READ_LIMIT = 0x10000  # 64KB
 
     def __init__(self, file_name, lines, is_kbi=False, prev_lines=None):
@@ -470,7 +470,11 @@ class TracebackReport(object):
             # limit if the end is not identified (failsafe)
             tb_end = max(line_count, cls.MAX_LINES)
         if tb_end - tb_start > cls.MAX_LINES:
-            lines = ["..."] + data[tb_end - cls.MAX_LINES:tb_end]
+            # add first entry
+            lines = data[tb_start:tb_start + 3]
+            lines += ["<--- TRACEBACK TRIMMED--->"]
+            # add end entries
+            lines += data[tb_end - (cls.MAX_LINES - 3):tb_end]
         else:
             lines = data[tb_start:tb_end]
         return cls(input_log, lines, is_kbi=is_kbi, prev_lines=prev_lines)
