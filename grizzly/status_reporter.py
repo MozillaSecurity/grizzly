@@ -125,7 +125,7 @@ class StatusReporter(object):
             str: A formatted report
         """
         if not self.reports:
-            return "No status reports loaded"
+            return "No status reports available"
         exp = int(time.time()) - self.EXP_LIMIT
         self.reports.sort(key=lambda x: x.duration, reverse=True)
         self.reports.sort(key=lambda x: x.timestamp < exp)
@@ -154,49 +154,49 @@ class StatusReporter(object):
         Returns:
             str: A summary of merged reports
         """
-        if not self.reports:
-            return "No status reports loaded"
         exp = int(time.time()) - self.EXP_LIMIT
         reports = tuple(x for x in self.reports if x.timestamp > exp)
-        # calculate totals
-        iterations = tuple(x.iteration for x in reports)
-        log_sizes = tuple(x.log_size for x in reports)
-        rates = tuple(x.rate for x in reports)
-        results = tuple(x.results for x in reports)
-        count = len(reports)
-        total_ignored = sum(x.ignored for x in reports)
-        total_iters = sum(iterations)
-
         txt = list()
-        # Iterations
-        txt.append("Iterations : %d" % (total_iters,))
-        if count > 1:
-            txt.append(" (%s, %s)" % (max(iterations), min(iterations)))
-        txt.append("\n")
-        # Rate
-        txt.append("      Rate : %d @ %0.2f" % (count, sum(rates)))
-        if count > 1:
-            txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
-        txt.append("\n")
-        # Results and ignored
-        txt.append("   Results : %d" % (sum(results),))
-        if total_ignored:
-            ignore_pct = (total_ignored / float(total_iters)) * 100
-            txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, ignore_pct))
-        # Runtime
-        if runtime:
-            txt.append("\n")
-            total_runtime = sum((x.duration for x in reports))
-            txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(total_runtime))),))
-        # Log size
-        log_usage = sum(log_sizes) / 1048576.0
-        if log_usage > self.DISPLAY_LIMIT_LOG:
-            txt.append("\n")
-            txt.append("      Logs : %0.1fMB" % (log_usage,))
+        if reports:
+            # calculate totals
+            iterations = tuple(x.iteration for x in reports)
+            log_sizes = tuple(x.log_size for x in reports)
+            rates = tuple(x.rate for x in reports)
+            results = tuple(x.results for x in reports)
+            count = len(reports)
+            total_ignored = sum(x.ignored for x in reports)
+            total_iters = sum(iterations)
+            # Iterations
+            txt.append("Iterations : %d" % (total_iters,))
             if count > 1:
-                txt.append(" (%0.2fMB, %0.2fMB)" % (
-                    max(log_sizes) / 1048576.0,
-                    min(log_sizes) / 1048576.0))
+                txt.append(" (%s, %s)" % (max(iterations), min(iterations)))
+            txt.append("\n")
+            # Rate
+            txt.append("      Rate : %d @ %0.2f" % (count, sum(rates)))
+            if count > 1:
+                txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
+            txt.append("\n")
+            # Results and ignored
+            txt.append("   Results : %d" % (sum(results),))
+            if total_ignored:
+                ignore_pct = (total_ignored / float(total_iters)) * 100
+                txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, ignore_pct))
+            # Runtime
+            if runtime:
+                txt.append("\n")
+                total_runtime = sum((x.duration for x in reports))
+                txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(total_runtime))),))
+            # Log size
+            log_usage = sum(log_sizes) / 1048576.0
+            if log_usage > self.DISPLAY_LIMIT_LOG:
+                txt.append("\n")
+                txt.append("      Logs : %0.1fMB" % (log_usage,))
+                if count > 1:
+                    txt.append(" (%0.2fMB, %0.2fMB)" % (
+                        max(log_sizes) / 1048576.0,
+                        min(log_sizes) / 1048576.0))
+        else:
+            txt.append("No status reports available")
         if sysinfo:
             txt.append("\n")
             txt.append(self._sys_info())
@@ -204,7 +204,7 @@ class StatusReporter(object):
             txt.append("\n")
             txt.append(" Timestamp : %s" % (time.strftime("%Y/%m/%d %X %z", time.gmtime()),))
         if self.tracebacks:
-            txt.append("\n\nWARNING Tracebacks detected!")
+            txt.append("\n\nWARNING Tracebacks (%d) detected!" % (len(self.tracebacks),))
             for tbr in self.tracebacks:
                 txt.append("\n")
                 txt.append(str(tbr))
@@ -293,7 +293,7 @@ class ReduceStatusReporter(StatusReporter):
             str: A formatted report
         """
         if not self.reports:
-            return "No status reports loaded"
+            return "No status reports available"
         exp = int(time.time()) - self.EXP_LIMIT
         self.reports.sort(key=lambda x: x.duration, reverse=True)
         self.reports.sort(key=lambda x: x.timestamp < exp)
@@ -323,34 +323,34 @@ class ReduceStatusReporter(StatusReporter):
         Returns:
             str: A summary of merged reports
         """
-        if not self.reports:
-            return "No status reports loaded"
         exp = int(time.time()) - self.EXP_LIMIT
         # filter out expired reports
         reports = tuple(x for x in self.reports if x.timestamp > exp)
-        # calculate totals
-        count = len(reports)
-        r_error = tuple(x.reduce_error for x in reports)
-        r_fail = tuple(x.reduce_fail for x in reports)
-        r_pass = tuple(x.reduce_pass for x in reports)
-
         txt = list()
         # Overall status
-        txt.append("---- Processed (%d)\n" % (sum(r_pass) + sum(r_fail) + sum(r_error),))
-        # Reduced successfully
-        txt.append("   Reduced : %d" % (sum(r_pass),))
-        if count > 1:
-            txt.append(" (%s, %s)" % (max(r_pass), min(r_pass)))
-        txt.append("\n")
-        # Failed to reproduce
-        txt.append("  No Repro : %d" % (sum(r_fail),))
-        if count > 1:
-            txt.append(" (%s, %s)" % (max(r_fail), min(r_fail)))
-        txt.append("\n")
-        # Error during reduction
-        txt.append("    Errors : %d" % (sum(r_error),))
-        if count > 1:
-            txt.append(" (%s, %s)" % (max(r_error), min(r_error)))
+        if reports:
+            # calculate totals
+            count = len(reports)
+            r_error = tuple(x.reduce_error for x in reports)
+            r_fail = tuple(x.reduce_fail for x in reports)
+            r_pass = tuple(x.reduce_pass for x in reports)
+            txt.append("---- Processed (%d)\n" % (sum(r_pass) + sum(r_fail) + sum(r_error),))
+            # Reduced successfully
+            txt.append("   Reduced : %d" % (sum(r_pass),))
+            if count > 1:
+                txt.append(" (%s, %s)" % (max(r_pass), min(r_pass)))
+            txt.append("\n")
+            # Failed to reproduce
+            txt.append("  No Repro : %d" % (sum(r_fail),))
+            if count > 1:
+                txt.append(" (%s, %s)" % (max(r_fail), min(r_fail)))
+            txt.append("\n")
+            # Error during reduction
+            txt.append("    Errors : %d" % (sum(r_error),))
+            if count > 1:
+                txt.append(" (%s, %s)" % (max(r_error), min(r_error)))
+        else:
+            txt.append("No status reports available")
         # Job specific status
         # filter out inactive
         reports = tuple(x for x in reports if x.duration > 0 or x.iteration > 0)
@@ -392,7 +392,7 @@ class ReduceStatusReporter(StatusReporter):
             txt.append("\n")
             txt.append(" Timestamp : %s" % (time.strftime("%Y/%m/%d %X %z", time.gmtime()),))
         if self.tracebacks:
-            txt.append("\n\nWARNING Tracebacks detected!")
+            txt.append("\n\nWARNING Tracebacks (%d) detected!" % (len(self.tracebacks),))
             for tbr in self.tracebacks:
                 txt.append("\n")
                 txt.append(str(tbr))

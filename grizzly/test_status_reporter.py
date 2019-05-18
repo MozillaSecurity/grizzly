@@ -14,15 +14,16 @@ from .status_reporter import Status, StatusReporter, TracebackReport
 
 def test_status_reporter_01(tmp_path):
     """test basic StatusReporter"""
+    StatusReporter.CPU_POLL_INTERVAL = 0.01
     st_rpt = StatusReporter(list())
     out = st_rpt._specific()
-    assert "No status reports loaded" in out
+    assert "No status reports available" in out
     report = tmp_path / "output.txt"
     st_rpt.dump_specific(str(report))
     assert report.is_file()
     st_rpt.print_specific()
     out = st_rpt._summary()
-    assert "No status reports loaded" in out
+    assert "No status reports available" in out
     report.unlink()
     st_rpt.dump_summary(str(report))
     assert report.is_file()
@@ -160,7 +161,7 @@ def test_status_reporter_06(tmp_path):
     assert "Results" in output
 
 def test_status_reporter_07(tmp_path):
-    """test StatusReporter.load_reports() with traceback"""
+    """test StatusReporter.load() with traceback"""
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
@@ -168,7 +169,7 @@ def test_status_reporter_07(tmp_path):
     status.iteration = 1
     status.log_size = 0
     status.results = 0
-    status.report()
+    status.report(force=True)
     # create boring screenlog
     test_log = tmp_path / "screenlog.0"
     test_log.write_bytes(b"boring\ntest\n123\n")
@@ -204,6 +205,23 @@ def test_status_reporter_07(tmp_path):
     assert "foo.bar.error" in merged_log
     assert "screenlog.3" not in merged_log
 
+def test_status_reporter_08(tmp_path):
+    """test StatusReporter.load() no reports with traceback"""
+    StatusReporter.CPU_POLL_INTERVAL = 0.01
+    test_db = tmp_path / "test.db"
+    # create screenlog with tb
+    test_log = tmp_path / "screenlog.1"
+    with test_log.open("wb") as test_fp:
+        test_fp.write(b"Traceback (most recent call last):\n")
+        test_fp.write(b"  blah\n")
+        test_fp.write(b"IndexError: list index out of range\n")
+    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    assert len(rptr.tracebacks) == 1
+    output = rptr._summary()
+    assert len(output.splitlines()) == 7
+    assert "No status reports available" in output
+    assert "IndexError" in output
+
 def test_reduce_status_reporter_01(tmp_path):
     """test empty ReduceStatusReporter"""
     test_db = tmp_path / "test.db"
@@ -211,9 +229,9 @@ def test_reduce_status_reporter_01(tmp_path):
     rptr = ReduceStatusReporter.load(str(test_db))
     assert not rptr.reports
     output = rptr._specific()
-    assert "No status reports loaded" in output
+    assert "No status reports available" in output
     output = rptr._summary()
-    assert "No status reports loaded" in output
+    assert "No status reports available" in output
 
 def test_reduce_status_reporter_02(tmp_path):
     """test ReduceStatusReporter._specific()"""
@@ -455,11 +473,8 @@ def test_main_02(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
-    status.ignored = 0
     status.iteration = 1
-    status.log_size = 0
-    status.results = 0
-    status.report()
+    status.report(force=True)
     assert test_db.is_file()
     main([])
 
@@ -468,11 +483,8 @@ def test_main_03(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
-    status.ignored = 0
     status.iteration = 1
-    status.log_size = 0
-    status.results = 0
-    status.report()
+    status.report(force=True)
     assert test_db.is_file()
     dump_file = tmp_path / "output.txt"
     main(["--dump", str(dump_file)])
@@ -484,7 +496,7 @@ def test_main_04(tmp_path):
     Status.DB_FILE = str(test_db)
     status = ReduceStatus.start()
     status.iteration = 1
-    status.report()
+    status.report(force=True)
     assert test_db.is_file()
     main(["--mode", "reduce-status"])
 
@@ -492,9 +504,5 @@ def test_main_05(tmp_path):
     """test main() with invalid mode"""
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
-    status = Status.start()
-    status.iteration = 1
-    status.report()
-    assert test_db.is_file()
     with pytest.raises(SystemExit):
         main(["--mode", "invalid"])
