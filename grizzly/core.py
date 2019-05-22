@@ -326,16 +326,10 @@ def main(args):
         log.debug("initializing the Reporter")
         if args.fuzzmanager:
             log.info("Results will be reported via FuzzManager")
-            reporter = FuzzManagerReporter(
-                args.binary,
-                log_limit=Session.FM_LOG_SIZE_LIMIT,
-                tool=args.tool)
+            reporter = FuzzManagerReporter(args.binary, tool=args.tool)
         elif args.s3_fuzzmanager:
             log.info("Results will be reported via FuzzManager w/ large attachments in S3")
-            reporter = S3FuzzManagerReporter(
-                args.binary,
-                log_limit=Session.FM_LOG_SIZE_LIMIT,
-                tool=args.tool)
+            reporter = S3FuzzManagerReporter(args.binary, tool=args.tool)
         else:
             reporter = FilesystemReporter()
             log.info("Results will be stored in %r", reporter.report_path)
@@ -364,8 +358,6 @@ def main(args):
         if session is not None:
             session.close()
         if target is not None:
-            if target.use_rr and target.rr_path is not None and os.path.isdir(target.rr_path):
-                shutil.rmtree(target.rr_path)
             target.cleanup()
         if adapter is not None:
             adapter.cleanup()

@@ -795,10 +795,7 @@ def main(args, interesting_cb=None, result_cb=None):
         LOG.debug("initializing the Reporter")
         if args.fuzzmanager:
             LOG.info("Reporting issues via FuzzManager")
-            job.reporter = FuzzManagerReporter(
-                args.binary,
-                log_limit=Session.FM_LOG_SIZE_LIMIT,
-                tool=args.tool)
+            job.reporter = FuzzManagerReporter(args.binary, tool=args.tool)
         else:
             job.reporter = FilesystemReporter()
             LOG.info("Results will be stored in %r", job.reporter.report_path)

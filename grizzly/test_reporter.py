@@ -6,12 +6,12 @@
 
 import glob
 import os
-import subprocess
 import sys
+import tarfile
 
 import pytest
 
-from .reporter import FilesystemReporter, Report, Reporter
+from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter
 
 
 def test_report_01():
@@ -331,25 +331,28 @@ def test_filesystem_reporter_02(tmp_path):
     assert len(results) == 2
     assert "NO_STACK" in results
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RR only supported on Linux")
 def test_filesystem_reporter_03(tmp_path):
-    """test packaging rr traces"""
-    rr_dir = tmp_path / "rr_test"
-    rr_dir.mkdir()
-    try:
-        subprocess.check_output(
-            ["rr", "record", "/bin/echo", "hello world"],
-            env={"_RR_TRACE_DIR": str(rr_dir)})
-    except OSError as exc:
-        pytest.skip("calling rr: %s" % (exc,))
-    assert os.path.islink(os.path.join(str(rr_dir), "latest-trace"))
-    assert os.path.isdir(os.path.realpath(os.path.join(str(rr_dir), "latest-trace")))
+    """test FilesystemReporter disk space failsafe"""
     log_path = tmp_path / "logs"
     log_path.mkdir()
-    # write logs
-    os.symlink(
-        os.path.realpath(os.path.join(str(rr_dir), "latest-trace")),
-        os.path.join(str(log_path), "rr-trace"))
+    tmp_log = log_path / "log_stderr.txt"
+    tmp_log.write_bytes(b"STDERR log")
+    tmp_log = log_path / "log_stdout.txt"
+    tmp_log.write_bytes(b"STDOUT log")
+    report_path = tmp_path / "reports"
+    report_path.mkdir()
+    reporter = FilesystemReporter(report_path=str(report_path))
+    reporter.DISK_SPACE_ABORT = 2 ** 50
+    with pytest.raises(RuntimeError) as exc:
+        reporter.submit(str(log_path), [])
+    assert "Running low on disk space" in str(exc)
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RR only supported on Linux")
+def test_filesystem_reporter_04(tmp_path):
+    """test packaging rr traces"""
+    # create fake logs
+    log_path = tmp_path / "logs"
+    log_path.mkdir()
     tmp_log = log_path / "log_stderr.txt"
     tmp_log.write_bytes(b"STDERR log")
     tmp_log = log_path / "log_stdout.txt"
@@ -358,11 +361,46 @@ def test_filesystem_reporter_03(tmp_path):
     with tmp_log.open("wb") as log_fp:
         log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
+    # create fake trace
+    rr_trace_path = log_path / "rr-traces" / "echo-0"
+    rr_trace_path.mkdir(parents=True)
+    tr_file = rr_trace_path / "fail_file"
+    tr_file.touch()
+    rr_trace_path = log_path / "rr-traces" / "echo-1"
+    rr_trace_path.mkdir()
+    tr_file = rr_trace_path / "cloned_data_5799_1"
+    tr_file.touch()
+    tr_file = rr_trace_path / "data"
+    tr_file.write_bytes(b"test_data")
+    tr_file = rr_trace_path / "events"
+    tr_file.write_bytes(b"foo")
+    tr_file = rr_trace_path / "mmap"
+    tr_file.write_bytes(b"bar")
+    tr_file = rr_trace_path / "tasks"
+    tr_file.write_bytes(b"foo")
+    tr_file = rr_trace_path / "version"
+    tr_file.write_bytes(b"123")
+    latest_path = log_path / "rr-traces" / "latest-trace"
+    latest_path.symlink_to(str(rr_trace_path), target_is_directory=True)
     report_path = tmp_path / "reports"
+    # report
+    assert not report_path.exists()
     reporter = FilesystemReporter(report_path=str(report_path))
     reporter.submit(str(log_path), [])
+    assert report_path.exists()
+    # verify report and archive
     report_log_dirs = glob.glob(str(report_path) + "/*/*_logs/")
     assert len(report_log_dirs) == 1
     report_log_dir = report_log_dirs[0]
-    assert not os.path.islink(os.path.join(report_log_dir, "rr-trace"))
-    assert os.path.isfile(os.path.join(report_log_dir, "rr.tar.xz"))
+    report_contents = os.listdir(report_log_dir)
+    assert "rr.tar.bz2" in report_contents
+    assert "rr-traces" not in report_contents
+    arc_file = os.path.join(report_log_dir, "rr.tar.bz2")
+    assert os.path.isfile(arc_file)
+    with tarfile.open(arc_file, "r:bz2") as arc_fp:
+        entries = arc_fp.getnames()
+    assert "echo-1" in entries
+    assert "echo-0" not in entries
+    assert "latest-trace" not in entries
+
+# TODO: fill out tests for FuzzManagerReporter and S3FuzzManagerReporter

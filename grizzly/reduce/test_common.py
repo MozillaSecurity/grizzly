@@ -9,6 +9,8 @@ from grizzly.reporter import Reporter
 
 
 class BaseFakeReporter(Reporter):
+    def _pre_submit(self, _):
+        pass
 
     def _reset(self):
         pass

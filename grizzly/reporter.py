@@ -9,11 +9,12 @@ import logging
 import os
 import re
 import shutil
-import subprocess
+import tarfile
 import tempfile
 import time
 import zipfile
 
+import psutil
 import six
 
 # check if required FuzzManager modules are available
@@ -81,16 +82,13 @@ class Report(object):
             self.stack = None
             self.prefix = "%s_%s" % (self.DEFAULT_MINOR, time.strftime("%Y-%m-%d_%H-%M-%S"))
 
-
     def cleanup(self):
         if os.path.isdir(self.path):
             shutil.rmtree(self.path)
 
-
     @classmethod
     def from_path(cls, path, size_limit=MAX_LOG_SIZE):
         return cls(path, Report.select_logs(path), size_limit=size_limit)
-
 
     @property
     def major(self):
@@ -101,7 +99,6 @@ class Report(object):
             pass
         return self.DEFAULT_MAJOR
 
-
     @property
     def minor(self):
         try:
@@ -111,11 +108,9 @@ class Report(object):
             pass
         return self.DEFAULT_MINOR
 
-
     @property
     def preferred(self):
         return self.log_aux if self.log_aux is not None else self.log_err
-
 
     @staticmethod
     def select_logs(log_path):
@@ -205,7 +200,6 @@ class Report(object):
 
         return logs
 
-
     @staticmethod
     def tail(in_file, size_limit):
         assert size_limit > 0
@@ -264,24 +258,28 @@ class Reporter(object):
 
 
 class FilesystemReporter(Reporter):
+    DISK_SPACE_ABORT = 512 * 1024 * 1024  # 512 MB
+
     def __init__(self, report_path=None):
         self.report_path = os.path.join(os.getcwd(), "results") if report_path is None else report_path
 
-    def _pre_submit(self, report):
-        self.compress_rr_trace(os.path.join(report.path, "rr-trace"), report.path)
-
     @staticmethod
-    def compress_rr_trace(path, dest, rm_path=False):
-        if not os.path.isdir(path):
-            return None
-        log.debug("calling: rr pack %s", path)
-        subprocess.check_output(["rr", "pack", path])
-        log.debug("calling: tar cf rr.tar %s", path)
-        rr_tar = os.path.join(dest, "rr.tar.xz")
-        subprocess.check_call(["tar", "-C", path, "-caf", rr_tar, dest])
-        if rm_path:
-            shutil.rmtree(path)
-        return rr_tar
+    def compress_rr_trace(src, dest):
+        # resolve symlink to latest trace available
+        latest_trace = os.path.realpath(os.path.join(src, "latest-trace"))
+        assert os.path.isdir(latest_trace), "missing latest-trace directory"
+        rr_arc = os.path.join(dest, "rr.tar.bz2")
+        log.debug("creating %r from %r", rr_arc, latest_trace)
+        with tarfile.open(rr_arc, "w:bz2") as arc_fp:
+            arc_fp.add(latest_trace, arcname=os.path.basename(latest_trace))
+        # remove path containing uncompressed traces
+        shutil.rmtree(src)
+        return rr_arc
+
+    def _pre_submit(self, report):
+        trace_path = os.path.join(report.path, "rr-traces")
+        if os.path.isdir(trace_path):
+            self.compress_rr_trace(trace_path, report.path)
 
     def _reset(self):
         pass
@@ -305,6 +303,11 @@ class FilesystemReporter(Reporter):
             log.warning("Report log path exists %r", target_dir)
         shutil.move(report.path, target_dir)
 
+        # avoid filling the disk
+        free_space = psutil.disk_usage(target_dir).free
+        if free_space < self.DISK_SPACE_ABORT:
+            raise RuntimeError("Running low on disk space (%0.1fMB)" % (free_space / 1048576.0,))
+
 
 class FuzzManagerReporter(Reporter):
     # this is where Collector looks for the '.fuzzmanagerconf' (see Collector.py)
@@ -323,8 +326,7 @@ class FuzzManagerReporter(Reporter):
     QUAL_REDUCER_ERROR = 9  # reducer error
     QUAL_NOT_REPRODUCIBLE = 10  # could not reproduce the testcase
 
-    def __init__(self, target_binary, log_limit=0, tool=None):
-        Reporter.__init__(self, log_limit)
+    def __init__(self, target_binary, tool=None):
         self._extra_metadata = {}
         self.force_report = False
         self.quality = self.QUAL_UNREDUCED
@@ -382,10 +384,13 @@ class FuzzManagerReporter(Reporter):
 
     def _process_rr_trace(self, report):
         # don't report large files to FuzzManager
-        trace_dir = os.path.join(report.path, "rr-trace")
-        if os.path.isdir(trace_dir):
+        trace_path = os.path.join(report.path, "rr-traces")
+        if os.path.isdir(trace_path):
+            log.info("Ignored rr trace")
             self._extra_metadata["rr-trace"] = "ignored"
-            os.unlink(trace_dir)
+            # remove traces so they are not uploaded to FM (because they are huge)
+            # use S3FuzzManagerReporter instead
+            shutil.rmtree(trace_path)
 
     @staticmethod
     def _ignored(report):
@@ -508,13 +513,14 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
         self._process_rr_trace(report)
 
     def _process_rr_trace(self, report):
-        trace_dir = os.path.join(report.path, "rr-trace")
-        if not os.path.isdir(trace_dir):
+        trace_path = os.path.join(report.path, "rr-traces")
+        if not os.path.isdir(trace_path):
             return None
-        s3_bucket = os.environ.get("GRZ_S3_BUCKET")
+        s3_bucket = os.getenv("GRZ_S3_BUCKET")
+        assert s3_bucket is not None
         # check for existing minor hash in S3
         s3 = boto3.resource("s3")
-        s3_key = "rr-%s.tar.xz" % (report.minor,)
+        s3_key = "rr-%s.zip" % (report.minor,)
         s3_url = "http://%s.s3.amazonaws.com/%s" % (s3_bucket, s3_key)
         try:
             s3.Object(s3_bucket, s3_key).load()  # HEAD, doesn't fetch the whole object
@@ -529,19 +535,19 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
             # The object already exists.
             log.info("RR trace exists at %s", s3_url)
             self._extra_metadata["rr-trace"] = s3_url
-            shutil.rmtree(trace_dir)
+            # remove traces so they are not reported to FM
+            shutil.rmtree(trace_path)
             return s3_url
 
         # Upload to S3
-        rr_path = FilesystemReporter.compress_rr_trace(os.path.join(report.path, "rr-trace"), report.path)
-        s3.meta.client.upload_file(rr_path, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"})
+        rr_arc = FilesystemReporter.compress_rr_trace(trace_path, report.path)
+        s3.meta.client.upload_file(rr_arc, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"})
         self._extra_metadata["rr-trace"] = s3_url
-        log.info("RR trace uploaded at %s", s3_url)
         return s3_url
 
     @staticmethod
     def sanity_check(bin_file):
-        if os.environ.get("GRZ_S3_BUCKET") is None:
+        if os.getenv("GRZ_S3_BUCKET") is None:
             raise EnvironmentError("'GRZ_S3_BUCKET' is not set in environment")
         if _boto_import_error is not None:
             raise _boto_import_error  # pylint: disable=raising-bad-type
