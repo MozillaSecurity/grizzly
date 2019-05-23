@@ -25,6 +25,7 @@ class FakeReduceStatus(object):
     def __init__(self):
         self.uid = 0
         self.duration = 0
+        self.ignored = 0
         self.iteration = 0
         self.rate = 0
         self.results = 0
