@@ -10,6 +10,7 @@ import re
 
 from .storage import InputFile, TestCase, TestFile
 
+__all__ = ("IOManager", "ServerMap")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -20,7 +21,6 @@ class ServerMap(object):
         self._include = dict()  # mapping of directories that can be requested
         self._redirect = dict()  # document paths to map to file names using 307s
 
-
     @property
     def dynamic_responses(self):
         out = list()
@@ -28,11 +28,9 @@ class ServerMap(object):
             out.append({"url":url, "callback":callback, "mime":mime})
         return out
 
-
     @property
     def includes(self):
         return list(self._include.items())
-
 
     @property
     def redirects(self):
@@ -41,34 +39,26 @@ class ServerMap(object):
             out.append({"url":url, "file_name":file_name, "required":required})
         return out
 
-
     def reset(self, dynamic_response=False, include=False, redirect=False):
         assert dynamic_response or include or redirect, "At least one kwarg should be True"
         if dynamic_response:
             self._dynamic.clear()
         if include:
-            self._include.clear()  # mapping of directories that can be requested
+            self._include.clear()
         if redirect:
-            self._redirect.clear()  # document paths to map to file names using 307s
-
+            self._redirect.clear()
 
     def remove_dynamic_response(self, url_path):
         assert isinstance(url_path, str)
-        assert url_path in self._dynamic
-        self._dynamic.pop(url_path, None)
-
+        self._dynamic.pop(url_path)
 
     def remove_include(self, url_path):
         assert isinstance(url_path, str)
-        assert url_path in self._include
-        self._include.pop(url_path, None)
-
+        self._include.pop(url_path)
 
     def remove_redirect(self, url):
         assert isinstance(url, str)
-        assert url in self._redirect
-        self._redirect.pop(url, None)
-
+        self._redirect.pop(url)
 
     def set_dynamic_response(self, url_path, callback, mime_type="application/octet-stream"):
         assert isinstance(url_path, str)
@@ -76,14 +66,12 @@ class ServerMap(object):
         assert isinstance(mime_type, str)
         self._dynamic[url_path] = (callback, mime_type)
 
-
     def set_include(self, url_path, target_path):
         assert isinstance(url_path, str)
         assert isinstance(target_path, str)
         if not os.path.isdir(target_path):
-            raise IOError("%r does not exist" % target_path)
+            raise IOError("%r does not exist" % (target_path,))
         self._include[url_path] = os.path.abspath(target_path)
-
 
     def set_redirect(self, url, file_name, required=True):
         assert isinstance(file_name, str)
@@ -100,7 +88,6 @@ class IOManager(object):
         "GRZ_FORCED_CLOSE",
         "MOZ_CHAOSMODE")
 
-
     def __init__(self, report_size=1, mime_type=None, working_path=None):
         assert report_size > 0
         self.active_input = None  # current active input file
@@ -109,14 +96,13 @@ class IOManager(object):
         self.server_map = ServerMap()  # manage redirects, include directories and dynamic responses
         self.tests = deque()
         self.working_path = working_path
-        self._report_size = report_size
         self._environ_files = list()  # collection of files that should be added to the testcase
         self._generated = 0  # number of test cases generated
         self._mime = mime_type
+        self._report_size = report_size
         # used to record environment variable that directly impact the browser
         self._tracked_env = self.tracked_environ()
         self._add_suppressions()
-
 
     def _add_suppressions(self):
         # Add suppression files to environment files
@@ -129,18 +115,18 @@ class IOManager(object):
                     continue
                 supp_file = opt.split("=")[-1].strip("'\"")
                 if os.path.isfile(supp_file):
-                    fname = "%s.supp" % opt_var.split("_")[0].lower()
+                    fname = "%s.supp" % (opt_var.split("_")[0].lower(),)
                     self._environ_files.append(TestFile.from_file(supp_file, fname))
                     break
-
 
     def cleanup(self):
         if self.active_input is not None:
             self.active_input.close()
+        if self.harness is not None:
+            self.harness.close()
         for e_file in self._environ_files:
             e_file.close()
         self.purge_tests()
-
 
     def scan_input(self, scan_path, accepted_extensions=None, sort=False):
         assert scan_path is not None, "scan_path should be a valid path"
@@ -172,43 +158,41 @@ class IOManager(object):
             self.input_files.append(os.path.abspath(scan_path))
 
         if not self.input_files:
-            raise IOError("Could not find input file(s) at %s" % scan_path)
+            raise IOError("Could not find input file(s) at %s" % (scan_path,))
 
         if sort and self.input_files:
             self.input_files.sort(reverse=True)
 
-
     def page_name(self, offset=0):
-        return "test_%04d.html" % (self._generated + offset)
-
+        return "test_%04d.html" % (self._generated + offset,)
 
     def landing_page(self):
         if self.harness is None:
             return self.page_name()
         return self.harness.file_name
 
-
     def redirect_page(self):
         return self.page_name(offset=1)
 
-
     def _rotation_required(self, rotation_period):
         if not self.input_files:
-            return False  # only rotate if we have input files
-        elif self.active_input is None:
-            return True  # we need a file
-        elif not rotation_period:
-            return True  # single pass mode
-        elif len(self.input_files) < 2:
-            return False  # only rotate if we have more than one file
-        elif not self._generated % rotation_period:
+            # only rotate if we have input files
+            return False
+        if self.active_input is None:
+            # we need a file
+            return True
+        if not rotation_period:
+            # single pass mode
+            return True
+        if len(self.input_files) < 2:
+            # single pass mode
+            return False
+        if not self._generated % rotation_period:
             return True
         return False
 
-
     def size(self):
         return len(self.input_files)
-
 
     def create_testcase(self, adapter_name, rotation_period=10):
         # check if we should choose a new active input file
@@ -252,12 +236,10 @@ class IOManager(object):
 
         return test
 
-
     def purge_tests(self):
         for testcase in self.tests:
             testcase.cleanup()
         self.tests.clear()
-
 
     @staticmethod
     def tracked_environ():
@@ -280,5 +262,4 @@ class IOManager(object):
                     env[e_var] = ":".join(opts)
             else:
                 env[e_var] = os.environ[e_var]
-
         return env
