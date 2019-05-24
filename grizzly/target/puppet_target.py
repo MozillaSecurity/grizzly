@@ -12,6 +12,7 @@ from ffpuppet import FFPuppet, LaunchError
 from .target_monitor import TargetMonitor
 from .target import Target
 
+__all__ = ("PuppetTarget",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
@@ -24,9 +25,9 @@ class PuppetTarget(Target):
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch, **kwds):
         super(PuppetTarget, self).__init__(binary, extension, launch_timeout, log_limit,
                                            memory_limit, prefs, relaunch)
-        self.use_rr = kwds.pop('rr', False)
-        self.use_valgrind = kwds.pop('valgrind', False)
-        use_xvfb = kwds.pop('xvfb', False)
+        self.use_rr = kwds.pop("rr", False)
+        self.use_valgrind = kwds.pop("valgrind", False)
+        use_xvfb = kwds.pop("xvfb", False)
 
         if kwds:
             log.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
@@ -70,9 +71,7 @@ class PuppetTarget(Target):
                     return self._puppet.launches
                 def log_length(_, log_id):
                     return self._puppet.log_length(log_id)
-
             self._monitor = _PuppetMonitor()
-
         return self._monitor
 
     def poll_for_idle(self, threshold, interval):
@@ -155,10 +154,9 @@ class PuppetTarget(Target):
 
     def launch(self, location, env_mod=None):
         self.rl_countdown = self.rl_reset
-        env_mod = dict(env_mod or [])  # if passed, make a copy so modifications aren't passed out
+        env_mod = dict(env_mod or [])
         # do not allow network connections to non local endpoints
         env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
-        # TODO: move to FFPuppet?
         env_mod["MOZ_CRASHREPORTER_SHUTDOWN"] = "1"
         try:
             self._puppet.launch(

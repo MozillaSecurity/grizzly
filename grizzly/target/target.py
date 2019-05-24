@@ -10,6 +10,7 @@ import time
 
 import six
 
+__all__ = ("Target",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
