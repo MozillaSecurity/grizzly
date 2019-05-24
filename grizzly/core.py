@@ -289,7 +289,7 @@ def main(args):
                 args.input,
                 accepted_extensions=args.accepted_extensions,
                 sort=adapter.ROTATION_PERIOD == 0)
-        log.info("Found %d test case(s)", iomanager.size())
+        log.info("Found %d input files(s)", len(iomanager.input_files))
 
         if adapter.ROTATION_PERIOD == 0:
             log.info("Running in SINGLE PASS mode")

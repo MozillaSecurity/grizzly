@@ -128,10 +128,80 @@ class IOManager(object):
             e_file.close()
         self.purge_tests()
 
+    def create_testcase(self, adapter_name, rotation_period=10):
+        # check if we should choose a new active input file
+        if self._rotation_required(rotation_period):
+            assert self.input_files
+            # close previous input if needed
+            if self.active_input is not None:
+                self.active_input.close()
+            if rotation_period > 0:
+                self.active_input = InputFile(random.choice(self.input_files))
+            else:
+                # single pass mode
+                self.active_input = InputFile(self.input_files.pop())
+        # create testcase object and landing page names
+        test = TestCase(
+            self.page_name(),
+            self.page_name(offset=1),
+            adapter_name=adapter_name,
+            input_fname=self.active_input.file_name if self.active_input else None)
+        # add environment variable info to the test case
+        for e_name, e_value in self._tracked_env.items():
+            test.add_environ_var(e_name, e_value)
+        # add environment files to the test case
+        for e_file in self._environ_files:
+            test.add_meta(e_file.clone())
+        # reset redirect map
+        self.server_map.reset(redirect=True)
+        if self.harness is not None:
+            # setup redirects for harness
+            self.server_map.set_redirect("first_test", self.page_name(), required=False)
+            self.server_map.set_redirect("next_test", self.page_name(offset=1))
+            # add harness to testcase
+            test.add_file(self.harness.clone(), required=False)
+        self._generated += 1
+        self.tests.append(test)
+        # manage testcase cache size
+        if len(self.tests) > self._report_size:
+            self.tests.popleft().cleanup()
+        return test
+
+    def landing_page(self):
+        if self.harness is None:
+            return self.page_name()
+        return self.harness.file_name
+
+    def page_name(self, offset=0):
+        return "test_%04d.html" % (self._generated + offset,)
+
+    def purge_tests(self):
+        for testcase in self.tests:
+            testcase.cleanup()
+        self.tests.clear()
+
+    def redirect_page(self):
+        return self.page_name(offset=1)
+
+    def _rotation_required(self, rotation_period):
+        if not self.input_files:
+            # only rotate if we have input files
+            return False
+        if self.active_input is None:
+            # we need a file
+            return True
+        if not rotation_period:
+            # single pass mode
+            return True
+        if len(self.input_files) < 2:
+            # single pass mode
+            return False
+        if not self._generated % rotation_period:
+            return True
+        return False
+
     def scan_input(self, scan_path, accepted_extensions=None, sort=False):
         assert scan_path is not None, "scan_path should be a valid path"
-        assert not self.input_files, "input_files should be empty"
-
         if os.path.isdir(scan_path):
             # create a set of normalized file extensions to look in
             if accepted_extensions is not None:
@@ -157,89 +227,8 @@ class IOManager(object):
         elif os.path.isfile(scan_path) and os.path.getsize(scan_path) > 0:
             self.input_files.append(os.path.abspath(scan_path))
 
-        if not self.input_files:
-            raise IOError("Could not find input file(s) at %s" % (scan_path,))
-
         if sort and self.input_files:
             self.input_files.sort(reverse=True)
-
-    def page_name(self, offset=0):
-        return "test_%04d.html" % (self._generated + offset,)
-
-    def landing_page(self):
-        if self.harness is None:
-            return self.page_name()
-        return self.harness.file_name
-
-    def redirect_page(self):
-        return self.page_name(offset=1)
-
-    def _rotation_required(self, rotation_period):
-        if not self.input_files:
-            # only rotate if we have input files
-            return False
-        if self.active_input is None:
-            # we need a file
-            return True
-        if not rotation_period:
-            # single pass mode
-            return True
-        if len(self.input_files) < 2:
-            # single pass mode
-            return False
-        if not self._generated % rotation_period:
-            return True
-        return False
-
-    def size(self):
-        return len(self.input_files)
-
-    def create_testcase(self, adapter_name, rotation_period=10):
-        # check if we should choose a new active input file
-        if self._rotation_required(rotation_period):
-            # close previous input if needed
-            if self.active_input is not None:
-                self.active_input.close()
-            if rotation_period > 0:
-                self.active_input = InputFile(random.choice(self.input_files))
-            else:
-                # single pass mode
-                self.active_input = InputFile(self.input_files.pop())
-
-        # create testcase object and landing page names
-        test = TestCase(
-            self.page_name(),
-            self.page_name(offset=1),
-            adapter_name=adapter_name,
-            input_fname=self.active_input.file_name if self.active_input else None)
-
-        for e_name, e_value in self._tracked_env.items():
-            test.add_environ_var(e_name, e_value)
-
-        for e_file in self._environ_files:
-            test.add_meta(e_file.clone())
-
-        # reset redirect map
-        self.server_map.reset(redirect=True)
-        if self.harness is not None:
-            # setup redirects for harness
-            self.server_map.set_redirect("first_test", self.page_name(), required=False)
-            self.server_map.set_redirect("next_test", self.page_name(offset=1))
-            # add harness to testcase
-            test.add_file(self.harness.clone(), required=False)
-
-        self._generated += 1
-        self.tests.append(test)
-        # manage testcase cache size
-        if len(self.tests) > self._report_size:
-            self.tests.popleft().cleanup()
-
-        return test
-
-    def purge_tests(self):
-        for testcase in self.tests:
-            testcase.cleanup()
-        self.tests.clear()
 
     @staticmethod
     def tracked_environ():

@@ -16,7 +16,7 @@ def test_iomanager_01():
     """test a simple IOManager"""
     iom = IOManager()
     try:
-        assert iom.size() == 0
+        assert not iom.input_files
         assert iom.active_input is None
         assert iom.server_map is not None
         assert not iom.input_files
@@ -32,9 +32,8 @@ def test_iomanager_02(tmp_path):
     iom = IOManager()
     try:
         # pass empty directory path
-        with pytest.raises(IOError) as exc:
-            iom.scan_input(str(tmp_path), None)
-        assert "Could not find input file(s)" in str(exc)
+        iom.scan_input(str(tmp_path))
+        assert not iom.input_files
         # create a test corpus
         test_file = tmp_path / "input_01.bin"
         test_file.write_bytes(b"foo")
@@ -51,17 +50,16 @@ def test_iomanager_02(tmp_path):
         test_file = nested / "input_03.txt"
         test_file.write_bytes(b"test")
         # pass directory path
-        iom.input_files = list()
         iom.scan_input(str(tmp_path), sort=True)
-        assert iom.size() == 3
+        assert len(iom.input_files) == 3
         # pass directory path with filter
         iom.input_files = list()
         iom.scan_input(str(tmp_path), ["Bin"])
-        assert iom.size() == 1
+        assert len(iom.input_files) == 1
         # pass file path
         iom.input_files = list()
         iom.scan_input(str(test_file))
-        assert iom.size() == 1
+        assert len(iom.input_files) == 1
     finally:
         iom.cleanup()
 
@@ -76,7 +74,7 @@ def test_iomanager_03(tmp_path, mocker):
         test_file = tmp_path / "input_01.bin"
         test_file.write_bytes(b"foo")
         iom.scan_input(str(tmp_path))
-        assert iom.size() == 1
+        assert len(iom.input_files) == 1
         # skip rotation because we only have one input file
         iom._generated = 1
         iom.active_input = mocker.Mock()
@@ -86,7 +84,7 @@ def test_iomanager_03(tmp_path, mocker):
         test_file.write_bytes(b"bar")
         iom.input_files = list()  # hack to enable rescan
         iom.scan_input(str(tmp_path))
-        assert iom.size() == 2
+        assert len(iom.input_files) == 2
         # pick a file
         iom.active_input = None
         assert iom._rotation_required(10)
@@ -148,10 +146,12 @@ def test_iomanager_07(tmp_path, mocker):
     try:
         assert iom._generated == 0
         assert iom._report_size == 1
+        assert not iom.input_files
+        assert iom.active_input is None
         assert not iom.tests
         iom._tracked_env = {"TEST": "1"}
         iom._environ_files = [TestFile.from_data(b"data", "e.txt")]
-        # without a harness
+        # without a harness, no input files
         tcase = iom.create_testcase("test-adapter", rotation_period=1)
         assert tcase is not None
         assert iom._generated == 1
