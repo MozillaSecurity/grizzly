@@ -33,6 +33,7 @@ class StatusReporter(object):
     DISPLAY_LIMIT_LOG = 10  # don't include log results unless size exceeds 10MBs
     EXP_LIMIT = 600  # expiration limit, ignore older reports
     READ_BUF_SIZE = 0x10000  # 64KB
+    SUMMARY_LIMIT = 4095  # summary output must be no more than 4KB
 
     def __init__(self, reports, tracebacks=None):
         self.reports = reports
@@ -203,12 +204,21 @@ class StatusReporter(object):
         if timestamp:
             txt.append("\n")
             txt.append(" Timestamp : %s" % (time.strftime("%Y/%m/%d %X %z", time.gmtime()),))
+        msg = "".join(txt)
         if self.tracebacks:
+            # append tracebacks to summary output without exceeding SUMMARY_LIMIT
+            msg_size = len(msg)
+            txt = list()
             txt.append("\n\nWARNING Tracebacks (%d) detected!" % (len(self.tracebacks),))
+            tb_size = len("".join(txt))
             for tbr in self.tracebacks:
+                tb_size += len(tbr) + 1
+                if msg_size + tb_size > self.SUMMARY_LIMIT:
+                    break
                 txt.append("\n")
                 txt.append(str(tbr))
-        return "".join(txt)
+            msg = "".join([msg] + txt)
+        return msg
 
     @staticmethod
     def _sys_info():
@@ -391,12 +401,21 @@ class ReduceStatusReporter(StatusReporter):
         if timestamp:
             txt.append("\n")
             txt.append(" Timestamp : %s" % (time.strftime("%Y/%m/%d %X %z", time.gmtime()),))
+        msg = "".join(txt)
         if self.tracebacks:
+            # append tracebacks to summary output without exceeding SUMMARY_LIMIT
+            msg_size = len(msg)
+            txt = list()
             txt.append("\n\nWARNING Tracebacks (%d) detected!" % (len(self.tracebacks),))
+            tb_size = len("".join(txt))
             for tbr in self.tracebacks:
+                tb_size += len(tbr) + 1
+                if msg_size + tb_size > self.SUMMARY_LIMIT:
+                    break
                 txt.append("\n")
                 txt.append(str(tbr))
-        return "".join(txt)
+            msg = "".join([msg] + txt)
+        return msg
 
 
 class TracebackReport(object):
@@ -478,6 +497,9 @@ class TracebackReport(object):
         else:
             lines = data[tb_start:tb_end]
         return cls(input_log, lines, is_kbi=is_kbi, prev_lines=prev_lines)
+
+    def __len__(self):
+        return len(str(self))
 
     def __str__(self):
         return "\n".join(["Log: %r" % self.file_name] + self.prev_lines + self.lines)

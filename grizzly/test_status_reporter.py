@@ -222,6 +222,38 @@ def test_status_reporter_08(tmp_path):
     assert "No status reports available" in output
     assert "IndexError" in output
 
+def test_status_reporter_09(tmp_path):
+    """test StatusReporter.summary() limit with traceback"""
+    StatusReporter.CPU_POLL_INTERVAL = 0.01
+    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(test_db)
+    # create reports
+    status = Status.start()
+    status.ignored = 100
+    status.iteration = 1000
+    status.log_size = 9999999999
+    status.results = 123
+    status.report(force=True)
+    status = Status.start()
+    status.ignored = 9
+    status.iteration = 192938
+    status.log_size = 0
+    status.results = 3
+    status.report(force=True)
+    # create screenlogs with tracebacks
+    for i in range(10):
+        test_log = tmp_path / ("screenlog.%d" % (i,))
+        with test_log.open("wb") as test_fp:
+            test_fp.write(b"Traceback (most recent call last):\n")
+            for j in range(TracebackReport.MAX_LINES):
+                test_fp.write(b"  File \"some/long/path/name/foobar.py\", line 5000, in <module>\n")
+                test_fp.write(b"    some_long_name_for_a_func_%04d()\n" % (j,))
+            test_fp.write(b"IndexError: list index out of range\n")
+    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    assert len(rptr.tracebacks) == 10
+    merged_log = rptr._summary(runtime=True, sysinfo=True, timestamp=True)
+    assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
+
 def test_reduce_status_reporter_01(tmp_path):
     """test empty ReduceStatusReporter"""
     test_db = tmp_path / "test.db"
@@ -351,6 +383,7 @@ def test_traceback_report_01():
     tbr = TracebackReport("log.txt", ["0", "1", "2"], prev_lines=["-2", "-1"])
     output = str(tbr)
     assert len(output.splitlines()) == 6
+    assert len(tbr) == 26
     assert "log.txt" in output
     assert "2" in output
     assert "-2" in output
