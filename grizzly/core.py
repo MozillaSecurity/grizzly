@@ -27,11 +27,11 @@ import tempfile
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, LaunchError
 import sapphire
 
-from .corpman import adapters, IOManager
 from .args import GrizzlyArgs
+from .corpman import adapters, IOManager
+from .corpman.storage import TestFile
 from .reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
 from .status import Status
-from .corpman.storage import TestFile
 from .target import load as load_target
 
 
@@ -60,7 +60,6 @@ class Session(object):
         self.status = Status.start()
         self.target = target
 
-
     def check_results(self, unserved, was_timeout):
         # attempt to detect a failure
         failure_detected = self.target.detect_failure(self.ignore, was_timeout)
@@ -77,7 +76,6 @@ class Session(object):
         elif failure_detected == self.target.RESULT_IGNORED:
             self.status.ignored += 1
             log.info("Ignored (%d)", self.status.ignored)
-
 
     def config_server(self, iteration_timeout):
         assert self.server is None
@@ -100,12 +98,10 @@ class Session(object):
             return b"<h1>Close Browser</h1>"
         self.server.add_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
 
-
     def close(self):
         self.status.cleanup()
         if self.server is not None:
             self.server.close()
-
 
     def generate_testcase(self, dump_path):
         assert self.server is not None
@@ -121,7 +117,6 @@ class Session(object):
         # dump test case files to filesystem to be served
         test.dump(dump_path)
         return test
-
 
     def launch_target(self):
         assert self.target.closed
@@ -157,7 +152,6 @@ class Session(object):
                 location.append("&forced_close=0")
         return "".join(location)
 
-
     def report_result(self):
         # create working directory for current testcase
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
@@ -169,8 +163,7 @@ class Session(object):
             shutil.rmtree(result_logs)
         self.iomanager.purge_tests()
 
-
-    def run(self):
+    def run(self, iteration_limit=None):
         assert self.server is not None, "server is not configured"
         while True:  # main fuzzing loop
             self.status.report()
@@ -236,6 +229,10 @@ class Session(object):
                 log.info("Replay Complete")
                 break
 
+            if iteration_limit is not None and self.status.iteration == iteration_limit:
+                log.info("Hit iteration limit")
+                break
+
 
 def console_init_logging():
     log_level = logging.INFO
@@ -298,7 +295,8 @@ def main(args):
             log.info("Running in SINGLE PASS mode")
         elif args.coverage:
             log.info("Running in COVERAGE mode")
-            adapter.ROTATION_PERIOD = 1  # cover as many test cases as possible
+            # cover as many test cases as possible
+            adapter.ROTATION_PERIOD = 1
         else:
             log.info("Running in FUZZING mode")
 
