@@ -1,12 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
+
 import os
 import signal
 import tempfile
 import threading
 import time
-import unittest
 
 from ffpuppet import FFPuppet
 
@@ -86,191 +87,235 @@ class FakePuppet(object):
             return 100
         return int(log_id.split("=")[1])
 
-    def wait(self, timeout=0):
+    def wait(self, timeout=0):  # pylint: disable=no-self-use,unused-argument
         return 1234  # successful wait()
 
+class SimpleTarget(Target):
+    def cleanup(self):
+        pass
+    def close(self):
+        pass
+    @property
+    def closed(self):
+        pass
+    def detect_failure(self, ignored, was_timeout):
+        pass
+    def launch(self):
+        pass
+    @property
+    def monitor(self):
+        return self._monitor
+    def save_logs(self, *args, **kwargs):
+        pass
 
-# TODO: split Target and PuppetTarget
-class TargetTests(unittest.TestCase):
-    def setUp(self):
-        PuppetTarget.PUPPET = FakePuppet
-        _fd, self.tmpfn = tempfile.mkstemp(prefix="grz_test_")
-        os.close(_fd)
+def test_target_01(tmp_path):
+    """test creating a simple Target"""
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    target = SimpleTarget(str(fake_file), str(fake_file), 321, 2, 3, str(fake_file), 25)
+    assert target.binary == str(fake_file)
+    assert target.extension == str(fake_file)
+    assert target.forced_close
+    assert target.launch_timeout == 321
+    assert target.log_size() == 0
+    assert target.log_limit == 2 * 0x100000
+    assert target.memory_limit == 3 * 0x100000
+    assert target.rl_countdown == 0
+    assert target.rl_reset == 25
+    assert target.poll_for_idle(0, 0) == target.POLL_BUSY
+    assert target.prefs == str(fake_file)
+    assert not target.expect_close
 
-    def tearDown(self):
-        if os.path.isfile(self.tmpfn):
-            os.remove(self.tmpfn)
+def test_target_02(tmp_path):
+    """test setting Target.forced_close"""
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    os.environ["GRZ_FORCED_CLOSE"] = "0"
+    try:
+        target = SimpleTarget(str(fake_file), None, 300, 25, 5000, None, 25)
+        assert not target.forced_close
+        assert target.extension is None
+        assert target.prefs is None
+        target.rl_countdown = 1
+        assert not target.expect_close
+        target.rl_countdown = 0
+        assert target.expect_close
+    finally:
+        os.environ.pop("GRZ_FORCED_CLOSE", None)
 
-    def test_01(self):
-        "test creating a simple Target"
-        os.environ["GRZ_FORCED_CLOSE"] = "0"
-        try:
-            target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 25)
-            self.addCleanup(target.cleanup)
-            self.assertTrue(target.closed)
-            self.assertFalse(target.forced_close)
-            self.assertEqual(target.detect_failure([], None), Target.RESULT_NONE)
-            self.assertEqual(target.log_size(), 1124)
-            self.assertIsNotNone(target.monitor)
-            target.check_relaunch()
-        finally:
-            os.environ.pop("GRZ_FORCED_CLOSE", None)
-
-    def test_02(self):
-        "test creating and launching a simple Target"
-        relaunch = 25
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch)
-        self.assertTrue(target.forced_close)
-        self.addCleanup(target.cleanup)
-        target.launch("launch_target_page")
-        self.assertEqual(target.detect_failure([], None), Target.RESULT_NONE)
-        self.assertFalse(target.closed)
-        target.close()
-        self.assertTrue(target.closed)
-
-    def test_03(self):
-        "test check_relaunch() and step()"
-        relaunch = 25
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch)
-        self.addCleanup(target.cleanup)
-        target.launch("launch_target_page")
+def test_target_03(tmp_path, mocker):
+    """test Target.check_relaunch() and Target.step()"""
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    target = SimpleTarget(str(fake_file), None, 300, 25, 5000, None, 1)
+    try:
+        target._monitor = mocker.Mock()
+        target._monitor.is_healthy.return_value = True
         # test skipping relaunch
-        self.assertEqual(target.rl_countdown, relaunch)
+        target.rl_countdown = 2
         target.step()
+        assert target.rl_countdown == 1
         target.check_relaunch(wait=60)
-        self.assertEqual(target.rl_countdown, relaunch - 1)
-        self.assertFalse(target.closed)
         # test triggering relaunch
-        target.rl_countdown = 0
+        target.rl_countdown = 1
         target.step()
+        assert target.rl_countdown == 0
         target.check_relaunch(wait=0)
-        self.assertEqual(target.rl_countdown, -1)
-        self.assertTrue(target.closed)
         # test with "crashed" process
-        target.launch("launch_target_page")
-        self.assertFalse(target.closed)
-        target._puppet.test_crashed = True  # pylint: disable=protected-access
+        target._monitor.is_healthy.return_value = False
         target.rl_countdown = 0
         target.step()
-        target.check_relaunch(wait=5)  # should not block
-        self.assertTrue(target.closed)
+        target.check_relaunch(wait=5)
+    finally:
+        target.cleanup()
 
-    def test_04(self):
-        "test detect_failure()"
-        relaunch = 25
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, relaunch)
-        self.addCleanup(target.cleanup)
+def test_puppet_target_01(tmp_path):
+    """test creating a PuppetTarget"""
+    PuppetTarget.PUPPET = FakePuppet
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    try:
+        target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25)
+        assert target.closed
+        assert target.forced_close
+        assert target.detect_failure([], None) == Target.RESULT_NONE
+        assert target.log_size() == 1124
+        assert target.monitor is not None
+        target.check_relaunch()
+    finally:
+        target.cleanup()
+
+def test_puppet_target_02(tmp_path):
+    """test PuppetTarget.launch()"""
+    PuppetTarget.PUPPET = FakePuppet
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 35)
+    try:
+        assert target.forced_close
+        target.launch("launch_target_page")
+        assert target.detect_failure([], None) == Target.RESULT_NONE
+        assert not target.closed
+        target.close()
+        assert target.closed
+    finally:
+        target.cleanup()
+
+def test_puppet_target_03(tmp_path):
+    """test detect_failure()"""
+    PuppetTarget.PUPPET = FakePuppet
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25)
+    try:
         target.launch("launch_target_page")
         # no failures
-        self.assertEqual(target.detect_failure([], False), Target.RESULT_NONE)
-        self.assertEqual(target.detect_failure(["memory"], False), Target.RESULT_NONE)
-        self.assertFalse(target.closed)
-        self.assertIsNone(target._puppet.reason)  # pylint: disable=protected-access
+        assert target.detect_failure([], False) == Target.RESULT_NONE
+        assert target.detect_failure(["memory"], False) == Target.RESULT_NONE
+        assert not target.closed
+        assert target._puppet.reason is None
         # test close
-        target.close()  # pylint: disable=protected-access
-        self.assertEqual(target.detect_failure([], False), Target.RESULT_NONE)
-        self.assertTrue(target.closed)
-        self.assertEqual(target._puppet.reason, FFPuppet.RC_CLOSED)  # pylint: disable=protected-access
-
+        target.close()
+        assert target.detect_failure([], False) == Target.RESULT_NONE
+        assert target.closed
+        assert target._puppet.reason == FFPuppet.RC_CLOSED
         # test single process crash
         target.launch("launch_page")
-        target._puppet.test_crashed = True  # pylint: disable=protected-access
-        target._puppet.test_running = False  # pylint: disable=protected-access
-        self.assertEqual(target.detect_failure([], False), Target.RESULT_FAILURE)
-        self.assertTrue(target.closed)
-
+        target._puppet.test_crashed = True
+        target._puppet.test_running = False
+        assert target.detect_failure([], False) == Target.RESULT_FAILURE
+        assert target.closed
         # test multiprocess crash
         target.launch("launch_page")
-        target._puppet.test_crashed = True  # pylint: disable=protected-access
-        self.assertEqual(target.detect_failure([], False), Target.RESULT_FAILURE)
-        self.assertEqual(target._puppet.reason, FFPuppet.RC_ALERT)  # pylint: disable=protected-access
-        self.assertTrue(target.closed)
-
+        target._puppet.test_crashed = True
+        assert target.detect_failure([], False) == Target.RESULT_FAILURE
+        assert target._puppet.reason == FFPuppet.RC_ALERT
+        assert target.closed
         # test exit with no crash logs
         target.launch("launch_page")
-        target._puppet.test_running = False  # pylint: disable=protected-access
-        self.assertEqual(target.detect_failure([], False), Target.RESULT_NONE)
-        self.assertEqual(target._puppet.reason, FFPuppet.RC_EXITED)  # pylint: disable=protected-access
-        self.assertTrue(target.closed)
-
+        target._puppet.test_running = False
+        assert target.detect_failure([], False) == Target.RESULT_NONE
+        assert target._puppet.reason == FFPuppet.RC_EXITED
+        assert target.closed
         # test timeout
         target.launch("launch_page")
-        target._puppet.test_running = True  # pylint: disable=protected-access
-        self.assertEqual(target.detect_failure([], True), Target.RESULT_FAILURE)
-        self.assertTrue(target.closed)
-
+        target._puppet.test_running = True
+        assert target.detect_failure([], True) == Target.RESULT_FAILURE
+        assert target.closed
         # test timeout ignored
         target.launch("launch_page")
-        target._puppet.test_running = True  # pylint: disable=protected-access
-        self.assertEqual(target.detect_failure(["timeout"], True), Target.RESULT_IGNORED)
-        self.assertTrue(target.closed)
-
+        target._puppet.test_running = True
+        assert target.detect_failure(["timeout"], True) == Target.RESULT_IGNORED
+        assert target.closed
         # test worker
         target.launch("launch_page")
-        target._puppet.test_check_abort = True  # pylint: disable=protected-access
-        self.assertEqual(target.detect_failure([], False), Target.RESULT_FAILURE)
-        self.assertEqual(target._puppet.reason, FFPuppet.RC_WORKER)  # pylint: disable=protected-access
-        self.assertTrue(target.closed)
-
+        target._puppet.test_check_abort = True
+        assert target.detect_failure([], False) == Target.RESULT_FAILURE
+        assert target._puppet.reason == FFPuppet.RC_WORKER
+        assert target.closed
         # test memory ignored
         target.launch("launch_page")
-        target._puppet.test_check_abort = True  # pylint: disable=protected-access
-        target._puppet.test_available_logs = ["ffp_worker_memory_usage"]  # pylint: disable=protected-access
-        self.assertEqual(target.detect_failure(["memory"], False), Target.RESULT_IGNORED)
-        self.assertEqual(target._puppet.reason, FFPuppet.RC_WORKER)  # pylint: disable=protected-access
-        self.assertTrue(target.closed)
-
+        target._puppet.test_check_abort = True
+        target._puppet.test_available_logs = ["ffp_worker_memory_usage"]
+        assert target.detect_failure(["memory"], False) == Target.RESULT_IGNORED
+        assert target._puppet.reason == FFPuppet.RC_WORKER
+        assert target.closed
         # test log-limit ignored
         target.launch("launch_page")
-        target._puppet.test_check_abort = True  # pylint: disable=protected-access
-        target._puppet.test_available_logs = ["ffp_worker_log_size"]  # pylint: disable=protected-access
-        self.assertEqual(target.detect_failure(["log-limit"], False), Target.RESULT_IGNORED)
-        self.assertTrue(target.closed)
-
+        target._puppet.test_check_abort = True
+        target._puppet.test_available_logs = ["ffp_worker_log_size"]
+        assert target.detect_failure(["log-limit"], False) == Target.RESULT_IGNORED
+        assert target.closed
+    finally:
         # test browser closing test case
         target.cleanup()
-        os.environ["GRZ_FORCED_CLOSE"] = "0"
-        try:
-            target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 1)
-            self.addCleanup(target.cleanup)
-            target.launch("launch_page")
-            target.step()
-            self.assertTrue(target.expect_close)
-            self.assertEqual(target.detect_failure([], False), Target.RESULT_NONE)
-            target.close()
-        finally:
-            os.environ.pop("GRZ_FORCED_CLOSE", None)
-
-    def test_05(self):
-        "test dump_coverage()"
-        class SigCatcher(object):  # pylint: disable=too-few-public-methods
-            CAUGHT = False
-            @staticmethod
-            def signal_handler(*args):  # pylint: disable=unused-argument
-                SigCatcher.CAUGHT = True
-
-        sig_catcher = SigCatcher()
-        signal.signal(signal.SIGUSR1, sig_catcher.signal_handler)
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 10)
-        target.dump_coverage()
-        self.assertFalse(sig_catcher.CAUGHT)
+    os.environ["GRZ_FORCED_CLOSE"] = "0"
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 1)
+    try:
         target.launch("launch_page")
-        target.dump_coverage()
-        self.assertTrue(sig_catcher.CAUGHT)  # not sure if there is a race here...
+        target.step()
+        assert target.expect_close
+        assert target.detect_failure([], False) == Target.RESULT_NONE
+        target.close()
+    finally:
+        os.environ.pop("GRZ_FORCED_CLOSE", None)
+        target.cleanup()
 
-    def test_06(self):
-        "test poll_for_idle()"
-        target = PuppetTarget(self.tmpfn, None, 300, 25, 5000, None, 10)
-        assert target.poll_for_idle(90, 0.2), "the test process should be mostly idle"
-        evt = threading.Event()
-        def busy_wait():
-            while not evt.is_set():
-                pass
-        waiter = threading.Thread(target=busy_wait)
-        try:
-            waiter.start()
-            time.sleep(0.1)
-            assert target.poll_for_idle(10, 0.2) == Target.POLL_BUSY, "the test process should be busy"
-        finally:
-            evt.set()
-            waiter.join()
+def test_puppet_target_04(tmp_path):
+    """test dump_coverage()"""
+    PuppetTarget.PUPPET = FakePuppet
+    class SigCatcher(object):  # pylint: disable=too-few-public-methods
+        CAUGHT = False
+        @staticmethod
+        def signal_handler(*args):  # pylint: disable=unused-argument
+            SigCatcher.CAUGHT = True
+    sig_catcher = SigCatcher()
+    signal.signal(signal.SIGUSR1, sig_catcher.signal_handler)
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 10)
+    target.dump_coverage()
+    assert not sig_catcher.CAUGHT
+    target.launch("launch_page")
+    target.dump_coverage()
+    assert sig_catcher.CAUGHT  # not sure if there is a race here...
+
+def test_puppet_target_05(tmp_path):
+    """test poll_for_idle()"""
+    PuppetTarget.PUPPET = FakePuppet
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 10)
+    assert target.poll_for_idle(90, 0.2), "the test process should be mostly idle"
+    evt = threading.Event()
+    def busy_wait():
+        while not evt.is_set():
+            pass
+    waiter = threading.Thread(target=busy_wait)
+    try:
+        waiter.start()
+        time.sleep(0.1)
+        assert target.poll_for_idle(10, 0.2) == Target.POLL_BUSY, "the test process should be busy"
+    finally:
+        evt.set()
+        waiter.join()
