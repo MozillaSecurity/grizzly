@@ -25,6 +25,9 @@ class FakePuppet(object):
         self.test_running = False  # used to control testing
         self.test_available_logs = list()  # used to control testing
 
+    def add_abort_token(self, token):  # pylint: disable=no-self-use
+        pass
+
     def available_logs(self):
         return self.test_available_logs
 
@@ -87,6 +90,9 @@ class FakePuppet(object):
             return 100
         return int(log_id.split("=")[1])
 
+    def save_logs(self, *args, **kwargs):
+        pass
+
     def wait(self, timeout=0):  # pylint: disable=no-self-use,unused-argument
         return 1234  # successful wait()
 
@@ -100,7 +106,7 @@ class SimpleTarget(Target):
         pass
     def detect_failure(self, ignored, was_timeout):
         pass
-    def launch(self):
+    def launch(self, location, env_mod=None):
         pass
     @property
     def monitor(self):
@@ -174,14 +180,15 @@ def test_puppet_target_01(tmp_path):
     PuppetTarget.PUPPET = FakePuppet
     fake_file = tmp_path / "fake"
     fake_file.touch()
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25)
     try:
-        target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25)
         assert target.closed
-        assert target.forced_close
-        assert target.detect_failure([], None) == Target.RESULT_NONE
+        assert target.detect_failure([], False) == Target.RESULT_NONE
         assert target.log_size() == 1124
         assert target.monitor is not None
-        target.check_relaunch()
+        assert isinstance(target._puppet, FakePuppet)
+        target.add_abort_token("test")
+        target.save_logs()
     finally:
         target.cleanup()
 
@@ -192,17 +199,16 @@ def test_puppet_target_02(tmp_path):
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 35)
     try:
-        assert target.forced_close
         target.launch("launch_target_page")
-        assert target.detect_failure([], None) == Target.RESULT_NONE
         assert not target.closed
+        assert target.detect_failure([], False) == Target.RESULT_NONE
         target.close()
         assert target.closed
     finally:
         target.cleanup()
 
 def test_puppet_target_03(tmp_path):
-    """test detect_failure()"""
+    """test PuppetTarget.detect_failure()"""
     PuppetTarget.PUPPET = FakePuppet
     fake_file = tmp_path / "fake"
     fake_file.touch()
@@ -282,7 +288,7 @@ def test_puppet_target_03(tmp_path):
         target.cleanup()
 
 def test_puppet_target_04(tmp_path):
-    """test dump_coverage()"""
+    """test PuppetTarget.dump_coverage()"""
     PuppetTarget.PUPPET = FakePuppet
     class SigCatcher(object):  # pylint: disable=too-few-public-methods
         CAUGHT = False
@@ -319,3 +325,21 @@ def test_puppet_target_05(tmp_path):
     finally:
         evt.set()
         waiter.join()
+
+def test_puppet_target_06(tmp_path):
+    """test PuppetTarget.monitor"""
+    PuppetTarget.PUPPET = FakePuppet
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25)
+    try:
+        assert target.monitor is not None
+        assert not target.monitor.is_healthy()
+        assert not target.monitor.is_running()
+        assert target.monitor.launches == 0
+        assert target.monitor.log_length("stdout") == 100
+        cloned = target.monitor.clone_log("somelog")
+        assert os.path.isfile(cloned)
+        os.remove(cloned)
+    finally:
+        target.cleanup()
