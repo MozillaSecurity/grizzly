@@ -41,8 +41,7 @@ class Status(object):
         """
         conn = sqlite3.connect(self.DB_FILE)
         try:
-            cur = conn.cursor()
-            cur.execute("""DELETE FROM status WHERE id = ?;""", (self.uid,))
+            conn.execute("""DELETE FROM status WHERE id = ?;""", (self.uid,))
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -123,16 +122,15 @@ class Status(object):
         self.timestamp = now
         conn = sqlite3.connect(self.DB_FILE)
         try:
-            cur = conn.cursor()
-            cur.execute("""UPDATE status
-                           SET ignored = ?,
-                               iteration = ?,
-                               log_size = ?,
-                               results = ?,
-                               time_stamp = ?
-                           WHERE id = ?;""",
-                        (self.ignored, self.iteration, self.log_size,
-                         self.results, self.timestamp, self.uid))
+            conn.execute("""UPDATE status
+                            SET ignored = ?,
+                                iteration = ?,
+                                log_size = ?,
+                                results = ?,
+                                time_stamp = ?
+                            WHERE id = ?;""",
+                         (self.ignored, self.iteration, self.log_size,
+                          self.results, self.timestamp, self.uid))
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -152,16 +150,14 @@ class Status(object):
         now = int(time.time())
         conn = sqlite3.connect(self.DB_FILE)
         try:
-            cur = conn.cursor()
-            cur.execute("""UPDATE status
-                           SET ignored = 0,
-                               iteration = 0,
-                               log_size = 0,
-                               results = 0,
-                               start_time = ?,
-                               time_stamp = ?
-                           WHERE id = ?;""",
-                        (now, now, self.uid))
+            conn.execute("""UPDATE status
+                            SET ignored = 0,
+                                iteration = 0,
+                                log_size = 0,
+                                results = 0,
+                                start_time = ?,
+                                time_stamp = ?
+                            WHERE id = ?;""", (now, now, self.uid))
             conn.commit()
             self.ignored = 0
             self.iteration = 0
@@ -186,16 +182,16 @@ class Status(object):
         """
         conn = sqlite3.connect(cls.DB_FILE)
         try:
-            conn.execute("""CREATE TABLE IF NOT EXISTS status
-                            (id         INTEGER PRIMARY KEY,
-                             ignored    INTEGER DEFAULT 0,
-                             iteration  INTEGER DEFAULT 0,
-                             log_size   INTEGER DEFAULT 0,
-                             results    INTEGER DEFAULT 0,
-                             start_time INTEGER DEFAULT 0,
-                             time_stamp INTEGER DEFAULT 0);""")
-            conn.commit()
             cur = conn.cursor()
+            cur.execute("""CREATE TABLE IF NOT EXISTS status
+                           (id         INTEGER PRIMARY KEY,
+                            ignored    INTEGER DEFAULT 0,
+                            iteration  INTEGER DEFAULT 0,
+                            log_size   INTEGER DEFAULT 0,
+                            results    INTEGER DEFAULT 0,
+                            start_time INTEGER DEFAULT 0,
+                            time_stamp INTEGER DEFAULT 0);""")
+            conn.commit()
             now = int(time.time())
             # remove old reports
             cur.execute("""DELETE FROM status

@@ -40,8 +40,7 @@ class ReduceStatus(object):
             return
         conn = sqlite3.connect(self._status.DB_FILE)
         try:
-            cur = conn.cursor()
-            cur.execute("""DELETE FROM reduce_status WHERE id = ?;""", (self._status.uid,))
+            conn.execute("""DELETE FROM reduce_status WHERE id = ?;""", (self._status.uid,))
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -99,13 +98,12 @@ class ReduceStatus(object):
             return
         conn = sqlite3.connect(self._status.DB_FILE)
         try:
-            cur = conn.cursor()
-            cur.execute("""UPDATE reduce_status
-                           SET error = ?,
-                               fail = ?,
-                               pass = ?
-                           WHERE id = ?;""",
-                        (self.reduce_error, self.reduce_fail, self.reduce_pass, self._status.uid))
+            conn.execute("""UPDATE reduce_status
+                            SET error = ?,
+                                fail = ?,
+                                pass = ?
+                            WHERE id = ?;""",
+                         (self.reduce_error, self.reduce_fail, self.reduce_pass, self._status.uid))
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -126,19 +124,20 @@ class ReduceStatus(object):
         assert status is not None
         conn = sqlite3.connect(status.DB_FILE)
         try:
-            conn.execute("""CREATE TABLE IF NOT EXISTS reduce_status
-                            (id    INTEGER PRIMARY KEY,
-                             error INTEGER DEFAULT 0,
-                             fail  INTEGER DEFAULT 0,
-                             pass  INTEGER DEFAULT 0);""")
-            conn.commit()
             cur = conn.cursor()
+            cur.execute("""CREATE TABLE IF NOT EXISTS reduce_status
+                           (id    INTEGER PRIMARY KEY,
+                            error INTEGER DEFAULT 0,
+                            fail  INTEGER DEFAULT 0,
+                            pass  INTEGER DEFAULT 0);""")
+            conn.commit()
             # remove old reports
             cur.execute("""DELETE FROM reduce_status
-                           WHERE id NOT IN (SELECT id FROM status);""")
+                           WHERE id NOT IN (SELECT id FROM status)
+                           OR id = ?;""", (status.uid,))
             # create new reduce_status entry that maps to a status entry
-            cur = conn.execute("""INSERT INTO reduce_status (id)
-                                  VALUES (?);""", (status.uid,))
+            cur.execute("""INSERT INTO reduce_status (id)
+                           VALUES (?);""", (status.uid,))
             conn.commit()
         finally:
             conn.close()
