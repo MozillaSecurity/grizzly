@@ -2,10 +2,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import os
-import shutil
-import tempfile
-import unittest
 
 from .adapter import Adapter
 
@@ -17,52 +13,41 @@ class SimpleAdapter(Adapter):
         pass
 
 
-class AdapterTests(unittest.TestCase):
+def test_adapter_01():
+    """test a simple Adapter"""
+    adpt = SimpleAdapter()
+    assert isinstance(adpt.fuzz, dict)
+    assert not adpt.fuzz
+    assert adpt.monitor is None
+    assert adpt.get_harness() is None
+    adpt.setup(None)
+    adpt.generate(None, None, None)
+    adpt.on_served(None, None)
+    adpt.on_timeout(None, None)
+    adpt.cleanup()
 
-    def test_01(self):
-        "test a simple adapter"
-        adpt = SimpleAdapter()
-        self.assertTrue(isinstance(adpt.fuzz, dict))
-        self.assertFalse(adpt.fuzz)
-        self.assertIsNone(adpt.monitor)
-        self.assertIsNone(adpt.get_harness())
-        adpt.setup(None)
-        adpt.generate(None, None, None)
-        adpt.on_served(None, None)
-        adpt.on_timeout(None, None)
-        adpt.cleanup()
+def test_adapter_02(tmp_path):
+    """test Adapter.enable_harness()"""
+    harness_file = tmp_path / "harness.html"
+    adpt = SimpleAdapter()
+    adpt.HARNESS_FILE = str(harness_file)
+    test_data = b"fake_default_harness_data"
+    harness_file.write_bytes(test_data)
+    adpt.enable_harness()
+    harness = adpt.get_harness()
+    assert harness is not None
+    harness.dump(str(tmp_path))
+    dump_harness = tmp_path / "grizzly_fuzz_harness.html"
+    assert dump_harness.is_file()
+    assert dump_harness.read_bytes() == test_data
+    harness_file.unlink()
 
-
-    def test_02(self):
-        "test harnesses"
-        tdir = tempfile.mkdtemp(prefix="adpt_tests")
-        self.addCleanup(shutil.rmtree, tdir)
-        _fd, h_file = tempfile.mkstemp(prefix="adpt_tst_")
-        os.close(_fd)
-        self.addCleanup(os.remove, h_file)
-        adpt = SimpleAdapter()
-        adpt.HARNESS_FILE = h_file
-
-        test_data = b"fake_harness_data"
-        with open(h_file, "wb") as h_fp:
-            h_fp.write(test_data)
-        self.assertIsNone(adpt.get_harness())
-        adpt.enable_harness()
-        harness = adpt.get_harness()
-        self.assertIsNotNone(harness)
-        harness.dump(tdir)
-        self.assertIn("grizzly_fuzz_harness.html", os.listdir(tdir))
-        with open(os.path.join(tdir, "grizzly_fuzz_harness.html"), "rb") as h_fp:
-            self.assertEqual(h_fp.read(), test_data)
-        os.remove(os.path.join(tdir, "grizzly_fuzz_harness.html"))
-
-        test_data = b"fake_harness_2nd_pass"
-        with open(h_file, "wb") as h_fp:
-            h_fp.write(test_data)
-        adpt.enable_harness(h_file)
-        harness = adpt.get_harness()
-        harness.dump(tdir)
-        self.assertIsNotNone(harness)
-        self.assertIn("grizzly_fuzz_harness.html", os.listdir(tdir))
-        with open(os.path.join(tdir, "grizzly_fuzz_harness.html"), "rb") as h_fp:
-            self.assertEqual(h_fp.read(), test_data)
+    test_data = b"fake_external_harness_data"
+    harness_file.write_bytes(test_data)
+    adpt.enable_harness(str(harness_file))
+    harness = adpt.get_harness()
+    assert harness is not None
+    harness.dump(str(tmp_path))
+    assert dump_harness.is_file()
+    assert dump_harness.read_bytes() == test_data
+    adpt.cleanup()
