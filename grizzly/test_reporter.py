@@ -11,7 +11,7 @@ import tarfile
 
 import pytest
 
-from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter
+from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
 
 
 def test_report_01():
@@ -402,5 +402,38 @@ def test_filesystem_reporter_04(tmp_path):
     assert "echo-1" in entries
     assert "echo-0" not in entries
     assert "latest-trace" not in entries
+
+def test_fuzzmanager_reporter_01(tmp_path, mocker):
+    """test FuzzManagerReporter.sanity_check()"""
+    mocker.patch("grizzly.reporter.ProgramConfiguration")
+    FuzzManagerReporter.FM_CONFIG = "no_file"
+    fake_bin = tmp_path / "bin"
+    fake_bin.touch()
+    #with pytest.raises(IOError) as exc:
+    with pytest.raises(IOError) as exc:
+        FuzzManagerReporter.sanity_check(str(fake_bin))
+    assert "Missing: no_file" in str(exc)
+    fake_fmc = tmp_path / ".fuzzmanagerconf"
+    fake_fmc.touch()
+    FuzzManagerReporter.FM_CONFIG = str(fake_fmc)
+    with pytest.raises(IOError) as exc:
+        FuzzManagerReporter.sanity_check(str(fake_bin))
+    assert "bin.fuzzmanagerconf" in str(exc)
+    fake_bin_fmc = tmp_path / "bin.fuzzmanagerconf"
+    fake_bin_fmc.touch()
+    FuzzManagerReporter.sanity_check(str(fake_bin))
+
+def test_s3fuzzmanager_reporter_01(tmp_path, mocker):
+    """test S3FuzzManagerReporter.sanity_check()"""
+    mocker.patch("grizzly.reporter.FuzzManagerReporter", autospec=True)
+    fake_bin = tmp_path / "bin"
+    with pytest.raises(EnvironmentError) as exc:
+        S3FuzzManagerReporter.sanity_check(str(fake_bin))
+    assert "'GRZ_S3_BUCKET' is not set in environment" in str(exc)
+    os.environ["GRZ_S3_BUCKET"] = "test"
+    try:
+        S3FuzzManagerReporter.sanity_check(str(fake_bin))
+    finally:
+        os.environ.pop("GRZ_S3_BUCKET", None)
 
 # TODO: fill out tests for FuzzManagerReporter and S3FuzzManagerReporter
