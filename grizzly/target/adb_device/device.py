@@ -631,7 +631,7 @@ class ADBProcess(object):
         return self._session.process_exists(self._pid)
 
 
-    def launch(self, url, env_mod=None, extension=None, prefs_js=None):
+    def launch(self, url, env_mod=None, extension=None, launch_timeout=60, prefs_js=None):
         log.debug("launching %r", url)
         assert self._launches > -1, "clean_up() has been called"
         assert self._session, "Device not connected"
@@ -686,7 +686,7 @@ class ADBProcess(object):
                 cmd.append("env%d" % var_num)
                 cmd.append("%s=%s" % (var_name, var_val))
 
-            if "Status: ok" not in self._session.call(cmd)[1].splitlines():
+            if "Status: ok" not in self._session.call(cmd, timeout=launch_timeout)[1].splitlines():
                 raise ADBLaunchError("Could not launch %r" % self._package)
             self._pid = self._session.get_pid(self._package)
             bootstrapper.wait(self.is_healthy, url=url)
@@ -821,6 +821,15 @@ class ADBProcess(object):
 
 
 def main(argv=None):  # pylint: disable=missing-docstring
+    # set output verbosity
+    if bool(os.getenv("DEBUG")):
+        log_level = logging.DEBUG
+        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
+    else:
+        log_level = logging.INFO
+        log_fmt = "[%(asctime)s] %(message)s"
+    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+
     parser = argparse.ArgumentParser(description="ADB Device Wrapper")
     parser.add_argument(
         "--airplane-mode", default=None, type=int,
@@ -866,7 +875,7 @@ def main(argv=None):  # pylint: disable=missing-docstring
             return 1
         proc = ADBProcess(package, session)
         try:
-            proc.launch("about:blank")
+            proc.launch("about:blank", launch_timeout=60)
             assert proc.is_running(), "browser not running?!"
             log.info("Launched")
             proc.wait()
