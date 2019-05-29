@@ -86,7 +86,7 @@ class ADBTarget(Target):
 
     def launch(self, location, env_mod=None):
         self.rl_countdown = self.rl_reset
-        env_mod = dict(env_mod or [])  # if passed, make a copy so modifications aren't passed out
+        env_mod = dict(env_mod or [])
 
         # This may be used to disabled network connections during testing, e.g.
         env_mod["MOZ_IN_AUTOMATION"] = "1"
@@ -100,6 +100,7 @@ class ADBTarget(Target):
         try:
             self._proc.launch(
                 env_mod=env_mod,
+                launch_timeout=self.launch_timeout,
                 prefs_js=self.prefs,
                 url=location)
         except LaunchError:
