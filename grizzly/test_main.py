@@ -4,8 +4,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly main"""
 
-import tempfile
-
 import pytest
 
 from ffpuppet import LaunchError
@@ -16,7 +14,7 @@ from .session import Session
 
 
 class FakeArgs(object):
-    def __init__(self):
+    def __init__(self, working_path):
         self.binary = None
         self.input = None
         self.accepted_extensions = None
@@ -39,10 +37,10 @@ class FakeArgs(object):
         self.timeout = 60
         self.tool = None
         self.valgrind = False
-        self.working_path = tempfile.gettempdir()
+        self.working_path = working_path
         self.xvfb = False
 
-def test_main_01(mocker):
+def test_main_01(tmp_path, mocker):
     """test main()"""
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 10
@@ -52,7 +50,7 @@ def test_main_01(mocker):
     targets.return_value = "fake-target"
     fake_session = mocker.patch("grizzly.core.Session", autospec=True)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
-    args = FakeArgs()
+    args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
     args.input = "fake"
     args.ignore = ["fake", "fake"]
@@ -70,25 +68,23 @@ def test_main_01(mocker):
     args.s3_fuzzmanager = True
     assert main(args) == Session.EXIT_SUCCESS
 
-def test_main_02(mocker):
+def test_main_02(tmp_path, mocker):
     """test main()"""
-
-    fake_adapter = mocker.Mock()
+    fake_adapter = mocker.Mock(spec=Adapter)
     adapter_get = mocker.patch("grizzly.corpman.adapters.get")
     adapter_get.return_value = lambda: fake_adapter
     fake_session = mocker.patch("grizzly.core.Session", autospec=True)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
-
-    args = FakeArgs()
+    args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
     args.input = "fake"
     fake_adapter.TEST_DURATION = args.timeout + 10
     with pytest.raises(RuntimeError):
         main(args)
 
-def test_main_03(mocker):
+def test_main_03(tmp_path, mocker):
     """test main() exit codes"""
-    fake_adapter = mocker.Mock()
+    fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 10
     fake_adapter.ROTATION_PERIOD = 0
     adapter_get = mocker.patch("grizzly.corpman.adapters.get")
@@ -99,7 +95,7 @@ def test_main_03(mocker):
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     fake_session.EXIT_ABORT = Session.EXIT_ABORT
     fake_session.EXIT_LAUNCH_FAILURE = Session.EXIT_LAUNCH_FAILURE
-    args = FakeArgs()
+    args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
     args.input = "fake"
     fake_session.return_value.run.side_effect = KeyboardInterrupt
