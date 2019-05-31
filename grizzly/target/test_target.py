@@ -13,6 +13,7 @@ from ffpuppet import FFPuppet
 
 from .puppet_target import PuppetTarget
 from .target import Target
+from .target_monitor import TargetMonitor
 
 
 class FakePuppet(object):
@@ -155,7 +156,7 @@ def test_target_03(tmp_path, mocker):
     fake_file.touch()
     target = SimpleTarget(str(fake_file), None, 300, 25, 5000, None, 1)
     try:
-        target._monitor = mocker.Mock()
+        target._monitor = mocker.Mock(spec=TargetMonitor)
         target._monitor.is_healthy.return_value = True
         # test skipping relaunch
         target.rl_countdown = 2

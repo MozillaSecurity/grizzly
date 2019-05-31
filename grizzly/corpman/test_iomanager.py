@@ -9,7 +9,7 @@ import os
 import pytest
 
 from .iomanager import IOManager, ServerMap
-from .storage import TestFile
+from .storage import InputFile, TestFile
 
 
 def test_iomanager_01():
@@ -77,7 +77,7 @@ def test_iomanager_03(tmp_path, mocker):
         assert len(iom.input_files) == 1
         # skip rotation because we only have one input file
         iom._generated = 1
-        iom.active_input = mocker.Mock()
+        iom.active_input = mocker.Mock(spec=InputFile)
         assert not iom._rotation_required(1)
         # add to test corpus
         test_file = tmp_path / "input_02.text"
@@ -90,15 +90,15 @@ def test_iomanager_03(tmp_path, mocker):
         assert iom._rotation_required(10)
         # don't pick a file because of rotation
         iom._generated = 3
-        iom.active_input = mocker.Mock()
+        iom.active_input = mocker.Mock(spec=InputFile)
         assert not iom._rotation_required(10)
         # pick a file because of rotation
         iom._generated = 2
-        iom.active_input = mocker.Mock()
+        iom.active_input = mocker.Mock(spec=InputFile)
         assert iom._rotation_required(2)
         # pick a file because of single pass
         iom._generated = 1
-        iom.active_input = mocker.Mock()
+        iom.active_input = mocker.Mock(spec=InputFile)
         assert iom._rotation_required(0)
     finally:
         iom.cleanup()
@@ -169,7 +169,7 @@ def test_iomanager_07(tmp_path, mocker):
         test_file.write_bytes(b"bar")
         iom.scan_input(str(tmp_path))
         assert len(iom.input_files) == 1
-        iom.active_input = mocker.Mock()
+        iom.active_input = mocker.Mock(spec=InputFile)
         tcase = iom.create_testcase("test-adapter", rotation_period=0)
         assert tcase is not None
         assert iom._generated == 3

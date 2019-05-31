@@ -9,7 +9,7 @@ unit tests for grizzly.Session
 import pytest
 
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
-from sapphire import SERVED_ALL, SERVED_TIMEOUT
+from sapphire import Sapphire, SERVED_ALL, SERVED_TIMEOUT
 from .corpman.adapter import Adapter
 from .corpman.iomanager import IOManager, ServerMap
 from .corpman.storage import TestCase, TestFile
@@ -67,7 +67,7 @@ def test_session_01(mocker):
     fake_target = mocker.Mock(spec=Target)
 
     session = Session(fake_adapter, False, [], fake_iomgr, None, fake_target)
-    session.report_result = mocker.Mock()
+    session.report_result = mocker.Mock(return_value=None)
 
     session.check_results(True, False)
     assert not fake_iomgr.tests
@@ -115,7 +115,7 @@ def test_session_02(mocker):
 
 def test_session_03(mocker, tmp_path):
     """test Session.launch_target()"""
-    fake_server = mocker.Mock()
+    fake_server = mocker.Mock(spec=Sapphire)
     fake_server.get_port.return_value = 1
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 10
@@ -173,12 +173,12 @@ def test_session_03(mocker, tmp_path):
 
 def test_session_04(mocker):
     """test Session.location"""
-    fake_server = mocker.Mock()
+    fake_server = mocker.Mock(spec=Sapphire)
     fake_server.get_port.return_value = 1
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 1
     fake_iomgr = mocker.Mock(spec=IOManager)
-    fake_iomgr.harness = mocker.Mock()
+    fake_iomgr.harness = mocker.Mock(spec=TestFile)
     fake_iomgr.landing_page.return_value = "x"
     fake_target = mocker.Mock(spec=Target)
     fake_target.rl_reset = 1
