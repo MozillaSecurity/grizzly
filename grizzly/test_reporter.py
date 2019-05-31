@@ -11,6 +11,7 @@ import tarfile
 
 import pytest
 
+from .corpman.storage import TestCase
 from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
 
 
@@ -422,6 +423,92 @@ def test_fuzzmanager_reporter_01(tmp_path, mocker):
     fake_bin_fmc = tmp_path / "bin.fuzzmanagerconf"
     fake_bin_fmc.touch()
     FuzzManagerReporter.sanity_check(str(fake_bin))
+
+def test_fuzzmanager_reporter_02(tmp_path):
+    """test FuzzManagerReporter.submit() empty path"""
+    reporter = FuzzManagerReporter("fake_bin")
+    report_path = tmp_path / "report"
+    report_path.mkdir()
+    with pytest.raises(IOError) as exc:
+        reporter.submit(str(report_path), [])
+    assert "No logs found in" in str(exc)
+
+def test_fuzzmanager_reporter_03(tmp_path, mocker):
+    """test FuzzManagerReporter.submit()"""
+    fake_crashinfo = mocker.patch("grizzly.reporter.CrashInfo", autospec=True)
+    fake_crashinfo.fromRawCrashData.return_value.createShortSignature.return_value = "test [@ test]"
+    fake_collector = mocker.patch("grizzly.reporter.Collector", autospec=True)
+    fake_collector.return_value.search.return_value = (None, None)
+    fake_collector.return_value.generate.return_value = "fake_sig_file"
+    reporter = FuzzManagerReporter(str("fake_bin"))
+    log_path = tmp_path / "log_path"
+    log_path.mkdir()
+    log_stderr = log_path / "log_stderr.txt"
+    log_stderr.write_bytes("blah")
+    log_stdout = log_path / "log_stdout.txt"
+    log_stdout.write_bytes("blah")
+    fake_test = mocker.Mock(spec=TestCase)
+    fake_test.adapter_name = "adapter"
+    fake_test.input_fname = "input"
+    fake_test.env_vars.return_value = "TEST=1"
+    reporter.submit(str(log_path), [fake_test])
+    assert not log_path.is_dir()
+    fake_test.dump.assert_called_once()
+    fake_collector.return_value.submit.assert_called_once()
+
+def test_fuzzmanager_reporter_04(tmp_path, mocker):
+    """test FuzzManagerReporter.submit() hit frequent crash"""
+    mocker.patch("grizzly.reporter.CrashInfo", autospec=True)
+    fake_collector = mocker.patch("grizzly.reporter.Collector", autospec=True)
+    fake_collector.return_value.search.return_value = (None, {"frequent": True, "shortDescription": "[@ test]"})
+    reporter = FuzzManagerReporter("fake_bin")
+    log_path = tmp_path / "log_path"
+    log_path.mkdir()
+    log_stderr = log_path / "log_stderr.txt"
+    log_stderr.write_bytes("blah")
+    log_stdout = log_path / "log_stdout.txt"
+    log_stdout.write_bytes("blah")
+    reporter.submit(str(log_path), [])
+    fake_collector.return_value.submit.assert_not_called()
+
+def test_fuzzmanager_reporter_05(tmp_path, mocker):
+    """test FuzzManagerReporter.submit() hit existing crash"""
+    mocker.patch("grizzly.reporter.CrashInfo", autospec=True)
+    fake_collector = mocker.patch("grizzly.reporter.Collector", autospec=True)
+    fake_collector.return_value.search.return_value = (
+        None, {"bug__id":1, "frequent": False, "shortDescription": "[@ test]"})
+    reporter = FuzzManagerReporter("fake_bin")
+    log_path = tmp_path / "log_path"
+    log_path.mkdir()
+    log_stderr = log_path / "log_stderr.txt"
+    log_stderr.write_bytes("blah")
+    log_stdout = log_path / "log_stdout.txt"
+    log_stdout.write_bytes("blah")
+    reporter._ignored = lambda x: True  # pylint: disable=protected-access
+    reporter.submit(str(log_path), [])
+    fake_collector.return_value.submit.assert_not_called()
+
+def test_fuzzmanager_reporter_06(tmp_path, mocker):
+    """test FuzzManagerReporter.submit() no signature"""
+    mocker.patch("grizzly.reporter.CrashInfo", autospec=True)
+    fake_collector = mocker.patch("grizzly.reporter.Collector", autospec=True)
+    fake_collector.return_value.search.return_value = (None, None)
+    fake_collector.return_value.generate.return_value = None
+    reporter = FuzzManagerReporter("fake_bin")
+    log_path = tmp_path / "log_path"
+    log_path.mkdir()
+    log_stderr = log_path / "log_stderr.txt"
+    log_stderr.write_bytes("blah")
+    log_stdout = log_path / "log_stdout.txt"
+    log_stdout.write_bytes("blah")
+    with pytest.raises(RuntimeError) as exc:
+        reporter.submit(str(log_path), [])
+    assert "Failed to create FM signature" in str(exc)
+    fake_collector.return_value.submit.assert_not_called()
+    # test ignore unsymbolized crash
+    reporter._ignored = lambda x: True  # pylint: disable=protected-access
+    reporter.submit(str(log_path), [])
+    fake_collector.return_value.submit.assert_not_called()
 
 def test_s3fuzzmanager_reporter_01(tmp_path, mocker):
     """test S3FuzzManagerReporter.sanity_check()"""
