@@ -4,7 +4,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly Reporter"""
 
-import glob
 import os
 import sys
 import tarfile
@@ -228,7 +227,7 @@ def test_report_09(tmp_path):
         assert "GOOD LOG" in log_fp.read()
 
 def test_report_10(tmp_path):
-    "test size_limit"
+    """test Report size_limit"""
     tmp_log = tmp_path / "log_stderr.txt"
     tmp_log.write_bytes(b"STDERR log\n" * 200)
     tmp_log = tmp_path / "log_stdout.txt"
@@ -285,14 +284,8 @@ def test_filesystem_reporter_01(tmp_path):
     reporter = FilesystemReporter(report_path=str(report_path))
     reporter.submit(str(log_path), [])
 
-def test_filesystem_reporter_02(tmp_path):
+def test_filesystem_reporter_02(tmp_path, mocker):
     """test FilesystemReporter with testcases"""
-    class DummyTest(object):
-        def __init__(self):
-            self.dump_called = False
-        def dump(self, *_a, **_kw):
-            assert not self.dump_called
-            self.dump_called = True
     log_path = tmp_path / "logs"
     log_path.mkdir()
     tmp_log = log_path / "log_stderr.txt"
@@ -305,7 +298,7 @@ def test_filesystem_reporter_02(tmp_path):
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
     testcases = list()
     for _ in range(10):
-        testcases.append(DummyTest())
+        testcases.append(mocker.Mock(spec=TestCase))
     report_path = tmp_path / "reports"
     assert not report_path.exists()
     reporter = FilesystemReporter(report_path=str(report_path))
@@ -314,7 +307,7 @@ def test_filesystem_reporter_02(tmp_path):
     assert report_path.exists()
     assert len(os.listdir(str(report_path))) == 1
     for tstc in testcases:
-        assert tstc.dump_called
+        tstc.dump.assert_called_once()
     # call report a 2nd time
     log_path = tmp_path / "logs"
     log_path.mkdir()
@@ -324,10 +317,10 @@ def test_filesystem_reporter_02(tmp_path):
     tmp_log.write_bytes(b"STDOUT log")
     testcases = list()
     for _ in range(2):
-        testcases.append(DummyTest())
+        testcases.append(mocker.Mock(spec=TestCase))
     reporter.submit(str(log_path), testcases)
     for tstc in testcases:
-        assert tstc.dump_called
+        tstc.dump.assert_called_once()
     results = os.listdir(str(report_path))
     assert len(results) == 2
     assert "NO_STACK" in results
@@ -390,9 +383,9 @@ def test_filesystem_reporter_04(tmp_path):
     reporter.submit(str(log_path), [])
     assert report_path.exists()
     # verify report and archive
-    report_log_dirs = glob.glob(str(report_path) + "/*/*_logs/")
+    report_log_dirs = list(report_path.glob("*/*_logs/"))
     assert len(report_log_dirs) == 1
-    report_log_dir = report_log_dirs[0]
+    report_log_dir = str(report_log_dirs[0])
     report_contents = os.listdir(report_log_dir)
     assert "rr.tar.bz2" in report_contents
     assert "rr-traces" not in report_contents
