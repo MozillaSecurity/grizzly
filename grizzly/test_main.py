@@ -8,8 +8,9 @@ import pytest
 
 from ffpuppet import LaunchError
 
-from .core import main
-from .corpman.adapter import Adapter
+from sapphire import Sapphire
+from .common import Adapter
+from .main import main
 from .session import Session
 
 
@@ -43,13 +44,16 @@ class FakeArgs(object):
 def test_main_01(tmp_path, mocker):
     """test main()"""
     fake_adapter = mocker.Mock(spec=Adapter)
+    fake_adapter.NAME = "fake"
     fake_adapter.TEST_DURATION = 10
-    adapter_get = mocker.patch("grizzly.corpman.adapters.get")
+    adapter_get = mocker.patch("grizzly.adapters.get")
     adapter_get.return_value = lambda: fake_adapter
     targets = mocker.patch("grizzly.target.TARGETS")
     targets.return_value = "fake-target"
-    fake_session = mocker.patch("grizzly.core.Session", autospec=True)
+    fake_session = mocker.patch("grizzly.main.Session", autospec=True)
+    fake_session.return_value.server = mocker.Mock(spec=Sapphire)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
+    #fake_session.return_value.server.return_value.get_port.return_value = 1234
     args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
     args.input = "fake"
@@ -59,11 +63,13 @@ def test_main_01(tmp_path, mocker):
     args.valgrind = True
     args.xvfb = True
     assert main(args) == Session.EXIT_SUCCESS
-    mocker.patch("grizzly.core.FuzzManagerReporter", autospec=True)
+    fake_reporter = mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
+    fake_reporter.sanity_check.return_value = True
     args.fuzzmanager = True
     args.coverage = True
     assert main(args) == Session.EXIT_SUCCESS
-    mocker.patch("grizzly.core.S3FuzzManagerReporter", autospec=True)
+    fake_reporter = mocker.patch("grizzly.main.S3FuzzManagerReporter", autospec=True)
+    fake_reporter.sanity_check.return_value = True
     args.fuzzmanager = False
     args.s3_fuzzmanager = True
     assert main(args) == Session.EXIT_SUCCESS
@@ -71,9 +77,9 @@ def test_main_01(tmp_path, mocker):
 def test_main_02(tmp_path, mocker):
     """test main()"""
     fake_adapter = mocker.Mock(spec=Adapter)
-    adapter_get = mocker.patch("grizzly.corpman.adapters.get")
+    adapter_get = mocker.patch("grizzly.adapters.get")
     adapter_get.return_value = lambda: fake_adapter
-    fake_session = mocker.patch("grizzly.core.Session", autospec=True)
+    fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
@@ -87,14 +93,15 @@ def test_main_03(tmp_path, mocker):
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 10
     fake_adapter.ROTATION_PERIOD = 0
-    adapter_get = mocker.patch("grizzly.corpman.adapters.get")
+    adapter_get = mocker.patch("grizzly.adapters.get")
     adapter_get.return_value = lambda: fake_adapter
     targets = mocker.patch("grizzly.target.TARGETS")
     targets.return_value = "fake-target"
-    fake_session = mocker.patch("grizzly.core.Session", autospec=True)
+    fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     fake_session.EXIT_ABORT = Session.EXIT_ABORT
     fake_session.EXIT_LAUNCH_FAILURE = Session.EXIT_LAUNCH_FAILURE
+    fake_session.return_value.server = mocker.Mock(spec=Sapphire)
     args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
     args.input = "fake"

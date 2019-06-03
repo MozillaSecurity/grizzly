@@ -15,11 +15,8 @@ import time
 
 import psutil
 
+from .reduce_status import ReduceStatus
 from .status import Status
-try:
-    from .reduce.reduce_status import ReduceStatus
-except ImportError:
-    ReduceStatus = None
 
 __all__ = ("ReduceStatusReporter", "StatusReporter")
 __author__ = "Tyson Smith"
@@ -514,9 +511,7 @@ def main(args=None):
     Returns:
         None
     """
-    modes = ["status"]
-    if ReduceStatus is not None:
-        modes += ["reduce-status"]
+    modes = ("reduce-status", "status")
     parser = argparse.ArgumentParser(description="Grizzly status report generator")
     parser.add_argument(
         "--dump",

@@ -7,7 +7,7 @@
 
 import sqlite3
 
-from ..status import Status
+from .status import Status
 
 __all__ = ("ReduceStatus",)
 __author__ = "Tyson Smith"

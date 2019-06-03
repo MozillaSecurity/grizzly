@@ -5,7 +5,7 @@
 from __future__ import unicode_literals
 import os
 from grizzly.target.target import Target
-from grizzly.reporter import Reporter
+from grizzly.common import Reporter
 
 
 class BaseFakeReporter(Reporter):

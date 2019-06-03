@@ -24,10 +24,9 @@ from FTB.Signatures.CrashInfo import CrashSignature
 from . import strategies as strategies_module
 from .interesting import Interesting
 from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
-from .reduce_status import ReduceStatus
-from ..core import Session
-from ..corpman.storage import TestFile, TestCase
-from ..reporter import FilesystemReporter, FuzzManagerReporter, Report
+from ..session import Session
+from ..common import FilesystemReporter, FuzzManagerReporter, Report
+from ..common import ReduceStatus, TestFile, TestCase
 from ..target import load as load_target
 
 
@@ -265,7 +264,7 @@ class ReductionJob(object):
 
             else:
                 # create a harness to iterate over the whole history
-                harness_path = os.path.join(os.path.dirname(__file__), '..', 'corpman', 'harness.html')
+                harness_path = os.path.join(os.path.dirname(__file__), '..', 'common', 'harness.html')
                 with io.open(harness_path, encoding="utf-8") as harness_fp:
                     harness = harness_fp.read()
                 # change dump string so that logs can be told apart

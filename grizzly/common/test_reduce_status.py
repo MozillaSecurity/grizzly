@@ -5,7 +5,7 @@
 """test Grizzly status reports"""
 # pylint: disable=protected-access
 
-from ..status import Status
+from .status import Status
 from .reduce_status import ReduceStatus
 
 def test_reduce_status_01(tmp_path):

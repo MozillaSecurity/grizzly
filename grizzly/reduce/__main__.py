@@ -6,7 +6,7 @@ import sys
 
 from .reduce import main
 from .args import ReducerArgs
-from ..core import console_init_logging
+from ..main import console_init_logging
 
 
 console_init_logging()

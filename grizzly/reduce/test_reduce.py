@@ -7,7 +7,7 @@ import os.path
 import zipfile
 import pytest
 from grizzly.reduce import exceptions, interesting, strategies
-from grizzly.reporter import FuzzManagerReporter
+from grizzly.common import FuzzManagerReporter
 from .test_common import BaseFakeReporter, create_target_binary
 
 
