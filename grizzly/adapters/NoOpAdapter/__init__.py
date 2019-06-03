@@ -17,14 +17,12 @@ class NoOpAdapter(Adapter):
 
     def setup(self, _):
         self.enable_harness()
-        self.fuzz["test"] = "\n".join([
-            "<html>",
-            "<head>",
-            "<script>",
-            "window.close()",
-            "</script>",
-            "</head>",
-            "</html>"])
+        self.fuzz["test"] = "<!DOCTYPE html>\n" \
+            "<html>\n" \
+            "<head>\n" \
+            "<script>window.close()</script>\n" \
+            "</head>" \
+            "</html>"
 
     def generate(self, testcase, *_):
         testcase.add_file(TestFile.from_data(self.fuzz["test"], testcase.landing_page))

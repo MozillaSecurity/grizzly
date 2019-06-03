@@ -37,7 +37,9 @@ def load(path=None, skip_failures=True):
         for clsname in dir(lib):
             cls = getattr(lib, clsname)
             if isinstance(cls, type) and issubclass(cls, Adapter):
-                # sanity checks
+                if clsname == "Adapter":
+                    continue
+                log.debug("sanity checking %r", clsname)
                 if not isinstance(cls.NAME, str):
                     raise RuntimeError(
                         "%s.NAME must be 'str' not %r" % (cls.__name__, type(cls.NAME).__name__))

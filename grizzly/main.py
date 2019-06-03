@@ -49,6 +49,7 @@ def console_init_logging():
 
 def console_main():
     console_init_logging()
+    grizzly.adapters.load()
     return main(GrizzlyArgs().parse_args())
 
 
@@ -81,7 +82,7 @@ def main(args):
             mime_type=args.mime,
             working_path=args.working_path)
 
-        log.debug("initializing the Adapter")
+        log.debug("initializing Adapter %r", args.adapter)
         adapter = grizzly.adapters.get(args.adapter)()
 
         if adapter.TEST_DURATION >= args.timeout:
