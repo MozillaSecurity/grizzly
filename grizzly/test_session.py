@@ -11,13 +11,14 @@ import pytest
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_TIMEOUT
-from grizzly.common import Adapter, IOManager, Reporter, ServerMap, TestCase, TestFile
+from grizzly.common import Adapter, IOManager, Reporter, ServerMap, Status, TestCase, TestFile
 from grizzly.session import Session
 from grizzly.target import Target
 
 
 def test_session_00(tmp_path, mocker):
     """test basic Session functions"""
+    Status.DB_FILE = str(tmp_path / "test.db")
     fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
     fake_server.return_value.serve_path.return_value = (SERVED_TIMEOUT, [])
     mocker.patch("grizzly.session.TestFile", autospec=True)
@@ -55,8 +56,9 @@ def test_session_00(tmp_path, mocker):
     fake_server.return_value.close.assert_called_once()
     fake_target.detect_failure.assert_called_once()
 
-def test_session_01(mocker):
+def test_session_01(tmp_path, mocker):
     """test Session.check_results()"""
+    Status.DB_FILE = str(tmp_path / "test.db")
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.IGNORE_UNSERVED = True
@@ -88,8 +90,9 @@ def test_session_01(mocker):
 
     session.close()
 
-def test_session_02(mocker):
+def test_session_02(tmp_path, mocker):
     """test Session.generate_testcase()"""
+    Status.DB_FILE = str(tmp_path / "test.db")
     fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
@@ -113,6 +116,7 @@ def test_session_02(mocker):
 
 def test_session_03(mocker, tmp_path):
     """test Session.launch_target()"""
+    Status.DB_FILE = str(tmp_path / "test.db")
     fake_server = mocker.Mock(spec=Sapphire)
     fake_server.get_port.return_value = 1
     fake_adapter = mocker.Mock(spec=Adapter)
@@ -169,8 +173,9 @@ def test_session_03(mocker, tmp_path):
         session.launch_target()
     assert fake_target.closed
 
-def test_session_04(mocker):
+def test_session_04(tmp_path, mocker):
     """test Session.location"""
+    Status.DB_FILE = str(tmp_path / "test.db")
     fake_server = mocker.Mock(spec=Sapphire)
     fake_server.get_port.return_value = 1
     fake_adapter = mocker.Mock(spec=Adapter)
@@ -196,8 +201,9 @@ def test_session_04(mocker):
     session.server = fake_server
     assert session.location == "http://127.0.0.1:1/x"
 
-def test_session_05(mocker):
+def test_session_05(tmp_path, mocker):
     """test Session.config_server()"""
+    Status.DB_FILE = str(tmp_path / "test.db")
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
     fake_iomgr = mocker.Mock(spec=IOManager)
@@ -205,14 +211,14 @@ def test_session_05(mocker):
     fake_iomgr.server_map.includes = [("test", "test")]
     fake_iomgr.server_map.dynamic_responses = [{"url": "a", "callback": lambda: 1, "mime": "x"}]
     fake_iomgr.server_map.redirects = [{"url":"", "file_name":"somefile", "required":True}]
-    fake_target = mocker.Mock(spec=Target)
-    session = Session(fake_adapter, False, [], fake_iomgr, None, fake_target)
+    session = Session(fake_adapter, False, [], fake_iomgr, None, mocker.Mock(spec=Target))
     session.config_server(5)
     assert fake_server.return_value.add_dynamic_response.call_count == 2
     fake_server.return_value.add_include.assert_called_once()
 
 def test_session_06(tmp_path, mocker):
     """test Session.run()"""
+    Status.DB_FILE = str(tmp_path / "test.db")
     fake_server = mocker.patch("sapphire.Sapphire", spec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
