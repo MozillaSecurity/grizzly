@@ -17,7 +17,7 @@ import threading
 
 import ffpuppet
 import sapphire
-from ..reporter import FuzzManagerReporter, Report
+from ..common import FuzzManagerReporter, Report
 from ..target.target import Target
 
 
@@ -287,7 +287,7 @@ class Interesting(object):
             self.server = sapphire.Sapphire(timeout=serve_timeout)
 
             if not self.no_harness:
-                harness = os.path.join(os.path.dirname(__file__), '..', 'corpman', 'harness.html')
+                harness = os.path.join(os.path.dirname(__file__), '..', 'common', 'harness.html')
                 with open(harness, 'rb') as harness_fp:
                     harness = harness_fp.read()
 

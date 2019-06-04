@@ -13,7 +13,7 @@ from Collector.Collector import Collector
 
 from .args import ReducerFuzzManagerIDArgs
 from .crash import main as reduce_crash
-from ..core import console_init_logging
+from ..main import console_init_logging
 
 
 LOG = logging.getLogger("grizzly.reduce.bucket")

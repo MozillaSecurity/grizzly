@@ -9,10 +9,9 @@ import shutil
 import tempfile
 
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
-import sapphire
 
-from .corpman.storage import TestFile
-from .status import Status
+import sapphire
+from .common import Status, TestFile
 
 
 __all__ = ("Session",)

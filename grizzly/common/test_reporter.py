@@ -10,8 +10,8 @@ import tarfile
 
 import pytest
 
-from .corpman.storage import TestCase
 from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
+from .storage import TestCase
 
 
 def test_report_01():
@@ -399,7 +399,7 @@ def test_filesystem_reporter_04(tmp_path):
 
 def test_fuzzmanager_reporter_01(tmp_path, mocker):
     """test FuzzManagerReporter.sanity_check()"""
-    mocker.patch("grizzly.reporter.ProgramConfiguration")
+    mocker.patch("grizzly.common.reporter.ProgramConfiguration")
     FuzzManagerReporter.FM_CONFIG = "no_file"
     fake_bin = tmp_path / "bin"
     fake_bin.touch()
@@ -428,11 +428,11 @@ def test_fuzzmanager_reporter_02(tmp_path):
 
 def test_fuzzmanager_reporter_03(tmp_path, mocker):
     """test FuzzManagerReporter.submit()"""
-    fake_crashinfo = mocker.patch("grizzly.reporter.CrashInfo", autospec=True)
+    fake_crashinfo = mocker.patch("grizzly.common.reporter.CrashInfo", autospec=True)
     fake_crashinfo.fromRawCrashData.return_value.createShortSignature.return_value = "test [@ test]"
-    fake_collector = mocker.patch("grizzly.reporter.Collector", autospec=True)
+    fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (None, None)
-    fake_collector.return_value.generate.return_value = "fake_sig_file"
+    fake_collector.return_value.generate.return_value = str(tmp_path / "fake_sig_file")
     reporter = FuzzManagerReporter(str("fake_bin"))
     log_path = tmp_path / "log_path"
     log_path.mkdir()
@@ -451,8 +451,8 @@ def test_fuzzmanager_reporter_03(tmp_path, mocker):
 
 def test_fuzzmanager_reporter_04(tmp_path, mocker):
     """test FuzzManagerReporter.submit() hit frequent crash"""
-    mocker.patch("grizzly.reporter.CrashInfo", autospec=True)
-    fake_collector = mocker.patch("grizzly.reporter.Collector", autospec=True)
+    mocker.patch("grizzly.common.reporter.CrashInfo", autospec=True)
+    fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (None, {"frequent": True, "shortDescription": "[@ test]"})
     reporter = FuzzManagerReporter("fake_bin")
     log_path = tmp_path / "log_path"
@@ -466,8 +466,8 @@ def test_fuzzmanager_reporter_04(tmp_path, mocker):
 
 def test_fuzzmanager_reporter_05(tmp_path, mocker):
     """test FuzzManagerReporter.submit() hit existing crash"""
-    mocker.patch("grizzly.reporter.CrashInfo", autospec=True)
-    fake_collector = mocker.patch("grizzly.reporter.Collector", autospec=True)
+    mocker.patch("grizzly.common.reporter.CrashInfo", autospec=True)
+    fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (
         None, {"bug__id":1, "frequent": False, "shortDescription": "[@ test]"})
     reporter = FuzzManagerReporter("fake_bin")
@@ -483,8 +483,8 @@ def test_fuzzmanager_reporter_05(tmp_path, mocker):
 
 def test_fuzzmanager_reporter_06(tmp_path, mocker):
     """test FuzzManagerReporter.submit() no signature"""
-    mocker.patch("grizzly.reporter.CrashInfo", autospec=True)
-    fake_collector = mocker.patch("grizzly.reporter.Collector", autospec=True)
+    mocker.patch("grizzly.common.reporter.CrashInfo", autospec=True)
+    fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (None, None)
     fake_collector.return_value.generate.return_value = None
     reporter = FuzzManagerReporter("fake_bin")
@@ -505,7 +505,7 @@ def test_fuzzmanager_reporter_06(tmp_path, mocker):
 
 def test_s3fuzzmanager_reporter_01(tmp_path, mocker):
     """test S3FuzzManagerReporter.sanity_check()"""
-    mocker.patch("grizzly.reporter.FuzzManagerReporter", autospec=True)
+    mocker.patch("grizzly.common.reporter.FuzzManagerReporter", autospec=True)
     fake_bin = tmp_path / "bin"
     with pytest.raises(EnvironmentError) as exc:
         S3FuzzManagerReporter.sanity_check(str(fake_bin))

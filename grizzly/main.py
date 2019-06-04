@@ -24,9 +24,9 @@ import os
 
 from ffpuppet import LaunchError
 
+import grizzly.adapters
 from .args import GrizzlyArgs
-from .corpman import adapters, IOManager
-from .reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
+from .common import FilesystemReporter, FuzzManagerReporter, IOManager, S3FuzzManagerReporter
 from .session import Session
 from .target import load as load_target
 
@@ -49,6 +49,7 @@ def console_init_logging():
 
 def console_main():
     console_init_logging()
+    grizzly.adapters.load()
     return main(GrizzlyArgs().parse_args())
 
 
@@ -81,8 +82,8 @@ def main(args):
             mime_type=args.mime,
             working_path=args.working_path)
 
-        log.debug("initializing the Adapter")
-        adapter = adapters.get(args.adapter)()
+        log.debug("initializing Adapter %r", args.adapter)
+        adapter = grizzly.adapters.get(args.adapter)()
 
         if adapter.TEST_DURATION >= args.timeout:
             raise RuntimeError("Test duration (%ds) should be less than browser timeout (%ds)" % (
@@ -146,6 +147,7 @@ def main(args):
             target)
 
         session.config_server(args.timeout)
+        target.reverse(session.server.get_port(), session.server.get_port())
 
         session.run()
 

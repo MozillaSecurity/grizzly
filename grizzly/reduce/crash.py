@@ -12,8 +12,8 @@ from Collector.Collector import Collector
 
 from .args import ReducerFuzzManagerIDArgs
 from .reduce import main as reduce_main
-from ..core import console_init_logging
-from ..reporter import FuzzManagerReporter
+from ..main import console_init_logging
+from ..common import FuzzManagerReporter
 
 
 LOG = logging.getLogger("grizzly.reduce.crash")

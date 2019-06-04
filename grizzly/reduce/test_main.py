@@ -7,8 +7,7 @@ import zipfile
 import pytest
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs
 from grizzly.reduce import reduce, crash, bucket, ReductionJob
-from grizzly import reporter
-from .reduce_status import ReduceStatus
+from grizzly.common import ReduceStatus, reporter
 from .test_common import BaseFakeReporter, FakeTarget
 from .test_reduce import FakeInteresting
 

@@ -9,9 +9,13 @@ import six
 
 from .storage import TestFile
 
-__all__ = ("Adapter",)
+__all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
+
+
+class AdapterError(RuntimeError):
+    """The base class for exceptions raised by an Adapter"""
 
 
 @six.add_metaclass(abc.ABCMeta)

@@ -9,13 +9,11 @@ unit tests for grizzly.Session
 import pytest
 
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
+
 from sapphire import Sapphire, SERVED_ALL, SERVED_TIMEOUT
-from .corpman.adapter import Adapter
-from .corpman.iomanager import IOManager, ServerMap
-from .corpman.storage import TestCase, TestFile
-from .reporter import Reporter
-from .session import Session
-from .target import Target
+from grizzly.common import Adapter, IOManager, Reporter, ServerMap, TestCase, TestFile
+from grizzly.session import Session
+from grizzly.target import Target
 
 
 def test_session_00(tmp_path, mocker):
