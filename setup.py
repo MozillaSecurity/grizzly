@@ -49,7 +49,7 @@ if __name__ == '__main__':
         name='grizzly',
         packages=[
             'grizzly',
-            'grizzly.corpman',
+            'grizzly.common',
             'grizzly.reduce',
             'loki',
             'sapphire',
