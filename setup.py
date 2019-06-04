@@ -35,7 +35,8 @@ if __name__ == '__main__':
         description='A framework for developing and running browser fuzzers',
         entry_points={
             'console_scripts': [
-                'grizzly = grizzly.core:console_main'
+                'grizzly = grizzly.main:console_main',
+                'grizzly.status = grizzly.common.status_reporter:main',
             ],
             'grizzly_targets': [
                 'ffpuppet = grizzly.target.puppet_target:PuppetTarget',
