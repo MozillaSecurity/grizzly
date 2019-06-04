@@ -74,7 +74,7 @@ class Adapter(object):
             None
 
         Returns:
-            grizzly.corpman.TestFile: The current harness
+            grizzly.common.TestFile: The current harness
         """
         return self._harness
 
@@ -87,9 +87,9 @@ class Adapter(object):
         """Automatically called. Populate testcase here.
 
         Args:
-            testcase (grizzly.corpman.TestCase): TestCase intended to be populated
-            input_file (grizzly.corpman.InputFile): Contains input data
-            server_map (grizzly.corpman.iomanager.ServerMap): A ServerMap
+            testcase (grizzly.common.TestCase): TestCase intended to be populated
+            input_file (grizzly.common.InputFile): Contains input data
+            server_map (grizzly.common.ServerMap): A ServerMap
 
         Returns:
             None
@@ -99,7 +99,7 @@ class Adapter(object):
         """Optional. Automatically called after a test case is successfully served.
 
         Args:
-            testcase (grizzly.corpman.TestCase): TestCase that was served
+            testcase (grizzly.common.TestCase): TestCase that was served
             served (list): A list of file names served from testcase
 
         Returns:
@@ -110,7 +110,7 @@ class Adapter(object):
         """Optional. Automatically called if timeout occurs attempting to serve a test case.
 
         Args:
-            testcase (grizzly.corpman.TestCase): TestCase that was served
+            testcase (grizzly.common.TestCase): TestCase that was served
             served (list): A list of file names served from testcase
 
         Returns:
@@ -122,7 +122,7 @@ class Adapter(object):
         """Optional. Automatically called once at startup.
 
         Args:
-            server_map (grizzly.corpman.iomanager.ServerMap): A ServerMap
+            server_map (grizzly.common.ServerMap): A ServerMap
 
         Returns:
             None
