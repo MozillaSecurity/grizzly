@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 
+import json
 import os
 
 import pytest
@@ -30,8 +31,7 @@ def test_testcase_01(tmp_path):
         tcase.dump(str(tmp_path))
         assert not os.listdir(str(tmp_path))
         tcase.dump(str(tmp_path), include_details=True)
-        assert "test_info.json" in os.listdir(str(tmp_path))
-        assert "test_info.txt" in os.listdir(str(tmp_path))  # deprecated
+        assert (tmp_path / "test_info.json").is_file()
     finally:
         tcase.cleanup()
 
@@ -48,29 +48,27 @@ def test_testcase_02(tmp_path):
         with pytest.raises(TestFileExists) as exc:
             tcase.add_from_data("test", "testfile1.bin")
         assert "'testfile1.bin' exists in test" in str(exc)
-        tcase.add_from_data("test_nreq", "test_dir/testfile2.bin", required=False)
+        tcase.add_from_data("test_nreq", "nested/testfile2.bin", required=False)
         tcase.add_from_data("test_blah", "/testfile3.bin")
         tcase.add_from_data("test_windows", "\\\\dir\\file.bin")
         opt_files = tcase.get_optional()
         assert len(opt_files) == 1
-        assert os.path.join("test_dir", "testfile2.bin") in opt_files
+        assert os.path.join("nested", "testfile2.bin") in opt_files
         tcase.dump(str(tmp_path), include_details=True)
-        assert os.path.isdir(os.path.join(str(tmp_path), "test_dir"))
-        assert os.path.isfile(os.path.join(str(tmp_path), "test_info.json"))
-        assert os.path.isfile(os.path.join(str(tmp_path), "test_info.txt"))
-        with open(os.path.join(str(tmp_path), "test_info.txt"), "r") as test_fp:
-            assert "testinput.bin" in test_fp.read()
-        assert os.path.isfile(os.path.join(str(tmp_path), "testfile1.bin"))
-        with open(os.path.join(str(tmp_path), "testfile1.bin"), "r") as test_fp:
+        assert (tmp_path / "nested").is_dir()
+        with (tmp_path / "test_info.json").open() as info:
+            test_info = json.load(info)
+        assert test_info["adapter"] == "test-adapter"
+        assert test_info["input"] == "testinput.bin"
+        assert test_info["target"] == "land_page.html"
+        assert isinstance(test_info["env"], dict)
+        with (tmp_path / "testfile1.bin").open() as test_fp:
             assert test_fp.read() == "test_req"
-        assert os.path.isfile(os.path.join(str(tmp_path), "test_dir", "testfile2.bin"))
-        with open(os.path.join(str(tmp_path), "test_dir", "testfile2.bin"), "r") as test_fp:
+        with (tmp_path / "nested" / "testfile2.bin").open() as test_fp:
             assert test_fp.read() == "test_nreq"
-        assert os.path.isfile(os.path.join(str(tmp_path), "testfile3.bin"))
-        with open(os.path.join(str(tmp_path), "testfile3.bin"), "r") as test_fp:
+        with (tmp_path / "testfile3.bin").open() as test_fp:
             assert test_fp.read() == "test_blah"
-        assert os.path.isfile(os.path.join(str(tmp_path), "dir", "file.bin"))
-        with open(os.path.join(str(tmp_path), "dir", "file.bin"), "r") as test_fp:
+        with (tmp_path / "dir" / "file.bin").open() as test_fp:
             assert test_fp.read() == "test_windows"
     finally:
         tcase.cleanup()
@@ -103,12 +101,10 @@ def test_testcase_04(tmp_path):
         dmp_path = tmp_path / "dmp_test"
         dmp_path.mkdir()
         tcase.dump(str(dmp_path), include_details=True)
-        env_file = dmp_path / "env_vars.txt"
-        assert env_file.is_file()
-        with env_file.open("r") as test_fp:
-            data = test_fp.read()
-        assert "TEST_ENV_VAR=1\n" in data
-        assert "TEST_NONE=\n" in data
+        with (dmp_path / "test_info.json").open("r") as test_fp:
+            data = json.load(test_fp)["env"]
+        assert data["TEST_ENV_VAR"] == "1"
+        assert data["TEST_NONE"] is None
     finally:
         tcase.cleanup()
 
