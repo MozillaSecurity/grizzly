@@ -7,6 +7,7 @@ Interesting script to use FFPuppet/Sapphire for fast reduction using lithium.
 """
 import glob
 import hashlib
+import json
 import logging
 import os
 import re
@@ -74,16 +75,22 @@ class Interesting(object):
         self._reduce_file = None  # the file to reduce
 
     def config_environ(self, environ):
-        self.env_mod = {}
-        with open(environ) as env_fp:
-            for line in env_fp:
-                line = line.rstrip()
-                if not line:
-                    continue
-                key, value = line.split('=', 1)
-                if not value:
-                    value = None
-                self.env_mod[key] = value
+        with open(environ) as in_fp:
+            try:
+                self.env_mod = json.load(in_fp).get('env', {})
+            except ValueError:
+                # TODO: remove this once switched to 'test_info.json'
+                # legacy support for 'env_vars.txt'
+                self.env_mod = {}
+                in_fp.seek(0)
+                for line in in_fp:
+                    line = line.rstrip()
+                    if not line:
+                        continue
+                    key, value = line.split('=', 1)
+                    if not value:
+                        value = None
+                    self.env_mod[key] = value
         # known sanitizer suppression files
         known_suppressions = ('lsan.supp', 'ubsan.supp')
         working_dir = os.path.dirname(environ)

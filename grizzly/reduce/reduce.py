@@ -8,6 +8,7 @@ Given a build and testcase, try to reproduce it using a set of strategies.
 from __future__ import absolute_import
 import hashlib
 import io
+import json
 import logging
 import math
 import os
@@ -167,23 +168,32 @@ class ReductionJob(object):
 
     @staticmethod
     def _get_landing_page(testpath):
-        """Parse test_info.txt for landing page
+        """Parse test_info.json for landing page
 
         Args:
-            testpath (str): Path to a testcase folder (containing a test_info.txt from Grizzly).
+            testpath (str): Path to a testcase folder (containing a test_info.json from Grizzly).
 
         Returns:
             str: Path to the landing page within testpath
         """
-        with io.open(os.path.join(testpath, "test_info.txt"), encoding="utf-8") as info:
-            for line in info:
-                if line.lower().startswith("landing page: "):
-                    landing_page = os.path.join(testpath,
-                                                line.split(": ", 1)[1].strip())
-                    break
-            else:
-                raise ReducerError("Could not find landing page in %s!"
-                                   % (os.path.abspath(info.name),))
+        info_file = os.path.join(testpath, "test_info.json")
+        if os.path.isfile(info_file):
+            with open(info_file) as info:
+                landing_page = json.load(info).get("target", None)
+            if landing_page is None:
+                raise ReducerError("Could not find landing page in %s!" % (os.path.abspath(info_file),))
+            landing_page = os.path.join(testpath, landing_page)
+        else:
+            LOG.warning("Using deprecated test_info.txt")
+            with io.open(os.path.join(testpath, "test_info.txt"), encoding="utf-8") as info:
+                for line in info:
+                    if line.lower().startswith("landing page: "):
+                        landing_page = os.path.join(testpath,
+                                                    line.split(": ", 1)[1].strip())
+                        break
+                else:
+                    raise ReducerError("Could not find landing page in %s!"
+                                       % (os.path.abspath(info.name),))
         if not os.path.isfile(landing_page):
             raise ReducerError("Landing page %s does not exist in %s!"
                                % (landing_page, os.path.abspath(info.name)))
@@ -212,8 +222,9 @@ class ReductionJob(object):
                 if testcase.lower().endswith(".html"):
                     os.mkdir(self.tcroot)
                     shutil.copy(testcase, self.tcroot)
-                    with open(os.path.join(self.tcroot, "test_info.txt"), "w") as info_fp:
-                        info_fp.write("landing page: %s\n" % (os.path.basename(testcase),))
+                    info = {"target": os.path.basename(testcase)}
+                    with open(os.path.join(self.tcroot, "test_info.json"), "w") as info_fp:
+                        json.dump(info, info_fp, indent=2, sort_keys=True)
                 elif testcase.lower().endswith(".zip"):
                     os.mkdir(self.tcroot)
                     try:
@@ -233,11 +244,14 @@ class ReductionJob(object):
             # get a list of all directories containing testcases (1-n, depending on how much history
             # grizzly saved)
             entries = set(os.listdir(self.tcroot))
-            if "test_info.txt" in entries:
+            if "test_info.json" in entries:
+                dirs = [self.tcroot]
+            elif "test_info.txt" in entries:
                 dirs = [self.tcroot]
             else:
                 dirs = sorted([os.path.join(self.tcroot, entry) for entry in entries
-                               if os.path.exists(os.path.join(self.tcroot, entry, "test_info.txt"))],
+                               if os.path.exists(os.path.join(self.tcroot, entry, "test_info.json"))
+                               or os.path.exists(os.path.join(self.tcroot, entry, "test_info.txt"))],
                               key=lambda x: -int(x.rsplit('-', 1)[1]))
                 if not dirs:
                     raise NoTestcaseError("No testcase recognized at %r" % (testcase,))
@@ -248,7 +262,15 @@ class ReductionJob(object):
                 os.rename(os.path.join(dirs[0], "prefs.js"), os.path.join(self.tmpdir, "prefs.js"))
                 self.interesting.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
                 LOG.warning("Using prefs included in testcase: %r", self.interesting.target.prefs)
-            if "env_vars.txt" in os.listdir(dirs[0]):
+            if "test_info.json" in os.listdir(dirs[0]):
+                self.interesting.config_environ(os.path.join(dirs[0], "test_info.json"))
+                if self.interesting.env_mod:
+                    LOG.warning("Using environment included in testcase: %s",
+                                os.path.abspath(os.path.join(dirs[0], "test_info.json")))
+                    self.interesting.target.forced_close = \
+                        self.interesting.env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
+            elif "env_vars.txt" in os.listdir(dirs[0]):
+                # TODO: remove this block once move to 'test_info.json' is complete
                 self.interesting.config_environ(os.path.join(dirs[0], "env_vars.txt"))
                 LOG.warning("Using environment included in testcase: %s",
                             os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
