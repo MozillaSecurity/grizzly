@@ -53,7 +53,6 @@ def test_main_01(tmp_path, mocker):
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec=Sapphire)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
-    #fake_session.return_value.server.return_value.get_port.return_value = 1234
     args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
     args.input = "fake"
@@ -65,6 +64,7 @@ def test_main_01(tmp_path, mocker):
     assert main(args) == Session.EXIT_SUCCESS
     fake_reporter = mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
     fake_reporter.sanity_check.return_value = True
+    args.input = None
     args.fuzzmanager = True
     args.coverage = True
     assert main(args) == Session.EXIT_SUCCESS
@@ -83,7 +83,6 @@ def test_main_02(tmp_path, mocker):
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
-    args.input = "fake"
     fake_adapter.TEST_DURATION = args.timeout + 10
     with pytest.raises(RuntimeError):
         main(args)

@@ -14,6 +14,9 @@ class ReducerArgs(CommonArgs):
     def __init__(self):
         CommonArgs.__init__(self)
         self.parser.add_argument(
+            "input",
+            help="Test case or directory containing test cases")
+        self.parser.add_argument(
             "--sig",
             help="Signature to reduce (JSON)")
         self.parser.add_argument(

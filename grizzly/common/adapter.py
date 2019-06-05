@@ -88,7 +88,7 @@ class Adapter(object):
 
         Args:
             testcase (grizzly.common.TestCase): TestCase intended to be populated
-            input_file (grizzly.common.InputFile): Contains input data
+            input_file (grizzly.common.InputFile): Contains input data (or None)
             server_map (grizzly.common.ServerMap): A ServerMap
 
         Returns:
