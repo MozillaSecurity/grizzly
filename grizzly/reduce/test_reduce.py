@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import unicode_literals
+import json
 import os.path
 import zipfile
 import pytest
@@ -135,6 +136,17 @@ def test_config_testcase_3(tmp_path, job):
 
 def test_config_testcase_4(tmp_path, job):
     """missing landing page causes failure"""
+    file = tmp_path / "test_info.json"
+    file.write_text("{}")
+    with pytest.raises(exceptions.ReducerError) as exc:
+        job.config_testcase(str(tmp_path))
+    assert "Could not find landing page" in str(exc)
+    assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
+
+
+def test_config_testcase_4_legacy(tmp_path, job):
+    """missing landing page causes failure"""
+    # TODO: remove this test
     file = tmp_path / "test_info.txt"
     file.touch()
     with pytest.raises(exceptions.ReducerError) as exc:
@@ -145,17 +157,40 @@ def test_config_testcase_4(tmp_path, job):
 
 def test_config_testcase_5(tmp_path, job):
     """missing landing page causes failure"""
+    file = tmp_path / "test_info.json"
+    file.write_text("{\"target\":\"\",\"env\":{}}")
+    with pytest.raises(exceptions.ReducerError) as exc:
+        job.config_testcase(str(tmp_path))
+    assert "does not exist" in str(exc)
+    assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
+
+
+def test_config_testcase_5_legacy(tmp_path, job):
+    """missing landing page causes failure"""
+    # TODO: remove this test
     file = tmp_path / "test_info.txt"
     file.write_text("landing page: ")
     with pytest.raises(exceptions.ReducerError) as exc:
         job.config_testcase(str(tmp_path))
-    assert "Landing page"
     assert "does not exist" in str(exc)
     assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_6(tmp_path, job):
     """single testcase is loaded ok"""
+    file = tmp_path / "test_info.json"
+    file.write_text("{\"target\":\"test.html\",\"env\":{}}")
+    (tmp_path / "test.html").write_text("hello")
+    job.config_testcase(str(tmp_path))
+    assert job.testcase == os.path.join(job.tcroot, "test.html")
+    with open(job.testcase) as tc_fp:
+        assert tc_fp.read() == "hello"
+    assert job.result_code is None
+
+
+def test_config_testcase_6_legacy(tmp_path, job):
+    """single testcase is loaded ok"""
+    # TODO: remove this test
     file = tmp_path / "test_info.txt"
     file.write_text("landing page: test.html")
     (tmp_path / "test.html").write_text("hello")
@@ -169,6 +204,20 @@ def test_config_testcase_6(tmp_path, job):
 def test_config_testcase_7(tmp_path, job):
     """single testcase in numbered subdir is loaded ok"""
     (tmp_path / "-0").mkdir()
+    file = tmp_path / "-0" / "test_info.json"
+    file.write_text("{\"target\":\"test.html\",\"env\":{}}")
+    (tmp_path / "-0" / "test.html").write_text("hello")
+    job.config_testcase(str(tmp_path))
+    assert job.testcase == os.path.join(job.tcroot, "-0", "test.html")
+    with open(job.testcase) as tc_fp:
+        assert tc_fp.read() == "hello"
+    assert job.result_code is None
+
+
+def test_config_testcase_7_legacy(tmp_path, job):
+    """single testcase in numbered subdir is loaded ok"""
+    # TODO: remove this test
+    (tmp_path / "-0").mkdir()
     file = tmp_path / "-0" / "test_info.txt"
     file.write_text("landing page: test.html")
     (tmp_path / "-0" / "test.html").write_text("hello")
@@ -181,6 +230,28 @@ def test_config_testcase_7(tmp_path, job):
 
 def test_config_testcase_8(tmp_path, job):
     """multiple testcase in numbered subdir creates a harness"""
+    for subdir in ("-0", "-1"):
+        (tmp_path / subdir).mkdir()
+        file = tmp_path / subdir / "test_info.json"
+        file.write_text("{\"target\":\"test.html\",\"env\":{}}")
+        (tmp_path / subdir / "test.html").write_text("hello")
+    job.config_testcase(str(tmp_path))
+    assert job.testcase.startswith(os.path.join(job.tcroot, "harness_"))
+    assert job.testcase.endswith(".html")
+    for subdir in ("-0", "-1"):
+        with open(os.path.join(job.tcroot, subdir, "test.html")) as tc_fp:
+            assert tc_fp.read() == "hello"
+    with open(job.testcase) as tc_fp:
+        harness = tc_fp.read()
+    loc0 = harness.index("'/-0/test.html',")
+    loc1 = harness.index("'/-1/test.html',")
+    assert loc1 < loc0, "testcases should occur in harness in descending order"
+    assert job.result_code is None
+
+
+def test_config_testcase_8_legacy(tmp_path, job):
+    """multiple testcase in numbered subdir creates a harness"""
+    # TODO: remove this test
     for subdir in ("-0", "-1"):
         (tmp_path / subdir).mkdir()
         file = tmp_path / subdir / "test_info.txt"
@@ -202,8 +273,22 @@ def test_config_testcase_8(tmp_path, job):
 
 def test_config_testcase_9(tmp_path, job):
     """single testcase is loaded from zip ok"""
-    file = tmp_path / "test_info.txt"
-    file.write_text("landing page: test.html")
+    (tmp_path / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
+    (tmp_path / "test.html").write_text("hello")
+    with zipfile.ZipFile(str(tmp_path / "test.zip"), "w") as zip_fp:
+        zip_fp.write(str(tmp_path / "test_info.json"), "test_info.json")
+        zip_fp.write(str(tmp_path / "test.html"), "test.html")
+    job.config_testcase(str(tmp_path / "test.zip"))
+    assert job.testcase == os.path.join(job.tcroot, "test.html")
+    with open(job.testcase) as tc_fp:
+        assert tc_fp.read() == "hello"
+    assert job.result_code is None
+
+
+def test_config_testcase_9_legacy(tmp_path, job):
+    """single testcase is loaded from zip ok"""
+    # TODO: remove this test
+    (tmp_path / "test_info.txt").write_text("landing page: test.html")
     (tmp_path / "test.html").write_text("hello")
     with zipfile.ZipFile(str(tmp_path / "test.zip"), "w") as zip_fp:
         zip_fp.write(str(tmp_path / "test_info.txt"), "test_info.txt")
@@ -219,8 +304,23 @@ def test_config_testcase_10(tmp_path, job):
     """prefs from testcase are used and take precedence over target prefs"""
     (tmp_path / "orig_prefs.js").write_text("orig prefs")
     job.interesting.target.prefs = str(tmp_path / "orig_prefs.js")
-    file = tmp_path / "test_info.txt"
-    file.write_text("landing page: test.html")
+    (tmp_path / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
+    (tmp_path / "test.html").write_text("hello")
+    (tmp_path / "prefs.js").write_text("some prefs")
+    job.config_testcase(str(tmp_path))
+    assert os.path.normpath(job.interesting.target.prefs) \
+        != os.path.normpath(str(tmp_path / "prefs.js"))
+    with open(job.interesting.target.prefs) as prefs_fp:
+        assert prefs_fp.read() == "some prefs"
+    assert job.result_code is None
+
+
+def test_config_testcase_10_legacy(tmp_path, job):
+    """prefs from testcase are used and take precedence over target prefs"""
+    # TODO: remove this test
+    (tmp_path / "orig_prefs.js").write_text("orig prefs")
+    job.interesting.target.prefs = str(tmp_path / "orig_prefs.js")
+    (tmp_path / "test_info.txt").write_text("landing page: test.html")
     (tmp_path / "test.html").write_text("hello")
     (tmp_path / "prefs.js").write_text("some prefs")
     job.config_testcase(str(tmp_path))
@@ -233,8 +333,23 @@ def test_config_testcase_10(tmp_path, job):
 
 def test_config_testcase_11(tmp_path, job):
     """env vars from testcase are used"""
-    file = tmp_path / "test_info.txt"
-    file.write_text("landing page: test.html")
+    with (tmp_path / "test_info.json").open("wb") as info:
+        json.dump({
+            "target": "test.html",
+            "env": {
+                "foo": "bar",
+                "var": "value"
+            }}, info)
+    (tmp_path / "test.html").write_text("hello")
+    job.config_testcase(str(tmp_path))
+    assert job.interesting.env_mod == dict(var="value", foo="bar")
+    assert job.result_code is None
+
+
+def test_config_testcase_11_legacy(tmp_path, job):
+    """env vars from testcase are used"""
+    # TODO: remove this test
+    (tmp_path / "test_info.txt").write_text("landing page: test.html")
     (tmp_path / "test.html").write_text("hello")
     (tmp_path / "env_vars.txt").write_text("var=value\nfoo=bar")
     job.config_testcase(str(tmp_path))
@@ -252,14 +367,41 @@ def test_config_testcase_12(tmp_path, job):
     assert job.result_code is None
 
 
+def test_config_testcase_13(tmp_path, job):
+    """test test_info.json not test_info.txt is used"""
+    # TODO: remove this test
+    (tmp_path / "test_info.txt").write_text("landing page: test_old.html")
+    (tmp_path / "test_old.html").write_text("fail!")
+    (tmp_path / "env_vars.txt").write_text("var=fail\nfoo=fail")
+    with (tmp_path / "test_info.json").open("wb") as info:
+        json.dump({
+            "target": "test.html",
+            "env": {
+                "foo": "bar",
+                "var": "value"
+            }}, info)
+    (tmp_path / "test.html").write_text("hello")
+    job.config_testcase(str(tmp_path))
+    assert job.interesting.env_mod == dict(var="value", foo="bar")
+    assert job.testcase == os.path.join(job.tcroot, "test.html")
+    with open(job.testcase) as tc_fp:
+        assert tc_fp.read() == "hello"
+    assert job.result_code is None
+
+
 def test_run_0(tmp_path, job):
     """single required testcase is reduced and reported"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    with (tmp_path / "tc" / "test_info.json").open("wb") as info:
+        json.dump({
+            "target": "test.html",
+            "env": {
+                "foo": "bar",
+                "var": "value"
+            }}, info)
     (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
     (tmp_path / "tc" / "prefs.js").write_text("some prefs")
-    (tmp_path / "tc" / "env_vars.txt").write_text("var=value\nfoo=bar")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
@@ -292,10 +434,15 @@ def test_run_1(tmp_path, job):
     """other crashes are reported as unreduced crashes"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    with (tmp_path / "tc" / "test_info.json").open("wb") as info:
+        json.dump({
+            "target": "test.html",
+            "env": {
+                "foo": "bar",
+                "var": "value"
+            }}, info)
     (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
     (tmp_path / "tc" / "prefs.js").write_text("some prefs")
-    (tmp_path / "tc" / "env_vars.txt").write_text("var=value\nfoo=bar")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
@@ -327,7 +474,7 @@ def test_run_2(tmp_path, job):
     """other files in testcase are not reduced without DDBEGIN/END"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
     (tmp_path / "tc" / "test2.html").write_text("fluff\nrequired\n")
     job.config_testcase(str(tmp_path / "tc"))
@@ -356,7 +503,7 @@ def test_run_3(tmp_path, job):
     """other files in testcase are reduced with DDBEGIN/END"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
     (tmp_path / "tc" / "test2.html").write_text("DDBEGIN\nfluff\nrequired\nDDEND\n")
     job.config_testcase(str(tmp_path / "tc"))
@@ -388,9 +535,9 @@ def test_run_4(tmp_path, job):
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "-0").mkdir()
     (tmp_path / "tc" / "-1").mkdir()
-    (tmp_path / "tc" / "-0" / "test_info.txt").write_text("landing page: required.html")
+    (tmp_path / "tc" / "-0" / "test_info.json").write_text("{\"target\":\"required.html\",\"env\":{}}")
     (tmp_path / "tc" / "-0" / "required.html").write_text("DDBEGIN\nfluff\nrequired\nDDEND\n")
-    (tmp_path / "tc" / "-1" / "test_info.txt").write_text("landing page: required.html")
+    (tmp_path / "tc" / "-1" / "test_info.json").write_text("{\"target\":\"required.html\",\"env\":{}}")
     (tmp_path / "tc" / "-1" / "required.html").write_text("DDBEGIN\nfluff\nrequired\nDDEND\n")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
@@ -423,9 +570,9 @@ def test_run_5(tmp_path, job):
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "-0").mkdir()
     (tmp_path / "tc" / "-1").mkdir()
-    (tmp_path / "tc" / "-0" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "-0" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "tc" / "-0" / "test.html").write_text("-0\nDDBEGIN\nfluff\nrequired\nDDEND\n")
-    (tmp_path / "tc" / "-1" / "test_info.txt").write_text("landing page: required.html")
+    (tmp_path / "tc" / "-1" / "test_info.json").write_text("{\"target\":\"required.html\",\"env\":{}}")
     (tmp_path / "tc" / "-1" / "required.html").write_text("-1\nDDBEGIN\nfluff\nrequired\nDDEND\n")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
@@ -452,7 +599,7 @@ def test_run_6(tmp_path, job):
     """test that jsbeautifier stage works"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.js")
+    (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.js\",\"env\":{}}")
     (tmp_path / "tc" / "test.js").write_text("try{'fluff';'required'}catch(e){}\n")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
@@ -478,7 +625,7 @@ def test_run_7(tmp_path, job):
     """test that jschar stage works"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.js")
+    (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.js\",\"env\":{}}")
     (tmp_path / "tc" / "test.js").write_text("var x = 'xrequiredx'\n")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
@@ -506,7 +653,7 @@ def test_run_8(tmp_path, job):
     """test that analyze stage works"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    (tmp_path / "tc" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
     (tmp_path / "tc" / "prefs.js").write_text("some prefs")
     (tmp_path / "tc" / "env_vars.txt").write_text("var=value\nfoo=bar")
@@ -549,9 +696,9 @@ def test_run_9(tmp_path, job):
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "-0").mkdir()
     (tmp_path / "tc" / "-1").mkdir()
-    (tmp_path / "tc" / "-0" / "test_info.txt").write_text("landing page: test.html")
+    (tmp_path / "tc" / "-0" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "tc" / "-0" / "test.html").write_text("-0\nDDBEGIN\nfluff\nrequired\nDDEND\n")
-    (tmp_path / "tc" / "-1" / "test_info.txt").write_text("landing page: required.html")
+    (tmp_path / "tc" / "-1" / "test_info.json").write_text("{\"target\":\"required.html\",\"env\":{}}")
     (tmp_path / "tc" / "-1" / "required.html").write_text("-1\nDDBEGIN\nfluff\nrequired\nDDEND\n")
     job.config_testcase(str(tmp_path / "tc"))
 
