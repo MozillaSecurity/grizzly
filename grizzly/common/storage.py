@@ -90,8 +90,6 @@ class TestCase(object):
         self._add(self._files.meta, meta_file)
 
     def add_environ_var(self, name, value):
-        assert isinstance(name, str)
-        assert value is None or isinstance(value, str)
         self._env_vars[name] = value
 
     def add_file(self, test_file, required=True):
@@ -134,33 +132,17 @@ class TestCase(object):
         # save test case files and meta data including:
         # adapter used, input file, environment info and files
         if include_details:
-            details = dict()
-            details["adapter"] = self.adapter_name
-            details["env"] = dict()
-            details["input"] = os.path.basename(self.input_fname) if self.input_fname else None
-            details["target"] = self.landing_page
-            for env_var, env_val in self._env_vars.items():
-                details["env"][env_var] = env_val
+            assert isinstance(self._env_vars, dict)
+            info = {
+                "adapter": self.adapter_name,
+                "env": self._env_vars,
+                "input": os.path.basename(self.input_fname) if self.input_fname else None,
+                "target": self.landing_page}
             with open(os.path.join(log_dir, "test_info.json"), "w") as out_fp:
-                json.dump(details, out_fp, indent=2, sort_keys=True)
+                json.dump(info, out_fp, indent=2, sort_keys=True)
             # save meta files
             for meta_file in self._files.meta:
                 meta_file.dump(log_dir)
-            # WARNING: test_info.txt and env_vars.txt are deprecated and will be removed
-            # TODO: remove this section
-            with open(os.path.join(log_dir, "test_info.txt"), "w") as out_fp:
-                out_fp.write("[Grizzly test case details]\n")
-                out_fp.write("Adapter:           %s\n" % self.adapter_name)
-                out_fp.write("Landing Page:      %s\n" % self.landing_page)
-                if self.input_fname is not None:
-                    out_fp.write("Input File:        %s\n" % os.path.basename(self.input_fname))
-            if self._env_vars:
-                with open(os.path.join(log_dir, "env_vars.txt"), "w") as out_fp:
-                    for env_var, env_val in self._env_vars.items():
-                        if env_val is None:
-                            out_fp.write("%s=\n" % env_var)
-                        else:
-                            out_fp.write("%s=%s\n" % (env_var, env_val))
 
     def cleanup(self):
         # close all the test files
