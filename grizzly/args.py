@@ -39,9 +39,6 @@ class CommonArgs(object):
             "binary",
             help="Firefox binary to run")
         self.parser.add_argument(
-            "input",
-            help="Test case or directory containing test cases")
-        self.parser.add_argument(
             "-e", "--extension", action="append",
             help="Install an extension. Specify the path to the xpi or the directory"
                  " containing the unpacked extension. To install multiple extensions"
@@ -105,7 +102,7 @@ class CommonArgs(object):
             if ignore_token not in self.IGNORABLE:
                 self.parser.error("Unrecognized ignore value: %s" % ignore_token)
 
-        if "input" not in self._sanity_skip:
+        if "input" not in self._sanity_skip and args.input:
             if not os.path.exists(args.input):
                 self.parser.error("%r does not exist" % args.input)
             elif os.path.isdir(args.input) and not os.listdir(args.input):
@@ -149,6 +146,9 @@ class GrizzlyArgs(CommonArgs):
         self.parser.add_argument(
             "--coverage", action="store_true",
             help="Enable coverage collection")
+        self.parser.add_argument(
+            "-i", "--input",
+            help="Test case or directory containing test cases")
         self.parser.add_argument(
             "--mime",
             help="Specify a mime type")
