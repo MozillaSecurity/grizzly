@@ -494,6 +494,23 @@ def test_traceback_report_05(tmp_path):
     assert "first()" in output
     assert "func_%d" % (TracebackReport.MAX_LINES * 2 - 1) in output
 
+def test_traceback_report_06(tmp_path):
+    """test TracebackReport.from_file() single word error"""
+    test_log = tmp_path / "screenlog.0"
+    with test_log.open("wb") as test_fp:
+        test_fp.write(b"Traceback (most recent call last):\n")
+        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b"    first()\n")
+        test_fp.write(b"AssertionError\n")
+        test_fp.write(b"end junk\n")
+    tbr = TracebackReport.from_file(str(test_log))
+    assert not tbr.is_kbi
+    output = str(tbr)
+    assert len(output.splitlines()) == 5
+    assert "first()" in output
+    assert "AssertionError" in output
+    assert "end junk" not in output
+
 def test_main_01(tmp_path):
     """test main() with no reports"""
     test_db = tmp_path / "test.db"

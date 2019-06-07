@@ -471,8 +471,8 @@ class TracebackReport(object):
                     # stop at first empty line
                     tb_end = min(line_num, line_count)
                     break
-                is_kbi = log_line.startswith("KeyboardInterrupt")
-                if is_kbi or re.match(r"^\w+(\.\w+)*\:\s", log_line) is not None:
+                if re.match(r"^\w+(\.\w+)*\:\s|^\w+(Interrupt|Error)$", log_line):
+                    is_kbi = log_line.startswith("KeyboardInterrupt")
                     # stop after error message
                     tb_end = min(line_num + 1, line_count)
                     break
