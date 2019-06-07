@@ -378,7 +378,7 @@ class ADBSession(object):
             shutil.rmtree(tmpd, ignore_errors=True)
 
         llvm_symer = os.path.join(
-            ndk_base, "toolchains", "llvm", "prebuilt", "android-x86_64",
+            ndk_base, "prebuilt", "android-x86_64",
             "llvm-symbolizer", "llvm-symbolizer")
         self.install_file(llvm_symer, "/system/bin", "755", ctx)
 
@@ -389,7 +389,7 @@ class ADBSession(object):
         self.call(["shell", "cp", "/system/bin/sh", "/system/bin/sh-from-zygote"])
         self.call(["shell", "chcon", ctx, "/system/bin/sh-from-zygote"])
 
-        self.call(["shell", "setenforce", "1"])
+        # restart the zygote
         self.call(["shell", "stop"])
         self.call(["shell", "start"])
 
