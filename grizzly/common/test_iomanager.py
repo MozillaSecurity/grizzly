@@ -35,16 +35,11 @@ def test_iomanager_02(tmp_path):
         iom.scan_input(str(tmp_path))
         assert not iom.input_files
         # create a test corpus
-        test_file = tmp_path / "input_01.bin"
-        test_file.write_bytes(b"foo")
-        test_file = tmp_path / ".should_be_ignored"
-        test_file.write_bytes(b"ignored")
-        test_file = tmp_path / "empty.BIN"
-        test_file.touch()
-        test_file = tmp_path / "input_02.txt"
-        test_file.write_bytes(b"bar")
-        test_file = tmp_path / "desktop.ini"
-        test_file.write_bytes(b"ignored")
+        (tmp_path / "input_01.bin").write_bytes(b"foo")
+        (tmp_path / ".should_be_ignored").write_bytes(b"ignored")
+        (tmp_path / "empty.BIN").touch()
+        (tmp_path / "input_02.txt").write_bytes(b"bar")
+        (tmp_path / "desktop.ini").write_bytes(b"ignored")
         nested = tmp_path / "nested"
         nested.mkdir()
         test_file = nested / "input_03.txt"
@@ -71,8 +66,7 @@ def test_iomanager_03(tmp_path, mocker):
         assert not iom._rotation_required(0)
         assert not iom._rotation_required(1)
         # create a test corpus
-        test_file = tmp_path / "input_01.bin"
-        test_file.write_bytes(b"foo")
+        (tmp_path / "input_01.bin").write_bytes(b"foo")
         iom.scan_input(str(tmp_path))
         assert len(iom.input_files) == 1
         # skip rotation because we only have one input file
@@ -80,8 +74,7 @@ def test_iomanager_03(tmp_path, mocker):
         iom.active_input = mocker.Mock(spec=InputFile)
         assert not iom._rotation_required(1)
         # add to test corpus
-        test_file = tmp_path / "input_02.text"
-        test_file.write_bytes(b"bar")
+        (tmp_path / "input_02.text").write_bytes(b"bar")
         iom.input_files = list()  # hack to enable rescan
         iom.scan_input(str(tmp_path))
         assert len(iom.input_files) == 2
