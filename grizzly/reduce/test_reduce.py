@@ -22,7 +22,7 @@ class FakeInteresting(interesting.Interesting):
     def location(self):
         return "127.0.0.1" if self.no_harness else "127.0.0.1/harness"
 
-    def _run(self, temp_prefix):
+    def _run(self, _testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
@@ -39,13 +39,13 @@ class FakeInterestingAlt(FakeInteresting):
     def init(self, _):
         self.__first_run = True
 
-    def _run(self, temp_prefix):
+    def _run(self, testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
         with open(self.reduce_file) as fp:
             if "required" in fp.read():
-                self.alt_crash_cb(temp_prefix)
+                self.alt_crash_cb(testcase, temp_prefix)
         if self.__first_run:
             self.__first_run = False
             return True
@@ -61,7 +61,7 @@ class FakeInterestingKeepHarness(FakeInteresting):
             with open(self.reduce_file) as harness_fp:
                 self.__init_data = harness_fp.read()
 
-    def _run(self, temp_prefix):
+    def _run(self, _testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
@@ -82,7 +82,7 @@ class FakeInterestingSemiReliable(FakeInteresting):
         self.interesting_count = 0
         self.require_no_harness = require_no_harness
 
-    def _run(self, temp_prefix):
+    def _run(self, _testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
@@ -484,12 +484,15 @@ def test_run_2(tmp_path, job):
         def _submit(self, _report, test_cases):
             assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
             tc = test_cases[0]
-            assert len(tc._files.required) == 2, \
-                "expecting 2 test_files: %r" % (tc._files.required,)
+            assert len(tc._files.required) == 1, \
+                "expecting 1 test_file: %r" % ({f.file_name for f in tc._files.required},)
+            assert len(tc._files.optional) == 1, \
+                "expecting 1 test_file: %r" % ({f.file_name for f in tc._files.optional},)
             assert tc.landing_page == "test.html"
             assert {x.file_name: x.data for x in tc._files.required} \
-                == {"test.html": "required\n",
-                    "test2.html": "fluff\nrequired\n"}
+                == {"test.html": "required\n"}
+            assert {x.file_name: x.data for x in tc._files.optional} \
+                == {"test2.html": "fluff\nrequired\n"}
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -513,12 +516,15 @@ def test_run_3(tmp_path, job):
         def _submit(self, _report, test_cases):
             assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
             tc = test_cases[0]
-            assert len(tc._files.required) == 2, \
-                "expecting 2 test_files: %r" % (tc._files.required,)
+            assert len(tc._files.required) == 1, \
+                "expecting 1 test file: %r" % (tc._files.required,)
+            assert len(tc._files.optional) == 1, \
+                "expecting 1 test file: %r" % (tc._files.optional,)
             assert tc.landing_page == "test.html"
             assert {x.file_name: x.data for x in tc._files.required} \
-                == {"test.html": "required\n",
-                    "test2.html": "DDBEGIN\nrequired\nDDEND\n"}
+                == {"test.html": "required\n"}
+            assert {x.file_name: x.data for x in tc._files.optional} \
+                == {"test2.html": "DDBEGIN\nrequired\nDDEND\n"}
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -546,13 +552,13 @@ def test_run_4(tmp_path, job):
         def _submit(self, _report, test_cases):
             assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
             tc = test_cases[0]
-            assert len(tc._files.required) == 3, \
-                "expecting 3 test_files: %r" % (tc._files.required,)
+            assert len(tc._files.required) == 1, \
+                "expecting 1 test file: %r" % (tc._files.required,)
+            assert len(tc._files.optional) == 2, \
+                "expecting 2 test files: %r" % (tc._files.optional,)
             assert tc.landing_page.startswith("harness_")
             assert tc.landing_page.endswith(".html")
-            harness_idx = [x.file_name for x in tc._files.required].index(tc.landing_page)
-            tc._files.required.pop(harness_idx)
-            assert {x.file_name: x.data for x in tc._files.required} \
+            assert {x.file_name: x.data for x in tc._files.optional} \
                 == {"-0/required.html": "DDBEGIN\nrequired\nDDEND\n",
                     "-1/required.html": "DDBEGIN\nrequired\nDDEND\n"}
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT

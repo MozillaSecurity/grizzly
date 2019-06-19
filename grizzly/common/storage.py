@@ -114,6 +114,26 @@ class TestCase(object):
             tfile.close()
             raise
 
+    def remove_files_not_served(self, files_served):
+        """Remove optional files (by name) that were not served.
+
+        Args:
+            files_served(list): List of filenames that were reported as served by sapphire.
+
+        Returns:
+            None
+        """
+        files_served = set(files_served)
+        to_remove = []
+
+        for idx, file in enumerate(self._files.optional):
+            if file.file_name not in files_served:
+                to_remove.append(idx)
+
+        to_remove.reverse()
+        for idx in to_remove:
+            self._files.optional.pop(idx)
+
     def dump(self, log_dir, include_details=False):
         """
         dump(log_dir)

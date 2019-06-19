@@ -31,6 +31,9 @@ class FakeServer(object):
     def set_redirect(self, *args, **kwds):
         pass
 
+    def serve_testcase(self, *args, **kwds):
+        return sapphire.SERVED_ALL, []
+
     def serve_path(self, *args, **kwds):
         return sapphire.SERVED_ALL, []
 
@@ -438,7 +441,7 @@ def test_idle_timeout(monkeypatch, tmp_path):
 
     class MyServer(FakeServer):
 
-        def serve_path(self, *args, **kwds):
+        def serve_testcase(self, *args, **kwds):
             continue_cb = kwds["continue_cb"]
             while continue_cb():
                 pass

@@ -26,7 +26,7 @@ from .interesting import Interesting
 from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..session import Session
 from ..common import FilesystemReporter, FuzzManagerReporter, Report
-from ..common import ReduceStatus, TestFile, TestCase
+from ..common import ReduceStatus
 from ..target import load as load_target
 
 
@@ -73,7 +73,6 @@ class ReductionJob(object):
         self.tmpdir = tempfile.mkdtemp(prefix="grzreduce", dir=working_path)
         self.tcroot = os.path.join(self.tmpdir, "tc")
         self.other_crashes = {}
-        self.input_fname = None
         self.interesting_prefix = None
         self.log_handler = self._start_log_capture()
         self.cache_iter_harness_created = None
@@ -224,7 +223,7 @@ class ReductionJob(object):
             else:
                 raise ReducerError("Testcase must be zip, html or directory")
 
-            self.input_fname = os.path.basename(testcase)
+            self.interesting.input_fname = os.path.basename(testcase)
 
             # get a list of all directories containing testcases (1-n, depending on how much history
             # grizzly saved)
@@ -354,38 +353,15 @@ class ReductionJob(object):
         if self.interesting.target is not None:
             self.interesting.target.cleanup()
 
-    def _report_result(self, tcroot, temp_prefix, quality_value, force=False, include_logs=False):
+    def _report_result(self, testcase, temp_prefix, quality_value, force=False):
         self.reporter.quality = quality_value
         self.reporter.force_report = force
-
-        landing_page = os.path.relpath(self.testcase, self.tcroot)
-        testcase = TestCase(landing_page, None, "grizzly.reduce", input_fname=self.input_fname)
-
-        # add testcase contents
-        for file_name in testcase_contents(tcroot):
-            testcase.add_file(TestFile.from_file(os.path.join(tcroot, file_name), file_name))
-
-        # add reduce log
-        if include_logs:
-            LOG.info("Closing reduce log for report submission")
-            self._stop_log_capture()
-            testcase.add_meta(TestFile.from_file(os.path.join(self.tmpdir, "reducelog.txt"), "reducelog.txt"))
-
-        # add prefs
-        if self.interesting.target.prefs is not None:
-            testcase.add_meta(TestFile.from_file(self.interesting.target.prefs, "prefs.js"))
-
-        # add environment variables
-        if self.interesting.env_mod is not None:
-            for name, value in self.interesting.env_mod.items():
-                testcase.add_environ_var(name, value)
-
         self.reporter.submit(temp_prefix + "_logs", [testcase])
 
     def _interesting_crash(self, temp_prefix):
         self.interesting_prefix = temp_prefix
 
-    def _other_crash_found(self, temp_prefix):
+    def _other_crash_found(self, testcase, temp_prefix):
         """
         If we hit an alternate crash, store the testcase in a tmp folder.
         If the same crash is encountered again, only keep the newest one.
@@ -396,30 +372,21 @@ class ReductionJob(object):
         max_frames = FuzzManagerReporter.signature_max_frames(crash_info, 5)
         this_sig = crash_info.createCrashSignature(maxFrames=max_frames)
         crash_hash = hashlib.sha256(this_sig.rawSignature.encode("utf-8")).hexdigest()[:10]
-        tmpd = os.path.join(self.tmpdir, "alt", crash_hash)
         if crash_hash in self.other_crashes:
-            shutil.rmtree(self.other_crashes[crash_hash]["tcroot"])
             LOG.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
             # already counted when initially found
             self.status.ignored += 1
         else:
             LOG.info("Found alternate crash: %s", crash_info.createShortSignature())
             self.status.results += 1
-        os.makedirs(tmpd)
-        for file_name in testcase_contents(self.tcroot):
-            out = os.path.join(tmpd, file_name)
-            out_dir = os.path.dirname(out)
-            if not os.path.isdir(out_dir):
-                os.makedirs(out_dir)
-            shutil.copyfile(os.path.join(self.tcroot, file_name), out)
-        self.other_crashes[crash_hash] = {"tcroot": os.path.realpath(tmpd), "prefix": temp_prefix}
+        self.other_crashes[crash_hash] = {"tc": testcase, "prefix": temp_prefix}
 
     def _report_other_crashes(self):
         """
         After reduce is finished, report any alternate results (if they don't match the collector cache).
         """
         for entry in self.other_crashes.values():
-            self._report_result(entry["tcroot"], entry["prefix"], FuzzManagerReporter.QUAL_UNREDUCED)
+            self._report_result(entry["tc"], entry["prefix"], FuzzManagerReporter.QUAL_UNREDUCED)
 
     def run(self, strategies=None):
         """Run reduction.
@@ -518,11 +485,10 @@ class ReductionJob(object):
             if reduced_size == self.original_size[0]:
                 raise ReducerError("Reducer succeeded but nothing was reduced!")
 
-            self._report_result(self.tcroot,
+            self._report_result(self.interesting.best_testcase,
                                 self.interesting_prefix,
                                 FuzzManagerReporter.QUAL_REDUCED_RESULT,
-                                force=True,
-                                include_logs=True)
+                                force=True)
 
             # change original quality so unbucketed crashes don't reduce again
             self.result_code = FuzzManagerReporter.QUAL_REDUCED_ORIGINAL
