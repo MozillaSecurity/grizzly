@@ -20,7 +20,7 @@ def test_session_00(tmp_path, mocker):
     """test basic Session functions"""
     Status.DB_FILE = str(tmp_path / "test.db")
     fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
-    fake_server.return_value.serve_path.return_value = (SERVED_TIMEOUT, [])
+    fake_server.return_value.serve_testcase.return_value = (SERVED_TIMEOUT, [])
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 10
@@ -52,7 +52,7 @@ def test_session_00(tmp_path, mocker):
 
     fake_iomgr.create_testcase.assert_called_once()
     fake_server.assert_called_once()
-    fake_server.return_value.serve_path.assert_called_once()
+    fake_server.return_value.serve_testcase.assert_called_once()
     fake_server.return_value.close.assert_called_once()
     fake_target.detect_failure.assert_called_once()
 
@@ -109,9 +109,8 @@ def test_session_02(tmp_path, mocker):
 
     session = Session(fake_adapter, False, [], fake_iomgr, None, fake_target)
     session.config_server(5)
-    testcase = session.generate_testcase("fake_path")
+    testcase = session.generate_testcase()
     testcase.add_meta.assert_called_once()
-    testcase.dump.assert_called_once()
     fake_server.return_value.set_redirect.assert_called_once()
 
 def test_session_03(mocker, tmp_path):
@@ -246,9 +245,9 @@ def test_session_06(tmp_path, mocker):
     session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
     session.TARGET_LOG_SIZE_WARN = 100
     session.config_server(5)
-    def fake_serve_path(*_a, **_kw):
+    def fake_serve_testcase(*_a, **_kw):
         return SERVED_TIMEOUT if session.status.iteration % 2 else SERVED_ALL, []
-    session.server.serve_path = fake_serve_path
+    session.server.serve_testcase = fake_serve_testcase
     session.run(10)
     session.close()
 
