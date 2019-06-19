@@ -82,7 +82,7 @@ class Session(object):
         if self.server is not None:
             self.server.close()
 
-    def generate_testcase(self, dump_path):
+    def generate_testcase(self):
         assert self.server is not None
         log.debug("calling iomanager.create_testcase()")
         test = self.iomanager.create_testcase(self.adapter.NAME, rotation_period=self.adapter.ROTATION_PERIOD)
@@ -93,8 +93,6 @@ class Session(object):
         # update sapphire redirects from the adapter
         for redirect in self.iomanager.server_map.redirects:
             self.server.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
-        # dump test case files to filesystem to be served
-        test.dump(dump_path)
         return test
 
     def launch_target(self):
@@ -153,35 +151,30 @@ class Session(object):
             self.target.step()
 
             # create and populate a test case
-            wwwdir = tempfile.mkdtemp(prefix="grz_test_", dir=self.iomanager.working_path)
-            try:
-                current_test = self.generate_testcase(wwwdir)
-                # print iteration status
-                if self.iomanager.active_input is None:
-                    active_file = None
-                else:
-                    active_file = self.iomanager.active_input.file_name
-                if not self.adapter.ROTATION_PERIOD:
-                    log.info(
-                        "[I%04d-L%02d-R%02d] %s",
-                        self.status.iteration,
-                        len(self.iomanager.input_files),
-                        self.status.results,
-                        os.path.basename(active_file))
-                else:
-                    if active_file and self.status.test_name != active_file:
-                        self.status.test_name = active_file
-                        log.info("Now fuzzing: %s", os.path.basename(active_file))
-                    log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
-                # use Sapphire to serve the most recent test case
-                server_status, files_served = self.server.serve_path(
-                    wwwdir,
-                    continue_cb=self.target.monitor.is_healthy,
-                    optional_files=current_test.get_optional())
-            finally:
-                # remove test case working directory
-                if os.path.isdir(wwwdir):
-                    shutil.rmtree(wwwdir)
+            current_test = self.generate_testcase()
+            # display iteration status
+            if self.iomanager.active_input is None:
+                active_file = None
+            else:
+                active_file = self.iomanager.active_input.file_name
+            if not self.adapter.ROTATION_PERIOD:
+                log.info(
+                    "[I%04d-L%02d-R%02d] %s",
+                    self.status.iteration,
+                    len(self.iomanager.input_files),
+                    self.status.results,
+                    os.path.basename(active_file))
+            else:
+                if active_file and self.status.test_name != active_file:
+                    self.status.test_name = active_file
+                    log.info("Now fuzzing: %s", os.path.basename(active_file))
+                log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
+            # use Sapphire to serve the most recent test case
+            server_status, files_served = self.server.serve_testcase(
+                current_test,
+                continue_cb=self.target.monitor.is_healthy,
+                working_path=self.iomanager.working_path)
+
             if server_status == sapphire.SERVED_TIMEOUT:
                 log.debug("calling self.adapter.on_timeout()")
                 self.adapter.on_timeout(current_test, files_served)
