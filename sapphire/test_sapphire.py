@@ -9,6 +9,8 @@ import random
 import threading
 import pytest
 
+from grizzly.common import TestCase
+
 from .core import Resource, Sapphire, ServeJob, SERVED_ALL, SERVED_NONE, \
     SERVED_REQUEST, SERVED_TIMEOUT
 
@@ -659,6 +661,19 @@ def test_sapphire_27(client_factory, tmp_path):
     assert status == SERVED_TIMEOUT
     assert len(served_list) < max_served
 
+def test_sapphire_28(client, tmp_path):
+    """test Sapphire.serve_testcase()"""
+    serv = Sapphire(timeout=1)  # minimum timeout is 1 second
+    try:
+        test = TestCase("test.html", "none.test", "foo")
+        test.add_from_data(b"test", "test.html")
+        t_file = _create_test(test.landing_page, tmp_path)
+        client.launch("127.0.0.1", serv.get_port(), [t_file])
+        status, files_served = serv.serve_testcase(test)
+    finally:
+        serv.close()
+    assert status == SERVED_ALL
+    assert files_served
 
 def test_serve_job_01(tmp_path):
     """test creating an empty ServeJob"""
