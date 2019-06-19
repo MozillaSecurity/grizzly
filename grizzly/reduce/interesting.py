@@ -18,8 +18,9 @@ import threading
 
 import ffpuppet
 import sapphire
-from ..common import FuzzManagerReporter, Report
-from ..target.target import Target
+from ..common import FuzzManagerReporter, Report, TestCase, TestFile
+from ..target import Target
+from . import testcase_contents
 
 
 __author__ = "Jesse Schwartzentruber"
@@ -53,24 +54,13 @@ class Interesting(object):
         self.any_crash = any_crash
         self.idle_threshold = idle_threshold
         self.idle_timeout = idle_timeout
+        self.input_fname = None
         # testcase cache remembers if we have seen this reduce_file before and if so return the same
         # interesting result
         self.use_result_cache = testcase_cache
         self.result_cache = {}
         # environment if specified in the testcase
         self.env_mod = None
-
-        class _all(object):  # pylint: disable=too-few-public-methods
-
-            @staticmethod
-            def __contains__(item):
-                """
-                use this for sapphire optional_files argument.
-                always return True for 'in' except for the testcase itself
-                """
-                return item != self.landing_page
-
-        self.optional_files = _all()
         self._landing_page = None  # the file to point the target at
         self._reduce_file = None  # the file to reduce
 
@@ -131,6 +121,7 @@ class Interesting(object):
             None
         """
         self.skipped = None
+        self.best_testcase = None
         self.result_cache = {}
 
     def _add_san_suppressions(self, supp_file):
@@ -237,6 +228,29 @@ class Interesting(object):
                 else:
                     LOG.info("Uninteresting (cached)")
                 return result
+
+        # create the TestCase to try
+        testcase = TestCase(self.landing_page, None, "grizzly.reduce", input_fname=self.input_fname)
+
+        # add testcase contents
+        for file_name in testcase_contents(self.wwwdir):
+            testcase.add_from_file(os.path.join(self.wwwdir, file_name), file_name,
+                                   required=bool(file_name == self.landing_page))
+
+        # add prefs
+        if self.target.prefs is not None:
+            testcase.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
+
+        # add environment variables
+        if self.env_mod is not None:
+            for name, value in self.env_mod.items():
+                testcase.add_environ_var(name, value)
+
+        if self.no_harness:
+            # create a tmp file that will never be served
+            # this will keep sapphire serving until timeout or ffpuppet exits
+            testcase.add_from_data("", ".lithium-garbage.bin", required=True)
+
         run_prefix = None
         for try_num in range(n_tries):
             if (n_tries - try_num) < (self.min_crashes - n_crashes):
@@ -244,7 +258,7 @@ class Interesting(object):
             self.status.report()
             self.status.iteration += 1
             run_prefix = "%s(%d)" % (temp_prefix, try_num)
-            if self._run(run_prefix):
+            if self._run(testcase, run_prefix):
                 n_crashes += 1
                 if n_crashes >= self.min_crashes:
                     if self.interesting_cb is not None:
@@ -254,6 +268,7 @@ class Interesting(object):
                             'result': True,
                             'prefix': run_prefix
                         }
+                    self.best_testcase = testcase
                     return True
         if self.use_result_cache:
             # No need to save the temp_prefix on uninteresting testcases
@@ -264,11 +279,12 @@ class Interesting(object):
             }
         return False
 
-    def _run(self, temp_prefix):
+    def _run(self, testcase, temp_prefix):
         """Run a single iteration against the target and determine if it is interesting. This is the
         low-level iteration function used by `interesting`.
 
         Args:
+            testcase (TestCase): The testcase to serve
             temp_prefix (str): A unique prefix for any files written during this iteration.
 
         Returns:
@@ -332,24 +348,11 @@ class Interesting(object):
             def keep_waiting():
                 return self.target.monitor.is_healthy() and not idle_timeout_event.is_set()
 
-            if self.no_harness:
-                # create a tmp file that will never be served
-                # this will keep sapphire serving until timeout or ffpuppet exits
-                tempfd, tempf = tempfile.mkstemp(prefix=".lithium-garbage-", suffix=".bin",
-                                                 dir=self.wwwdir)
-                os.close(tempfd)
-                try:
-                    # serve the testcase
-                    server_status, _ = self.server.serve_path(self.wwwdir, continue_cb=keep_waiting)
-                finally:
-                    os.unlink(tempf)
-
-            else:
+            if not self.no_harness:
                 self.server.set_redirect("/next_test", str(self.landing_page), required=True)
-                # serve the testcase
-                server_status = self.server.serve_path(self.wwwdir,
-                                                       continue_cb=keep_waiting,
-                                                       optional_files=self.optional_files)[0]
+
+            # serve the testcase
+            server_status, files_served = self.server.serve_testcase(testcase, continue_cb=keep_waiting)
 
             end_time = time.time()
 
@@ -361,6 +364,7 @@ class Interesting(object):
             # handle failure if detected
             if failure_detected == Target.RESULT_FAILURE:
                 self.target.close()
+                testcase.remove_files_not_served(files_served)
 
                 # save logs
                 result_logs = temp_prefix + "_logs"
@@ -390,7 +394,7 @@ class Interesting(object):
                 else:
                     LOG.info("Uninteresting: different signature: %s", short_sig)
                     if self.alt_crash_cb is not None:
-                        self.alt_crash_cb(temp_prefix)  # pylint: disable=not-callable
+                        self.alt_crash_cb(testcase, temp_prefix)  # pylint: disable=not-callable
 
             elif failure_detected == Target.RESULT_IGNORED:
                 LOG.info("Uninteresting: ignored")
