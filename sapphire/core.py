@@ -18,8 +18,10 @@ except ImportError:
     from queue import Queue
 import random
 import re
+import shutil
 import socket
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -465,7 +467,7 @@ class Sapphire(object):
 
     def serve_path(self, path, continue_cb=None, optional_files=None):
         """
-        serve_path() -> int
+        serve_path() -> tuple
         path is the directory that will be used as wwwroot. The callback continue_cb should
         be a function that returns True or False. If continue_cb is specified and returns False
         the server serve loop will exit. optional_files is list of files that do not need to be
@@ -553,6 +555,30 @@ class Sapphire(object):
 
         return status, job._served.files.keys()  # pylint: disable=protected-access
 
+    def serve_testcase(self, testcase, continue_cb=None, working_path=None):
+        """
+        serve_testcase() -> tuple
+        testcase is the Grizzly TestCase to serve. The callback continue_cb should
+        be a function that returns True or False. If continue_cb is specified and returns False
+        the server serve loop will exit. working_path is where the testcase will be unpacked
+        temporary.
+
+        returns a tuple (server status, files served)
+        see serve_path() for more info
+        """
+        LOG.debug("serve_testcase() called")
+        wwwdir = tempfile.mkdtemp(prefix="sphr_test_", dir=working_path)
+        try:
+            testcase.dump(wwwdir)
+            return self.serve_path(
+                wwwdir,
+                continue_cb=continue_cb,
+                optional_files=testcase.get_optional())
+        finally:
+            # remove test case working directory
+            if os.path.isdir(wwwdir):
+                shutil.rmtree(wwwdir)
+
     @staticmethod
     def _check_potential_url(url_path):
         url_path = url_path.strip("/")
@@ -590,7 +616,7 @@ class Sapphire(object):
         url = self._check_potential_url(url)
         if not isinstance(target, str):
             raise TypeError("target must be of type 'str'")
-        elif not target:
+        if not target:
             raise TypeError("target must not be an empty string")
         self._redirect_map[url] = Resource(
             ServeJob.URL_REDIRECT,
