@@ -23,16 +23,19 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class Session(object):
+    DISPLAY_VERBOSE = 0  # display status every iteration
+    DISPLAY_NORMAL = 1  # quickly reduce the amount of output
     EXIT_SUCCESS = 0
     EXIT_ERROR = 1
     EXIT_ABORT = 3
     EXIT_LAUNCH_FAILURE = 7
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, adapter, coverage, ignore, iomanager, reporter, target):
+    def __init__(self, adapter, coverage, ignore, iomanager, reporter, target, display_mode=DISPLAY_NORMAL):
+        self._next_display = display_mode
         self.adapter = adapter
         self.coverage = coverage
-        self.ignore = ignore  # TODO: this should be part of the reporter
+        self.ignore = ignore
         self.iomanager = iomanager
         self.reporter = reporter
         self.server = None
@@ -81,6 +84,21 @@ class Session(object):
         self.status.cleanup()
         if self.server is not None:
             self.server.close()
+
+    def display_status(self):
+        if not self.adapter.ROTATION_PERIOD:
+            assert self.status.test_name is not None
+            log.info(
+                "[I%04d-L%02d-R%02d] %s",
+                self.status.iteration,
+                len(self.iomanager.input_files),
+                self.status.results,
+                os.path.basename(self.status.test_name))
+        elif not self._next_display or self.status.iteration == self._next_display:
+            self._next_display *= 2
+            if self.status.test_name:
+                log.debug("fuzzing: %s", os.path.basename(self.status.test_name))
+            log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
     def generate_testcase(self):
         assert self.server is not None
@@ -152,23 +170,12 @@ class Session(object):
 
             # create and populate a test case
             current_test = self.generate_testcase()
-            # display iteration status
-            if self.iomanager.active_input is None:
-                active_file = None
-            else:
-                active_file = self.iomanager.active_input.file_name
-            if not self.adapter.ROTATION_PERIOD:
-                log.info(
-                    "[I%04d-L%02d-R%02d] %s",
-                    self.status.iteration,
-                    len(self.iomanager.input_files),
-                    self.status.results,
-                    os.path.basename(active_file))
-            else:
-                if active_file and self.status.test_name != active_file:
-                    self.status.test_name = active_file
-                    log.info("Now fuzzing: %s", os.path.basename(active_file))
-                log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
+            if self.iomanager.active_input is not None:
+                self.status.test_name = self.iomanager.active_input.file_name
+
+            # display status
+            self.display_status()
+
             # use Sapphire to serve the most recent test case
             server_status, files_served = self.server.serve_testcase(
                 current_test,
