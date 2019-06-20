@@ -21,7 +21,7 @@ import ffpuppet
 import lithium
 from FTB.Signatures.CrashInfo import CrashSignature
 
-from . import strategies as strategies_module, testcase_contents
+from . import strategies as strategies_module
 from .interesting import Interesting
 from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..session import Session

@@ -12,7 +12,6 @@ import logging
 import os
 import re
 import shutil
-import tempfile
 import time
 import threading
 
@@ -330,7 +329,7 @@ class Interesting(object):
                     break
                 except ffpuppet.LaunchError as exc:
                     if retries:
-                        LOG.warn(str(exc))
+                        LOG.warning(str(exc))
                         time.sleep(15)
                     else:
                         raise
