@@ -132,7 +132,7 @@ class TestCase(object):
 
         to_remove.reverse()
         for idx in to_remove:
-            self._files.optional.pop(idx)
+            self._files.optional.pop(idx).close()
 
     def dump(self, log_dir, include_details=False):
         """
