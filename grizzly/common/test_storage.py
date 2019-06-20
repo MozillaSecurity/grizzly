@@ -108,6 +108,26 @@ def test_testcase_04(tmp_path):
     finally:
         tcase.cleanup()
 
+def test_testcase_05(tmp_path):
+    """test TestCase.remove_files_not_served()"""
+    tcase = TestCase("land_page.html", "redirect.html", "test-adapter")
+    try:
+        tcase.add_from_data("foo", "testfile1.bin")
+        tcase.add_from_data("foo", "testfile2.bin", required=False)
+        tcase.add_from_data("foo", "testfile3.bin", required=False)
+        tcase.add_from_data("foo", "not_served.bin", required=False)
+        assert len(tcase.get_optional()) == 3
+        tcase.remove_files_not_served(tcase.get_optional())
+        assert len(tcase.get_optional()) == 3
+        served = ["testfile2.bin", "testfile3.bin"]
+        tcase.remove_files_not_served(served)
+        assert len(tcase.get_optional()) == 2
+        tcase.dump(str(tmp_path))
+        assert "testfile1.bin" in os.listdir(str(tmp_path))
+        assert "not_served.bin" not in os.listdir(str(tmp_path))
+    finally:
+        tcase.cleanup()
+
 def test_inputfile_01():
     """test InputFile with non-existing file"""
     with pytest.raises(IOError) as exc:
