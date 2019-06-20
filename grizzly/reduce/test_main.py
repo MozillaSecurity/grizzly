@@ -5,7 +5,7 @@
 from __future__ import unicode_literals
 import zipfile
 import pytest
-from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs
+from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs, ReducerFuzzManagerIDQualityArgs
 from grizzly.reduce import reduce, crash, bucket, ReductionJob
 from grizzly.common import ReduceStatus, reporter
 from .test_common import BaseFakeReporter, FakeTarget
@@ -215,7 +215,7 @@ def test_bucket_main(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefi
 
     (tmp_path / "binary").touch()
     exe = tmp_path / "binary"
-    args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '789'])
+    args = ReducerFuzzManagerIDQualityArgs().parse_args([str(exe), '789'])
     assert bucket.main(args) == 0
     assert main_called[0] == 1
 

@@ -122,3 +122,17 @@ class ReducerFuzzManagerIDArgs(ReducerArgs):
 
         # ... and Bob's your uncle
         self._sanity_skip.add("input")
+
+
+class ReducerFuzzManagerIDQualityArgs(ReducerFuzzManagerIDArgs):
+
+    def __init__(self):
+        super(ReducerFuzzManagerIDQualityArgs, self).__init__()
+        self.parser.add_argument("--quality", type=int,
+                                 help="Only try crashes with a given quality value")
+
+    def sanity_check(self, args):
+        super(ReducerFuzzManagerIDQualityArgs, self).sanity_check(args)
+
+        if args.quality is not None and args.quality < 0:
+            self.parser.error("'--quality' value must be positive or zero")
