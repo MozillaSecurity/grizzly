@@ -189,6 +189,8 @@ class Session(object):
                 log.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, files_served)
 
+            current_test.remove_files_not_served(files_served)
+
             # check for results and report as necessary
             self.check_results(not files_served, server_status == sapphire.SERVED_TIMEOUT)
 
