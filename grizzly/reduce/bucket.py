@@ -11,7 +11,7 @@ import tempfile
 
 from Collector.Collector import Collector
 
-from .args import ReducerFuzzManagerIDArgs
+from .args import ReducerFuzzManagerIDQualityArgs
 from .crash import main as reduce_crash
 from ..main import console_init_logging
 
@@ -19,12 +19,13 @@ from ..main import console_init_logging
 LOG = logging.getLogger("grizzly.reduce.bucket")
 
 
-def bucket_crashes(bucket_id):
+def bucket_crashes(bucket_id, quality_filter):
     """Fetch all crash IDs for the specified FuzzManager bucket.
     Only crashes with testcases are returned.
 
     Args:
         bucket_id (int): ID of the requested bucket on the server side
+        quality_filter (int): Filter crashes by quality value (None for all)
 
     Returns:
         generator: generator of crash ID (int)
@@ -61,10 +62,13 @@ def bucket_crashes(bucket_id):
             response = coll.get(response["next"]).json()
 
     # Get all crashes for bucket
-    query = json.dumps(collections.OrderedDict((
-        ("op", "OR"),
-        ("bucket", bucket_id)
-    )))
+    query_args = [
+        ("op", "AND"),
+        ("bucket", bucket_id),
+    ]
+    if quality_filter is not None:
+        query_args.append(("testcase__quality", quality_filter))
+    query = json.dumps(collections.OrderedDict(query_args))
 
     n_yielded = 0
     for crash in _get_results("crashes", params={"query": query, "include_raw": "0"}):
@@ -112,7 +116,7 @@ def main(args):
         rm_sig = True
 
     try:
-        for crash_id in bucket_crashes(args.input):
+        for crash_id in bucket_crashes(args.input, args.quality):
 
             # reduce.main expects input to be a crash ID
             args.input = crash_id
@@ -131,4 +135,4 @@ def main(args):
 
 if __name__ == "__main__":
     console_init_logging()
-    sys.exit(main(ReducerFuzzManagerIDArgs().parse_args()))
+    sys.exit(main(ReducerFuzzManagerIDQualityArgs().parse_args()))
