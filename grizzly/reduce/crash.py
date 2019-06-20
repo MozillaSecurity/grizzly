@@ -63,7 +63,9 @@ def download_crash(crash_id):
     if disp_m is None:
         raise RuntimeError("Server sent malformed response: %r" % (response,))
 
-    testcase_fd, testcase_fn = tempfile.mkstemp(suffix=os.path.splitext(disp_m.group(1))[1])
+    prefix = "crash.%d." % (crash_id,)
+    suffix = os.path.splitext(disp_m.group(1))[1]
+    testcase_fd, testcase_fn = tempfile.mkstemp(prefix=prefix, suffix=suffix)
     with os.fdopen(testcase_fd, "wb") as testcase_fp:
         testcase_fp.write(response.content)
 
