@@ -12,7 +12,7 @@ from ..args import CommonArgs
 class ReducerArgs(CommonArgs):
 
     def __init__(self):
-        CommonArgs.__init__(self)
+        super(ReducerArgs, self).__init__()
         self.parser.add_argument(
             "input",
             help="Test case or directory containing test cases")
@@ -63,7 +63,7 @@ class ReducerArgs(CommonArgs):
             % (" ".join(sorted(strategies_by_name())), " ".join(ReductionJob.DEFAULT_STRATEGIES)))
 
     def sanity_check(self, args):
-        CommonArgs.sanity_check(self, args)
+        super(ReducerArgs, self).sanity_check(args)
 
         if "input" not in self._sanity_skip:
             if not (os.path.isdir(args.input)
@@ -98,7 +98,7 @@ class ReducerArgs(CommonArgs):
 class ReducerFuzzManagerIDArgs(ReducerArgs):
 
     def __init__(self):
-        ReducerArgs.__init__(self)
+        super(ReducerFuzzManagerIDArgs, self).__init__()
 
         # madhax alert!
         #

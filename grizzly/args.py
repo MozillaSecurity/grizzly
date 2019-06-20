@@ -132,7 +132,7 @@ class CommonArgs(object):
 class GrizzlyArgs(CommonArgs):
     def __init__(self):
         self.adapters = sorted(grizzly.adapters.names())
-        CommonArgs.__init__(self)
+        super(GrizzlyArgs, self).__init__()
         self._sanity_skip.add("tool")
         self.parser.add_argument(
             "adapter",
@@ -160,7 +160,7 @@ class GrizzlyArgs(CommonArgs):
             help="Report large attachments (if any) to S3 and then the crash & S3 link to FuzzManager")
 
     def sanity_check(self, args):
-        CommonArgs.sanity_check(self, args)
+        super(GrizzlyArgs, self).sanity_check(args)
 
         if args.adapter.lower() not in self.adapters:
             msg = ["Adapter %r does not exist." % args.adapter.lower()]
