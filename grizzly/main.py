@@ -138,13 +138,18 @@ def main(args):
             log.info("Results will be stored in %r", reporter.report_path)
 
         log.debug("initializing the Session")
+        if bool(os.getenv("DEBUG")):
+            display_mode = Session.DISPLAY_VERBOSE
+        else:
+            display_mode = Session.DISPLAY_NORMAL
         session = Session(
             adapter,
             args.coverage,
             args.ignore,
             iomanager,
             reporter,
-            target)
+            target,
+            display_mode=display_mode)
 
         session.config_server(args.timeout)
         target.reverse(session.server.get_port(), session.server.get_port())
