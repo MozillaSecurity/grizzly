@@ -553,7 +553,11 @@ class Sapphire(object):
 
         self._redirect_map.clear()
 
-        return status, job._served.files.keys()  # pylint: disable=protected-access
+        # served files should be relative to the www root, since that path could be a temporary
+        # path created by serve_testcase()
+        served_files = {os.path.relpath(file, path) for file in job._served.files.keys()}
+
+        return status, served_files  # pylint: disable=protected-access
 
     def serve_testcase(self, testcase, continue_cb=None, working_path=None):
         """
