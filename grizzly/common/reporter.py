@@ -520,7 +520,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
         assert s3_bucket is not None
         # check for existing minor hash in S3
         s3 = boto3.resource("s3")
-        s3_key = "rr-%s.zip" % (report.minor,)
+        s3_key = "rr-%s.tar.bz2" % (report.minor,)
         s3_url = "http://%s.s3.amazonaws.com/%s" % (s3_bucket, s3_key)
         try:
             s3.Object(s3_bucket, s3_key).load()  # HEAD, doesn't fetch the whole object
