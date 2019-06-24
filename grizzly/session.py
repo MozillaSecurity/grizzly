@@ -181,6 +181,8 @@ class Session(object):
                 current_test,
                 continue_cb=self.target.monitor.is_healthy,
                 working_path=self.iomanager.working_path)
+            # remove unserved file from the test case
+            current_test.remove_files_not_served(files_served)
 
             if server_status == sapphire.SERVED_TIMEOUT:
                 log.debug("calling self.adapter.on_timeout()")
@@ -189,7 +191,6 @@ class Session(object):
                 log.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, files_served)
 
-            current_test.remove_files_not_served(files_served)
 
             # check for results and report as necessary
             self.check_results(not files_served, server_status == sapphire.SERVED_TIMEOUT)
