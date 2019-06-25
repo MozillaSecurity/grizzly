@@ -32,21 +32,39 @@ class InputFile(object):
             self.extension = os.path.splitext(self.file_name)[-1].lstrip(".")
 
     def _cache_data(self):
+        """Cache file data.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         self._fp = tempfile.SpooledTemporaryFile(max_size=self.CACHE_LIMIT)
         with open(self.file_name, "rb") as src_fp:
             shutil.copyfileobj(src_fp, self._fp, 0x10000)  # 64KB
 
     def close(self):
+        """Close file handles.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         if self._fp is not None:
             self._fp.close()
         self._fp = None
 
     def get_data(self):
-        """
-        get_data()
-        Provide the raw input file data to the caller.
+        """Read file data.
 
-        returns input file data from file.read()
+        Args:
+            None
+
+        Returns:
+            bytes: Data from input file
         """
         if self._fp is None:
             self._cache_data()
@@ -55,6 +73,14 @@ class InputFile(object):
         return self._fp.read()
 
     def get_fp(self):
+        """Get input file File object.
+
+        Args:
+            None
+
+        Returns:
+            file: input file object
+        """
         if self._fp is None:
             self._cache_data()
         self._fp.seek(0)
@@ -77,8 +103,14 @@ class TestCase(object):
             required=list())
 
     def _add(self, target, test_file):
-        """
-        Add test file to test case and perform sanity checks
+        """Add a test file to test case and perform sanity checks.
+
+        Args:
+            target (list): Specific list of Files to append target test_file to.
+            test_file (TestFile): TestFile to append
+
+        Returns:
+            None
         """
         assert isinstance(test_file, TestFile), "only accepts TestFiles"
         if test_file.file_name in self._existing_paths:
@@ -87,18 +119,55 @@ class TestCase(object):
         target.append(test_file)
 
     def add_meta(self, meta_file):
+        """Add a test file to test case as a meta file.
+
+        Args:
+            meta_file (TestFile): TestFile to add to TestCase
+
+        Returns:
+            None
+        """
         self._add(self._files.meta, meta_file)
 
     def add_environ_var(self, name, value):
+        """Add environment variable to test case.
+
+        Args:
+            name (str): Environment variable name
+            value (str): Environment variable value
+
+        Returns:
+            None
+        """
         self._env_vars[name] = value
 
     def add_file(self, test_file, required=True):
+        """Add a test file to test case.
+
+        Args:
+            meta_file (TestFile): TestFile to add to TestCase
+            required (bool): Indicates if test file must be served
+
+        Returns:
+            None
+        """
         if required:
             self._add(self._files.required, test_file)
         else:
             self._add(self._files.optional, test_file)
 
     def add_from_data(self, data, file_name, encoding="UTF-8", required=True):
+        """Create a TestFile and add it to the test case.
+
+        Args:
+            data (bytes): Data to write to file
+            file_name (str): Name for the test file
+            encoding (str): Encoding to be used
+            required (bool): Indicates if test file must be served
+
+        Returns:
+            None
+        """
         tfile = TestFile.from_data(data=data, file_name=file_name, encoding=encoding)
         try:
             self.add_file(tfile, required=required)
@@ -107,12 +176,85 @@ class TestCase(object):
             raise
 
     def add_from_file(self, input_file, file_name, required=True):
+        """Create a TestFile from an existing file and add it to the test case.
+
+        Args:
+            input_file (str): Path to existing file to use
+            file_name (str): Name for the test file
+            required (bool): Indicates if test file must be served
+
+        Returns:
+            None
+        """
         tfile = TestFile.from_file(input_file=input_file, file_name=file_name)
         try:
             self.add_file(tfile, required=required)
         except TestFileExists:
             tfile.close()
             raise
+
+    def cleanup(self):
+        """Close all the test files.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        for file_group in self._files:
+            for test_file in file_group:
+                test_file.close()
+
+    def dump(self, out_path, include_details=False):
+        """Write all the test case data to the filesystem.
+
+        Args:
+            out_path (str): Path to directory to output data
+            include_details (bool): Output "test_info.json" file
+
+        Returns:
+            None
+        """
+        # save test files to out_path
+        for test_file in self._files.required + self._files.optional:
+            test_file.dump(out_path)
+        # save test case files and meta data including:
+        # adapter used, input file, environment info and files
+        if include_details:
+            assert isinstance(self._env_vars, dict)
+            info = {
+                "adapter": self.adapter_name,
+                "env": self._env_vars,
+                "input": os.path.basename(self.input_fname) if self.input_fname else None,
+                "target": self.landing_page}
+            with open(os.path.join(out_path, "test_info.json"), "w") as out_fp:
+                json.dump(info, out_fp, indent=2, sort_keys=True)
+            # save meta files
+            for meta_file in self._files.meta:
+                meta_file.dump(out_path)
+
+    def env_vars(self):
+        """Get list of TestCase environment variables
+
+        Args:
+            None
+
+        Returns:
+            list: environment variables (str)
+        """
+        return ["=".join((k, v)) for k, v in self._env_vars.items() if v is not None]
+
+    def get_optional(self):
+        """Get list of file names of optional TestFiles
+
+        Args:
+            None
+
+        Returns:
+            list: file names (str) of options files
+        """
+        return [x.file_name for x in self._files.optional]
 
     def remove_files_not_served(self, files_served):
         """Remove optional files (by name) that were not served.
@@ -134,48 +276,6 @@ class TestCase(object):
         for idx in to_remove:
             self._files.optional.pop(idx).close()
 
-    def dump(self, log_dir, include_details=False):
-        """
-        dump(log_dir)
-        Write all the test case data to the filesystem.
-        This includes:
-        - the generated test case
-        - details of input file used
-        All data will be located in log_dir.
-
-        returns None
-        """
-
-        # save test files to log_dir
-        for test_file in self._files.required + self._files.optional:
-            test_file.dump(log_dir)
-        # save test case files and meta data including:
-        # adapter used, input file, environment info and files
-        if include_details:
-            assert isinstance(self._env_vars, dict)
-            info = {
-                "adapter": self.adapter_name,
-                "env": self._env_vars,
-                "input": os.path.basename(self.input_fname) if self.input_fname else None,
-                "target": self.landing_page}
-            with open(os.path.join(log_dir, "test_info.json"), "w") as out_fp:
-                json.dump(info, out_fp, indent=2, sort_keys=True)
-            # save meta files
-            for meta_file in self._files.meta:
-                meta_file.dump(log_dir)
-
-    def cleanup(self):
-        # close all the test files
-        for file_group in self._files:
-            for test_file in file_group:
-                test_file.close()
-
-    def get_optional(self):
-        return [x.file_name for x in self._files.optional]
-
-    def env_vars(self):
-        return ["=".join((k, v)) for k, v in self._env_vars.items() if v is not None]
-
 
 class TestFile(object):
     CACHE_LIMIT = 0x40000  # data cache limit per file: 256KB
@@ -193,17 +293,40 @@ class TestFile(object):
         self.file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
 
     def clone(self):
+        """Make a copy of the TestFile.
+
+        Args:
+            None
+
+        Returns:
+            TestFile: A copy of the TestFile instance
+        """
         cloned = TestFile(self.file_name)
         self._fp.seek(0)
         shutil.copyfileobj(self._fp, cloned._fp, self.XFER_BUF)  # pylint: disable=protected-access
         return cloned
 
     def close(self):
+        """Close the TestFile.
+
+        Args:
+            None
+
+        Returns:
+            None TestFile instance
+        """
         self._fp.close()
 
     @property
     def data(self):
-        # Not recommenced for large files
+        """Get the data from the TestFile. Not recommenced for large files.
+
+        Args:
+            None
+
+        Returns:
+            bytes: Data from the TestFile
+        """
         pos = self._fp.tell()
         self._fp.flush()
         self._fp.seek(0)
@@ -212,6 +335,14 @@ class TestFile(object):
         return data
 
     def dump(self, path):
+        """Write test file data to the filesystem.
+
+        Args:
+            path (str): Path to output data
+
+        Returns:
+            None
+        """
         target_path = os.path.join(path, os.path.dirname(self.file_name))
         if not os.path.isdir(target_path):
             os.makedirs(target_path)
@@ -221,6 +352,16 @@ class TestFile(object):
 
     @classmethod
     def from_data(cls, data, file_name, encoding="UTF-8"):
+        """Create a TestFile and add it to the test case.
+
+        Args:
+            data (bytes): Data to write to file
+            file_name (str): Name for the test file
+            encoding (str): Encoding to be used
+
+        Returns:
+            TestFile: new instance
+        """
         t_file = cls(file_name=file_name)
         if data:
             if isinstance(data, bytes) or not encoding:
@@ -231,10 +372,27 @@ class TestFile(object):
 
     @classmethod
     def from_file(cls, input_file, file_name):
+        """Create a TestFile from an existing file.
+
+        Args:
+            input_file (str): Path to existing file to use
+            file_name (str): Name for the test file
+
+        Returns:
+            TestFile: new instance
+        """
         t_file = cls(file_name=file_name)
         with open(input_file, "rb") as src_fp:
             shutil.copyfileobj(src_fp, t_file._fp, cls.XFER_BUF)  # pylint: disable=protected-access
         return t_file
 
     def write(self, data):
+        """Add data to the TestFile.
+
+        Args:
+            data (bytes): Data to add to the TestFile
+
+        Returns:
+            None
+        """
         self._fp.write(data)
