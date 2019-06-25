@@ -443,7 +443,7 @@ def test_fuzzmanager_reporter_03(tmp_path, mocker):
     fake_test = mocker.Mock(spec=TestCase)
     fake_test.adapter_name = "adapter"
     fake_test.input_fname = "input"
-    fake_test.env_vars.return_value = "TEST=1"
+    fake_test.env_vars = ("TEST=1",)
     reporter.submit(str(log_path), [fake_test])
     assert not log_path.is_dir()
     fake_test.dump.assert_called_once()

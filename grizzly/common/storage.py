@@ -234,33 +234,38 @@ class TestCase(object):
             for meta_file in self._files.meta:
                 meta_file.dump(out_path)
 
+    @property
     def env_vars(self):
-        """Get list of TestCase environment variables
+        """Get TestCase environment variables
 
         Args:
             None
 
         Returns:
-            list: environment variables (str)
+            generator: environment variables (str)
         """
-        return ["=".join((k, v)) for k, v in self._env_vars.items() if v is not None]
+        for name, value in self._env_vars.items():
+            if value is not None:
+                yield "=".join((name, value))
 
-    def get_optional(self):
-        """Get list of file names of optional TestFiles
+    @property
+    def optional(self):
+        """Get file names of optional TestFiles
 
         Args:
             None
 
         Returns:
-            list: file names (str) of options files
+            generator: file names (str) of optional files
         """
-        return [x.file_name for x in self._files.optional]
+        for test in self._files.optional:
+            yield test.file_name
 
     def remove_files_not_served(self, files_served):
         """Remove optional files (by name) that were not served.
 
         Args:
-            files_served(list): List of filenames that were reported as served by sapphire.
+            files_served (iterable): Filenames that were reported as served by sapphire.
 
         Returns:
             None

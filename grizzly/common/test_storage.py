@@ -27,7 +27,7 @@ def test_testcase_01(tmp_path):
         assert not tcase._files.optional
         assert not tcase._files.required
         assert not tcase._env_vars
-        assert not tcase.get_optional()
+        assert not list(tcase.optional)
         tcase.dump(str(tmp_path))
         assert not os.listdir(str(tmp_path))
         tcase.dump(str(tmp_path), include_details=True)
@@ -51,7 +51,7 @@ def test_testcase_02(tmp_path):
         tcase.add_from_data("test_nreq", "nested/testfile2.bin", required=False)
         tcase.add_from_data("test_blah", "/testfile3.bin")
         tcase.add_from_data("test_windows", "\\\\dir\\file.bin")
-        opt_files = tcase.get_optional()
+        opt_files = list(tcase.optional)
         assert len(opt_files) == 1
         assert os.path.join("nested", "testfile2.bin") in opt_files
         tcase.dump(str(tmp_path), include_details=True)
@@ -90,13 +90,13 @@ def test_testcase_03(tmp_path):
         tcase.cleanup()
 
 def test_testcase_04(tmp_path):
-    """test TestCase add_environ_var() and env_vars()"""
+    """test TestCase.add_environ_var() and TestCase.env_vars"""
     tcase = TestCase("land_page.html", "redirect.html", "test-adapter")
     try:
         tcase.add_environ_var("TEST_ENV_VAR", "1")
-        assert len(tcase.env_vars()) == 1
+        assert len(list(tcase.env_vars)) == 1
         tcase.add_environ_var("TEST_NONE", None)
-        assert len(tcase.env_vars()) == 1
+        assert len(list(tcase.env_vars)) == 1
         assert len(tcase._env_vars) == 2
         dmp_path = tmp_path / "dmp_test"
         dmp_path.mkdir()
@@ -116,12 +116,12 @@ def test_testcase_05(tmp_path):
         tcase.add_from_data("foo", "testfile2.bin", required=False)
         tcase.add_from_data("foo", "testfile3.bin", required=False)
         tcase.add_from_data("foo", "not_served.bin", required=False)
-        assert len(tcase.get_optional()) == 3
-        tcase.remove_files_not_served(tcase.get_optional())
-        assert len(tcase.get_optional()) == 3
+        assert len(list(tcase.optional)) == 3
+        tcase.remove_files_not_served(tcase.optional)
+        assert len(list(tcase.optional)) == 3
         served = ["testfile2.bin", "testfile3.bin"]
         tcase.remove_files_not_served(served)
-        assert len(tcase.get_optional()) == 2
+        assert len(list(tcase.optional)) == 2
         tcase.dump(str(tmp_path))
         assert "testfile1.bin" in os.listdir(str(tmp_path))
         assert "not_served.bin" not in os.listdir(str(tmp_path))

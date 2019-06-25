@@ -149,14 +149,14 @@ def test_iomanager_07(tmp_path, mocker):
         assert tcase is not None
         assert iom._generated == 1
         assert len(iom.tests) == 1
-        assert not tcase.get_optional()
+        assert not list(tcase.optional)
         # with a harness
         iom.harness = TestFile.from_data(b"data", "h.htm")
         tcase = iom.create_testcase("test-adapter")
         assert tcase is not None
         assert len(iom.tests) == 1
         assert iom._generated == 2
-        assert "h.htm" in tcase.get_optional()
+        assert "h.htm" in tcase.optional
         # rotate active_input (single pass style)
         test_file = tmp_path / "input_01.bin"
         test_file.write_bytes(b"bar")

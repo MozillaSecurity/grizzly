@@ -468,7 +468,7 @@ class FuzzManagerReporter(Reporter):
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
         if test_cases:
             crash_info.configuration.addMetadata(
-                {"recorded_envvars": " ".join(test_cases[0].env_vars())})
+                {"recorded_envvars": " ".join(test_cases[0].env_vars)})
         else:
             self.quality = self.QUAL_NO_TESTCASE
         crash_info.configuration.addMetadata(self._extra_metadata)

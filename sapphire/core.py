@@ -577,7 +577,7 @@ class Sapphire(object):
             return self.serve_path(
                 wwwdir,
                 continue_cb=continue_cb,
-                optional_files=testcase.get_optional())
+                optional_files=tuple(testcase.optional))
         finally:
             # remove test case working directory
             if os.path.isdir(wwwdir):
