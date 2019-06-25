@@ -1,16 +1,14 @@
 Grizzly
 =======
 
-Grizzly is a general purpose browser fuzzer made up of multiple modules.
-The intention is to create a platform that can be extended by the creation of adapters to support
-different fuzzers that target the browser.
+Grizzly is a general purpose browser fuzzing harness made up of multiple modules.
+The intention is to create a platform that can be extended by the creation of adapters
+and target platforms to support different fuzzers that target browsers.
 An adapter is used to wrap an existing fuzzer to allow it to be run via Grizzly.
 Adapters take the content output by fuzzers and transform it (if needed) into a format that can
 be served to and processed by the browser.
 Cross platform compatibility should be maintained for Windows, Linux and OSX.
 However not all features may be available.
-
-NOTE: Grizzly is under development at the moment and may still undergo major changes.
 
 Installation
 ------------
@@ -33,16 +31,16 @@ $ python -m grizzly -h
 usage: __main__.py
                    [--accepted-extensions ACCEPTED_EXTENSIONS [ACCEPTED_EXTENSIONS ...]]
                    [-c CACHE] [--coverage] [-e EXTENSION] [--fuzzmanager] [-h]
-                   [--ignore IGNORE [IGNORE ...]]
+                   [--ignore IGNORE [IGNORE ...]] [-i INPUT]
                    [--launch-timeout LAUNCH_TIMEOUT] [--log-limit LOG_LIMIT]
-                   [-m MEMORY] [--mime MIME] [-p PREFS] [--relaunch RELAUNCH]
-                   [--rr] [--s3-fuzzmanager] [--soft-asserts] [-t TIMEOUT]
-                   [--tool TOOL] [--valgrind] [-w WORKING_PATH] [--xvfb]
-                   binary input adapter
+                   [-m MEMORY] [--mime MIME] [--platform PLATFORM] [-p PREFS]
+                   [--relaunch RELAUNCH] [--rr] [--s3-fuzzmanager]
+                   [--soft-asserts] [-t TIMEOUT] [--tool TOOL] [--valgrind]
+                   [-w WORKING_PATH] [--xvfb]
+                   binary adapter
 
 positional arguments:
   binary                Firefox binary to run
-  input                 Test case or directory containing test cases
   adapter               Available adapters: <list of adapters>
 
 optional arguments:
@@ -62,6 +60,8 @@ optional arguments:
   --ignore IGNORE [IGNORE ...]
                         Space separated ignore list. ie: log-limit memory
                         timeout (default: nothing)
+  -i INPUT, --input INPUT
+                        Test case or directory containing test cases
   --launch-timeout LAUNCH_TIMEOUT
                         Number of seconds to wait before LaunchError is raised
                         (default: 300)
@@ -91,7 +91,7 @@ optional arguments:
   --xvfb                Use Xvfb (Linux only)
 ```
 
-Other platforms
+Target platforms
 -------
 Other target platforms can be defined as [setuptools entry-points](https://setuptools.readthedocs.io/en/latest/setuptools.html#dynamic-discovery-of-services-and-plugins),
 using the name "grizzly_targets".  Targets must implement `grizzly.target.Target`.
