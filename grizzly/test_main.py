@@ -45,6 +45,7 @@ def test_main_01(tmp_path, mocker):
     """test main()"""
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.NAME = "fake"
+    fake_adapter.RELAUNCH = 1
     fake_adapter.TEST_DURATION = 10
     adapter_get = mocker.patch("grizzly.adapters.get")
     adapter_get.return_value = lambda: fake_adapter
@@ -91,6 +92,7 @@ def test_main_03(tmp_path, mocker):
     """test main() exit codes"""
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 10
+    fake_adapter.RELAUNCH = 0
     fake_adapter.ROTATION_PERIOD = 0
     adapter_get = mocker.patch("grizzly.adapters.get")
     adapter_get.return_value = lambda: fake_adapter

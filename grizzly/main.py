@@ -105,6 +105,12 @@ def main(args):
         else:
             log.info("Running in FUZZING mode")
 
+        if adapter.RELAUNCH > 0:
+            log.debug("relaunch (%d) set in Adapter", adapter.RELAUNCH)
+            relaunch = adapter.RELAUNCH
+        else:
+            relaunch = args.relaunch
+
         log.debug("initializing the Target")
         target = load_target(args.platform)(
             args.binary,
@@ -113,7 +119,7 @@ def main(args):
             args.log_limit,
             args.memory,
             args.prefs,
-            args.relaunch,
+            relaunch,
             rr=args.rr,
             valgrind=args.valgrind,
             xvfb=args.xvfb)
