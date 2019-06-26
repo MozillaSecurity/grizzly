@@ -257,6 +257,8 @@ def test_session_06(tmp_path, mocker):
     fake_adapter.on_served.assert_called()
     fake_adapter.on_timeout.assert_called()
     fake_adapter.pre_launch.assert_called()
+    fake_iomgr.purge_tests.assert_called()
+    assert fake_target.launch.call_count == fake_iomgr.purge_tests.call_count
     session.close()
 
     fake_server.assert_called_once()

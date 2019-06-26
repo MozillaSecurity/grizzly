@@ -156,7 +156,6 @@ class Session(object):
         self.reporter.submit(result_logs, self.iomanager.tests)
         if os.path.isdir(result_logs):
             shutil.rmtree(result_logs)
-        self.iomanager.purge_tests()
 
     def run(self, iteration_limit=None):
         assert self.server is not None, "server is not configured"
@@ -165,6 +164,7 @@ class Session(object):
             self.status.iteration += 1
 
             if self.target.closed:
+                self.iomanager.purge_tests()
                 self.adapter.pre_launch()
                 self.launch_target()
             self.target.step()
