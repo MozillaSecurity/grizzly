@@ -154,10 +154,8 @@ def test_session_03(mocker, tmp_path):
     fake_target = FakeTarget()
     session = Session(fake_adapter, False, [], fake_iomgr, None, fake_target)
     session.server = fake_server
-    fake_adapter.pre_launch.assert_not_called()
     session.launch_target()
     assert not fake_target.closed
-    fake_adapter.pre_launch.assert_called_once()
 
     fake_target = FakeTarget(launch_raise=BrowserTerminatedError)
     fake_reporter = mocker.Mock(spec=Reporter)
@@ -254,9 +252,11 @@ def test_session_06(tmp_path, mocker):
     session.server.serve_testcase = fake_serve_testcase
     fake_adapter.on_served.assert_not_called()
     fake_adapter.on_timeout.assert_not_called()
+    fake_adapter.pre_launch.assert_not_called()
     session.run(10)
     fake_adapter.on_served.assert_called()
     fake_adapter.on_timeout.assert_called()
+    fake_adapter.pre_launch.assert_called()
     session.close()
 
     fake_server.assert_called_once()

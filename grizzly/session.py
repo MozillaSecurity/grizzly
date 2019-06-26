@@ -115,7 +115,6 @@ class Session(object):
 
     def launch_target(self):
         assert self.target.closed
-        self.adapter.pre_launch()
         launch_timeouts = 0
         while True:
             try:
@@ -166,6 +165,7 @@ class Session(object):
             self.status.iteration += 1
 
             if self.target.closed:
+                self.adapter.pre_launch()
                 self.launch_target()
             self.target.step()
 
@@ -192,14 +192,13 @@ class Session(object):
                 log.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, files_served)
 
-
             # check for results and report as necessary
             self.check_results(not files_served, server_status == sapphire.SERVED_TIMEOUT)
 
             # warn about large browser logs
             self.status.log_size = self.target.log_size()
             if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
-                log.warning("Large browser logs: %dMBs", (self.status.log_size/0x100000))
+                log.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
 
             if self.coverage:
                 self.target.dump_coverage()
