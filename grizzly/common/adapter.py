@@ -23,6 +23,7 @@ class Adapter(object):
     HARNESS_FILE = os.path.join(os.path.dirname(__file__), "harness.html")
     IGNORE_UNSERVED = True  # Only report test cases with served content
     NAME = None  # must be set to a unique 'str' by subclass
+    RELAUNCH = 0  # maximum iterations between Target relaunches (<1 use default)
     ROTATION_PERIOD = 10  # iterations per input file before switching
     TEST_DURATION = 30  # maximum execution time per test
 
@@ -117,6 +118,16 @@ class Adapter(object):
             None
         """
         self.on_served(testcase, served)
+
+    def pre_launch(self):
+        """Optional. Automatically called before launching the Target.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
 
     def setup(self, server_map):
         """Optional. Automatically called once at startup.

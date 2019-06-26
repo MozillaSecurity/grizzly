@@ -115,6 +115,7 @@ class Session(object):
 
     def launch_target(self):
         assert self.target.closed
+        self.adapter.pre_launch()
         launch_timeouts = 0
         while True:
             try:

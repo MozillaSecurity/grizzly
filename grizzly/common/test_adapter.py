@@ -24,6 +24,7 @@ def test_adapter_01():
     adpt.generate(None, None, None)
     adpt.on_served(None, None)
     adpt.on_timeout(None, None)
+    adpt.pre_launch()
     adpt.cleanup()
 
 def test_adapter_02(tmp_path):
