@@ -542,6 +542,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
         # Upload to S3
         rr_arc = FilesystemReporter.compress_rr_trace(trace_path, report.path)
         s3.meta.client.upload_file(rr_arc, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"})
+        os.unlink(rr_arc)
         self._extra_metadata["rr-trace"] = s3_url
         return s3_url
 

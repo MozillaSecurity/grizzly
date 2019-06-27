@@ -516,4 +516,52 @@ def test_s3fuzzmanager_reporter_01(tmp_path, mocker):
     finally:
         os.environ.pop("GRZ_S3_BUCKET", None)
 
+def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
+    """test S3FuzzManagerReporter._process_rr_trace()"""
+    fake_boto3 = mocker.patch("grizzly.common.reporter.boto3", autospec=True)
+
+    fake_report = mocker.Mock(spec=Report)
+    fake_report.path = "no-path"
+    reporter = S3FuzzManagerReporter("fake_bin")
+    # test will missing rr-trace
+    assert reporter._process_rr_trace(fake_report) is None
+    assert not reporter._extra_metadata
+
+    # test will exiting rr-trace
+    trace_dir = tmp_path / "rr-traces" / "latest-trace"
+    trace_dir.mkdir(parents=True)
+    fake_report.minor = "1234abcd"
+    fake_report.path = str(tmp_path)
+    os.environ["GRZ_S3_BUCKET"] = "test"
+    try:
+        reporter._process_rr_trace(fake_report)
+    finally:
+        os.environ.pop("GRZ_S3_BUCKET", None)
+    assert not os.listdir(str(tmp_path))
+    assert "rr-trace" in reporter._extra_metadata
+    assert fake_report.minor in reporter._extra_metadata["rr-trace"]
+    fake_boto3.resource.return_value.meta.client.upload_file.assert_not_called()
+
+    # test with new rr-trace
+    reporter._extra_metadata.clear()
+    trace_dir.mkdir(parents=True)
+    (trace_dir / "trace-file").touch()
+    class FakeClientError(Exception):
+        def __init__(self, message, response):
+            super(FakeClientError, self).__init__(message)
+            self.response = response
+    fake_botocore = mocker.patch("grizzly.common.reporter.botocore", autospec=True)
+    fake_botocore.exceptions.ClientError = FakeClientError
+    fake_client_error = mocker.Mock()
+    fake_boto3.resource.return_value.Object.side_effect = FakeClientError("test", {"Error": {"Code": "404"}})
+    os.environ["GRZ_S3_BUCKET"] = "test"
+    try:
+        reporter._process_rr_trace(fake_report)
+    finally:
+        os.environ.pop("GRZ_S3_BUCKET", None)
+    assert not os.listdir(str(tmp_path))
+    assert "rr-trace" in reporter._extra_metadata
+    assert fake_report.minor in reporter._extra_metadata["rr-trace"]
+    fake_boto3.resource.return_value.meta.client.upload_file.assert_called_once()
+
 # TODO: fill out tests for FuzzManagerReporter and S3FuzzManagerReporter
