@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly Reporter"""
+# pylint: disable=protected-access
 
 import os
 import sys
@@ -27,10 +28,8 @@ def test_report_01():
 
 def test_report_02(tmp_path):
     """test from_path() with boring logs (no stack)"""
-    log_err = tmp_path / "log_stderr.txt"
-    log_err.write_bytes(b"STDERR log")
-    log_out = tmp_path / "log_stdout.txt"
-    log_out.write_bytes(b"STDOUT log")
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     report = Report.from_path(str(tmp_path))
     assert report.path == str(tmp_path)
     assert report.log_err.endswith("log_stderr.txt")
@@ -46,12 +45,9 @@ def test_report_02(tmp_path):
 
 def test_report_03(tmp_path):
     """test from_path()"""
-    log_err = tmp_path / "log_stderr.txt"
-    log_err.write_bytes(b"STDERR log")
-    log_out = tmp_path / "log_stdout.txt"
-    log_out.write_bytes(b"STDOUT log")
-    log_crash = tmp_path / "log_asan_blah.txt"
-    with log_crash.open("wb") as log_fp:
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    with (tmp_path / "log_asan_blah.txt").open("wb") as log_fp:
         log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
     report = Report.from_path(str(tmp_path))
@@ -84,13 +80,11 @@ def test_report_04(tmp_path):
 def test_report_05(tmp_path):
     """test Report.select_logs()"""
     # small log with nothing interesting
-    tmp_log = tmp_path / "log_asan.txt.1"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_asan.txt.1").open("wb") as log_fp:
         log_fp.write("SHORT LOG\n")
         log_fp.write("filler line")
     # crash on another thread
-    tmp_log = tmp_path / "log_asan.txt.2"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_asan.txt.2").open("wb") as log_fp:
         log_fp.write("GOOD LOG\n")
         log_fp.write("==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x00000BADF00D")
         log_fp.write(" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T0)\n")  # must be 2nd line
@@ -98,143 +92,110 @@ def test_report_05(tmp_path):
         for l_no in range(4):
             log_fp.write("    #%d blah...\n" % l_no)
     # child log that should be ignored (created when parent crashes)
-    tmp_log = tmp_path / "log_asan.txt.3"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_asan.txt.3").open("wb") as log_fp:
         log_fp.write("BAD LOG\n")
         log_fp.write("==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000")
         log_fp.write(" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T2)\n")  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
             log_fp.write("    #%d blah...\n" % l_no)
-    tmp_log = tmp_path / "log_mindump_blah.txt"
-    tmp_log.write_bytes(b"minidump log")
-    tmp_log = tmp_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log")
-    tmp_log = tmp_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log")
+    (tmp_path / "log_mindump_blah.txt").write_bytes(b"minidump log")
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     # should be ignored in favor of "GOOD LOG"
-    tmp_log = tmp_path / "log_ffp_worker_blah.txt"
-    tmp_log.write_bytes(b"worker log")
+    (tmp_path / "log_ffp_worker_blah.txt").write_bytes(b"worker log")
     log_map = Report.select_logs(str(tmp_path))
-    with open(os.path.join(str(tmp_path), log_map["aux"]), "r") as log_fp:
-        assert "GOOD LOG" in log_fp.read()
-    with open(os.path.join(str(tmp_path), log_map["stderr"]), "r") as log_fp:
-        assert "STDERR" in log_fp.read()
-    with open(os.path.join(str(tmp_path), log_map["stdout"]), "r") as log_fp:
-        assert "STDOUT" in log_fp.read()
+    assert "GOOD LOG" in (tmp_path / log_map["aux"]).read_text()
+    assert "STDERR" in (tmp_path / log_map["stderr"]).read_text()
+    assert "STDOUT" in (tmp_path / log_map["stdout"]).read_text()
 
 def test_report_06(tmp_path):
     """test minidump with Report.select_logs()"""
-    tmp_log = tmp_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log")
-    tmp_log = tmp_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log")
-    tmp_log = tmp_path / "log_minidump_01.txt"
-    with tmp_log.open("wb") as log_fp:
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    with (tmp_path / "log_minidump_01.txt").open("wb") as log_fp:
         log_fp.write(b"GPU|||\n")
         log_fp.write(b"Crash|SIGSEGV|0x0|0\n")
         log_fp.write(b"minidump log\n")
-    tmp_log = tmp_path / "log_ffp_worker_blah.txt"
-    tmp_log.write_bytes(b"worker log")
+    (tmp_path / "log_ffp_worker_blah.txt").write_bytes(b"worker log")
     log_map = Report.select_logs(str(tmp_path))
-    assert os.path.isfile(os.path.join(str(tmp_path), log_map["stderr"]))
-    assert os.path.isfile(os.path.join(str(tmp_path), log_map["stdout"]))
-    with open(os.path.join(str(tmp_path), log_map["aux"]), "r") as log_fp:
-        assert "minidump log" in log_fp.read()
+    assert (tmp_path / log_map["stderr"]).is_file()
+    assert (tmp_path / log_map["stdout"]).is_file()
+    assert "minidump log" in (tmp_path / log_map["aux"]).read_text()
 
 def test_report_07(tmp_path):
     """test selecting preferred DUMP_REQUESTED minidump with Report.select_logs()"""
-    tmp_log = tmp_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log")
-    tmp_log = tmp_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log")
-    tmp_log = tmp_path / "log_minidump_01.txt"
-    with tmp_log.open("wb") as log_fp:
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    with (tmp_path / "log_minidump_01.txt").open("wb") as log_fp:
         log_fp.write(b"GPU|||\n")
         log_fp.write(b"Crash|DUMP_REQUESTED|0x7f9518665d18|0\n")
         log_fp.write(b"0|0|bar.so|sadf|a.cc:739484451a63|3066|0x0\n")
         log_fp.write(b"0|1|gar.so|fdsa|b.cc:739484451a63|1644|0x12\n")
-    tmp_log = tmp_path / "log_minidump_02.txt"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_minidump_02.txt").open("wb") as log_fp:
         log_fp.write(b"GPU|||\n")
         log_fp.write(b"Crash|DUMP_REQUESTED|0x7f57ac9e2e14|0\n")
         log_fp.write(b"0|0|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:234|674|0xc\n")
         log_fp.write(b"0|1|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:4a2|645|0x8\n")
-    tmp_log = tmp_path / "log_minidump_03.txt"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_minidump_03.txt").open("wb") as log_fp:
         log_fp.write(b"GPU|||\n")
         log_fp.write(b"Crash|DUMP_REQUESTED|0x7f9518665d18|0\n")
         log_fp.write(b"0|0|bar.so|sadf|a.cc:1234|3066|0x0\n")
         log_fp.write(b"0|1|gar.so|fdsa|b.cc:4323|1644|0x12\n")
     log_map = Report.select_logs(str(tmp_path))
-    assert os.path.isfile(os.path.join(str(tmp_path), log_map["stderr"]))
-    assert os.path.isfile(os.path.join(str(tmp_path), log_map["stdout"]))
-    with open(os.path.join(str(tmp_path), log_map["aux"]), "r") as log_fp:
-        assert "google_breakpad::ExceptionHandler::WriteMinidump" in log_fp.read()
+    assert (tmp_path / log_map["stderr"]).is_file()
+    assert (tmp_path / log_map["stdout"]).is_file()
+    assert "google_breakpad::ExceptionHandler::WriteMinidump" in (tmp_path / log_map["aux"]).read_text()
 
 def test_report_08(tmp_path):
     """test selecting worker logs with Report.select_logs()"""
-    tmp_log = tmp_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log")
-    tmp_log = tmp_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log")
-    tmp_log = tmp_path / "log_ffp_worker_blah.txt"
-    with tmp_log.open("wb") as log_fp:
-        log_fp.write("worker log")
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    (tmp_path / "log_ffp_worker_blah.txt").write_bytes(b"worker log")
     log_map = Report.select_logs(str(tmp_path))
-    assert os.path.isfile(os.path.join(str(tmp_path), log_map["stderr"]))
-    assert os.path.isfile(os.path.join(str(tmp_path), log_map["stdout"]))
-    with open(os.path.join(str(tmp_path), log_map["aux"]), "r") as log_fp:
-        assert "worker log" in log_fp.read()
+    assert (tmp_path / log_map["stderr"]).is_file()
+    assert (tmp_path / log_map["stdout"]).is_file()
+    assert "worker log" in (tmp_path / log_map["aux"]).read_text()
 
 def test_report_09(tmp_path):
     """test prioritizing *San logs with Report.select_logs()"""
     # crash
-    tmp_log = tmp_path / "log_asan.txt.1"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_asan.txt.1").open("wb") as log_fp:
         log_fp.write("GOOD LOG\n")
         log_fp.write("==1942==ERROR: AddressSanitizer: heap-use-after-free on ... blah\n")  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
             log_fp.write("    #%d blah...\n" % l_no)
     # crash missing trace
-    tmp_log = tmp_path / "log_asan.txt.2"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_asan.txt.2").open("wb") as log_fp:
         log_fp.write("BAD LOG\n")
         log_fp.write("==1984==ERROR: AddressSanitizer: SEGV on ... blah\n")  # must be 2nd line
         log_fp.write("missing trace...\n")
     # child log that should be ignored (created when parent crashes)
-    tmp_log = tmp_path / "log_asan.txt.3"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_asan.txt.3").open("wb") as log_fp:
         log_fp.write("BAD LOG\n")
         log_fp.write("==1184==ERROR: AddressSanitizer: BUS on ... blah\n")  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
             log_fp.write("    #%d blah...\n" % l_no)
-    tmp_log = tmp_path / "log_asan.txt.4"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_asan.txt.4").open("wb") as log_fp:
         log_fp.write("BAD LOG\n")
         log_fp.write("==9482==ERROR: AddressSanitizer: stack-overflow on ...\n")  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
             log_fp.write("    #%d blah...\n" % l_no)
-    tmp_log = tmp_path / "log_asan.txt.5"
-    with tmp_log.open("wb") as log_fp:
+    with (tmp_path / "log_asan.txt.5").open("wb") as log_fp:
         log_fp.write("BAD LOG\n")
         log_fp.write("ERROR: Failed to mmap\n")  # must be 2nd line
     log_map = Report.select_logs(str(tmp_path))
-    with open(os.path.join(str(tmp_path), log_map["aux"]), "r") as log_fp:
-        assert "GOOD LOG" in log_fp.read()
+    assert "GOOD LOG" in (tmp_path / log_map["aux"]).read_text()
 
 def test_report_10(tmp_path):
     """test Report size_limit"""
-    tmp_log = tmp_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log\n" * 200)
-    tmp_log = tmp_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log\n" * 200)
-    tmp_log = tmp_path / "unrelated.txt"
-    tmp_log.write_bytes(b"nothing burger\n" * 200)
-    os.mkdir(os.path.join(str(tmp_path), "rr-trace"))
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log\n" * 200)
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log\n" * 200)
+    (tmp_path / "unrelated.txt").write_bytes(b"nothing burger\n" * 200)
+    (tmp_path / "rr-trace").mkdir()
     size_limit = len("STDERR log\n")
     report = Report.from_path(str(tmp_path), size_limit=size_limit)
     assert report.path == str(tmp_path)
@@ -248,7 +209,7 @@ def test_report_10(tmp_path):
     assert os.stat(os.path.join(report.path, report.log_out)).st_size == size_limit
     assert os.stat(os.path.join(report.path, "unrelated.txt")).st_size == size_limit
     report.cleanup()
-    assert not os.path.isdir(str(tmp_path))
+    assert not tmp_path.is_dir()
 
 def test_reporter_01(tmp_path):
     """test creating a simple Reporter"""
@@ -271,12 +232,9 @@ def test_filesystem_reporter_01(tmp_path):
     """test FilesystemReporter without testcases"""
     log_path = tmp_path / "logs"
     log_path.mkdir()
-    tmp_log = log_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log")
-    tmp_log = log_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log")
-    tmp_log = log_path / "log_asan_blah.txt"
-    with tmp_log.open("wb") as log_fp:
+    (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    with (log_path / "log_asan_blah.txt").open("wb") as log_fp:
         log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
     report_path = tmp_path / "reports"
@@ -288,12 +246,9 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     """test FilesystemReporter with testcases"""
     log_path = tmp_path / "logs"
     log_path.mkdir()
-    tmp_log = log_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log")
-    tmp_log = log_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log")
-    tmp_log = log_path / "log_asan_blah.txt"
-    with tmp_log.open("wb") as log_fp:
+    (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    with (log_path / "log_asan_blah.txt").open("wb") as log_fp:
         log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
     testcases = list()
@@ -309,12 +264,9 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     for tstc in testcases:
         tstc.dump.assert_called_once()
     # call report a 2nd time
-    log_path = tmp_path / "logs"
     log_path.mkdir()
-    tmp_log = log_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log")
-    tmp_log = log_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log")
+    (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     testcases = list()
     for _ in range(2):
         testcases.append(mocker.Mock(spec=TestCase))
@@ -329,10 +281,8 @@ def test_filesystem_reporter_03(tmp_path):
     """test FilesystemReporter disk space failsafe"""
     log_path = tmp_path / "logs"
     log_path.mkdir()
-    tmp_log = log_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log")
-    tmp_log = log_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log")
+    (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     report_path = tmp_path / "reports"
     report_path.mkdir()
     reporter = FilesystemReporter(report_path=str(report_path))
@@ -347,35 +297,24 @@ def test_filesystem_reporter_04(tmp_path):
     # create fake logs
     log_path = tmp_path / "logs"
     log_path.mkdir()
-    tmp_log = log_path / "log_stderr.txt"
-    tmp_log.write_bytes(b"STDERR log")
-    tmp_log = log_path / "log_stdout.txt"
-    tmp_log.write_bytes(b"STDOUT log")
-    tmp_log = log_path / "log_asan_blah.txt"
-    with tmp_log.open("wb") as log_fp:
+    (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    with (log_path / "log_asan_blah.txt").open("wb") as log_fp:
         log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
     # create fake trace
     rr_trace_path = log_path / "rr-traces" / "echo-0"
     rr_trace_path.mkdir(parents=True)
-    tr_file = rr_trace_path / "fail_file"
-    tr_file.touch()
+    (rr_trace_path / "fail_file").touch()
     rr_trace_path = log_path / "rr-traces" / "echo-1"
     rr_trace_path.mkdir()
-    tr_file = rr_trace_path / "cloned_data_5799_1"
-    tr_file.touch()
-    tr_file = rr_trace_path / "data"
-    tr_file.write_bytes(b"test_data")
-    tr_file = rr_trace_path / "events"
-    tr_file.write_bytes(b"foo")
-    tr_file = rr_trace_path / "mmap"
-    tr_file.write_bytes(b"bar")
-    tr_file = rr_trace_path / "tasks"
-    tr_file.write_bytes(b"foo")
-    tr_file = rr_trace_path / "version"
-    tr_file.write_bytes(b"123")
-    latest_path = log_path / "rr-traces" / "latest-trace"
-    latest_path.symlink_to(str(rr_trace_path), target_is_directory=True)
+    (rr_trace_path / "cloned_data_5799_1").touch()
+    (rr_trace_path / "data").write_bytes(b"test_data")
+    (rr_trace_path / "events").write_bytes(b"foo")
+    (rr_trace_path / "mmap").write_bytes(b"bar")
+    (rr_trace_path / "tasks").write_bytes(b"foo")
+    (rr_trace_path / "version").write_bytes(b"123")
+    (log_path / "rr-traces" / "latest-trace").symlink_to(str(rr_trace_path), target_is_directory=True)
     report_path = tmp_path / "reports"
     # report
     assert not report_path.exists()
@@ -413,8 +352,7 @@ def test_fuzzmanager_reporter_01(tmp_path, mocker):
     with pytest.raises(IOError) as exc:
         FuzzManagerReporter.sanity_check(str(fake_bin))
     assert "bin.fuzzmanagerconf" in str(exc)
-    fake_bin_fmc = tmp_path / "bin.fuzzmanagerconf"
-    fake_bin_fmc.touch()
+    (tmp_path / "bin.fuzzmanagerconf").touch()
     FuzzManagerReporter.sanity_check(str(fake_bin))
 
 def test_fuzzmanager_reporter_02(tmp_path):
@@ -436,10 +374,8 @@ def test_fuzzmanager_reporter_03(tmp_path, mocker):
     reporter = FuzzManagerReporter(str("fake_bin"))
     log_path = tmp_path / "log_path"
     log_path.mkdir()
-    log_stderr = log_path / "log_stderr.txt"
-    log_stderr.write_bytes("blah")
-    log_stdout = log_path / "log_stdout.txt"
-    log_stdout.write_bytes("blah")
+    (log_path / "log_stderr.txt").write_bytes("blah")
+    (log_path / "log_stdout.txt").write_bytes("blah")
     fake_test = mocker.Mock(spec=TestCase)
     fake_test.adapter_name = "adapter"
     fake_test.input_fname = "input"
@@ -457,10 +393,8 @@ def test_fuzzmanager_reporter_04(tmp_path, mocker):
     reporter = FuzzManagerReporter("fake_bin")
     log_path = tmp_path / "log_path"
     log_path.mkdir()
-    log_stderr = log_path / "log_stderr.txt"
-    log_stderr.write_bytes("blah")
-    log_stdout = log_path / "log_stdout.txt"
-    log_stdout.write_bytes("blah")
+    (log_path / "log_stderr.txt").write_bytes("blah")
+    (log_path / "log_stdout.txt").write_bytes("blah")
     reporter.submit(str(log_path), [])
     fake_collector.return_value.submit.assert_not_called()
 
@@ -473,11 +407,9 @@ def test_fuzzmanager_reporter_05(tmp_path, mocker):
     reporter = FuzzManagerReporter("fake_bin")
     log_path = tmp_path / "log_path"
     log_path.mkdir()
-    log_stderr = log_path / "log_stderr.txt"
-    log_stderr.write_bytes("blah")
-    log_stdout = log_path / "log_stdout.txt"
-    log_stdout.write_bytes("blah")
-    reporter._ignored = lambda x: True  # pylint: disable=protected-access
+    (log_path / "log_stderr.txt").write_bytes("blah")
+    (log_path / "log_stdout.txt").write_bytes("blah")
+    reporter._ignored = lambda x: True
     reporter.submit(str(log_path), [])
     fake_collector.return_value.submit.assert_not_called()
 
@@ -490,16 +422,14 @@ def test_fuzzmanager_reporter_06(tmp_path, mocker):
     reporter = FuzzManagerReporter("fake_bin")
     log_path = tmp_path / "log_path"
     log_path.mkdir()
-    log_stderr = log_path / "log_stderr.txt"
-    log_stderr.write_bytes("blah")
-    log_stdout = log_path / "log_stdout.txt"
-    log_stdout.write_bytes("blah")
+    (log_path / "log_stderr.txt").write_bytes("blah")
+    (log_path / "log_stdout.txt").write_bytes("blah")
     with pytest.raises(RuntimeError) as exc:
         reporter.submit(str(log_path), [])
     assert "Failed to create FM signature" in str(exc)
     fake_collector.return_value.submit.assert_not_called()
     # test ignore unsymbolized crash
-    reporter._ignored = lambda x: True  # pylint: disable=protected-access
+    reporter._ignored = lambda x: True
     reporter.submit(str(log_path), [])
     fake_collector.return_value.submit.assert_not_called()
 
@@ -552,7 +482,6 @@ def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
             self.response = response
     fake_botocore = mocker.patch("grizzly.common.reporter.botocore", autospec=True)
     fake_botocore.exceptions.ClientError = FakeClientError
-    fake_client_error = mocker.Mock()
     fake_boto3.resource.return_value.Object.side_effect = FakeClientError("test", {"Error": {"Code": "404"}})
     os.environ["GRZ_S3_BUCKET"] = "test"
     try:
