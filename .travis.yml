@@ -53,6 +53,6 @@ install:
   - python -m pip install -e lithium
   - python -m pip install -e .[all]
 before_script:
-  - pip install --upgrade pytest pytest-pylint pytest-cov codecov
+  - pip install --upgrade pytest pytest-mock pytest-pylint pytest-cov codecov
 script:
-  - python -m pytest
+  - python -m pytest grizzly
