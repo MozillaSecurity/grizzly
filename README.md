@@ -1,5 +1,7 @@
 Grizzly
 =======
+[![Build Status](https://travis-ci.org/MozillaSecurity/grizzly.svg?branch=master)](https://travis-ci.org/MozillaSecurity/ffpuppet)
+[![IRC](https://img.shields.io/badge/IRC-%23fuzzing-1e72ff.svg?style=flat)](https://www.irccloud.com/invite?channel=%23fuzzing&amp;hostname=irc.mozilla.org&amp;port=6697&amp;ssl=1)
 
 Grizzly is a general purpose browser fuzzing harness made up of multiple modules.
 The intention is to create a platform that can be extended by the creation of adapters
