@@ -47,6 +47,8 @@ matrix:
 before_install:
   - pip install --upgrade setuptools pip
 install:
+  - git clone https://github.com/MozillaSecurity/ffpuppet.git
+  - python -m pip install -e ffpuppet
   - python -m pip install -e .
 before_script:
   - pip install --upgrade pytest pytest-pylint pytest-cov codecov
