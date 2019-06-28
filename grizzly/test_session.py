@@ -223,8 +223,9 @@ def test_session_06(tmp_path, mocker):
     fake_server = mocker.patch("sapphire.Sapphire", spec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
-    fake_adapter.TEST_DURATION = 10
+    fake_adapter.IGNORE_UNSERVED = True
     fake_adapter.ROTATION_PERIOD = 2
+    fake_adapter.TEST_DURATION = 10
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
     fake_iomgr.server_map.includes = []
@@ -266,3 +267,4 @@ def test_session_06(tmp_path, mocker):
     assert session.status.iteration == 10
     assert fake_iomgr.create_testcase.call_count == 10
     assert fake_target.detect_failure.call_count == 10
+    assert fake_iomgr.create_testcase.return_value.remove_files_not_served.call_count == 10
