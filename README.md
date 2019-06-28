@@ -10,6 +10,8 @@ be served to and processed by the browser.
 Cross platform compatibility should be maintained for Windows, Linux and OSX.
 However not all features may be available.
 
+For additional information please check out the [wiki](https://github.com/MozillaSecurity/grizzly/wiki).
+
 Installation
 ------------
 The following modules are required:
