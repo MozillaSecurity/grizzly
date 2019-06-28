@@ -49,7 +49,9 @@ before_install:
 install:
   - git clone https://github.com/MozillaSecurity/ffpuppet.git
   - python -m pip install -e ffpuppet
-  - python -m pip install -e .
+  - git clone https://github.com/MozillaSecurity/lithium.git
+  - python -m pip install -e lithium
+  - python -m pip install -e .[all]
 before_script:
   - pip install --upgrade pytest pytest-pylint pytest-cov codecov
 script:
