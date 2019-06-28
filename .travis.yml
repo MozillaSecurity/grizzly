@@ -1,0 +1,61 @@
+dist: xenial
+sudo: false
+cache: pip
+language: python
+python:
+  - 2.7
+  - 3.5
+  - 3.6
+  - 3.7
+  - 3.8-dev
+matrix:
+  include:
+    - os: osx
+      language: generic
+      python: 2.7
+    - os: osx
+      language: sh
+      python: 3.7
+      before_install:
+        - brew update
+        - brew upgrade python
+        - python3 -m venv venv
+        - source venv/bin/activate
+    - os: windows
+      language: sh
+      python: 2.7
+      before_install:
+        - choco install python2
+        - export PATH="/c/Python27:/c/Python27/Scripts:$PATH"
+        - python -m pip install --upgrade pip wheel
+    - os: windows
+      language: sh
+      python: 3.7
+      before_install:
+        - choco install python3
+        - export PATH="/c/Python37:/c/Python37/Scripts:$PATH"
+        - python -m pip install --upgrade pip wheel
+  allow_failures:
+    - os: linux
+      python: 3.5
+    - os: linux
+      python: 3.6
+    - os: linux
+      python: 3.7
+    - os: linux
+      python: 3.8-dev
+    - os: osx
+      python: 3.7
+    - os: windows
+before_install:
+  - pip install --upgrade setuptools pip
+install:
+  - git clone https://github.com/MozillaSecurity/ffpuppet.git
+  - python -m pip install -e ffpuppet
+  - git clone https://github.com/MozillaSecurity/lithium.git
+  - python -m pip install -e lithium
+  - python -m pip install -e .[all]
+before_script:
+  - pip install --upgrade pytest pytest-mock pytest-pylint pytest-cov codecov
+script:
+  - python -m pytest grizzly
