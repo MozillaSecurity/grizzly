@@ -8,9 +8,9 @@ import signal
 
 import psutil
 
-from ffpuppet import FFPuppet, LaunchError
+from ffpuppet import BrowserTimeoutError, FFPuppet, LaunchError
 from .target_monitor import TargetMonitor
-from .target import Target
+from .target import Target, TargetLaunchError, TargetLaunchTimeout, TargetError
 
 __all__ = ("PuppetTarget",)
 __author__ = "Tyson Smith"
@@ -28,7 +28,6 @@ class PuppetTarget(Target):
         self.use_rr = kwds.pop("rr", False)
         self.use_valgrind = kwds.pop("valgrind", False)
         use_xvfb = kwds.pop("xvfb", False)
-
         if kwds:
             log.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
 
@@ -153,6 +152,8 @@ class PuppetTarget(Target):
         os.kill(pid, signal.SIGUSR1)
 
     def launch(self, location, env_mod=None):
+        if not self.prefs:
+            raise TargetError("A prefs.js file is required")
         self.rl_countdown = self.rl_reset
         env_mod = dict(env_mod or [])
         # do not allow network connections to non local endpoints
@@ -168,9 +169,12 @@ class PuppetTarget(Target):
                 prefs_js=self.prefs,
                 extension=self.extension,
                 env_mod=env_mod)
-        except LaunchError:
+        except LaunchError as exc:
+            log.error("FFPuppet Error: %s", str(exc))
             self.close()
-            raise
+            if isinstance(exc, BrowserTimeoutError):
+                raise TargetLaunchTimeout(str(exc))
+            raise TargetLaunchError(str(exc))
 
     def log_size(self):
         return self._puppet.log_length("stderr") + self._puppet.log_length("stdout")

@@ -8,9 +8,9 @@ import sys
 import traceback
 import pkg_resources
 
-from .target import Target
+from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
 
-__all__ = ("Target", "available", "load")
+__all__ = ("Target", "TargetError", "TargetLaunchError", "TargetLaunchTimeout", "available", "load")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 TARGETS = None

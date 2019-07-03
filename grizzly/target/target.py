@@ -17,6 +17,18 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
+class TargetError(Exception):
+    """Raised by Target"""
+
+
+class TargetLaunchError(TargetError):
+    """Raised if a failure during launch occurs"""
+
+
+class TargetLaunchTimeout(TargetError):
+    """Raised if the target does not launch within the defined amount of time"""
+
+
 @six.add_metaclass(abc.ABCMeta)
 class Target(object):
     RESULT_NONE = 0
@@ -41,8 +53,9 @@ class Target(object):
 
         assert self.binary is not None and os.path.isfile(self.binary)
         if self.prefs is not None:
+            if not os.path.isfile(self.prefs):
+                raise TargetError("Prefs file does not exist %r" % (self.prefs,))
             log.info("Using prefs %r", self.prefs)
-            assert os.path.isfile(self.prefs)
 
     def add_abort_token(self, token):  # pylint: disable=no-self-use,unused-argument
         log.warning("add_abort_token() not implemented!")

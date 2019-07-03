@@ -8,12 +8,10 @@ unit tests for grizzly.Session
 
 import pytest
 
-from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
-
 from sapphire import Sapphire, SERVED_ALL, SERVED_TIMEOUT
 from grizzly.common import Adapter, IOManager, Reporter, ServerMap, Status, TestCase, TestFile
 from grizzly.session import Session
-from grizzly.target import Target
+from grizzly.target import Target, TargetLaunchError, TargetLaunchTimeout
 
 
 def test_session_00(tmp_path, mocker):
@@ -157,20 +155,20 @@ def test_session_03(mocker, tmp_path):
     session.launch_target()
     assert not fake_target.closed
 
-    fake_target = FakeTarget(launch_raise=BrowserTerminatedError)
+    fake_target = FakeTarget(launch_raise=TargetLaunchError)
     fake_reporter = mocker.Mock(spec=Reporter)
     session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
     session.server = fake_server
-    with pytest.raises(BrowserTerminatedError):
+    with pytest.raises(TargetLaunchError):
         session.launch_target()
     assert fake_target.closed
     assert session.status.results == 1
 
-    fake_target = FakeTarget(launch_raise=BrowserTimeoutError)
+    fake_target = FakeTarget(launch_raise=TargetLaunchTimeout)
     fake_reporter = mocker.Mock(spec=Reporter)
     session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
     session.server = fake_server
-    with pytest.raises(BrowserTimeoutError):
+    with pytest.raises(TargetLaunchTimeout):
         session.launch_target()
     assert fake_target.closed
 

@@ -6,12 +6,11 @@
 
 import pytest
 
-from ffpuppet import LaunchError
-
 from sapphire import Sapphire
 from .common import Adapter
 from .main import main
 from .session import Session
+from .target import TargetLaunchError
 
 
 class FakeArgs(object):
@@ -108,5 +107,5 @@ def test_main_03(tmp_path, mocker):
     args.input = "fake"
     fake_session.return_value.run.side_effect = KeyboardInterrupt
     assert main(args) == Session.EXIT_ABORT
-    fake_session.return_value.run.side_effect = LaunchError("test")
+    fake_session.return_value.run.side_effect = TargetLaunchError("test")
     assert main(args) == Session.EXIT_LAUNCH_FAILURE

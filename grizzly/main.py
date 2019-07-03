@@ -22,13 +22,11 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 import logging
 import os
 
-from ffpuppet import LaunchError
-
 import grizzly.adapters
 from .args import GrizzlyArgs
 from .common import FilesystemReporter, FuzzManagerReporter, IOManager, S3FuzzManagerReporter
 from .session import Session
-from .target import load as load_target
+from .target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
 
 __author__ = "Tyson Smith"
@@ -165,7 +163,7 @@ def main(args):
     except KeyboardInterrupt:
         return Session.EXIT_ABORT
 
-    except LaunchError:
+    except (TargetLaunchError, TargetLaunchTimeout):
         return Session.EXIT_LAUNCH_FAILURE
 
     finally:

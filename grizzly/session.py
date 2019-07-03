@@ -8,10 +8,9 @@ import os
 import shutil
 import tempfile
 
-from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
-
 import sapphire
 from .common import Status, TestFile
+from .target import TargetLaunchError, TargetLaunchTimeout
 
 
 __all__ = ("Session",)
@@ -120,13 +119,13 @@ class Session(object):
             try:
                 log.info("Launching target")
                 self.target.launch(self.location)
-            except BrowserTerminatedError:
+            except TargetLaunchError:
                 # this result likely has nothing to do with Grizzly
                 self.status.results += 1
                 log.error("Launch error detected")
                 self.report_result()
                 raise
-            except BrowserTimeoutError:
+            except TargetLaunchTimeout:
                 launch_timeouts += 1
                 log.warning("Launch timeout detected (attempt #%d)", launch_timeouts)
                 # likely has nothing to do with Grizzly but is seen frequently on machines under a high load

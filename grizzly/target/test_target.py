@@ -9,10 +9,12 @@ import tempfile
 import threading
 import time
 
+import pytest
+
 from ffpuppet import FFPuppet
 
 from .puppet_target import PuppetTarget
-from .target import Target
+from .target import Target, TargetError
 from .target_monitor import TargetMonitor
 
 
@@ -199,6 +201,9 @@ def test_puppet_target_02(tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 35)
+    with pytest.raises(TargetError, match=r"A prefs.js file is required"):
+        target.launch("launch_target_page")
+    target.prefs = str(fake_file)
     try:
         target.launch("launch_target_page")
         assert not target.closed
@@ -213,7 +218,7 @@ def test_puppet_target_03(tmp_path):
     PuppetTarget.PUPPET = FakePuppet
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25)
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 25)
     try:
         target.launch("launch_target_page")
         # no failures
@@ -277,7 +282,7 @@ def test_puppet_target_03(tmp_path):
         # test browser closing test case
         target.cleanup()
     os.environ["GRZ_FORCED_CLOSE"] = "0"
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 1)
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 1)
     try:
         target.launch("launch_page")
         target.step()
@@ -300,7 +305,7 @@ def test_puppet_target_04(tmp_path):
     signal.signal(signal.SIGUSR1, sig_catcher.signal_handler)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 10)
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 10)
     target.dump_coverage()
     assert not sig_catcher.CAUGHT
     target.launch("launch_page")
