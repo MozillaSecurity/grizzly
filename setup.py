@@ -43,7 +43,7 @@ if __name__ == '__main__':
             ],
         },
         extras_require=EXTRAS,
-        install_requires=['psutil', 'six'],
+        install_requires=['ffpuppet', 'psutil', 'six'],
         license='MPL 2.0',
         maintainer='Tyson Smith',
         maintainer_email='twsmith@mozilla.com',
@@ -56,4 +56,4 @@ if __name__ == '__main__':
             'sapphire',
         ],
         url='https://github.com/MozillaSecurity/grizzly',
-        version='0.0.1')
+        version='0.9.0')
