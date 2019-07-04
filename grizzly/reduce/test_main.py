@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import unicode_literals
+import re
 import zipfile
 import pytest
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs, ReducerFuzzManagerIDQualityArgs
@@ -29,12 +30,12 @@ def test_parse_args(capsys, tmp_path):
     with pytest.raises(SystemExit):
         ReducerArgs().parse_args([str(exe), str(inp)])
     _, err = capsys.readouterr()
-    assert "error: file not found: '%s'" % (str(exe),) in err
+    assert "error: file not found: %r" % (str(exe),) in err
     exe.mkdir()
     with pytest.raises(SystemExit):
         ReducerArgs().parse_args([str(exe), str(inp)])
     _, err = capsys.readouterr()
-    assert "error: file not found: '%s'" % (str(exe),) in err
+    assert "error: file not found: %r" % (str(exe),) in err
     exe.rmdir()
     exe.touch()
 
@@ -42,7 +43,7 @@ def test_parse_args(capsys, tmp_path):
     with pytest.raises(SystemExit):
         ReducerArgs().parse_args([str(exe), str(inp)])
     _, err = capsys.readouterr()
-    assert "error: '%s' does not exist" % (str(inp),) in err
+    assert "error: %r does not exist" % (str(inp),) in err
     inp.touch()
     with pytest.raises(SystemExit):
         ReducerArgs().parse_args([str(exe), str(inp)])
@@ -70,12 +71,12 @@ def test_parse_args(capsys, tmp_path):
         with pytest.raises(SystemExit):
             ReducerArgs().parse_args([str(exe), str(inp), arg, str(fname)])
         _, err = capsys.readouterr()
-        assert "error: file not found: '%s'" % (str(fname),) in err
+        assert "error: file not found: %r" % (str(fname),) in err
         fname.mkdir()
         with pytest.raises(SystemExit):
             ReducerArgs().parse_args([str(exe), str(inp), arg, str(fname)])
         _, err = capsys.readouterr()
-        assert "error: file not found: '%s'" % (str(fname),) in err
+        assert "error: file not found: %r" % (str(fname),) in err
         fname.rmdir()
         fname.touch()
         ReducerArgs().parse_args([str(exe), str(inp), arg, str(fname)])
@@ -162,7 +163,7 @@ def test_main_strategies(job, monkeypatch, tmp_path):  # noqa pylint: disable=re
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.html"
-            assert tc._files.required[0].data == "'xxrequired'\n"
+            assert tc._files.required[0].data == b"'xxrequired'\n"
             report_data["num_reports"] += 1
     monkeypatch.setattr(reduce, "FilesystemReporter", FakeReporter)
 
@@ -171,7 +172,7 @@ def test_main_strategies(job, monkeypatch, tmp_path):  # noqa pylint: disable=re
     (tmp_path / "input").mkdir()
     inp = tmp_path / "input"
     (inp / "test_info.txt").write_text("landing page: test.html")
-    (inp / "test.html").write_text("fluff\n'xxrequired'\n")
+    (inp / "test.html").write_bytes(b"fluff\n'xxrequired'\n")
     args = ReducerArgs().parse_args([str(exe), str(inp), "--strategy", "line"])
     assert reduce.main(args) == 0
     assert report_data["num_reports"] == 1
@@ -447,7 +448,7 @@ def test_environ_and_suppressions(monkeypatch, tmpdir):
             assert self.interesting.env_mod["GRZ_FORCED_CLOSE"] == "0"
             assert not self.interesting.target.forced_close
             assert "LSAN_OPTIONS" in self.interesting.env_mod
-            assert len(self.interesting.env_mod["LSAN_OPTIONS"].split(":")) == 2
+            assert len(re.split(r":(?![\\|/])", self.interesting.env_mod["LSAN_OPTIONS"])) == 2
             assert "detect_leaks=1" in self.interesting.env_mod["LSAN_OPTIONS"]
             assert "lsan.supp" in self.interesting.env_mod["LSAN_OPTIONS"]
             run_called[0] += 1

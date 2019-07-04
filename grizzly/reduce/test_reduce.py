@@ -100,18 +100,18 @@ def test_config_testcase_0(tmp_path, job):
     """empty directory fails config_testcase"""
     with pytest.raises(exceptions.NoTestcaseError) as exc:
         job.config_testcase(str(tmp_path))
-    assert "No testcase recognized" in str(exc)
+    assert "No testcase recognized" in str(exc.value)
     assert job.result_code == FuzzManagerReporter.QUAL_NO_TESTCASE
 
 
 def test_config_testcase_1(tmp_path, job):
     """non-zip file fails config_testcase"""
-    file = tmp_path / "test.txt"
-    file.touch()
+    tmp_file = tmp_path / "test.txt"
+    tmp_file.touch()
     with pytest.raises(exceptions.ReducerError) as exc:
-        job.config_testcase(str(file))
-    assert "Testcase must be zip, html, or directory" in str(exc)
-    file.unlink()
+        job.config_testcase(str(tmp_file))
+    assert "Testcase must be zip, html, or directory" in str(exc.value)
+    tmp_file.unlink()
     assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
@@ -121,65 +121,60 @@ def test_config_testcase_2(tmp_path, job):
         job.config_testcase(str(tmp_path))
     with pytest.raises(exceptions.ReducerError) as exc:
         job.config_testcase(str(tmp_path))
-    assert "Testcase already configured?" in str(exc)
+    assert "Testcase already configured?" in str(exc.value)
     assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_3(tmp_path, job):
     """bad zip file fails config_testcase"""
-    file = tmp_path / "test.zip"
-    file.touch()
+    test_zip = tmp_path / "test.zip"
+    test_zip.touch()
     with pytest.raises(exceptions.CorruptTestcaseError):
-        job.config_testcase(str(file))
+        job.config_testcase(str(test_zip))
     assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_4(tmp_path, job):
     """missing landing page causes failure"""
-    file = tmp_path / "test_info.json"
-    file.write_text("{}")
+    (tmp_path / "test_info.json").write_text("{}")
     with pytest.raises(exceptions.ReducerError) as exc:
         job.config_testcase(str(tmp_path))
-    assert "Could not find landing page" in str(exc)
+    assert "Could not find landing page" in str(exc.value)
     assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_4_legacy(tmp_path, job):
     """missing landing page causes failure"""
     # TODO: remove this test
-    file = tmp_path / "test_info.txt"
-    file.touch()
+    (tmp_path / "test_info.txt").touch()
     with pytest.raises(exceptions.ReducerError) as exc:
         job.config_testcase(str(tmp_path))
-    assert "Could not find landing page" in str(exc)
+    assert "Could not find landing page" in str(exc.value)
     assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_5(tmp_path, job):
     """missing landing page causes failure"""
-    file = tmp_path / "test_info.json"
-    file.write_text("{\"target\":\"\",\"env\":{}}")
+    (tmp_path / "test_info.json").write_text("{\"target\":\"\",\"env\":{}}")
     with pytest.raises(exceptions.ReducerError) as exc:
         job.config_testcase(str(tmp_path))
-    assert "does not exist" in str(exc)
+    assert "does not exist" in str(exc.value)
     assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_5_legacy(tmp_path, job):
     """missing landing page causes failure"""
     # TODO: remove this test
-    file = tmp_path / "test_info.txt"
-    file.write_text("landing page: ")
+    (tmp_path / "test_info.txt").write_text("landing page: ")
     with pytest.raises(exceptions.ReducerError) as exc:
         job.config_testcase(str(tmp_path))
-    assert "does not exist" in str(exc)
+    assert "does not exist" in str(exc.value)
     assert job.result_code == FuzzManagerReporter.QUAL_REDUCER_ERROR
 
 
 def test_config_testcase_6(tmp_path, job):
     """single testcase is loaded ok"""
-    file = tmp_path / "test_info.json"
-    file.write_text("{\"target\":\"test.html\",\"env\":{}}")
+    (tmp_path / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "test.html").write_text("hello")
     job.config_testcase(str(tmp_path))
     assert job.testcase == os.path.join(job.tcroot, "test.html")
@@ -191,8 +186,7 @@ def test_config_testcase_6(tmp_path, job):
 def test_config_testcase_6_legacy(tmp_path, job):
     """single testcase is loaded ok"""
     # TODO: remove this test
-    file = tmp_path / "test_info.txt"
-    file.write_text("landing page: test.html")
+    (tmp_path / "test_info.txt").write_text("landing page: test.html")
     (tmp_path / "test.html").write_text("hello")
     job.config_testcase(str(tmp_path))
     assert job.testcase == os.path.join(job.tcroot, "test.html")
@@ -204,8 +198,7 @@ def test_config_testcase_6_legacy(tmp_path, job):
 def test_config_testcase_7(tmp_path, job):
     """single testcase in numbered subdir is loaded ok"""
     (tmp_path / "-0").mkdir()
-    file = tmp_path / "-0" / "test_info.json"
-    file.write_text("{\"target\":\"test.html\",\"env\":{}}")
+    (tmp_path / "-0" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "-0" / "test.html").write_text("hello")
     job.config_testcase(str(tmp_path))
     assert job.testcase == os.path.join(job.tcroot, "-0", "test.html")
@@ -218,8 +211,7 @@ def test_config_testcase_7_legacy(tmp_path, job):
     """single testcase in numbered subdir is loaded ok"""
     # TODO: remove this test
     (tmp_path / "-0").mkdir()
-    file = tmp_path / "-0" / "test_info.txt"
-    file.write_text("landing page: test.html")
+    (tmp_path / "-0" / "test_info.txt").write_text("landing page: test.html")
     (tmp_path / "-0" / "test.html").write_text("hello")
     job.config_testcase(str(tmp_path))
     assert job.testcase == os.path.join(job.tcroot, "-0", "test.html")
@@ -232,8 +224,7 @@ def test_config_testcase_8(tmp_path, job):
     """multiple testcase in numbered subdir creates a harness"""
     for subdir in ("-0", "-1"):
         (tmp_path / subdir).mkdir()
-        file = tmp_path / subdir / "test_info.json"
-        file.write_text("{\"target\":\"test.html\",\"env\":{}}")
+        (tmp_path / subdir / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
         (tmp_path / subdir / "test.html").write_text("hello")
     job.config_testcase(str(tmp_path))
     assert job.testcase.startswith(os.path.join(job.tcroot, "harness_"))
@@ -254,8 +245,7 @@ def test_config_testcase_8_legacy(tmp_path, job):
     # TODO: remove this test
     for subdir in ("-0", "-1"):
         (tmp_path / subdir).mkdir()
-        file = tmp_path / subdir / "test_info.txt"
-        file.write_text("landing page: test.html")
+        (tmp_path / subdir / "test_info.txt").write_text("landing page: test.html")
         (tmp_path / subdir / "test.html").write_text("hello")
     job.config_testcase(str(tmp_path))
     assert job.testcase.startswith(os.path.join(job.tcroot, "harness_"))
@@ -333,7 +323,7 @@ def test_config_testcase_10_legacy(tmp_path, job):
 
 def test_config_testcase_11(tmp_path, job):
     """env vars from testcase are used"""
-    with (tmp_path / "test_info.json").open("wb") as info:
+    with open(str(tmp_path / "test_info.json"), "w") as info:
         json.dump({
             "target": "test.html",
             "env": {
@@ -373,7 +363,7 @@ def test_config_testcase_13(tmp_path, job):
     (tmp_path / "test_info.txt").write_text("landing page: test_old.html")
     (tmp_path / "test_old.html").write_text("fail!")
     (tmp_path / "env_vars.txt").write_text("var=fail\nfoo=fail")
-    with (tmp_path / "test_info.json").open("wb") as info:
+    with open(str(tmp_path / "test_info.json"), "w") as info:
         json.dump({
             "target": "test.html",
             "env": {
@@ -393,15 +383,15 @@ def test_run_0(tmp_path, job):
     """single required testcase is reduced and reported"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    with (tmp_path / "tc" / "test_info.json").open("wb") as info:
+    with open(str(tmp_path / "tc" / "test_info.json"), "w") as info:
         json.dump({
             "target": "test.html",
             "env": {
                 "foo": "bar",
                 "var": "value"
             }}, info)
-    (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
-    (tmp_path / "tc" / "prefs.js").write_text("some prefs")
+    (tmp_path / "tc" / "test.html").write_bytes(b"fluff\nrequired\n")
+    (tmp_path / "tc" / "prefs.js").write_bytes(b"some prefs")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
@@ -412,13 +402,13 @@ def test_run_0(tmp_path, job):
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.html"
-            assert tc._files.required[0].data == "required\n"
+            assert tc._files.required[0].data == b"required\n"
             prefs_data = None
             for meta_file in tc._files.meta:
                 if meta_file.file_name == "prefs.js":
                     prefs_data = meta_file.data
                     break
-            assert prefs_data == "some prefs"
+            assert prefs_data == b"some prefs"
             assert tc._env_vars == dict(var="value", foo="bar")
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
@@ -434,15 +424,15 @@ def test_run_1(tmp_path, job):
     """other crashes are reported as unreduced crashes"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    with (tmp_path / "tc" / "test_info.json").open("wb") as info:
+    with open(str(tmp_path / "tc" / "test_info.json"), "w") as info:
         json.dump({
             "target": "test.html",
             "env": {
                 "foo": "bar",
                 "var": "value"
             }}, info)
-    (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
-    (tmp_path / "tc" / "prefs.js").write_text("some prefs")
+    (tmp_path / "tc" / "test.html").write_bytes(b"fluff\nrequired\n")
+    (tmp_path / "tc" / "prefs.js").write_bytes(b"some prefs")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
@@ -452,14 +442,14 @@ def test_run_1(tmp_path, job):
             tc = test_cases[0]
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
-            assert tc._files.required[0].data == "required\n"
+            assert tc._files.required[0].data == b"required\n"
             assert tc.landing_page == "test.html"
             prefs_data = None
             for meta_file in tc._files.meta:
                 if meta_file.file_name == "prefs.js":
                     prefs_data = meta_file.data
                     break
-            assert prefs_data == "some prefs"
+            assert prefs_data == b"some prefs"
             assert tc._env_vars == dict(var="value", foo="bar")
             assert self.quality == FuzzManagerReporter.QUAL_UNREDUCED
             assert not self.force_report
@@ -475,8 +465,8 @@ def test_run_2(tmp_path, job):
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
-    (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
-    (tmp_path / "tc" / "test2.html").write_text("fluff\nrequired\n")
+    (tmp_path / "tc" / "test.html").write_bytes(b"fluff\nrequired\n")
+    (tmp_path / "tc" / "test2.html").write_bytes(b"fluff\nrequired\n")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
@@ -490,9 +480,9 @@ def test_run_2(tmp_path, job):
                 "expecting 1 test_file: %r" % ({f.file_name for f in tc._files.optional},)
             assert tc.landing_page == "test.html"
             assert {x.file_name: x.data for x in tc._files.required} \
-                == {"test.html": "required\n"}
+                == {"test.html": b"required\n"}
             assert {x.file_name: x.data for x in tc._files.optional} \
-                == {"test2.html": "fluff\nrequired\n"}
+                == {"test2.html": b"fluff\nrequired\n"}
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -507,8 +497,8 @@ def test_run_3(tmp_path, job):
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
-    (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
-    (tmp_path / "tc" / "test2.html").write_text("DDBEGIN\nfluff\nrequired\nDDEND\n")
+    (tmp_path / "tc" / "test.html").write_bytes(b"fluff\nrequired\n")
+    (tmp_path / "tc" / "test2.html").write_bytes(b"DDBEGIN\nfluff\nrequired\nDDEND\n")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
@@ -522,9 +512,9 @@ def test_run_3(tmp_path, job):
                 "expecting 1 test file: %r" % (tc._files.optional,)
             assert tc.landing_page == "test.html"
             assert {x.file_name: x.data for x in tc._files.required} \
-                == {"test.html": "required\n"}
+                == {"test.html": b"required\n"}
             assert {x.file_name: x.data for x in tc._files.optional} \
-                == {"test2.html": "DDBEGIN\nrequired\nDDEND\n"}
+                == {"test2.html": b"DDBEGIN\nrequired\nDDEND\n"}
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -542,9 +532,9 @@ def test_run_4(tmp_path, job):
     (tmp_path / "tc" / "-0").mkdir()
     (tmp_path / "tc" / "-1").mkdir()
     (tmp_path / "tc" / "-0" / "test_info.json").write_text("{\"target\":\"required.html\",\"env\":{}}")
-    (tmp_path / "tc" / "-0" / "required.html").write_text("DDBEGIN\nfluff\nrequired\nDDEND\n")
+    (tmp_path / "tc" / "-0" / "required.html").write_bytes(b"DDBEGIN\nfluff\nrequired\nDDEND\n")
     (tmp_path / "tc" / "-1" / "test_info.json").write_text("{\"target\":\"required.html\",\"env\":{}}")
-    (tmp_path / "tc" / "-1" / "required.html").write_text("DDBEGIN\nfluff\nrequired\nDDEND\n")
+    (tmp_path / "tc" / "-1" / "required.html").write_bytes(b"DDBEGIN\nfluff\nrequired\nDDEND\n")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
@@ -559,8 +549,8 @@ def test_run_4(tmp_path, job):
             assert tc.landing_page.startswith("harness_")
             assert tc.landing_page.endswith(".html")
             assert {x.file_name: x.data for x in tc._files.optional} \
-                == {"-0/required.html": "DDBEGIN\nrequired\nDDEND\n",
-                    "-1/required.html": "DDBEGIN\nrequired\nDDEND\n"}
+                == {os.path.join("-0", "required.html"): b"DDBEGIN\nrequired\nDDEND\n",
+                    os.path.join("-1", "required.html"): b"DDBEGIN\nrequired\nDDEND\n"}
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -577,9 +567,9 @@ def test_run_5(tmp_path, job):
     (tmp_path / "tc" / "-0").mkdir()
     (tmp_path / "tc" / "-1").mkdir()
     (tmp_path / "tc" / "-0" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
-    (tmp_path / "tc" / "-0" / "test.html").write_text("-0\nDDBEGIN\nfluff\nrequired\nDDEND\n")
+    (tmp_path / "tc" / "-0" / "test.html").write_bytes(b"-0\nDDBEGIN\nfluff\nrequired\nDDEND\n")
     (tmp_path / "tc" / "-1" / "test_info.json").write_text("{\"target\":\"required.html\",\"env\":{}}")
-    (tmp_path / "tc" / "-1" / "required.html").write_text("-1\nDDBEGIN\nfluff\nrequired\nDDEND\n")
+    (tmp_path / "tc" / "-1" / "required.html").write_bytes(b"-1\nDDBEGIN\nfluff\nrequired\nDDEND\n")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
@@ -590,7 +580,7 @@ def test_run_5(tmp_path, job):
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "required.html"
-            assert tc._files.required[0].data == "-1\nDDBEGIN\nrequired\nDDEND\n"
+            assert tc._files.required[0].data == b"-1\nDDBEGIN\nrequired\nDDEND\n"
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -617,7 +607,7 @@ def test_run_6(tmp_path, job):
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.js"
-            assert tc._files.required[0].data.lstrip(' ') == "'required'\n"
+            assert tc._files.required[0].data.lstrip(' ') == "'required'%s" % (os.linesep,)
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -631,8 +621,8 @@ def test_run_7(tmp_path, job):
     """test that jschar stage works"""
     create_target_binary(job.interesting.target, tmp_path)
     (tmp_path / "tc").mkdir()
-    (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.js\",\"env\":{}}")
-    (tmp_path / "tc" / "test.js").write_text("var x = 'xrequiredx'\n")
+    (tmp_path / "tc" / "test_info.json").write_bytes(b"{\"target\":\"test.js\",\"env\":{}}")
+    (tmp_path / "tc" / "test.js").write_bytes(b"var x = 'xrequiredx'\n")
     job.config_testcase(str(tmp_path / "tc"))
     report_data = {"num_reports": 0}
 
@@ -644,7 +634,7 @@ def test_run_7(tmp_path, job):
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.js"
             # strip() is required because jsbeautifier stage removes the newline (if installed)
-            assert tc._files.required[0].data.strip() == "var x = 'required'"
+            assert tc._files.required[0].data.strip() == b"var x = 'required'"
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
