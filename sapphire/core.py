@@ -88,6 +88,9 @@ class ServeJob(object):
                     LOG.debug("optional: %r", f_name)
                     continue
                 file_path = os.path.abspath(os.path.join(d_name, f_name))
+                if "?" in file_path:
+                    LOG.warning("Cannot add files with '?' in path. Skipping %r", file_path)
+                    continue
                 self._pending.files.add(file_path)
                 LOG.debug("required: %r", f_name)
 
@@ -132,9 +135,10 @@ class ServeJob(object):
 
                 LOG.debug("looking up %r in include map", inc_path)
                 if inc_path in self.url_map.include:
+                    to_serve = os.path.normpath("/".join([self.url_map.include[inc_path].target] + target_path))
                     return Resource(
                         self.URL_INCLUDE,
-                        "/".join([self.url_map.include[inc_path].target] + target_path),
+                        to_serve,
                         mime=self.url_map.include[inc_path].mime,
                         required=self.url_map.include[inc_path].required)
                 LOG.debug("include map does not contain %r", inc_path)
@@ -143,9 +147,10 @@ class ServeJob(object):
             # check if this is a nested directory in a directory mounted at '/'
             LOG.debug("checking include map at '/'")
             if "" in self.url_map.include:
+                to_serve = os.path.normpath(os.path.join(self.url_map.include[""].target, request.lstrip("/")))
                 return Resource(
                     self.URL_INCLUDE,
-                    os.path.join(self.url_map.include[""].target, request.lstrip("/")),
+                    to_serve,
                     mime=self.url_map.include[""].mime,
                     required=self.url_map.include[""].required)
             LOG.debug("include map does not contain an entry at '/'")
