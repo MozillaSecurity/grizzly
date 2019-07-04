@@ -607,7 +607,8 @@ def test_run_6(tmp_path, job):
             assert len(tc._files.required) == 1, \
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.js"
-            assert tc._files.required[0].data.lstrip(' ') == "'required'%s" % (os.linesep,)
+            result = tc._files.required[0].data.decode("UTF-8").lstrip(" ")
+            assert result == "'required'%s" % (str(os.linesep),)
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
@@ -615,7 +616,6 @@ def test_run_6(tmp_path, job):
 
     assert job.run()
     assert report_data["num_reports"] == 1
-
 
 def test_run_7(tmp_path, job):
     """test that jschar stage works"""
@@ -634,7 +634,8 @@ def test_run_7(tmp_path, job):
                 "too many test_files: %r" % (tc._files.required,)
             assert tc.landing_page == "test.js"
             # strip() is required because jsbeautifier stage removes the newline (if installed)
-            assert tc._files.required[0].data.strip() == b"var x = 'required'"
+            result = tc._files.required[0].data.decode("UTF-8").strip()
+            assert result == "var x = 'required'"
             assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
             assert self.force_report
             report_data["num_reports"] += 1
