@@ -105,7 +105,7 @@ class ServeJob(object):
     def check_request(self, request):
         if "?" in request:
             request = request.split("?", 1)[0]
-        to_serve = os.path.join(self.base_path, request)
+        to_serve = os.path.normpath(os.path.join(self.base_path, request))
         if os.path.isfile(to_serve):
             res = Resource(self.URL_FILE, to_serve)
             with self._pending.lock:
