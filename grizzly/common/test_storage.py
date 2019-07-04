@@ -130,9 +130,10 @@ def test_testcase_05(tmp_path):
 
 def test_inputfile_01():
     """test InputFile with non-existing file"""
+    missing_file = os.path.join("foo", "bar", "none")
     with pytest.raises(IOError) as exc:
-        InputFile(os.path.join("foo", "bar", "none"))
-    assert "File 'foo/bar/none' does not exist" in str(exc)
+        InputFile(missing_file)
+    assert "File %r does not exist" % (missing_file,) in str(exc)
 
 def test_inputfile_02(tmp_path):
     """test InputFile object"""
