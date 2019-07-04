@@ -5,8 +5,10 @@ Sapphire unit tests
 import hashlib
 import logging
 import os
+import platform
 import random
 import threading
+
 import pytest
 
 from grizzly.common import TestCase
@@ -699,7 +701,7 @@ def test_serve_job_02(tmp_path):
     req1_path = tmp_path / "req_file_1.txt"
     req1_path.write_bytes(b"a")
     (tmp_path / "test").mkdir()
-    req2_path = tmp_path / "test" / "req_file_2.txt?q=123"
+    req2_path = tmp_path / "test" / "req_file_2.txt"
     req2_path.write_bytes(b"a")
     job = ServeJob(str(tmp_path), dict(), dict(), dict(), optional_files=[opt_path.name])
     assert job.status == SERVED_NONE
@@ -760,7 +762,7 @@ def test_serve_job_04(tmp_path):
     inc_1.write_bytes(b"b")
     nst_1 = srv_include_nested / "nested_file.txt"
     nst_1.write_bytes(b"c")
-    inc_2 = srv_include_2 / "test_file_2.txt?q=123"
+    inc_2 = srv_include_2 / "test_file_2.txt"
     inc_2.write_bytes(b"d")
     includes = {
         "testinc": Resource(ServeJob.URL_INCLUDE, str(srv_include)),
@@ -833,6 +835,19 @@ def test_serve_job_06(tmp_path):
     assert resource.type == job.URL_FILE
     assert not job.is_forbidden(str(test_1))
     assert job.is_forbidden(str(srv_root / "../no_access.txt"))
+
+
+@pytest.mark.skipif(platform.system() == "Windows",
+                    reason="Unsupported on Windows")
+def test_serve_job_07(tmp_path):
+    """test ServeJob with file names containing invalid characters"""
+    test_file = tmp_path / "test.txt"
+    test_file.write_bytes(b"a")
+    (tmp_path / "?_2.txt").write_bytes(b"a")
+    job = ServeJob(str(tmp_path), dict(), dict(), dict())
+    assert job.status == SERVED_NONE
+    assert job.pending_files() == 1
+    assert job.check_request("req_file_1.txt").target == str(test_file)
 
 
 def test_response_data_01():
