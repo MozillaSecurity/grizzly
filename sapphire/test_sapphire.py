@@ -847,7 +847,7 @@ def test_serve_job_07(tmp_path):
     job = ServeJob(str(tmp_path), dict(), dict(), dict())
     assert job.status == SERVED_NONE
     assert job.pending_files() == 1
-    assert job.check_request("req_file_1.txt").target == str(test_file)
+    assert job.check_request("test.txt").target == str(test_file)
 
 
 def test_response_data_01():
