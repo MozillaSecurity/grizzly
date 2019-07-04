@@ -223,7 +223,7 @@ def test_stackframe_02():
     assert StackFrame.from_line(" #0 ") is None
     with pytest.raises(AssertionError) as exc:
         StackFrame.from_line("#0 \n \n\n\n#1\n\ntest()!")
-    assert "Input contains unexpected new line(s)" in str(exc)
+    assert "Input contains unexpected new line(s)" in str(exc.value)
     assert StackFrame.from_line("#0#0#0#0#0#0#0#0") is None
     assert StackFrame.from_line("#a") is None
     assert StackFrame.from_line("") is None
