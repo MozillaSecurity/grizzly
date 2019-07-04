@@ -4,6 +4,7 @@
 # pylint: disable=protected-access
 
 import os
+import platform
 import signal
 import tempfile
 import threading
@@ -293,6 +294,8 @@ def test_puppet_target_03(tmp_path):
         os.environ.pop("GRZ_FORCED_CLOSE", None)
         target.cleanup()
 
+@pytest.mark.skipif(platform.system() == "Windows",
+                    reason="Unsupported on Windows")
 def test_puppet_target_04(tmp_path):
     """test PuppetTarget.dump_coverage()"""
     PuppetTarget.PUPPET = FakePuppet
