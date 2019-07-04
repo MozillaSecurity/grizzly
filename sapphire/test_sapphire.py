@@ -829,7 +829,7 @@ def test_serve_job_06(tmp_path):
     assert job.status == SERVED_NONE
     assert job.pending_files() == 1
     resource = job.check_request("../no_access.txt")
-    assert resource.target == str(srv_root / ".." / "no_access.txt")
+    assert resource.target == str(no_access)
     assert resource.type == job.URL_FILE
     assert not job.is_forbidden(str(test_1))
     assert job.is_forbidden(str(srv_root / "../no_access.txt"))
