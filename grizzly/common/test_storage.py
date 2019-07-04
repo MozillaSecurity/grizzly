@@ -44,10 +44,10 @@ def test_testcase_02(tmp_path):
         tcase.add_from_file(str(in_file), "testfile1.bin")
         with pytest.raises(TestFileExists) as exc:
             tcase.add_from_file(str(in_file), "testfile1.bin")
-        assert "'testfile1.bin' exists in test" in str(exc)
+        assert "'testfile1.bin' exists in test" in str(exc.value)
         with pytest.raises(TestFileExists) as exc:
             tcase.add_from_data("test", "testfile1.bin")
-        assert "'testfile1.bin' exists in test" in str(exc)
+        assert "'testfile1.bin' exists in test" in str(exc.value)
         tcase.add_from_data("test_nreq", "nested/testfile2.bin", required=False)
         tcase.add_from_data("test_blah", "/testfile3.bin")
         tcase.add_from_data("test_windows", "\\\\dir\\file.bin")
@@ -133,7 +133,7 @@ def test_inputfile_01():
     missing_file = os.path.join("foo", "bar", "none")
     with pytest.raises(IOError) as exc:
         InputFile(missing_file)
-    assert "File %r does not exist" % (missing_file,) in str(exc)
+    assert "File %r does not exist" % (missing_file,) in str(exc.value)
 
 def test_inputfile_02(tmp_path):
     """test InputFile object"""

@@ -23,7 +23,7 @@ def test_target_load_01(mocker):
     '''If no targets are available, available() should return nothing.'''
     mocker.patch('grizzly.target.TARGETS', None)
     mocker.patch('pkg_resources.iter_entry_points', lambda _: [])
-    assert available() == []
+    assert not available()
 
 
 def test_target_load_02(mocker):
@@ -69,7 +69,7 @@ def test_target_load_03(mocker):
             return object
 
     mocker.patch('pkg_resources.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
-    assert available() == ['test1']
+    assert set(available()) == {'test1'}
     assert load('test1') is Target
 
 
@@ -115,5 +115,5 @@ def test_target_load_05(mocker):
             raise Exception("boo!")
 
     mocker.patch('pkg_resources.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
-    assert available() == ['test1']
+    assert set(available()) == {'test1'}
     assert load('test1') is Target

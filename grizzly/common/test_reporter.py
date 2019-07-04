@@ -81,24 +81,24 @@ def test_report_05(tmp_path):
     """test Report.select_logs()"""
     # small log with nothing interesting
     with (tmp_path / "log_asan.txt.1").open("wb") as log_fp:
-        log_fp.write("SHORT LOG\n")
-        log_fp.write("filler line")
+        log_fp.write(b"SHORT LOG\n")
+        log_fp.write(b"filler line")
     # crash on another thread
     with (tmp_path / "log_asan.txt.2").open("wb") as log_fp:
-        log_fp.write("GOOD LOG\n")
-        log_fp.write("==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x00000BADF00D")
-        log_fp.write(" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T0)\n")  # must be 2nd line
+        log_fp.write(b"GOOD LOG\n")
+        log_fp.write(b"==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x00000BADF00D")
+        log_fp.write(b" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T0)\n")  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
-            log_fp.write("    #%d blah...\n" % l_no)
+            log_fp.write(b"    #%d blah...\n" % l_no)
     # child log that should be ignored (created when parent crashes)
     with (tmp_path / "log_asan.txt.3").open("wb") as log_fp:
-        log_fp.write("BAD LOG\n")
-        log_fp.write("==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000")
-        log_fp.write(" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T2)\n")  # must be 2nd line
+        log_fp.write(b"BAD LOG\n")
+        log_fp.write(b"==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000")
+        log_fp.write(b" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T2)\n")  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
-            log_fp.write("    #%d blah...\n" % l_no)
+            log_fp.write(b"    #%d blah...\n" % l_no)
     (tmp_path / "log_mindump_blah.txt").write_bytes(b"minidump log")
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
@@ -161,32 +161,32 @@ def test_report_09(tmp_path):
     """test prioritizing *San logs with Report.select_logs()"""
     # crash
     with (tmp_path / "log_asan.txt.1").open("wb") as log_fp:
-        log_fp.write("GOOD LOG\n")
-        log_fp.write("==1942==ERROR: AddressSanitizer: heap-use-after-free on ... blah\n")  # must be 2nd line
+        log_fp.write(b"GOOD LOG\n")
+        log_fp.write(b"==1942==ERROR: AddressSanitizer: heap-use-after-free on ... blah\n")  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
-            log_fp.write("    #%d blah...\n" % l_no)
+            log_fp.write(b"    #%d blah...\n" % l_no)
     # crash missing trace
     with (tmp_path / "log_asan.txt.2").open("wb") as log_fp:
-        log_fp.write("BAD LOG\n")
-        log_fp.write("==1984==ERROR: AddressSanitizer: SEGV on ... blah\n")  # must be 2nd line
-        log_fp.write("missing trace...\n")
+        log_fp.write(b"BAD LOG\n")
+        log_fp.write(b"==1984==ERROR: AddressSanitizer: SEGV on ... blah\n")  # must be 2nd line
+        log_fp.write(b"missing trace...\n")
     # child log that should be ignored (created when parent crashes)
     with (tmp_path / "log_asan.txt.3").open("wb") as log_fp:
-        log_fp.write("BAD LOG\n")
-        log_fp.write("==1184==ERROR: AddressSanitizer: BUS on ... blah\n")  # must be 2nd line
+        log_fp.write(b"BAD LOG\n")
+        log_fp.write(b"==1184==ERROR: AddressSanitizer: BUS on ... blah\n")  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
-            log_fp.write("    #%d blah...\n" % l_no)
+            log_fp.write(b"    #%d blah...\n" % l_no)
     with (tmp_path / "log_asan.txt.4").open("wb") as log_fp:
-        log_fp.write("BAD LOG\n")
-        log_fp.write("==9482==ERROR: AddressSanitizer: stack-overflow on ...\n")  # must be 2nd line
+        log_fp.write(b"BAD LOG\n")
+        log_fp.write(b"==9482==ERROR: AddressSanitizer: stack-overflow on ...\n")  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
-            log_fp.write("    #%d blah...\n" % l_no)
+            log_fp.write(b"    #%d blah...\n" % l_no)
     with (tmp_path / "log_asan.txt.5").open("wb") as log_fp:
-        log_fp.write("BAD LOG\n")
-        log_fp.write("ERROR: Failed to mmap\n")  # must be 2nd line
+        log_fp.write(b"BAD LOG\n")
+        log_fp.write(b"ERROR: Failed to mmap\n")  # must be 2nd line
     log_map = Report.select_logs(str(tmp_path))
     assert "GOOD LOG" in (tmp_path / log_map["aux"]).read_text()
 
@@ -223,10 +223,10 @@ def test_reporter_01(tmp_path):
     reporter = SimpleReporter()
     with pytest.raises(IOError) as exc:
         reporter.submit("fake_dir", [])
-    assert "No such directory 'fake_dir'" in str(exc)
+    assert "No such directory 'fake_dir'" in str(exc.value)
     with pytest.raises(IOError) as exc:
         reporter.submit(str(tmp_path), [])
-    assert "No logs found in" in str(exc)
+    assert "No logs found in" in str(exc.value)
 
 def test_filesystem_reporter_01(tmp_path):
     """test FilesystemReporter without testcases"""
@@ -289,7 +289,7 @@ def test_filesystem_reporter_03(tmp_path):
     reporter.DISK_SPACE_ABORT = 2 ** 50
     with pytest.raises(RuntimeError) as exc:
         reporter.submit(str(log_path), [])
-    assert "Running low on disk space" in str(exc)
+    assert "Running low on disk space" in str(exc.value)
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RR only supported on Linux")
 def test_filesystem_reporter_04(tmp_path):
@@ -345,13 +345,13 @@ def test_fuzzmanager_reporter_01(tmp_path, mocker):
     #with pytest.raises(IOError) as exc:
     with pytest.raises(IOError) as exc:
         FuzzManagerReporter.sanity_check(str(fake_bin))
-    assert "Missing: no_file" in str(exc)
+    assert "Missing: no_file" in str(exc.value)
     fake_fmc = tmp_path / ".fuzzmanagerconf"
     fake_fmc.touch()
     FuzzManagerReporter.FM_CONFIG = str(fake_fmc)
     with pytest.raises(IOError) as exc:
         FuzzManagerReporter.sanity_check(str(fake_bin))
-    assert "bin.fuzzmanagerconf" in str(exc)
+    assert "bin.fuzzmanagerconf" in str(exc.value)
     (tmp_path / "bin.fuzzmanagerconf").touch()
     FuzzManagerReporter.sanity_check(str(fake_bin))
 
@@ -362,7 +362,7 @@ def test_fuzzmanager_reporter_02(tmp_path):
     report_path.mkdir()
     with pytest.raises(IOError) as exc:
         reporter.submit(str(report_path), [])
-    assert "No logs found in" in str(exc)
+    assert "No logs found in" in str(exc.value)
 
 def test_fuzzmanager_reporter_03(tmp_path, mocker):
     """test FuzzManagerReporter.submit()"""
@@ -374,8 +374,8 @@ def test_fuzzmanager_reporter_03(tmp_path, mocker):
     reporter = FuzzManagerReporter(str("fake_bin"))
     log_path = tmp_path / "log_path"
     log_path.mkdir()
-    (log_path / "log_stderr.txt").write_bytes("blah")
-    (log_path / "log_stdout.txt").write_bytes("blah")
+    (log_path / "log_stderr.txt").touch()
+    (log_path / "log_stdout.txt").touch()
     fake_test = mocker.Mock(spec=TestCase)
     fake_test.adapter_name = "adapter"
     fake_test.input_fname = "input"
@@ -393,8 +393,8 @@ def test_fuzzmanager_reporter_04(tmp_path, mocker):
     reporter = FuzzManagerReporter("fake_bin")
     log_path = tmp_path / "log_path"
     log_path.mkdir()
-    (log_path / "log_stderr.txt").write_bytes("blah")
-    (log_path / "log_stdout.txt").write_bytes("blah")
+    (log_path / "log_stderr.txt").touch()
+    (log_path / "log_stdout.txt").touch()
     reporter.submit(str(log_path), [])
     fake_collector.return_value.submit.assert_not_called()
 
@@ -407,8 +407,8 @@ def test_fuzzmanager_reporter_05(tmp_path, mocker):
     reporter = FuzzManagerReporter("fake_bin")
     log_path = tmp_path / "log_path"
     log_path.mkdir()
-    (log_path / "log_stderr.txt").write_bytes("blah")
-    (log_path / "log_stdout.txt").write_bytes("blah")
+    (log_path / "log_stderr.txt").touch()
+    (log_path / "log_stdout.txt").touch()
     reporter._ignored = lambda x: True
     reporter.submit(str(log_path), [])
     fake_collector.return_value.submit.assert_not_called()
@@ -422,11 +422,11 @@ def test_fuzzmanager_reporter_06(tmp_path, mocker):
     reporter = FuzzManagerReporter("fake_bin")
     log_path = tmp_path / "log_path"
     log_path.mkdir()
-    (log_path / "log_stderr.txt").write_bytes("blah")
-    (log_path / "log_stdout.txt").write_bytes("blah")
+    (log_path / "log_stderr.txt").touch()
+    (log_path / "log_stdout.txt").touch()
     with pytest.raises(RuntimeError) as exc:
         reporter.submit(str(log_path), [])
-    assert "Failed to create FM signature" in str(exc)
+    assert "Failed to create FM signature" in str(exc.value)
     fake_collector.return_value.submit.assert_not_called()
     # test ignore unsymbolized crash
     reporter._ignored = lambda x: True
@@ -439,7 +439,7 @@ def test_s3fuzzmanager_reporter_01(tmp_path, mocker):
     fake_bin = tmp_path / "bin"
     with pytest.raises(EnvironmentError) as exc:
         S3FuzzManagerReporter.sanity_check(str(fake_bin))
-    assert "'GRZ_S3_BUCKET' is not set in environment" in str(exc)
+    assert "'GRZ_S3_BUCKET' is not set in environment" in str(exc.value)
     os.environ["GRZ_S3_BUCKET"] = "test"
     try:
         S3FuzzManagerReporter.sanity_check(str(fake_bin))

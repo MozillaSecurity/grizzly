@@ -215,7 +215,7 @@ def test_servermap_01():
     assert not srv_map.redirects
     with pytest.raises(AssertionError) as exc:
         srv_map.reset()
-    assert "At least one kwarg should be True" in str(exc)
+    assert "At least one kwarg should be True" in str(exc.value)
 
 def test_servermap_02():
     """test ServerMap dynamic responses"""
@@ -239,7 +239,7 @@ def test_servermap_03(tmp_path):
     srv_map = ServerMap()
     with pytest.raises(IOError) as exc:
         srv_map.set_include("test_url", "no_dir")
-    assert "'no_dir' does not exist" in str(exc)
+    assert "'no_dir' does not exist" in str(exc.value)
     assert not srv_map.includes
     srv_map.set_include("url_01", str(tmp_path))
     assert len(srv_map.includes) == 1
