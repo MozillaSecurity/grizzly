@@ -48,11 +48,11 @@ def test_session_00(tmp_path, mocker):
     session.run()
     session.close()
 
-    fake_iomgr.create_testcase.assert_called_once()
-    fake_server.assert_called_once()
-    fake_server.return_value.serve_testcase.assert_called_once()
-    fake_server.return_value.close.assert_called_once()
-    fake_target.detect_failure.assert_called_once()
+    assert fake_iomgr.create_testcase.call_count == 1
+    assert fake_server.call_count == 1
+    assert fake_server.return_value.serve_testcase.call_count == 1
+    assert fake_server.return_value.close.call_count == 1
+    assert fake_target.detect_failure.call_count == 1
 
 def test_session_01(tmp_path, mocker):
     """test Session.check_results()"""
@@ -69,21 +69,21 @@ def test_session_01(tmp_path, mocker):
 
     session.check_results(True, False)
     assert not fake_iomgr.tests
-    fake_target.detect_failure.assert_called_once()
+    assert fake_target.detect_failure.call_count == 1
     fake_iomgr.reset_mock()
     fake_target.reset_mock()
 
     fake_target.detect_failure.return_value = fake_target.RESULT_FAILURE
     session.check_results(False, False)
-    fake_target.detect_failure.assert_called_once()
-    session.report_result.assert_called_once()
+    assert fake_target.detect_failure.call_count == 1
+    assert session.report_result.call_count == 1
     assert session.status.results == 1
     fake_iomgr.reset_mock()
     fake_target.reset_mock()
 
     fake_target.detect_failure.return_value = fake_target.RESULT_IGNORED
     session.check_results(False, False)
-    fake_target.detect_failure.assert_called_once()
+    assert fake_target.detect_failure.call_count == 1
     assert session.status.ignored == 1
 
     session.close()
@@ -109,9 +109,9 @@ def test_session_02(tmp_path, mocker):
     session.config_server(5)
     fake_adapter.generate.assert_not_called()
     testcase = session.generate_testcase()
-    fake_adapter.generate.assert_called_once()
-    testcase.add_meta.assert_called_once()
-    fake_server.return_value.set_redirect.assert_called_once()
+    assert fake_adapter.generate.call_count == 1
+    assert testcase.add_meta.call_count == 1
+    assert fake_server.return_value.set_redirect.call_count == 1
 
 def test_session_03(mocker, tmp_path):
     """test Session.launch_target()"""
@@ -213,7 +213,7 @@ def test_session_05(tmp_path, mocker):
     session = Session(fake_adapter, False, [], fake_iomgr, None, mocker.Mock(spec=Target))
     session.config_server(5)
     assert fake_server.return_value.add_dynamic_response.call_count == 2
-    fake_server.return_value.add_include.assert_called_once()
+    assert fake_server.return_value.add_include.call_count == 1
 
 def test_session_06(tmp_path, mocker):
     """test Session.run()"""
@@ -253,15 +253,15 @@ def test_session_06(tmp_path, mocker):
     fake_adapter.on_timeout.assert_not_called()
     fake_adapter.pre_launch.assert_not_called()
     session.run(10)
-    fake_adapter.on_served.assert_called()
-    fake_adapter.on_timeout.assert_called()
-    fake_adapter.pre_launch.assert_called()
-    fake_iomgr.purge_tests.assert_called()
+    assert fake_adapter.on_served.call_count == 5
+    assert fake_adapter.on_timeout.call_count == 5
+    assert fake_adapter.pre_launch.call_count == 10
+    assert fake_iomgr.purge_tests.call_count == 10
     assert fake_target.launch.call_count == fake_iomgr.purge_tests.call_count
     session.close()
 
-    fake_server.assert_called_once()
-    fake_server.return_value.close.assert_called_once()
+    assert fake_server.call_count == 1
+    assert fake_server.return_value.close.call_count == 1
     assert session.status.iteration == 10
     assert fake_iomgr.create_testcase.call_count == 10
     assert fake_target.detect_failure.call_count == 10
