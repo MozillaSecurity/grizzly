@@ -36,6 +36,8 @@ def client_factory():
         def __init__(self, rx_size=0x10000):
             self.thread = None
             self.rx_size = rx_size
+            self._idle = threading.Event()
+            self._idle.set()
 
         def close(self):
             if self.thread is not None:
@@ -43,6 +45,8 @@ def client_factory():
 
         def launch(self, addr, port, files_to_serve, delay=0, in_order=False, indicate_failure=False,
                    request=None, throttle=0):
+            assert self._idle.is_set()
+            self._idle.clear()
             self.thread = threading.Thread(
                 target=self._handle_request,
                 args=(addr, port, files_to_serve),
@@ -139,6 +143,10 @@ def client_factory():
                 finally:
                     if cli is not None:
                         cli.close()
+            self._idle.set()
+
+        def wait(self, timeout=None):
+            return self._idle.wait(timeout)
 
     def _get_client(*args, **kwds):
         cli = _SimpleClient(*args, **kwds)
