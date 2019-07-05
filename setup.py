@@ -47,7 +47,7 @@ if __name__ == '__main__':
         license='MPL 2.0',
         maintainer='Tyson Smith',
         maintainer_email='twsmith@mozilla.com',
-        name='grizzly',
+        name='grizzly-framework',
         packages=[
             'grizzly',
             'grizzly.common',
