@@ -262,7 +262,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     assert report_path.exists()
     assert len(os.listdir(str(report_path))) == 1
     for tstc in testcases:
-        tstc.dump.assert_called_once()
+        assert tstc.dump.call_count == 1
     # call report a 2nd time
     log_path.mkdir()
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
@@ -272,7 +272,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
         testcases.append(mocker.Mock(spec=TestCase))
     reporter.submit(str(log_path), testcases)
     for tstc in testcases:
-        tstc.dump.assert_called_once()
+        assert tstc.dump.call_count == 1
     results = os.listdir(str(report_path))
     assert len(results) == 2
     assert "NO_STACK" in results
@@ -382,8 +382,8 @@ def test_fuzzmanager_reporter_03(tmp_path, mocker):
     fake_test.env_vars = ("TEST=1",)
     reporter.submit(str(log_path), [fake_test])
     assert not log_path.is_dir()
-    fake_test.dump.assert_called_once()
-    fake_collector.return_value.submit.assert_called_once()
+    assert fake_test.dump.call_count == 1
+    assert fake_collector.return_value.submit.call_count == 1
 
 def test_fuzzmanager_reporter_04(tmp_path, mocker):
     """test FuzzManagerReporter.submit() hit frequent crash"""
@@ -491,6 +491,6 @@ def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
     assert not os.listdir(str(tmp_path))
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
-    fake_boto3.resource.return_value.meta.client.upload_file.assert_called_once()
+    assert fake_boto3.resource.return_value.meta.client.upload_file.call_count == 1
 
 # TODO: fill out tests for FuzzManagerReporter and S3FuzzManagerReporter
