@@ -31,14 +31,13 @@ def test_status_reporter_01(tmp_path):
 
 def test_status_reporter_02(tmp_path):
     """test StatusReporter.load()"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
-    st_rpt = StatusReporter.load(str(test_db), tb_path="no_dir")
+    Status.DB_FILE = str(tmp_path / "test.db")
+    st_rpt = StatusReporter.load(tb_path="no_dir")
     assert isinstance(st_rpt.reports, list)
     assert isinstance(st_rpt.tracebacks, list)
     assert not st_rpt.reports
     assert not st_rpt.tracebacks
-    st_rpt = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    st_rpt = StatusReporter.load(tb_path=str(tmp_path))
     assert isinstance(st_rpt.reports, list)
     assert isinstance(st_rpt.tracebacks, list)
     assert not st_rpt.reports
@@ -80,15 +79,17 @@ def test_status_reporter_04(tmp_path):
 def test_status_reporter_05(tmp_path):
     """test StatusReporter._summary()"""
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     status = Status.start()
-    status.ignored = 0
-    status.iteration = 1
-    status.log_size = 0
-    status.results = 0
-    status.report(force=True)
-    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    try:
+        status.ignored = 0
+        status.iteration = 1
+        status.log_size = 0
+        status.results = 0
+        status.report(force=True)
+    finally:
+        status.close()
+    rptr = StatusReporter.load(tb_path=str(tmp_path))
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     output = rptr._summary(runtime=False)
@@ -101,13 +102,16 @@ def test_status_reporter_05(tmp_path):
     assert "Timestamp" not in output
     assert len(output.split("\n")) == 3
     status = Status.start()
-    status.start_time += 66.0
-    status.ignored = 1
-    status.iteration = 8
-    status.log_size = 86900000
-    status.results = 0
-    status.report(force=True)
-    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    try:
+        status.start_time += 66.0
+        status.ignored = 1
+        status.iteration = 8
+        status.log_size = 86900000
+        status.results = 0
+        status.report(force=True)
+    finally:
+        status.close()
+    rptr = StatusReporter.load(tb_path=str(tmp_path))
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
     assert "Iteration" in output
@@ -127,15 +131,17 @@ def test_status_reporter_05(tmp_path):
 def test_status_reporter_06(tmp_path):
     """test StatusReporter._specific()"""
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     status = Status.start()
-    status.ignored = 0
-    status.iteration = 1
-    status.log_size = 0
-    status.results = 0
-    status.report(force=True)
-    rptr = StatusReporter.load(str(test_db))
+    try:
+        status.ignored = 0
+        status.iteration = 1
+        status.log_size = 0
+        status.results = 0
+        status.report(force=True)
+    finally:
+        status.close()
+    rptr = StatusReporter.load()
     assert rptr.reports is not None
     output = rptr._specific()
     lines = output.split("\n")[:-1]
@@ -146,11 +152,14 @@ def test_status_reporter_06(tmp_path):
     assert "Results" in output
     assert "EXPIRED" not in output
     status = Status.start()
-    status.ignored = 1
-    status.iteration = 432422
-    status.results = 123
-    status.report(force=True)
-    rptr = StatusReporter.load(str(test_db))
+    try:
+        status.ignored = 1
+        status.iteration = 432422
+        status.results = 123
+        status.report(force=True)
+    finally:
+        status.close()
+    rptr = StatusReporter.load()
     assert len(rptr.reports) == 2
     output = rptr._specific()
     lines = output.split("\n")[:-1]
@@ -162,14 +171,16 @@ def test_status_reporter_06(tmp_path):
 
 def test_status_reporter_07(tmp_path):
     """test StatusReporter.load() with traceback"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     status = Status.start()
-    status.ignored = 0
-    status.iteration = 1
-    status.log_size = 0
-    status.results = 0
-    status.report(force=True)
+    try:
+        status.ignored = 0
+        status.iteration = 1
+        status.log_size = 0
+        status.results = 0
+        status.report(force=True)
+    finally:
+        status.close()
     # create boring screenlog
     test_log = tmp_path / "screenlog.0"
     test_log.write_bytes(b"boring\ntest\n123\n")
@@ -179,7 +190,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 1
     # create second screenlog
     test_log = tmp_path / "screenlog.1234"
@@ -187,7 +198,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"foo.bar.error: blah\n")
-    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
     # create third screenlog
     test_log = tmp_path / "screenlog.3"
@@ -195,7 +206,7 @@ def test_status_reporter_07(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"KeyboardInterrupt\n")
-    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
     merged_log = rptr._summary()
     assert len(merged_log.splitlines()) == 14
@@ -208,14 +219,14 @@ def test_status_reporter_07(tmp_path):
 def test_status_reporter_08(tmp_path):
     """test StatusReporter.load() no reports with traceback"""
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    test_db = tmp_path / "test.db"
+    Status.DB_FILE = str(tmp_path / "test.db")
     # create screenlog with tb
     test_log = tmp_path / "screenlog.1"
     with test_log.open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 1
     output = rptr._summary()
     assert len(output.splitlines()) == 7
@@ -225,21 +236,26 @@ def test_status_reporter_08(tmp_path):
 def test_status_reporter_09(tmp_path):
     """test StatusReporter.summary() limit with traceback"""
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     # create reports
     status = Status.start()
-    status.ignored = 100
-    status.iteration = 1000
-    status.log_size = 9999999999
-    status.results = 123
-    status.report(force=True)
-    status = Status.start()
-    status.ignored = 9
-    status.iteration = 192938
-    status.log_size = 0
-    status.results = 3
-    status.report(force=True)
+    try:
+        status.ignored = 100
+        status.iteration = 1000
+        status.log_size = 9999999999
+        status.results = 123
+        status.report(force=True)
+    finally:
+        status.close()
+    try:
+        status = Status.start()
+        status.ignored = 9
+        status.iteration = 192938
+        status.log_size = 0
+        status.results = 3
+        status.report(force=True)
+    finally:
+        status.close()
     # create screenlogs with tracebacks
     for i in range(10):
         test_log = tmp_path / ("screenlog.%d" % (i,))
@@ -249,7 +265,7 @@ def test_status_reporter_09(tmp_path):
                 test_fp.write(b"  File \"some/long/path/name/foobar.py\", line 5000, in <module>\n")
                 test_fp.write(b"    some_long_name_for_a_func_%04d()\n" % (j,))
             test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(str(test_db), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 10
     merged_log = rptr._summary(runtime=True, sysinfo=True, timestamp=True)
     assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
@@ -257,7 +273,7 @@ def test_status_reporter_09(tmp_path):
 def test_reduce_status_reporter_01(tmp_path):
     """test empty ReduceStatusReporter"""
     test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     rptr = ReduceStatusReporter.load(str(test_db))
     assert not rptr.reports
     output = rptr._specific()
@@ -271,8 +287,11 @@ def test_reduce_status_reporter_02(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = ReduceStatus.start()
-    status.iteration = 1
-    status.report(force=True)
+    try:
+        status.iteration = 1
+        status.report(force=True)
+    finally:
+        status.close()
     rptr = ReduceStatusReporter.load(str(test_db))
     assert rptr.reports is not None
     output = rptr._specific()
@@ -281,10 +300,13 @@ def test_reduce_status_reporter_02(tmp_path):
     assert "Iteration" in output
     assert "Rate" in output
     status = ReduceStatus.start()
-    status.ignored = 12
-    status.iteration = 432422
-    status.results = 123
-    status.report(force=True)
+    try:
+        status.ignored = 12
+        status.iteration = 432422
+        status.results = 123
+        status.report(force=True)
+    finally:
+        status.close()
     rptr = ReduceStatusReporter.load(str(test_db))
     assert len(rptr.reports) == 2
     output = rptr._specific()
@@ -299,8 +321,11 @@ def test_reduce_status_reporter_03(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = ReduceStatus.start()
-    status.iteration = 1
-    status.report(force=True)
+    try:
+        status.iteration = 1
+        status.report(force=True)
+    finally:
+        status.close()
     rptr = ReduceStatusReporter.load(str(test_db))
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
@@ -315,13 +340,16 @@ def test_reduce_status_reporter_03(tmp_path):
     assert "Timestamp" not in output
     assert len(output.split("\n")) == 9
     status = ReduceStatus.start()
-    status.reduce_error = 1
-    status.reduce_fail = 2
-    status.reduce_pass = 10
-    status.ignored = 4
-    status.iteration = 13
-    status.results = 3
-    status.report(force=True)
+    try:
+        status.reduce_error = 1
+        status.reduce_fail = 2
+        status.reduce_pass = 10
+        status.ignored = 4
+        status.iteration = 13
+        status.results = 3
+        status.report(force=True)
+    finally:
+        status.close()
     rptr = ReduceStatusReporter.load(str(test_db))
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
@@ -350,10 +378,13 @@ def test_reduce_status_reporter_04(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = ReduceStatus.start()
-    status.reduce_error = 1
-    status.reduce_fail = 2
-    status.reduce_pass = 10
-    status.report(force=True)
+    try:
+        status.reduce_error = 1
+        status.reduce_fail = 2
+        status.reduce_pass = 10
+        status.report(force=True)
+    finally:
+        status.close()
     rptr = ReduceStatusReporter.load(str(test_db))
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
@@ -523,8 +554,11 @@ def test_main_02(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
-    status.iteration = 1
-    status.report(force=True)
+    try:
+        status.iteration = 1
+        status.report(force=True)
+    finally:
+        status.close()
     assert test_db.is_file()
     main([])
 
@@ -533,8 +567,11 @@ def test_main_03(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = Status.start()
-    status.iteration = 1
-    status.report(force=True)
+    try:
+        status.iteration = 1
+        status.report(force=True)
+    finally:
+        status.close()
     assert test_db.is_file()
     dump_file = tmp_path / "output.txt"
     main(["--dump", str(dump_file)])
@@ -545,14 +582,16 @@ def test_main_04(tmp_path):
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
     status = ReduceStatus.start()
-    status.iteration = 1
-    status.report(force=True)
+    try:
+        status.iteration = 1
+        status.report(force=True)
+    finally:
+        status.close()
     assert test_db.is_file()
     main(["--mode", "reduce-status"])
 
 def test_main_05(tmp_path):
     """test main() with invalid mode"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     with pytest.raises(SystemExit):
         main(["--mode", "invalid"])

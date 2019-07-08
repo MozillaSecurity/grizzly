@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly status reports"""
 # pylint: disable=protected-access
+import pytest
 
 from .status import Status
 from .reduce_status import ReduceStatus
@@ -15,6 +16,8 @@ def test_reduce_status_01(tmp_path):
     # create db
     assert not test_db.is_file()
     status = ReduceStatus.start()
+    assert status is not None
+    status.close()
     assert status.uid == 1
     assert status.start_time > 0
     assert status.timestamp > 0
@@ -27,37 +30,55 @@ def test_reduce_status_01(tmp_path):
     # existing db
     assert test_db.is_file()
     status = Status.start()
+    status.close()
     assert status.uid == 2
     # pass uid
     status = Status.start(1234)
+    status.close()
     assert status.uid == 1234
 
 def test_reduce_status_02(tmp_path):
     """test ReduceStatus.report()"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     # report with empty db
-    ReduceStatus(Status(123, 1557934564)).report()
+    with pytest.raises(AssertionError):
+        ReduceStatus(Status(123, 1557934564)).report()
     # normal report
     status = ReduceStatus.start()
-    status.report()
-    # try to report before REPORT_FREQ elapses
-    status.report()
+    try:
+        status.report()
+        # try to report before REPORT_FREQ elapses
+        status.report()
+    finally:
+        status.close()
 
 def test_reduce_status_03(tmp_path):
     """test ReduceStatus.load()"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
-    # load no db
-    assert ReduceStatus.load(1) is None
+    Status.DB_FILE = str(tmp_path / "test.db")
+    # load with empty db
+    assert not tuple(ReduceStatus.load(uid=1))
+    conn = ReduceStatus.open_connection()
+    try:
+        assert not tuple(ReduceStatus.load(conn=conn))
+    finally:
+        conn.close()
     # create simple report
     status = ReduceStatus.start()
+    status.close()
     assert status.uid == 1
     # invalid uid
-    assert ReduceStatus.load(1337) is None
+    assert not tuple(ReduceStatus.load(uid=1337))
+    # load all entries
+    conn = ReduceStatus.open_connection()
+    try:
+        assert len(tuple(Status.load(conn=conn))) == 1
+    finally:
+        conn.close()
     # load default reduce status report
-    status = ReduceStatus.load(status.uid)
-    assert status is not None
+    entries = tuple(ReduceStatus.load(uid=status.uid))
+    for entry in entries:
+        entry.close()
+    assert len(entries) == 1
     assert status.start_time > 0
     assert status.timestamp > 0
     assert status.duration == 0
@@ -68,83 +89,104 @@ def test_reduce_status_03(tmp_path):
 
 def test_reduce_status_04(tmp_path):
     """test ReportStatus.load() on Status object"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     # create simple report
     status = Status.start()
     assert status is not None
-    assert ReduceStatus.load(status.uid) is None
+    status.close()
+    assert not tuple(ReduceStatus.load(uid=status.uid))
 
 def test_reduce_status_05(tmp_path):
     """test ReduceStatus.cleanup()"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     status = ReduceStatus.start()
-    assert Status.load(status.uid) is not None
-    status.cleanup()
-    assert Status.load(status.uid) is None
     # nothing to cleanup
     status.cleanup()
+    # cleanup one entry
+    status = ReduceStatus.start()
+    status.close()
+    entries = tuple(ReduceStatus.load(uid=status.uid))
+    assert len(entries) == 1
+    entries[0].cleanup()
+    conn = ReduceStatus.open_connection()
+    try:
+        assert not tuple(Status.load(conn=conn))
+    finally:
+        conn.close()
 
 def test_reduce_status_06(tmp_path):
     """test ReduceStatus.load() and ReduceStatus.report()"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     status = ReduceStatus.start()
-    status.ignored += 1
-    status.iteration = 12345
-    status.reduce_error = 33
-    status.reduce_fail = 22
-    status.reduce_pass = 11
-    status.results = 10
-    status.report(force=True)
-    ld_status = ReduceStatus.load(status.uid)
-    assert ld_status.uid == status.uid
+    try:
+        status.ignored += 1
+        status.iteration = 12345
+        status.reduce_error = 33
+        status.reduce_fail = 22
+        status.reduce_pass = 11
+        status.results = 10
+        status.report(force=True)
+    finally:
+        status.close()
+    entries = tuple(ReduceStatus.load(uid=status.uid))
+    for entry in entries:
+        entry.close()
+    assert len(entries) == 1
+    assert entries[0].uid == status.uid
     assert status.ignored == 1
     assert status.results == 10
-    assert ld_status.ignored == status.ignored
-    assert ld_status.iteration == status.iteration
-    assert ld_status.reduce_error == status.reduce_error
-    assert ld_status.reduce_fail == status.reduce_fail
-    assert ld_status.reduce_pass == status.reduce_pass
-    assert ld_status.results == status.results
-    assert ld_status.start_time == status.start_time
-    assert ld_status.timestamp == status.timestamp
+    assert entries[0].ignored == status.ignored
+    assert entries[0].iteration == status.iteration
+    assert entries[0].reduce_error == status.reduce_error
+    assert entries[0].reduce_fail == status.reduce_fail
+    assert entries[0].reduce_pass == status.reduce_pass
+    assert entries[0].results == status.results
+    assert entries[0].start_time == status.start_time
+    assert entries[0].timestamp == status.timestamp
 
 def test_reduce_status_07(tmp_path):
     """test ReduceStatus.report(reset_status=True)"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     status = ReduceStatus.start()
-    status.ignored += 1
-    status.iteration = 12345
-    status.reduce_error = 33
-    status.reduce_fail = 22
-    status.reduce_pass = 11
-    status.results = 10
-    status.report(force=True)
-    ld_status = ReduceStatus.load(status.uid)
-    ld_status.report(reset_status=True)
-    ld_status = ReduceStatus.load(status.uid)
-    assert ld_status.uid == status.uid
-    assert ld_status.duration == 0
-    assert ld_status.ignored == 0
-    assert ld_status.iteration == 0
-    assert ld_status.results == 0
-    assert ld_status.reduce_error == 33
-    assert ld_status.reduce_fail == 22
-    assert ld_status.reduce_pass == 11
+    try:
+        status.ignored += 1
+        status.iteration = 12345
+        status.reduce_error = 33
+        status.reduce_fail = 22
+        status.reduce_pass = 11
+        status.results = 10
+        status.report(force=True)
+        status.report(reset_status=True)
+    finally:
+        status.close()
+    entries = tuple(ReduceStatus.load(uid=status.uid))
+    for entry in entries:
+        entry.close()
+    assert len(entries) == 1
+    assert entries[0].uid == status.uid
+    assert entries[0].duration == 0
+    assert entries[0].ignored == 0
+    assert entries[0].iteration == 0
+    assert entries[0].results == 0
+    assert entries[0].reduce_error == 33
+    assert entries[0].reduce_fail == 22
+    assert entries[0].reduce_pass == 11
 
 def test_reduce_status_08(tmp_path):
     """test ReduceStatus.load() with Status and ReduceStatus"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
+    Status.DB_FILE = str(tmp_path / "test.db")
     status = Status.start()
-    status.iteration = 11
-    status.report(force=True)
-    status = ReduceStatus.start()
-    status.iteration = 22
-    status.report(force=True)
-    ld_status = ReduceStatus.load(status.uid)
-    assert ld_status.uid == status.uid
-    assert ld_status.iteration == 22
+    try:
+        status.iteration = 11
+        status.report(force=True)
+        status = ReduceStatus.start()
+        status.iteration = 22
+        status.report(force=True)
+    finally:
+        status.close()
+    entries = tuple(ReduceStatus.load(uid=status.uid))
+    for entry in entries:
+        entry.close()
+    assert len(entries) == 1
+    assert entries[0].uid == status.uid
+    assert entries[0].iteration == 22
