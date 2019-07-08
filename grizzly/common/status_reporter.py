@@ -7,9 +7,9 @@
 
 import argparse
 import datetime
+import logging
 import os
 import re
-import sqlite3
 import sys
 import time
 
@@ -64,32 +64,23 @@ class StatusReporter(object):
             ofp.write(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
     @classmethod
-    def load(cls, db_file, tb_path=None):
+    def load(cls, tb_path=None):
         """Read Grizzly status reports and create a StatusReporter object
 
         Args:
-            db_file (str): sqlite database containing Grizzly status info.
             tb_path (str): Directory to scan for file containing Python tracebacks
 
         Returns:
             StatusReporter: Contains status reports and traceback reports that were found
         """
-        reports = list(cls._load(db_file))
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
-        return cls(reports, tracebacks)
+        return cls(cls._load_reports(), tracebacks)
 
     @staticmethod
-    def _load(db_file):
-        conn = sqlite3.connect(db_file)
+    def _load_reports():
+        conn = Status.open_connection(timeout=30)
         try:
-            cur = conn.cursor()
-            cur.execute("""SELECT id FROM status;""")
-            for row in cur:
-                status = Status.load(int(row[0]))
-                if status is not None:
-                    yield status
-        except sqlite3.OperationalError:
-            pass
+            return list(Status.load(conn=conn))
         finally:
             conn.close()
 
@@ -276,17 +267,10 @@ class StatusReporter(object):
 
 class ReduceStatusReporter(StatusReporter):
     @staticmethod
-    def _load(db_file):
-        conn = sqlite3.connect(db_file)
+    def _load_reports():
+        conn = ReduceStatus.open_connection(timeout=30)
         try:
-            cur = conn.cursor()
-            cur.execute("""SELECT id FROM reduce_status;""")
-            for row in cur:
-                status = ReduceStatus.load(int(row[0]))
-                if status is not None:
-                    yield status
-        except sqlite3.OperationalError:
-            pass
+            return list(ReduceStatus.load(conn=conn))
         finally:
             conn.close()
 
@@ -511,6 +495,13 @@ def main(args=None):
     Returns:
         None
     """
+    log_level = logging.INFO
+    log_fmt = "[%(asctime)s] %(message)s"
+    if bool(os.getenv("DEBUG")):
+        log_level = logging.DEBUG
+        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
+    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+
     modes = ("reduce-status", "status")
     parser = argparse.ArgumentParser(description="Grizzly status report generator")
     parser.add_argument(
@@ -530,9 +521,9 @@ def main(args=None):
     if args.mode not in modes:
         parser.error("Invalid mode %r" % args.mode)
     if args.mode == "reduce-status":
-        reporter = ReduceStatusReporter.load(Status.DB_FILE, tb_path=args.tracebacks)
+        reporter = ReduceStatusReporter.load(tb_path=args.tracebacks)
     else:
-        reporter = StatusReporter.load(Status.DB_FILE, tb_path=args.tracebacks)
+        reporter = StatusReporter.load(tb_path=args.tracebacks)
     if args.dump:
         reporter.dump_summary(args.dump)
         return 0

@@ -3,8 +3,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-"""Manage Grizzly status reports."""
-
+"""Manage Grizzly reducer status."""
+import logging
 import sqlite3
 
 from .status import Status
@@ -12,6 +12,8 @@ from .status import Status
 __all__ = ("ReduceStatus",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
+
+LOG = logging.getLogger("reducer_status")
 
 class ReduceStatus(object):
     """ReduceStatus holds status information for the Grizzly reduce session.
@@ -38,46 +40,81 @@ class ReduceStatus(object):
         """
         if self._status is None:
             return
-        conn = sqlite3.connect(self._status.DB_FILE)
-        try:
-            conn.execute("""DELETE FROM reduce_status WHERE id = ?;""", (self._status.uid,))
-            conn.commit()
-        except sqlite3.OperationalError:
-            pass
-        finally:
-            conn.close()
-            self._status.cleanup()
+        if self._status.conn is not None:
+            try:
+                self._status.conn.execute("""DELETE FROM reduce_status
+                                             WHERE id = ?;""", (self._status.uid,))
+                self._status.conn.commit()
+            except sqlite3.OperationalError:
+                pass
+        self._status.cleanup()
         self._status = None
 
+    def close(self):
+        """Close Status object db connection.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        if self._status is not None:
+            self._status.close()
+
     @classmethod
-    def load(cls, uid):
+    def load(cls, conn=None, timeout=10, uid=None):
         """Read Grizzly reduce status report.
 
         Args:
+            conn (sqlite3.Connection): An open (shared) sqlite db connection.
+            timeout (int): Timeout for sqlite db connection.
             uid (int): Unique ID of Grizzly ReduceStatus to load.
 
         Returns:
             ReduceStatus: Grizzly ReduceStatus object or None if uid is unused.
         """
-        status = Status.load(uid)
-        if status is None:
-            return None
-        conn = sqlite3.connect(status.DB_FILE)
+        if conn is None:
+            conn = cls.open_connection(timeout=timeout)
+        else:
+            assert uid is None, "shared conn required when loading all entries"
+
+        # load status component of entries
+        entries = tuple(Status.load(conn=conn, timeout=timeout, uid=uid))
+        if not entries:
+            return
+
+        query = """SELECT id, error, fail, pass
+                   FROM reduce_status
+                   WHERE id IN (%s);""" % ", ".join("?" for _ in range(len(entries)))
+        args = tuple(entry.uid for entry in entries)
         try:
-            cur = conn.cursor()
-            cur.execute("""SELECT error, fail, pass
-                           FROM reduce_status WHERE id = ?;""", (status.uid,))
-            row = cur.fetchone()
-        except sqlite3.OperationalError:
-            return None
-        finally:
+            for row in conn.execute(query, args):
+                for entry in entries:
+                    if entry.uid == row[0]:
+                        status = cls(entry)
+                        status.reduce_error = int(row[1])
+                        status.reduce_fail = int(row[2])
+                        status.reduce_pass = int(row[3])
+                        yield status
+                        break
+                else:
+                    LOG.debug("missing entry uid %r", row[0])
+        except sqlite3.OperationalError as exc:
+            LOG.warning("load failed: %r", str(exc))
             conn.close()
-        assert row is not None, "Status exists but ReduceStatus does not"
-        report = cls(status)
-        report.reduce_error = int(row[0])
-        report.reduce_fail = int(row[1])
-        report.reduce_pass = int(row[2])
-        return report
+
+    @staticmethod
+    def open_connection(timeout=10):
+        """Open a database connection.
+
+        Args:
+            timeout (int): Timeout for sqlite db connection.
+
+        Returns:
+            sqlite3.Connection: An open sqlite db connection.
+        """
+        return Status.open_connection(timeout=timeout)
 
     def report(self, force=False, report_freq=REPORT_FREQ, reset_status=False):
         """Write Grizzly reduce status report. Reports are only written when the duration
@@ -95,20 +132,18 @@ class ReduceStatus(object):
         if reset_status:
             self._status.reset()
         elif not self._status.report(force=force, report_freq=report_freq):
+            # not time to update the entry yet
             return
-        conn = sqlite3.connect(self._status.DB_FILE)
         try:
-            conn.execute("""UPDATE reduce_status
-                            SET error = ?,
-                                fail = ?,
-                                pass = ?
-                            WHERE id = ?;""",
-                         (self.reduce_error, self.reduce_fail, self.reduce_pass, self._status.uid))
-            conn.commit()
-        except sqlite3.OperationalError:
-            pass
-        finally:
-            conn.close()
+            args = (self.reduce_error, self.reduce_fail, self.reduce_pass, self._status.uid)
+            self._status.conn.execute("""UPDATE reduce_status
+                                         SET error = ?,
+                                             fail = ?,
+                                             pass = ?
+                                         WHERE id = ?;""", args)
+            self._status.conn.commit()
+        except sqlite3.OperationalError as exc:
+            LOG.warning("report failed: %r", str(exc))
 
     @classmethod
     def start(cls, uid=None):
@@ -122,15 +157,13 @@ class ReduceStatus(object):
         """
         status = Status.start(uid=uid)
         assert status is not None
-        conn = sqlite3.connect(status.DB_FILE)
         try:
-            cur = conn.cursor()
+            cur = status.conn.cursor()
             cur.execute("""CREATE TABLE IF NOT EXISTS reduce_status
                            (id    INTEGER PRIMARY KEY,
                             error INTEGER DEFAULT 0,
                             fail  INTEGER DEFAULT 0,
                             pass  INTEGER DEFAULT 0);""")
-            conn.commit()
             # remove old reports
             cur.execute("""DELETE FROM reduce_status
                            WHERE id NOT IN (SELECT id FROM status)
@@ -138,9 +171,10 @@ class ReduceStatus(object):
             # create new reduce_status entry that maps to a status entry
             cur.execute("""INSERT INTO reduce_status (id)
                            VALUES (?);""", (status.uid,))
-            conn.commit()
-        finally:
-            conn.close()
+            status.conn.commit()
+        except sqlite3.OperationalError:
+            status.conn.close()
+            raise
         return cls(status)
 
     ### Map properties from Status object
