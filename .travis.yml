@@ -43,14 +43,14 @@ matrix:
     - os: windows
 before_install:
   - pip install --upgrade setuptools pip
-  - git clone https://github.com/MozillaSecurity/lithium.git
-  - python -m pip install -e lithium
 install:
   - python -m pip install -e .[all]
 before_script:
   - pip install --upgrade pytest pytest-mock pytest-pylint pytest-cov codecov
 script:
-  - python -m pytest -v grizzly loki sapphire
+  - python -m pytest
+after_success:
+  - codecov
 deploy:
   provider: pypi
   distributions: sdist bdist_wheel

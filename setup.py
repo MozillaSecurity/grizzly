@@ -15,7 +15,7 @@ EXTRAS = {
     's3': ['boto3'],
 }
 EXTRAS['all'] = list(set(itertools.chain.from_iterable(EXTRAS.values())))
-EXTRAS['test'] = ['pytest>=3.9', 'pytest-mock']
+EXTRAS['test'] = ['pytest>=3.9', 'pytest-cov', 'pytest-mock']
 
 
 if __name__ == '__main__':
