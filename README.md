@@ -17,31 +17,7 @@ For additional information please check out the [wiki](https://github.com/Mozill
 
 Installation
 ------------
-The following modules are required:
-* https://github.com/MozillaSecurity/ffpuppet
-* https://github.com/giampaolo/psutil
-
-The FuzzManager module is required to support reporting results via FM:
- * https://github.com/MozillaSecurity/FuzzManager
-
-FFPuppet must be installed first. Steps can be found [here](https://github.com/MozillaSecurity/ffpuppet#installation)
-
-##### To install after cloning the repository
-    pip install --user -e <grizzly_repository>
-
-Fuzzing builds & prefs.js
--------------------------
-Fuzzing builds can be found in [taskcluster](https://tools.taskcluster.net/index/gecko.v2.mozilla-central.latest.firefox) or the [fuzzfetch](https://github.com/MozillaSecurity/fuzzfetch) (**recommended**) tool can be used to download a build.
-
-prefs.js files can be found [here](https://github.com/MozillaSecurity/fuzzdata/tree/master/settings/firefox) in the [fuzzdata](https://github.com/MozillaSecurity/fuzzdata) repository along with other fuzzing input and configuration files.
-
-**NOTE:** prefs.js files must be used when running with Mozilla browsers.
-
-Example
--------
-To verify everything is installed and working correctly run the *no-op* adapter. If everything is working correctly the browser should launch and open the *harness* in the first tab and a second tab should open and close rapidly.
-
-`python -m grizzly /path/to/browser/firefox no-op -p prefs/prefs-default-e10s.js`
+See [getting started](https://github.com/MozillaSecurity/grizzly/wiki/Getting-Started) on the wiki.
 
 Target platforms
 -------
