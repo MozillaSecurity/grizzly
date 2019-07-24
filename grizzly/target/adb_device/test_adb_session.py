@@ -5,7 +5,7 @@ import zipfile
 
 import pytest
 
-from .device import ADBCommandError, ADBSession, ADBSessionError
+from .adb_session import ADBCommandError, ADBSession, ADBSessionError
 
 def test_adb_session_01(mocker):
     """test ADBSession._call_adb()"""

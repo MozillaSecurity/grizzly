@@ -9,7 +9,7 @@ from ffpuppet.helpers import append_prefs, Bootstrapper, create_profile
 from ffpuppet.minidump_parser import process_minidumps
 from ffpuppet.puppet_logger import PuppetLogger
 
-from .adb_session import ADBSession
+from .adb_session import ADBSession, ADBSessionError
 
 log = logging.getLogger("adb_device")  # pylint: disable=invalid-name
 
@@ -17,16 +17,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
-class ADBCommandError(RuntimeError):
-    pass
-
-class ADBSessionError(RuntimeError):
-    pass
-
 class ADBLaunchError(ADBSessionError):
-    pass
-
-class ADBNoDevice(ADBSessionError):
     pass
 
 

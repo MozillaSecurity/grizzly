@@ -54,10 +54,6 @@ def main(argv=None):  # pylint: disable=missing-docstring
             log.error("Could not install %r", args.install)
             return 1
         log.info("Installed %r", package)
-    #elif args.install_asan is not None:
-    #    log.info("Installing ASan from %r ...", args.install_asan)
-    #    session.install_asan(args.install_asan)
-    #    log.info("Device reboot required")
     elif args.airplane_mode is not None:
         session.set_airplane_mode(mode=args.airplane_mode > 0)
     elif args.launch:
