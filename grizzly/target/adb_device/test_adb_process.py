@@ -1,7 +1,8 @@
 # pylint: disable=protected-access
 import pytest
 
-from .device import ADBProcess, ADBSession, ADBSessionError, ADBLaunchError
+from .adb_process import ADBProcess, ADBLaunchError
+from .adb_session import ADBSession, ADBSessionError
 
 def test_adb_process_01(mocker):
     """test creating a simple device"""
@@ -34,7 +35,7 @@ def test_adb_process_03(mocker):
     fake_session.collect_logs.return_value = b""
     fake_session.listdir.return_value = ()
     fake_session.process_exists.return_value = False
-    proc = ADBProcess("org.test.preinstalled", fake_session)
+    proc = ADBProcess("org.test.unknown", fake_session)
     try:
         assert not proc.is_running()
         with pytest.raises(ADBLaunchError):
@@ -47,7 +48,7 @@ def test_adb_process_03(mocker):
 
 def test_adb_process_04(mocker):
     """test launch(), is_running() and is_healthy()"""
-    fake_bs = mocker.patch("grizzly.target.adb_device.device.Bootstrapper", autospec=True)
+    fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec=ADBSession)
@@ -72,7 +73,7 @@ def test_adb_process_04(mocker):
 
 def test_adb_process_05(mocker):
     """test launch() with environment variables"""
-    fake_bs = mocker.patch("grizzly.target.adb_device.device.Bootstrapper", autospec=True)
+    fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec=ADBSession)
@@ -91,7 +92,7 @@ def test_adb_process_05(mocker):
 
 def test_adb_process_06(mocker):
     """test wait_on_files()"""
-    fake_bs = mocker.patch("grizzly.target.adb_device.device.Bootstrapper", autospec=True)
+    fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec=ADBSession)

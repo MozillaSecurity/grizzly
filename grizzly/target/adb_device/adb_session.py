@@ -44,13 +44,10 @@ class DeviceProcess(object):
             return None
 
 
-class ADBCommandError(RuntimeError):
+class ADBCommandError(Exception):
     pass
 
-class ADBSessionError(RuntimeError):
-    pass
-
-class ADBLaunchError(ADBSessionError):
+class ADBSessionError(Exception):
     pass
 
 class ADBNoDevice(ADBSessionError):
