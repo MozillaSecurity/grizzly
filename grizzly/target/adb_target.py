@@ -14,7 +14,7 @@ from .target_monitor import TargetMonitor
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
+log = logging.getLogger("adb_target")  # pylint: disable=invalid-name
 
 
 class ADBTarget(Target):
@@ -87,7 +87,6 @@ class ADBTarget(Target):
     def launch(self, location, env_mod=None):
         self.rl_countdown = self.rl_reset
         env_mod = dict(env_mod or [])
-
         # This may be used to disabled network connections during testing, e.g.
         env_mod["MOZ_IN_AUTOMATION"] = "1"
         # prevent crash reporter from touching the dmp files
@@ -96,7 +95,6 @@ class ADBTarget(Target):
         env_mod["MOZ_CRASHREPORTER_SHUTDOWN"] = "1"
         # do not allow network connections to non local endpoints
         env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
-
         try:
             self._proc.launch(
                 env_mod=env_mod,
@@ -131,9 +129,7 @@ class ADBTarget(Target):
                 def log_length(_, *_a):  # pylint: disable=arguments-differ
                     # TODO: This needs to be implemented
                     return 0
-
             self._monitor = _ADBMonitor()
-
         return self._monitor
 
     def reverse(self, remote, local):
