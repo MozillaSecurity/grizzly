@@ -31,8 +31,8 @@ def test_adb_process_02(mocker):
 def test_adb_process_03(mocker):
     """test failed launch() and is_running()"""
     fake_session = mocker.Mock(spec=ADBSession)
-    fake_session.call.return_value = (1, b"")
-    fake_session.collect_logs.return_value = b""
+    fake_session.call.return_value = (1, "")
+    fake_session.collect_logs.return_value = ""
     fake_session.listdir.return_value = ()
     fake_session.process_exists.return_value = False
     proc = ADBProcess("org.test.unknown", fake_session)
@@ -52,8 +52,8 @@ def test_adb_process_04(mocker):
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec=ADBSession)
-    fake_session.call.return_value = (0, b"Status: ok")
-    fake_session.collect_logs.return_value = b""
+    fake_session.call.return_value = (0, "Status: ok")
+    fake_session.collect_logs.return_value = ""
     fake_session.get_pid.return_value = 1337
     fake_session.listdir.return_value = ()
     #fake_session.process_exists.return_value = False
@@ -77,8 +77,8 @@ def test_adb_process_05(mocker):
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec=ADBSession)
-    fake_session.call.return_value = (0, b"Status: ok")
-    fake_session.collect_logs.return_value = b""
+    fake_session.call.return_value = (0, "Status: ok")
+    fake_session.collect_logs.return_value = ""
     fake_session.get_pid.return_value = 1337
     fake_session.listdir.return_value = ()
     env = {"test1":"1", "test2": "2"}
@@ -96,8 +96,8 @@ def test_adb_process_06(mocker):
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec=ADBSession)
-    fake_session.call.return_value = (0, b"Status: ok")
-    fake_session.collect_logs.return_value = b""
+    fake_session.call.return_value = (0, "Status: ok")
+    fake_session.collect_logs.return_value = ""
     fake_session.get_open_files.return_value = ((1, "some_file"),)
     fake_session.get_pid.return_value = 1337
     fake_session.listdir.return_value = ()

@@ -11,8 +11,8 @@ def test_adb_session_01(mocker):
     """test ADBSession._call_adb()"""
     def fake_call(cmd, stderr=None, stdout=None):
         assert cmd[0] == "test"
-        stderr.write("")
-        stdout.write("blah_out")
+        stderr.write(b"")
+        stdout.write(b"blah_out")
         return 0
     mocker.patch("subprocess.call", side_effect=fake_call)
     ret, output = ADBSession._call_adb(["test"])
@@ -274,9 +274,9 @@ def test_adb_session_10(mocker):
 def test_adb_session_11(tmp_path, mocker):
     """test ADBSession.install()"""
     def fake_get_package_name(_):
-        with zipfile.ZipFile(apk_file, mode="r")as zfp:
+        with zipfile.ZipFile(apk_file, mode="r") as zfp:
             with zfp.open("package-name.txt", "r") as pfp:
-                return pfp.read().strip()
+                return pfp.read().strip().decode("utf-8", errors="ignore")
     def fake_adb_call(obj, cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
         if cmd[1] == "install":
@@ -300,7 +300,7 @@ def test_adb_session_11(tmp_path, mocker):
     apk_file = str(tmp_path / "test.apk")
     syms_path = str(tmp_path / "symbols")
     os.makedirs(syms_path)
-    pkg_file.write_bytes(b"test-package.blah.foo\n")
+    pkg_file.write_text("test-package.blah.foo\n")
     with zipfile.ZipFile(apk_file, mode="w") as z_out:
         z_out.write(str(pkg_file), "package-name.txt")
     assert not session.symbols_path(apk_file)
