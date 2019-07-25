@@ -11,7 +11,7 @@ from ffpuppet.puppet_logger import PuppetLogger
 
 from .adb_session import ADBSession, ADBSessionError
 
-log = logging.getLogger("adb_device")  # pylint: disable=invalid-name
+log = logging.getLogger("adb_process")  # pylint: disable=invalid-name
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
