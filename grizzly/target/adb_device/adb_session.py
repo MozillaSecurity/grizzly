@@ -290,10 +290,11 @@ class ADBSession(object):
             if not os.path.isfile(aapt):
                 # fall back to system version
                 aapt = subprocess.check_output(["which", "aapt"]).strip()
+                aapt = aapt.decode("utf-8", errors="ignore")
         apk_info = subprocess.check_output([aapt, "dump", "badging", apk_path])
         for line in apk_info.splitlines():
-            if line.startswith("package: name="):
-                package_name = line.split()[1][5:].strip("'")
+            if line.startswith(b"package: name="):
+                package_name = line.split()[1][5:].strip("'").decode("utf-8", errors="ignore")
                 break
         else:
             raise RuntimeError("Could not find APK package name")

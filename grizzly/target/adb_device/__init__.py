@@ -1,4 +1,5 @@
-from .device import ADBProcess, ADBSession
+from .adb_process import ADBProcess
+from .adb_session import ADBSession
 
 __all__ = ("ADBProcess", "ADBSession")
 
