@@ -44,15 +44,13 @@ class ADBNoDevice(ADBSessionError):
 
 
 class ADBSession(object):
-    BIN_AAPT = None
-    BIN_ADB = None
-
     def __init__(self, ip_addr=None, port=5555):
         self.connected = False
         self.symbols = dict()
-        self._root = False
+        self._adb_bin = self._adb_check()
         self._ip_addr = None  # target device IP address
         self._port = None  # ADB listening port
+        self._root = False
 
         log.debug("creating IP based session: %r", ip_addr is not None)
         if ip_addr is not None:
@@ -66,20 +64,36 @@ class ADBSession(object):
                 raise ValueError("Port must be valid integer between 1025 and 65535")
             self._port = port
 
-        suggested_adb = os.path.expanduser("~/.android/sdk/platform-tools/adb")
-        if self.BIN_ADB is None:
-            if os.path.isfile(suggested_adb):
-                self.BIN_ADB = suggested_adb
-            else:
-                try:
-                    self.BIN_ADB = subprocess.check_output(["which", "adb"]).strip()
-                except subprocess.CalledProcessError:
-                    raise EnvironmentError("Please install ADB")
-            # TODO: update this to check adb version
-            if os.path.realpath(self.BIN_ADB) != os.path.realpath(suggested_adb):
-                log.warning("You are not using the recommended ADB install!")
-                log.warning("Either run the setup script or proceed with caution.")
-                time.sleep(5)
+    @classmethod
+    def _aapt_check(cls):
+        aapt_bin = os.path.expanduser("~/.android/sdk/platform-tools/aapt")
+        if os.path.isfile(aapt_bin):
+            log.debug("using recommended aapt from %r", aapt_bin)
+            return aapt_bin
+        try:
+            aapt_bin = subprocess.check_output(["which", "aapt"]).strip().decode("utf-8", errors="ignore")
+        except subprocess.CalledProcessError:
+            raise EnvironmentError("Please install AAPT")
+        # TODO: update this to check aapt version
+        log.warning("Using aapt_bin from %r", aapt_bin)
+        return aapt_bin
+
+    @classmethod
+    def _adb_check(cls):
+        adb_bin = os.path.expanduser("~/.android/sdk/platform-tools/adb")
+        if os.path.isfile(adb_bin):
+            log.debug("using recommended adb from %r", adb_bin)
+            return adb_bin
+        try:
+            adb_bin = subprocess.check_output(["which", "adb"]).strip().decode("utf-8", errors="ignore")
+        except subprocess.CalledProcessError:
+            raise EnvironmentError("Please install ADB")
+        # TODO: update this to check adb version
+        log.warning("Using adb from %r", adb_bin)
+        log.warning("You are not using the recommended ADB install!")
+        log.warning("Either run the setup script or proceed with caution.")
+        time.sleep(5)
+        return adb_bin
 
     @classmethod
     def create(cls, ip_addr=None, port=5555, as_root=True, max_attempts=10):
@@ -109,7 +123,7 @@ class ADBSession(object):
 
     def call(self, cmd, require_device=True, timeout=None):
         assert isinstance(cmd, list) and cmd
-        cmd = [self.BIN_ADB] + cmd
+        cmd = [self._adb_bin] + cmd
         log.debug("calling: %s", " ".join(cmd))
         if not self.connected and cmd[1] not in ("connect", "devices", "disconnect"):
             raise ADBSessionError("ADB session is not connected!")
@@ -181,6 +195,8 @@ class ADBSession(object):
 
         if self.connected and self._root:
             self.set_enforce(0)
+            if self.get_enforce():
+                raise ADBSessionError("set_enforce(0) failed!")
 
         return self.connected
 
@@ -281,20 +297,21 @@ class ADBSession(object):
         if context is not None:
             self.call(["shell", "chcon", context, full_dst])
 
-    @staticmethod
-    def get_package_name(apk_path):
-        # unpack and lookup package name
-        aapt = ADBSession.BIN_AAPT
-        if aapt is None:
-            aapt = os.path.expanduser("~/.android/sdk/android-9/aapt")
-            if not os.path.isfile(aapt):
-                # fall back to system version
-                aapt = subprocess.check_output(["which", "aapt"]).strip()
-                aapt = aapt.decode("utf-8", errors="ignore")
+    def get_enforce(self):
+        status = self.call(["shell", "getenforce"])[1]
+        if status == "Enforcing":
+            return True
+        if status != "Permissive":
+            log.warning("Unexpected SELinux state '%r'", status)
+        return False
+
+    @classmethod
+    def get_package_name(cls, apk_path):
+        aapt = cls._aapt_check()
         apk_info = subprocess.check_output([aapt, "dump", "badging", apk_path])
         for line in apk_info.splitlines():
             if line.startswith(b"package: name="):
-                package_name = line.split()[1][5:].strip("'").decode("utf-8", errors="ignore")
+                package_name = line.split()[1][5:].strip(b"'").decode("utf-8", errors="ignore")
                 break
         else:
             raise RuntimeError("Could not find APK package name")
@@ -393,8 +410,10 @@ class ADBSession(object):
 
     def set_enforce(self, value):
         assert value in (0, 1)
-        is_set = self.call(["shell", "getenforce"])[1] == "Enforcing"
+        is_set = self.get_enforce()
         if (is_set and value == 0) or (not is_set and value == 1):
             self.call(["shell", "setenforce", str(value)])
             self.call(["shell", "stop"])
             self.call(["shell", "start"])
+        else:
+            log.debug("set_enforce(%d) no action required", value)
