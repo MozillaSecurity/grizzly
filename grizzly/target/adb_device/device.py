@@ -29,51 +29,68 @@ def main(argv=None):  # pylint: disable=missing-docstring
     parser.add_argument(
         "--install", help="Path to APK to install")
     parser.add_argument(
-        "--install-asan", help="Path to NDK")
-    parser.add_argument(
         "--launch", help="Path to APK to launch")
     parser.add_argument(
         "--logs", help="Location to save logs")
     parser.add_argument(
         "--ip", help="IP address of target device")
     parser.add_argument(
+        "--non-root", action="store_true",
+        help="Connect as non-root user")
+    parser.add_argument(
         "--port", default=5555, type=int,
         help="ADB listening port on target device")
+    parser.add_argument(
+        "--prep", help="Prepare the device for fuzzing. Path to APK")
     args = parser.parse_args(argv)
+    if not any((args.airplane_mode is not None, args.install, args.launch, args.prep)):
+        parser.error("No options selected")
+        return 1
 
-    log.info("Opening a session")
-    session = ADBSession.create(args.ip, args.port, as_root=True)
+    log.debug("opening a session")
+    session = ADBSession.create(args.ip, args.port, as_root=not args.non_root)
     if session is None:
         log.error("Failed to connect to IP:%r port:%r", args.ip, args.port)
         return 1
-
-    if args.install is not None:
-        log.info("Installing %r ...", args.install)
-        package = session.install(args.install)
-        if not package:
-            log.error("Could not install %r", args.install)
-            return 1
-        log.info("Installed %r", package)
-    elif args.airplane_mode is not None:
-        session.set_airplane_mode(mode=args.airplane_mode > 0)
-    elif args.launch:
-        package = ADBSession.get_package_name(args.launch)
-        if not package:
-            log.error("APK not installed")
-            return 1
-        proc = ADBProcess(package, session)
-        try:
-            proc.launch("about:blank", launch_timeout=60)
-            assert proc.is_running(), "browser not running?!"
-            log.info("Launched")
-            proc.wait()
-        finally:
-            proc.close()
-            if args.logs:
-                proc.save_logs(args.logs)
-            proc.cleanup()
-    else:
-        parser.print_help()
+    try:
+        if args.prep is not None:
+            log.info("Preparing device...")
+            session.set_enforce(0)
+            args.airplane_mode = True
+            args.install = args.prep
+        if args.airplane_mode is not None:
+            if args.airplane_mode > 0:
+                log.info("Enabling airplane mode...")
+            else:
+                log.info("Disabling airplane mode...")
+            session.set_airplane_mode(mode=args.airplane_mode > 0)
+            log.info("Done.")
+        if args.install is not None:
+            log.info("Installing %r ...", args.install)
+            package = session.install(args.install)
+            if not package:
+                log.error("Could not install %r", args.install)
+                return 1
+            log.info("Installed %r.", package)
+        if args.launch:
+            package = ADBSession.get_package_name(args.launch)
+            if not package:
+                log.error("APK not installed")
+                return 1
+            proc = ADBProcess(package, session)
+            try:
+                proc.launch("about:blank", launch_timeout=60)
+                assert proc.is_running(), "browser not running?!"
+                log.info("Launched.")
+                proc.wait()
+            finally:
+                proc.close()
+                if args.logs:
+                    proc.save_logs(args.logs)
+                proc.cleanup()
+                log.info("Closed.")
+    finally:
+        session.disconnect()
     return 0
 
 
