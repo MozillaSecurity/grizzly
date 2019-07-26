@@ -402,18 +402,15 @@ class ADBSession(object):
         return self.symbols.get(package_name, "")
 
     def set_airplane_mode(self, mode=True):
-        cmd = ["shell", "settings", "put", "global", "airplane_mode_on"]
-        cmd += ["1" if mode else "0"]
-        self.call(cmd)
-        cmd = ["shell", "su", "root", "am", "broadcast", "-a", "android.intent.action.AIRPLANE_MODE"]
-        self.call(cmd)
+        self.call(["shell", "settings", "put", "global", "airplane_mode_on", "1" if mode else "0"])
+        self.call(["shell", "su", "root", "am", "broadcast", "-a", "android.intent.action.AIRPLANE_MODE"])
 
     def set_enforce(self, value):
         assert value in (0, 1)
         is_set = self.get_enforce()
         if (is_set and value == 0) or (not is_set and value == 1):
+            if not self._root:
+                log.warning("set_enforce requires root")
             self.call(["shell", "setenforce", str(value)])
-            self.call(["shell", "stop"])
-            self.call(["shell", "start"])
         else:
             log.debug("set_enforce(%d) no action required", value)
