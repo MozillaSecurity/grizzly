@@ -251,15 +251,15 @@ class ADBSession(object):
 
     def reverse(self, remote, local):
         # remote->device, local->desktop
-        assert isinstance(local, int) and local > 1024 and local < 0x10000
-        assert isinstance(remote, int) and remote > 1024 and remote < 0x10000
+        assert isinstance(local, int) and 1024 < local < 0x10000
+        assert isinstance(remote, int) and 1024 < remote < 0x10000
         return self.call(["reverse", "tcp:%d" % remote, "tcp:%d" % local])[0] == 0
 
     def reverse_remove(self, remote=None):
         # remote->device
         cmd = ["reverse"]
         if remote is not None:
-            assert isinstance(remote, int) and remote > 1024 and remote < 0x10000
+            assert isinstance(remote, int) and 1024 < remote < 0x10000
             cmd.append("--remove")
             cmd.append("tcp:%d" % remote)
         else:
@@ -287,15 +287,16 @@ class ADBSession(object):
         log.debug("installed package %r (%r)", package_name, apk_path)
         return package_name
 
-    def install_file(self, src, dst, mode=None, context=None):
-        basename = os.path.basename(src)
-        full_dst = os.path.join(dst, basename)
-        self.push(src, full_dst)
-        self.call(["shell", "chown", "root.shell", full_dst])
-        if mode is not None:
-            self.call(["shell", "chmod", mode, full_dst])
-        if context is not None:
-            self.call(["shell", "chcon", context, full_dst])
+    # This is no longer required and I *think* it can be removed
+    #def install_file(self, src, dst, mode=None, context=None):
+    #    basename = os.path.basename(src)
+    #    full_dst = os.path.join(dst, basename)
+    #    self.push(src, full_dst)
+    #    self.call(["shell", "chown", "root.shell", full_dst])
+    #    if mode is not None:
+    #        self.call(["shell", "chmod", mode, full_dst])
+    #    if context is not None:
+    #        self.call(["shell", "chcon", context, full_dst])
 
     def get_enforce(self):
         status = self.call(["shell", "getenforce"])[1]
