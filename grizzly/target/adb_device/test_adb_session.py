@@ -695,6 +695,7 @@ def test_adb_session_26(mocker):
 
 def test_adb_session_27(mocker):
     """test ADBSession.get_enforce()"""
+    mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
     mocker.patch("grizzly.target.adb_device.ADBSession.call", return_value=(0, "Enforcing"))
     session = ADBSession("127.0.0.1")
     assert session.get_enforce()
@@ -704,12 +705,13 @@ def test_adb_session_27(mocker):
 
 def test_adb_session_28(mocker):
     """test ADBSession.set_enforce()"""
+    mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
     # disable when enabled
     fake_call = mocker.patch("grizzly.target.adb_device.ADBSession.call")
     mocker.patch("grizzly.target.adb_device.ADBSession.get_enforce", return_value=True)
     session = ADBSession("127.0.0.1")
     session.set_enforce(0)
-    assert fake_call.call_count == 3
+    assert fake_call.call_count == 1
     fake_call.reset_mock()
     # disable when disabled
     mocker.patch("grizzly.target.adb_device.ADBSession.get_enforce", return_value=False)
@@ -721,7 +723,7 @@ def test_adb_session_28(mocker):
     mocker.patch("grizzly.target.adb_device.ADBSession.get_enforce", return_value=False)
     session = ADBSession("127.0.0.1")
     session.set_enforce(1)
-    assert fake_call.call_count == 3
+    assert fake_call.call_count == 1
     fake_call.reset_mock()
     # enable when enabled
     mocker.patch("grizzly.target.adb_device.ADBSession.get_enforce", return_value=True)
