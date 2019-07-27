@@ -1,5 +1,6 @@
 # pylint: disable=protected-access
 import os
+import shutil
 
 import pytest
 
@@ -120,7 +121,7 @@ def test_adb_process_07(mocker):
     fake_session = mocker.Mock(spec=ADBSession)
     proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
     try:
-        mocker.patch.object(proc, "profile", return_value="profile_path")
+        proc.profile = "profile_path"
         # no dump files
         fake_session.listdir.return_value = ("somefile.txt")
         assert not proc.find_crashreports()
@@ -151,6 +152,36 @@ def test_adb_process_08(mocker, tmp_path):
         proc.cleanup()
     assert "fake.txt" in os.listdir(str(dmp_path))
 
+def test_adb_process_09(mocker):
+    """test ADBProcess._process_logs()"""
+    mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
+    mocker.patch("grizzly.target.adb_device.adb_process.PuppetLogger", autospec=True)
+    fake_proc_md = mocker.patch("grizzly.target.adb_device.adb_process.process_minidumps", autospec=True)
+    fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.collect_logs.return_value = "fake logcat data"
+    proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
+    try:
+        # no extra logs
+        proc._process_logs([])
+        assert os.path.isdir(proc.logs)
+        try:
+            assert "log_logcat.txt" in os.listdir(proc.logs)
+        finally:
+            shutil.rmtree(proc.logs)
+        proc.logs = None
+        assert fake_proc_md.call_count == 0
+        assert fake_session.pull.call_count == 0
+        # other logs available
+        proc._process_logs(["log.dmp", "asan_log.txt"])
+        assert os.path.isdir(proc.logs)
+        try:
+            assert "log_logcat.txt" in os.listdir(proc.logs)
+        finally:
+            shutil.rmtree(proc.logs)
+        assert fake_proc_md.call_count == 1
+        assert fake_session.pull.call_count == 2
+    finally:
+        proc.cleanup()
 
 
 # TODO:
