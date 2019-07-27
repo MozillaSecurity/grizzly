@@ -1,4 +1,6 @@
 # pylint: disable=protected-access
+import os
+
 import pytest
 
 from .adb_process import ADBProcess, ADBLaunchError
@@ -29,7 +31,7 @@ def test_adb_process_02(mocker):
         ADBProcess("org.test.unknown", fake_session)
 
 def test_adb_process_03(mocker):
-    """test failed launch() and is_running()"""
+    """test failed ADBProcess.launch() and ADBProcess.is_running()"""
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.call.return_value = (1, "")
     fake_session.collect_logs.return_value = ""
@@ -47,7 +49,7 @@ def test_adb_process_03(mocker):
         proc.cleanup()
 
 def test_adb_process_04(mocker):
-    """test launch(), is_running() and is_healthy()"""
+    """test ADBProcess.launch(), ADBProcess.is_running() and ADBProcess.is_healthy()"""
     fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
@@ -60,9 +62,11 @@ def test_adb_process_04(mocker):
     proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
     try:
         assert not proc.is_running()
+        assert proc.launches == 0
         assert proc.launch("fake.url")
         assert proc.is_running()
         assert proc.is_healthy()
+        assert proc.launches == 1
         proc.close()
         assert proc._pid is None
         assert proc.logs
@@ -72,7 +76,7 @@ def test_adb_process_04(mocker):
     assert fake_bs.return_value.close.call_count == 1
 
 def test_adb_process_05(mocker):
-    """test launch() with environment variables"""
+    """test ADBProcess.launch() with environment variables"""
     fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
@@ -91,15 +95,12 @@ def test_adb_process_05(mocker):
         proc.cleanup()
 
 def test_adb_process_06(mocker):
-    """test wait_on_files()"""
-    fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
-    fake_bs.return_value.location.return_value = "http://localhost"
-    fake_bs.return_value.port.return_value = 1234
+    """test ADBProcess.wait_on_files()"""
+    mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.call.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = ""
     fake_session.get_open_files.return_value = ((1, "some_file"),)
-    fake_session.get_pid.return_value = 1337
     fake_session.listdir.return_value = ()
     fake_session.realpath.side_effect = str.strip
     proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
@@ -113,6 +114,44 @@ def test_adb_process_06(mocker):
     finally:
         proc.cleanup()
 
+def test_adb_process_07(mocker):
+    """test ADBProcess.find_crashreports()"""
+    mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
+    fake_session = mocker.Mock(spec=ADBSession)
+    proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
+    try:
+        mocker.patch.object(proc, "profile", return_value="profile_path")
+        # no dump files
+        fake_session.listdir.return_value = ("somefile.txt")
+        assert not proc.find_crashreports()
+        # contains dump file
+        fake_session.listdir.return_value = ("somefile.txt", "test.dmp")
+        assert proc.find_crashreports()
+        # contains missing path
+        fake_session.listdir.side_effect = IOError("test")
+        assert not proc.find_crashreports()
+    finally:
+        proc.cleanup()
+
+def test_adb_process_08(mocker, tmp_path):
+    """test ADBProcess.save_logs()"""
+    mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
+    fake_session = mocker.Mock(spec=ADBSession)
+    log_path = tmp_path / "src"
+    log_path.mkdir()
+    (log_path / "nested").mkdir()
+    fake_log = log_path / "fake.txt"
+    fake_log.touch()
+    dmp_path = tmp_path / "dst"
+    proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
+    proc.logs = str(log_path)
+    try:
+        proc.save_logs(str(dmp_path))
+    finally:
+        proc.cleanup()
+    assert "fake.txt" in os.listdir(str(dmp_path))
+
+
+
 # TODO:
 # _process_logs
-# save_logs
