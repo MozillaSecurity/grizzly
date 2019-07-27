@@ -66,7 +66,7 @@ class ADBSession(object):
 
     @classmethod
     def _aapt_check(cls):
-        aapt_bin = os.path.expanduser("~/.android/sdk/platform-tools/aapt")
+        aapt_bin = os.path.expanduser("~/.android/sdk/android-9/aapt")
         if os.path.isfile(aapt_bin):
             log.debug("using recommended aapt from %r", aapt_bin)
             return aapt_bin
