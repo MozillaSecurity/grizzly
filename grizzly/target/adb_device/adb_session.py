@@ -151,34 +151,34 @@ class ADBSession(object):
         root_called = False
         while attempt < max_attempts:
             attempt += 1
-            if not self.connected and self._ip_addr is not None:
-                addr = ":".join([self._ip_addr, str(self._port)])
-                log.debug("connecting to %s", addr)
-                if self.call(["connect", addr])[0] != 0:
-                    log.warning("connection attempt #%d failed", attempt)
-                    time.sleep(0.25)
+            if not self.connected:
+                if self._ip_addr is not None:
+                    addr = ":".join([self._ip_addr, str(self._port)])
+                    log.debug("connecting to %s", addr)
+                    if self.call(["connect", addr])[0] != 0:
+                        log.warning("connection attempt #%d failed", attempt)
+                        time.sleep(0.25)
+                        continue
+                elif not self._devices_available(self.call(["devices"])[1]):
+                    log.warning("No device detected (attempt %d/%d)", attempt, max_attempts)
+                    time.sleep(1)
                     continue
-            elif not self._devices_available(self.call(["devices"])[1]):
-                log.warning("No device detected (attempt %d/%d)", attempt, max_attempts)
-                time.sleep(1)
-                continue
-            self.connected = True
+                self.connected = True
 
             # verify we are connected
             ret_code, user = self.call(["shell", "whoami"], require_device=False)
-            if (ret_code != 0 or not user) and attempt < max_attempts:
+            if ret_code != 0 or not user:
+                self.connected = False
+                if attempt == max_attempts:
+                    raise ADBSessionError("Device in a bad state, try disconnect & reboot")
                 time.sleep(0.25)
                 continue
 
-            if ret_code != 0 or not user:
-                raise ADBSessionError("Device in a bad state, try disconnect & reboot")
             user = user.splitlines()[-1]
             if user == "root":
                 self._root = True
-
             if not as_root or self._root:
                 break  # connected
-
             # enable root
             assert as_root, "Should not be here if root is not requested"
             if self.call(["root"])[0] == 0:
