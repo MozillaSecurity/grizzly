@@ -56,7 +56,7 @@ def main(argv=None):  # pylint: disable=missing-docstring
         if args.prep is not None:
             log.info("Preparing device...")
             session.set_enforce(0)
-            args.airplane_mode = True
+            args.airplane_mode = 1
             args.install = args.prep
         if args.airplane_mode is not None:
             if args.airplane_mode > 0:
@@ -66,6 +66,8 @@ def main(argv=None):  # pylint: disable=missing-docstring
             session.set_airplane_mode(mode=args.airplane_mode > 0)
             log.info("Done.")
         if args.install is not None:
+            if session.uninstall(ADBSession.get_package_name(args.install)):
+                log.info("Uninstalled existing version")
             log.info("Installing %r ...", args.install)
             package = session.install(args.install)
             if not package:
