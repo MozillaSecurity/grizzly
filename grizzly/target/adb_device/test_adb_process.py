@@ -183,7 +183,7 @@ def test_adb_process_09(mocker):
     finally:
         proc.cleanup()
 
-def test_adb_process_10(mocker, tmp_path):
+def test_adb_process_10(tmp_path):
     """test ADBProcess._split_logcat()"""
     log_path = tmp_path / "logs"
     log_path.mkdir()
@@ -216,13 +216,10 @@ def test_adb_process_10(mocker, tmp_path):
     ADBProcess._split_logcat(str(log_path))
     log_files = os.listdir(str(log_path))
     assert log_files
-    assert "log_stderr.txt" in log_files
     with logstdout.open("rb") as log_fp:
-        assert log_fp.read() == b"test, line1\n"
-    assert "log_stdout.txt" in log_files
+        assert log_fp.read().rstrip() == b"test, line1"
     with logstderr.open("rb") as log_fp:
         stderr_lines = log_fp.read().splitlines()
-        print(stderr_lines)
-    assert len(stderr_lines) == 6
     assert b"test, line2" in stderr_lines
     assert b"test, line1" not in stderr_lines
+    assert len(stderr_lines) == 6
