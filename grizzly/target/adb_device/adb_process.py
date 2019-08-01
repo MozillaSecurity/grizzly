@@ -144,15 +144,10 @@ class ADBProcess(object):
                     "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'"}
                 append_prefs(local_profile, prefs)
                 self.profile = "/".join([self._working_path, os.path.basename(local_profile)])
-                if os.listdir(local_profile):
-                    if not self._session.push(local_profile, self.profile):
-                        raise ADBLaunchError("Could not upload %r" % local_profile)
-                else:
-                    log.debug("creating empty profile on device: %s", self.profile)
-                    self._session.call(["shell", "mkdir", "-p", self.profile])
+                if not self._session.push(local_profile, self.profile):
+                    raise ADBLaunchError("Could not upload profile %r" % local_profile)
             finally:
-                if os.path.exists(local_profile):
-                    shutil.rmtree(local_profile) # TODO: temporary
+                shutil.rmtree(local_profile, True)
             if not self._session.reverse(bootstrapper.port, bootstrapper.port):
                 raise ADBLaunchError("Could not reverse port: %d" % bootstrapper.port)
             cmd = [
