@@ -5,7 +5,7 @@ import zipfile
 
 import pytest
 
-from .adb_session import ADBCommandError, ADBNoDevice, ADBSession, ADBSessionError, DeviceProcess
+from .adb_session import ADBCommandError, ADBNoDevice, ADBSession, ADBSessionError, DeviceProcessInfo
 
 def test_adb_session_01(mocker):
     """test ADBSession._call_adb()"""
@@ -350,7 +350,7 @@ def test_adb_session_14(tmp_path, mocker):
             assert cmd[2] == "-r"
             if "test.apk" in cmd[3]:
                 return 0, "Success"
-            return 1, "Success"
+            return 1, ""
         if cmd[1] == "shell":
             assert cmd[2] == "pm"
             assert cmd[3] == "grant"
@@ -888,17 +888,17 @@ def test_adb_session_35(mocker):
     session.set_airplane_mode(mode=False)
 
 def test_device_process_01():
-    """test DeviceProcess"""
+    """test DeviceProcessInfo"""
     # nothing to parse
-    assert DeviceProcess.from_ps_line("") is None
+    assert DeviceProcessInfo.from_ps_line("") is None
     # invalid number of entries
-    assert DeviceProcess.from_ps_line(" ".join("a" * 20)) is None
+    assert DeviceProcessInfo.from_ps_line(" ".join("a" * 20)) is None
     # invalid data (valid number of entries)
-    assert DeviceProcess.from_ps_line(" ".join("a" * 9)) is None
+    assert DeviceProcessInfo.from_ps_line(" ".join("a" * 9)) is None
     # valid info
-    proc = DeviceProcess.from_ps_line("a 1 2 a 3 a a a name")
-    assert proc is not None
-    assert proc.memory == 3
-    assert proc.name == "name"
-    assert proc.pid == 1
-    assert proc.ppid == 2
+    pinfo = DeviceProcessInfo.from_ps_line("a 1 2 a 3 a a a name")
+    assert pinfo is not None
+    assert pinfo.memory == 3
+    assert pinfo.name == "name"
+    assert pinfo.pid == 1
+    assert pinfo.ppid == 2
