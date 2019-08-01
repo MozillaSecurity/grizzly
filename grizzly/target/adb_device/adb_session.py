@@ -12,7 +12,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
-class DeviceProcess(object):
+class DeviceProcessInfo(object):
     def __init__(self, memory, name, pid, ppid):
         self.memory = memory
         self.name = name
@@ -381,9 +381,9 @@ class ADBSession(object):
             cmd += ["--ppid", str(pid_children)]
         procs = list()
         for line in self.call(cmd)[1].splitlines()[1:]:
-            proc = DeviceProcess.from_ps_line(line)
-            if proc is not None:
-                procs.append(proc)
+            pinfo = DeviceProcessInfo.from_ps_line(line)
+            if pinfo is not None:
+                procs.append(pinfo)
         return procs
 
     def is_installed(self, package_name):
