@@ -240,7 +240,7 @@ class ADBProcess(object):
                 if b"Gecko" not in line and b"MOZ_" not in line:
                     continue
                 # strip logger info ... "07-27 12:10:15.442  9990  4234 E "
-                line = re.sub(r".+?\s[ADEIWV]\s+", "", line.decode("ascii", "ignore"))
+                line = re.sub(r".+?\s[A-Z]\s+", "", line.decode("ascii", "ignore"))
                 if line.startswith("GeckoDump"):
                     o_fp.write(line.split(": ", 1)[-1])
                 elif line.startswith("Gecko") or line.startswith("MOZ_"):
