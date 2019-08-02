@@ -55,7 +55,6 @@ def main(argv=None):  # pylint: disable=missing-docstring
     try:
         if args.prep is not None:
             log.info("Preparing device...")
-            session.set_enforce(0)
             args.airplane_mode = 1
             args.install = args.prep
         if args.airplane_mode is not None:

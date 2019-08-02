@@ -48,7 +48,9 @@ class ADBSession(object):
         self.connected = False
         self.symbols = dict()
         self._adb_bin = self._adb_check()
+        self._cpu_arch = None  # Android CPU architecture string
         self._ip_addr = None  # target device IP address
+        self._os_version = None  # Android version string
         self._port = None  # ADB listening port
         self._root = False
 
@@ -71,9 +73,10 @@ class ADBSession(object):
             log.debug("using recommended aapt from %r", aapt_bin)
             return aapt_bin
         try:
-            aapt_bin = subprocess.check_output(["which", "aapt"]).strip().decode("utf-8", errors="ignore")
+            aapt_bin = subprocess.check_output(["which", "aapt"])
         except subprocess.CalledProcessError:
             raise EnvironmentError("Please install AAPT")
+        aapt_bin = aapt_bin.strip().decode("utf-8", errors="ignore")
         # TODO: update this to check aapt version
         log.warning("Using aapt_bin from %r", aapt_bin)
         return aapt_bin
@@ -85,9 +88,10 @@ class ADBSession(object):
             log.debug("using recommended adb from %r", adb_bin)
             return adb_bin
         try:
-            adb_bin = subprocess.check_output(["which", "adb"]).strip().decode("utf-8", errors="ignore")
+            adb_bin = subprocess.check_output(["which", "adb"])
         except subprocess.CalledProcessError:
             raise EnvironmentError("Please install ADB")
+        adb_bin = adb_bin.strip().decode("utf-8", errors="ignore")
         # TODO: update this to check adb version
         log.warning("Using adb from %r", adb_bin)
         log.warning("You are not using the recommended ADB install!")
@@ -145,10 +149,15 @@ class ADBSession(object):
         log.debug("clear_logs()")
         return self.call(["logcat", "--clear"], timeout=10)[0] == 0
 
-    def connect(self, as_root=True, max_attempts=10):
-        max_attempts = max(1, max_attempts)
+    def connect(self, as_root=True, boot_timeout=300, max_attempts=10, retry_delay=1):
+        assert isinstance(boot_timeout, int) and boot_timeout > 0
+        assert isinstance(max_attempts, int) and max_attempts > 0
+        assert isinstance(retry_delay, (int, float)) and retry_delay > 0
+        self._cpu_arch = None
+        self._os_version = None
         attempt = 0
         root_called = False
+        set_enforce_called = False
         while attempt < max_attempts:
             attempt += 1
             if not self.connected:
@@ -157,46 +166,64 @@ class ADBSession(object):
                     log.debug("connecting to %s", addr)
                     if self.call(["connect", addr])[0] != 0:
                         log.warning("connection attempt #%d failed", attempt)
-                        time.sleep(0.25)
+                        time.sleep(retry_delay)
                         continue
                 elif not self._devices_available(self.call(["devices"])[1]):
                     log.warning("No device detected (attempt %d/%d)", attempt, max_attempts)
-                    time.sleep(1)
+                    time.sleep(retry_delay)
                     continue
                 self.connected = True
 
             # verify we are connected
+            if not self.wait_for_boot(timeout=boot_timeout):
+                raise ADBSessionError("Timeout (%ds) waiting for device boot to complete" % boot_timeout)
             ret_code, user = self.call(["shell", "whoami"], require_device=False)
             if ret_code != 0 or not user:
                 self.connected = False
                 if attempt == max_attempts:
                     raise ADBSessionError("Device in a bad state, try disconnect & reboot")
-                time.sleep(0.25)
                 continue
+            self._root = user.splitlines()[-1] == "root"
 
-            user = user.splitlines()[-1]
-            if user == "root":
-                self._root = True
+            # collect CPU and OS info
+            if self._os_version is None:
+                self._os_version = self.call(["shell", "getprop", "ro.build.version.release"])[1]
+            if self._cpu_arch is None:
+                self._cpu_arch = self.call(["shell", "getprop", "ro.product.cpu.abi"])[1]
+
+            # check SELinux mode
+            if self._root:
+                if self.get_enforce():
+                    if set_enforce_called:
+                        raise ADBSessionError("set_enforce(0) failed!")
+                    # set SELinux to run in permissive mode
+                    self.set_enforce(0)
+                    self.call(["shell", "stop"])
+                    self.call(["shell", "start"])
+                    # put the device in a known state
+                    self.call(["reconnect"])
+                    set_enforce_called = True
+                    self.connected = False
+                    continue
+
             if not as_root or self._root:
-                break  # connected
+                log.debug("connected device running Android %s (%s)", self._os_version, self._cpu_arch)
+                break
+
             # enable root
             assert as_root, "Should not be here if root is not requested"
             if self.call(["root"])[0] == 0:
                 self.connected = False
+                # only skip attempt to call root once
                 if not root_called:
                     root_called = True
-                    attempt -= 1  # remove attempt used to call root
+                    attempt -= 1
                     continue
-
-            time.sleep(0.25)  # wait for adbd to restart on device
+            else:
+                log.warning("Failed root login attempt")
 
         if self.connected and as_root and not self._root:
             raise ADBSessionError("Could not enable root")
-
-        if self.connected and self._root:
-            self.set_enforce(0)
-            if self.get_enforce():
-                raise ADBSessionError("set_enforce(0) failed!")
 
         return self.connected
 
@@ -408,10 +435,35 @@ class ADBSession(object):
 
     def set_enforce(self, value):
         assert value in (0, 1)
-        is_set = self.get_enforce()
-        if (is_set and value == 0) or (not is_set and value == 1):
-            if not self._root:
-                log.warning("set_enforce requires root")
-            self.call(["shell", "setenforce", str(value)])
+        if not self._root:
+            log.warning("set_enforce requires root")
+        self.call(["shell", "setenforce", str(value)])
+
+    def wait_for_boot(self, timeout=None):
+        if timeout is not None:
+            assert isinstance(timeout, (int, float)) and timeout > 0
+            deadline = time.time() + timeout
         else:
-            log.debug("set_enforce(%d) no action required", value)
+            deadline = None
+        attempts = 0
+        booted = False
+        # first wait for the boot to complete then wait for the boot animation to complete
+        # this will help ensure the device is in a ready state
+        while True:
+            if not booted:
+                booted = self.call(["shell", "getprop", "sys.boot_completed"], require_device=False)[1] == "1"
+                attempts += 1
+            # we need to verify that boot is complete before checking the animation is stopped because
+            # the animation can be in the stopped state early in the boot process
+            if booted and self.call(["shell", "getprop", "init.svc.bootanim"])[1] == "stopped":
+                if attempts > 1:
+                    # the device was booting so give it additional time
+                    log.debug("device was boot was detected")
+                    time.sleep(5)
+                return True
+            if deadline and time.time() >= deadline:
+                log.debug("wait_for_boot() timeout %r exceeded", timeout)
+                break
+            log.debug("waiting for device to boot")
+            time.sleep(0.5)
+        return False
