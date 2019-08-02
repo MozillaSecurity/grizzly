@@ -88,8 +88,10 @@ def test_adb_session_04(mocker):
     session = ADBSession(test_ip, test_port)
     assert not session.connected
     assert not session._root
+    assert session._cpu_arch is None
     assert session._ip_addr == test_ip
     assert session._port == test_port
+    assert session._os_version is None
 
 def test_adb_session_05():
     """test ADBSession._devices_available()"""
@@ -105,8 +107,10 @@ def test_adb_session_05():
 def test_adb_session_06(mocker):
     """test simple ADBSession.create()"""
     mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
+    test_arch = "x86_64"
     test_ip = "localhost"
     test_port = 5555
+    test_version = "9"
     def fake_adb_call(obj, cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
         if cmd[1] == "connect":
@@ -115,6 +119,15 @@ def test_adb_session_06(mocker):
         # already Permissive
         if cmd[1] == "shell" and cmd[2] == "getenforce":
             return 0, "Permissive"
+        if cmd[1] == "shell" and cmd[2] == "getprop":
+            if cmd[3] == "init.svc.bootanim":
+                return 0, "stopped"
+            if cmd[3] == "ro.build.version.release":
+                return 0, test_version
+            if cmd[3] == "ro.product.cpu.abi":
+                return 0, test_arch
+            if cmd[3] == "sys.boot_completed":
+                return 0, "1"
         # already root
         if cmd[1] == "shell" and cmd[2] == "whoami":
             return 0, "root"
@@ -125,14 +138,18 @@ def test_adb_session_06(mocker):
     assert session is not None
     assert session.connected
     assert session._root
+    assert session._cpu_arch == test_arch
     assert session._ip_addr == test_ip
+    assert session._os_version == test_version
     assert session._port == test_port
 
 def test_adb_session_07(mocker):
     """test full ADBSession.create()"""
     mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
+    test_arch = "x86_64"
     test_ip = "localhost"
     test_port = 5555
+    test_version = "9"
     def fake_adb_call(obj, cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
         if cmd[1] == "connect":
@@ -147,12 +164,30 @@ def test_adb_session_07(mocker):
             assert cmd[2] == ":".join([test_ip, str(test_port)])
             obj.connected = False
             return 0, ""
+        if cmd[1] == "reconnect":
+            return 0, ""
         if cmd[1] == "root":
             obj._root = True
             obj.connected = False
             return 0, "restarting adbd as root"
         if cmd[1] == "shell" and cmd[2] == "getenforce":
+            if getattr(obj, "enforcing", True):
+                return 0, "Enforcing"
             return 0, "Permissive"
+        if cmd[1] == "shell" and cmd[2] == "getprop":
+            if cmd[3] == "init.svc.bootanim":
+                return 0, "stopped"
+            if cmd[3] == "ro.build.version.release":
+                return 0, test_version
+            if cmd[3] == "ro.product.cpu.abi":
+                return 0, test_arch
+            if cmd[3] == "sys.boot_completed":
+                return 0, "1"
+        if cmd[1] == "shell" and cmd[2] == "setenforce":
+            setattr(obj, "enforcing", False)
+            return 0, ""
+        if cmd[1] == "shell" and cmd[2] in ("start", "stop"):
+            return 0, ""
         if cmd[1] == "shell" and cmd[2] == "whoami":
             if obj._root:
                 return 0, "root"
@@ -168,7 +203,9 @@ def test_adb_session_07(mocker):
     assert session is not None
     assert session.connected
     assert session._root
+    assert session._cpu_arch == test_arch
     assert session._ip_addr == test_ip
+    assert session._os_version == test_version
     assert session._port == test_port
     session.disconnect()
     assert not session.connected
@@ -177,6 +214,8 @@ def test_adb_session_07(mocker):
 def test_adb_session_08(mocker):
     """test ADBSession.create() without IP"""
     mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
+    test_arch = "x86"
+    test_version = "7.1.2"
     def fake_adb_call(obj, cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
         if cmd[1] == "connect":
@@ -192,6 +231,15 @@ def test_adb_session_08(mocker):
                                  "emulator-5554   device"))
         if cmd[1] == "shell" and cmd[2] == "getenforce":
             return 0, "Permissive"
+        if cmd[1] == "shell" and cmd[2] == "getprop":
+            if cmd[3] == "init.svc.bootanim":
+                return 0, "stopped"
+            if cmd[3] == "ro.build.version.release":
+                return 0, test_version
+            if cmd[3] == "ro.product.cpu.abi":
+                return 0, test_arch
+            if cmd[3] == "sys.boot_completed":
+                return 0, "1"
         if cmd[1] == "shell" and cmd[2] == "whoami":
             return 0, "shell"
         raise RuntimeError("unexpected command %r" % (cmd,))
@@ -203,6 +251,8 @@ def test_adb_session_08(mocker):
     assert session._port is None
     assert session.connected
     assert not session._root
+    assert session._cpu_arch == test_arch
+    assert session._os_version == test_version
     session.disconnect()
     assert not session.connected
 
@@ -233,6 +283,11 @@ def test_adb_session_10(mocker):
             return 0, ""
         if cmd[1] == "devices":
             return 0, "\n"
+        if cmd[1] == "shell" and cmd[2] == "getprop":
+            if cmd[3] == "init.svc.bootanim":
+                return 0, "stopped"
+            if cmd[3] == "sys.boot_completed":
+                return 0, "1"
         if cmd[1] == "shell" and cmd[2] == "whoami":
             return 1, ""
         raise RuntimeError("unexpected command %r" % (cmd,))
@@ -266,6 +321,15 @@ def test_adb_session_11(mocker):
             return 0, "restarting adbd as root"
         if cmd[1] == "shell" and cmd[2] == "getenforce":
             return 0, "Permissive"
+        if cmd[1] == "shell" and cmd[2] == "getprop":
+            if cmd[3] == "init.svc.bootanim":
+                return 0, "stopped"
+            if cmd[3] == "ro.build.version.release":
+                return 0, "9"
+            if cmd[3] == "ro.product.cpu.abi":
+                return 0, "x86_64"
+            if cmd[3] == "sys.boot_completed":
+                return 0, "1"
         if cmd[1] == "shell" and cmd[2] == "whoami":
             if obj._root:
                 return 0, "root"
@@ -321,7 +385,7 @@ def test_adb_session_12(mocker):
     assert not session._root
     session.disconnect()
     # connect and enable root
-    assert not session.connect(max_attempts=1)
+    assert not session.connect(max_attempts=1, retry_delay=0.01)
     assert not session.connected
     assert not session._root
 
@@ -782,23 +846,11 @@ def test_adb_session_31(mocker):
     session.set_enforce(0)
     assert fake_call.call_count == 1
     fake_call.reset_mock()
-    # disable when disabled
-    mocker.patch("grizzly.target.adb_device.ADBSession.get_enforce", return_value=False)
-    session = ADBSession("127.0.0.1")
-    session.set_enforce(0)
-    assert fake_call.call_count == 0
-    fake_call.reset_mock()
     # enable when disabled
     mocker.patch("grizzly.target.adb_device.ADBSession.get_enforce", return_value=False)
     session = ADBSession("127.0.0.1")
     session.set_enforce(1)
     assert fake_call.call_count == 1
-    fake_call.reset_mock()
-    # enable when enabled
-    mocker.patch("grizzly.target.adb_device.ADBSession.get_enforce", return_value=True)
-    session = ADBSession("127.0.0.1")
-    session.set_enforce(1)
-    assert fake_call.call_count == 0
 
 def test_adb_session_32(mocker):
     """test ADBSession.realpath()"""
@@ -886,6 +938,58 @@ def test_adb_session_35(mocker):
     session.connected = True
     session.set_airplane_mode()
     session.set_airplane_mode(mode=False)
+
+def test_adb_session_36(mocker):
+    """test ADBSession.wait_for_boot()"""
+    mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
+    mocker.patch("grizzly.target.adb_device.ADBSession._call_adb")
+    fake_sleep = mocker.patch("time.sleep")
+    # test timeout
+    def fake_adb_01(_, cmd, timeout=None):
+        if cmd[1] == "shell" and cmd[2] == "getprop":
+            if cmd[3] == "init.svc.bootanim":
+                return 0, ""
+            if cmd[3] == "sys.boot_completed":
+                return 0, "0"
+        raise RuntimeError("unexpected command %r" % (cmd,))
+    ADBSession._call_adb = fake_adb_01
+    session = ADBSession("127.0.0.1")
+    session.connected = True
+    assert not session.wait_for_boot(timeout=0.01)
+    fake_sleep.reset_mock()
+    # test already booted
+    def fake_adb_02(_, cmd, timeout=None):
+        if cmd[1] == "shell" and cmd[2] == "getprop":
+            if cmd[3] == "init.svc.bootanim":
+                return 0, "stopped"
+            if cmd[3] == "sys.boot_completed":
+                return 0, "1"
+        raise RuntimeError("unexpected command %r" % (cmd,))
+    ADBSession._call_adb = fake_adb_02
+    session = ADBSession("127.0.0.1")
+    session.connected = True
+    assert session.wait_for_boot()
+    assert fake_sleep.call_count == 0
+    fake_sleep.reset_mock()
+    # test boot in progress
+    def fake_adb_03(obj, cmd, timeout=None):
+        if cmd[1] == "shell" and cmd[2] == "getprop":
+            if cmd[3] == "init.svc.bootanim":
+                if not getattr(obj, "anim_done", False):
+                    setattr(obj, "anim_done", True)
+                    return 0, ""
+                return 0, "stopped"
+            if cmd[3] == "sys.boot_completed":
+                if not getattr(obj, "boot_done", False):
+                    setattr(obj, "boot_done", True)
+                    return 0, "0"
+                return 0, "1"
+        raise RuntimeError("unexpected command %r" % (cmd,))
+    ADBSession._call_adb = fake_adb_03
+    session = ADBSession("127.0.0.1")
+    session.connected = True
+    assert session.wait_for_boot()
+    assert fake_sleep.call_count == 3
 
 def test_device_process_01():
     """test DeviceProcessInfo"""
