@@ -213,6 +213,7 @@ def test_adb_process_10(tmp_path):
         log_fp.write(b"07-27 12:39:27.239  17  14 I InputReader: Reconfiguring input devices.  changes=0x00000010\n")
         log_fp.write(b"07-27 12:39:27.440  78  78 E android.os.Debug: failed to load memtrack module: -2\n")
         log_fp.write(b"07-27 12:39:27.441  78  78 I Radio-JNI: register_android_hardware_Radio DONE\n")
+        log_fp.write(b"07-27 12:39:27.442 18461 18481 F MOZ_CRASH: Hit MOZ_CRASH(test) at gpp.rs:17\n")
     ADBProcess._split_logcat(str(log_path))
     log_files = os.listdir(str(log_path))
     assert log_files
@@ -222,4 +223,4 @@ def test_adb_process_10(tmp_path):
         stderr_lines = log_fp.read().splitlines()
     assert b"test, line2" in stderr_lines
     assert b"test, line1" not in stderr_lines
-    assert len(stderr_lines) == 6
+    assert len(stderr_lines) == 7
