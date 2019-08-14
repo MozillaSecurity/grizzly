@@ -149,7 +149,7 @@ class ADBSession(object):
         log.debug("clear_logs()")
         return self.call(["logcat", "--clear"], timeout=10)[0] == 0
 
-    def connect(self, as_root=True, boot_timeout=300, max_attempts=10, retry_delay=1):
+    def connect(self, as_root=True, boot_timeout=300, max_attempts=60, retry_delay=1):
         assert isinstance(boot_timeout, int) and boot_timeout > 0
         assert isinstance(max_attempts, int) and max_attempts > 0
         assert isinstance(retry_delay, (int, float)) and retry_delay > 0
@@ -168,7 +168,7 @@ class ADBSession(object):
                         log.warning("connection attempt #%d failed", attempt)
                         time.sleep(retry_delay)
                         continue
-                elif not self._devices_available(self.call(["devices"])[1]):
+                elif not self.devices():
                     log.warning("No device detected (attempt %d/%d)", attempt, max_attempts)
                     time.sleep(retry_delay)
                     continue
@@ -237,12 +237,25 @@ class ADBSession(object):
             cmd += ["--pid=%d" % pid]
         return self.call(cmd, timeout=10)[1].encode("utf-8", "ignore")
 
-    @staticmethod
-    def _devices_available(adb_output):
-        entries = adb_output.strip().splitlines()
-        if len(entries) < 2:
-            return False
-        return entries[-1].endswith("device")
+    def devices(self, all_devices=False, any_state=True):
+        ret_code, entries = self.call(["devices"])
+        devices = {}
+        if ret_code != 0:
+            return devices
+        target_device = os.getenv("ANDROID_SERIAL", None) if not all_devices else None
+        for entry in entries.strip().splitlines()[1:]:
+            try:
+                name, state = entry.split()
+            except ValueError:
+                continue
+            if target_device is not None and name != target_device:
+                continue
+            if not any_state and state != "device":
+                continue
+            devices[name] = state
+        if target_device is None and not all_devices and len(devices) > 1:
+            raise ADBSessionError("Multiple devices available and ANDROID_SERIAL not set")
+        return devices
 
     def disconnect(self, unroot=True):
         if not self.connected:
