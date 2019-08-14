@@ -93,16 +93,48 @@ def test_adb_session_04(mocker):
     assert session._port == test_port
     assert session._os_version is None
 
-def test_adb_session_05():
-    """test ADBSession._devices_available()"""
-    adb_output = (
-        "List of devices attached",
-        "* daemon not running; starting now at tcp:5037",
-        "* daemon started successfully",
-        "emulator-5554   device")
-    assert not ADBSession._devices_available("\n".join(adb_output[:-1]))
-    assert not ADBSession._devices_available("")
-    assert ADBSession._devices_available("\n".join(adb_output))
+def test_adb_session_05(mocker):
+    """test ADBSession.devices()"""
+    mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
+    def fake_adb_01(cmd, timeout=None):
+        assert cmd and cmd[0].endswith("adb")
+        if cmd[1] == "devices":
+            return 1, ""
+        raise RuntimeError("unexpected command %r" % (cmd,))
+    mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_01)
+    assert not ADBSession().devices()
+    def fake_adb_02(cmd, timeout=None):
+        assert cmd and cmd[0].endswith("adb")
+        if cmd[1] == "devices":
+            return 0, "List of devices attached\n" \
+                      "emulator-5554   device\n" \
+                      "emulator-5556   offline"
+        raise RuntimeError("unexpected command %r" % (cmd,))
+    mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_02)
+    devices = ADBSession().devices(all_devices=True, any_state=False)
+    assert len(devices) == 1
+    assert "emulator-5554" in devices
+    def fake_adb_03(cmd, timeout=None):
+        assert cmd and cmd[0].endswith("adb")
+        if cmd[1] == "devices":
+            return 0, "List of devices attached\n" \
+                      "* daemon not running; starting now at tcp:5037\n" \
+                      "* daemon started successfully\n" \
+                      "emulator-5554   device\n" \
+                      "emulator-5556   offline\n" \
+                      "emulator-5558   device\n"
+        raise RuntimeError("unexpected command %r" % (cmd,))
+    mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_03)
+    session = ADBSession()
+    os.environ["ANDROID_SERIAL"] = "emulator-5558"
+    try:
+        devices = session.devices(all_devices=False, any_state=False)
+    finally:
+        os.environ.pop("ANDROID_SERIAL")
+    assert len(devices) == 1
+    assert "emulator-5558" in devices
+    with pytest.raises(ADBSessionError):
+        session.devices(all_devices=False, any_state=False)
 
 def test_adb_session_06(mocker):
     """test simple ADBSession.create()"""
