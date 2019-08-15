@@ -44,7 +44,7 @@ class ADBProcess(object):
         self._session = session  # ADB session with device
         self._working_path = "/sdcard/ADBProc_%08X" % random.getrandbits(32)
         self.logs = None
-        self.profile = None
+        self.profile = None  # profile path on device
         self.reason = self.RC_CLOSED
 
     def cleanup(self):
@@ -130,32 +130,38 @@ class ADBProcess(object):
         self._session.clear_logs()
         self._remove_logs()
         self.reason = None
-        local_profile = create_profile(
-            extension=extension,
-            prefs_js=prefs_js,
-            template=self._profile_template)
-
-        bootstrapper = Bootstrapper(poll_wait=0.5)
+        # setup bootstrapper and reverse port
+        # reverse does fail occasionally so use a retry loop
+        for _ in range(10):
+            bootstrapper = Bootstrapper(poll_wait=0.5)
+            if not self._session.reverse(bootstrapper.port, bootstrapper.port):
+                bootstrapper.close()
+                log.debug("failed to reverse port, retrying...")
+                time.sleep(0.25)
+                continue
+            break
+        else:
+            bootstrapper.close()
+            raise ADBLaunchError("Could not reverse port")
         try:
+            profile = create_profile(extension=extension, prefs_js=prefs_js, template=self._profile_template)
             try:
                 prefs = {
                     "capability.policy.policynames": "'localfilelinks'",
                     "capability.policy.localfilelinks.sites": "'%s'" % bootstrapper.location,
                     "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'"}
-                append_prefs(local_profile, prefs)
-                self.profile = "/".join([self._working_path, os.path.basename(local_profile)])
-                if not self._session.push(local_profile, self.profile):
-                    raise ADBLaunchError("Could not upload profile %r" % local_profile)
+                append_prefs(profile, prefs)
+                self.profile = "/".join([self._working_path, os.path.basename(profile)])
+                if not self._session.push(profile, self.profile):
+                    raise ADBLaunchError("Could not upload profile %r" % profile)
             finally:
-                shutil.rmtree(local_profile, True)
-            if not self._session.reverse(bootstrapper.port, bootstrapper.port):
-                raise ADBLaunchError("Could not reverse port: %d" % bootstrapper.port)
+                shutil.rmtree(profile, True)
             cmd = [
                 "shell", "am", "start", "-W", "-n",
                 "/".join([self._package, "org.mozilla.gecko.BrowserApp"]),
                 "-a", "android.intent.action.VIEW", "-d", bootstrapper.location,
                 "--es", "args", "-profile\\ %s" % self.profile]
-
+            # add environment variables to launch command
             env_mod = dict(env_mod or {})
             env_mod.setdefault("MOZ_SKIA_DISABLE_ASSERTS", "1")
             for var_num, (var_name, var_val) in enumerate(env_mod.items()):
