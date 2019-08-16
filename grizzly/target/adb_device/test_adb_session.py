@@ -1031,6 +1031,50 @@ def test_adb_session_36(mocker):
     assert session.wait_for_boot()
     assert fake_sleep.call_count == 3
 
+def test_adb_session_37(mocker):
+    """test ADBSession.reboot_device()"""
+    mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
+    def fake_adb_call(cmd, timeout=None):
+        assert cmd and cmd[0].endswith("adb")
+        if cmd[1] == "reboot":
+            return 0, ""
+        raise RuntimeError("unexpected command %r" % (cmd,))
+    mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_call)
+    mocker.patch("grizzly.target.adb_device.ADBSession.connect", spec=True)
+    session = ADBSession()
+    session.connected = True
+    with pytest.raises(AssertionError):
+        session.reboot_device()
+
+def test_adb_session_38(mocker):
+    """test ADBSession.remount()"""
+    mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
+    def fake_adb_01(cmd, timeout=None):
+        assert cmd and cmd[0].endswith("adb")
+        if cmd[1] == "remount":
+            return 0, "Permission denied"
+        raise RuntimeError("unexpected command %r" % (cmd,))
+    mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_01)
+    session = ADBSession()
+    session.connected = True
+    session._root = True
+    with pytest.raises(ADBSessionError):
+        session.remount()
+    def fake_adb_02(cmd, timeout=None):
+        assert cmd and cmd[0].endswith("adb")
+        if cmd[1] == "remount":
+            return 0, ""
+        raise RuntimeError("unexpected command %r" % (cmd,))
+    mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_02)
+    session = ADBSession()
+    session.connected = True
+    # test as non-root
+    with pytest.raises(AssertionError):
+        session.remount()
+    session._root = True
+    # test as root
+    session.remount()
+
 def test_device_process_01():
     """test DeviceProcessInfo"""
     # nothing to parse
