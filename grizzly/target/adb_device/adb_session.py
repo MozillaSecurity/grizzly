@@ -300,6 +300,24 @@ class ADBSession(object):
             raise IOError("%r does not exist" % path)
         return output.strip()
 
+    def reboot_device(self, boot_timeout=300, max_attempts=60, retry_delay=1):
+        was_root = self._root
+        log.debug("calling reboot...")
+        self.call(["reboot"])
+        self.connected = False
+        self.connect(
+            as_root=was_root,
+            boot_timeout=boot_timeout,
+            max_attempts=max_attempts,
+            retry_delay=retry_delay)
+        assert self.connected, "Device did not connect after reboot"
+
+    def remount(self):
+        assert self._root
+        code, result = self.call(["remount"])
+        if code != 0 or "Permission denied" in result:
+            raise ADBSessionError("Remount failed, is '-writable-system' set?")
+
     def reverse(self, remote, local):
         # remote->device, local->desktop
         assert isinstance(local, int) and 1024 < local < 0x10000
