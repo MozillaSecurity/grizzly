@@ -47,6 +47,12 @@ def main(argv=None):  # pylint: disable=missing-docstring
         parser.error("No options selected")
         return 1
 
+    # sanity check the APK
+    for apk in (args.install, args.launch, args.prep):
+        if apk is not None and not os.path.isfile(apk):
+            log.error("Invalid APK %r", apk)
+            return 1
+
     log.debug("opening a session")
     session = ADBSession.create(args.ip, args.port, as_root=not args.non_root)
     if session is None:
@@ -62,28 +68,34 @@ def main(argv=None):  # pylint: disable=missing-docstring
                 log.info("Enabling airplane mode...")
             else:
                 log.info("Disabling airplane mode...")
-            session.set_airplane_mode(mode=args.airplane_mode > 0)
+            session.airplane_mode = bool(args.airplane_mode)
             log.info("Done.")
         if args.install is not None:
-            if session.uninstall(ADBSession.get_package_name(args.install)):
+            pkg_name = ADBSession.get_package_name(args.install)
+            if pkg_name is None:
+                log.error("Failed to lookup package name in %r", args.install)
+                return 1
+            if session.uninstall(pkg_name):
                 log.info("Uninstalled existing version")
-            log.info("Installing %r ...", args.install)
+            log.info("Installing %s (%r)...", pkg_name, args.install)
             package = session.install(args.install)
             if not package:
-                log.error("Could not install %r", args.install)
+                log.error("Could not install %s", args.install)
                 return 1
-            log.info("Installed %r.", package)
+            log.info("Installed %s.", package)
         if args.launch:
-            package = ADBSession.get_package_name(args.launch)
-            if not package:
-                log.error("APK not installed")
+            pkg_name = ADBSession.get_package_name(args.launch)
+            if pkg_name is None:
+                log.error("Failed to lookup package name in %r", args.install)
                 return 1
-            proc = ADBProcess(package, session)
+            proc = ADBProcess(pkg_name, session)
             try:
                 proc.launch("about:blank", launch_timeout=60)
                 assert proc.is_running(), "browser not running?!"
                 log.info("Launched.")
                 proc.wait()
+            except KeyboardInterrupt:
+                pass
             finally:
                 proc.close()
                 if args.logs:
