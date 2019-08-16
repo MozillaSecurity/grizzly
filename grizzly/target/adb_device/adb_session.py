@@ -440,7 +440,7 @@ class ADBSession(object):
         return pids[0]
 
     def process_exists(self, pid):
-        return bool(self._get_procs(pid=pid))
+        return any(self._get_procs(pid=pid))
 
     def _get_procs(self, pid=None, pid_children=None):
         # default list all procs
