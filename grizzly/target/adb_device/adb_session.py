@@ -99,6 +99,16 @@ class ADBSession(object):
         time.sleep(5)
         return adb_bin
 
+    @property
+    def airplane_mode(self):
+        return self.call(["shell", "settings", "get", "global", "airplane_mode_on"])[1].startswith("1")
+
+    @airplane_mode.setter
+    def airplane_mode(self, mode):
+        assert isinstance(mode, bool), "mode must be a bool"
+        self.call(["shell", "settings", "put", "global", "airplane_mode_on", "1" if mode else "0"])
+        self.call(["shell", "su", "root", "am", "broadcast", "-a", "android.intent.action.AIRPLANE_MODE"])
+
     @classmethod
     def create(cls, ip_addr=None, port=5555, as_root=True, max_attempts=10):
         session = cls(ip_addr, port)
@@ -202,8 +212,9 @@ class ADBSession(object):
                     self.call(["shell", "start"])
                     # put the device in a known state
                     self.call(["reconnect"])
-                    set_enforce_called = True
                     self.connected = False
+                    set_enforce_called = True
+                    attempt -= 1
                     continue
 
             if not as_root or self._root:
@@ -320,12 +331,14 @@ class ADBSession(object):
         if self.call(["install", "-r", apk_path], timeout=120)[0] != 0:
             raise ADBSessionError("Failed to install %r" % apk_path)
         # unpack and lookup package name
-        package_name = self.get_package_name(apk_path)
+        pkg_name = self.get_package_name(apk_path)
+        if pkg_name is None:
+            raise ADBSessionError("Could not find APK package name")
         # set permissions
-        self.call(["shell", "pm", "grant", package_name, "android.permission.READ_EXTERNAL_STORAGE"])
-        self.call(["shell", "pm", "grant", package_name, "android.permission.WRITE_EXTERNAL_STORAGE"])
-        log.debug("installed package %r (%r)", package_name, apk_path)
-        return package_name
+        self.call(["shell", "pm", "grant", pkg_name, "android.permission.READ_EXTERNAL_STORAGE"])
+        self.call(["shell", "pm", "grant", pkg_name, "android.permission.WRITE_EXTERNAL_STORAGE"])
+        log.debug("installed package %r (%r)", pkg_name, apk_path)
+        return pkg_name
 
     # This is no longer required and I *think* it can be removed
     #def install_file(self, src, dst, mode=None, context=None):
@@ -348,23 +361,26 @@ class ADBSession(object):
 
     @classmethod
     def get_package_name(cls, apk_path):
+        if not os.path.isfile(apk_path):
+            raise IOError("APK path must point to a file")
         aapt = cls._aapt_check()
         apk_info = subprocess.check_output([aapt, "dump", "badging", apk_path])
         for line in apk_info.splitlines():
             if line.startswith(b"package: name="):
-                package_name = line.split()[1][5:].strip(b"'").decode("utf-8", errors="ignore")
-                break
-        else:
-            raise RuntimeError("Could not find APK package name")
-        return package_name
+                return line.split()[1][5:].strip(b"'").decode("utf-8", errors="ignore")
+        return None
 
-    def get_packages(self):
+    @property
+    def packages(self):
         # TODO: should this be by pid or package?
-        cmd = ["shell", "pm", "list", "packages"]
-        return [line[8:] for line in self.call(cmd)[1].splitlines() if line.startswith("package:")]
+        ret_code, output = self.call(["shell", "pm", "list", "packages"])
+        if ret_code == 0:
+            for line in output.splitlines():
+                if line.startswith("package:"):
+                    yield line[8:]
 
-    def get_open_files(self, pid=None, children=False, files=None):
-        log.debug("get_open_files(pid=%r, children=%r, files=%r", pid, children, files)
+    def open_files(self, pid=None, children=False, files=None):
+        log.debug("open_files(pid=%r, children=%r, files=%r", pid, children, files)
         pids = list()
         if pid is not None:
             pids.append(str(pid))
@@ -377,7 +393,6 @@ class ADBSession(object):
             cmd += ["-p", ",".join(pids)]
         if files:
             cmd.extend(list(files))
-        open_files = list()
         for line in self.call(cmd)[1].splitlines():
             if line.endswith("Permission denied)"):
                 continue
@@ -389,17 +404,14 @@ class ADBSession(object):
                 file_name = file_info[-1]
                 if pid is not None and file_info[1] not in pids:
                     continue
-                # add tuple containing pid and filename
-                open_files.append((int(file_info[1]), file_name))
+                # yield tuple containing pid and filename
+                yield (int(file_info[1]), file_name)
             except ValueError:
                 pass
 
-        return open_files
-
     def get_pid(self, package_name):
         # NOTE: pidof is not supported pre-Android 6
-        procs = self._get_procs()
-        pids = [proc.pid for proc in procs if proc.name == package_name]
+        pids = [proc.pid for proc in self._get_procs() if proc.name == package_name]
         if not pids:
             return None
         count = len(pids)
@@ -407,7 +419,7 @@ class ADBSession(object):
             log.debug("get_pid() %d proc(s) found", count)
             # TODO: use procs and use the ppid of the procs the determine the parent
             pids.sort()
-        return int(pids[0])
+        return pids[0]
 
     def process_exists(self, pid):
         return bool(self._get_procs(pid=pid))
@@ -419,15 +431,13 @@ class ADBSession(object):
             cmd.append(str(pid))
         if pid_children is not None:
             cmd += ["--ppid", str(pid_children)]
-        procs = list()
         for line in self.call(cmd)[1].splitlines()[1:]:
             pinfo = DeviceProcessInfo.from_ps_line(line)
             if pinfo is not None:
-                procs.append(pinfo)
-        return procs
+                yield pinfo
 
     def is_installed(self, package_name):
-        return package_name in self.get_packages()
+        return package_name in self.packages
 
     def pull(self, src, dst):
         log.debug("pull(%r, %r)", src, dst)
@@ -441,10 +451,6 @@ class ADBSession(object):
 
     def symbols_path(self, package_name):
         return self.symbols.get(package_name, "")
-
-    def set_airplane_mode(self, mode=True):
-        self.call(["shell", "settings", "put", "global", "airplane_mode_on", "1" if mode else "0"])
-        self.call(["shell", "su", "root", "am", "broadcast", "-a", "android.intent.action.AIRPLANE_MODE"])
 
     def set_enforce(self, value):
         assert value in (0, 1)

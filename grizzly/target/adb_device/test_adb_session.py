@@ -538,7 +538,7 @@ def test_adb_session_17(mocker):
     assert session.is_installed("org.test.preinstalled")
 
 def test_adb_session_18(mocker):
-    """test ADBSession.get_packages()"""
+    """test ADBSession.packages()"""
     mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
@@ -555,7 +555,7 @@ def test_adb_session_18(mocker):
     mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_call)
     session = ADBSession("127.0.0.1")
     session.connected = True
-    pkgs = session.get_packages()
+    pkgs = tuple(session.packages)
     assert len(pkgs) == 4
     assert "com.android.phone" in pkgs
     assert "com.android.shell" in pkgs
@@ -601,7 +601,7 @@ def test_adb_session_19(mocker):
     assert not session.collect_logs(1111).splitlines()
 
 def test_adb_session_20(mocker):
-    """test ADBSession.get_open_files()"""
+    """test ADBSession.open_files()"""
     mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
@@ -648,13 +648,13 @@ def test_adb_session_20(mocker):
     session = ADBSession("127.0.0.1")
     session.connected = True
     # list all open files
-    assert len(session.get_open_files()) == 7
+    assert len(tuple(session.open_files())) == 7
     # list process specific open files
-    assert len(session.get_open_files(pid=9990)) == 5
+    assert len(tuple(session.open_files(pid=9990))) == 5
     # list process and children specific open files
-    assert len(session.get_open_files(pid=9990, children=True)) == 6
+    assert len(tuple(session.open_files(pid=9990, children=True))) == 6
     with pytest.raises(AssertionError):
-        session.get_open_files(pid=None, children=True)
+        tuple(session.open_files(pid=None, children=True))
 
 def test_adb_session_21(mocker):
     """test ADBSession._get_procs()"""
@@ -690,8 +690,8 @@ def test_adb_session_21(mocker):
     mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_call)
     session = ADBSession("127.0.0.1")
     session.connected = True
-    assert len(session._get_procs()) == 10
-    dev_procs = session._get_procs(pid_children=9990)
+    assert len(tuple(session._get_procs())) == 10
+    dev_procs = tuple(session._get_procs(pid_children=9990))
     assert len(dev_procs) == 1
     assert dev_procs[0].pid == 9991
 
@@ -818,12 +818,15 @@ def test_adb_session_28(mocker, tmp_path):
     with pytest.raises(EnvironmentError, match=r"Please install ADB"):
         assert ADBSession._adb_check()
 
-def test_adb_session_29(mocker):
+def test_adb_session_29(mocker, tmp_path):
     """test ADBSession.get_package_name()"""
     mocker.patch("grizzly.target.adb_device.ADBSession._aapt_check", return_value="/fake/aapt")
     mocker.patch("subprocess.check_output", return_value=b"")
-    with pytest.raises(RuntimeError, match=r"Could not find APK package name"):
+    with pytest.raises(IOError):
         ADBSession.get_package_name("/fake/path")
+    fake_apk = tmp_path / "fake.apk"
+    fake_apk.touch()
+    assert ADBSession.get_package_name(str(fake_apk)) is None
     output = (
         b"package: name='org.mozilla.fennec_aurora' versionCode='2015624653' versionName='68.0a1' platformBuildVersionName=''",
         b"install-location:'internalOnly'",
@@ -856,7 +859,7 @@ def test_adb_session_29(mocker):
         b"densities: '120' '160' '240' '320' '480' '640' '65534' '65535'",
         b"native-code: 'x86'")
     mocker.patch("subprocess.check_output", return_value=b"\n".join(output))
-    assert ADBSession.get_package_name("/fake/path") == "org.mozilla.fennec_aurora"
+    assert ADBSession.get_package_name(str(fake_apk)) == "org.mozilla.fennec_aurora"
 
 def test_adb_session_30(mocker):
     """test ADBSession.get_enforce()"""
@@ -947,16 +950,20 @@ def test_adb_session_34(mocker):
         session.reverse_remove(remote=1023)
 
 def test_adb_session_35(mocker):
-    """test ADBSession.set_airplane_mode()"""
+    """test ADBSession.airplane_mode()"""
     mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
         if cmd[1] == "shell" and cmd[2] == "settings":
-            assert cmd[3] == "put"
-            assert cmd[4] == "global"
-            assert cmd[5] == "airplane_mode_on"
-            assert cmd[6] in "01"
-            return 0, ""
+            if cmd[3] == "get":
+                assert cmd[4] == "global"
+                assert cmd[5] == "airplane_mode_on"
+                return 0, "1"
+            if cmd[3] == "put":
+                assert cmd[4] == "global"
+                assert cmd[5] == "airplane_mode_on"
+                assert cmd[6] in "01"
+                return 0, ""
         if cmd[1] == "shell" and cmd[2] == "su":
             assert cmd[3] == "root"
             assert cmd[4] == "am"
@@ -968,8 +975,9 @@ def test_adb_session_35(mocker):
     mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_call)
     session = ADBSession("127.0.0.1")
     session.connected = True
-    session.set_airplane_mode()
-    session.set_airplane_mode(mode=False)
+    session.airplane_mode = False
+    session.airplane_mode = True
+    assert session.airplane_mode
 
 def test_adb_session_36(mocker):
     """test ADBSession.wait_for_boot()"""

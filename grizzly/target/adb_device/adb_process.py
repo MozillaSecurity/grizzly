@@ -141,7 +141,6 @@ class ADBProcess(object):
                 continue
             break
         else:
-            bootstrapper.close()
             raise ADBLaunchError("Could not reverse port")
         try:
             profile = create_profile(extension=extension, prefs_js=prefs_js, template=self._profile_template)
@@ -277,7 +276,7 @@ class ADBProcess(object):
         wait_files = set(self._session.realpath(x) for x in wait_files)
 
         while wait_files:
-            open_files = set(x for _, x in self._session.get_open_files())
+            open_files = set(x for _, x in self._session.open_files())
             # check if any open files are in the wait file list
             if not wait_files.intersection(open_files):
                 break

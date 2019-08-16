@@ -101,7 +101,7 @@ def test_adb_process_06(mocker):
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.call.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = ""
-    fake_session.get_open_files.return_value = ((1, "some_file"),)
+    fake_session.open_files.return_value = ((1, "some_file"),)
     fake_session.listdir.return_value = ()
     fake_session.realpath.side_effect = str.strip
     proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
@@ -109,7 +109,7 @@ def test_adb_process_06(mocker):
         proc.wait_on_files(["not_running"])
         assert proc.launch("fake.url")
         assert proc.wait_on_files([])
-        fake_session.get_open_files.return_value = ((1, "some_file"), (1, "/existing/file.txt"))
+        fake_session.open_files.return_value = ((1, "some_file"), (1, "/existing/file.txt"))
         assert not proc.wait_on_files(["/existing/file.txt"], poll_rate=0.1, timeout=0.3)
         proc.close()
     finally:
