@@ -252,29 +252,32 @@ class ADBProcess(object):
         if not isinstance(package_name, bytes):
             package_name = package_name.encode("utf-8")
         # create set of filter pids
+        # this will include any line that mentions "Gecko", "MOZ_" or the package name
+        asan_tid = None
         filter_pids = set()
-        re_pid = re.compile(br"^\d+-\d+\s+(\d+[:.]){3}\d+\s+(?P<pid>\d+)")
+        re_id = re.compile(br"^\d+-\d+\s+(\d+[:.]){3}\d+\s+(?P<pid>\d+)\s+(?P<tid>\d+)")
         with open(logcat, "rb") as lc_fp:
             for line in lc_fp:
                 if b"Gecko" not in line and b"MOZ_" not in line and package_name not in line:
                     continue
-                m_pid = re_pid.match(line)
-                if m_pid is None:
+                m_id = re_id.match(line)
+                if m_id is None:
                     continue
-                filter_pids.add(m_pid.group("pid"))
+                filter_pids.add(m_id.group("pid"))
+                if asan_tid is None and b": AddressSanitizer:" in line:
+                    asan_tid = m_id.group("tid")
         log.debug("%d interesting pid(s) found in logcat output", len(filter_pids))
         # filter logs
-        asan_found = False
         with open(logcat, "rb") as lc_fp, open(err_log, "wb") as e_fp, open(out_log, "wb") as o_fp:
             for line in lc_fp:
                 # quick check if pid is in the line
                 if not any(pid in line for pid in filter_pids):
                     continue
                 # verify the line pid is in set of filter pids
-                m_pid = re_pid.match(line)
-                if m_pid is None:
+                m_id = re_id.match(line)
+                if m_id is None:
                     continue
-                line_pid = m_pid.group("pid")
+                line_pid = m_id.group("pid")
                 if not any(pid == line_pid for pid in filter_pids):
                     continue
                 # strip logger info ... "07-27 12:10:15.442  9990  4234 E "
@@ -283,24 +286,32 @@ class ADBProcess(object):
                     o_fp.write(line.split(b": ", 1)[-1])
                 else:
                     e_fp.write(line.split(b": ", 1)[-1])
-                if not asan_found:
-                    asan_found = b"AddressSanitizer" in line
         # Break out ASan logs (to be removed when ASAN_OPTIONS=log_path works)
         # This could be merged into the above block but it is kept separate
         # so it can be removed easily in the future.
-        if asan_found:
+        if asan_tid is not None:
             asan_log = os.path.join(log_path, "log_asan.txt")
             if os.path.isfile(asan_log):
                 log.warning("log_asan.txt already exist! Overwriting...")
             found_log = False
-            with open(err_log, "rb") as e_fp, open(asan_log, "wb") as o_fp:
-                for line in e_fp:
+            with open(logcat, "rb") as lc_fp, open(asan_log, "wb") as o_fp:
+                for line in lc_fp:
+                    # quick check if thread id is in the line
+                    if not asan_tid in line:
+                        continue
+                    # verify the line tid matches ASan thread id
+                    m_id = re_id.match(line)
+                    if m_id is None or m_id.group("tid") != asan_tid:
+                        continue
+                    # filter noise before the crash
                     if not found_log:
-                        found_log = b"AddressSanitizer" in line
-                    if found_log:
-                        o_fp.write(line)
-                        if b"==ABORTING" in line:
-                            break
+                        if b": AddressSanitizer:" in line:
+                            found_log = True
+                        else:
+                            continue
+                    # strip logger info ... "07-27 12:10:15.442  9990  4234 E "
+                    line = re.sub(br".+?\s[ADEIVW]\s+", b"", line)
+                    o_fp.write(line.split(b": ", 1)[-1])
 
     def save_logs(self, log_path, meta=False):
         assert self.logs is not None
