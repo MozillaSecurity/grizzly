@@ -1,5 +1,7 @@
+import glob
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -44,11 +46,14 @@ class ADBNoDevice(ADBSessionError):
 
 
 class ADBSession(object):
+    SANITIZER_LOG_PREFIX = "/sdcard/sanitizer_logs/report.log"
+
     def __init__(self, ip_addr=None, port=5555):
         self.connected = False
         self.symbols = dict()
         self._adb_bin = self._adb_check()
         self._cpu_arch = None  # Android CPU architecture string
+        self._debug_adb = int(os.getenv("SHOW_ADB_DEBUG", "0")) != 0  # include adb output in debug logs
         self._ip_addr = None  # target device IP address
         self._os_version = None  # Android version string
         self._port = None  # ADB listening port
@@ -142,7 +147,8 @@ class ADBSession(object):
         if not self.connected and cmd[1] not in ("connect", "devices", "disconnect"):
             raise ADBSessionError("ADB session is not connected!")
         ret_code, output = self._call_adb(cmd, timeout=timeout)
-        log.debug("=== adb start ===\n%s\n=== adb end, returned %d ===", output, ret_code)
+        if self._debug_adb:
+            log.debug("=== adb start ===\n%s\n=== adb end, returned %d ===", output, ret_code)
         if ret_code != 0:
             if output.startswith("Android Debug Bridge version"):
                 raise ADBCommandError("Invalid ADB command '%s'" % " ".join(cmd[1:]))
@@ -315,7 +321,7 @@ class ADBSession(object):
     def remount(self):
         assert self._root
         code, result = self.call(["remount"])
-        if code != 0 or "Permission denied" in result:
+        if code != 0 or "Permission denied" in result or "remount failed" in result:
             raise ADBSessionError("Remount failed, is '-writable-system' set?")
 
     def reverse(self, remote, local):
@@ -345,8 +351,7 @@ class ADBSession(object):
         log.debug("installing %r", apk_path)
         if not os.path.isfile(apk_path):
             raise IOError("APK does not exist %r" % apk_path)
-        # check if package is installed
-        if self.call(["install", "-r", apk_path], timeout=120)[0] != 0:
+        if self.call(["install", "-g", "-r", apk_path], timeout=120)[0] != 0:
             raise ADBSessionError("Failed to install %r" % apk_path)
         # unpack and lookup package name
         pkg_name = self.get_package_name(apk_path)
@@ -358,16 +363,105 @@ class ADBSession(object):
         log.debug("installed package %r (%r)", pkg_name, apk_path)
         return pkg_name
 
-    # This is no longer required and I *think* it can be removed
-    #def install_file(self, src, dst, mode=None, context=None):
-    #    basename = os.path.basename(src)
-    #    full_dst = os.path.join(dst, basename)
-    #    self.push(src, full_dst)
-    #    self.call(["shell", "chown", "root.shell", full_dst])
-    #    if mode is not None:
-    #        self.call(["shell", "chmod", mode, full_dst])
-    #    if context is not None:
-    #        self.call(["shell", "chcon", context, full_dst])
+    def install_asan(self, ndk_base, asan_options=None):
+        if not os.path.isdir(ndk_base):
+            raise IOError("NDK does not exist %r" % ndk_base)
+
+        clang_path = os.path.join(
+            ndk_base, "toolchains", "llvm", "prebuilt", "linux-x86_64", "lib64",
+            "clang", "*", "lib", "linux")
+        for cpath in glob.glob(clang_path):
+            asan_rt = os.path.join(cpath, "libclang_rt.asan-i686-android.so")
+            asan_rt64 = os.path.join(cpath, "libclang_rt.asan-x86_64-android.so")
+            if os.path.isfile(asan_rt) and os.path.isfile(asan_rt64):
+                break
+        else:
+            raise IOError("Cannot find libclang_rt.asan-*-android.so")
+
+        self.remount()
+        ctx = "u:object_r:zygote_exec:s0"
+        if self.call(["shell", "ls", "/system/bin/app_process32.real"]) != 0:
+            self.call(["shell", "mv", "/system/bin/app_process32", "/system/bin/app_process32.real"])
+            self.call(["shell", "chcon", ctx, "/system/bin/app_process32.real"])
+        if self.call(["shell", "ls", "/system/bin/app_process64.real"]) != 0:
+            self.call(["shell", "mv", "/system/bin/app_process64", "/system/bin/app_process64.real"])
+            self.call(["shell", "chcon", ctx, "/system/bin/app_process64.real"])
+
+        # TODO: should we force overwrite here?
+        self.install_file(asan_rt, "/system/lib", "644")
+        self.install_file(asan_rt64, "/system/lib64", "644")
+
+        sanitizer_logs = os.path.dirname(self.SANITIZER_LOG_PREFIX)
+        self.call(["shell", "mkdir", "-p", sanitizer_logs])
+        self.call(["shell", "chmod", "666", sanitizer_logs])
+        addition_options = [
+            "abort_on_error=0",
+            "allow_user_segv_handler=1",
+            "detect_leaks=0",
+            "fast_unwind_on_check=1",
+            "fast_unwind_on_fatal=1",
+            #"log_path='%s'" % (self.SANITIZER_LOG_PREFIX,),
+            "use_sigaltstack=1",
+            "symbolize=1",
+            "start_deactivated=1"]
+        if asan_options:
+            existing_opts = [opt for opt in asan_options.split(":") if opt]
+        else:
+            existing_opts = []
+        asan_options = ":".join(existing_opts + addition_options)
+
+        tmpd = tempfile.mkdtemp()
+        try:
+            fname = os.path.join(tmpd, "app_process32")
+            with open(fname, "w") as out_fp:
+                out_fp.write("#!/system/bin/sh\n")
+                out_fp.write("ASAN_OPTIONS=%s \\\n" % asan_options)
+                #out_fp.write("ASAN_ACTIVATION_OPTIONS=include_if_exists=/sdcard/asan.options \\\n")
+                out_fp.write("LD_PRELOAD=/system/lib/libclang_rt.asan-i686-android.so \\\n")
+                out_fp.write("exec /system/bin/app_process32.real \"$@\"\n")
+            self.install_file(fname, "/system/bin", "755", ctx)
+            fname = os.path.join(tmpd, "app_process64")
+            with open(fname, "w") as out_fp:
+                out_fp.write("#!/system/bin/sh\n")
+                out_fp.write("ASAN_OPTIONS=%s \\\n" % asan_options)
+                #out_fp.write("ASAN_ACTIVATION_OPTIONS=include_if_exists=/sdcard/asan.option \\\n")
+                out_fp.write("LD_PRELOAD=/system/lib64/libclang_rt.asan-x86_64-android.so \\\n")
+                out_fp.write("exec /system/bin/app_process64.real \"$@\"\n")
+            self.install_file(fname, "/system/bin", "755", ctx)
+            fname = os.path.join(tmpd, "asanwrapper32")
+            with open(fname, "w") as out_fp:
+                out_fp.write("#!/system/bin/sh\n")
+                out_fp.write("LD_PRELOAD=/system/lib/libclang_rt.asan-i686-android.so \\\n")
+                out_fp.write("exec \"$@\"\n")
+            self.install_file(fname, "/system/bin", "755")
+            fname = os.path.join(tmpd, "asanwrapper64")
+            with open(fname, "w") as out_fp:
+                out_fp.write("#!/system/bin/sh\n")
+                out_fp.write("LD_PRELOAD=/system/lib64/libclang_rt.asan-x86_64-android.so \\\n")
+                out_fp.write("exec \"$@\"\n")
+            self.install_file(fname, "/system/bin", "755")
+        finally:
+            shutil.rmtree(tmpd, ignore_errors=True)
+
+        llvm_symer = os.path.join(
+            ndk_base, "prebuilt", "android-x86_64", "llvm-symbolizer", "llvm-symbolizer")
+        self.install_file(llvm_symer, "/system/bin", "755", ctx)
+
+        self.call(["shell", "stop"])
+        self.call(["shell", "start"])
+        # put the device in a known state
+        self.call(["reconnect"])
+        self.wait_for_boot()
+
+    def install_file(self, src, dst, mode=None, context=None):
+        basename = os.path.basename(src)
+        full_dst = os.path.join(dst, basename)
+        self.push(src, full_dst)
+        self.call(["shell", "chown", "root.shell", full_dst])
+        if mode is not None:
+            self.call(["shell", "chmod", mode, full_dst])
+        if context is not None:
+            self.call(["shell", "chcon", context, full_dst])
 
     def get_enforce(self):
         status = self.call(["shell", "getenforce"])[1]

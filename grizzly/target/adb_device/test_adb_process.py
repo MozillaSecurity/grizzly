@@ -34,6 +34,7 @@ def test_adb_process_02(mocker):
 def test_adb_process_03(mocker):
     """test failed ADBProcess.launch() and ADBProcess.is_running()"""
     fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (1, "")
     fake_session.collect_logs.return_value = ""
     fake_session.listdir.return_value = ()
@@ -55,6 +56,7 @@ def test_adb_process_04(mocker):
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = ""
     fake_session.get_pid.return_value = 1337
@@ -82,6 +84,7 @@ def test_adb_process_05(mocker):
     fake_bs.return_value.location.return_value = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = ""
     fake_session.get_pid.return_value = 1337
@@ -99,6 +102,7 @@ def test_adb_process_06(mocker):
     """test ADBProcess.wait_on_files()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = ""
     fake_session.open_files.return_value = ((1, "some_file"),)
@@ -188,7 +192,7 @@ def test_adb_process_10(tmp_path):
     log_path = tmp_path / "logs"
     log_path.mkdir()
     # missing log_logcat.txt
-    ADBProcess._split_logcat(str(log_path))
+    ADBProcess._split_logcat(str(log_path), "fake.package")
     assert not os.listdir(str(log_path))
     # with log_logcat.txt
     logstderr = tmp_path / "logs" / "log_stderr.txt"
@@ -214,7 +218,7 @@ def test_adb_process_10(tmp_path):
         log_fp.write(b"07-27 12:39:27.440  78  78 E android.os.Debug: failed to load memtrack module: -2\n")
         log_fp.write(b"07-27 12:39:27.441  78  78 I Radio-JNI: register_android_hardware_Radio DONE\n")
         log_fp.write(b"07-27 12:39:27.442 18461 18481 F MOZ_CRASH: Hit MOZ_CRASH(test) at gpp.rs:17\n")
-    ADBProcess._split_logcat(str(log_path))
+    ADBProcess._split_logcat(str(log_path), "fake.package")
     log_files = os.listdir(str(log_path))
     assert log_files
     with logstdout.open("rb") as log_fp:

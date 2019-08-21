@@ -84,6 +84,10 @@ class ADBProcess(object):
                 self.wait()
                 self._process_logs(crash_reports)
                 self._session.call(["shell", "rm", "-rf", self._working_path])
+                # TODO: this should be temporary until ASAN_OPTIONS=log_file is working
+                if "log_asan.txt" in os.listdir(self.logs):
+                    self.reason = self.RC_ALERT
+
         except ADBSessionError:
             log.warning("No device detected while closing process")
         self._pid = None
@@ -93,7 +97,7 @@ class ADBProcess(object):
 
     def find_crashreports(self):
         reports = list()
-        # TODO: Add ASan support
+        # TODO: scan for ASan logs once ASAN_OPTIONS=log_path is working
         if self.profile:
             # check for minidumps
             md_path = os.path.join(self.profile, "minidumps")
@@ -129,6 +133,10 @@ class ADBProcess(object):
 
         self._session.clear_logs()
         self._remove_logs()
+        sanitizer_logs = os.path.dirname(self._session.SANITIZER_LOG_PREFIX)
+        self._session.call(["shell", "rm", "-r", sanitizer_logs])
+        self._session.call(["shell", "mkdir", "-p", sanitizer_logs])
+        self._session.call(["shell", "chmod", "666", sanitizer_logs])
         self.reason = None
         # setup bootstrapper and reverse port
         # reverse does fail occasionally so use a retry loop
@@ -203,7 +211,7 @@ class ADBProcess(object):
             # TODO: should this filter by pid or not?
             log_fp.write(self._session.collect_logs())
             #log_fp.write(self._session.collect_logs(pid=self._pid))
-
+        self._split_logcat(self.logs, self._package)
         if not crash_reports:
             return
 
@@ -226,7 +234,7 @@ class ADBProcess(object):
             self.logs = None
 
     @staticmethod
-    def _split_logcat(log_path):
+    def _split_logcat(log_path, package_name):
         # Roughly split out stderr and stdout from logcat
         # This is to support FuzzManager. The original logcat output is also
         # included in the report so nothing is lost.
@@ -240,16 +248,39 @@ class ADBProcess(object):
         out_log = os.path.join(log_path, "log_stdout.txt")
         if os.path.isfile(out_log):
             log.warning("log_stdout.txt already exist! Overwriting...")
+        assert package_name
+        if not isinstance(package_name, bytes):
+            package_name = package_name.encode("utf-8")
+        asan_found = False
         with open(logcat, "rb") as lc_fp, open(err_log, "w") as e_fp, open(out_log, "w") as o_fp:
             for line in lc_fp:
-                if b"Gecko" not in line and b"MOZ_" not in line:
+                if b"Gecko" not in line and b"MOZ_" not in line and package_name not in line:
                     continue
                 # strip logger info ... "07-27 12:10:15.442  9990  4234 E "
                 line = re.sub(r".+?\s[A-Z]\s+", "", line.decode("ascii", "ignore"))
                 if line.startswith("GeckoDump"):
                     o_fp.write(line.split(": ", 1)[-1])
-                elif line.startswith("Gecko") or line.startswith("MOZ_"):
+                elif line.startswith("Gecko") or line.startswith("MOZ_") or line.startswith(package_name):
                     e_fp.write(line.split(": ", 1)[-1])
+                if not asan_found:
+                    asan_found = "AddressSanitizer" in line
+        # Break out ASan logs (to be removed when ASAN_OPTIONS=log_path works)
+        # This could be merged into the above block but it is kept septate
+        # so it can be remove easily in the future.
+        if asan_found:
+            asan_log = os.path.join(log_path, "log_asan.txt")
+            if os.path.isfile(asan_log):
+                log.warning("log_asan.txt already exist! Overwriting...")
+            found_log = False
+            with open(err_log, "rb") as e_fp, open(asan_log, "wb") as o_fp:
+                for line in e_fp:
+                    if not found_log:
+                        found_log = b"AddressSanitizer" in line
+                    if found_log:
+                        o_fp.write(line)
+                        if b"==ABORTING" in line:
+                            break
+
 
     def save_logs(self, log_path, meta=False):
         assert self.logs is not None
@@ -266,7 +297,6 @@ class ADBProcess(object):
             if not os.path.isfile(full_name):
                 continue
             shutil.copy(full_name, log_path)
-        self._split_logcat(log_path)
 
     def wait_on_files(self, wait_files, poll_rate=0.5, timeout=60):
         assert poll_rate >= 0, "Invalid poll_rate %d, must be greater than or equal to 0" % poll_rate
