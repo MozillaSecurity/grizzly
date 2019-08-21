@@ -201,23 +201,24 @@ def test_adb_process_10(tmp_path):
     logstdout.touch()
     logcat = tmp_path / "logs" / "log_logcat.txt"
     with logcat.open("wb") as log_fp:
-        log_fp.write(b"07-27 12:10:15.414  90  90 W art     : Unexpected CPU variant for X86 using defaults: x86\n")
+        log_fp.write(b"07-27 12:10:15.414  80  80 W art     : Unexpected CPU variant for X86 using defaults: x86\n")
         log_fp.write(b"07-27 12:10:15.430  90  90 I GeckoApplication: zerdatime 3349725 - application start\n")
         log_fp.write(b"07-27 12:10:15.442  90  44 I GeckoThread: preparing to run Gecko\n")
         log_fp.write(b"07-27 12:10:15.442  90  44 E GeckoLibLoad: Load sqlite start\n")
-        log_fp.write(b"07-27 12:10:15.496  90  90 I GRALLOC-DRM: foo\n")
+        log_fp.write(b"07-27 12:10:15.496  81  81 I GRALLOC-DRM: foo\n")
         log_fp.write(b"07-27 12:10:15.505  90  43 I GeckoDump: test, line1\n")
         log_fp.write(b"07-27 12:10:15.505  90  43 E GeckoApp: test, line2\n")
-        log_fp.write(b"07-27 12:10:15.520  90  49 I EGL-DRI2: found extension DRI_Core version 1\n")
-        log_fp.write(b"07-27 12:10:15.521  90  49 I OpenGLRenderer: Initialized EGL, version 1.4\n")
+        log_fp.write(b"07-27 12:10:15.520  82  49 I EGL-DRI2: found extension DRI_Core version 1\n")
+        log_fp.write(b"07-27 12:10:15.521  82  49 I OpenGLRenderer: Initialized EGL, version 1.4\n")
         log_fp.write(b"07-27 12:10:15.528  90  44 E GeckoLibLoad: Load sqlite done\n")
-        log_fp.write(b"07-27 12:10:15.529  90  47 W art     : Suspending all threads took: 8.966ms\n")
+        log_fp.write(b"07-27 12:10:15.529  80  80 W art     : Suspending all threads took: 8.966ms\n")
         log_fp.write(b"07-27 12:10:15.533  90  44 E GeckoLibLoad: Load nss done\n")
         log_fp.write(b"07-27 12:39:27.188  39  39 W Fake  : asdf\n")
         log_fp.write(b"07-27 12:39:27.239  17  14 I InputReader: Reconfiguring input devices.  changes=0x00000010\n")
-        log_fp.write(b"07-27 12:39:27.440  78  78 E android.os.Debug: failed to load memtrack module: -2\n")
+        log_fp.write(b"07-27 12:39:27.440  78  78 E android.os.Debug: failed to load memtrack module: 90\n")
         log_fp.write(b"07-27 12:39:27.441  78  78 I Radio-JNI: register_android_hardware_Radio DONE\n")
         log_fp.write(b"07-27 12:39:27.442 18461 18481 F MOZ_CRASH: Hit MOZ_CRASH(test) at gpp.rs:17\n")
+        log_fp.write(b"07-27 12:39:27.443  90  90 I eckoThrea: potentially missed\n")
     ADBProcess._split_logcat(str(log_path), "fake.package")
     log_files = os.listdir(str(log_path))
     assert log_files
@@ -227,4 +228,4 @@ def test_adb_process_10(tmp_path):
         stderr_lines = log_fp.read().splitlines()
     assert b"test, line2" in stderr_lines
     assert b"test, line1" not in stderr_lines
-    assert len(stderr_lines) == 7
+    assert len(stderr_lines) == 8

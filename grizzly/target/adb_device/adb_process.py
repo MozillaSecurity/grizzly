@@ -251,22 +251,43 @@ class ADBProcess(object):
         assert package_name
         if not isinstance(package_name, bytes):
             package_name = package_name.encode("utf-8")
-        asan_found = False
-        with open(logcat, "rb") as lc_fp, open(err_log, "w") as e_fp, open(out_log, "w") as o_fp:
+        # create set of filter pids
+        filter_pids = set()
+        re_pid = re.compile(br"^\d+-\d+\s+(\d+[:.]){3}\d+\s+(?P<pid>\d+)")
+        with open(logcat, "rb") as lc_fp:
             for line in lc_fp:
                 if b"Gecko" not in line and b"MOZ_" not in line and package_name not in line:
                     continue
+                m_pid = re_pid.match(line)
+                if m_pid is None:
+                    continue
+                filter_pids.add(m_pid.group("pid"))
+        log.debug("%d interesting pid(s) found in logcat output", len(filter_pids))
+        # filter logs
+        asan_found = False
+        with open(logcat, "rb") as lc_fp, open(err_log, "wb") as e_fp, open(out_log, "wb") as o_fp:
+            for line in lc_fp:
+                # quick check if pid is in the line
+                if not any(pid in line for pid in filter_pids):
+                    continue
+                # verify the line pid is in set of filter pids
+                m_pid = re_pid.match(line)
+                if m_pid is None:
+                    continue
+                line_pid = m_pid.group("pid")
+                if not any(pid == line_pid for pid in filter_pids):
+                    continue
                 # strip logger info ... "07-27 12:10:15.442  9990  4234 E "
-                line = re.sub(r".+?\s[A-Z]\s+", "", line.decode("ascii", "ignore"))
-                if line.startswith("GeckoDump"):
-                    o_fp.write(line.split(": ", 1)[-1])
-                elif line.startswith("Gecko") or line.startswith("MOZ_") or line.startswith(package_name):
-                    e_fp.write(line.split(": ", 1)[-1])
+                line = re.sub(br".+?\s[ADEIVW]\s+", b"", line)
+                if line.startswith(b"GeckoDump"):
+                    o_fp.write(line.split(b": ", 1)[-1])
+                else:
+                    e_fp.write(line.split(b": ", 1)[-1])
                 if not asan_found:
-                    asan_found = "AddressSanitizer" in line
+                    asan_found = b"AddressSanitizer" in line
         # Break out ASan logs (to be removed when ASAN_OPTIONS=log_path works)
-        # This could be merged into the above block but it is kept septate
-        # so it can be remove easily in the future.
+        # This could be merged into the above block but it is kept separate
+        # so it can be removed easily in the future.
         if asan_found:
             asan_log = os.path.join(log_path, "log_asan.txt")
             if os.path.isfile(asan_log):
@@ -280,7 +301,6 @@ class ADBProcess(object):
                         o_fp.write(line)
                         if b"==ABORTING" in line:
                             break
-
 
     def save_logs(self, log_path, meta=False):
         assert self.logs is not None
