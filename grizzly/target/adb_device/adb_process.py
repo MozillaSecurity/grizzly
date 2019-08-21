@@ -297,7 +297,7 @@ class ADBProcess(object):
             with open(logcat, "rb") as lc_fp, open(asan_log, "wb") as o_fp:
                 for line in lc_fp:
                     # quick check if thread id is in the line
-                    if not asan_tid in line:
+                    if asan_tid not in line:
                         continue
                     # verify the line tid matches ASan thread id
                     m_id = re_id.match(line)
@@ -305,10 +305,9 @@ class ADBProcess(object):
                         continue
                     # filter noise before the crash
                     if not found_log:
-                        if b": AddressSanitizer:" in line:
-                            found_log = True
-                        else:
+                        if b": AddressSanitizer:" not in line:
                             continue
+                        found_log = True
                     # strip logger info ... "07-27 12:10:15.442  9990  4234 E "
                     line = re.sub(br".+?\s[ADEIVW]\s+", b"", line)
                     o_fp.write(line.split(b": ", 1)[-1])
