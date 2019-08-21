@@ -396,13 +396,15 @@ class ADBSession(object):
         self.call(["shell", "chmod", "666", sanitizer_logs])
         addition_options = [
             "abort_on_error=0",
-            "allow_user_segv_handler=1",
-            "detect_leaks=0",
+            "alloc_dealloc_mismatch=0",  # here until ASAN_OPTIONS set in mozglue are set properly
+            "allocator_may_return_null=1",  # here until ASAN_OPTIONS set in mozglue are set properly
+            "allow_user_segv_handler=1",  # here until ASAN_OPTIONS set in mozglue are set properly
+            "detect_leaks=0",  # here until ASAN_OPTIONS set in mozglue are set properly
             "fast_unwind_on_check=1",
             "fast_unwind_on_fatal=1",
+            "handle_sigill=1",  # here until ASAN_OPTIONS set in mozglue are set properly
             #"log_path='%s'" % (self.SANITIZER_LOG_PREFIX,),
             "use_sigaltstack=1",
-            "symbolize=1",
             "start_deactivated=1"]
         if asan_options:
             existing_opts = [opt for opt in asan_options.split(":") if opt]
