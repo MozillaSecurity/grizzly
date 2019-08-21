@@ -443,8 +443,9 @@ def test_adb_session_14(tmp_path, mocker):
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
         if cmd[1] == "install":
-            assert cmd[2] == "-r"
-            if "test.apk" in cmd[3]:
+            assert cmd[2] == "-g"
+            assert cmd[3] == "-r"
+            if "test.apk" in cmd[4]:
                 return 0, "Success"
             return 1, ""
         if cmd[1] == "shell":
