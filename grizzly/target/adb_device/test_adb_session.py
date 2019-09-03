@@ -6,7 +6,6 @@ import zipfile
 import pytest
 
 from .adb_session import ADBCommandError, ADBCommunicationError, ADBSession, ADBSessionError
-from .adb_session import DeviceProcessInfo
 
 def test_adb_session_01(mocker):
     """test ADBSession._call_adb()"""
@@ -1080,16 +1079,16 @@ def test_adb_session_38(mocker):
     # test as root
     session.remount()
 
-def test_device_process_01():
-    """test DeviceProcessInfo"""
+def test_adb_session_39():
+    """test ADBSession._line_to_info()"""
     # nothing to parse
-    assert DeviceProcessInfo.from_ps_line("") is None
+    assert ADBSession._line_to_info("") is None
     # invalid number of entries
-    assert DeviceProcessInfo.from_ps_line(" ".join("a" * 20)) is None
+    assert ADBSession._line_to_info(" ".join("a" * 20)) is None
     # invalid data (valid number of entries)
-    assert DeviceProcessInfo.from_ps_line(" ".join("a" * 9)) is None
+    assert ADBSession._line_to_info(" ".join("a" * 9)) is None
     # valid info
-    pinfo = DeviceProcessInfo.from_ps_line("a 1 2 a 3 a a a name")
+    pinfo = ADBSession._line_to_info("a 1 2 a 3 a a a name")
     assert pinfo is not None
     assert pinfo.memory == 3
     assert pinfo.name == "name"

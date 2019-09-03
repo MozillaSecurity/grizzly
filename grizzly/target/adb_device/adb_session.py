@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from collections import namedtuple
 import glob
 import logging
 import os
@@ -18,35 +19,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
-class DeviceProcessInfo(object):
-    __slots__ = ("memory", "name", "pid", "ppid")
-
-    def __init__(self, memory, name, pid, ppid):
-        self.memory = memory
-        self.name = name
-        self.pid = pid
-        self.ppid = ppid
-
-    @classmethod
-    def from_ps_line(cls, line):
-        """Create a DeviceProcessInfo from the string output of ps.
-
-        Args:
-            line (str): Line of output from ps.
-
-        Returns:
-            DeviceProcessInfo: new instance.
-        """
-        try:
-            _, pid, ppid, _, memory, _, _, _, name = line.split()
-        except ValueError:
-            log.debug("invalid ps line %r", line)
-            return None
-        try:
-            return cls(int(memory), name, int(pid), int(ppid))
-        except ValueError:
-            log.debug("invalid ps line values")
-        return None
+DeviceProcessInfo = namedtuple("DeviceProcessInfo", "memory name pid ppid")
 
 
 class ADBCommandError(Exception):
@@ -185,9 +158,26 @@ class ADBSession(object):
         if pid_children > -1:
             cmd += ["--ppid", str(pid_children)]
         for line in self.call(cmd)[1].splitlines()[1:]:
-            pinfo = DeviceProcessInfo.from_ps_line(line)
+            pinfo = self._line_to_info(line)
             if pinfo is not None:
                 yield pinfo
+
+    @staticmethod
+    def _line_to_info(ps_line):
+        """Create a DeviceProcessInfo from the string output of ps.
+
+        Args:
+            ps_line (str): Line of output from ps.
+
+        Returns:
+            DeviceProcessInfo: new instance.
+        """
+        try:
+            _, pid, ppid, _, memory, _, _, _, name = ps_line.split()
+            return DeviceProcessInfo(int(memory), name, int(pid), int(ppid))
+        except ValueError:
+            log.debug("invalid ps line %r", ps_line)
+        return None
 
     @property
     def airplane_mode(self):
