@@ -207,7 +207,7 @@ class ADBProcess(object):
         unprocessed = os.path.join(self.logs, "unprocessed")
         os.mkdir(unprocessed)
 
-        with open(os.path.join(self.logs, "log_logcat.txt"), "w") as log_fp:
+        with open(os.path.join(self.logs, "log_logcat.txt"), "wb") as log_fp:
             # TODO: should this filter by pid or not?
             log_fp.write(self._session.collect_logs())
             #log_fp.write(self._session.collect_logs(pid=self._pid))
