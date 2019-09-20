@@ -500,9 +500,6 @@ class ADBSession(object):
             raise ADBSessionError("Could not find APK package name")
         if self.call(["install", "-g", "-r", apk_path], timeout=120)[0] != 0:
             raise ADBSessionError("Failed to install %r" % (apk_path,))
-        # set permissions
-        self.call(["shell", "pm", "grant", pkg_name, "android.permission.READ_EXTERNAL_STORAGE"])
-        self.call(["shell", "pm", "grant", pkg_name, "android.permission.WRITE_EXTERNAL_STORAGE"])
         log.debug("installed package %r (%r)", pkg_name, apk_path)
         return pkg_name
 
