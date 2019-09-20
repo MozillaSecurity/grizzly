@@ -36,7 +36,7 @@ def test_adb_process_03(mocker):
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (1, "")
-    fake_session.collect_logs.return_value = ""
+    fake_session.collect_logs.return_value = b""
     fake_session.listdir.return_value = ()
     fake_session.process_exists.return_value = False
     proc = ADBProcess("org.test.unknown", fake_session)
@@ -58,7 +58,7 @@ def test_adb_process_04(mocker):
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
-    fake_session.collect_logs.return_value = ""
+    fake_session.collect_logs.return_value = b""
     fake_session.get_pid.return_value = 1337
     fake_session.listdir.return_value = ()
     #fake_session.process_exists.return_value = False
@@ -86,7 +86,7 @@ def test_adb_process_05(mocker):
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
-    fake_session.collect_logs.return_value = ""
+    fake_session.collect_logs.return_value = b""
     fake_session.get_pid.return_value = 1337
     fake_session.listdir.return_value = ()
     env = {"test1":"1", "test2": "2"}
@@ -104,7 +104,7 @@ def test_adb_process_06(mocker):
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
-    fake_session.collect_logs.return_value = ""
+    fake_session.collect_logs.return_value = b""
     fake_session.open_files.return_value = ((1, "some_file"),)
     fake_session.listdir.return_value = ()
     fake_session.realpath.side_effect = str.strip
@@ -162,7 +162,7 @@ def test_adb_process_09(mocker):
     mocker.patch("grizzly.target.adb_device.adb_process.PuppetLogger", autospec=True)
     fake_proc_md = mocker.patch("grizzly.target.adb_device.adb_process.process_minidumps", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
-    fake_session.collect_logs.return_value = "fake logcat data"
+    fake_session.collect_logs.return_value = b"fake logcat data"
     proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
     try:
         # no extra logs
