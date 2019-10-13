@@ -49,6 +49,7 @@ def test_sapphire_00(client, tmp_path):
     """test requesting a single test case file"""
     serv = Sapphire(timeout=10)
     try:
+        assert serv.timeout == 10
         test = _create_test("test_case.html", tmp_path)
         client.launch("127.0.0.1", serv.get_port(), [test])
         assert serv.serve_path(str(tmp_path))[0] == SERVED_ALL
@@ -177,8 +178,15 @@ def test_sapphire_05(client, tmp_path):
 
 def test_sapphire_06(tmp_path):
     """test timeout of the server"""
-    serv = Sapphire(timeout=1)  # minimum timeout is 1 second
+    serv = Sapphire(timeout=60)
     try:
+        assert serv.timeout == 60  # verify default
+        serv.timeout = None  # disable timeout
+        assert serv.timeout == 0
+        serv.timeout = 0  # disable timeout
+        assert serv.timeout == 0
+        serv.timeout = 0.1  # set minimum time
+        assert serv.timeout == 1
         _create_test("test_case.html", tmp_path)
         status, files_served = serv.serve_path(str(tmp_path))
     finally:
