@@ -216,8 +216,10 @@ class Sapphire(object):
         self._dr_map = dict()
         self._include_map = dict()
         self._redirect_map = dict()
-        self._server_timeout = max(timeout, 1) if timeout else None  # minimum 1 second
+        self._timeout = None
         self._socket = Sapphire._create_listening_socket(allow_remote, port)
+        self.timeout = timeout
+
 
     @staticmethod
     def _200_header(c_length, c_type):
@@ -493,11 +495,6 @@ class Sapphire(object):
         if not os.path.isdir(os.path.abspath(path)):
             raise IOError("%r does not exist" % path)
 
-        if self._server_timeout is not None:
-            exp_time = time.time() + self._server_timeout
-        else:
-            exp_time = None
-
         job = ServeJob(
             path,
             self._dr_map,
@@ -528,6 +525,11 @@ class Sapphire(object):
                 if tries < 1:
                     raise
                 time.sleep(0.1)  # wait for system resources to free up
+            if self._timeout:
+                exp_time = time.time() + self._timeout
+            else:
+                exp_time = None
+                LOG.warning("timeout is not set!")
             break
 
         status = None
@@ -587,6 +589,17 @@ class Sapphire(object):
             # remove test case working directory
             if os.path.isdir(wwwdir):
                 shutil.rmtree(wwwdir)
+
+    @property
+    def timeout(self):
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, value):
+        if not value:
+            self._timeout = 0
+        else:
+            self._timeout = max(value, 1)
 
     @staticmethod
     def _check_potential_url(url_path):
