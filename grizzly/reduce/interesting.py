@@ -299,14 +299,9 @@ class Interesting(object):
 
         # launch sapphire if needed
         if self.server is None:
-            if self.no_harness:
-                serve_timeout = self.iter_timeout
-            else:
-                # wait a few extra seconds to avoid races between the harness & sapphire timing out
-                serve_timeout = self.iter_timeout + 10
             # have client error pages (code 4XX) call window.close() after a few seconds
             sapphire.Sapphire.CLOSE_CLIENT_ERROR = 2
-            self.server = sapphire.Sapphire(timeout=serve_timeout)
+            self.server = sapphire.Sapphire()
 
             if not self.no_harness:
                 harness = os.path.join(os.path.dirname(__file__), '..', 'common', 'harness.html')
@@ -319,6 +314,12 @@ class Interesting(object):
                 self.server.add_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
                 self.server.add_dynamic_response("/harness", lambda: harness, mime_type="text/html")
                 self.server.set_redirect("/first_test", str(self.landing_page), required=True)
+
+        if self.no_harness:
+            self.server.timeout = self.iter_timeout
+        else:
+            # wait a few extra seconds to avoid races between the harness & sapphire timing out
+            self.server.timeout = self.iter_timeout + 10
 
         # (re)launch Target
         if self.target.closed:

@@ -37,6 +37,15 @@ class FakeServer(object):
     def serve_path(self, *args, **kwds):
         return sapphire.SERVED_ALL, []
 
+    @property
+    def timeout(self):
+        return FakeServer._last_timeout
+
+    @timeout.setter
+    def timeout(self, value):
+        assert value is None or value >= 0
+        FakeServer._last_timeout = value
+
 
 @pytest.fixture
 def fake_sapphire(monkeypatch):
