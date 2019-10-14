@@ -27,7 +27,7 @@ class FakeInteresting(interesting.Interesting):
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
         with open(self.reduce_file) as fp:
-            return "required" in fp.read()
+            return 0.1 if "required" in fp.read() else -1
 
     def cleanup(self, _):
         pass
@@ -48,8 +48,8 @@ class FakeInterestingAlt(FakeInteresting):
                 self.alt_crash_cb(testcase, temp_prefix)
         if self.__first_run:
             self.__first_run = False
-            return True
-        return False
+            return 0.1
+        return -1
 
 
 class FakeInterestingKeepHarness(FakeInteresting):
@@ -67,10 +67,10 @@ class FakeInterestingKeepHarness(FakeInteresting):
         self.target.save_logs(result_logs, meta=True)
         if self.__init_data is not None:
             with open(self.reduce_file) as fp:
-                return self.__init_data == fp.read()
+                return 1 if self.__init_data == fp.read() else -1
         else:
             with open(self.reduce_file) as fp:
-                return "required" in fp.read()
+                return 1 if "required" in fp.read() else -1
 
 
 class FakeInterestingSemiReliable(FakeInteresting):
@@ -87,9 +87,9 @@ class FakeInterestingSemiReliable(FakeInteresting):
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
         if self.require_no_harness and "harness" in self.location:
-            return False
+            return -1
         self.interesting_count += 1
-        return self.interesting_count <= self.interesting_times
+        return 1 if self.interesting_count <= self.interesting_times else -1
 
 
 class FakeInterestingSemiReliableWithCache(FakeInterestingSemiReliable):

@@ -70,7 +70,6 @@ def test_interesting(tmp_path):
     obj.init(None)
     (tmp_path / "lithium").mkdir()
     assert obj.interesting(None, str(tmp_path / "lithium"))
-    assert obj.server is None
     assert obj.target._calls["close"] == 1
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
@@ -160,7 +159,6 @@ def test_no_harness(tmp_path):
     obj.reduce_file = str(reduce_file)
     obj.init(None)
     assert obj.interesting(None, str(prefix))
-    assert obj.server is None
     assert obj.target._calls["close"] == 1
     obj.cleanup(None)
     assert obj.target._calls["cleanup"] == 0
@@ -181,7 +179,6 @@ def test_skip(tmp_path):
     assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 1
     assert obj.target._calls["close"] == 1
-    assert obj.server is None
     for _ in range(7):
         assert not obj.interesting(None, None)
     assert obj.target._calls["launch"] == 1
@@ -218,7 +215,6 @@ def test_any_crash_false(tmp_path):
     assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 1
     assert obj.target._calls["close"] == 1
-    assert obj.server is None
     prefix = tmp_path / "lithium1"
     prefix.mkdir()
     stderr = "Assertion failure: some other thing happened, at test.c:456"
@@ -253,7 +249,6 @@ def test_any_crash_true(tmp_path):
     assert obj.interesting(None, str(prefix))
     assert obj.target._calls["launch"] == 1
     assert obj.target._calls["close"] == 1
-    assert obj.server is None
     prefix = tmp_path / "lithium1"
     prefix.mkdir()
     stderr = "Assertion failure: some other thing happened, at test.c:456"
@@ -413,7 +408,6 @@ def test_timeout_update(monkeypatch, tmp_path):
     assert obj.interesting(None, tmp_path / "lithium1")
     assert obj.idle_timeout < 30
     idle_timeout = obj.idle_timeout
-    assert obj.server is None  # killed to update timeout
     assert FakeServer._last_timeout == last_timeout
     last_timeout = FakeServer._last_timeout
     (tmp_path / "lithium2").mkdir()

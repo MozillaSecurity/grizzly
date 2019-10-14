@@ -155,7 +155,7 @@ class Interesting(object):
 
     def update_timeout(self, run_time):
         # If run_time is less than poll-time, update it
-        LOG.debug('Run took %r', run_time)
+        LOG.debug('Run time %r', run_time)
         new_poll_timeout = max(10, min(run_time * 1.5, self.idle_timeout))
         if new_poll_timeout < self.idle_timeout:
             LOG.info("Updating poll timeout to: %r", new_poll_timeout)
@@ -167,10 +167,6 @@ class Interesting(object):
         if new_iter_timeout < self.iter_timeout:
             LOG.info("Updating max timeout to: %r", new_iter_timeout)
             self.iter_timeout = new_iter_timeout
-            if self.server is not None:
-                self.server.close()
-                self.server = None
-                # trigger relaunch with new timeout
 
     @property
     def location(self):
@@ -250,6 +246,7 @@ class Interesting(object):
             # this will keep sapphire serving until timeout or ffpuppet exits
             testcase.add_from_data("", ".lithium-garbage.bin", required=True)
 
+        max_duration = 0
         run_prefix = None
         for try_num in range(n_tries):
             if (n_tries - try_num) < (self.min_crashes - n_crashes):
@@ -257,7 +254,11 @@ class Interesting(object):
             self.status.report()
             self.status.iteration += 1
             run_prefix = "%s(%d)" % (temp_prefix, try_num)
-            if self._run(testcase, run_prefix):
+            duration = self._run(testcase, run_prefix)
+            if duration >= 0:
+                # track the maximum duration of the successful reduction attempts
+                if duration > max_duration:
+                    max_duration = duration
                 n_crashes += 1
                 if n_crashes >= self.min_crashes:
                     if self.interesting_cb is not None:
@@ -268,6 +269,10 @@ class Interesting(object):
                             'prefix': run_prefix
                         }
                     self.best_testcase = testcase
+                    # the amount of time it can take to replay a test case can vary
+                    # when under Valgrind so do not update the timeout in that case
+                    if not getattr(self.target, "use_valgrind", False):
+                        self.update_timeout(max_duration)
                     return True
         if self.use_result_cache:
             # No need to save the temp_prefix on uninteresting testcases
@@ -287,9 +292,9 @@ class Interesting(object):
             temp_prefix (str): A unique prefix for any files written during this iteration.
 
         Returns:
-            bool: True if reduced testcase is still interesting.
+            float: Duration of the iteration on success otherwise -1.
         """
-        result = False
+        duration = -1
 
         # if target is closed and server is alive, we should restart it or else the first request
         #   against /first_test will 404
@@ -382,15 +387,12 @@ class Interesting(object):
                     # XXX: need to change this to support reducing timeouts?
                     LOG.info("Uninteresting: no crash detected")
                 elif self.orig_sig is None or self.orig_sig.matches(crash):
-                    result = True
+                    duration = end_time - start_time
+                    assert duration >= 0
                     LOG.info("Interesting: %s", short_sig)
                     if self.orig_sig is None and not self.any_crash:
                         max_frames = FuzzManagerReporter.signature_max_frames(crash, 5)
                         self.orig_sig = crash.createCrashSignature(maxFrames=max_frames)
-                    # the amount of time it can take to replay a test case can vary
-                    # when under Valgrind so do not update the timeout in that case
-                    if not getattr(self.target, "use_valgrind", False):
-                        self.update_timeout(end_time - start_time)
                 else:
                     LOG.info("Uninteresting: different signature: %s", short_sig)
                     if self.alt_crash_cb is not None:
@@ -416,7 +418,7 @@ class Interesting(object):
             if self.idle_poll:
                 poll.join()
 
-        return result
+        return duration
 
     def cleanup(self, _):
         """Lithium cleanup entrypoint
