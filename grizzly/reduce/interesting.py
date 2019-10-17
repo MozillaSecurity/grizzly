@@ -47,6 +47,7 @@ class Interesting(object):
         self.no_harness = no_harness
         self.skip = skip
         self.skipped = None
+        self.static_timeout = False  # if True iter_timeout will not be changed
         self.min_crashes = min_crashes
         self.repeat = repeat
         self.idle_poll = idle_poll
@@ -271,7 +272,7 @@ class Interesting(object):
                     self.best_testcase = testcase
                     # the amount of time it can take to replay a test case can vary
                     # when under Valgrind so do not update the timeout in that case
-                    if not getattr(self.target, "use_valgrind", False):
+                    if not self.static_timeout and not getattr(self.target, "use_valgrind", False):
                         self.update_timeout(max_duration)
                     return True
         if self.use_result_cache:
