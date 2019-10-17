@@ -396,6 +396,7 @@ def test_timeout_update(monkeypatch, tmp_path):
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
     obj.init(None)
+    assert not obj.static_timeout
     assert obj.idle_timeout == 30
     (tmp_path / "lithium0").mkdir()
     assert not obj.interesting(None, tmp_path / "lithium0")
@@ -404,21 +405,27 @@ def test_timeout_update(monkeypatch, tmp_path):
     last_timeout = FakeServer._last_timeout
     assert last_timeout >= 30
     failure_result = Target.RESULT_FAILURE
+    obj.static_timeout = True
     (tmp_path / "lithium1").mkdir()
     assert obj.interesting(None, tmp_path / "lithium1")
+    assert obj.idle_timeout == 30
+    assert FakeServer._last_timeout == last_timeout
+    obj.static_timeout = False
+    (tmp_path / "lithium2").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium2")
     assert obj.idle_timeout < 30
     idle_timeout = obj.idle_timeout
     assert FakeServer._last_timeout == last_timeout
     last_timeout = FakeServer._last_timeout
-    (tmp_path / "lithium2").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium2")
+    (tmp_path / "lithium3").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium3")
     assert obj.idle_timeout == idle_timeout
     assert FakeServer._last_timeout  # assert that there is actually a timeout
     assert FakeServer._last_timeout < last_timeout
     last_timeout = FakeServer._last_timeout
     assert obj.server is not None
-    (tmp_path / "lithium3").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium3")
+    (tmp_path / "lithium4").mkdir()
+    assert obj.interesting(None, tmp_path / "lithium4")
     assert obj.idle_timeout == idle_timeout
     assert FakeServer._last_timeout == last_timeout
     assert obj.server is not None

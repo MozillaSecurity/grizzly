@@ -592,6 +592,10 @@ def main(args, interesting_cb=None, result_cb=None):
             job.reporter = FilesystemReporter()
             LOG.info("Results will be stored in %r", job.reporter.report_path)
 
+        if args.static_timeout:
+            LOG.info("Using a static iteration timeout")
+        job.interesting.static_timeout = args.static_timeout
+
         # detect soft assertions
         if args.soft_asserts:
             job.interesting.target.add_abort_token("###!!! ASSERTION:")

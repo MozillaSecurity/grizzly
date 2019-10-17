@@ -86,7 +86,9 @@ class _AnalyzeReliability(lithium.Strategy):
         self.job.interesting.repeat = 1
         self.job.interesting.min_crashes = 1
         self.job.interesting.target.rl_reset = min(self.job.original_relaunch, self.ITERATIONS)
-
+        # do not update the iteration timeout during analysis
+        original_static_timeout = self.job.interesting.static_timeout
+        self.job.interesting.static_timeout = True
         harness_crashes = 0
         non_harness_crashes = 0
 
@@ -144,6 +146,8 @@ class _AnalyzeReliability(lithium.Strategy):
 
         # set relaunch to min(relaunch, repeat)
         self.job.interesting.target.rl_reset = min(self.job.original_relaunch, self.job.interesting.repeat)
+        # restore static_timeout flags
+        self.job.interesting.static_timeout = original_static_timeout
 
         LOG.info("Analysis results:")
         if harness_crashes == self.ITERATIONS:
