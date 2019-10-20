@@ -6,6 +6,7 @@
 # pylint: disable=protected-access
 
 import re
+import time
 
 import pytest
 
@@ -372,8 +373,12 @@ def test_reduce_status_reporter_03(tmp_path):
             continue
         assert re.match(r"\S\s:\s\S", line[position - 2:])
 
-def test_reduce_status_reporter_04(tmp_path):
+def test_reduce_status_reporter_04(mocker, tmp_path):
     """test ReduceStatusReporter._summary() ignore inactive"""
+    # prevent status.duration calculation from returning a value > 0
+    fake_time = mocker.patch("grizzly.common.status.time")
+    fake_time.time.return_value = time.time()
+
     ReduceStatusReporter.CPU_POLL_INTERVAL = 0.01
     test_db = tmp_path / "test.db"
     Status.DB_FILE = str(test_db)
