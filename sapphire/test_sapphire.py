@@ -398,8 +398,8 @@ def test_sapphire_16(client, tmp_path):
     assert redir_test.len_srv == redir_target.len_org
 
 
-def test_sapphire_17(client_factory, tmp_path):
-    """test include directories"""
+def test_sapphire_17(client, tmp_path):
+    """test include directories and permissions"""
     inc1_path = tmp_path / "inc1"
     inc2_path = tmp_path / "inc2"
     root_path = tmp_path / "root"
@@ -439,29 +439,21 @@ def test_sapphire_17(client_factory, tmp_path):
         assert (tmp_path / "no_access.html").is_file()
         files_to_serve.append(inc403)
 
-        # test file
+        # test file (used to keep sever job alive)
         test = _create_test("test_case.html", root_path)
         files_to_serve.append(test)
 
         serv.add_include("/", str(inc1_path))  # mount at '/'
         serv.add_include("inc_test", str(inc2_path))  # mount at '/inc_test'
 
-        client_incs = client_factory()
-        client_reqs = client_factory()
-        # client that requests the include files
-        # TODO: find out why test fails without in_order=True and fix or make a note
-        client_incs.launch("127.0.0.1", serv.get_port(), files_to_serve, in_order=True)
-        client_reqs.launch("127.0.0.1", serv.get_port(), [test], delay=0.1)
-        # delayed client that requests the required files (once others are requested)
+        # in_order is used to ensure that all scenarios are tested before server job completes
+        client.launch("127.0.0.1", serv.get_port(), files_to_serve, in_order=True)
         status, files_served = serv.serve_path(str(root_path))
+        assert client.wait(timeout=10)
     finally:
         serv.close()
     assert status == SERVED_ALL
     assert len(files_served) == 4
-    assert client_incs.wait(timeout=10)
-    client_incs.close()
-    assert client_reqs.wait(timeout=10)
-    client_reqs.close()
     assert inc1.code == 200
     assert inc2.code == 200
     assert nest.code == 200
