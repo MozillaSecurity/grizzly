@@ -42,10 +42,13 @@ def client_factory():
         def close(self):
             if self.thread is not None:
                 self.thread.join()
+                self.thread = None
+            self._idle.set()
 
         def launch(self, addr, port, files_to_serve, delay=0, in_order=False, indicate_failure=False,
-                   request=None, throttle=0):
+                   throttle=0):
             assert self._idle.is_set()
+            assert self.thread is None
             self._idle.clear()
             self.thread = threading.Thread(
                 target=self._handle_request,
@@ -54,12 +57,11 @@ def client_factory():
                     "delay": delay,
                     "in_order": in_order,
                     "indicate_failure": indicate_failure,
-                    "request": request,
                     "throttle": throttle})
             self.thread.start()
 
         def _handle_request(self, addr, port, files_to_request, delay=0, in_order=False,
-                            indicate_failure=False, request=None, throttle=0):
+                            indicate_failure=False, throttle=0):
             assert isinstance(files_to_request, list), "files_to_request should be a list"
             if delay:
                 time.sleep(delay)
@@ -78,8 +80,8 @@ def client_factory():
                     target_url = t_file.url
                 cli = None
                 try:
-                    if request is None:
-                        cli = urlopen("http://%s:%d/%s" % (addr, port, target_url), timeout=0.5)
+                    if t_file.custom_request is None:
+                        cli = urlopen("http://%s:%d/%s" % (addr, port, target_url), timeout=10)
                         resp_code = cli.getcode()
                         content_type = cli.info().get("Content-Type")
                         if resp_code == 200:
@@ -99,9 +101,9 @@ def client_factory():
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         try:
                             sock.connect((addr, port))
-                            sock.settimeout(1)  # safety, so test doesn't hang on failure
-                            sock.sendall(request)
-                            data = sock.recv(self.rx_size) if request else b""
+                            sock.settimeout(10)  # safety, so test doesn't hang on failure
+                            sock.sendall(t_file.custom_request)
+                            data = sock.recv(self.rx_size) if t_file.custom_request else b""
                         finally:
                             sock.close()
                         content_type = None
@@ -146,6 +148,9 @@ def client_factory():
             self._idle.set()
 
         def wait(self, timeout=None):
+            """
+            Used to help prevent checking test cases before client is complete.
+            """
             return self._idle.wait(timeout)
 
     def _get_client(*args, **kwds):
