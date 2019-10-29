@@ -31,6 +31,7 @@ class _TestFile(object):
         self.custom_request = None
         self.len_org = 0  # original file length
         self.len_srv = 0  # served file length
+        self.requested = 0  # number of time file was requested
         self.lock = threading.Lock()
         self.url = url
 
@@ -688,9 +689,35 @@ def test_sapphire_29(client, tmp_path):
         serv.close()
 
 
+def test_sapphire_30(client_factory, tmp_path):
+    """test Sapphire.serve_testcase() with forever=True"""
+    clients = list()
+    serv = Sapphire(timeout=10)
+    try:
+        assert serv.timeout == 10
+        test = _create_test("test_case.html", tmp_path)
+        for _ in range(3):
+            clients.append(client_factory())
+        for client in clients:
+            client.launch("127.0.0.1", serv.get_port(), [test], skip_served=False)
+        def _test_callback():
+            with test.lock:
+                return test.requested < 3
+        assert serv.serve_path(str(tmp_path), continue_cb=_test_callback, forever=True)[0] == SERVED_ALL
+    finally:
+        serv.close()
+    for client in clients:
+        assert client.wait(timeout=10)
+        client.close()
+    assert test.requested == 3
+    assert test.code == 200
+    assert test.len_srv == test.len_org
+
+
 def test_serve_job_01(tmp_path):
     """test creating an empty ServeJob"""
     job = ServeJob(str(tmp_path), dict(), dict(), dict())
+    assert not job.forever
     assert job.status == SERVED_ALL
     assert job.check_request("") is None
     assert job.check_request("test") is None
@@ -889,6 +916,6 @@ def test_response_data_04():
         output = Sapphire._4xx_page(404, "Not Found")  # pylint: disable=protected-access
         assert "Content-Length: " in output
         assert "HTTP/1.1 404 Not Found" in output
-        assert "<script>window.setTimeout(window.close in 10000)</script>", output
+        assert "<script>window.setTimeout(window.close, 10000)</script>" in output
     finally:
         Sapphire.CLOSE_CLIENT_ERROR = None

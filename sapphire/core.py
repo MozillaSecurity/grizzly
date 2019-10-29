@@ -59,7 +59,7 @@ class ServeJob(object):
     URL_INCLUDE = 2
     URL_REDIRECT = 3
 
-    def __init__(self, base_path, dynamic_map, include_map, redirect_map, optional_files=None):
+    def __init__(self, base_path, dynamic_map, include_map, redirect_map, forever=False, optional_files=None):
         assert isinstance(dynamic_map, dict)
         assert isinstance(include_map, dict)
         assert isinstance(redirect_map, dict)
@@ -70,6 +70,7 @@ class ServeJob(object):
         self.accepting.set()
         self.base_path = os.path.abspath(base_path)  # wwwroot
         self.exceptions = Queue()
+        self.forever = forever
         self.initial_queue_size = 0
         self.url_map = UrlMap(
             dynamic=dynamic_map,  # paths that map to a callback
@@ -327,6 +328,10 @@ class Sapphire(object):
             elif resource.type == serv_job.URL_REDIRECT:
                 finish_job = serv_job.remove_pending(request)
 
+            if finish_job and serv_job.forever:
+                LOG.debug("serv_job.forever is set, resetting finish_job")
+                finish_job = False
+
             if not finish_job:
                 serv_job.accepting.set()
             else:
@@ -472,7 +477,7 @@ class Sapphire(object):
             for worker in worker_pool:
                 worker.thread.join()
 
-    def serve_path(self, path, continue_cb=None, optional_files=None):
+    def serve_path(self, path, continue_cb=None, forever=False, optional_files=None):
         """
         serve_path() -> tuple
         path is the directory that will be used as wwwroot. The callback continue_cb should
@@ -489,6 +494,7 @@ class Sapphire(object):
         """
 
         LOG.debug("serve_path: %s", path)
+        LOG.debug("serving forever: %r", forever)
 
         if continue_cb is not None and not callable(continue_cb):
             raise TypeError("continue_cb must be of type 'function'")
@@ -500,6 +506,7 @@ class Sapphire(object):
             self._dr_map,
             self._include_map,
             self._redirect_map,
+            forever=forever,
             optional_files=optional_files)
 
         if not job.pending_files():
@@ -566,7 +573,7 @@ class Sapphire(object):
 
         return status, served_files  # pylint: disable=protected-access
 
-    def serve_testcase(self, testcase, continue_cb=None, working_path=None):
+    def serve_testcase(self, testcase, continue_cb=None, forever=False, working_path=None):
         """
         serve_testcase() -> tuple
         testcase is the Grizzly TestCase to serve. The callback continue_cb should
@@ -584,6 +591,7 @@ class Sapphire(object):
             return self.serve_path(
                 wwwdir,
                 continue_cb=continue_cb,
+                forever=forever,
                 optional_files=tuple(testcase.optional))
         finally:
             # remove test case working directory

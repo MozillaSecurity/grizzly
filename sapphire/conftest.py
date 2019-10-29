@@ -46,7 +46,7 @@ def client_factory():
             self._idle.set()
 
         def launch(self, addr, port, files_to_serve, delay=0, in_order=False, indicate_failure=False,
-                   throttle=0):
+                   skip_served=True, throttle=0):
             assert self._idle.is_set()
             assert self.thread is None
             self._idle.clear()
@@ -57,11 +57,12 @@ def client_factory():
                     "delay": delay,
                     "in_order": in_order,
                     "indicate_failure": indicate_failure,
+                    "skip_served": skip_served,
                     "throttle": throttle})
             self.thread.start()
 
         def _handle_request(self, addr, port, files_to_request, delay=0, in_order=False,
-                            indicate_failure=False, throttle=0):
+                            indicate_failure=False, skip_served=True, throttle=0):
             assert isinstance(files_to_request, list), "files_to_request should be a list"
             if delay:
                 time.sleep(delay)
@@ -72,7 +73,7 @@ def client_factory():
                 t_file = files_to_request[index]
                 with t_file.lock:
                     # check if the file has been served
-                    if t_file.code is not None:
+                    if skip_served and t_file.code is not None:
                         continue
                     # if t_file.md5_org is set to anything but None the test client will calculate
                     # the md5 hash
@@ -117,8 +118,9 @@ def client_factory():
 
                     # update test info
                     with t_file.lock:
-                        if t_file.code is not None:
+                        if skip_served and t_file.code is not None:
                             continue  # test has already be updated
+                        t_file.requested += 1
                         t_file.code = resp_code
                         if resp_code == 200:
                             t_file.content_type = content_type
@@ -127,7 +129,8 @@ def client_factory():
 
                 except HTTPError as http_err:
                     with t_file.lock:
-                        if t_file.code is None:
+                        t_file.requested += 1
+                        if not skip_served or t_file.code is None:
                             t_file.code = http_err.code
                 except (BadStatusLine, socket.error, socket.timeout, URLError):
                     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -139,9 +142,10 @@ def client_factory():
                             exc_obj,
                             exc_tb.tb_lineno,
                             t_file.url)
-                        if indicate_failure and t_file.code is None:
-                            t_file.code = 0
-                            break
+                        if indicate_failure:
+                            if not skip_served or t_file.code is None:
+                                t_file.code = 0
+                                break
                 finally:
                     if cli is not None:
                         cli.close()
