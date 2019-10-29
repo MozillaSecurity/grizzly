@@ -261,24 +261,21 @@ class TestCase(object):
         for test in self._files.optional:
             yield test.file_name
 
-    def remove_files_not_served(self, files_served):
-        """Remove optional files (by name) that were not served.
+    def purge_optional(self, keep):
+        """Remove optional files (by name) that are not in keep.
 
         Args:
-            files_served (iterable): Filenames that were reported as served by sapphire.
+            keep (iterable): Filenames that will not be removed.
 
         Returns:
             None
         """
-        files_served = set(files_served)
+        keep = set(keep)
         to_remove = []
-
-        for idx, file in enumerate(self._files.optional):
-            if file.file_name not in files_served:
+        for idx, tfile in enumerate(self._files.optional):
+            if tfile.file_name not in keep:
                 to_remove.append(idx)
-
-        to_remove.reverse()
-        for idx in to_remove:
+        for idx in reversed(to_remove):
             self._files.optional.pop(idx).close()
 
 
