@@ -370,7 +370,7 @@ class Interesting(object):
             # handle failure if detected
             if failure_detected == Target.RESULT_FAILURE:
                 self.target.close()
-                testcase.remove_files_not_served(files_served)
+                testcase.purge_optional(files_served)
 
                 # save logs
                 result_logs = temp_prefix + "_logs"

@@ -109,19 +109,19 @@ def test_testcase_04(tmp_path):
         tcase.cleanup()
 
 def test_testcase_05(tmp_path):
-    """test TestCase.remove_files_not_served()"""
+    """test TestCase.purge_optional()"""
     tcase = TestCase("land_page.html", "redirect.html", "test-adapter")
     try:
         tcase.add_from_data("foo", "testfile1.bin")
         tcase.add_from_data("foo", "testfile2.bin", required=False)
         tcase.add_from_data("foo", "testfile3.bin", required=False)
         tcase.add_from_data("foo", "not_served.bin", required=False)
-        assert len(list(tcase.optional)) == 3
-        tcase.remove_files_not_served(tcase.optional)
-        assert len(list(tcase.optional)) == 3
+        assert len(tuple(tcase.optional)) == 3
+        tcase.purge_optional(tcase.optional)
+        assert len(tuple(tcase.optional)) == 3
         served = ["testfile2.bin", "testfile3.bin"]
-        tcase.remove_files_not_served(served)
-        assert len(list(tcase.optional)) == 2
+        tcase.purge_optional(served)
+        assert len(tuple(tcase.optional)) == 2
         tcase.dump(str(tmp_path))
         assert "testfile1.bin" in os.listdir(str(tmp_path))
         assert "not_served.bin" not in os.listdir(str(tmp_path))
