@@ -242,11 +242,6 @@ class Interesting(object):
             for name, value in self.env_mod.items():
                 testcase.add_environ_var(name, value)
 
-        if self.no_harness:
-            # create a tmp file that will never be served
-            # this will keep sapphire serving until timeout or ffpuppet exits
-            testcase.add_from_data("", ".lithium-garbage.bin", required=True)
-
         max_duration = 0
         run_prefix = None
         for try_num in range(n_tries):
@@ -358,7 +353,9 @@ class Interesting(object):
                 self.server.set_redirect("/next_test", str(self.landing_page), required=True)
 
             # serve the testcase
-            server_status, files_served = self.server.serve_testcase(testcase, continue_cb=keep_waiting)
+            server_status, files_served = self.server.serve_testcase(testcase,
+                                                                     continue_cb=keep_waiting,
+                                                                     forever=self.no_harness)
 
             end_time = time.time()
 
