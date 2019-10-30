@@ -142,7 +142,7 @@ class _AnalyzeReliability(lithium.Strategy):
         # adjust repeat/min-crashes depending on how reliable the testcase was
         self.job.interesting.min_crashes = self.MIN_CRASHES
         self.job.interesting.repeat = \
-            int(math.log(1 - self.TARGET_PROBABILITY, 1 - crashes_percent) + 0.5) * self.MIN_CRASHES
+            int(math.ceil(math.log(1 - self.TARGET_PROBABILITY, 1 - crashes_percent)) * self.MIN_CRASHES)
 
         # set relaunch to min(relaunch, repeat)
         self.job.interesting.target.rl_reset = min(self.job.original_relaunch, self.job.interesting.repeat)
