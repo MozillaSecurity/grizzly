@@ -9,7 +9,7 @@ unit tests for grizzly.Session
 import pytest
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_TIMEOUT
-from grizzly.common import Adapter, IOManager, Reporter, ServerMap, Status, TestCase, TestFile
+from grizzly.common import Adapter, InputFile, IOManager, Reporter, ServerMap, Status, TestCase, TestFile
 from grizzly.session import Session
 from grizzly.target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -28,8 +28,9 @@ def test_session_00(tmp_path, mocker):
     fake_iomgr.server_map.includes = []
     fake_iomgr.server_map.redirects = []
     fake_iomgr.server_map.dynamic_responses = []
-    fake_iomgr.active_input = mocker.Mock(spec=TestFile)
+    fake_iomgr.active_input = mocker.Mock(spec=InputFile)
     fake_iomgr.active_input.file_name = "input.txt"
+    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.harness = None
     fake_iomgr.input_files = []
     fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
@@ -95,8 +96,9 @@ def test_session_02(tmp_path, mocker):
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_iomgr = mocker.Mock(spec=IOManager)
-    fake_iomgr.active_input = mocker.Mock(spec=TestFile)
+    fake_iomgr.active_input = mocker.Mock(spec=InputFile)
     fake_iomgr.active_input.file_name = "infile"
+    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
     fake_iomgr.server_map.includes = []
     fake_iomgr.server_map.redirects = []
@@ -218,7 +220,7 @@ def test_session_05(tmp_path, mocker):
 def test_session_06(tmp_path, mocker):
     """test Session.run()"""
     Status.DB_FILE = str(tmp_path / "test.db")
-    fake_server = mocker.patch("sapphire.Sapphire", spec=True)
+    fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.IGNORE_UNSERVED = True
@@ -229,8 +231,9 @@ def test_session_06(tmp_path, mocker):
     fake_iomgr.server_map.includes = []
     fake_iomgr.server_map.redirects = []
     fake_iomgr.server_map.dynamic_responses = []
-    fake_iomgr.active_input = mocker.Mock(spec=TestFile)
+    fake_iomgr.active_input = mocker.Mock(spec=InputFile)
     fake_iomgr.active_input.file_name = "input.txt"
+    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.harness = None
     fake_iomgr.input_files = []
     fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
@@ -265,4 +268,4 @@ def test_session_06(tmp_path, mocker):
     assert session.status.iteration == 10
     assert fake_iomgr.create_testcase.call_count == 10
     assert fake_target.detect_failure.call_count == 10
-    assert fake_iomgr.create_testcase.return_value.remove_files_not_served.call_count == 10
+    assert fake_iomgr.create_testcase.return_value.purge_optional.call_count == 10
