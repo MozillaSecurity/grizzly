@@ -183,7 +183,7 @@ class Session(object):
                 working_path=self.iomanager.working_path)
             if self.adapter.IGNORE_UNSERVED:
                 log.debug("removing unserved files from the test case")
-                current_test.remove_files_not_served(files_served)
+                current_test.purge_optional(files_served)
 
             if server_status == sapphire.SERVED_TIMEOUT:
                 log.debug("calling self.adapter.on_timeout()")
