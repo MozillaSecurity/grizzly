@@ -175,7 +175,7 @@ def test_sapphire_05(client, tmp_path):
 
 def test_sapphire_06(client, tmp_path):
     """test serving no files... this should never happen but..."""
-    serv = Sapphire(timeout=1)
+    serv = Sapphire(timeout=10)
     try:
         client.launch("127.0.0.1", serv.get_port(), [])
         status, files_served = serv.serve_path(str(tmp_path))
@@ -558,7 +558,7 @@ def test_sapphire_23(client, tmp_path):
 def test_sapphire_24(client_factory, tmp_path):
     """test requesting multiple files via multiple connections"""
     default_pool_limit = Sapphire.WORKER_POOL_LIMIT
-    serv = Sapphire(timeout=10)
+    serv = Sapphire(timeout=60)
     try:
         Sapphire.WORKER_POOL_LIMIT = 20
         to_serve = list()
@@ -588,7 +588,7 @@ def test_sapphire_25(client_factory, tmp_path):
     def _dyn_test_cb():
         return b"A" if random.getrandbits(1) else b"AA"
 
-    serv = Sapphire(timeout=10)
+    serv = Sapphire(timeout=60)
     default_pool_limit = Sapphire.WORKER_POOL_LIMIT
     try:
         Sapphire.WORKER_POOL_LIMIT = 10
@@ -639,7 +639,7 @@ def test_sapphire_26(client, tmp_path):
 
 def test_sapphire_27(client, tmp_path):
     """test serving to a slow client"""
-    serv = Sapphire(timeout=10)
+    serv = Sapphire(timeout=60)
     try:
         t_data = "".join(random.choice("ABCD1234") for _ in range(0x19000))  # 100KB
         t_file = _create_test("test_case.html", tmp_path, data=t_data.encode("ascii"), calc_hash=True)
@@ -676,7 +676,7 @@ def test_sapphire_28(client, tmp_path):
 
 def test_sapphire_29(client, tmp_path):
     """test Sapphire.serve_testcase()"""
-    serv = Sapphire(timeout=1)  # minimum timeout is 1 second
+    serv = Sapphire(timeout=10)
     try:
         test = TestCase("test.html", "none.test", "foo")
         test.add_from_data(b"test", "test.html")
