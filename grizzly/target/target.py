@@ -63,7 +63,7 @@ class Target(object):
     def check_relaunch(self, wait=60):
         if self.rl_countdown > 0:
             return
-        # if the corpus manager does not use the default harness
+        # if the adapter does not use the default harness
         # or close the browser it will hang here for 60 seconds
         log.debug("relaunch will be triggered... waiting up to %0.2f seconds", wait)
         deadline = time.time() + wait
