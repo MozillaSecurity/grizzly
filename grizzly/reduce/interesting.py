@@ -139,8 +139,9 @@ class Interesting(object):
         updated.append('suppressions=\'%s\'' % supp_file)
         self.env_mod[opt_key] = ':'.join(updated)
 
-    def monitor_process(self, iteration_done_event, idle_timeout_event):
+    def monitor_process(self, iteration_done_event, idle_timeout_event, monitor_launched):
         # Wait until timeout is hit before polling
+        monitor_launched.set()
         LOG.debug('Waiting %r before polling', self.idle_timeout)
         exp_time = time.time() + self.idle_timeout
         while exp_time >= time.time() and not iteration_done_event.is_set():
@@ -347,9 +348,11 @@ class Interesting(object):
             idle_timeout_event = threading.Event()
             iteration_done_event = threading.Event()
             if self.idle_poll:
+                monitor_launched = threading.Event()
                 poll = threading.Thread(target=self.monitor_process,
-                                        args=(iteration_done_event, idle_timeout_event))
+                                        args=(iteration_done_event, idle_timeout_event, monitor_launched))
                 poll.start()
+                assert monitor_launched.wait(30), "Failed to launch monitoring thread"
 
             def keep_waiting():
                 return self.target.monitor.is_healthy() and not idle_timeout_event.is_set()
