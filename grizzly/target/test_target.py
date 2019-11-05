@@ -220,7 +220,7 @@ def test_puppet_target_02(tmp_path):
     finally:
         target.cleanup()
 
-def test_puppet_target_03(tmp_path):
+def test_puppet_target_03(mocker, tmp_path):
     """test PuppetTarget.detect_failure()"""
     PuppetTarget.PUPPET = FakePuppet
     fake_file = tmp_path / "fake"
@@ -259,7 +259,12 @@ def test_puppet_target_03(tmp_path):
         # test timeout
         target.launch("launch_page")
         target._puppet.test_running = True
+        target._puppet.test_cpu_usage.append((1234, 10))
+        target._puppet.test_cpu_usage.append((1236, 75))
+        target._puppet.test_cpu_usage.append((1238, 60))
+        fake_os = mocker.patch("grizzly.target.puppet_target.os", autospec=True)
         assert target.detect_failure([], True) == Target.RESULT_FAILURE
+        assert fake_os.kill.call_count == 1
         assert target.closed
         # test timeout ignored
         target.launch("launch_page")

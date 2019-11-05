@@ -38,6 +38,15 @@ class PuppetTarget(Target):
             use_valgrind=self.use_valgrind,
             use_xvfb=use_xvfb)
 
+    def _abort_hung_proc(self):
+        # send SIGABRT to the busiest process
+        with self._lock:
+            proc_usage = self._puppet.cpu_usage()
+        for pid, cpu in sorted(proc_usage, reverse=True, key=lambda x: x[1]):
+            log.debug("sending SIGABRT to pid: %r, cpu: %0.2f%%", pid, cpu)
+            os.kill(pid, signal.SIGABRT)
+            break
+
     def add_abort_token(self, token):
         self._puppet.add_abort_token(token)
 
@@ -97,6 +106,10 @@ class PuppetTarget(Target):
         if not is_healthy or was_timeout:
             if self._puppet.is_running():
                 log.info("Terminating browser...")
+                if was_timeout and "timeout" not in ignored:
+                    self._abort_hung_proc()
+                    # give the process a moment to start dump
+                    self._puppet.wait(timeout=1)
             self.close()
         # if something has happened figure out what
         if not is_healthy:
