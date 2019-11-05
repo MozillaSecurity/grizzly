@@ -5,6 +5,7 @@
 import logging
 import os
 import signal
+import time
 
 import psutil
 
@@ -75,21 +76,16 @@ class PuppetTarget(Target):
 
     def poll_for_idle(self, threshold, interval):
         # return POLL_IDLE if cpu usage of target is below threshold for interval seconds
-        pid = self._puppet.get_pid()
-        if pid is not None:
-            try:
-                process = psutil.Process(pid)
-                log.debug("Polling process...")
-                # poll for 100ms at a time so we can exit earlier if the threshold is exceeded
-                intervals = int(interval / 0.1)
-                if all(process.cpu_percent(interval=0.1) <= threshold for _ in range(intervals)):
-                    log.info("Process utilized <= %d%% CPU for %ds", threshold, interval)
-                    return self.POLL_IDLE
-                return self.POLL_BUSY
-            except psutil.NoSuchProcess:
-                log.debug("Error polling process: %d no longer exists", pid)
-        # default to False if we could not measure cpu usage
-        return self.POLL_ERROR
+        start_time = time.time()
+        while time.time() - start_time < interval:
+            for _, cpu in self._puppet.cpu_usage():
+                if cpu >= threshold:
+                    return self.POLL_BUSY
+            if not self._puppet.is_running():
+                break
+        else:
+            log.info("Process utilized <= %d%% CPU for %ds", threshold, interval)
+        return self.POLL_IDLE
 
     def detect_failure(self, ignored, was_timeout):
         status = self.RESULT_NONE

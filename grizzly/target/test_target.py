@@ -28,6 +28,7 @@ class FakePuppet(object):
         self.test_crashed = False  # used to control testing
         self.test_running = False  # used to control testing
         self.test_available_logs = list()  # used to control testing
+        self.test_cpu_usage = list()  # used to control testing
 
     def add_abort_token(self, token):  # pylint: disable=no-self-use
         pass
@@ -67,6 +68,11 @@ class FakePuppet(object):
         self.test_check_abort = False
         self.test_crashed = False
         self.test_running = False
+
+    def cpu_usage(self):
+        for usage in self.test_cpu_usage:
+            assert isinstance(usage, tuple)
+            yield usage
 
     def get_pid(self):  # pylint: disable=no-self-use
         return os.getpid()
@@ -321,19 +327,11 @@ def test_puppet_target_05(tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 10)
-    assert target.poll_for_idle(90, 0.2), "the test process should be mostly idle"
-    evt = threading.Event()
-    def busy_wait():
-        while not evt.is_set():
-            pass
-    waiter = threading.Thread(target=busy_wait)
-    try:
-        waiter.start()
-        time.sleep(0.1)
-        assert target.poll_for_idle(10, 0.2) == Target.POLL_BUSY, "the test process should be busy"
-    finally:
-        evt.set()
-        waiter.join()
+    assert target.poll_for_idle(1, 0.1) == Target.POLL_IDLE
+    target._puppet.test_cpu_usage.append((1234, 50.0))
+    target._puppet.test_running = True
+    assert target.poll_for_idle(90, 0.2) == Target.POLL_IDLE
+    assert target.poll_for_idle(10, 0.2) == Target.POLL_BUSY
 
 def test_puppet_target_06(tmp_path):
     """test PuppetTarget.monitor"""
