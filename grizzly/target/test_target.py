@@ -307,24 +307,18 @@ def test_puppet_target_03(mocker, tmp_path):
 
 @pytest.mark.skipif(platform.system() == "Windows",
                     reason="Unsupported on Windows")
-def test_puppet_target_04(tmp_path):
+def test_puppet_target_04(mocker, tmp_path):
     """test PuppetTarget.dump_coverage()"""
     PuppetTarget.PUPPET = FakePuppet
-    class SigCatcher(object):  # pylint: disable=too-few-public-methods
-        CAUGHT = False
-        @staticmethod
-        def signal_handler(*args):  # pylint: disable=unused-argument
-            SigCatcher.CAUGHT = True
-    sig_catcher = SigCatcher()
-    signal.signal(signal.SIGUSR1, sig_catcher.signal_handler)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 10)
+    fake_os = mocker.patch("grizzly.target.puppet_target.os", autospec=True)
     target.dump_coverage()
-    assert not sig_catcher.CAUGHT
+    assert not fake_os.kill.call_count
     target.launch("launch_page")
     target.dump_coverage()
-    assert sig_catcher.CAUGHT  # not sure if there is a race here...
+    assert fake_os.kill.call_count
 
 def test_puppet_target_05(tmp_path):
     """test poll_for_idle()"""
