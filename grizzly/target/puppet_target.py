@@ -131,12 +131,8 @@ class PuppetTarget(Target):
                 log.debug("failure detected, ffpuppet return code: %r", self._puppet.reason)
                 status = self.RESULT_FAILURE
         elif was_timeout:
-            log.debug("timeout detected, potential browser hang")
-            if ignored and "timeout" in ignored:
-                status = self.RESULT_IGNORED
-                log.info("Timed out")
-            else:
-                status = self.RESULT_FAILURE
+            log.info("Timeout detected")
+            status = self.RESULT_IGNORED if "timeout" in ignored else self.RESULT_FAILURE
         return status
 
     def dump_coverage(self):
