@@ -682,15 +682,17 @@ def test_sapphire_29(client, tmp_path):
         test.add_from_data(b"test", "test.html")
         t_file = _create_test(test.landing_page, tmp_path)
         client.launch("127.0.0.1", serv.get_port(), [t_file])
+        assert test.duration is None
         status, files_served = serv.serve_testcase(test)
         assert status == SERVED_ALL
         assert files_served
+        assert test.duration >= 0
     finally:
         serv.close()
 
 
 def test_sapphire_30(client_factory, tmp_path):
-    """test Sapphire.serve_testcase() with forever=True"""
+    """test Sapphire.serve_path() with forever=True"""
     clients = list()
     serv = Sapphire(timeout=10)
     try:

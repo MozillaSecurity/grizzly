@@ -588,15 +588,17 @@ class Sapphire(object):
         wwwdir = tempfile.mkdtemp(prefix="sphr_test_", dir=working_path)
         try:
             testcase.dump(wwwdir)
-            return self.serve_path(
+            serve_start = time.time()
+            result = self.serve_path(
                 wwwdir,
                 continue_cb=continue_cb,
                 forever=forever,
                 optional_files=tuple(testcase.optional))
+            testcase.duration = time.time() - serve_start
+            return result
         finally:
             # remove test case working directory
-            if os.path.isdir(wwwdir):
-                shutil.rmtree(wwwdir)
+            shutil.rmtree(wwwdir, ignore_errors=True)
 
     @property
     def timeout(self):
