@@ -22,6 +22,7 @@ def test_testcase_01(tmp_path):
         assert tcase.landing_page == l_page
         assert tcase.redirect_page == r_page
         assert tcase.adapter_name == adpt_name
+        assert tcase.duration is None
         assert tcase.input_fname is None
         assert not tcase._files.meta
         assert not tcase._files.optional
