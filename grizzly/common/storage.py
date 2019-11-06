@@ -92,6 +92,7 @@ TestFileMap = namedtuple("TestFileMap", "meta optional required")
 class TestCase(object):
     def __init__(self, landing_page, redirect_page, adapter_name, input_fname=None):
         self.adapter_name = adapter_name
+        self.duration = None
         self.input_fname = input_fname  # file that was used to create the test case
         self.landing_page = landing_page
         self.redirect_page = redirect_page
@@ -225,6 +226,7 @@ class TestCase(object):
             assert isinstance(self._env_vars, dict)
             info = {
                 "adapter": self.adapter_name,
+                "duration": self.duration,
                 "env": self._env_vars,
                 "input": os.path.basename(self.input_fname) if self.input_fname else None,
                 "target": self.landing_page}
