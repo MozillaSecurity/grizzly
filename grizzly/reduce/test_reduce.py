@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
 from __future__ import unicode_literals
 import json
 import os.path
@@ -22,12 +23,13 @@ class FakeInteresting(interesting.Interesting):
     def location(self):
         return "127.0.0.1" if self.no_harness else "127.0.0.1/harness"
 
-    def _run(self, _testcase, temp_prefix):
+    def _run(self, testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
+        testcase.duration = 0.1
         with open(self.reduce_file) as fp:
-            return 0.1 if "required" in fp.read() else -1
+            return "required" in fp.read()
 
     def cleanup(self, _):
         pass
@@ -43,13 +45,14 @@ class FakeInterestingAlt(FakeInteresting):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
+        testcase.duration = 0.1
         with open(self.reduce_file) as fp:
             if "required" in fp.read():
                 self.alt_crash_cb(testcase, temp_prefix)
         if self.__first_run:
             self.__first_run = False
-            return 0.1
-        return -1
+            return True
+        return False
 
 
 class FakeInterestingKeepHarness(FakeInteresting):
@@ -61,16 +64,17 @@ class FakeInterestingKeepHarness(FakeInteresting):
             with open(self.reduce_file) as harness_fp:
                 self.__init_data = harness_fp.read()
 
-    def _run(self, _testcase, temp_prefix):
+    def _run(self, testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
+        testcase.duration = 0.1
         if self.__init_data is not None:
             with open(self.reduce_file) as fp:
-                return 1 if self.__init_data == fp.read() else -1
+                return self.__init_data == fp.read()
         else:
             with open(self.reduce_file) as fp:
-                return 1 if "required" in fp.read() else -1
+                return "required" in fp.read()
 
 
 class FakeInterestingSemiReliable(FakeInteresting):
@@ -82,14 +86,15 @@ class FakeInterestingSemiReliable(FakeInteresting):
         self.interesting_count = 0
         self.require_no_harness = require_no_harness
 
-    def _run(self, _testcase, temp_prefix):
+    def _run(self, testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
         self.target.save_logs(result_logs, meta=True)
+        testcase.duration = 0.1
         if self.require_no_harness and "harness" in self.location:
-            return -1
+            return False
         self.interesting_count += 1
-        return 1 if self.interesting_count <= self.interesting_times else -1
+        return self.interesting_count <= self.interesting_times
 
 
 class FakeInterestingSemiReliableWithCache(FakeInterestingSemiReliable):

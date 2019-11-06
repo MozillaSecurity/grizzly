@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
 from __future__ import unicode_literals
 import os
 import time
@@ -22,7 +23,7 @@ class FakeServer(object):
     def close(self):
         pass
 
-    def get_port(self):
+    def get_port(self):  # pylint: disable=no-self-use
         return 8000
 
     def add_dynamic_response(self, *args, **kwds):
@@ -31,10 +32,11 @@ class FakeServer(object):
     def set_redirect(self, *args, **kwds):
         pass
 
-    def serve_testcase(self, *args, **kwds):
+    def serve_testcase(self, testcase, **kwds):  # pylint: disable=no-self-use,unused-argument
+        testcase.duration = 0.1
         return sapphire.SERVED_ALL, []
 
-    def serve_path(self, *args, **kwds):
+    def serve_path(self, *args, **kwds):  # pylint: disable=no-self-use,unused-argument
         return sapphire.SERVED_ALL, []
 
     @property
@@ -42,7 +44,7 @@ class FakeServer(object):
         return FakeServer._last_timeout
 
     @timeout.setter
-    def timeout(self, value):
+    def timeout(self, value):  # pylint: disable=no-self-use
         assert value is None or value >= 0
         FakeServer._last_timeout = value
 
@@ -451,7 +453,8 @@ def test_idle_timeout(monkeypatch, tmp_path):
 
     class MyServer(FakeServer):
 
-        def serve_testcase(self, *args, **kwds):
+        def serve_testcase(self, testcase, **kwds):
+            testcase.duration = 0.1
             continue_cb = kwds["continue_cb"]
             while continue_cb():
                 pass
