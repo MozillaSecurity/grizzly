@@ -251,11 +251,10 @@ class Interesting(object):
             self.status.report()
             self.status.iteration += 1
             run_prefix = "%s(%d)" % (temp_prefix, try_num)
-            duration = self._run(testcase, run_prefix)
-            if duration >= 0:
+            if self._run(testcase, run_prefix):
                 # track the maximum duration of the successful reduction attempts
-                if duration > max_duration:
-                    max_duration = duration
+                if testcase.duration > max_duration:
+                    max_duration = testcase.duration
                 n_crashes += 1
                 if n_crashes >= self.min_crashes:
                     if self.interesting_cb is not None:
@@ -289,9 +288,9 @@ class Interesting(object):
             temp_prefix (str): A unique prefix for any files written during this iteration.
 
         Returns:
-            float: Duration of the iteration on success otherwise -1.
+            bool: True if reduced testcase is still interesting.
         """
-        duration = -1
+        result = False
 
         # if target is closed and server is alive, we should restart it or else the first request
         #   against /first_test will 404
@@ -339,7 +338,6 @@ class Interesting(object):
             self.target.step()
 
         try:
-            start_time = time.time()
             idle_timeout_event = threading.Event()
             iteration_done_event = threading.Event()
             if self.idle_poll:
@@ -359,8 +357,6 @@ class Interesting(object):
             server_status, files_served = self.server.serve_testcase(testcase,
                                                                      continue_cb=keep_waiting,
                                                                      forever=self.no_harness)
-
-            end_time = time.time()
 
             # attempt to detect a failure
             failure_detected = self.target.detect_failure(
@@ -388,8 +384,7 @@ class Interesting(object):
                     # XXX: need to change this to support reducing timeouts?
                     LOG.info("Uninteresting: no crash detected")
                 elif self.orig_sig is None or self.orig_sig.matches(crash):
-                    duration = end_time - start_time
-                    assert duration >= 0
+                    result = True
                     LOG.info("Interesting: %s", short_sig)
                     if self.orig_sig is None and not self.any_crash:
                         max_frames = FuzzManagerReporter.signature_max_frames(crash, 5)
@@ -419,7 +414,7 @@ class Interesting(object):
             if self.idle_poll:
                 poll.join()
 
-        return duration
+        return result
 
     def cleanup(self, _):
         """Lithium cleanup entrypoint
