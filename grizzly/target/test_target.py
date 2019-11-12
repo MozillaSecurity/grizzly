@@ -5,106 +5,15 @@
 
 import os
 import platform
-import signal
-import tempfile
-import threading
-import time
 
 import pytest
 
-from ffpuppet import FFPuppet
+from ffpuppet import BrowserTimeoutError, FFPuppet
 
 from .puppet_target import PuppetTarget
-from .target import Target, TargetError
+from .target import Target, TargetError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
-
-class FakePuppet(object):
-    def __init__(self, use_rr, use_valgrind, use_xvfb):  # pylint: disable=unused-argument
-        self.reason = FFPuppet.RC_CLOSED
-        self.running = False
-        self._launches = 0
-        self.test_check_abort = False  # used to control testing
-        self.test_crashed = False  # used to control testing
-        self.test_running = False  # used to control testing
-        self.test_available_logs = list()  # used to control testing
-        self.test_cpu_usage = list()  # used to control testing
-
-    def add_abort_token(self, token):  # pylint: disable=no-self-use
-        pass
-
-    def available_logs(self):
-        return self.test_available_logs
-
-    def clean_up(self):
-        self.close()
-
-    def clone_log(self, log_id, offset=0):  # pylint: disable=no-self-use,unused-argument
-        assert log_id is not None
-        tmp_fd, log_file = tempfile.mkstemp(
-            suffix="_log.txt",
-            prefix="test_")
-        os.close(tmp_fd)
-        with open(log_file, "wb") as log_fp:
-            log_fp.write(b"test")
-        return log_file
-
-    def close(self):
-        # the reason code is dependent on the state of test_crashed and test_running
-        # this MUST model FFPuppet.close()
-        if self.reason is not None:
-            self.test_check_abort = False
-            self.test_crashed = False
-            self.test_running = False
-            return
-        if self.test_crashed:
-            self.reason = FFPuppet.RC_ALERT
-        elif self.test_check_abort:
-            self.reason = FFPuppet.RC_WORKER
-        elif self.test_running:
-            self.reason = FFPuppet.RC_CLOSED
-        else:
-            self.reason = FFPuppet.RC_EXITED
-        self.test_check_abort = False
-        self.test_crashed = False
-        self.test_running = False
-
-    def cpu_usage(self):
-        for usage in self.test_cpu_usage:
-            assert isinstance(usage, tuple)
-            yield usage
-
-    def get_pid(self):  # pylint: disable=no-self-use
-        return os.getpid()
-
-    def is_healthy(self):
-        return not self.test_crashed and self.test_running and not self.test_check_abort
-
-    def is_running(self):
-        return self.test_running
-
-    def launch(self, binary, launch_timeout=0, location=None, log_limit=0, memory_limit=0,  # pylint: disable=unused-argument,too-many-arguments
-               prefs_js=None, extension=None, env_mod=None):  # pylint: disable=unused-argument,too-many-arguments
-        self.reason = None
-        self.test_crashed = False
-        self.test_running = True
-
-    @property
-    def launches(self):
-        return self._launches
-
-    def log_length(self, log_id):  # pylint: disable=no-self-use
-        if log_id == "stderr":
-            return 1024
-        if log_id == "stdout":
-            return 100
-        return int(log_id.split("=")[1])
-
-    def save_logs(self, *args, **kwargs):
-        pass
-
-    def wait(self, timeout=0):  # pylint: disable=no-self-use,unused-argument
-        return 1234  # successful wait()
 
 class SimpleTarget(Target):
     def cleanup(self):
@@ -164,188 +73,215 @@ def test_target_03(tmp_path, mocker):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = SimpleTarget(str(fake_file), None, 300, 25, 5000, None, 1)
-    try:
-        target._monitor = mocker.Mock(spec=TargetMonitor)
-        target._monitor.is_healthy.return_value = True
-        # test skipping relaunch
-        target.rl_countdown = 2
-        target.step()
-        assert target.rl_countdown == 1
-        target.check_relaunch(wait=60)
-        # test triggering relaunch
-        target.rl_countdown = 1
-        target.step()
-        assert target.rl_countdown == 0
-        target.check_relaunch(wait=0)
-        # test with "crashed" process
-        target._monitor.is_healthy.return_value = False
-        target.rl_countdown = 0
-        target.step()
-        target.check_relaunch(wait=5)
-    finally:
-        target.cleanup()
+    target._monitor = mocker.Mock(spec=TargetMonitor)
+    target._monitor.is_healthy.return_value = True
+    # test skipping relaunch
+    target.rl_countdown = 2
+    target.step()
+    assert target.rl_countdown == 1
+    target.check_relaunch(wait=60)
+    # test triggering relaunch
+    target.rl_countdown = 1
+    target.step()
+    assert target.rl_countdown == 0
+    target.check_relaunch(wait=0)
+    # test with "crashed" process
+    target._monitor.is_healthy.return_value = False
+    target.rl_countdown = 0
+    target.step()
+    target.check_relaunch(wait=5)
+    target.cleanup()
 
-def test_puppet_target_01(tmp_path):
+def test_puppet_target_01(mocker, tmp_path):
     """test creating a PuppetTarget"""
-    PuppetTarget.PUPPET = FakePuppet
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_ffp.return_value.reason = FFPuppet.RC_CLOSED
+    fake_ffp.return_value.log_length.return_value = 562
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25)
-    try:
-        assert target.closed
-        assert target.detect_failure([], False) == Target.RESULT_NONE
-        assert target.log_size() == 1124
-        assert target.monitor is not None
-        assert isinstance(target._puppet, FakePuppet)
-        target.add_abort_token("test")
-        target.save_logs()
-    finally:
-        target.cleanup()
+    assert target.closed
+    assert target.detect_failure([], False) == Target.RESULT_NONE
+    assert target.log_size() == 1124
+    fake_ffp.return_value.log_length.assert_any_call("stderr")
+    fake_ffp.return_value.log_length.assert_any_call("stdout")
+    assert target.monitor is not None
+    target.add_abort_token("test")
+    assert fake_ffp.return_value.add_abort_token.call_count == 1
+    target.save_logs("fake_dest")
+    assert fake_ffp.return_value.save_logs.call_count == 1
+    target.cleanup()
+    assert fake_ffp.return_value.clean_up.call_count == 1
 
-def test_puppet_target_02(tmp_path):
+def test_puppet_target_02(mocker, tmp_path):
     """test PuppetTarget.launch()"""
-    PuppetTarget.PUPPET = FakePuppet
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 35)
     with pytest.raises(TargetError, match=r"A prefs.js file is required"):
         target.launch("launch_target_page")
+    assert fake_ffp.return_value.launch.call_count == 0
     target.prefs = str(fake_file)
-    try:
+    target.launch("launch_target_page")
+    assert fake_ffp.return_value.launch.call_count == 1
+    assert fake_ffp.return_value.close.call_count == 0
+    fake_ffp.return_value.launch.side_effect = BrowserTimeoutError
+    with pytest.raises(TargetLaunchTimeout):
         target.launch("launch_target_page")
-        assert not target.closed
-        assert target.detect_failure([], False) == Target.RESULT_NONE
-        target.close()
-        assert target.closed
-    finally:
-        target.cleanup()
+    assert fake_ffp.return_value.launch.call_count == 2
+    assert fake_ffp.return_value.close.call_count == 1
 
 def test_puppet_target_03(mocker, tmp_path):
     """test PuppetTarget.detect_failure()"""
-    PuppetTarget.PUPPET = FakePuppet
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_ffp.RC_ALERT = FFPuppet.RC_ALERT
+    fake_ffp.RC_CLOSED = FFPuppet.RC_CLOSED
+    fake_ffp.RC_EXITED = FFPuppet.RC_EXITED
+    fake_ffp.RC_WORKER = FFPuppet.RC_WORKER
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 25)
-    try:
-        target.launch("launch_target_page")
-        # no failures
-        assert target.detect_failure([], False) == Target.RESULT_NONE
-        assert target.detect_failure(["memory"], False) == Target.RESULT_NONE
-        assert not target.closed
-        assert target._puppet.reason is None
-        # test close
-        target.close()
-        assert target.detect_failure([], False) == Target.RESULT_NONE
-        assert target.closed
-        assert target._puppet.reason == FFPuppet.RC_CLOSED
-        # test single process crash
-        target.launch("launch_page")
-        target._puppet.test_crashed = True
-        target._puppet.test_running = False
-        assert target.detect_failure([], False) == Target.RESULT_FAILURE
-        assert target.closed
-        # test multiprocess crash
-        target.launch("launch_page")
-        target._puppet.test_crashed = True
-        assert target.detect_failure([], False) == Target.RESULT_FAILURE
-        assert target._puppet.reason == FFPuppet.RC_ALERT
-        assert target.closed
-        # test exit with no crash logs
-        target.launch("launch_page")
-        target._puppet.test_running = False
-        assert target.detect_failure([], False) == Target.RESULT_NONE
-        assert target._puppet.reason == FFPuppet.RC_EXITED
-        assert target.closed
-        # test timeout
-        target.launch("launch_page")
-        target._puppet.test_running = True
-        target._puppet.test_cpu_usage.append((1234, 10))
-        target._puppet.test_cpu_usage.append((1236, 75))
-        target._puppet.test_cpu_usage.append((1238, 60))
-        fake_os = mocker.patch("grizzly.target.puppet_target.os", autospec=True)
-        assert target.detect_failure([], True) == Target.RESULT_FAILURE
-        assert fake_os.kill.call_count == 1
-        assert target.closed
-        # test timeout ignored
-        target.launch("launch_page")
-        target._puppet.test_running = True
-        assert target.detect_failure(["timeout"], True) == Target.RESULT_IGNORED
-        assert target.closed
-        # test worker
-        target.launch("launch_page")
-        target._puppet.test_check_abort = True
-        assert target.detect_failure([], False) == Target.RESULT_FAILURE
-        assert target._puppet.reason == FFPuppet.RC_WORKER
-        assert target.closed
-        # test memory ignored
-        target.launch("launch_page")
-        target._puppet.test_check_abort = True
-        target._puppet.test_available_logs = ["ffp_worker_memory_usage"]
-        assert target.detect_failure(["memory"], False) == Target.RESULT_IGNORED
-        assert target._puppet.reason == FFPuppet.RC_WORKER
-        assert target.closed
-        # test log-limit ignored
-        target.launch("launch_page")
-        target._puppet.test_check_abort = True
-        target._puppet.test_available_logs = ["ffp_worker_log_size"]
-        assert target.detect_failure(["log-limit"], False) == Target.RESULT_IGNORED
-        assert target.closed
-    finally:
-        # test browser closing test case
-        target.cleanup()
-    os.environ["GRZ_FORCED_CLOSE"] = "0"
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 1)
-    try:
-        target.launch("launch_page")
-        target.step()
-        assert target.expect_close
-        assert target.detect_failure([], False) == Target.RESULT_NONE
-        target.close()
-    finally:
-        os.environ.pop("GRZ_FORCED_CLOSE", None)
-        target.cleanup()
+    # no failures
+    fake_ffp.return_value.is_healthy.return_value = True
+    fake_ffp.return_value.reason = None
+    assert target.detect_failure([], False) == Target.RESULT_NONE
+    assert target.detect_failure(["memory"], False) == Target.RESULT_NONE
+    assert not target.closed
+    # test close
+    fake_ffp.return_value.is_healthy.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = False
+    fake_ffp.return_value.is_running.return_value = False
+    fake_ffp.return_value.reason = FFPuppet.RC_CLOSED
+    assert target.detect_failure([], False) == Target.RESULT_NONE
+    assert fake_ffp.return_value.is_running.call_count == 1
+    assert fake_ffp.return_value.is_healthy.call_count == 1
+    assert fake_ffp.return_value.close.call_count == 1
+    # test single process crash
+    fake_ffp.return_value.close.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = False
+    fake_ffp.return_value.is_running.return_value = False
+    fake_ffp.return_value.reason = FFPuppet.RC_ALERT
+    assert target.detect_failure([], False) == Target.RESULT_FAILURE
+    assert fake_ffp.return_value.close.call_count == 1
+    # test multiprocess crash
+    fake_ffp.return_value.close.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = False
+    fake_ffp.return_value.is_running.return_value = True
+    fake_ffp.return_value.reason = FFPuppet.RC_ALERT
+    assert target.detect_failure([], False) == Target.RESULT_FAILURE
+    assert fake_ffp.return_value.close.call_count == 1
+    # test exit with no crash logs
+    fake_ffp.return_value.close.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = False
+    fake_ffp.return_value.is_running.return_value = False
+    fake_ffp.return_value.reason = FFPuppet.RC_EXITED
+    assert target.detect_failure([], False) == Target.RESULT_NONE
+    assert fake_ffp.return_value.close.call_count == 1
+    # test timeout
+    fake_ffp.return_value.close.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = True
+    fake_ffp.return_value.is_running.return_value = True
+    fake_ffp.return_value.reason = None
+    fake_ffp.return_value.cpu_usage.return_value = ((1234, 10), (1236, 75), (1238, 60))
+    fake_os = mocker.patch("grizzly.target.puppet_target.os", autospec=True)
+    assert target.detect_failure([], True) == Target.RESULT_FAILURE
+    assert fake_os.kill.call_count == 1
+    assert fake_ffp.return_value.close.call_count == 1
+    assert fake_ffp.return_value.wait.call_count == 1
+    # test timeout ignored
+    fake_ffp.return_value.close.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = True
+    fake_ffp.return_value.is_running.return_value = True
+    fake_ffp.return_value.reason = None
+    assert target.detect_failure(["timeout"], True) == Target.RESULT_IGNORED
+    assert fake_ffp.return_value.close.call_count == 1
+    # test worker
+    fake_ffp.return_value.close.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = False
+    fake_ffp.return_value.is_running.return_value = False
+    fake_ffp.return_value.reason = FFPuppet.RC_WORKER
+    assert target.detect_failure([], False) == Target.RESULT_FAILURE
+    assert fake_ffp.return_value.close.call_count == 1
+    # test memory ignored
+    fake_ffp.return_value.close.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = False
+    fake_ffp.return_value.is_running.return_value = False
+    fake_ffp.return_value.reason = FFPuppet.RC_WORKER
+    fake_ffp.return_value.available_logs.return_value = " ffp_worker_memory_usage "
+    assert target.detect_failure(["memory"], False) == Target.RESULT_IGNORED
+    assert fake_ffp.return_value.close.call_count == 1
+    # test log-limit ignored
+    fake_ffp.return_value.close.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = False
+    fake_ffp.return_value.is_running.return_value = False
+    fake_ffp.return_value.reason = FFPuppet.RC_WORKER
+    fake_ffp.return_value.available_logs.return_value = " ffp_worker_log_size "
+    assert target.detect_failure(["log-limit"], False) == Target.RESULT_IGNORED
+    assert fake_ffp.return_value.close.call_count == 1
+    # test browser closing test case
+    fake_ffp.return_value.close.call_count = 0
+    fake_ffp.return_value.wait.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = False
+    fake_ffp.return_value.is_running.return_value = False
+    fake_ffp.return_value.reason = FFPuppet.RC_EXITED
+    target.forced_close = False
+    target.rl_countdown = 0
+    assert target.detect_failure([], False) == Target.RESULT_NONE
+    assert fake_ffp.return_value.wait.call_count == 1
+    assert fake_ffp.return_value.close.call_count == 1
 
 @pytest.mark.skipif(platform.system() == "Windows",
                     reason="Unsupported on Windows")
 def test_puppet_target_04(mocker, tmp_path):
     """test PuppetTarget.dump_coverage()"""
-    PuppetTarget.PUPPET = FakePuppet
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_psutil = mocker.patch("grizzly.target.puppet_target.psutil", autospec=True)
+    fake_psutil.Process.return_value.children.return_value = (mocker.Mock(),)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 10)
     fake_os = mocker.patch("grizzly.target.puppet_target.os", autospec=True)
+    fake_ffp.return_value.get_pid.return_value = None
     target.dump_coverage()
     assert not fake_os.kill.call_count
-    target.launch("launch_page")
+    fake_ffp.return_value.is_running.return_value = True
+    fake_ffp.return_value.get_pid.return_value = 1234
     target.dump_coverage()
-    assert fake_os.kill.call_count
+    assert fake_os.kill.call_count == 2
+    assert fake_ffp.return_value.is_running.call_count == 1
 
-def test_puppet_target_05(tmp_path):
+def test_puppet_target_05(mocker, tmp_path):
     """test poll_for_idle()"""
-    PuppetTarget.PUPPET = FakePuppet
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 10)
+    fake_ffp.return_value.is_running.return_value = False
     assert target.poll_for_idle(1, 0.1) == Target.POLL_IDLE
-    target._puppet.test_cpu_usage.append((1234, 50.0))
-    target._puppet.test_running = True
+    fake_ffp.return_value.cpu_usage.return_value = ((1234, 50.0),)
+    fake_ffp.return_value.is_running.return_value = True
     assert target.poll_for_idle(90, 0.2) == Target.POLL_IDLE
     assert target.poll_for_idle(10, 0.2) == Target.POLL_BUSY
 
-def test_puppet_target_06(tmp_path):
+def test_puppet_target_06(mocker, tmp_path):
     """test PuppetTarget.monitor"""
-    PuppetTarget.PUPPET = FakePuppet
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25)
-    try:
-        assert target.monitor is not None
-        assert not target.monitor.is_healthy()
-        assert not target.monitor.is_running()
-        assert target.monitor.launches == 0
-        assert target.monitor.log_length("stdout") == 100
-        cloned = target.monitor.clone_log("somelog")
-        assert os.path.isfile(cloned)
-        os.remove(cloned)
-    finally:
-        target.cleanup()
+    fake_ffp.return_value.is_running.return_value = False
+    fake_ffp.return_value.is_healthy.return_value = False
+    assert target.monitor is not None
+    assert not target.monitor.is_healthy()
+    assert not target.monitor.is_running()
+    fake_ffp.return_value.is_running.return_value = True
+    fake_ffp.return_value.is_healthy.return_value = True
+    assert target.monitor.is_healthy()
+    assert target.monitor.is_running()
+    fake_ffp.return_value.launches = 123
+    assert target.monitor.launches == 123
+    fake_ffp.return_value.log_length.return_value = 100
+    assert target.monitor.log_length("stdout") == 100
+    target.monitor.clone_log("somelog")
+    assert fake_ffp.return_value.clone_log.call_count == 1
