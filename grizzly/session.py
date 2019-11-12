@@ -7,18 +7,46 @@ import logging
 import os
 import shutil
 import tempfile
+import time
 
 import sapphire
 from .common import Status, TestFile
 from .target import TargetLaunchError, TargetLaunchTimeout
 
 
-__all__ = ("Session",)
+__all__ = ("LogOutputLimiter", "Session")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
 log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
+
+
+class LogOutputLimiter(object):
+    def __init__(self, delay=300, delta_multiplier=2, verbose=False):
+        self._delay = delay  # maximum time delay between output
+        self._iterations = 1  # next iteration to trigger output
+        self._launches = 1  # next launch to trigger output
+        self._multiplier = delta_multiplier  # rate to decrease output (iterations)
+        self._time = time.time()
+        self._verbose = verbose  # always output
+
+    def ready(self, cur_iter, launches):
+        # calculate if a status line should be output
+        if self._verbose:
+            return True
+        ready = False
+        if cur_iter >= self._iterations:
+            ready = True
+            self._iterations *= self._multiplier
+        elif launches >= self._launches:
+            ready = True
+        elif time.time() - self._delay >= self._time:
+            ready = True
+        if ready:
+            self._time = time.time()
+            self._launches = launches + 1
+        return ready
 
 
 class Session(object):
@@ -31,7 +59,7 @@ class Session(object):
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
     def __init__(self, adapter, coverage, ignore, iomanager, reporter, target, display_mode=DISPLAY_NORMAL):
-        self._next_display = display_mode
+        self._lol = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         self.adapter = adapter
         self.coverage = coverage
         self.ignore = ignore
@@ -93,8 +121,7 @@ class Session(object):
                 len(self.iomanager.input_files),
                 self.status.results,
                 os.path.basename(self.status.test_name))
-        elif not self._next_display or self.status.iteration == self._next_display:
-            self._next_display *= 2
+        elif self._lol.ready(self.status.iteration, self.target.monitor.launches):
             if self.status.test_name:
                 log.debug("fuzzing: %s", os.path.basename(self.status.test_name))
             log.info("I%04d-R%02d ", self.status.iteration, self.status.results)

@@ -103,7 +103,7 @@ class PuppetTarget(Target):
         # check if there has been a crash, hang, etc...
         if not is_healthy or was_timeout:
             if self._puppet.is_running():
-                log.info("Terminating browser...")
+                log.debug("terminating browser...")
                 if was_timeout and "timeout" not in ignored:
                     self._abort_hung_proc()
                     # give the process a moment to start dump

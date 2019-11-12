@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
 """
 unit tests for grizzly.Session
 """
@@ -10,7 +11,7 @@ import pytest
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_TIMEOUT
 from grizzly.common import Adapter, InputFile, IOManager, Reporter, ServerMap, Status, TestCase, TestFile
-from grizzly.session import Session
+from grizzly.session import LogOutputLimiter, Session
 from grizzly.target import Target, TargetLaunchError, TargetLaunchTimeout
 
 
@@ -249,6 +250,7 @@ def test_session_06(tmp_path, mocker):
     session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
     session.TARGET_LOG_SIZE_WARN = 100
     session.config_server(5)
+    session._lol = mocker.Mock(spec=LogOutputLimiter)
     def fake_serve_testcase(*_a, **_kw):
         return SERVED_TIMEOUT if session.status.iteration % 2 else SERVED_ALL, []
     session.server.serve_testcase = fake_serve_testcase
@@ -269,3 +271,57 @@ def test_session_06(tmp_path, mocker):
     assert fake_iomgr.create_testcase.call_count == 10
     assert fake_target.detect_failure.call_count == 10
     assert fake_iomgr.create_testcase.return_value.purge_optional.call_count == 10
+
+def test_log_output_limiter_01(mocker):
+    """test LogOutputLimiter.ready() not ready"""
+    fake_time = mocker.patch("grizzly.session.time", autospec=True)
+    fake_time.time.return_value = 1.0
+    lol = LogOutputLimiter(delay=10, delta_multiplier=2)
+    assert lol._delay == 10
+    assert lol._iterations == 1
+    assert lol._launches == 1
+    assert lol._multiplier == 2
+    assert lol._time == 1.0
+    assert not lol._verbose
+    fake_time.time.return_value = 1.1
+    assert not lol.ready(0, 0)
+    assert lol._iterations == 1
+    assert lol._launches == 1
+    assert lol._time == 1.0
+    lol._verbose = True
+    assert lol.ready(0, 0)
+
+def test_log_output_limiter_02(mocker):
+    """test LogOutputLimiter.ready() due to iterations"""
+    fake_time = mocker.patch("grizzly.session.time", autospec=True)
+    fake_time.time.return_value = 1.0
+    lol = LogOutputLimiter(delay=10, delta_multiplier=2)
+    fake_time.time.return_value = 1.1
+    lol._launches = 2
+    assert lol.ready(1, 1)
+    assert lol._iterations == 2
+    assert lol._launches == 2
+    assert lol._time == 1.1
+
+def test_log_output_limiter_03(mocker):
+    """test LogOutputLimiter.ready() due to launches"""
+    fake_time = mocker.patch("grizzly.session.time", autospec=True)
+    fake_time.time.return_value = 1.0
+    lol = LogOutputLimiter(delay=10, delta_multiplier=2)
+    lol._iterations = 4
+    assert lol.ready(3, 1)
+    assert lol._launches == 2
+    assert lol._iterations == 4
+    assert lol._time == 1.0
+
+def test_log_output_limiter_04(mocker):
+    """test LogOutputLimiter.ready() due to time"""
+    fake_time = mocker.patch("grizzly.session.time", autospec=True)
+    fake_time.time.return_value = 1.0
+    lol = LogOutputLimiter(delay=1, delta_multiplier=2)
+    lol._iterations = 4
+    fake_time.time.return_value = 2.0
+    assert lol.ready(3, 0)
+    assert lol._iterations == 4
+    assert lol._launches == 1
+    assert lol._time == 2.0
