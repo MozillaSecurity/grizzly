@@ -21,8 +21,6 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class PuppetTarget(Target):
-    PUPPET = FFPuppet  # used in unit tests
-
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch, **kwds):
         super(PuppetTarget, self).__init__(binary, extension, launch_timeout, log_limit,
                                            memory_limit, prefs, relaunch)
@@ -33,7 +31,7 @@ class PuppetTarget(Target):
             log.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
 
         # create Puppet object
-        self._puppet = self.PUPPET(
+        self._puppet = FFPuppet(
             use_rr=self.use_rr,
             use_valgrind=self.use_valgrind,
             use_xvfb=use_xvfb)
