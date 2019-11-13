@@ -19,6 +19,21 @@ Installation
 ------------
 See [getting started](https://github.com/MozillaSecurity/grizzly/wiki/Getting-Started) on the wiki.
 
+Docker setup
+------------
+
+An alternative docker image is available. You need to build it first:
+
+```
+docker build -f docker/Dockerfile -t grizzly .
+```
+
+Then you can execute it, and access grizzly. By default it will download a recent ASan build, and run a no-op adapter:
+
+```
+docker run --rm grizzly
+```
+
 Target platforms
 -------
 Other target platforms can be defined as [setuptools entry-points](https://setuptools.readthedocs.io/en/latest/setuptools.html#dynamic-discovery-of-services-and-plugins),
