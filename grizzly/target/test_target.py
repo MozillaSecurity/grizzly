@@ -237,19 +237,79 @@ def test_puppet_target_04(mocker, tmp_path):
     """test PuppetTarget.dump_coverage()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_psutil = mocker.patch("grizzly.target.puppet_target.psutil", autospec=True)
-    fake_psutil.Process.return_value.children.return_value = (mocker.Mock(),)
+    fake_psutil.Process.return_value.children.return_value = (mocker.Mock(pid=123),)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 10)
     fake_os = mocker.patch("grizzly.target.puppet_target.os", autospec=True)
+    # not running
     fake_ffp.return_value.get_pid.return_value = None
     target.dump_coverage()
     assert not fake_os.kill.call_count
-    fake_ffp.return_value.is_running.return_value = True
+    assert fake_ffp.return_value.get_pid.call_count == 1
+    assert fake_psutil.process_iter.call_count == 0
+    # timeout
+    fake_ffp.return_value.is_healthy.return_value = True
+    fake_ffp.return_value.get_pid.return_value = 1234
+    target.dump_coverage(timeout=0)
+    assert fake_os.kill.call_count == 2
+    assert fake_psutil.process_iter.call_count == 1
+    assert fake_ffp.return_value.is_healthy.call_count == 1
+    # browser crashes
+    fake_os.kill.call_count = 0
+    fake_ffp.return_value.is_healthy.call_count = 0
+    fake_ffp.return_value.is_healthy.side_effect = [True, False]
     fake_ffp.return_value.get_pid.return_value = 1234
     target.dump_coverage()
     assert fake_os.kill.call_count == 2
-    assert fake_ffp.return_value.is_running.call_count == 1
+    assert fake_psutil.process_iter.call_count == 2
+    assert fake_ffp.return_value.is_healthy.call_count == 2
+    # wait for files
+    fake_os.kill.call_count = 0
+    fake_ffp.return_value.is_healthy.call_count = 0
+    fake_ffp.return_value.is_healthy.return_value = True
+    fake_ffp.return_value.is_healthy.side_effect = None
+    fake_ffp.return_value.get_pid.return_value = 123
+    fpi = mocker.Mock(iters=0)
+    def fake_process_iter(*args, **kwargs):
+        fpi.iters += 1
+        if fpi.iters == 1:
+            yield mocker.Mock(info={
+                "pid": 123,
+                "ppid": 0,
+                "open_files": (mocker.Mock(path="a.bin"), mocker.Mock(path="/a/s/d"))
+            })
+            yield mocker.Mock(info={
+                "pid": 321,
+                "ppid": 0,
+                "open_files": (mocker.Mock(path="a.bin"),)
+            })
+        elif fpi.iters == 2:
+            yield mocker.Mock(info={
+                "pid": 123,
+                "ppid": 0,
+                "open_files": (mocker.Mock(path="a.gcda"),)
+            })
+            yield mocker.Mock(info={
+                "pid": 321,
+                "ppid": 0,
+                "open_files": (mocker.Mock(path="a.bin"),)
+            })
+        elif fpi.iters == 3:
+            yield mocker.Mock(info={
+                "pid": 123,
+                "ppid": 0,
+                "open_files": (mocker.Mock(path="a.bin"),)
+            })
+            yield mocker.Mock(info={
+                "pid": 321,
+                "ppid": 0,
+                "open_files": (mocker.Mock(path="ignore.gcda"),)
+            })
+    fake_psutil.process_iter = fake_process_iter
+    target.dump_coverage()
+    assert fpi.iters == 3
+    assert fake_os.kill.call_count == 2
 
 def test_puppet_target_05(mocker, tmp_path):
     """test poll_for_idle()"""

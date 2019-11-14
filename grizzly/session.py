@@ -219,6 +219,9 @@ class Session(object):
                 log.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, files_served)
 
+            if self.coverage and server_status != sapphire.SERVED_TIMEOUT:
+                self.target.dump_coverage()
+
             # check for results and report as necessary
             self.check_results(not files_served, server_status == sapphire.SERVED_TIMEOUT)
 
@@ -226,9 +229,6 @@ class Session(object):
             self.status.log_size = self.target.log_size()
             if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
                 log.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
-
-            if self.coverage:
-                self.target.dump_coverage()
 
             # trigger relaunch by closing the browser if needed
             self.target.check_relaunch()
