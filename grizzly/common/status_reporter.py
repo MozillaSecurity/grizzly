@@ -15,10 +15,9 @@ import time
 
 import psutil
 
-from .reduce_status import ReduceStatus
-from .status import Status
+from .status import ReducerStats, Status
 
-__all__ = ("ReduceStatusReporter", "StatusReporter")
+__all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -32,7 +31,8 @@ class StatusReporter(object):
     READ_BUF_SIZE = 0x10000  # 64KB
     SUMMARY_LIMIT = 4095  # summary output must be no more than 4KB
 
-    def __init__(self, reports, tracebacks=None):
+    def __init__(self, reports, reducer=False, tracebacks=None):
+        self._reducer = reducer
         self.reports = reports
         self.tracebacks = tracebacks
 
@@ -64,25 +64,19 @@ class StatusReporter(object):
             ofp.write(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
     @classmethod
-    def load(cls, tb_path=None):
+    def load(cls, reducer=False, tb_path=None):
         """Read Grizzly status reports and create a StatusReporter object
 
         Args:
-            tb_path (str): Directory to scan for file containing Python tracebacks
+            tb_path (str): Directory to scan for files containing Python tracebacks
 
         Returns:
             StatusReporter: Contains status reports and traceback reports that were found
         """
+        if tb_path is not None and not os.path.isdir(tb_path):
+            raise IOError("%r is not a directory" % (tb_path,))
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
-        return cls(cls._load_reports(), tracebacks)
-
-    @staticmethod
-    def _load_reports():
-        conn = Status.open_connection(timeout=30)
-        try:
-            return list(Status.load(conn=conn))
-        finally:
-            conn.close()
+        return cls(list(Status.loadall()), reducer=reducer, tracebacks=tracebacks)
 
     def print_specific(self):
         print(self._specific())
@@ -92,8 +86,6 @@ class StatusReporter(object):
 
     @staticmethod
     def _scan(path, fname_pattern):
-        if not os.path.isdir(path):
-            return
         abs_path = os.path.abspath(path)
         for fname in os.listdir(abs_path):
             if fname_pattern.match(fname) is None:
@@ -127,8 +119,10 @@ class StatusReporter(object):
             txt.append(" Runtime %s\n" % str(datetime.timedelta(seconds=int(report.duration))))
             txt.append(" * Iterations: %03d" % report.iteration)
             txt.append(" - Rate: %0.2f" % report.rate)
-            txt.append(" - Ignored: %02d" % report.ignored)
-            txt.append(" - Results: %d\n" % report.results)
+            if not self._reducer:
+                txt.append(" - Ignored: %02d" % report.ignored)
+                txt.append(" - Results: %d" % report.results)
+            txt.append("\n")
         return "".join(txt)
 
     def _summary(self, runtime=True, sysinfo=False, timestamp=False):
@@ -143,9 +137,24 @@ class StatusReporter(object):
         Returns:
             str: A summary of merged reports
         """
+        txt = list()
+        if self._reducer:
+            # reducer stats
+            with ReducerStats() as stats:
+                r_error = stats.error
+                r_failed = stats.failed
+                r_passed = stats.passed
+            txt.append("======== Stats ========\n")
+            # Reduced successfully
+            txt.append("   Reduced : %d\n" % (r_passed,))
+            # Failed to reproduce
+            txt.append("  No Repro : %d\n" % (r_failed,))
+            # Error during reduction
+            txt.append("    Errors : %d\n" % (r_error,))
+            txt.append("======= Active ========\n")
+        # Job specific status
         exp = int(time.time()) - self.EXP_LIMIT
         reports = tuple(x for x in self.reports if x.timestamp > exp)
-        txt = list()
         if reports:
             # calculate totals
             iterations = tuple(x.iteration for x in reports)
@@ -165,8 +174,12 @@ class StatusReporter(object):
             if count > 1:
                 txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
             txt.append("\n")
-            # Results and ignored
-            txt.append("   Results : %d" % (sum(results),))
+            if self._reducer:
+                # Signature mismatch
+                txt.append("  Mismatch : %d" % (sum(results),))
+            else:
+                # Results
+                txt.append("   Results : %d" % (sum(results),))
             if total_ignored:
                 ignore_pct = (total_ignored / float(total_iters)) * 100
                 txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, ignore_pct))
@@ -194,19 +207,30 @@ class StatusReporter(object):
             txt.append(" Timestamp : %s" % (time.strftime("%Y/%m/%d %X %z", time.gmtime()),))
         msg = "".join(txt)
         if self.tracebacks:
-            # append tracebacks to summary output without exceeding SUMMARY_LIMIT
-            msg_size = len(msg)
-            txt = list()
-            txt.append("\n\nWARNING Tracebacks (%d) detected!" % (len(self.tracebacks),))
-            tb_size = len("".join(txt))
-            for tbr in self.tracebacks:
-                tb_size += len(tbr) + 1
-                if msg_size + tb_size > self.SUMMARY_LIMIT:
-                    break
-                txt.append("\n")
-                txt.append(str(tbr))
-            msg = "".join([msg] + txt)
+            txt = self._merge_tracebacks(self.tracebacks, self.SUMMARY_LIMIT - len(msg))
+            msg = "".join((msg, txt))
         return msg
+
+    @staticmethod
+    def _merge_tracebacks(tracebacks, size_limit):
+        """Merge traceback without exceeding size_limit.
+
+        Args:
+            tracebacks (iterable): TracebackReport to merge.
+            size_limit (int): Maximum size in bytes of output.
+
+        Returns:
+            str: merged tracebacks.
+        """
+        txt = list()
+        txt.append("\n\nWARNING Tracebacks (%d) detected!" % (len(tracebacks),))
+        tb_size = len(txt[-1])
+        for tbr in tracebacks:
+            tb_size += len(tbr) + 1
+            if tb_size > size_limit:
+                break
+            txt.append(str(tbr))
+        return "\n".join(txt)
 
     @staticmethod
     def _sys_info():
@@ -263,140 +287,6 @@ class StatusReporter(object):
                 continue
             tracebacks.append(tbr)
         return tracebacks
-
-
-class ReduceStatusReporter(StatusReporter):
-    @staticmethod
-    def _load_reports():
-        conn = ReduceStatus.open_connection(timeout=30)
-        try:
-            return list(ReduceStatus.load(conn=conn))
-        finally:
-            conn.close()
-
-    def _specific(self):
-        """Merged and generate formatted output of status reports.
-
-        Args:
-            None
-
-        Returns:
-            str: A formatted report
-        """
-        if not self.reports:
-            return "No status reports available"
-        exp = int(time.time()) - self.EXP_LIMIT
-        self.reports.sort(key=lambda x: x.duration, reverse=True)
-        self.reports.sort(key=lambda x: x.timestamp < exp)
-        txt = list()
-        for num, report in enumerate(self.reports, start=1):
-            txt.append("#%02d" % (num,))
-            if report.timestamp < exp:
-                txt.append(" (EXPIRED)\n")
-                continue
-            txt.append(" Runtime %s\n" % str(datetime.timedelta(seconds=int(report.duration))))
-            txt.append(" * Iterations: %03d" % report.iteration)
-            txt.append(" - Rate: %0.2f" % report.rate)
-            txt.append("\n")
-            #txt.append(" - Ignored: %02d" % report.ignored)
-            #txt.append(" - Results: %d\n" % report.results)
-        return "".join(txt)
-
-    def _summary(self, runtime=True, sysinfo=False, timestamp=False):
-        """Merge and generate a summary of status reports.
-
-        Args:
-            filename (str): Path where output should be written.
-            runtime (bool): Include total runtime in output
-            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output
-            timestamp (bool): Include time stamp in output
-
-        Returns:
-            str: A summary of merged reports
-        """
-        exp = int(time.time()) - self.EXP_LIMIT
-        # filter out expired reports
-        reports = tuple(x for x in self.reports if x.timestamp > exp)
-        txt = list()
-        # Overall status
-        if reports:
-            # calculate totals
-            count = len(reports)
-            r_error = tuple(x.reduce_error for x in reports)
-            r_fail = tuple(x.reduce_fail for x in reports)
-            r_pass = tuple(x.reduce_pass for x in reports)
-            txt.append("---- Processed (%d)\n" % (sum(r_pass) + sum(r_fail) + sum(r_error),))
-            # Reduced successfully
-            txt.append("   Reduced : %d" % (sum(r_pass),))
-            if count > 1:
-                txt.append(" (%s, %s)" % (max(r_pass), min(r_pass)))
-            txt.append("\n")
-            # Failed to reproduce
-            txt.append("  No Repro : %d" % (sum(r_fail),))
-            if count > 1:
-                txt.append(" (%s, %s)" % (max(r_fail), min(r_fail)))
-            txt.append("\n")
-            # Error during reduction
-            txt.append("    Errors : %d" % (sum(r_error),))
-            if count > 1:
-                txt.append(" (%s, %s)" % (max(r_error), min(r_error)))
-        else:
-            txt.append("No status reports available")
-        # Job specific status
-        # filter out inactive
-        reports = tuple(x for x in reports if x.duration > 0 or x.iteration > 0)
-        if reports:
-            count = len(reports)
-            txt.append("\n------- Active\n")
-            # Iterations
-            iterations = tuple(x.iteration for x in reports)
-            total_iters = sum(iterations)
-            txt.append("Iterations : %d" % (total_iters,))
-            if count > 1:
-                txt.append(" (%s, %s)" % (max(iterations), min(iterations)))
-            txt.append("\n")
-            # Rate
-            rates = tuple(x.rate for x in reports)
-            txt.append("      Rate : %d @ %0.2f" % (count, sum(rates)))
-            if count > 1:
-                txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
-            txt.append("\n")
-            # Runtime
-            durations = tuple(x.duration for x in reports)
-            if count > 1:
-                max_duration = str(datetime.timedelta(seconds=int(max(durations))))
-                min_duration = str(datetime.timedelta(seconds=int(min(durations))))
-                txt.append("   Runtime : (%s, %s)" % (max_duration, min_duration))
-            else:
-                txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(durations[0]))),))
-            txt.append("\n")
-            # Results (Signature mismatch) and ignored
-            txt.append("  Mismatch : %d" % (sum(x.results for x in reports),))
-            total_ignored = sum(x.ignored for x in reports)
-            if total_ignored:
-                ignore_pct = (total_ignored / float(total_iters)) * 100
-                txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, ignore_pct))
-        if sysinfo:
-            txt.append("\n")
-            txt.append(self._sys_info())
-        if timestamp:
-            txt.append("\n")
-            txt.append(" Timestamp : %s" % (time.strftime("%Y/%m/%d %X %z", time.gmtime()),))
-        msg = "".join(txt)
-        if self.tracebacks:
-            # append tracebacks to summary output without exceeding SUMMARY_LIMIT
-            msg_size = len(msg)
-            txt = list()
-            txt.append("\n\nWARNING Tracebacks (%d) detected!" % (len(self.tracebacks),))
-            tb_size = len("".join(txt))
-            for tbr in self.tracebacks:
-                tb_size += len(tbr) + 1
-                if msg_size + tb_size > self.SUMMARY_LIMIT:
-                    break
-                txt.append("\n")
-                txt.append(str(tbr))
-            msg = "".join([msg] + txt)
-        return msg
 
 
 class TracebackReport(object):
@@ -520,10 +410,7 @@ def main(args=None):
 
     if args.mode not in modes:
         parser.error("Invalid mode %r" % args.mode)
-    if args.mode == "reduce-status":
-        reporter = ReduceStatusReporter.load(tb_path=args.tracebacks)
-    else:
-        reporter = StatusReporter.load(tb_path=args.tracebacks)
+    reporter = StatusReporter.load(tb_path=args.tracebacks, reducer=args.mode == "reduce-status")
     if args.dump:
         reporter.dump_summary(args.dump)
         return 0

@@ -26,7 +26,7 @@ from .interesting import Interesting
 from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..session import Session
 from ..common import FilesystemReporter, FuzzManagerReporter, Report
-from ..common import ReduceStatus
+from ..common import Status, ReducerStats
 from ..target import load as load_target
 
 
@@ -527,17 +527,7 @@ def main(args, interesting_cb=None, result_cb=None):
     target = None
     job = None
 
-    # attempt to load status (used by automation)
-    status_uid = os.getenv("GRZ_STATUS_UID")
-    if status_uid is not None:
-        status_uid = int(status_uid)
-        status = ReduceStatus.load(status_uid)
-    else:
-        status = None
-    if status is None:
-        # create new status object
-        status = ReduceStatus.start(uid=status_uid)
-
+    status = Status.start()
     job_cancelled = False
     try:
         LOG.debug("initializing the Target")
@@ -616,13 +606,14 @@ def main(args, interesting_cb=None, result_cb=None):
         if result_cb is not None:
             result_cb(job.result_code)
 
-        # update status
-        if result:
-            status.reduce_pass += 1
-        elif job.result_code in (6, 10):
-            status.reduce_fail += 1
-        elif job.result_code in (7, 8, 9):
-            status.reduce_error += 1
+        # update stats
+        with ReducerStats() as stats:
+            if result:
+                stats.passed += 1
+            elif job.result_code in (6, 10):
+                stats.failed += 1
+            elif job.result_code in (7, 8, 9):
+                stats.error += 1
 
         if result:
             LOG.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
@@ -632,7 +623,8 @@ def main(args, interesting_cb=None, result_cb=None):
         return Session.EXIT_ERROR
 
     except NoTestcaseError:
-        status.reduce_error += 1
+        with ReducerStats() as stats:
+            stats.error += 1
         # TODO: test should be marked as Q7
         return Session.EXIT_ERROR
 
@@ -642,7 +634,8 @@ def main(args, interesting_cb=None, result_cb=None):
 
     except ffpuppet.LaunchError as exc:
         LOG.error("Error launching target: %s", exc)
-        status.reduce_error += 1
+        with ReducerStats() as stats:
+            stats.error += 1
         return Session.EXIT_LAUNCH_FAILURE
 
     finally:
@@ -656,7 +649,4 @@ def main(args, interesting_cb=None, result_cb=None):
         if job is None and target is not None:
             target.cleanup()
         # call cleanup if we are unlikely to be using status again
-        if "GRZ_STATUS_UID" not in os.environ:
-            status.cleanup()
-        else:
-            status.report(reset_status=True)
+        status.cleanup()

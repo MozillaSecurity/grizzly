@@ -3,13 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
+import json
 import logging
 import os
-import sqlite3
 import tempfile
 import time
 
-__all__ = ("Status",)
+import fasteners
+
+__all__ = ("ReducerStats", "Status")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -18,15 +20,17 @@ LOG = logging.getLogger("status")
 
 class Status(object):
     """Status holds status information for the Grizzly session.
+    There can be multiple readers of the data but only a single writer.
     """
     AGE_LIMIT = 3600  # 1 hour
-    DB_FILE = os.path.join(tempfile.gettempdir(), "grz-status.db")
+    PATH = os.path.join(tempfile.gettempdir(), "grzstatus")
     REPORT_FREQ = 60
 
-    def __init__(self, uid, start_time, conn=None):
-        assert isinstance(start_time, int)
-        assert isinstance(uid, int)
-        self.conn = conn
+    def __init__(self, data_file, start_time):
+        assert isinstance(data_file, str) and os.path.isfile(data_file)
+        assert isinstance(start_time, float)
+        self._lock = fasteners.process_lock.InterProcessLock("%s.lock" % (data_file,))
+        self.data_file = data_file
         self.ignored = 0
         self.iteration = 0
         self.log_size = 0
@@ -34,10 +38,9 @@ class Status(object):
         self.start_time = start_time
         self.test_name = None
         self.timestamp = start_time
-        self.uid = uid
 
     def cleanup(self):
-        """Close db connection and remove entries that are no longer needed.
+        """Remove data file.
 
         Args:
             None
@@ -45,29 +48,21 @@ class Status(object):
         Returns:
             None
         """
-        if self.conn is None:
-            LOG.debug("cleanup: self.conn is None")
+        if self.data_file is None:
             return
-        try:
-            self.conn.execute("""DELETE FROM status WHERE id = ?;""", (self.uid,))
-            self.conn.commit()
-        except (sqlite3.OperationalError, sqlite3.ProgrammingError) as exc:
-            LOG.warning("cleanup failed: %r", str(exc))
-        self.close()
-
-    def close(self):
-        """Close db connection.
-
-        Args:
-            None
-
-        Returns:
-            None
-        """
-        if self.conn is not None:
-            LOG.debug("closing db connection")
-            self.conn.close()
-            self.conn = None
+        with self._lock:
+            try:
+                if os.path.isfile(self.data_file):
+                    os.unlink(self.data_file)
+            except OSError:
+                LOG.warning("Failed to delete %r", self.data_file)
+            lock_file = "%s.lock" % (self.data_file,)
+            self.data_file = None
+        if os.path.isfile(lock_file):
+            try:
+                os.unlink(lock_file)
+            except OSError:
+                pass
 
     @property
     def duration(self):
@@ -82,61 +77,48 @@ class Status(object):
         return max(self.timestamp - self.start_time, 0)
 
     @classmethod
-    def load(cls, conn=None, timeout=10, uid=None):
-        """Read Grizzly status reports.
+    def load(cls, data_file):
+        """Read Grizzly status report.
 
         Args:
-            conn (sqlite3.Connection): An open (shared) sqlite db connection.
-            timeout (int): Timeout for sqlite db connection.
-            uid (int): Unique ID of Grizzly status to load.
+            data_file (str): JSON file that contains status data.
 
         Returns:
-            Generator: Status objects stored in cls.DB_FILE
+            Status: Loaded status object or None
         """
-        LOG.debug("load uid %r", uid)
-        if uid is None:
-            assert conn is not None, "shared conn required when loading all entries"
-            query = """SELECT id, ignored, iteration, log_size,
-                              results, start_time, time_stamp
-                       FROM status
-                       WHERE time_stamp >= ?;"""
-            args = (int(time.time()) - cls.AGE_LIMIT,)
-        else:
-            assert isinstance(uid, int)
-            if conn is None:
-                conn = cls.open_connection(timeout=timeout)
-            query = """SELECT id, ignored, iteration, log_size,
-                              results, start_time, time_stamp
-                       FROM status
-                       WHERE time_stamp >= ? AND id = ?;"""
-            args = (int(time.time()) - cls.AGE_LIMIT, uid)
-        try:
-            for row in conn.execute(query, args):
-                # if uid is None a shared connection is implied and
-                # not passed to the status object
-                status = cls(int(row[0]), int(row[5]), conn=None if uid is None else conn)
-                status.ignored = int(row[1])
-                status.iteration = int(row[2])
-                status.log_size = int(row[3])
-                status.results = int(row[4])
-                status.timestamp = int(row[6])
-                yield status
-        except sqlite3.OperationalError as exc:
-            LOG.warning("load failed: %r", str(exc))
-            conn.close()
+        if not os.path.isfile(data_file):
+            return None
+        with fasteners.process_lock.InterProcessLock("%s.lock" % (data_file,)):
+            with open(data_file, "r") as out_fp:
+                try:
+                    data = json.load(out_fp)
+                except ValueError:
+                    LOG.debug("failed to json")
+                    return None
+        status = cls(data_file, data["start_time"])
+        for attr, value in data.items():
+            setattr(status, attr, value)
+        return status
 
     @classmethod
-    def open_connection(cls, timeout=10):
-        """Open a database connection.
+    def loadall(cls):
+        """Read all Grizzly status reports found in cls.PATH.
 
         Args:
-            timeout (int): Timeout for sqlite db connection.
+            None
 
         Returns:
-            sqlite3.Connection: An open sqlite db connection.
+            Generator: Status objects stored in cls.PATH.
         """
-        LOG.debug("opening db %r (timeout %d)", cls.DB_FILE, timeout)
-        return sqlite3.connect(cls.DB_FILE, timeout)
+        if not os.path.isdir(cls.PATH):
+            return
+        for data_file in os.listdir(cls.PATH):
+            if not data_file.endswith(".json"):
+                continue
+            status = cls.load(os.path.join(cls.PATH, data_file))
+            if status is None:
+                continue
+            yield status
 
     @property
     def rate(self):
@@ -150,6 +132,17 @@ class Status(object):
         """
         return self.iteration / float(self.duration) if self.duration > 0 else 0
 
+    @property
+    def _data(self):
+        return {
+            "ignored": self.ignored,
+            "iteration": self.iteration,
+            "log_size": self.log_size,
+            "results": self.results,
+            "start_time": self.start_time,
+            "test_name": self.test_name,
+            "timestamp": self.timestamp}
+
     def report(self, force=False, report_freq=REPORT_FREQ):
         """Write Grizzly status report. Reports are only written when the duration
         of time since the previous report was created exceeds `report_freq` seconds
@@ -161,94 +154,77 @@ class Status(object):
         Returns:
             bool: Returns true if the report was successful otherwise false
         """
-        assert self.conn is not None
-        now = int(time.time())
+        now = time.time()
         if not force and now < (self.timestamp + report_freq):
             return False
         self.timestamp = now
-        try:
-            self.conn.execute("""UPDATE status
-                                 SET ignored = ?,
-                                     iteration = ?,
-                                     log_size = ?,
-                                     results = ?,
-                                     time_stamp = ?
-                                 WHERE id = ?;""",
-                              (self.ignored, self.iteration, self.log_size,
-                               self.results, self.timestamp, self.uid))
-            self.conn.commit()
-        except sqlite3.OperationalError as exc:
-            LOG.warning("report failed: %r", str(exc))
-            return False
+        with self._lock:
+            with open(self.data_file, "w") as out_fp:
+                json.dump(self._data, out_fp)
         return True
 
-    def reset(self):
-        """Reset Grizzly status to initial state.
+    @classmethod
+    def start(cls):
+        """Create a unique Status object.
 
         Args:
             None
 
         Returns:
-            bool: Returns true if the reset was successful otherwise false
-        """
-        assert self.conn is not None
-        now = int(time.time())
-        try:
-            self.conn.execute("""UPDATE status
-                                 SET ignored = 0,
-                                     iteration = 0,
-                                     log_size = 0,
-                                     results = 0,
-                                     start_time = ?,
-                                     time_stamp = ?
-                                 WHERE id = ?;""", (now, now, self.uid))
-            self.conn.commit()
-            self.ignored = 0
-            self.iteration = 0
-            self.log_size = 0
-            self.results = 0
-            self.start_time = self.timestamp = now
-        except sqlite3.OperationalError as exc:
-            LOG.warning("reset failed: %r", str(exc))
-            return False
-        return True
-
-    @classmethod
-    def start(cls, uid=None):
-        """Create a unique Status object.
-
-        Args:
-            uid (int): Unique ID of Grizzly status to use.
-
-        Returns:
             Status: Ready to be used to report Grizzly status
         """
-        conn = cls.open_connection()
+        if not os.path.isdir(cls.PATH):
+            try:
+                os.mkdir(cls.PATH)
+            except OSError:
+                if not os.path.isdir(cls.PATH):
+                    raise
+        tfd, filepath = tempfile.mkstemp(dir=cls.PATH, prefix="grzstatus_", suffix=".json")
+        os.close(tfd)
+        status = cls(filepath, time.time())
+        status.report(force=True)
+        return status
+
+
+class ReducerStats(object):
+    """ReducerStats holds stats for the Grizzly reducer.
+    """
+
+    FILE = "reducer-stats.json"
+    PATH = tempfile.gettempdir()
+
+    def __init__(self):
+        if not os.path.isdir(self.PATH):
+            raise OSError("Missing directory %r" % self.PATH)
+        self._file = os.path.join(self.PATH, self.FILE)
+        self._lock = None
+        self.error = 0
+        self.failed = 0
+        self.passed = 0
+
+    def __enter__(self):
+        self._lock = fasteners.process_lock.InterProcessLock("%s.lock" % (self._file,))
+        self._lock.acquire()
         try:
-            cur = conn.cursor()
-            cur.execute("""CREATE TABLE IF NOT EXISTS status
-                           (id         INTEGER PRIMARY KEY,
-                            ignored    INTEGER DEFAULT 0,
-                            iteration  INTEGER DEFAULT 0,
-                            log_size   INTEGER DEFAULT 0,
-                            results    INTEGER DEFAULT 0,
-                            start_time INTEGER DEFAULT 0,
-                            time_stamp INTEGER DEFAULT 0);""")
-            now = int(time.time())
-            # remove old reports
-            cur.execute("""DELETE FROM status
-                           WHERE time_stamp < ?;""", (now - cls.AGE_LIMIT,))
-            # create new status entry
-            if uid is None:
-                cur = conn.execute("""INSERT INTO status (start_time, time_stamp)
-                                      VALUES (?, ?);""", (now, now))
-            else:
-                LOG.warning("uid %r specified", uid)
-                assert isinstance(uid, int)
-                cur = conn.execute("""INSERT INTO status (id, start_time, time_stamp)
-                                      VALUES (?, ?, ?);""", (uid, now, now))
-            conn.commit()
-            return cls(cur.lastrowid, now, conn=conn)
-        except sqlite3.OperationalError:
-            conn.close()
-            raise
+            with open(self._file, "r") as in_fp:
+                data = json.load(in_fp)
+            self.error = data["error"]
+            self.failed = data["failed"]
+            self.passed = data["passed"]
+        except IOError:
+            LOG.debug("%r does not exist", self._file)
+        except ValueError:
+            LOG.debug("failed to load stats from %r", self._file)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            with open(self._file, "w") as out_fp:
+                json.dump({
+                    "error": self.error,
+                    "failed": self.failed,
+                    "passed": self.passed}, out_fp)
+        finally:
+            if self._lock:
+                self._lock.release()
+            self._lock = None

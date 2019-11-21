@@ -8,7 +8,7 @@ import zipfile
 import pytest
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs, ReducerFuzzManagerIDQualityArgs
 from grizzly.reduce import reduce, crash, bucket, ReductionJob
-from grizzly.common import ReduceStatus, reporter
+from grizzly.common import Status, reporter
 from .test_common import BaseFakeReporter, FakeTarget
 from .test_reduce import FakeInteresting
 
@@ -127,7 +127,8 @@ def test_main_prefs(monkeypatch, tmp_path):
             run_called[0] += 1
             return result
 
-    status = ReduceStatus.start()
+    Status.PATH = str(tmp_path / "grzstatus")
+    status = Status.start()
     job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, status, None, False)
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
 
@@ -436,7 +437,7 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylin
     assert not expect_patch
 
 
-def test_environ_and_suppressions(monkeypatch, tmpdir):
+def test_environ_and_suppressions(monkeypatch, tmp_path):
     ""
     run_called = [0]
 
@@ -453,17 +454,20 @@ def test_environ_and_suppressions(monkeypatch, tmpdir):
             assert "lsan.supp" in self.interesting.env_mod["LSAN_OPTIONS"]
             run_called[0] += 1
 
-    status = ReduceStatus.start()
+    Status.PATH = str(tmp_path / "grzstatus")
+    status = Status.start()
     job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, status, None, False)
     monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
     assert job.interesting.target.forced_close
 
-    exe = tmpdir.ensure("binary")
-    inp = tmpdir.ensure("input", dir=True)
-    inp.ensure("env_vars.txt").write("LSAN_OPTIONS=detect_leaks=1\nGRZ_FORCED_CLOSE=0")
-    inp.ensure("test_info.txt").write("landing page: test.html")
-    inp.ensure("lsan.supp").write("foo")
-    inp.ensure("test.html").write("fluff\nrequired\n")
-    args = ReducerArgs().parse_args([exe.strpath, inp.strpath])
+    exe = tmp_path / "binary"
+    exe.touch()
+    inp = tmp_path / "input"
+    inp.mkdir()
+    (inp / "env_vars.txt").write_text("LSAN_OPTIONS=detect_leaks=1\nGRZ_FORCED_CLOSE=0")
+    (inp / "test_info.txt").write_text("landing page: test.html")
+    (inp / "lsan.supp").write_text("foo")
+    (inp / "test.html").write_text("fluff\nrequired\n")
+    args = ReducerArgs().parse_args([str(exe), str(inp)])
     reduce.main(args)
     assert run_called[0] == 1

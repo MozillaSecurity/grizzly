@@ -17,7 +17,7 @@ from grizzly.target import Target, TargetLaunchError, TargetLaunchTimeout
 
 def test_session_00(tmp_path, mocker):
     """test basic Session functions"""
-    Status.DB_FILE = str(tmp_path / "test.db")
+    Status.PATH = str(tmp_path)
     fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
     fake_server.return_value.serve_testcase.return_value = (SERVED_TIMEOUT, [])
     mocker.patch("grizzly.session.TestFile", autospec=True)
@@ -58,7 +58,7 @@ def test_session_00(tmp_path, mocker):
 
 def test_session_01(tmp_path, mocker):
     """test Session.check_results()"""
-    Status.DB_FILE = str(tmp_path / "test.db")
+    Status.PATH = str(tmp_path)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.IGNORE_UNSERVED = True
@@ -92,7 +92,7 @@ def test_session_01(tmp_path, mocker):
 
 def test_session_02(tmp_path, mocker):
     """test Session.generate_testcase()"""
-    Status.DB_FILE = str(tmp_path / "test.db")
+    Status.PATH = str(tmp_path)
     fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
@@ -118,7 +118,7 @@ def test_session_02(tmp_path, mocker):
 
 def test_session_03(mocker, tmp_path):
     """test Session.launch_target()"""
-    Status.DB_FILE = str(tmp_path / "test.db")
+    Status.PATH = str(tmp_path)
     fake_server = mocker.Mock(spec=Sapphire)
     fake_server.get_port.return_value = 1
     fake_adapter = mocker.Mock(spec=Adapter)
@@ -177,7 +177,7 @@ def test_session_03(mocker, tmp_path):
 
 def test_session_04(tmp_path, mocker):
     """test Session.location"""
-    Status.DB_FILE = str(tmp_path / "test.db")
+    Status.PATH = str(tmp_path)
     fake_server = mocker.Mock(spec=Sapphire)
     fake_server.get_port.return_value = 1
     fake_adapter = mocker.Mock(spec=Adapter)
@@ -205,7 +205,7 @@ def test_session_04(tmp_path, mocker):
 
 def test_session_05(tmp_path, mocker):
     """test Session.config_server()"""
-    Status.DB_FILE = str(tmp_path / "test.db")
+    Status.PATH = str(tmp_path)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
     fake_iomgr = mocker.Mock(spec=IOManager)
@@ -220,7 +220,7 @@ def test_session_05(tmp_path, mocker):
 
 def test_session_06(tmp_path, mocker):
     """test Session.run()"""
-    Status.DB_FILE = str(tmp_path / "test.db")
+    Status.PATH = str(tmp_path)
     fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)

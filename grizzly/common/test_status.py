@@ -3,217 +3,109 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly status"""
+# pylint: disable=protected-access
+
+import multiprocessing
+import os
 import time
 
-import pytest
+from .status import ReducerStats, Status
 
-from .status import Status
 
 def test_status_01(tmp_path):
-    """test Status.start() and Status.close()"""
-    test_db = tmp_path / "test.db"
-    Status.DB_FILE = str(test_db)
-    # create db
-    assert not test_db.is_file()
+    """test Status.start()"""
+    working_path = tmp_path / "grzstatus"
+    Status.PATH = str(working_path)
     status = Status.start()
     assert status is not None
-    assert status.conn is not None
-    status.close()
+    assert working_path.is_dir()
+    assert os.path.isfile(status.data_file)
+    assert os.stat(status.data_file).st_size > 0
     assert status.start_time > 0
-    assert status.timestamp == status.start_time
-    assert status.duration == 0
+    assert status.timestamp >= status.start_time
+    assert int(status.duration) == 0
     assert status.ignored == 0
     assert status.iteration == 0
     assert status.log_size == 0
     assert status.rate == 0
     assert status.results == 0
-    assert status.uid == 1
-    assert status.conn is None
-    # call close 2nd time (already closed)
-    status.close()
-    # existing db
-    assert test_db.is_file()
-    status = Status.start()
-    status.close()
-    assert status.uid == 2
-    # pass uid
-    status = Status.start(uid=1234)
-    status.close()
-    assert status.uid == 1234
 
 def test_status_02(tmp_path):
-    """test Status.report()"""
-    Status.DB_FILE = str(tmp_path / "test.db")
-    # report with no connection
-    with pytest.raises(AssertionError):
-        Status(123, 1557934564).report()
-    # normal report
-    status = Status.start()
-    try:
-        status.report()
-        # REPORT_FREQ elapses
-        status.timestamp = 0
-        status.report()
-        assert status.timestamp > 0
-        # try to report before REPORT_FREQ elapses
-        future = int(time.time()) + 1000
-        status.timestamp = future
-        status.report()
-        assert status.timestamp == future
-        # force report
-        status.report(force=True)
-        assert status.timestamp < future
-    finally:
-        status.close()
-
-def test_status_03(tmp_path):
-    """test Status.load() single"""
-    Status.DB_FILE = str(tmp_path / "test.db")
-    # load no db
-    assert not tuple(Status.load(uid=1))
-    # create simple entry
-    status = Status.start()
-    status.close()
-    assert status.uid == 1
-    # invalid uid
-    assert not tuple(Status.load(uid=1337))
-    # load default status entry
-    entries = tuple(Status.load(uid=status.uid))
-    for entry in entries:
-        entry.close()
-    assert len(entries) == 1
-    status = entries[0]
-    assert status is not None
-    assert status.start_time > 0
-    assert status.timestamp > 0
-    assert status.duration == 0
-    assert status.ignored == 0
-    assert status.iteration == 0
-    assert status.log_size == 0
-    assert status.results == 0
-
-def test_status_04(tmp_path):
-    """test Status.load() multiple"""
-    Status.DB_FILE = str(tmp_path / "test.db")
-    status = Status.start()
-    status.close()
-    # load all status entries
-    conn = Status.open_connection()
-    try:
-        entries = tuple(Status.load(conn=conn))
-    finally:
-        conn.close()
-    assert len(entries) == 1
-    # should be read only since uid was not specified
-    assert entries[0].conn is None
-    # call close() on read only entry
-    entries[0].close()
-    # add more entries
-    for _ in range(4):
-        status = Status.start()
-        status.close()
-    # load single entry when many are available
-    entries = tuple(Status.load(uid=1))
-    for entry in entries:
-        entry.close()
-    assert len(entries) == 1
-    # load all entries
-    conn = Status.open_connection()
-    try:
-        entries = tuple(Status.load(conn=conn))
-    finally:
-        conn.close()
-    assert len(entries) == 5
-    # verify shared connection is not passed to status objects
-    for entry in entries:
-        assert entry.conn is None
-
-def test_status_05(tmp_path):
-    """test Status.reset()"""
-    Status.DB_FILE = str(tmp_path / "test.db")
-    # reset with no connection
-    with pytest.raises(AssertionError):
-        Status(123, 1557934564).reset()
-    status = Status.start()
-    try:
-        status.ignored = 1
-        status.iteration = 5
-        status.log_size = 2
-        status.results = 3
-        assert status.start_time > 0
-        assert status.timestamp == status.start_time
-        status.report(force=True)
-        status.reset()
-    finally:
-        status.close()
-    assert status.uid == status.uid
-    assert status.ignored == 0
-    assert status.iteration == 0
-    assert status.log_size == 0
-    assert status.results == 0
-    entries = tuple(Status.load(uid=status.uid))
-    for entry in entries:
-        entry.close()
-    assert len(entries) == 1
-    assert entries[0].uid == status.uid
-    assert entries[0].ignored == status.ignored
-    assert entries[0].iteration == status.iteration
-    assert entries[0].log_size == status.log_size
-    assert entries[0].results == status.results
-    assert entries[0].start_time == status.start_time
-    assert entries[0].timestamp == status.timestamp
-
-def test_status_06(tmp_path):
-    """test Status.load() and Status.report()"""
-    Status.DB_FILE = str(tmp_path / "test.db")
-    status = Status.start()
-    try:
-        status.ignored = 1
-        status.iteration = 5
-        status.log_size = 2
-        status.results = 3
-        assert status.start_time > 0
-        assert status.timestamp == status.start_time
-        status.report(force=True)
-    finally:
-        status.close()
-    entries = tuple(Status.load(uid=status.uid))
-    for entry in entries:
-        entry.close()
-    assert len(entries) == 1
-    assert entries[0].uid == status.uid
-    assert entries[0].ignored == status.ignored
-    assert entries[0].iteration == status.iteration
-    assert entries[0].log_size == status.log_size
-    assert entries[0].results == status.results
-    assert entries[0].start_time == status.start_time
-    assert entries[0].timestamp == status.timestamp
-    entries[0].timestamp += 1
-    assert entries[0].duration > 0
-    assert entries[0].rate > 0
-
-def test_status_07(tmp_path):
     """test Status.cleanup()"""
-    Status.DB_FILE = str(tmp_path / "test.db")
-    # cleanup with no connection
-    Status(123, 1557934564).cleanup()
-    # normal operation
+    Status.PATH = str(tmp_path / "grzstatus")
     status = Status.start()
-    status.close()
-    entries = tuple(Status.load(uid=status.uid))
-    assert len(entries) == 1
-    entries[0].cleanup()
-    entries = tuple(Status.load(uid=status.uid))
-    assert not entries
-    # nothing to cleanup
+    dfile = status.data_file
+    status.cleanup()
+    assert status.data_file is None
+    assert not os.path.isfile(dfile)
+    # call 2nd time
+    status.cleanup()
+    # missing data file
+    status = Status.start()
+    os.remove(status.data_file)
     status.cleanup()
 
-def test_status_08(tmp_path):
-    """test Status.duration and Status.rate calculations"""
-    Status.DB_FILE = str(tmp_path / "test.db")
+def test_status_03(tmp_path):
+    """test Status.report()"""
+    Status.PATH = str(tmp_path / "grzstatus")
     status = Status.start()
-    status.close()
-    status.timestamp += 1
+    # try to report before REPORT_FREQ elapses
+    assert not status.report()
+    # REPORT_FREQ elapses
+    status.timestamp = 0
+    assert status.report()
+    assert status.timestamp > 0
+    # force report
+    future = int(time.time()) + 1000
+    status.timestamp = future
+    assert status.report(force=True)
+    assert status.timestamp < future
+
+def test_status_04(tmp_path):
+    """test Status.load()"""
+    working_path = tmp_path / "grzstatus"
+    Status.PATH = str(working_path)
+    # load no db
+    assert Status.load(str(tmp_path / "missing")) is None
+    # load empty/invalid json
+    working_path.mkdir()
+    empty = (working_path / "empty.json")
+    empty.touch()
+    assert Status.load(str(empty)) is None
+    # create simple entry
+    status = Status.start()
+    loaded = Status.load(status.data_file)
+    assert loaded is not None
+    assert status.start_time == loaded.start_time
+    assert status.timestamp == loaded.timestamp
+    assert status.duration == loaded.duration
+    assert status.ignored == loaded.ignored
+    assert status.iteration == loaded.iteration
+    assert status.log_size == loaded.log_size
+    assert status.results == loaded.results
+
+def test_status_05(tmp_path):
+    """test Status.loadall()"""
+    working_path = tmp_path / "grzstatus"
+    Status.PATH = str(working_path)
+    # missing path
+    assert not tuple(Status.loadall())
+    # no status data
+    working_path.mkdir()
+    assert not tuple(Status.loadall())
+    # add more entries
+    st_objs = list()
+    for _ in range(5):
+        st_objs.append(Status.start())
+    (working_path / "empty.json").touch()
+    assert len(tuple(Status.loadall())) == 5
+
+def test_status_06(tmp_path):
+    """test Status.duration and Status.rate calculations"""
+    Status.PATH = str(tmp_path / "grzstatus")
+    status = Status.start()
+    status.start_time = 1
+    status.timestamp = 2
     status.iteration = 0
     assert status.duration == 1
     assert status.rate == 0
@@ -221,3 +113,105 @@ def test_status_08(tmp_path):
     assert status.rate == 1
     status.timestamp += 1
     assert status.rate == 0.5
+
+def _client_writer(done, working_path):
+    """Used by test_status_07"""
+    Status.PATH = working_path
+    status = Status.start()
+    try:
+        while not done.is_set():
+            status.iteration += 1
+            status.report(force=True)
+            time.sleep(0.01)
+    finally:
+        status.cleanup()
+
+def test_status_07(tmp_path):
+    """test Status.loadall() with multiple active reporters"""
+    Status.PATH = str(tmp_path / "grzstatus")
+    best_rate = 0
+    done = multiprocessing.Event()
+    procs = list()
+    try:
+        for _ in range(5):
+            procs.append(multiprocessing.Process(target=_client_writer, args=(done, Status.PATH)))
+            procs[-1].start()
+        deadline = time.time() + 60
+        while len(tuple(Status.loadall())) < len(procs):
+            time.sleep(0.1)
+            assert time.time() < deadline, "timeout waiting for processes to launch!"
+        for _ in range(20):
+            st_objs = tuple(Status.loadall())
+            for obj in st_objs:
+                if obj.rate > best_rate:
+                    best_rate = obj.rate
+    finally:
+        done.set()
+        for proc in procs:
+            if proc.pid is not None:
+                proc.join()
+    assert best_rate > 0
+    assert not tuple(Status.loadall())
+
+def test_reducer_stats_01(tmp_path):
+    """test ReducerStats() empty"""
+    ReducerStats.PATH = str(tmp_path)
+    with ReducerStats() as stats:
+        assert stats.error == 0
+        assert stats.failed == 0
+        assert stats.passed == 0
+        stats_file = stats._file
+        assert not os.path.isfile(stats_file)
+    assert os.path.isfile(stats_file)
+
+def test_reducer_stats_02(tmp_path):
+    """test ReducerStats() simple"""
+    ReducerStats.PATH = str(tmp_path)
+    with ReducerStats() as stats:
+        stats.error += 1
+        stats.failed += 1
+        stats.passed += 1
+    with ReducerStats() as stats:
+        assert stats.error == 1
+        assert stats.failed == 1
+        assert stats.passed == 1
+
+def test_reducer_stats_03(tmp_path):
+    """test ReducerStats() empty/invalid data file"""
+    ReducerStats.PATH = str(tmp_path)
+    with ReducerStats() as stats:
+        stats.passed += 1
+        stats_file = stats._file
+    with open(stats_file, "w"):
+        pass
+    with ReducerStats() as stats:
+        assert stats.passed == 0
+
+def _reducer_client(working_path, limit, unrestrict):
+    """Used by test_reducer_stats_04"""
+    ReducerStats.PATH = working_path
+    for _ in range(50):
+        with ReducerStats() as stats:
+            stats.passed += 1
+            if stats.passed == limit:
+                unrestrict.set()
+        unrestrict.wait(timeout=60)
+
+def test_reducer_stats_04(tmp_path):
+    """test ReducerStats() with multiple processes"""
+    ReducerStats.PATH = str(tmp_path)
+    procs = list()
+    unrestrict = multiprocessing.Event()  # used to sync client procs
+    try:
+        proc_count = 5
+        for _ in range(proc_count):
+            procs.append(multiprocessing.Process(
+                target=_reducer_client, args=(ReducerStats.PATH, proc_count, unrestrict)))
+            procs[-1].start()
+    finally:
+        unrestrict.set()
+        for proc in procs:
+            if proc.pid is not None:
+                proc.join()
+    with ReducerStats() as stats:
+        assert stats.passed == 250
