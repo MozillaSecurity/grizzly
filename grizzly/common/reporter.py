@@ -14,6 +14,7 @@ import tempfile
 import time
 import zipfile
 
+import fasteners
 import psutil
 import six
 
@@ -22,7 +23,6 @@ try:
     from Collector.Collector import Collector
     from FTB.ProgramConfiguration import ProgramConfiguration
     from FTB.Signatures.CrashInfo import CrashInfo
-    import fasteners
     _fm_import_error = None  # pylint: disable=invalid-name
 except ImportError as err:
     _fm_import_error = err  # pylint: disable=invalid-name
