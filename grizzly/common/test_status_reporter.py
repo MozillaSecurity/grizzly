@@ -303,6 +303,9 @@ def test_reduce_status_reporter_03(tmp_path):
     status = Status.start()
     status.iteration = 1
     status.report(force=True)
+    status = Status.start()
+    status.iteration = 10
+    status.report(force=True)
     rptr = StatusReporter.load(reducer=True)
     rptr._sys_info = _fake_sys_info
     assert rptr.reports is not None
@@ -485,6 +488,13 @@ def test_main_03(tmp_path):
     dump_file = tmp_path / "output.txt"
     assert main(["--dump", str(dump_file)]) == 0
     assert dump_file.is_file()
+    assert b"Runtime" not in dump_file.read_bytes()
+    #assert False, dump_file.read_bytes()
+    dump_file.unlink()
+    dump_file = tmp_path / "output.txt"
+    assert main(["--dump", str(dump_file), "--mode", "reduce-status"]) == 0
+    assert dump_file.is_file()
+    assert b"Runtime" in dump_file.read_bytes()
 
 def test_main_04(tmp_path):
     """test main() with --mode reduce-status"""

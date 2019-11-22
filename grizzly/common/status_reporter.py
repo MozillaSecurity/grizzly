@@ -174,11 +174,10 @@ class StatusReporter(object):
             if count > 1:
                 txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
             txt.append("\n")
+            # Results / Signature mismatch
             if self._reducer:
-                # Signature mismatch
                 txt.append("  Mismatch : %d" % (sum(results),))
             else:
-                # Results
                 txt.append("   Results : %d" % (sum(results),))
             if total_ignored:
                 ignore_pct = (total_ignored / float(total_iters)) * 100
@@ -186,8 +185,17 @@ class StatusReporter(object):
             # Runtime
             if runtime:
                 txt.append("\n")
-                total_runtime = sum((x.duration for x in reports))
-                txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(total_runtime))),))
+                if self._reducer:
+                    durations = tuple(x.duration for x in reports)
+                    if count > 1:
+                        max_duration = str(datetime.timedelta(seconds=int(max(durations))))
+                        min_duration = str(datetime.timedelta(seconds=int(min(durations))))
+                        txt.append("   Runtime : (%s, %s)" % (max_duration, min_duration))
+                    else:
+                        txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(durations[0]))),))
+                else:
+                    total_runtime = sum((x.duration for x in reports))
+                    txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(total_runtime))),))
             # Log size
             log_usage = sum(log_sizes) / 1048576.0
             if log_usage > self.DISPLAY_LIMIT_LOG:
@@ -410,9 +418,10 @@ def main(args=None):
 
     if args.mode not in modes:
         parser.error("Invalid mode %r" % args.mode)
-    reporter = StatusReporter.load(tb_path=args.tracebacks, reducer=args.mode == "reduce-status")
+    reducer_mode = args.mode == "reduce-status"
+    reporter = StatusReporter.load(tb_path=args.tracebacks, reducer=reducer_mode)
     if args.dump:
-        reporter.dump_summary(args.dump)
+        reporter.dump_summary(args.dump, runtime=reducer_mode)
         return 0
     if not reporter.reports:
         print("No status reports to display")
