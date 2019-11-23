@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
+import platform
 import signal
 import time
 
@@ -104,7 +105,7 @@ class PuppetTarget(Target):
         if not is_healthy or was_timeout:
             if self._puppet.is_running():
                 log.debug("terminating browser...")
-                if was_timeout and "timeout" not in ignored:
+                if was_timeout and "timeout" not in ignored and platform.system() == "Linux":
                     self._abort_hung_proc()
                     # give the process a moment to start dump
                     self._puppet.wait(timeout=1)
