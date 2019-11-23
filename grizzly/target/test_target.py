@@ -186,9 +186,13 @@ def test_puppet_target_03(mocker, tmp_path):
     fake_ffp.return_value.cpu_usage.return_value = ((1234, 10), (1236, 75), (1238, 60))
     fake_os = mocker.patch("grizzly.target.puppet_target.os", autospec=True)
     assert target.detect_failure([], True) == Target.RESULT_FAILURE
-    assert fake_os.kill.call_count == 1
+    if platform.system() == "Linux":
+        assert fake_os.kill.call_count == 1
+        assert fake_ffp.return_value.wait.call_count == 1
+    else:
+        assert fake_os.kill.call_count == 0
+        assert fake_ffp.return_value.wait.call_count == 0
     assert fake_ffp.return_value.close.call_count == 1
-    assert fake_ffp.return_value.wait.call_count == 1
     # test timeout ignored
     fake_ffp.return_value.close.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = True
