@@ -23,6 +23,7 @@ def test_testcase_01(tmp_path):
         assert tcase.redirect_page == r_page
         assert tcase.adapter_name == adpt_name
         assert tcase.duration is None
+        assert tcase.data_size == 0
         assert tcase.input_fname is None
         assert not tcase._files.meta
         assert not tcase._files.optional
@@ -43,6 +44,7 @@ def test_testcase_02(tmp_path):
         in_file = tmp_path / "testfile1.bin"
         in_file.write_bytes(b"test_req")
         tcase.add_from_file(str(in_file), "testfile1.bin")
+        assert tcase.data_size == 8
         with pytest.raises(TestFileExists) as exc:
             tcase.add_from_file(str(in_file), "testfile1.bin")
         assert "'testfile1.bin' exists in test" in str(exc.value)
@@ -84,6 +86,7 @@ def test_testcase_03(tmp_path):
         meta_data = b"foobar"
         tcase.add_meta(TestFile.from_data(meta_data, meta_file.name))
         tcase.dump(str(dmp_path), include_details=True)
+        assert tcase.data_size == 6
         assert meta_file.is_file()
         with meta_file.open("rb") as test_fp:
             assert test_fp.read() == meta_data
@@ -129,6 +132,18 @@ def test_testcase_05(tmp_path):
     finally:
         tcase.cleanup()
 
+def test_testcase_06():
+    """test TestCase.data_size"""
+    tcase = TestCase("land_page.html", "redirect.html", "test-adapter")
+    try:
+        assert tcase.data_size == 0
+        tcase.add_from_data("1", "testfile1.bin", required=True)
+        tcase.add_from_data("12", "testfile2.bin", required=False)
+        tcase.add_meta(TestFile.from_data("123", "meta.bin"))
+        assert tcase.data_size == 6
+    finally:
+        tcase.cleanup()
+
 def test_inputfile_01():
     """test InputFile with non-existing file"""
     missing_file = os.path.join("foo", "bar", "none")
@@ -160,6 +175,7 @@ def test_testfile_01():
     try:
         assert tfile.file_name == "test_file.txt"
         assert not tfile._fp.closed
+        assert tfile.size == 0
         tfile.close()
         assert tfile._fp.closed
     finally:

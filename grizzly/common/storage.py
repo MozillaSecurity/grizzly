@@ -207,6 +207,21 @@ class TestCase(object):
             for test_file in file_group:
                 test_file.close()
 
+    @property
+    def data_size(self):
+        """The total amount of data used by the test case (bytes).
+
+        Args:
+            None
+
+        Returns:
+            int: Total size of the test case in byte.
+        """
+        total = 0
+        for group in self._files:
+            total += sum(x.size for x in group)
+        return total
+
     def dump(self, out_path, include_details=False):
         """Write all the test case data to the filesystem.
 
@@ -389,6 +404,24 @@ class TestFile(object):
         with open(input_file, "rb") as src_fp:
             shutil.copyfileobj(src_fp, t_file._fp, cls.XFER_BUF)  # pylint: disable=protected-access
         return t_file
+
+    @property
+    def size(self):
+        """Size of the file in bytes.
+
+        Args:
+            None
+
+        Returns:
+            int: Size in bytes.
+        """
+        pos = self._fp.tell()
+        self._fp.flush()
+        self._fp.seek(0, os.SEEK_END)
+        size = self._fp.tell()
+        self._fp.seek(pos)
+        return size
+
 
     def write(self, data):
         """Add data to the TestFile.
