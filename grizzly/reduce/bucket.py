@@ -12,7 +12,7 @@ import tempfile
 from Collector.Collector import Collector
 
 from .args import ReducerFuzzManagerIDQualityArgs
-from .crash import main as reduce_crash
+from .crash import CrashReductionJob
 from ..main import console_init_logging
 
 
@@ -121,7 +121,7 @@ def main(args):
             # reduce.main expects input to be a crash ID
             args.input = crash_id
 
-            if reduce_crash(args) == 0:
+            if CrashReductionJob.main(args) == 0:
                 # success!
                 return 0
 

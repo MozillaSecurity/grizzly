@@ -6,6 +6,7 @@
 Given a build and testcase, try to reproduce it using a set of strategies.
 """
 from __future__ import absolute_import
+import glob
 import hashlib
 import io
 import json
@@ -14,20 +15,21 @@ import os
 import re
 import shutil
 import tempfile
+import threading
+import time
 import zipfile
 import zlib
 
 import ffpuppet
 import lithium
+import sapphire
 from FTB.Signatures.CrashInfo import CrashSignature
 
-from . import strategies as strategies_module
-from .interesting import Interesting
+from . import strategies as strategies_module, testcase_contents
 from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..session import Session
-from ..common import FilesystemReporter, FuzzManagerReporter, Report
-from ..common import Status, ReducerStats
-from ..target import load as load_target
+from ..common import FilesystemReporter, FuzzManagerReporter, ReducerStats, Report, Status, TestCase, TestFile
+from ..target import Target, load as load_target
 
 
 __author__ = "Jesse Schwartzentruber"
@@ -53,22 +55,33 @@ class ReductionJob(object):
         self.result_code = None
         self.signature = None
         self.status = status
-        self.interesting = Interesting(
-            ignore,
-            target,
-            iter_timeout,
-            no_harness,
-            any_crash,
-            skip,
-            min_crashes,
-            repeat,
-            idle_poll,
-            idle_threshold,
-            idle_timeout,
-            status,
-            testcase_cache)
-        self.interesting.alt_crash_cb = self._other_crash_found
-        self.interesting.interesting_cb = self._interesting_crash
+
+        self.ignore = ignore  # things to ignore
+        self.target = target  # a Puppet to run with
+        self.status = status  # ReduceStatus to track progress
+        self.server = None  # a server to serve with
+        self.orig_sig = None  # signature to reduce to (if specified)
+        self.iter_timeout = iter_timeout
+        self.no_harness = no_harness
+        self.skip = skip
+        self.skipped = None
+        self.static_timeout = False  # if True iter_timeout will not be changed
+        self.min_crashes = min_crashes
+        self.repeat = repeat
+        self.idle_poll = idle_poll
+        self.any_crash = any_crash
+        self.idle_threshold = idle_threshold
+        self.idle_timeout = idle_timeout
+        self.input_fname = None
+        # testcase cache remembers if we have seen this reduce_file before and if so return the same
+        # interesting result
+        self.use_result_cache = testcase_cache
+        self.result_cache = {}
+        # environment if specified in the testcase
+        self.env_mod = None
+        self._landing_page = None  # the file to point the target at
+        self._reduce_file = None  # the file to reduce
+
         self.testcase = None
         self.tmpdir = tempfile.mkdtemp(prefix="grzreduce", dir=working_path)
         self.tcroot = os.path.join(self.tmpdir, "tc")
@@ -80,14 +93,14 @@ class ReductionJob(object):
         if not self.skip_analysis:
             # see if any of the args tweaked by analysis were overridden
             # --relaunch is regarded as a maximum, so overriding the default is not a deal-breaker for this
-            if self.interesting.min_crashes != 1:
-                LOG.warning("--min-crashes=%d was given, skipping analysis", self.interesting.min_crashes)
+            if self.min_crashes != 1:
+                LOG.warning("--min-crashes=%d was given, skipping analysis", self.min_crashes)
                 self.skip_analysis = True
-            elif self.interesting.repeat != 1:
-                LOG.warning("--repeat=%d was given, skipping analysis", self.interesting.repeat)
+            elif self.repeat != 1:
+                LOG.warning("--repeat=%d was given, skipping analysis", self.repeat)
                 self.skip_analysis = True
         self.original_relaunch = target.rl_reset
-        self.force_no_harness = self.interesting.no_harness
+        self.force_no_harness = self.no_harness
         self.files_to_reduce = None
         self.original_size = None
 
@@ -121,6 +134,349 @@ class ReductionJob(object):
 
         return handler
 
+    @property
+    def wwwdir(self):
+        return os.path.dirname(os.path.realpath(self._landing_page))
+
+    @property
+    def landing_page(self):
+        return os.path.basename(self._landing_page)
+
+    @landing_page.setter
+    def landing_page(self, value):
+        self._landing_page = value
+
+    @property
+    def reduce_file(self):
+        return self._reduce_file
+
+    @reduce_file.setter
+    def reduce_file(self, value):
+        self._reduce_file = value
+        # landing page should default to same value as reduce file
+        if self._landing_page is None:
+            self._landing_page = value
+
+    def init(self, _):
+        """Lithium initialization entrypoint
+
+        Args:
+            _args (unused): Command line arguments from Lithium (N/A)
+
+        Returns:
+            None
+        """
+        self.skipped = None
+        self.best_testcase = None
+        self.result_cache = {}
+
+    def _add_san_suppressions(self, supp_file):
+        # Update the sanitizer *SAN_OPTIONS environment variable to use provided
+        # suppressions file
+        opt_key = '%s_OPTIONS' % os.path.basename(supp_file).split('.')[0].upper()
+        # the value matching *SAN_OPTIONS can be set to None
+        san_opts = self.env_mod.get(opt_key, None)
+        if san_opts is None:
+            san_opts = ''
+        updated = list()
+        for opt in re.split(r":(?![\\|/])", san_opts):
+            if opt and opt != 'suppressions':
+                updated.append(opt)
+        updated.append('suppressions=\'%s\'' % supp_file)
+        self.env_mod[opt_key] = ':'.join(updated)
+
+    def monitor_process(self, iteration_done_event, idle_timeout_event, monitor_launched):
+        # Wait until timeout is hit before polling
+        monitor_launched.set()
+        LOG.debug('Waiting %r before polling', self.idle_timeout)
+        exp_time = time.time() + self.idle_timeout
+        while exp_time >= time.time() and not iteration_done_event.is_set():
+            time.sleep(0.1)
+
+        while not iteration_done_event.is_set():
+            result = self.target.poll_for_idle(self.idle_threshold, self.idle_poll)
+            if result != Target.POLL_BUSY:
+                if result == Target.POLL_IDLE:
+                    idle_timeout_event.set()
+                break
+            time.sleep(0.1)
+
+    def update_timeout(self, run_time):
+        # If run_time is less than poll-time, update it
+        LOG.debug('Run time %r', run_time)
+        new_poll_timeout = max(10, min(run_time * 1.5, self.idle_timeout))
+        if new_poll_timeout < self.idle_timeout:
+            LOG.info("Updating poll timeout to: %r", new_poll_timeout)
+            self.idle_timeout = new_poll_timeout
+        # If run_time * 2 is less than iter_timeout, update it
+        # in other words, decrease the timeout if this ran in less than half the timeout
+        # (floored at 10s)
+        new_iter_timeout = max(10, min(run_time * 2, self.iter_timeout))
+        if new_iter_timeout < self.iter_timeout:
+            LOG.info("Updating max timeout to: %r", new_iter_timeout)
+            self.iter_timeout = new_iter_timeout
+
+    @property
+    def location(self):
+        if self.no_harness:
+            return "http://127.0.0.1:%d/%s" % (self.server.get_port(), self.landing_page)
+        return "".join((
+            "http://127.0.0.1:%d/harness" % self.server.get_port(),
+            "?timeout=%d" % (self.iter_timeout * 1000,),
+            "&close_after=%d" % self.target.rl_reset,
+            "&forced_close=0" if not self.target.forced_close else ""))
+
+    def interesting(self, _, temp_prefix):
+        """Lithium main iteration entrypoint.
+
+        This should try the reduction and return True or False based on whether the reduction was
+        good or bad.  This is subject to a number of options (skip, repeat, cache) and so may
+        result in 0 or more actual runs of the target.
+
+        Args:
+            _args (unused): Command line arguments from Lithium (N/A)
+            temp_prefix (str): A unique prefix for any files written during this iteration.
+
+        Returns:
+            bool: True if reduced testcase is still interesting.
+        """
+        # ensure the target is closed so "repeat" and "relaunch" never get out of sync
+        if not self.target.closed:
+            self.target.close()
+        if self.skip:
+            if self.skipped is None:
+                self.skipped = 0
+            elif self.skipped < self.skip:
+                self.skipped += 1
+                return False
+        n_crashes = 0
+        n_tries = max(self.repeat, self.min_crashes)
+        if self.use_result_cache:
+            with open(self.reduce_file, "rb") as test_fp:
+                cache_key = hashlib.sha1(test_fp.read()).hexdigest()
+            if cache_key in self.result_cache:
+                result = self.result_cache[cache_key]['result']
+                if result:
+                    LOG.info("Interesting (cached)")
+                    cached_prefix = self.result_cache[cache_key]['prefix']
+                    for filename in glob.glob(r"%s_*" % cached_prefix):
+                        suffix = os.path.basename(filename).split("_", 1)
+                        if os.path.isfile(filename):
+                            shutil.copy(filename, "%s_%s" % (temp_prefix, suffix[1]))
+                        elif os.path.isdir(filename):
+                            shutil.copytree(filename, "%s_%s" % (temp_prefix, suffix[1]))
+                        else:
+                            raise RuntimeError("Cannot copy non-file/non-directory: %s"
+                                               % (filename,))
+                else:
+                    LOG.info("Uninteresting (cached)")
+                return result
+
+        # create the TestCase to try
+        testcase = TestCase(self.landing_page, None, "grizzly.reduce", input_fname=self.input_fname)
+
+        # add testcase contents
+        for file_name in testcase_contents(self.wwwdir):
+            testcase.add_from_file(os.path.join(self.wwwdir, file_name), file_name,
+                                   required=bool(file_name == self.landing_page))
+
+        # add prefs
+        if self.target.prefs is not None:
+            testcase.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
+
+        # add environment variables
+        if self.env_mod is not None:
+            for name, value in self.env_mod.items():
+                testcase.add_environ_var(name, value)
+
+        max_duration = 0
+        run_prefix = None
+        for try_num in range(n_tries):
+            if (n_tries - try_num) < (self.min_crashes - n_crashes):
+                break  # no longer possible to get min_crashes, so stop
+            self.status.report()
+            self.status.iteration += 1
+            run_prefix = "%s(%d)" % (temp_prefix, try_num)
+            if self._run(testcase, run_prefix):
+                # track the maximum duration of the successful reduction attempts
+                if testcase.duration > max_duration:
+                    max_duration = testcase.duration
+                n_crashes += 1
+                if n_crashes >= self.min_crashes:
+                    self.on_interesting_crash(run_prefix)
+                    if self.use_result_cache:
+                        self.result_cache[cache_key] = {
+                            'result': True,
+                            'prefix': run_prefix
+                        }
+                    self.best_testcase = testcase
+                    # the amount of time it can take to replay a test case can vary
+                    # when under Valgrind so do not update the timeout in that case
+                    if not self.static_timeout and not getattr(self.target, "use_valgrind", False):
+                        self.update_timeout(max_duration)
+                    return True
+        if self.use_result_cache:
+            # No need to save the temp_prefix on uninteresting testcases
+            # But let's do it anyway to stay consistent
+            self.result_cache[cache_key] = {
+                'result': False,
+                'prefix': run_prefix
+            }
+        return False
+
+    def _run(self, testcase, temp_prefix):
+        """Run a single iteration against the target and determine if it is interesting. This is the
+        low-level iteration function used by `interesting`.
+
+        Args:
+            testcase (TestCase): The testcase to serve
+            temp_prefix (str): A unique prefix for any files written during this iteration.
+
+        Returns:
+            bool: True if reduced testcase is still interesting.
+        """
+        result = False
+
+        # if target is closed and server is alive, we should restart it or else the first request
+        #   against /first_test will 404
+        if self.target.closed and self.server is not None:
+            self.server.close()
+            self.server = None
+
+        # launch sapphire if needed
+        if self.server is None:
+            # have client error pages (code 4XX) call window.close() after a few seconds
+            sapphire.Sapphire.CLOSE_CLIENT_ERROR = 2
+            self.server = sapphire.Sapphire()
+
+            if not self.no_harness:
+                harness = os.path.join(os.path.dirname(__file__), '..', 'common', 'harness.html')
+                with open(harness, 'rb') as harness_fp:
+                    harness = harness_fp.read()
+
+                def _dyn_resp_close():
+                    self.target.close()
+                    return b"<h1>Close Browser</h1>"
+                self.server.add_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
+                self.server.add_dynamic_response("/harness", lambda: harness, mime_type="text/html")
+                self.server.set_redirect("/first_test", str(self.landing_page), required=True)
+
+        if self.no_harness:
+            self.server.timeout = self.iter_timeout
+        else:
+            # wait a few extra seconds to avoid races between the harness & sapphire timing out
+            self.server.timeout = self.iter_timeout + 10
+
+        # (re)launch Target
+        if self.target.closed:
+            # Try to launch the browser at most, 4 times
+            for retries in reversed(range(4)):
+                try:
+                    self.target.launch(self.location, env_mod=self.env_mod)
+                    break
+                except ffpuppet.LaunchError as exc:
+                    if retries:
+                        LOG.warning(str(exc))
+                        time.sleep(15)
+                    else:
+                        raise
+            self.target.step()
+
+        try:
+            idle_timeout_event = threading.Event()
+            iteration_done_event = threading.Event()
+            if self.idle_poll:
+                monitor_launched = threading.Event()
+                poll = threading.Thread(target=self.monitor_process,
+                                        args=(iteration_done_event, idle_timeout_event, monitor_launched))
+                poll.start()
+                assert monitor_launched.wait(30), "Failed to launch monitoring thread"
+
+            def keep_waiting():
+                return self.target.monitor.is_healthy() and not idle_timeout_event.is_set()
+
+            if not self.no_harness:
+                self.server.set_redirect("/next_test", str(self.landing_page), required=True)
+
+            # serve the testcase
+            server_status, files_served = self.server.serve_testcase(testcase,
+                                                                     continue_cb=keep_waiting,
+                                                                     forever=self.no_harness)
+
+            # attempt to detect a failure
+            failure_detected = self.target.detect_failure(
+                self.ignore,
+                server_status == sapphire.SERVED_TIMEOUT)
+
+            # handle failure if detected
+            if failure_detected == Target.RESULT_FAILURE:
+                self.target.close()
+                testcase.purge_optional(files_served)
+
+                # save logs
+                result_logs = temp_prefix + "_logs"
+                if not os.path.exists(result_logs):
+                    os.mkdir(result_logs)
+                self.target.save_logs(result_logs, meta=True)
+
+                # create a CrashInfo
+                crash = FuzzManagerReporter.create_crash_info(
+                    Report.from_path(result_logs),
+                    self.target.binary)
+
+                short_sig = crash.createShortSignature()
+                if short_sig == "No crash detected":
+                    # XXX: need to change this to support reducing timeouts?
+                    LOG.info("Uninteresting: no crash detected")
+                elif self.orig_sig is None or self.orig_sig.matches(crash):
+                    result = True
+                    LOG.info("Interesting: %s", short_sig)
+                    if self.orig_sig is None and not self.any_crash:
+                        max_frames = FuzzManagerReporter.signature_max_frames(crash, 5)
+                        self.orig_sig = crash.createCrashSignature(maxFrames=max_frames)
+                else:
+                    LOG.info("Uninteresting: different signature: %s", short_sig)
+                    self.on_other_crash_found(testcase, temp_prefix)
+
+            elif failure_detected == Target.RESULT_IGNORED:
+                LOG.info("Uninteresting: ignored")
+                self.target.close()
+
+                # save logs
+                result_logs = temp_prefix + "_logs"
+                os.mkdir(result_logs)
+                self.target.save_logs(result_logs, meta=True)
+
+            else:
+                LOG.info("Uninteresting: no failure detected")
+
+            # trigger relaunch by closing the browser if needed
+            self.target.check_relaunch()
+
+        finally:
+            iteration_done_event.set()
+            if self.idle_poll:
+                poll.join()
+
+        return result
+
+    def cleanup(self, _):
+        """Lithium cleanup entrypoint
+
+        Args:
+            _args (unused): Command line arguments from Lithium (N/A)
+
+        Returns:
+            None
+        """
+        try:
+            if self.server is not None:
+                self.server.close()
+                self.server = None
+        finally:
+            if self.target is not None:
+                self.target.close()
+
     def _stop_log_capture(self):
         """Stop handling reduce logs.
 
@@ -137,6 +493,30 @@ class ReductionJob(object):
         self.log_handler.flush()
         self.log_handler.close()
         self.log_handler = None
+
+    def config_environ(self, environ):
+        with open(environ) as in_fp:
+            try:
+                self.env_mod = json.load(in_fp).get('env', {})
+            except ValueError:
+                # TODO: remove this once switched to 'test_info.json'
+                # legacy support for 'env_vars.txt'
+                self.env_mod = {}
+                in_fp.seek(0)
+                for line in in_fp:
+                    line = line.rstrip()
+                    if not line:
+                        continue
+                    key, value = line.split('=', 1)
+                    if not value:
+                        value = None
+                    self.env_mod[key] = value
+        # known sanitizer suppression files
+        known_suppressions = ('lsan.supp', 'ubsan.supp')
+        working_dir = os.path.dirname(environ)
+        for file_name in os.listdir(working_dir):
+            if file_name in known_suppressions:
+                self._add_san_suppressions(os.path.join(working_dir, file_name))
 
     def config_signature(self, signature):
         """Configure a signature to use for reduction.  If none is given, an automatic signature is
@@ -223,7 +603,7 @@ class ReductionJob(object):
             else:
                 raise ReducerError("Testcase must be zip, html or directory")
 
-            self.interesting.input_fname = os.path.basename(testcase)
+            self.input_fname = os.path.basename(testcase)
 
             # get a list of all directories containing testcases (1-n, depending on how much history
             # grizzly saved)
@@ -244,22 +624,22 @@ class ReductionJob(object):
             if "prefs.js" in os.listdir(dirs[0]):
                 # move the file out of tcroot because we prune these non-testcase files later
                 os.rename(os.path.join(dirs[0], "prefs.js"), os.path.join(self.tmpdir, "prefs.js"))
-                self.interesting.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
-                LOG.warning("Using prefs included in testcase: %r", self.interesting.target.prefs)
+                self.target.prefs = os.path.abspath(os.path.join(self.tmpdir, "prefs.js"))
+                LOG.warning("Using prefs included in testcase: %r", self.target.prefs)
             if "test_info.json" in os.listdir(dirs[0]):
-                self.interesting.config_environ(os.path.join(dirs[0], "test_info.json"))
-                if self.interesting.env_mod:
+                self.config_environ(os.path.join(dirs[0], "test_info.json"))
+                if self.env_mod:
                     LOG.warning("Using environment included in testcase: %s",
                                 os.path.abspath(os.path.join(dirs[0], "test_info.json")))
-                    self.interesting.target.forced_close = \
-                        self.interesting.env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
+                    self.target.forced_close = \
+                        self.env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
             elif "env_vars.txt" in os.listdir(dirs[0]):
                 # TODO: remove this block once move to 'test_info.json' is complete
-                self.interesting.config_environ(os.path.join(dirs[0], "env_vars.txt"))
+                self.config_environ(os.path.join(dirs[0], "env_vars.txt"))
                 LOG.warning("Using environment included in testcase: %s",
                             os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
-                self.interesting.target.forced_close = \
-                    self.interesting.env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
+                self.target.forced_close = \
+                    self.env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
 
             # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
             # them all in order
@@ -279,7 +659,7 @@ class ReductionJob(object):
                 harness = harness.replace("'GrizzlyFuzz'", "'CacheIterator'")
                 # insert the iteration timeout. insert it directly because we can't set a hash value
                 new_harness = re.sub(r"^(\s*let\s.*\btime_limit\b)",
-                                     r"\1 = %d" % (self.interesting.iter_timeout * 1000),
+                                     r"\1 = %d" % (self.iter_timeout * 1000),
                                      harness,
                                      flags=re.MULTILINE)
                 if new_harness == harness:
@@ -350,25 +730,29 @@ class ReductionJob(object):
             else:
                 shutil.rmtree(self.tmpdir)
                 self.tmpdir = None
-        if self.interesting.target is not None:
-            self.interesting.target.cleanup()
+        if self.target is not None:
+            self.target.cleanup()
 
     def _report_result(self, testcase, temp_prefix, quality_value, force=False):
         self.reporter.quality = quality_value
         self.reporter.force_report = force
         self.reporter.submit(temp_prefix + "_logs", [testcase])
 
-    def _interesting_crash(self, temp_prefix):
+    def on_interesting_crash(self, temp_prefix):
+        # called for any interesting crash
         self.interesting_prefix = temp_prefix
 
-    def _other_crash_found(self, testcase, temp_prefix):
+    def on_result(self, result_code):
+        pass
+
+    def on_other_crash_found(self, testcase, temp_prefix):
         """
         If we hit an alternate crash, store the testcase in a tmp folder.
         If the same crash is encountered again, only keep the newest one.
         """
         crash_info = FuzzManagerReporter.create_crash_info(
             Report.from_path(temp_prefix + "_logs"),
-            self.interesting.target.binary)
+            self.target.binary)
         max_frames = FuzzManagerReporter.signature_max_frames(crash_info, 5)
         this_sig = crash_info.createCrashSignature(maxFrames=max_frames)
         crash_hash = hashlib.sha256(this_sig.rawSignature.encode("utf-8")).hexdigest()[:10]
@@ -399,9 +783,9 @@ class ReductionJob(object):
         try:
             # set up lithium
             reducer = lithium.Lithium()
-            self.interesting.orig_sig = self.signature
-            self.interesting.landing_page = self.testcase
-            reducer.conditionScript = self.interesting
+            self.orig_sig = self.signature
+            self.landing_page = self.testcase
+            reducer.conditionScript = self
 
             # if we created a harness to iterate over history, files_to_reduce is initially just
             #   that harness
@@ -442,7 +826,7 @@ class ReductionJob(object):
                         result = 0
                         continue
 
-                    self.interesting.reduce_file = testcase_path
+                    self.reduce_file = testcase_path
                     # set up tempdir manually so it doesn't go in cwd
                     reducer.tempDir = tempfile.mkdtemp(
                         prefix="lith-%d-%s" % (strategy_num, strategy_type.name),
@@ -485,7 +869,7 @@ class ReductionJob(object):
             if reduced_size == self.original_size[0]:
                 raise ReducerError("Reducer succeeded but nothing was reduced!")
 
-            self._report_result(self.interesting.best_testcase,
+            self._report_result(self.best_testcase,
                                 self.interesting_prefix,
                                 FuzzManagerReporter.QUAL_REDUCED_RESULT,
                                 force=True)
@@ -509,41 +893,9 @@ class ReductionJob(object):
             self.files_to_reduce = None
             self.original_size = None
 
-
-def main(args, interesting_cb=None, result_cb=None):
-    # NOTE: this mirrors grizzly.core.main pretty closely
-    #       please check if updates here should go there too
-    LOG.info("Starting Grizzly Reducer")
-    if args.fuzzmanager:
-        FuzzManagerReporter.sanity_check(args.binary)
-
-    if args.ignore:
-        LOG.info("Ignoring: %s", ", ".join(args.ignore))
-    if args.xvfb:
-        LOG.info("Running with Xvfb")
-    if args.valgrind:
-        LOG.info("Running with Valgrind. This will be SLOW!")
-
-    target = None
-    job = None
-
-    status = Status.start()
-    job_cancelled = False
-    try:
-        LOG.debug("initializing the Target")
-
-        target = load_target(args.platform)(
-            args.binary,
-            args.extension,
-            args.launch_timeout,
-            args.log_limit,
-            args.memory,
-            None,  # prefs
-            args.relaunch,
-            valgrind=args.valgrind,
-            xvfb=args.xvfb)
-
-        job = ReductionJob(
+    @classmethod
+    def from_args(cls, args, target, status):
+        job = cls(
             args.ignore,
             target,
             args.timeout,
@@ -565,10 +917,10 @@ def main(args, interesting_cb=None, result_cb=None):
         # arguments for environ and prefs should override the testcase
         if args.environ:
             LOG.warning("Overriding environment with %r", args.environ)
-            job.interesting.config_environ(args.environ)
+            job.config_environ(args.environ)
         if args.prefs:
             LOG.warning("Overriding prefs with %r", args.prefs)
-            job.interesting.target.prefs = os.path.abspath(args.prefs)
+            job.target.prefs = os.path.abspath(args.prefs)
 
         if args.sig is not None:
             with io.open(args.sig, encoding="utf-8") as sig_fp:
@@ -584,69 +936,96 @@ def main(args, interesting_cb=None, result_cb=None):
 
         if args.static_timeout:
             LOG.info("Using a static iteration timeout")
-        job.interesting.static_timeout = args.static_timeout
+        job.static_timeout = args.static_timeout
 
         # detect soft assertions
         if args.soft_asserts:
-            job.interesting.target.add_abort_token("###!!! ASSERTION:")
+            job.target.add_abort_token("###!!! ASSERTION:")
 
-        # setup interesting callback if requested
-        if interesting_cb is not None:
-            orig_interesting_cb = job.interesting.interesting_cb
+        return job
 
-            def _on_interesting(*args, **kwds):
-                if orig_interesting_cb is not None:
-                    orig_interesting_cb(*args, **kwds)
-                interesting_cb()
-            job.interesting.interesting_cb = _on_interesting
+    @classmethod
+    def main(cls, args):
+        # NOTE: this mirrors grizzly.core.main pretty closely
+        #       please check if updates here should go there too
+        LOG.info("Starting Grizzly Reducer")
+        if args.fuzzmanager:
+            FuzzManagerReporter.sanity_check(args.binary)
 
-        result = job.run(strategies=args.strategies)
+        if args.ignore:
+            LOG.info("Ignoring: %s", ", ".join(args.ignore))
+        if args.xvfb:
+            LOG.info("Running with Xvfb")
+        if args.valgrind:
+            LOG.info("Running with Valgrind. This will be SLOW!")
 
-        # report result out if callback requested
-        if result_cb is not None:
-            result_cb(job.result_code)
+        target = None
+        job = None
 
-        # update stats
-        with ReducerStats() as stats:
+        status = Status.start()
+        job_cancelled = False
+        try:
+            LOG.debug("initializing the Target")
+
+            target = load_target(args.platform)(
+                args.binary,
+                args.extension,
+                args.launch_timeout,
+                args.log_limit,
+                args.memory,
+                None,  # prefs
+                args.relaunch,
+                valgrind=args.valgrind,
+                xvfb=args.xvfb)
+
+            job = cls.from_args(args, target, status)
+
+            result = job.run(strategies=args.strategies)
+
+            # report result out if callback requested
+            job.on_result(job.result_code)
+
+            # update stats
+            with ReducerStats() as stats:
+                if result:
+                    stats.passed += 1
+                elif job.result_code in (6, 10):
+                    stats.failed += 1
+                elif job.result_code in (7, 8, 9):
+                    stats.error += 1
+
             if result:
-                stats.passed += 1
-            elif job.result_code in (6, 10):
-                stats.failed += 1
-            elif job.result_code in (7, 8, 9):
+                LOG.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
+                return Session.EXIT_SUCCESS
+
+            LOG.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
+            return Session.EXIT_ERROR
+
+        except NoTestcaseError:
+            with ReducerStats() as stats:
                 stats.error += 1
+            # TODO: test should be marked as Q7
+            return Session.EXIT_ERROR
 
-        if result:
-            LOG.info("Reduction succeeded: %s", FuzzManagerReporter.quality_name(job.result_code))
-            return Session.EXIT_SUCCESS
+        except KeyboardInterrupt:
+            job_cancelled = True
+            return Session.EXIT_ABORT
 
-        LOG.warning("Reduction failed: %s", FuzzManagerReporter.quality_name(job.result_code))
-        return Session.EXIT_ERROR
+        except ffpuppet.LaunchError as exc:
+            LOG.error("Error launching target: %s", exc)
+            with ReducerStats() as stats:
+                stats.error += 1
+            return Session.EXIT_LAUNCH_FAILURE
 
-    except NoTestcaseError:
-        with ReducerStats() as stats:
-            stats.error += 1
-        # TODO: test should be marked as Q7
-        return Session.EXIT_ERROR
-
-    except KeyboardInterrupt:
-        job_cancelled = True
-        return Session.EXIT_ABORT
-
-    except ffpuppet.LaunchError as exc:
-        LOG.error("Error launching target: %s", exc)
-        with ReducerStats() as stats:
-            stats.error += 1
-        return Session.EXIT_LAUNCH_FAILURE
-
-    finally:
-        LOG.warning("Shutting down...")
-        if job is not None and not job_cancelled:
-            job_cancelled = job.result_code in {FuzzManagerReporter.QUAL_REDUCER_BROKE,
-                                                FuzzManagerReporter.QUAL_REDUCER_ERROR}
-        if job is not None:
-            job.close(keep_temp=job_cancelled)
-        # job handles calling cleanup if it was created
-        if job is None and target is not None:
-            target.cleanup()
-        # call cleanup if we are unlikely to be using status again
-        status.cleanup()
+        finally:
+            LOG.warning("Shutting down...")
+            if job is not None and not job_cancelled:
+                job_cancelled = job.result_code in {FuzzManagerReporter.QUAL_REDUCER_BROKE,
+                                                    FuzzManagerReporter.QUAL_REDUCER_ERROR}
+            if job is not None:
+                job.close(keep_temp=job_cancelled)
+            # job handles calling cleanup if it was created
+            if job is None and target is not None:
+                target.cleanup()
+            # call cleanup if we are unlikely to be using status again
+            status.cleanup()

@@ -8,13 +8,13 @@ import json
 import os.path
 import zipfile
 import pytest
-from grizzly.reduce import exceptions, interesting, strategies
+from grizzly.reduce import exceptions, strategies, reduce
 from grizzly.common import FuzzManagerReporter
 from .test_common import BaseFakeReporter, create_target_binary
 
 
-class FakeInteresting(interesting.Interesting):
-    """Stub to fake parts of grizzly.reduce.Interesting needed for testing the reduce loop"""
+class TestReductionJob(reduce.ReductionJob):
+    """Stub to fake parts of grizzly.reduce.ReductionJob needed for testing the reduce loop"""
 
     def init(self, _):
         pass
@@ -22,6 +22,9 @@ class FakeInteresting(interesting.Interesting):
     @property
     def location(self):
         return "127.0.0.1" if self.no_harness else "127.0.0.1/harness"
+
+    def close(self, *_args, **_kwds):
+        super(TestReductionJob, self).close(keep_temp=False)
 
     def _run(self, testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
@@ -35,8 +38,8 @@ class FakeInteresting(interesting.Interesting):
         pass
 
 
-class FakeInterestingAlt(FakeInteresting):
-    """Version of FakeInteresting that only reports alternate crashes"""
+class TestReductionJobAlt(TestReductionJob):
+    """Version of TestReductionJob that only reports alternate crashes"""
 
     def init(self, _):
         self.__first_run = True
@@ -48,15 +51,15 @@ class FakeInterestingAlt(FakeInteresting):
         testcase.duration = 0.1
         with open(self.reduce_file) as fp:
             if "required" in fp.read():
-                self.alt_crash_cb(testcase, temp_prefix)
+                self.on_other_crash_found(testcase, temp_prefix)
         if self.__first_run:
             self.__first_run = False
             return True
         return False
 
 
-class FakeInterestingKeepHarness(FakeInteresting):
-    """Version of FakeInteresting that keeps the entire harness"""
+class TestReductionJobKeepHarness(TestReductionJob):
+    """Version of TestReductionJob that keeps the entire harness"""
 
     def init(self, _):
         self.__init_data = None
@@ -77,8 +80,8 @@ class FakeInterestingKeepHarness(FakeInteresting):
                 return "required" in fp.read()
 
 
-class FakeInterestingSemiReliable(FakeInteresting):
-    """Version of FakeInteresting that returns interesting N times only"""
+class TestReductionJobSemiReliable(TestReductionJob):
+    """Version of TestReductionJob that returns interesting N times only"""
     USE_ANALYZE = True
 
     def set_n(self, n, require_no_harness=False):
@@ -97,7 +100,7 @@ class FakeInterestingSemiReliable(FakeInteresting):
         return self.interesting_count <= self.interesting_times
 
 
-class FakeInterestingSemiReliableWithCache(FakeInterestingSemiReliable):
+class TestReductionJobSemiReliableWithCache(TestReductionJobSemiReliable):
     USE_TESTCASE_CACHE = True
 
 
@@ -298,14 +301,14 @@ def test_config_testcase_9_legacy(tmp_path, job):
 def test_config_testcase_10(tmp_path, job):
     """prefs from testcase are used and take precedence over target prefs"""
     (tmp_path / "orig_prefs.js").write_text("orig prefs")
-    job.interesting.target.prefs = str(tmp_path / "orig_prefs.js")
+    job.target.prefs = str(tmp_path / "orig_prefs.js")
     (tmp_path / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "test.html").write_text("hello")
     (tmp_path / "prefs.js").write_text("some prefs")
     job.config_testcase(str(tmp_path))
-    assert os.path.normpath(job.interesting.target.prefs) \
+    assert os.path.normpath(job.target.prefs) \
         != os.path.normpath(str(tmp_path / "prefs.js"))
-    with open(job.interesting.target.prefs) as prefs_fp:
+    with open(job.target.prefs) as prefs_fp:
         assert prefs_fp.read() == "some prefs"
     assert job.result_code is None
 
@@ -314,14 +317,14 @@ def test_config_testcase_10_legacy(tmp_path, job):
     """prefs from testcase are used and take precedence over target prefs"""
     # TODO: remove this test
     (tmp_path / "orig_prefs.js").write_text("orig prefs")
-    job.interesting.target.prefs = str(tmp_path / "orig_prefs.js")
+    job.target.prefs = str(tmp_path / "orig_prefs.js")
     (tmp_path / "test_info.txt").write_text("landing page: test.html")
     (tmp_path / "test.html").write_text("hello")
     (tmp_path / "prefs.js").write_text("some prefs")
     job.config_testcase(str(tmp_path))
-    assert os.path.normpath(job.interesting.target.prefs) \
+    assert os.path.normpath(job.target.prefs) \
         != os.path.normpath(str(tmp_path / "prefs.js"))
-    with open(job.interesting.target.prefs) as prefs_fp:
+    with open(job.target.prefs) as prefs_fp:
         assert prefs_fp.read() == "some prefs"
     assert job.result_code is None
 
@@ -337,7 +340,7 @@ def test_config_testcase_11(tmp_path, job):
             }}, info)
     (tmp_path / "test.html").write_text("hello")
     job.config_testcase(str(tmp_path))
-    assert job.interesting.env_mod == dict(var="value", foo="bar")
+    assert job.env_mod == dict(var="value", foo="bar")
     assert job.result_code is None
 
 
@@ -348,7 +351,7 @@ def test_config_testcase_11_legacy(tmp_path, job):
     (tmp_path / "test.html").write_text("hello")
     (tmp_path / "env_vars.txt").write_text("var=value\nfoo=bar")
     job.config_testcase(str(tmp_path))
-    assert job.interesting.env_mod == dict(var="value", foo="bar")
+    assert job.env_mod == dict(var="value", foo="bar")
     assert job.result_code is None
 
 
@@ -377,7 +380,7 @@ def test_config_testcase_13(tmp_path, job):
             }}, info)
     (tmp_path / "test.html").write_text("hello")
     job.config_testcase(str(tmp_path))
-    assert job.interesting.env_mod == dict(var="value", foo="bar")
+    assert job.env_mod == dict(var="value", foo="bar")
     assert job.testcase == os.path.join(job.tcroot, "test.html")
     with open(job.testcase) as tc_fp:
         assert tc_fp.read() == "hello"
@@ -386,7 +389,7 @@ def test_config_testcase_13(tmp_path, job):
 
 def test_run_0(tmp_path, job):
     """single required testcase is reduced and reported"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     with open(str(tmp_path / "tc" / "test_info.json"), "w") as info:
         json.dump({
@@ -424,10 +427,10 @@ def test_run_0(tmp_path, job):
     assert report_data["num_reports"] == 1
 
 
-@pytest.mark.parametrize("job", [FakeInterestingAlt], indirect=["job"])
+@pytest.mark.parametrize("job", [TestReductionJobAlt], indirect=["job"])
 def test_run_1(tmp_path, job):
     """other crashes are reported as unreduced crashes"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     with open(str(tmp_path / "tc" / "test_info.json"), "w") as info:
         json.dump({
@@ -467,7 +470,7 @@ def test_run_1(tmp_path, job):
 
 def test_run_2(tmp_path, job):
     """other files in testcase are not reduced without DDBEGIN/END"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "tc" / "test.html").write_bytes(b"fluff\nrequired\n")
@@ -499,7 +502,7 @@ def test_run_2(tmp_path, job):
 
 def test_run_3(tmp_path, job):
     """other files in testcase are reduced with DDBEGIN/END"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "tc" / "test.html").write_bytes(b"fluff\nrequired\n")
@@ -529,10 +532,10 @@ def test_run_3(tmp_path, job):
     assert report_data["num_reports"] == 1
 
 
-@pytest.mark.parametrize("job", [FakeInterestingKeepHarness], indirect=["job"])
+@pytest.mark.parametrize("job", [TestReductionJobKeepHarness], indirect=["job"])
 def test_run_4(tmp_path, job):
     """multiple testcases result in harness being reported"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "-0").mkdir()
     (tmp_path / "tc" / "-1").mkdir()
@@ -567,7 +570,7 @@ def test_run_4(tmp_path, job):
 
 def test_run_5(tmp_path, job):
     """multiple testcases reducing to 1 file will have harness removed"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "-0").mkdir()
     (tmp_path / "tc" / "-1").mkdir()
@@ -598,7 +601,7 @@ def test_run_5(tmp_path, job):
 @pytest.mark.skipif(not strategies.HAVE_JSBEAUTIFIER, reason="jsbeautifier required")
 def test_run_6(tmp_path, job):
     """test that jsbeautifier stage works"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.js\",\"env\":{}}")
     (tmp_path / "tc" / "test.js").write_text("try{'fluff';'required'}catch(e){}\n")
@@ -624,7 +627,7 @@ def test_run_6(tmp_path, job):
 
 def test_run_7(tmp_path, job):
     """test that jschar stage works"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "test_info.json").write_bytes(b"{\"target\":\"test.js\",\"env\":{}}")
     (tmp_path / "tc" / "test.js").write_bytes(b"var x = 'xrequiredx'\n")
@@ -650,10 +653,10 @@ def test_run_7(tmp_path, job):
     assert report_data["num_reports"] == 1
 
 
-@pytest.mark.parametrize("job", [FakeInterestingSemiReliable], indirect=["job"])
+@pytest.mark.parametrize("job", [TestReductionJobSemiReliable], indirect=["job"])
 def test_run_8(tmp_path, job):
     """test that analyze stage works"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
     (tmp_path / "tc" / "test.html").write_text("fluff\nrequired\n")
@@ -664,37 +667,37 @@ def test_run_8(tmp_path, job):
     job.reporter = BaseFakeReporter()
 
     # try a 50% reliable testcase
-    job.interesting.min_crashes = 1
-    job.interesting.repeat = 1
-    job.interesting.set_n(5)
+    job.min_crashes = 1
+    job.repeat = 1
+    job.set_n(5)
     job.run()
-    assert job.interesting.min_crashes == 2
-    assert job.interesting.repeat == 10
-    assert not job.interesting.no_harness
+    assert job.min_crashes == 2
+    assert job.repeat == 10
+    assert not job.no_harness
 
     # try a 90% reliable testcase
-    job.interesting.min_crashes = 1
-    job.interesting.repeat = 1
-    job.interesting.set_n(9)
+    job.min_crashes = 1
+    job.repeat = 1
+    job.set_n(9)
     job.run()
-    assert job.interesting.min_crashes == 2
-    assert job.interesting.repeat == 4
-    assert not job.interesting.no_harness
+    assert job.min_crashes == 2
+    assert job.repeat == 4
+    assert not job.no_harness
 
     # try a 100% reliable testcase that doesn't repro with the harness
-    job.interesting.min_crashes = 1
-    job.interesting.repeat = 1
-    job.interesting.set_n(11, require_no_harness=True)
+    job.min_crashes = 1
+    job.repeat = 1
+    job.set_n(11, require_no_harness=True)
     job.run()
-    assert job.interesting.min_crashes == 2
-    assert job.interesting.repeat == 2
-    assert job.interesting.no_harness
+    assert job.min_crashes == 2
+    assert job.repeat == 2
+    assert job.no_harness
 
 
-@pytest.mark.parametrize("job", [FakeInterestingSemiReliableWithCache], indirect=["job"])
+@pytest.mark.parametrize("job", [TestReductionJobSemiReliableWithCache], indirect=["job"])
 def test_run_9(tmp_path, job):
     """test that analyze stage works with multiple testcases"""
-    create_target_binary(job.interesting.target, tmp_path)
+    create_target_binary(job.target, tmp_path)
     (tmp_path / "tc").mkdir()
     (tmp_path / "tc" / "-0").mkdir()
     (tmp_path / "tc" / "-1").mkdir()
@@ -706,10 +709,10 @@ def test_run_9(tmp_path, job):
 
     job.reporter = BaseFakeReporter()
 
-    job.interesting.min_crashes = 1
-    job.interesting.repeat = 1
-    job.interesting.set_n(5)
+    job.min_crashes = 1
+    job.repeat = 1
+    job.set_n(5)
     job.run()
-    assert job.interesting.min_crashes == 2
-    assert job.interesting.repeat == 10
-    assert not job.interesting.no_harness
+    assert job.min_crashes == 2
+    assert job.repeat == 10
+    assert not job.no_harness

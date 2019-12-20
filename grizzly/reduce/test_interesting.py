@@ -9,7 +9,7 @@ import time
 import pytest
 import ffpuppet
 import sapphire
-from grizzly.reduce.interesting import Interesting
+from grizzly.reduce.reduce import ReductionJob
 from grizzly.target.target import Target
 from .test_common import FakeTarget, FakeReduceStatus, create_target_binary
 
@@ -63,9 +63,10 @@ def fake_timesleep(monkeypatch):
 pytestmark = pytest.mark.usefixtures("fake_sapphire", "fake_timesleep")
 
 
+
 def test_interesting(tmp_path):
     "simple case where the test is interesting"
-    obj = Interesting([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
@@ -87,7 +88,7 @@ def test_not_interesting(tmp_path):
             FakeTarget.detect_failure(self, *args, **kwds)
             return Target.RESULT_NONE
 
-    obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
     create_target_binary(obj.target, tmp_path)
     obj.target._is_healthy = True
     (tmp_path / "test.html").touch()
@@ -112,7 +113,7 @@ def test_ignored(tmp_path):
             assert ignored == ["foo", "bar"]
             return Target.RESULT_IGNORED
 
-    obj = Interesting(["foo", "bar"], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
+    obj = ReductionJob(["foo", "bar"], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
@@ -135,7 +136,7 @@ def test_target_relaunch(tmp_path):
             FakeTarget.launch(self, *args, **kwds)
             raise ffpuppet.LaunchError()
 
-    obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
     create_target_binary(obj.target, tmp_path)
     prefix = tmp_path / "lithium"
     prefix.mkdir()
@@ -152,7 +153,7 @@ def test_target_relaunch(tmp_path):
 
 def test_no_harness(tmp_path):
     "simple case where harness is not used"
-    obj = Interesting([], FakeTarget(), 30, True, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], FakeTarget(), 30, True, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
     create_target_binary(obj.target, tmp_path)
     prefix = tmp_path / "lithium"
     prefix.mkdir()
@@ -169,7 +170,7 @@ def test_no_harness(tmp_path):
 
 def test_skip(tmp_path):
     "skip should assume interesting for the first n calls, without launching the target"
-    obj = Interesting([], FakeTarget(), 30, False, False, 7, 1, 1, 0, 0, 0, FakeReduceStatus(), False)
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 7, 1, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -205,7 +206,7 @@ def test_any_crash_false(tmp_path):
             with open(os.path.join(dest, "log_stderr.txt"), "w") as log_fp:
                 log_fp.write(stderr)
 
-    obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus(), False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -239,7 +240,7 @@ def test_any_crash_true(tmp_path):
             with open(os.path.join(dest, "log_stderr.txt"), "w") as log_fp:
                 log_fp.write(stderr)
 
-    obj = Interesting([], MyTarget(), 30, False, True, 0, 1, 1, 0, 0, 0, FakeReduceStatus(), False)
+    obj = ReductionJob([], MyTarget(), 30, False, True, 0, 1, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -264,7 +265,7 @@ def test_any_crash_true(tmp_path):
 
 def test_min_crashes_repro(tmp_path):
     "min_crashes will force n iterations if crash repros"
-    obj = Interesting([], FakeTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, FakeReduceStatus(), False)
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -294,7 +295,7 @@ def test_min_crashes_norepro(tmp_path):
             self.repros += 1
             return Target.RESULT_FAILURE
 
-    obj = Interesting([], MyTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, FakeReduceStatus(), False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -313,7 +314,7 @@ def test_min_crashes_norepro(tmp_path):
 
 def test_repeat_repro(tmp_path):
     "repeat will stop at min_crashes if crash repros"
-    obj = Interesting([], FakeTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, FakeReduceStatus(), False)
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -337,7 +338,7 @@ def test_repeat_norepro(tmp_path):
             FakeTarget.detect_failure(self, *args, **kwds)
             return Target.RESULT_NONE
 
-    obj = Interesting([], MyTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, FakeReduceStatus(), False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -354,7 +355,7 @@ def test_repeat_norepro(tmp_path):
 
 def test_cache(tmp_path):
     "cache will be hit if same file is given twice"
-    obj = Interesting([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
@@ -369,7 +370,7 @@ def test_cache(tmp_path):
 
 def test_no_cache(tmp_path):
     "testcase_cache=False will disable cache"
-    obj = Interesting([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus(), False)
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
@@ -393,7 +394,7 @@ def test_timeout_update(monkeypatch, tmp_path):
             FakeTarget.detect_failure(self, *args, **kwds)
             return failure_result
 
-    obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 30, FakeReduceStatus(), False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 30, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
@@ -463,7 +464,7 @@ def test_idle_timeout(monkeypatch, tmp_path):
     monkeypatch.setattr(time, "time", mytime)
     monkeypatch.setattr(sapphire, "Sapphire", MyServer)
 
-    obj = Interesting([], MyTarget(), 30, False, False, 0, 1, 1, 10, 25, 30, FakeReduceStatus(), False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 10, 25, 30, FakeReduceStatus(), testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
