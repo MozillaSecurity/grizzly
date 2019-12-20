@@ -11,7 +11,7 @@ import tempfile
 from Collector.Collector import Collector
 
 from .args import ReducerFuzzManagerIDArgs
-from .reduce import main as reduce_main
+from .reduce import ReductionJob
 from ..main import console_init_logging
 from ..common import FuzzManagerReporter
 
@@ -97,65 +97,86 @@ def change_quality(crash_id, quality):
             raise
 
 
-def main(args):
-    LOG.info("Trying crash %d", args.input)
+class CrashReductionJob(ReductionJob):
 
-    crash_id = args.input
-    testcase = download_crash(crash_id)
-    tool_override = args.tool is None
-    crash = crashentry_data(crash_id)
-    quality = crash["testcase_quality"]
-    if tool_override:
-        args.tool = crash["tool"]
-        LOG.info("Using toolname from crash: %s", args.tool)
-    fm_reporter = args.fuzzmanager
+    def __init__(self, *args, **kwds):
+        super(CrashReductionJob, self).__init__(*args, **kwds)
+        self.was_interesting = False
+        self.fm_reporter = False
+        self.crash_id = None
+        self.tool_override = False
+        self.quality = None
+        self.testcase_path = None
 
-    try:
-        # reduce.main expects input to be a path to testcase
-        args.input = testcase
+    def on_result(self, result_code):
+        # only update quality of the original crash if we are reporting to FuzzManager
+        if not self.fm_reporter:
+            return
 
-        def _on_result(result):
-            # only update quality of the original crash if we are reporting to FuzzManager
-            if not fm_reporter:
-                return
+        if result_code == FuzzManagerReporter.QUAL_REDUCED_ORIGINAL:
+            # reduce succeeded
+            change_quality(self.crash_id, result_code)
 
-            if result == FuzzManagerReporter.QUAL_REDUCED_ORIGINAL:
-                # reduce succeeded
-                change_quality(crash_id, result)
+        elif result_code == FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE:
+            if self.quality == FuzzManagerReporter.QUAL_UNREDUCED:
+                # override result to request platform specific reduction
+                result_code = FuzzManagerReporter.QUAL_REQUEST_SPECIFIC
+            change_quality(self.crash_id, result_code)
 
-            elif result == FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE:
-                if quality == FuzzManagerReporter.QUAL_UNREDUCED:
-                    # override result to request platform specific reduction
-                    result = FuzzManagerReporter.QUAL_REQUEST_SPECIFIC
-                change_quality(crash_id, result)
+        # for these cases, something went wrong. a reduce log/result would be really valuable
+        elif result_code in {FuzzManagerReporter.QUAL_REDUCER_BROKE,
+                             FuzzManagerReporter.QUAL_REDUCER_ERROR}:
+            # for now just change the quality
+            change_quality(self.crash_id, result_code)
 
-            # for these cases, something went wrong. a reduce log/result would be really valuable
-            elif result in {FuzzManagerReporter.QUAL_REDUCER_BROKE,
-                            FuzzManagerReporter.QUAL_REDUCER_ERROR}:
-                # for now just change the quality
-                change_quality(crash_id, result)
+        else:
+            LOG.error("Got unhandled quality: %s", FuzzManagerReporter.quality_name(result_code))
 
-            else:
-                LOG.error("Got unhandled quality: %s", FuzzManagerReporter.quality_name(result))
+    def on_interesting_crash(self, *args, **kwds):
+        super(CrashReductionJob, self).on_interesting_crash(*args, **kwds)
+        if self.was_interesting:
+            return
+        LOG.info("Crash %d reproduced!", self.crash_id)
+        if self.fm_reporter:
+            change_quality(self.crash_id, FuzzManagerReporter.QUAL_REPRODUCIBLE)
+        self.was_interesting = True
 
-        _was_interesting = [False]
+    def run(self, *args, **kwds):
+        try:
+            return super(CrashReductionJob, self).run(*args, **kwds)
+        finally:
+            os.unlink(self.testcase_path)
 
-        def _on_interesting():
-            if _was_interesting[0]:
-                return
-            LOG.info("Crash %d reproduced!", crash_id)
-            if fm_reporter:
-                change_quality(crash_id, FuzzManagerReporter.QUAL_REPRODUCIBLE)
-            _was_interesting[0] = True
+    @classmethod
+    def from_args(cls, args, target, status):
+        LOG.info("Trying crash %d", args.input)
 
-        return reduce_main(args, interesting_cb=_on_interesting, result_cb=_on_result)
+        try:
+            crash_id = args.input
+            testcase = download_crash(crash_id)
+            tool_override = args.tool is None
+            crash = crashentry_data(crash_id)
+            quality = crash["testcase_quality"]
+            if tool_override:
+                args.tool = crash["tool"]
+                LOG.info("Using toolname from crash: %s", args.tool)
 
-    finally:
-        os.unlink(testcase)
-        if tool_override:
-            args.tool = None
+            # reduce.main expects input to be a path to testcase
+            args.input = testcase
+
+            job = super(CrashReductionJob, cls).from_args(args, target, status)
+            job.fm_reporter = args.fuzzmanager
+            job.crash_id = crash_id
+            job.tool_override = tool_override
+            job.quality = quality
+            job.testcase_path = testcase
+            return job
+
+        except:  # noqa
+            os.unlink(testcase)
+            raise
 
 
 if __name__ == "__main__":
     console_init_logging()
-    sys.exit(main(ReducerFuzzManagerIDArgs().parse_args()))
+    sys.exit(CrashReductionJob.main(ReducerFuzzManagerIDArgs().parse_args()))

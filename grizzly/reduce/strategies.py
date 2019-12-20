@@ -63,7 +63,7 @@ class _AnalyzeReliability(lithium.Strategy):
     ITERATIONS = 11  # number of iterations to analyze
     MIN_CRASHES = 2  # --min-crashes value when analysis is used
     TARGET_PROBABILITY = 0.95  # probability that successful reduction will observe the crash
-    # to see the worst case, run the `self.interesting.repeat` calculation below using
+    # to see the worst case, run the `self.repeat` calculation below using
     # crashes_percent = 1.0/ITERATIONS
 
     def __init__(self, job):
@@ -75,26 +75,26 @@ class _AnalyzeReliability(lithium.Strategy):
         assert self.ITERATIONS > 0
 
         # disable result cache setting
-        use_result_cache = self.job.interesting.use_result_cache
-        self.job.interesting.use_result_cache = False
+        use_result_cache = self.job.use_result_cache
+        self.job.use_result_cache = False
 
         # Reset parameters.
         # Use repeat=1 & relaunch=ITERATIONS because this is closer to how we will run
         #   post-analysis.
         # We're only using repeat=1 instead of repeat=ITERATIONS so we can get feedback on every
         #   call to interesting.
-        self.job.interesting.repeat = 1
-        self.job.interesting.min_crashes = 1
-        self.job.interesting.target.rl_reset = min(self.job.original_relaunch, self.ITERATIONS)
+        self.job.repeat = 1
+        self.job.min_crashes = 1
+        self.job.target.rl_reset = min(self.job.original_relaunch, self.ITERATIONS)
         # do not update the iteration timeout during analysis
-        original_static_timeout = self.job.interesting.static_timeout
-        self.job.interesting.static_timeout = True
+        original_static_timeout = self.job.static_timeout
+        self.job.static_timeout = True
         harness_crashes = 0
         non_harness_crashes = 0
 
         # close target so new parameters take effect
-        if not self.job.interesting.target.closed:
-            self.job.interesting.target.close()
+        if not self.job.target.closed:
+            self.job.target.close()
 
         if not self.job.force_no_harness:
             LOG.info("Running for %d iterations to assess reliability using harness.", self.ITERATIONS)
@@ -107,12 +107,12 @@ class _AnalyzeReliability(lithium.Strategy):
                      100.0 * harness_crashes / self.ITERATIONS, self.ITERATIONS)
 
             # close target so new parameters take effect
-            if not self.job.interesting.target.closed:
-                self.job.interesting.target.close()
+            if not self.job.target.closed:
+                self.job.target.close()
 
         if harness_crashes != self.ITERATIONS:
             # try without harness
-            self.job.interesting.no_harness = True
+            self.job.no_harness = True
 
             LOG.info("Running for %d iterations to assess reliability without harness.",
                      self.ITERATIONS)
@@ -125,29 +125,29 @@ class _AnalyzeReliability(lithium.Strategy):
                      100.0 * non_harness_crashes / self.ITERATIONS, self.ITERATIONS)
 
             # close target so new parameters take effect
-            if not self.job.interesting.target.closed:
-                self.job.interesting.target.close()
+            if not self.job.target.closed:
+                self.job.target.close()
 
         # restore result cache setting
-        self.job.interesting.use_result_cache = use_result_cache
+        self.job.use_result_cache = use_result_cache
 
         if harness_crashes == 0 and non_harness_crashes == 0:
             return 1  # no crashes ever?
 
         # should we use the harness? go with whichever crashed more
-        self.job.interesting.no_harness = non_harness_crashes > harness_crashes
+        self.job.no_harness = non_harness_crashes > harness_crashes
         # this is max 99% to avoid domain errors in the calculation below
         crashes_percent = min(1.0 * max(non_harness_crashes, harness_crashes) / self.ITERATIONS, 0.99)
 
         # adjust repeat/min-crashes depending on how reliable the testcase was
-        self.job.interesting.min_crashes = self.MIN_CRASHES
-        self.job.interesting.repeat = \
+        self.job.min_crashes = self.MIN_CRASHES
+        self.job.repeat = \
             int(math.ceil(math.log(1 - self.TARGET_PROBABILITY, 1 - crashes_percent)) * self.MIN_CRASHES)
 
         # set relaunch to min(relaunch, repeat)
-        self.job.interesting.target.rl_reset = min(self.job.original_relaunch, self.job.interesting.repeat)
+        self.job.target.rl_reset = min(self.job.original_relaunch, self.job.repeat)
         # restore static_timeout flags
-        self.job.interesting.static_timeout = original_static_timeout
+        self.job.static_timeout = original_static_timeout
 
         LOG.info("Analysis results:")
         if harness_crashes == self.ITERATIONS:
@@ -158,10 +158,10 @@ class _AnalyzeReliability(lithium.Strategy):
             LOG.info("* --no-harness was already set")
         else:
             LOG.info("* testcase was %s reliable with the harness",
-                     "less" if self.job.interesting.no_harness else "more")
+                     "less" if self.job.no_harness else "more")
         LOG.info("* adjusted parameters: --min-crashes=%d --repeat=%d --relaunch=%d",
-                 self.job.interesting.min_crashes, self.job.interesting.repeat,
-                 self.job.interesting.target.rl_reset)
+                 self.job.min_crashes, self.job.repeat,
+                 self.job.target.rl_reset)
 
         return 0
 
@@ -193,13 +193,13 @@ class MinimizeCacheIterHarness(MinimizeLines):
         #   fix the timeout values
 
         # start polling for idle after n-1 testcases have finished
-        self.job.interesting.idle_timeout += \
-            self.job.interesting.idle_timeout * (len(self.reducer.testcase) - 1)
+        self.job.idle_timeout += \
+            self.job.idle_timeout * (len(self.reducer.testcase) - 1)
 
         # iteration timeout is * n testcases, but add 10 seconds for overhead from the
         #   outer harness
-        self.job.interesting.iter_timeout = \
-            (self.job.interesting.iter_timeout + 10) * len(self.reducer.testcase)
+        self.job.iter_timeout = \
+            (self.job.iter_timeout + 10) * len(self.reducer.testcase)
 
     def on_success(self):
         while self.job.files_to_reduce:
@@ -216,7 +216,7 @@ class MinimizeCacheIterHarness(MinimizeLines):
             assert len(testcase_path) == 2
             self.job.tcroot = os.path.join(self.job.tcroot, testcase_path[0])
             self.job.testcase = os.path.join(self.job.tcroot, testcase_path[1])
-            self.job.interesting.landing_page = self.job.testcase
+            self.job.landing_page = self.job.testcase
             self.job.files_to_reduce.append(self.job.testcase)
             LOG.info("Reduced history to a single file: %s", testcase_path[1])
         else:

@@ -8,17 +8,16 @@ Reducer unit test fixtures
 import pytest
 from grizzly.reduce import reduce, ReductionJob
 from .test_common import FakeReduceStatus, FakeTarget
-from .test_reduce import FakeInteresting
+from .test_reduce import TestReductionJob
 
 
 @pytest.fixture
 def job(monkeypatch, request):
     """Pytest fixture to provide a ReductionJob object with dependencies stubbed and default values"""
-    interesting_cls = getattr(request, "param", FakeInteresting)
-    use_testcase_cache = getattr(interesting_cls, "USE_TESTCASE_CACHE", False)
-    use_analysis = getattr(interesting_cls, "USE_ANALYZE", False)
-    monkeypatch.setattr(reduce, "Interesting", interesting_cls)
-    result = ReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
-                          FakeReduceStatus(), None, use_testcase_cache, not use_analysis)
+    job_cls = getattr(request, "param", TestReductionJob)
+    use_testcase_cache = getattr(job_cls, "USE_TESTCASE_CACHE", False)
+    use_analysis = getattr(job_cls, "USE_ANALYZE", False)
+    result = job_cls([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
+                     FakeReduceStatus(), None, use_testcase_cache, not use_analysis)
     yield result
     result.close()

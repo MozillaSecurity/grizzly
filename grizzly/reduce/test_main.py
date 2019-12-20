@@ -3,14 +3,54 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import unicode_literals
+import os
 import re
 import zipfile
 import pytest
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs, ReducerFuzzManagerIDQualityArgs
-from grizzly.reduce import reduce, crash, bucket, ReductionJob
+from grizzly.reduce import reduce, crash, bucket
 from grizzly.common import Status, reporter
-from .test_common import BaseFakeReporter, FakeTarget
-from .test_reduce import FakeInteresting
+from .test_common import BaseFakeReporter, FakeTarget, FakeReduceStatus
+from .test_reduce import TestReductionJob
+
+
+class TestMainReductionJob(TestReductionJob):
+
+    def __init__(self, *_args, **_kwds):
+        super(TestMainReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
+                                                   FakeReduceStatus(), testcase_cache=False,
+                                                   skip_analysis=True)
+
+
+# this is the same as TestMainReductionJob, but for CrashReductionJob
+class TestMainCrashReductionJob(crash.CrashReductionJob):
+    """Stub to fake parts of grizzly.crash.CrashReductionJob needed for testing the reduce loop"""
+
+    def __init__(self, *_args, **_kwds):
+        super(TestMainCrashReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25,
+                                                        60, FakeReduceStatus(), testcase_cache=False,
+                                                        skip_analysis=True)
+
+    def close(self, *_args, **_kwds):
+        super(TestMainCrashReductionJob, self).close(keep_temp=False)
+
+    def init(self, _):
+        pass
+
+    @property
+    def location(self):
+        return "127.0.0.1" if self.no_harness else "127.0.0.1/harness"
+
+    def _run(self, testcase, temp_prefix):
+        result_logs = temp_prefix + "_logs"
+        os.mkdir(result_logs)
+        self.target.save_logs(result_logs, meta=True)
+        testcase.duration = 0.1
+        with open(self.reduce_file) as fp:
+            return "required" in fp.read()
+
+    def cleanup(self, _):
+        pass
 
 
 def test_parse_args(capsys, tmp_path):
@@ -98,10 +138,8 @@ def test_parse_args(capsys, tmp_path):
         ReducerArgs().parse_args([str(exe), str(inp), arg, "10"])
 
 
-def test_main(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_main(tmp_path):  # noqa pylint: disable=redefined-outer-name
     "simple test that main functions"
-    # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
-    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
 
     (tmp_path / "binary").touch()
     exe = tmp_path / "binary"
@@ -110,27 +148,29 @@ def test_main(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-out
     (inp / "test_info.txt").write_text("landing page: test.html")
     (inp / "test.html").write_text("fluff\nrequired\n")
     args = ReducerArgs().parse_args([str(exe), str(inp)])
-    assert reduce.main(args) == 0
+    # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
+    assert TestMainReductionJob.main(args) == 0
 
 
-def test_main_prefs(monkeypatch, tmp_path):
+def test_main_prefs(tmp_path):
     "cmd line prefs should override prefs in the testcase"
-    monkeypatch.setattr(reduce, "Interesting", FakeInteresting)
     run_called = [0]
-
-    class MyReductionJob(ReductionJob):
-
-        def run(self, *args, **kwds):
-            result = ReductionJob.run(self, *args, **kwds)
-            with open(self.interesting.target.prefs) as prefs_fp:
-                assert "main prefs" == prefs_fp.read()
-            run_called[0] += 1
-            return result
 
     Status.PATH = str(tmp_path / "grzstatus")
     status = Status.start()
-    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, status, None, False)
-    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
+
+    class MyReductionJob(TestReductionJob):
+
+        def __init__(self, *_args, **_kwds):
+            super(MyReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
+                                                 status, testcase_cache=False)
+
+        def run(self, *args, **kwds):
+            result = super(MyReductionJob, self).run(*args, **kwds)
+            with open(self.target.prefs) as prefs_fp:
+                assert "main prefs" == prefs_fp.read()
+            run_called[0] += 1
+            return result
 
     (tmp_path / "binary").touch()
     exe = tmp_path / "binary"
@@ -142,14 +182,13 @@ def test_main_prefs(monkeypatch, tmp_path):
     (tmp_path / "prefs.js").write_text("main prefs")
     args = ReducerArgs().parse_args([str(exe), str(inp),
                                      "-p", str(tmp_path / "prefs.js")])
-    assert reduce.main(args) == 0
+    assert MyReductionJob.main(args) == 0
     assert run_called[0] == 1
 
 
-def test_main_strategies(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_main_strategies(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "strategies list should be respected"
     # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
-    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
     report_data = {"num_reports": 0}
 
     class FakeReporter(BaseFakeReporter):
@@ -175,11 +214,11 @@ def test_main_strategies(job, monkeypatch, tmp_path):  # noqa pylint: disable=re
     (inp / "test_info.txt").write_text("landing page: test.html")
     (inp / "test.html").write_bytes(b"fluff\n'xxrequired'\n")
     args = ReducerArgs().parse_args([str(exe), str(inp), "--strategy", "line"])
-    assert reduce.main(args) == 0
+    assert TestMainReductionJob.main(args) == 0
     assert report_data["num_reports"] == 1
 
 
-def test_bucket_main(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_bucket_main(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "bucket.main iterates using crash.main"
     main_called = [0]
 
@@ -207,13 +246,16 @@ def test_bucket_main(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefi
                         }
             return response
 
-    def crash_main(args):
-        assert args.input == 456
-        main_called[0] += 1
-        return 0
+    class FakeCrashReductionJob(object):
+
+        @staticmethod
+        def main(args):
+            assert args.input == 456
+            main_called[0] += 1
+            return 0
 
     monkeypatch.setattr(bucket, "Collector", FakeCollector)
-    monkeypatch.setattr(bucket, "reduce_crash", crash_main)
+    monkeypatch.setattr(bucket, "CrashReductionJob", FakeCrashReductionJob)
 
     (tmp_path / "binary").touch()
     exe = tmp_path / "binary"
@@ -222,7 +264,7 @@ def test_bucket_main(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefi
     assert main_called[0] == 1
 
 
-def test_crash_main_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_repro(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     # expect Collector.patch to be called with these qualities
     expect_patch = [reporter.FuzzManagerReporter.QUAL_REPRODUCIBLE,
@@ -268,8 +310,6 @@ def test_crash_main_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=r
             assert expect_patch
             assert data["testcase_quality"] == expect_patch.pop(0)
 
-    # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
-    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
     monkeypatch.setattr(reporter, "Collector", FakeCollector)
     monkeypatch.setattr(reduce, "FuzzManagerReporter", ReporterNoSubmit)
     monkeypatch.setattr(crash, "Collector", FakeCollector)
@@ -290,12 +330,12 @@ def test_crash_main_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=r
         zip_fp.write(str(inp / "test_info.txt"), "test_info.txt")
         zip_fp.write(str(inp / "test.html"), "test.html")
     args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
-    assert crash.main(args) == 0
+    assert TestMainCrashReductionJob.main(args) == 0
     assert not expect_patch
     assert submitted[0]
 
 
-def test_crash_main_no_repro(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_no_repro(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     expect_patch = [reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC]
 
@@ -341,7 +381,6 @@ def test_crash_main_no_repro(job, monkeypatch, tmp_path):  # noqa pylint: disabl
             assert data["testcase_quality"] == expect_patch.pop(0)
 
     # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
-    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
     monkeypatch.setattr(reporter, "Collector", FakeCollector)
     monkeypatch.setattr(reduce, "FuzzManagerReporter", ReporterNoSubmit)
     monkeypatch.setattr(crash, "Collector", FakeCollector)
@@ -362,11 +401,11 @@ def test_crash_main_no_repro(job, monkeypatch, tmp_path):  # noqa pylint: disabl
         zip_fp.write(str(inp / "test_info.txt"), "test_info.txt")
         zip_fp.write(str(inp / "test.html"), "test.html")
     args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
-    assert crash.main(args) == 1
+    assert TestMainCrashReductionJob.main(args) == 1
     assert not expect_patch
 
 
-def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_no_repro_specific(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     expect_patch = [reporter.FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE]
 
@@ -411,8 +450,6 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylin
             assert expect_patch
             assert data["testcase_quality"] == expect_patch.pop(0)
 
-    # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
-    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
     monkeypatch.setattr(reporter, "Collector", FakeCollector)
     monkeypatch.setattr(reduce, "FuzzManagerReporter", ReporterNoSubmit)
     monkeypatch.setattr(crash, "Collector", FakeCollector)
@@ -433,7 +470,7 @@ def test_crash_main_no_repro_specific(job, monkeypatch, tmp_path):  # noqa pylin
         zip_fp.write(str(inp / "test_info.txt"), "test_info.txt")
         zip_fp.write(str(inp / "test.html"), "test.html")
     args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
-    assert crash.main(args) == 1
+    assert TestMainCrashReductionJob.main(args) == 1
     assert not expect_patch
 
 
@@ -441,24 +478,26 @@ def test_environ_and_suppressions(monkeypatch, tmp_path):
     ""
     run_called = [0]
 
-    class MyReductionJob(ReductionJob):
+    class MyReductionJob(TestReductionJob):
+
+        def __init__(self, *_args, **_kwds):
+            super(MyReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
+                                                 status, testcase_cache=False)
+            assert self.target.forced_close
 
         def run(self, *args, **kwds):
-            assert len(self.interesting.env_mod) == 2
-            assert "GRZ_FORCED_CLOSE" in self.interesting.env_mod
-            assert self.interesting.env_mod["GRZ_FORCED_CLOSE"] == "0"
-            assert not self.interesting.target.forced_close
-            assert "LSAN_OPTIONS" in self.interesting.env_mod
-            assert len(re.split(r":(?![\\|/])", self.interesting.env_mod["LSAN_OPTIONS"])) == 2
-            assert "detect_leaks=1" in self.interesting.env_mod["LSAN_OPTIONS"]
-            assert "lsan.supp" in self.interesting.env_mod["LSAN_OPTIONS"]
+            assert len(self.env_mod) == 2
+            assert "GRZ_FORCED_CLOSE" in self.env_mod
+            assert self.env_mod["GRZ_FORCED_CLOSE"] == "0"
+            assert not self.target.forced_close
+            assert "LSAN_OPTIONS" in self.env_mod
+            assert len(re.split(r":(?![\\|/])", self.env_mod["LSAN_OPTIONS"])) == 2
+            assert "detect_leaks=1" in self.env_mod["LSAN_OPTIONS"]
+            assert "lsan.supp" in self.env_mod["LSAN_OPTIONS"]
             run_called[0] += 1
 
     Status.PATH = str(tmp_path / "grzstatus")
     status = Status.start()
-    job = MyReductionJob([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60, status, None, False)
-    monkeypatch.setattr(reduce, "ReductionJob", lambda *a, **kw: job)
-    assert job.interesting.target.forced_close
 
     exe = tmp_path / "binary"
     exe.touch()
@@ -469,5 +508,5 @@ def test_environ_and_suppressions(monkeypatch, tmp_path):
     (inp / "lsan.supp").write_text("foo")
     (inp / "test.html").write_text("fluff\nrequired\n")
     args = ReducerArgs().parse_args([str(exe), str(inp)])
-    reduce.main(args)
+    MyReductionJob.main(args)
     assert run_called[0] == 1
