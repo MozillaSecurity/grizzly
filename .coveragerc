@@ -1,9 +1,0 @@
-[run]
-omit =
-	*/test_*.py
-	grizzly/adapters/*/__init__.py
-	setup.py
-
-[report]
-exclude_lines =
-	pragma: no cover
