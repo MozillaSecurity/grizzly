@@ -34,7 +34,7 @@ class TestMainCrashReductionJob(crash.CrashReductionJob):
     def close(self, *_args, **_kwds):
         super(TestMainCrashReductionJob, self).close(keep_temp=False)
 
-    def init(self, _):
+    def lithium_init(self):
         pass
 
     @property
@@ -49,7 +49,7 @@ class TestMainCrashReductionJob(crash.CrashReductionJob):
         with open(self.reduce_file) as fp:
             return "required" in fp.read()
 
-    def cleanup(self, _):
+    def lithium_cleanup(self):
         pass
 
 

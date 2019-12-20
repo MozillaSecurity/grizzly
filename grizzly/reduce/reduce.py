@@ -39,6 +39,54 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber", "Jason Kratzer"]
 LOG = logging.getLogger("grizzly.reduce")
 
 
+class LithiumInterestingProxy(object):
+    """Proxy to use a ReductionJob object as a Lithium interestingness script object.
+    """
+    def __init__(self, job):
+        self._job = job
+
+    def init(self, _args):
+        """Lithium initialization entrypoint.
+
+        Do any per-reduction loop setup needed.
+
+        Args:
+            _args (unused): Command line arguments from Lithium (N/A)
+
+        Returns:
+            None
+        """
+        self._job.lithium_init()
+
+    def interesting(self, _args, temp_prefix):
+        """Lithium main iteration entrypoint.
+
+        This should try the reduction and return True or False based on whether the reduction was
+        good or bad.
+
+        Args:
+            _args (unused): Command line arguments from Lithium (N/A)
+            temp_prefix (str): A unique prefix for any files written during this iteration.
+
+        Returns:
+            bool: True if reduced testcase is still interesting.
+        """
+        return self._job.lithium_interesting(temp_prefix)
+
+    def cleanup(self, _args):
+        """Lithium cleanup entrypoint.
+
+        Do any per-reduction loop cleanup needed.
+
+        Args:
+            _args (unused): Command line arguments from Lithium (N/A)
+
+        Returns:
+            None
+        """
+        self._job.lithium_cleanup()
+
+
 class ReductionJob(object):
     LOGGERS_TO_WATCH = ("ffpuppet", "grizzly", "lithium", "sapphire")
     DEFAULT_STRATEGIES = ("line", "jsbeautify", "collapsebraces", "jschar")
@@ -51,45 +99,46 @@ class ReductionJob(object):
         Args:
             target (grizzly.target.Target): Target object to use for reduction.
         """
-        self.reporter = None
-        self.result_code = None
-        self.signature = None
-        self.status = status
-
-        self.ignore = ignore  # things to ignore
-        self.target = target  # a Puppet to run with
-        self.status = status  # ReduceStatus to track progress
-        self.server = None  # a server to serve with
-        self.orig_sig = None  # signature to reduce to (if specified)
-        self.iter_timeout = iter_timeout
-        self.no_harness = no_harness
-        self.skip = skip
-        self.skipped = None
-        self.static_timeout = False  # if True iter_timeout will not be changed
-        self.min_crashes = min_crashes
-        self.repeat = repeat
-        self.idle_poll = idle_poll
+        self._landing_page = None  # the file to point the target at
+        self._reduce_file = None  # the file to reduce
         self.any_crash = any_crash
+        self.cache_iter_harness_created = None
+        self.env_mod = None  # environment if specified in the testcase
+        self.files_to_reduce = None
+        self.force_no_harness = no_harness
+        self.idle_poll = idle_poll
         self.idle_threshold = idle_threshold
         self.idle_timeout = idle_timeout
+        self.ignore = ignore  # things to ignore
         self.input_fname = None
+        self.interesting_prefix = None
+        self.iter_timeout = iter_timeout
+        self.min_crashes = min_crashes
+        self.no_harness = no_harness
+        self.orig_sig = None  # signature to reduce to (if specified)
+        self.original_relaunch = target.rl_reset
+        self.original_size = None
+        self.other_crashes = {}
+        self.repeat = repeat
+        self.reporter = None
+        self.result_cache = {}
+        self.result_code = None
+        self.server = None  # a server to serve with
+        self.signature = None
+        self.skip = skip
+        self.skip_analysis = skip_analysis
+        self.skipped = None
+        self.static_timeout = False  # if True iter_timeout will not be changed
+        self.status = status
+        self.status = status  # ReduceStatus to track progress
+        self.target = target  # a Puppet to run with
+        self.testcase = None
         # testcase cache remembers if we have seen this reduce_file before and if so return the same
         # interesting result
         self.use_result_cache = testcase_cache
-        self.result_cache = {}
-        # environment if specified in the testcase
-        self.env_mod = None
-        self._landing_page = None  # the file to point the target at
-        self._reduce_file = None  # the file to reduce
-
-        self.testcase = None
         self.tmpdir = tempfile.mkdtemp(prefix="grzreduce", dir=working_path)
         self.tcroot = os.path.join(self.tmpdir, "tc")
-        self.other_crashes = {}
-        self.interesting_prefix = None
         self.log_handler = self._start_log_capture()
-        self.cache_iter_harness_created = None
-        self.skip_analysis = skip_analysis
         if not self.skip_analysis:
             # see if any of the args tweaked by analysis were overridden
             # --relaunch is regarded as a maximum, so overriding the default is not a deal-breaker for this
@@ -99,44 +148,6 @@ class ReductionJob(object):
             elif self.repeat != 1:
                 LOG.warning("--repeat=%d was given, skipping analysis", self.repeat)
                 self.skip_analysis = True
-        self.original_relaunch = target.rl_reset
-        self.force_no_harness = self.no_harness
-        self.files_to_reduce = None
-        self.original_size = None
-
-    def _start_log_capture(self):
-        """Add a log handler for grizzly and lithium messages generated during this job.
-        The handler is removed again by close()
-
-        Args:
-            None
-
-        Returns:
-            logging.Handler: The log handler to be removed later.
-        """
-        formatter = logging.Formatter("%(levelname).1s %(name)s [%(asctime)s] %(message)s")
-        handler = logging.FileHandler(os.path.join(self.tmpdir, "reducelog.txt"))
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(formatter)
-        for logname in self.LOGGERS_TO_WATCH:
-            logging.getLogger(logname).addHandler(handler)
-
-        # check that DEBUG messages will actually get through
-        # if the root logger level is > DEBUG, messages will not get through to our log handler
-        # set root to DEBUG, and propagate the old root level to each root handler
-        root_logger = logging.getLogger()
-        root_level = root_logger.getEffectiveLevel()
-        if root_level > logging.DEBUG:
-            root_logger.setLevel(logging.DEBUG)
-            for root_handler in root_logger.handlers:
-                if root_handler.level < root_level:
-                    root_handler.setLevel(root_level)
-
-        return handler
-
-    @property
-    def wwwdir(self):
-        return os.path.dirname(os.path.realpath(self._landing_page))
 
     @property
     def landing_page(self):
@@ -145,6 +156,16 @@ class ReductionJob(object):
     @landing_page.setter
     def landing_page(self, value):
         self._landing_page = value
+
+    @property
+    def location(self):
+        if self.no_harness:
+            return "http://127.0.0.1:%d/%s" % (self.server.get_port(), self.landing_page)
+        return "".join((
+            "http://127.0.0.1:%d/harness" % self.server.get_port(),
+            "?timeout=%d" % (self.iter_timeout * 1000,),
+            "&close_after=%d" % self.target.rl_reset,
+            "&forced_close=0" if not self.target.forced_close else ""))
 
     @property
     def reduce_file(self):
@@ -157,11 +178,15 @@ class ReductionJob(object):
         if self._landing_page is None:
             self._landing_page = value
 
-    def init(self, _):
-        """Lithium initialization entrypoint
+    @property
+    def wwwdir(self):
+        return os.path.dirname(os.path.realpath(self._landing_page))
+
+    def lithium_init(self):
+        """Lithium initialization entrypoint. Do any per-reduction loop setup needed.
 
         Args:
-            _args (unused): Command line arguments from Lithium (N/A)
+            None
 
         Returns:
             None
@@ -170,63 +195,7 @@ class ReductionJob(object):
         self.best_testcase = None
         self.result_cache = {}
 
-    def _add_san_suppressions(self, supp_file):
-        # Update the sanitizer *SAN_OPTIONS environment variable to use provided
-        # suppressions file
-        opt_key = '%s_OPTIONS' % os.path.basename(supp_file).split('.')[0].upper()
-        # the value matching *SAN_OPTIONS can be set to None
-        san_opts = self.env_mod.get(opt_key, None)
-        if san_opts is None:
-            san_opts = ''
-        updated = list()
-        for opt in re.split(r":(?![\\|/])", san_opts):
-            if opt and opt != 'suppressions':
-                updated.append(opt)
-        updated.append('suppressions=\'%s\'' % supp_file)
-        self.env_mod[opt_key] = ':'.join(updated)
-
-    def monitor_process(self, iteration_done_event, idle_timeout_event, monitor_launched):
-        # Wait until timeout is hit before polling
-        monitor_launched.set()
-        LOG.debug('Waiting %r before polling', self.idle_timeout)
-        exp_time = time.time() + self.idle_timeout
-        while exp_time >= time.time() and not iteration_done_event.is_set():
-            time.sleep(0.1)
-
-        while not iteration_done_event.is_set():
-            result = self.target.poll_for_idle(self.idle_threshold, self.idle_poll)
-            if result != Target.POLL_BUSY:
-                if result == Target.POLL_IDLE:
-                    idle_timeout_event.set()
-                break
-            time.sleep(0.1)
-
-    def update_timeout(self, run_time):
-        # If run_time is less than poll-time, update it
-        LOG.debug('Run time %r', run_time)
-        new_poll_timeout = max(10, min(run_time * 1.5, self.idle_timeout))
-        if new_poll_timeout < self.idle_timeout:
-            LOG.info("Updating poll timeout to: %r", new_poll_timeout)
-            self.idle_timeout = new_poll_timeout
-        # If run_time * 2 is less than iter_timeout, update it
-        # in other words, decrease the timeout if this ran in less than half the timeout
-        # (floored at 10s)
-        new_iter_timeout = max(10, min(run_time * 2, self.iter_timeout))
-        if new_iter_timeout < self.iter_timeout:
-            LOG.info("Updating max timeout to: %r", new_iter_timeout)
-            self.iter_timeout = new_iter_timeout
-
-    @property
-    def location(self):
-        if self.no_harness:
-            return "http://127.0.0.1:%d/%s" % (self.server.get_port(), self.landing_page)
-        return "".join((
-            "http://127.0.0.1:%d/harness" % self.server.get_port(),
-            "?timeout=%d" % (self.iter_timeout * 1000,),
-            "&close_after=%d" % self.target.rl_reset,
-            "&forced_close=0" if not self.target.forced_close else ""))
-
-    def interesting(self, _, temp_prefix):
+    def lithium_interesting(self, temp_prefix):
         """Lithium main iteration entrypoint.
 
         This should try the reduction and return True or False based on whether the reduction was
@@ -234,7 +203,6 @@ class ReductionJob(object):
         result in 0 or more actual runs of the target.
 
         Args:
-            _args (unused): Command line arguments from Lithium (N/A)
             temp_prefix (str): A unique prefix for any files written during this iteration.
 
         Returns:
@@ -323,6 +291,99 @@ class ReductionJob(object):
                 'prefix': run_prefix
             }
         return False
+
+    def lithium_cleanup(self):
+        """Lithium cleanup entrypoint. Do any per-reduction loop cleanup needed.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        try:
+            if self.server is not None:
+                self.server.close()
+                self.server = None
+        finally:
+            if self.target is not None:
+                self.target.close()
+
+    def _add_san_suppressions(self, supp_file):
+        # Update the sanitizer *SAN_OPTIONS environment variable to use provided
+        # suppressions file
+        opt_key = '%s_OPTIONS' % os.path.basename(supp_file).split('.')[0].upper()
+        # the value matching *SAN_OPTIONS can be set to None
+        san_opts = self.env_mod.get(opt_key, None)
+        if san_opts is None:
+            san_opts = ''
+        updated = list()
+        for opt in re.split(r":(?![\\|/])", san_opts):
+            if opt and opt != 'suppressions':
+                updated.append(opt)
+        updated.append('suppressions=\'%s\'' % supp_file)
+        self.env_mod[opt_key] = ':'.join(updated)
+
+    def _start_log_capture(self):
+        """Add a log handler for grizzly and lithium messages generated during this job.
+        The handler is removed again by close()
+
+        Args:
+            None
+
+        Returns:
+            logging.Handler: The log handler to be removed later.
+        """
+        formatter = logging.Formatter("%(levelname).1s %(name)s [%(asctime)s] %(message)s")
+        handler = logging.FileHandler(os.path.join(self.tmpdir, "reducelog.txt"))
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(formatter)
+        for logname in self.LOGGERS_TO_WATCH:
+            logging.getLogger(logname).addHandler(handler)
+
+        # check that DEBUG messages will actually get through
+        # if the root logger level is > DEBUG, messages will not get through to our log handler
+        # set root to DEBUG, and propagate the old root level to each root handler
+        root_logger = logging.getLogger()
+        root_level = root_logger.getEffectiveLevel()
+        if root_level > logging.DEBUG:
+            root_logger.setLevel(logging.DEBUG)
+            for root_handler in root_logger.handlers:
+                if root_handler.level < root_level:
+                    root_handler.setLevel(root_level)
+
+        return handler
+
+    def monitor_process(self, iteration_done_event, idle_timeout_event, monitor_launched):
+        # Wait until timeout is hit before polling
+        monitor_launched.set()
+        LOG.debug('Waiting %r before polling', self.idle_timeout)
+        exp_time = time.time() + self.idle_timeout
+        while exp_time >= time.time() and not iteration_done_event.is_set():
+            time.sleep(0.1)
+
+        while not iteration_done_event.is_set():
+            result = self.target.poll_for_idle(self.idle_threshold, self.idle_poll)
+            if result != Target.POLL_BUSY:
+                if result == Target.POLL_IDLE:
+                    idle_timeout_event.set()
+                break
+            time.sleep(0.1)
+
+    def update_timeout(self, run_time):
+        # If run_time is less than poll-time, update it
+        LOG.debug('Run time %r', run_time)
+        new_poll_timeout = max(10, min(run_time * 1.5, self.idle_timeout))
+        if new_poll_timeout < self.idle_timeout:
+            LOG.info("Updating poll timeout to: %r", new_poll_timeout)
+            self.idle_timeout = new_poll_timeout
+        # If run_time * 2 is less than iter_timeout, update it
+        # in other words, decrease the timeout if this ran in less than half the timeout
+        # (floored at 10s)
+        new_iter_timeout = max(10, min(run_time * 2, self.iter_timeout))
+        if new_iter_timeout < self.iter_timeout:
+            LOG.info("Updating max timeout to: %r", new_iter_timeout)
+            self.iter_timeout = new_iter_timeout
 
     def _run(self, testcase, temp_prefix):
         """Run a single iteration against the target and determine if it is interesting. This is the
@@ -459,23 +520,6 @@ class ReductionJob(object):
                 poll.join()
 
         return result
-
-    def cleanup(self, _):
-        """Lithium cleanup entrypoint
-
-        Args:
-            _args (unused): Command line arguments from Lithium (N/A)
-
-        Returns:
-            None
-        """
-        try:
-            if self.server is not None:
-                self.server.close()
-                self.server = None
-        finally:
-            if self.target is not None:
-                self.target.close()
 
     def _stop_log_capture(self):
         """Stop handling reduce logs.
@@ -785,7 +829,7 @@ class ReductionJob(object):
             reducer = lithium.Lithium()
             self.orig_sig = self.signature
             self.landing_page = self.testcase
-            reducer.conditionScript = self
+            reducer.conditionScript = LithiumInterestingProxy(self)
 
             # if we created a harness to iterate over history, files_to_reduce is initially just
             #   that harness
