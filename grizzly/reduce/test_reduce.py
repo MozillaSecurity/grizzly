@@ -16,7 +16,7 @@ from .test_common import BaseFakeReporter, create_target_binary
 class TestReductionJob(reduce.ReductionJob):
     """Stub to fake parts of grizzly.reduce.ReductionJob needed for testing the reduce loop"""
 
-    def init(self, _):
+    def lithium_init(self):
         pass
 
     @property
@@ -34,14 +34,14 @@ class TestReductionJob(reduce.ReductionJob):
         with open(self.reduce_file) as fp:
             return "required" in fp.read()
 
-    def cleanup(self, _):
+    def lithium_cleanup(self):
         pass
 
 
 class TestReductionJobAlt(TestReductionJob):
     """Version of TestReductionJob that only reports alternate crashes"""
 
-    def init(self, _):
+    def lithium_init(self):
         self.__first_run = True
 
     def _run(self, testcase, temp_prefix):
@@ -61,7 +61,7 @@ class TestReductionJobAlt(TestReductionJob):
 class TestReductionJobKeepHarness(TestReductionJob):
     """Version of TestReductionJob that keeps the entire harness"""
 
-    def init(self, _):
+    def lithium_init(self):
         self.__init_data = None
         if os.path.basename(self.reduce_file).startswith("harness_"):
             with open(self.reduce_file) as harness_fp:

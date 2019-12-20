@@ -70,11 +70,11 @@ def test_interesting(tmp_path):
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
-    obj.init(None)
+    obj.lithium_init()
     (tmp_path / "lithium").mkdir()
-    assert obj.interesting(None, str(tmp_path / "lithium"))
+    assert obj.lithium_interesting(str(tmp_path / "lithium"))
     assert obj.target._calls["close"] == 1
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
 
@@ -93,12 +93,12 @@ def test_not_interesting(tmp_path):
     obj.target._is_healthy = True
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
-    obj.init(None)
+    obj.lithium_init()
     (tmp_path / "lithium").mkdir()
-    assert not obj.interesting(None, str(tmp_path / "lithium"))
+    assert not obj.lithium_interesting(str(tmp_path / "lithium"))
     assert obj.server is not None
     assert obj.target._calls["close"] == 0
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
 
@@ -117,12 +117,12 @@ def test_ignored(tmp_path):
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
-    obj.init(None)
+    obj.lithium_init()
     (tmp_path / "lithium").mkdir()
-    assert not obj.interesting(None, str(tmp_path / "lithium"))
+    assert not obj.lithium_interesting(str(tmp_path / "lithium"))
     assert obj.server is not None
     assert obj.target._calls["close"] == 1
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
 
@@ -142,12 +142,12 @@ def test_target_relaunch(tmp_path):
     prefix.mkdir()
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
-    obj.init(None)
+    obj.lithium_init()
     with pytest.raises(ffpuppet.LaunchError):
-        obj.interesting(None, str(prefix))
+        obj.lithium_interesting(str(prefix))
     assert obj.server is not None
     assert obj.target._calls["launch"] > 1
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
 
 
@@ -160,10 +160,10 @@ def test_no_harness(tmp_path):
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
     obj.reduce_file = str(reduce_file)
-    obj.init(None)
-    assert obj.interesting(None, str(prefix))
+    obj.lithium_init()
+    assert obj.lithium_interesting(str(prefix))
     assert obj.target._calls["close"] == 1
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
     assert obj.target._calls["detect_failure"] == 1
 
@@ -175,23 +175,23 @@ def test_skip(tmp_path):
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
     obj.reduce_file = str(reduce_file)
-    obj.init(None)
+    obj.lithium_init()
     # first call is real, regardless of skip, since that is the initial repro
     prefix = tmp_path / "lithium0"
     prefix.mkdir()
-    assert obj.interesting(None, str(prefix))
+    assert obj.lithium_interesting(str(prefix))
     assert obj.target._calls["launch"] == 1
     assert obj.target._calls["close"] == 1
     for _ in range(7):
-        assert not obj.interesting(None, None)
+        assert not obj.lithium_interesting(None)
     assert obj.target._calls["launch"] == 1
     prefix = tmp_path / "lithium1"
     prefix.mkdir()
-    assert obj.interesting(None, str(prefix))
+    assert obj.lithium_interesting(str(prefix))
     assert obj.target._calls["launch"] == 2
     assert obj.target._calls["close"] == 2
     assert obj.server is not None
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
 
 
@@ -211,21 +211,21 @@ def test_any_crash_false(tmp_path):
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
     obj.reduce_file = str(reduce_file)
-    obj.init(None)
+    obj.lithium_init()
     # first call is real, regardless of skip, since that is the initial repro
     prefix = tmp_path / "lithium0"
     prefix.mkdir()
-    assert obj.interesting(None, str(prefix))
+    assert obj.lithium_interesting(str(prefix))
     assert obj.target._calls["launch"] == 1
     assert obj.target._calls["close"] == 1
     prefix = tmp_path / "lithium1"
     prefix.mkdir()
     stderr = "Assertion failure: some other thing happened, at test.c:456"
-    assert not obj.interesting(None, str(prefix))  # doesn't match original sig
+    assert not obj.lithium_interesting(str(prefix))  # doesn't match original sig
     assert obj.target._calls["launch"] == 2
     assert obj.target._calls["close"] == 2
     assert obj.server is not None
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
 
 
@@ -245,21 +245,21 @@ def test_any_crash_true(tmp_path):
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
     obj.reduce_file = str(reduce_file)
-    obj.init(None)
+    obj.lithium_init()
     # first call is real, regardless of skip, since that is the initial repro
     prefix = tmp_path / "lithium0"
     prefix.mkdir()
-    assert obj.interesting(None, str(prefix))
+    assert obj.lithium_interesting(str(prefix))
     assert obj.target._calls["launch"] == 1
     assert obj.target._calls["close"] == 1
     prefix = tmp_path / "lithium1"
     prefix.mkdir()
     stderr = "Assertion failure: some other thing happened, at test.c:456"
-    assert obj.interesting(None, str(prefix))
+    assert obj.lithium_interesting(str(prefix))
     assert obj.target._calls["launch"] == 2
     assert obj.target._calls["close"] == 2
     assert obj.server is not None
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
 
 
@@ -270,15 +270,15 @@ def test_min_crashes_repro(tmp_path):
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
     obj.reduce_file = str(reduce_file)
-    obj.init(None)
+    obj.lithium_init()
     prefix = tmp_path / "lithium"
     prefix.mkdir()
-    assert obj.interesting(None, str(prefix))
+    assert obj.lithium_interesting(str(prefix))
     assert obj.target._calls["launch"] == 4
     assert obj.target._calls["close"] == 4
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 4
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
 
 
@@ -300,15 +300,15 @@ def test_min_crashes_norepro(tmp_path):
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
     obj.reduce_file = str(reduce_file)
-    obj.init(None)
+    obj.lithium_init()
     prefix = tmp_path / "lithium"
     prefix.mkdir()
-    assert not obj.interesting(None, str(prefix))
+    assert not obj.lithium_interesting(str(prefix))
     assert obj.target._calls["launch"] == 4
     assert obj.target._calls["close"] == 3
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 4
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
 
 
@@ -319,13 +319,13 @@ def test_repeat_repro(tmp_path):
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
     obj.reduce_file = str(reduce_file)
-    obj.init(None)
+    obj.lithium_init()
     prefix = tmp_path / "lithium"
     prefix.mkdir()
-    assert obj.interesting(None, str(prefix))
+    assert obj.lithium_interesting(str(prefix))
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 4
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
 
 
@@ -343,13 +343,13 @@ def test_repeat_norepro(tmp_path):
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
     obj.reduce_file = str(reduce_file)
-    obj.init(None)
+    obj.lithium_init()
     prefix = tmp_path / "lithium"
     prefix.mkdir()
-    assert not obj.interesting(None, str(prefix))
+    assert not obj.lithium_interesting(str(prefix))
     assert obj.server is not None
     assert obj.target._calls["detect_failure"] == 17 - 4 + 1
-    obj.cleanup(None)
+    obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
 
 
@@ -359,13 +359,13 @@ def test_cache(tmp_path):
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
-    obj.init(None)
+    obj.lithium_init()
     (tmp_path / "lithium0").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium0")
+    assert obj.lithium_interesting(tmp_path / "lithium0")
     (tmp_path / "lithium1").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium1")
+    assert obj.lithium_interesting(tmp_path / "lithium1")
     assert obj.target._calls["detect_failure"] == 1
-    obj.cleanup(None)
+    obj.lithium_cleanup()
 
 
 def test_no_cache(tmp_path):
@@ -374,13 +374,13 @@ def test_no_cache(tmp_path):
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
-    obj.init(None)
+    obj.lithium_init()
     (tmp_path / "lithium0").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium0")
+    assert obj.lithium_interesting(tmp_path / "lithium0")
     (tmp_path / "lithium1").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium1")
+    assert obj.lithium_interesting(tmp_path / "lithium1")
     assert obj.target._calls["detect_failure"] == 2
-    obj.cleanup(None)
+    obj.lithium_cleanup()
 
 
 def test_timeout_update(monkeypatch, tmp_path):
@@ -398,11 +398,11 @@ def test_timeout_update(monkeypatch, tmp_path):
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
-    obj.init(None)
+    obj.lithium_init()
     assert not obj.static_timeout
     assert obj.idle_timeout == 30
     (tmp_path / "lithium0").mkdir()
-    assert not obj.interesting(None, tmp_path / "lithium0")
+    assert not obj.lithium_interesting(tmp_path / "lithium0")
     assert obj.idle_timeout == 30
     assert obj.server is not None
     last_timeout = FakeServer._last_timeout
@@ -410,29 +410,29 @@ def test_timeout_update(monkeypatch, tmp_path):
     failure_result = Target.RESULT_FAILURE
     obj.static_timeout = True
     (tmp_path / "lithium1").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium1")
+    assert obj.lithium_interesting(tmp_path / "lithium1")
     assert obj.idle_timeout == 30
     assert FakeServer._last_timeout == last_timeout
     obj.static_timeout = False
     (tmp_path / "lithium2").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium2")
+    assert obj.lithium_interesting(tmp_path / "lithium2")
     assert obj.idle_timeout < 30
     idle_timeout = obj.idle_timeout
     assert FakeServer._last_timeout == last_timeout
     last_timeout = FakeServer._last_timeout
     (tmp_path / "lithium3").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium3")
+    assert obj.lithium_interesting(tmp_path / "lithium3")
     assert obj.idle_timeout == idle_timeout
     assert FakeServer._last_timeout  # assert that there is actually a timeout
     assert FakeServer._last_timeout < last_timeout
     last_timeout = FakeServer._last_timeout
     assert obj.server is not None
     (tmp_path / "lithium4").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium4")
+    assert obj.lithium_interesting(tmp_path / "lithium4")
     assert obj.idle_timeout == idle_timeout
     assert FakeServer._last_timeout == last_timeout
     assert obj.server is not None
-    obj.cleanup(None)
+    obj.lithium_cleanup()
 
 
 def test_idle_timeout(monkeypatch, tmp_path):
@@ -468,9 +468,9 @@ def test_idle_timeout(monkeypatch, tmp_path):
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
-    obj.init(None)
+    obj.lithium_init()
     (tmp_path / "lithium0").mkdir()
-    assert obj.interesting(None, tmp_path / "lithium0")
+    assert obj.lithium_interesting(tmp_path / "lithium0")
     assert abs(first_poll[0] - 30) <= 5, "polling started at %d" % (first_poll[0],)
     assert now[0] >= 45  # interesting did not return until poll_for_idle returned True
-    obj.cleanup(None)
+    obj.lithium_cleanup()
