@@ -27,19 +27,29 @@ class ReduceStage(object):
     strategy_type = None
     testcase_type = None
 
-    def __init__(self, job, reducer):
-        self.job = job
-        self.reducer = reducer
+    def __init__(self, job, run_state, reducer):
+        if getattr(self, "USES_ANALYSIS_MODE", False):
+            self._analysis_mode = job.analysis_mode
+        else:
+            self._analysis_mode = None
+
+        if getattr(self, "ALTERS_JOB_TESTCASE", False):
+            self.job_testcase = job.testcase_proxy(run_state)
+
+        if getattr(self, "ALTERS_JOB_TIMEOUTS", False):
+            self.job_timeouts = job.timeouts_proxy()
+
+        self.lithium = reducer
 
     def read_testcase(self, testcase_path):
-        if getattr(self.strategy_type, "TAKES_JOB", False):
-            self.reducer.strategy = self.strategy_type(self.job)  # pylint: disable=not-callable
+        if self._analysis_mode is not None:
+            self.lithium.strategy = self.strategy_type(self._analysis_mode)  # pylint: disable=not-callable
         else:
-            self.reducer.strategy = self.strategy_type()  # pylint: disable=not-callable
-        self.reducer.testcase = self.testcase_type()  # pylint: disable=not-callable
+            self.lithium.strategy = self.strategy_type()  # pylint: disable=not-callable
+        self.lithium.testcase = self.testcase_type()  # pylint: disable=not-callable
         LOG.info("Reducing %s with %s on %ss",
                  testcase_path, self.strategy_type.name, self.testcase_type.atom)
-        self.reducer.testcase.readTestcase(testcase_path)
+        self.lithium.testcase.readTestcase(testcase_path)
 
     def should_skip(self):  # pylint: disable=no-self-use
         return False
@@ -59,115 +69,96 @@ class MinimizeLines(ReduceStage):
 
 class _AnalyzeReliability(lithium.Strategy):
     name = "reliability-analysis"
-    TAKES_JOB = True
     ITERATIONS = 11  # number of iterations to analyze
     MIN_CRASHES = 2  # --min-crashes value when analysis is used
     TARGET_PROBABILITY = 0.95  # probability that successful reduction will observe the crash
     # to see the worst case, run the `self.repeat` calculation below using
     # crashes_percent = 1.0/ITERATIONS
 
-    def __init__(self, job):
+    def __init__(self, analysis_mode_cb):
         super(_AnalyzeReliability, self).__init__()
-        self.job = job
+        self.analysis_mode_cb = analysis_mode_cb
 
-    def main(self, testcase, interesting, tempFilename):
+    def main(self, testcase, interesting, _temp_filename):
 
         assert self.ITERATIONS > 0
 
-        # disable result cache setting
-        use_result_cache = self.job.use_result_cache
-        self.job.use_result_cache = False
-
-        # Reset parameters.
-        # Use repeat=1 & relaunch=ITERATIONS because this is closer to how we will run
-        #   post-analysis.
-        # We're only using repeat=1 instead of repeat=ITERATIONS so we can get feedback on every
-        #   call to interesting.
-        self.job.repeat = 1
-        self.job.min_crashes = 1
-        self.job.target.rl_reset = min(self.job.original_relaunch, self.ITERATIONS)
-        # do not update the iteration timeout during analysis
-        original_static_timeout = self.job.static_timeout
-        self.job.static_timeout = True
         harness_crashes = 0
         non_harness_crashes = 0
 
-        # close target so new parameters take effect
-        if not self.job.target.closed:
-            self.job.target.close()
+        # Reset parameters.
+        # Use repeat=1 & relaunch=ITERATIONS because this is closer to how we will run post-analysis.
+        # We're only using repeat=1 instead of repeat=ITERATIONS so we can get feedback on every
+        #   call to interesting.
+        with self.analysis_mode_cb(min_crashes=1, relaunch=self.ITERATIONS, repeat=1) as iter_params:
 
-        if not self.job.force_no_harness:
-            LOG.info("Running for %d iterations to assess reliability using harness.", self.ITERATIONS)
-            for _ in range(self.ITERATIONS):
-                result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
-                LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
-                if result:
-                    harness_crashes += 1
-            LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
-                     100.0 * harness_crashes / self.ITERATIONS, self.ITERATIONS)
+            iter_params.commit()
 
-            # close target so new parameters take effect
-            if not self.job.target.closed:
-                self.job.target.close()
+            if not iter_params.force_no_harness:
+                LOG.info("Running for %d iterations to assess reliability using harness.", self.ITERATIONS)
+                for _ in range(self.ITERATIONS):
+                    result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
+                    LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
+                    if result:
+                        harness_crashes += 1
+                LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
+                         100.0 * harness_crashes / self.ITERATIONS, self.ITERATIONS)
 
-        if harness_crashes != self.ITERATIONS:
-            # try without harness
-            self.job.no_harness = True
+                # close target so new parameters take effect
+                iter_params.commit()
 
-            LOG.info("Running for %d iterations to assess reliability without harness.",
-                     self.ITERATIONS)
-            for _ in range(self.ITERATIONS):
-                result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
-                LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
-                if result:
-                    non_harness_crashes += 1
-            LOG.info("Testcase was interesting %0.1f%% of %d attempts without harness.",
-                     100.0 * non_harness_crashes / self.ITERATIONS, self.ITERATIONS)
+            if harness_crashes != self.ITERATIONS:
+                # try without harness
+                iter_params.no_harness = True
 
-            # close target so new parameters take effect
-            if not self.job.target.closed:
-                self.job.target.close()
+                LOG.info("Running for %d iterations to assess reliability without harness.",
+                         self.ITERATIONS)
+                for _ in range(self.ITERATIONS):
+                    result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
+                    LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
+                    if result:
+                        non_harness_crashes += 1
+                LOG.info("Testcase was interesting %0.1f%% of %d attempts without harness.",
+                         100.0 * non_harness_crashes / self.ITERATIONS, self.ITERATIONS)
 
-        # restore result cache setting
-        self.job.use_result_cache = use_result_cache
+                # close target so new parameters take effect
+                iter_params.commit()
 
         if harness_crashes == 0 and non_harness_crashes == 0:
             return 1  # no crashes ever?
 
         # should we use the harness? go with whichever crashed more
-        self.job.no_harness = non_harness_crashes > harness_crashes
+        iter_params.no_harness = non_harness_crashes > harness_crashes
+
         # this is max 99% to avoid domain errors in the calculation below
         crashes_percent = min(1.0 * max(non_harness_crashes, harness_crashes) / self.ITERATIONS, 0.99)
 
         # adjust repeat/min-crashes depending on how reliable the testcase was
-        self.job.min_crashes = self.MIN_CRASHES
-        self.job.repeat = \
+        iter_params.min_crashes = self.MIN_CRASHES
+        iter_params.repeat = \
             int(math.ceil(math.log(1 - self.TARGET_PROBABILITY, 1 - crashes_percent)) * self.MIN_CRASHES)
-
-        # set relaunch to min(relaunch, repeat)
-        self.job.target.rl_reset = min(self.job.original_relaunch, self.job.repeat)
-        # restore static_timeout flags
-        self.job.static_timeout = original_static_timeout
+        iter_params.relaunch = iter_params.repeat  # actual value used will respect relaunch requested by user
 
         LOG.info("Analysis results:")
         if harness_crashes == self.ITERATIONS:
             LOG.info("* testcase was perfectly reliable with the harness (--no-harness not assessed)")
         elif harness_crashes == non_harness_crashes:
             LOG.info("* testcase was equally reliable with/without the harness")
-        elif self.job.force_no_harness:
+        elif iter_params.force_no_harness:
             LOG.info("* --no-harness was already set")
         else:
             LOG.info("* testcase was %s reliable with the harness",
-                     "less" if self.job.no_harness else "more")
+                     "less" if iter_params.no_harness else "more")
         LOG.info("* adjusted parameters: --min-crashes=%d --repeat=%d --relaunch=%d",
-                 self.job.min_crashes, self.job.repeat,
-                 self.job.target.rl_reset)
+                 iter_params.min_crashes, iter_params.repeat,
+                 iter_params.relaunch)
 
         return 0
 
 
 class AnalyzeTestcase(ReduceStage):
     name = "analyze"
+    USES_ANALYSIS_MODE = True
     strategy_type = _AnalyzeReliability
     testcase_type = lithium.TestcaseLine
 
@@ -179,9 +170,15 @@ class AnalyzeTestcase(ReduceStage):
 
 class MinimizeCacheIterHarness(MinimizeLines):
     name = "minimize-cache"
+    ALTERS_JOB_TESTCASE = True
+    ALTERS_JOB_TIMEOUTS = True
+
+    # job attributes:
+    # write: files_to_reduce (clear, append), tcroot, testcase, landing_page
+    # read: cache_iter_harness_created
 
     def should_skip(self):
-        return not self.job.cache_iter_harness_created
+        return not self.job_testcase.cache_iter_harness_created
 
     def read_testcase(self, testcase_path):
         if self.should_skip():
@@ -193,19 +190,20 @@ class MinimizeCacheIterHarness(MinimizeLines):
         #   fix the timeout values
 
         # start polling for idle after n-1 testcases have finished
-        self.job.idle_timeout += \
-            self.job.idle_timeout * (len(self.reducer.testcase) - 1)
+        self.job_timeouts.idle += \
+            self.job_timeouts.idle * (len(self.lithium.testcase) - 1)
 
         # iteration timeout is * n testcases, but add 10 seconds for overhead from the
         #   outer harness
-        self.job.iter_timeout = \
-            (self.job.iter_timeout + 10) * len(self.reducer.testcase)
+        self.job_timeouts.iteration = \
+            (self.job_timeouts.iteration + 10) * len(self.lithium.testcase)
 
     def on_success(self):
-        while self.job.files_to_reduce:
-            self.job.files_to_reduce.pop()
+        # XXX: when py27 is dropped, this can be files_to_reduce.clear()
+        while self.job_testcase.files_to_reduce:
+            self.job_testcase.files_to_reduce.pop()
         lines = lithium.TestcaseLine()
-        lines.readTestcase(self.job.testcase)
+        lines.readTestcase(self.job_testcase.entry)
         if len(lines) == 1:
             # we reduced this down to a single testcase, remove the harness
             testcase_rel = lines.parts[0].strip().decode("utf-8")
@@ -214,36 +212,42 @@ class MinimizeCacheIterHarness(MinimizeLines):
             testcase_rel = testcase_rel[2:-2]  # trim chars asserted above
             testcase_path = testcase_rel.split('/')
             assert len(testcase_path) == 2
-            self.job.tcroot = os.path.join(self.job.tcroot, testcase_path[0])
-            self.job.testcase = os.path.join(self.job.tcroot, testcase_path[1])
-            self.job.landing_page = self.job.testcase
-            self.job.files_to_reduce.append(self.job.testcase)
+            self.job_testcase.root = os.path.join(self.job_testcase.root, testcase_path[0])
+            self.job_testcase.entry = os.path.join(self.job_testcase.root, testcase_path[1])
+            self.job_testcase.landing_page = self.job_testcase.entry
+            self.job_testcase.files_to_reduce.append(self.job_testcase.entry)
             LOG.info("Reduced history to a single file: %s", testcase_path[1])
         else:
             # don't bother trying to reduce the harness further,
             #   leave harness out of files_to_reduce
-            LOG.info("Reduced history down to %d testcases", len(self.reducer.testcase))
+            LOG.info("Reduced history down to %d testcases", len(self.lithium.testcase))
 
 
 class ScanFilesToReduce(ReduceStage):
     name = "scan-files"
+    ALTERS_JOB_TESTCASE = True
+
+    # job attributes:
+    # read: tcroot, testcase, files_to_reduce (len, iter)
+    # modify: files_to_reduce (append, sort)
+    # write: original_size
 
     def __init__(self, *args, **kwds):
         super(ScanFilesToReduce, self).__init__(*args, **kwds)
         # find all files for reduction
-        for file_name in testcase_contents(self.job.tcroot):
-            file_name = os.path.join(self.job.tcroot, file_name)
-            if file_name == self.job.testcase:
+        for file_name in testcase_contents(self.job_testcase.root):
+            file_name = os.path.join(self.job_testcase.root, file_name)
+            if file_name == self.job_testcase.entry:
                 continue
             with open(file_name, "rb") as tc_fp:
                 for line in tc_fp:
                     if b"DDBEGIN" in line:
-                        self.job.files_to_reduce.append(file_name)
+                        self.job_testcase.files_to_reduce.append(file_name)
                         break
-        if len(self.job.files_to_reduce) > 1:
+        if len(self.job_testcase.files_to_reduce) > 1:
             # sort by descending size
-            self.job.files_to_reduce.sort(key=lambda fn: os.stat(fn).st_size, reverse=True)
-        self.job.original_size[0] = sum(os.stat(fn).st_size for fn in self.job.files_to_reduce)
+            self.job_testcase.files_to_reduce.sort(key=lambda fn: os.stat(fn).st_size, reverse=True)
+        self.job_testcase.original_size = self.job_testcase.total_size()
 
     def read_testcase(self, testcase_path):
         pass
@@ -271,8 +275,8 @@ class JSBeautify(ReduceStage):
 
         LOG.info("Attempting to beautify %s", testcase_path)
 
-        self.reducer.strategy = self.strategy_type()  # pylint: disable=not-callable
-        self.reducer.testcase = self.testcase_type()  # pylint: disable=not-callable
+        self.lithium.strategy = self.strategy_type()  # pylint: disable=not-callable
+        self.lithium.testcase = self.testcase_type()  # pylint: disable=not-callable
 
         # Beautify testcase
         with open(testcase_path) as testcase_fp:
@@ -287,7 +291,7 @@ class JSBeautify(ReduceStage):
         with open(testcase_path, 'w') as testcase_fp:
             testcase_fp.write(beautified_testcase)
 
-        self.reducer.testcase.readTestcase(testcase_path)
+        self.lithium.testcase.readTestcase(testcase_path)
 
     def should_skip(self):
         if HAVE_JSBEAUTIFIER and self.testcase_path.endswith(".js"):

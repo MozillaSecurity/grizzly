@@ -6,6 +6,7 @@ from __future__ import unicode_literals
 import os
 from grizzly.target.target import Target
 from grizzly.common import Reporter
+from grizzly.reduce import crash, reduce
 
 
 class BaseFakeReporter(Reporter):
@@ -126,3 +127,119 @@ def create_target_binary(target, tmp_path):
         "os = linux\n"
     )
     target.binary = str(tmp_path / "firefox")
+
+
+class TestReductionJob(reduce.ReductionJob):
+    """Stub to fake parts of grizzly.reduce.ReductionJob needed for testing the reduce loop"""
+    __slots__ = []
+
+    def __init__(self, tmp_path, create_binary=True, testcase_cache=False, skip_analysis=True):
+        super(TestReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
+                                               FakeReduceStatus(),
+                                               testcase_cache=testcase_cache,
+                                               skip_analysis=skip_analysis)
+        if create_binary:
+            create_target_binary(self.target, tmp_path)
+
+    def lithium_init(self):
+        pass
+
+    def _get_location(self):
+        return "127.0.0.1" if self.no_harness else "127.0.0.1/harness"
+
+    def close(self, *_args, **_kwds):
+        super(TestReductionJob, self).close(keep_temp=False)
+
+    def _run(self, testcase, temp_prefix):
+        result_logs = temp_prefix + "_logs"
+        os.mkdir(result_logs)
+        self.target.save_logs(result_logs, meta=True)
+        testcase.duration = 0.1
+        with open(self.reduce_file) as fp:
+            return "required" in fp.read()
+
+    def lithium_cleanup(self):
+        pass
+
+
+class TestMainReductionJob(TestReductionJob):
+    __slots__ = []
+
+    def __init__(self, *_args, **_kwds):
+        super(TestMainReductionJob, self).__init__(None, create_binary=False)
+
+
+# this is the same as TestReductionJob, but for CrashReductionJob
+class TestMainCrashReductionJob(TestMainReductionJob, crash.CrashReductionJob):
+    """Stub to fake parts of grizzly.crash.CrashReductionJob needed for testing the reduce loop"""
+    __slots__ = []
+
+
+class TestReductionJobAlt(TestReductionJob):
+    """Version of TestReductionJob that only reports alternate crashes"""
+    __slots__ = ['__first_run']
+
+    def lithium_init(self):
+        self.__first_run = True
+
+    def _run(self, testcase, temp_prefix):
+        result_logs = temp_prefix + "_logs"
+        os.mkdir(result_logs)
+        self.target.save_logs(result_logs, meta=True)
+        testcase.duration = 0.1
+        with open(self.reduce_file) as fp:
+            if "required" in fp.read():
+                self.on_other_crash_found(testcase, temp_prefix)
+        if self.__first_run:
+            self.__first_run = False
+            return True
+        return False
+
+
+class TestReductionJobKeepHarness(TestReductionJob):
+    """Version of TestReductionJob that keeps the entire harness"""
+    __slots__ = ['__init_data']
+
+    def lithium_init(self):
+        self.__init_data = None
+        if os.path.basename(self.reduce_file).startswith("harness_"):
+            with open(self.reduce_file) as harness_fp:
+                self.__init_data = harness_fp.read()
+
+    def _run(self, testcase, temp_prefix):
+        result_logs = temp_prefix + "_logs"
+        os.mkdir(result_logs)
+        self.target.save_logs(result_logs, meta=True)
+        testcase.duration = 0.1
+        if self.__init_data is not None:
+            with open(self.reduce_file) as fp:
+                return self.__init_data == fp.read()
+        else:
+            with open(self.reduce_file) as fp:
+                return "required" in fp.read()
+
+
+class TestReductionJobSemiReliable(TestReductionJob):
+    """Version of TestReductionJob that returns interesting N times only"""
+    __slots__ = ['__interesting_times', '__interesting_count', '__require_no_harness']
+
+    def __init__(self, *args, **kwds):
+        super(TestReductionJobSemiReliable, self).__init__(*args, **kwds)
+        self.__interesting_times = 0
+        self.__interesting_count = 0
+        self.__require_no_harness = False
+
+    def test_set_n(self, n, require_no_harness=False):
+        self.__interesting_times = n
+        self.__interesting_count = 0
+        self.__require_no_harness = require_no_harness
+
+    def _run(self, testcase, temp_prefix):
+        result_logs = temp_prefix + "_logs"
+        os.mkdir(result_logs)
+        self.target.save_logs(result_logs, meta=True)
+        testcase.duration = 0.1
+        if self.__require_no_harness and not self._no_harness:
+            return False
+        self.__interesting_count += 1
+        return self.__interesting_count <= self.__interesting_times

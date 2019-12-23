@@ -3,54 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import unicode_literals
-import os
 import re
 import zipfile
 import pytest
 from grizzly.reduce.args import ReducerArgs, ReducerFuzzManagerIDArgs, ReducerFuzzManagerIDQualityArgs
 from grizzly.reduce import reduce, crash, bucket
-from grizzly.common import Status, reporter
-from .test_common import BaseFakeReporter, FakeTarget, FakeReduceStatus
-from .test_reduce import TestReductionJob
-
-
-class TestMainReductionJob(TestReductionJob):
-
-    def __init__(self, *_args, **_kwds):
-        super(TestMainReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
-                                                   FakeReduceStatus(), testcase_cache=False,
-                                                   skip_analysis=True)
-
-
-# this is the same as TestMainReductionJob, but for CrashReductionJob
-class TestMainCrashReductionJob(crash.CrashReductionJob):
-    """Stub to fake parts of grizzly.crash.CrashReductionJob needed for testing the reduce loop"""
-
-    def __init__(self, *_args, **_kwds):
-        super(TestMainCrashReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25,
-                                                        60, FakeReduceStatus(), testcase_cache=False,
-                                                        skip_analysis=True)
-
-    def close(self, *_args, **_kwds):
-        super(TestMainCrashReductionJob, self).close(keep_temp=False)
-
-    def lithium_init(self):
-        pass
-
-    @property
-    def location(self):
-        return "127.0.0.1" if self.no_harness else "127.0.0.1/harness"
-
-    def _run(self, testcase, temp_prefix):
-        result_logs = temp_prefix + "_logs"
-        os.mkdir(result_logs)
-        self.target.save_logs(result_logs, meta=True)
-        testcase.duration = 0.1
-        with open(self.reduce_file) as fp:
-            return "required" in fp.read()
-
-    def lithium_cleanup(self):
-        pass
+from grizzly.common import reporter
+from .test_common import BaseFakeReporter, TestMainReductionJob, TestMainCrashReductionJob
 
 
 def test_parse_args(capsys, tmp_path):
@@ -156,14 +115,11 @@ def test_main_prefs(tmp_path):
     "cmd line prefs should override prefs in the testcase"
     run_called = [0]
 
-    Status.PATH = str(tmp_path / "grzstatus")
-    status = Status.start()
-
-    class MyReductionJob(TestReductionJob):
+    class MyReductionJob(TestMainReductionJob):
+        __slots__ = []
 
         def __init__(self, *_args, **_kwds):
-            super(MyReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
-                                                 status, testcase_cache=False)
+            super(MyReductionJob, self).__init__(tmp_path, create_binary=False)
 
         def run(self, *args, **kwds):
             result = super(MyReductionJob, self).run(*args, **kwds)
@@ -478,26 +434,23 @@ def test_environ_and_suppressions(monkeypatch, tmp_path):
     ""
     run_called = [0]
 
-    class MyReductionJob(TestReductionJob):
+    class MyReductionJob(TestMainReductionJob):
+        __slots__ = []
 
         def __init__(self, *_args, **_kwds):
-            super(MyReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
-                                                 status, testcase_cache=False)
+            super(MyReductionJob, self).__init__(tmp_path, create_binary=False)
             assert self.target.forced_close
 
         def run(self, *args, **kwds):
-            assert len(self.env_mod) == 2
-            assert "GRZ_FORCED_CLOSE" in self.env_mod
-            assert self.env_mod["GRZ_FORCED_CLOSE"] == "0"
+            assert len(self._env_mod) == 2
+            assert "GRZ_FORCED_CLOSE" in self._env_mod
+            assert self._env_mod["GRZ_FORCED_CLOSE"] == "0"
             assert not self.target.forced_close
-            assert "LSAN_OPTIONS" in self.env_mod
-            assert len(re.split(r":(?![\\|/])", self.env_mod["LSAN_OPTIONS"])) == 2
-            assert "detect_leaks=1" in self.env_mod["LSAN_OPTIONS"]
-            assert "lsan.supp" in self.env_mod["LSAN_OPTIONS"]
+            assert "LSAN_OPTIONS" in self._env_mod
+            assert len(re.split(r":(?![\\|/])", self._env_mod["LSAN_OPTIONS"])) == 2
+            assert "detect_leaks=1" in self._env_mod["LSAN_OPTIONS"]
+            assert "lsan.supp" in self._env_mod["LSAN_OPTIONS"]
             run_called[0] += 1
-
-    Status.PATH = str(tmp_path / "grzstatus")
-    status = Status.start()
 
     exe = tmp_path / "binary"
     exe.touch()

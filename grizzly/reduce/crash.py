@@ -98,54 +98,56 @@ def change_quality(crash_id, quality):
 
 
 class CrashReductionJob(ReductionJob):
+    __slots__ = ['_crash_id', '_fm_reporter', '_quality', '_testcase_path', '_tool_override',
+                 '_was_interesting']
 
     def __init__(self, *args, **kwds):
         super(CrashReductionJob, self).__init__(*args, **kwds)
-        self.was_interesting = False
-        self.fm_reporter = False
-        self.crash_id = None
-        self.tool_override = False
-        self.quality = None
-        self.testcase_path = None
+        self._crash_id = None
+        self._fm_reporter = False
+        self._quality = None
+        self._testcase_path = None
+        self._tool_override = False
+        self._was_interesting = False
 
     def on_result(self, result_code):
         # only update quality of the original crash if we are reporting to FuzzManager
-        if not self.fm_reporter:
+        if not self._fm_reporter:
             return
 
         if result_code == FuzzManagerReporter.QUAL_REDUCED_ORIGINAL:
             # reduce succeeded
-            change_quality(self.crash_id, result_code)
+            change_quality(self._crash_id, result_code)
 
         elif result_code == FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE:
-            if self.quality == FuzzManagerReporter.QUAL_UNREDUCED:
+            if self._quality == FuzzManagerReporter.QUAL_UNREDUCED:
                 # override result to request platform specific reduction
                 result_code = FuzzManagerReporter.QUAL_REQUEST_SPECIFIC
-            change_quality(self.crash_id, result_code)
+            change_quality(self._crash_id, result_code)
 
         # for these cases, something went wrong. a reduce log/result would be really valuable
         elif result_code in {FuzzManagerReporter.QUAL_REDUCER_BROKE,
                              FuzzManagerReporter.QUAL_REDUCER_ERROR}:
             # for now just change the quality
-            change_quality(self.crash_id, result_code)
+            change_quality(self._crash_id, result_code)
 
         else:
             LOG.error("Got unhandled quality: %s", FuzzManagerReporter.quality_name(result_code))
 
     def on_interesting_crash(self, *args, **kwds):
         super(CrashReductionJob, self).on_interesting_crash(*args, **kwds)
-        if self.was_interesting:
+        if self._was_interesting:
             return
-        LOG.info("Crash %d reproduced!", self.crash_id)
-        if self.fm_reporter:
-            change_quality(self.crash_id, FuzzManagerReporter.QUAL_REPRODUCIBLE)
-        self.was_interesting = True
+        LOG.info("Crash %d reproduced!", self._crash_id)
+        if self._fm_reporter:
+            change_quality(self._crash_id, FuzzManagerReporter.QUAL_REPRODUCIBLE)
+        self._was_interesting = True
 
     def run(self, *args, **kwds):
         try:
             return super(CrashReductionJob, self).run(*args, **kwds)
         finally:
-            os.unlink(self.testcase_path)
+            os.unlink(self._testcase_path)
 
     @classmethod
     def from_args(cls, args, target, status):
@@ -165,11 +167,11 @@ class CrashReductionJob(ReductionJob):
             args.input = testcase
 
             job = super(CrashReductionJob, cls).from_args(args, target, status)
-            job.fm_reporter = args.fuzzmanager
-            job.crash_id = crash_id
-            job.tool_override = tool_override
-            job.quality = quality
-            job.testcase_path = testcase
+            job._fm_reporter = args.fuzzmanager
+            job._crash_id = crash_id
+            job._tool_override = tool_override
+            job._quality = quality
+            job._testcase_path = testcase
             return job
 
         except:  # noqa
