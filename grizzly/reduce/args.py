@@ -58,7 +58,7 @@ class ReducerArgs(CommonArgs):
             "--no-analysis", action="store_true",
             help="Disable analysis to auto-set --repeat/--min-crashes.")
         self.parser.add_argument(
-            "--static-timeout", action="store_true",
+            "--static-timeout", action="store_true", dest="fixed_timeout",
             help="Disable automatically updating the iteration timeout.")
         self.parser.add_argument(
             "--strategy", nargs="+", default=list(), metavar="STRATEGY", dest="strategies",

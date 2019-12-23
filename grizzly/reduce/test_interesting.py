@@ -63,7 +63,6 @@ def fake_timesleep(monkeypatch):
 pytestmark = pytest.mark.usefixtures("fake_sapphire", "fake_timesleep")
 
 
-
 def test_interesting(tmp_path):
     "simple case where the test is interesting"
     obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus())
@@ -170,7 +169,8 @@ def test_no_harness(tmp_path):
 
 def test_skip(tmp_path):
     "skip should assume interesting for the first n calls, without launching the target"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 7, 1, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 7, 1, 1, 0, 0, 0, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -206,7 +206,8 @@ def test_any_crash_false(tmp_path):
             with open(os.path.join(dest, "log_stderr.txt"), "w") as log_fp:
                 log_fp.write(stderr)
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -240,7 +241,8 @@ def test_any_crash_true(tmp_path):
             with open(os.path.join(dest, "log_stderr.txt"), "w") as log_fp:
                 log_fp.write(stderr)
 
-    obj = ReductionJob([], MyTarget(), 30, False, True, 0, 1, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], MyTarget(), 30, False, True, 0, 1, 1, 0, 0, 0, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -265,7 +267,8 @@ def test_any_crash_true(tmp_path):
 
 def test_min_crashes_repro(tmp_path):
     "min_crashes will force n iterations if crash repros"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -295,7 +298,8 @@ def test_min_crashes_norepro(tmp_path):
             self.repros += 1
             return Target.RESULT_FAILURE
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 1, 0, 0, 0, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -314,7 +318,8 @@ def test_min_crashes_norepro(tmp_path):
 
 def test_repeat_repro(tmp_path):
     "repeat will stop at min_crashes if crash repros"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -338,7 +343,8 @@ def test_repeat_norepro(tmp_path):
             FakeTarget.detect_failure(self, *args, **kwds)
             return Target.RESULT_NONE
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 17, 0, 0, 0, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
     reduce_file.touch()
@@ -370,7 +376,8 @@ def test_cache(tmp_path):
 
 def test_no_cache(tmp_path):
     "testcase_cache=False will disable cache"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, 0, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
@@ -394,42 +401,43 @@ def test_timeout_update(monkeypatch, tmp_path):
             FakeTarget.detect_failure(self, *args, **kwds)
             return failure_result
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 30, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, 30, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
     obj.lithium_init()
-    assert not obj.static_timeout
-    assert obj.idle_timeout == 30
+    assert not obj._fixed_timeout
+    assert obj._idle_timeout == 30
     (tmp_path / "lithium0").mkdir()
     assert not obj.lithium_interesting(tmp_path / "lithium0")
-    assert obj.idle_timeout == 30
+    assert obj._idle_timeout == 30
     assert obj.server is not None
     last_timeout = FakeServer._last_timeout
     assert last_timeout >= 30
     failure_result = Target.RESULT_FAILURE
-    obj.static_timeout = True
+    obj._fixed_timeout = True
     (tmp_path / "lithium1").mkdir()
     assert obj.lithium_interesting(tmp_path / "lithium1")
-    assert obj.idle_timeout == 30
+    assert obj._idle_timeout == 30
     assert FakeServer._last_timeout == last_timeout
-    obj.static_timeout = False
+    obj._fixed_timeout = False
     (tmp_path / "lithium2").mkdir()
     assert obj.lithium_interesting(tmp_path / "lithium2")
-    assert obj.idle_timeout < 30
-    idle_timeout = obj.idle_timeout
+    assert obj._idle_timeout < 30
+    idle_timeout = obj._idle_timeout
     assert FakeServer._last_timeout == last_timeout
     last_timeout = FakeServer._last_timeout
     (tmp_path / "lithium3").mkdir()
     assert obj.lithium_interesting(tmp_path / "lithium3")
-    assert obj.idle_timeout == idle_timeout
+    assert obj._idle_timeout == idle_timeout
     assert FakeServer._last_timeout  # assert that there is actually a timeout
     assert FakeServer._last_timeout < last_timeout
     last_timeout = FakeServer._last_timeout
     assert obj.server is not None
     (tmp_path / "lithium4").mkdir()
     assert obj.lithium_interesting(tmp_path / "lithium4")
-    assert obj.idle_timeout == idle_timeout
+    assert obj._idle_timeout == idle_timeout
     assert FakeServer._last_timeout == last_timeout
     assert obj.server is not None
     obj.lithium_cleanup()
@@ -464,7 +472,8 @@ def test_idle_timeout(monkeypatch, tmp_path):
     monkeypatch.setattr(time, "time", mytime)
     monkeypatch.setattr(sapphire, "Sapphire", MyServer)
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 10, 25, 30, FakeReduceStatus(), testcase_cache=False)
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 10, 25, 30, FakeReduceStatus(),
+                       testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
