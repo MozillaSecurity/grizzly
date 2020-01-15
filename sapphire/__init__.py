@@ -7,7 +7,8 @@ Sapphire HTTP server
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from .core import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
+from .server_map import ServerMap
 
-__all__ = ("Sapphire", "SERVED_ALL", "SERVED_NONE", "SERVED_REQUEST", "SERVED_TIMEOUT")
+__all__ = ("Sapphire", "SERVED_ALL", "SERVED_NONE", "SERVED_REQUEST", "SERVED_TIMEOUT", "ServerMap")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
