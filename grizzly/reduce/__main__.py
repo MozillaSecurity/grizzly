@@ -4,10 +4,10 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import sys
 
-from .reduce import main
+from .reduce import ReductionJob
 from .args import ReducerArgs
 from ..main import console_init_logging
 
 
 console_init_logging()
-sys.exit(main(ReducerArgs().parse_args()))
+sys.exit(ReductionJob.main(ReducerArgs().parse_args()))
