@@ -93,19 +93,13 @@ class Session(object):
         sapphire.Sapphire.CLOSE_CLIENT_ERROR = 1
         # launch http server used to serve test cases
         self.server = sapphire.Sapphire(timeout=iteration_timeout)
-        # add include paths to server
-        for url_path, target_path in self.iomanager.server_map.includes:
-            self.server.add_include(url_path, target_path)
-        # add dynamic responses to the server
-        for dyn_rsp in self.iomanager.server_map.dynamic_responses:
-            self.server.add_dynamic_response(
-                dyn_rsp["url"],
-                dyn_rsp["callback"],
-                mime_type=dyn_rsp["mime"])
         def _dyn_resp_close():
             self.target.close()
             return b"<h1>Close Browser</h1>"
-        self.server.add_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
+        self.iomanager.server_map.set_dynamic_response(
+            "/close_browser",
+            _dyn_resp_close,
+            mime_type="text/html")
 
     def close(self):
         self.status.cleanup()
@@ -134,9 +128,6 @@ class Session(object):
         self.adapter.generate(test, self.iomanager.active_input, self.iomanager.server_map)
         if self.target.prefs is not None:
             test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
-        # update sapphire redirects from the adapter
-        for redirect in self.iomanager.server_map.redirects:
-            self.server.set_redirect(redirect["url"], redirect["file_name"], redirect["required"])
         return test
 
     def launch_target(self):
@@ -207,6 +198,7 @@ class Session(object):
             server_status, files_served = self.server.serve_testcase(
                 current_test,
                 continue_cb=self.target.monitor.is_healthy,
+                server_map=self.iomanager.server_map,
                 working_path=self.iomanager.working_path)
             if self.adapter.IGNORE_UNSERVED:
                 log.debug("removing unserved files from the test case")

@@ -3,75 +3,89 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 import os
+import re
 
 
-__all__ = ("ServerMap",)
+__all__ = ("Resource", "ServerMap")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
+
+LOG = logging.getLogger("sapphire")  # pylint: disable=invalid-name
+
+
+class InvalidURLError(Exception):
+    """Raised what a URL string string contained invalid characters"""
+
+
+class MapCollisionError(Exception):
+    """Raised when a URL is already in use by ServerMap"""
+
+
+class Resource(object):
+    URL_DYNAMIC = 0
+    URL_FILE = 1
+    URL_INCLUDE = 2
+    URL_REDIRECT = 3
+
+    __slots__ = ("mime", "required", "target", "type")
+
+    def __init__(self, resource_type, target, mime=None, required=False):
+        self.mime = mime
+        self.required = required
+        self.target = target
+        self.type = resource_type
 
 
 class ServerMap(object):
     def __init__(self):
-        self._dynamic = dict()
-        self._include = dict()  # mapping of directories that can be requested
-        self._redirect = dict()  # document paths to map to file names using 307s
+        self.dynamic = dict()
+        self.include = dict()  # mapping of directories that can be requested
+        self.redirect = dict()  # document paths to map to file names using 307s
 
-    @property
-    def dynamic_responses(self):
-        out = list()
-        for url, (callback, mime) in self._dynamic.items():
-            out.append({"url":url, "callback":callback, "mime":mime})
-        return out
+    @staticmethod
+    def _check_url(url):
+        # check and sanitize URL
+        url = url.strip("/")
+        if re.search(r"\W", url) is not None:
+            raise InvalidURLError("Only alpha-numeric characters accepted in URL.")
+        return url
 
-    @property
-    def includes(self):
-        return list(self._include.items())
+    def set_dynamic_response(self, url, callback, mime_type="application/octet-stream"):
+        url = self._check_url(url)
+        if not callable(callback):
+            raise TypeError("callback must be callable")
+        if not isinstance(mime_type, str):
+            raise TypeError("mime_type must be of type 'str'")
+        if url in self.include or url in self.redirect:
+            raise MapCollisionError("URL collision on %r" % (url,))
+        LOG.debug("mapping dynamic response %r -> %r (%r)", url, callback, mime_type)
+        self.dynamic[url] = Resource(
+            Resource.URL_DYNAMIC,
+            callback,
+            mime=mime_type)
 
-    @property
-    def redirects(self):
-        out = list()
-        for url, (file_name, required) in self._redirect.items():
-            out.append({"url":url, "file_name":file_name, "required":required})
-        return out
-
-    def reset(self, dynamic_response=False, include=False, redirect=False):
-        assert dynamic_response or include or redirect, "At least one kwarg should be True"
-        if dynamic_response:
-            self._dynamic.clear()
-        if include:
-            self._include.clear()
-        if redirect:
-            self._redirect.clear()
-
-    def remove_dynamic_response(self, url_path):
-        assert isinstance(url_path, str)
-        self._dynamic.pop(url_path)
-
-    def remove_include(self, url_path):
-        assert isinstance(url_path, str)
-        self._include.pop(url_path)
-
-    def remove_redirect(self, url):
-        assert isinstance(url, str)
-        self._redirect.pop(url)
-
-    def set_dynamic_response(self, url_path, callback, mime_type="application/octet-stream"):
-        assert isinstance(url_path, str)
-        assert callable(callback)
-        assert isinstance(mime_type, str)
-        self._dynamic[url_path] = (callback, mime_type)
-
-    def set_include(self, url_path, target_path):
-        assert isinstance(url_path, str)
-        assert isinstance(target_path, str)
+    def set_include(self, url, target_path):
+        url = self._check_url(url)
         if not os.path.isdir(target_path):
-            raise IOError("%r does not exist" % (target_path,))
-        self._include[url_path] = os.path.abspath(target_path)
+            raise IOError("Include path not found: %s" % target_path)
+        if url in self.dynamic or url in self.redirect:
+            raise MapCollisionError("URL collision on %r" % (url,))
+        LOG.debug("mapping include %r -> %r", url, target_path)
+        self.include[url] = Resource(
+            Resource.URL_INCLUDE,
+            os.path.abspath(target_path))
 
-    def set_redirect(self, url, file_name, required=True):
-        assert isinstance(file_name, str)
-        assert isinstance(required, bool)
-        assert isinstance(url, str)
-        self._redirect[url] = (file_name, required)
-
+    def set_redirect(self, url, target, required=True):
+        url = self._check_url(url)
+        if not isinstance(target, str):
+            raise TypeError("target must be of type 'str'")
+        if not target:
+            raise TypeError("target must not be an empty string")
+        if url in self.dynamic or url in self.include:
+            raise MapCollisionError("URL collision on %r" % (url,))
+        self.redirect[url] = Resource(
+            Resource.URL_REDIRECT,
+            target,
+            required=required)

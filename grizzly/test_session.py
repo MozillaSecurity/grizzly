@@ -9,8 +9,8 @@ unit tests for grizzly.Session
 
 import pytest
 
-from sapphire import Sapphire, SERVED_ALL, SERVED_TIMEOUT
-from grizzly.common import Adapter, InputFile, IOManager, Reporter, ServerMap, Status, TestCase, TestFile
+from sapphire import Sapphire, ServerMap, SERVED_ALL, SERVED_TIMEOUT
+from grizzly.common import Adapter, InputFile, IOManager, Reporter, Status, TestCase, TestFile
 from grizzly.session import LogOutputLimiter, Session
 from grizzly.target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -93,18 +93,14 @@ def test_session_01(tmp_path, mocker):
 def test_session_02(tmp_path, mocker):
     """test Session.generate_testcase()"""
     Status.PATH = str(tmp_path)
-    fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
+    mocker.patch("sapphire.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.active_input = mocker.Mock(spec=InputFile)
     fake_iomgr.active_input.file_name = "infile"
-    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
-    fake_iomgr.server_map.includes = []
-    fake_iomgr.server_map.redirects = []
-    fake_iomgr.server_map.dynamic_responses = []
-    fake_iomgr.server_map.redirects = ({"url":"", "file_name":"somefile", "required":True},)
+    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_target = mocker.Mock(spec=Target)
     fake_target.prefs = "fake_prefs.js"
 
@@ -114,7 +110,6 @@ def test_session_02(tmp_path, mocker):
     testcase = session.generate_testcase()
     assert fake_adapter.generate.call_count == 1
     assert testcase.add_meta.call_count == 1
-    assert fake_server.return_value.set_redirect.call_count == 1
 
 def test_session_03(mocker, tmp_path):
     """test Session.launch_target()"""
@@ -207,16 +202,12 @@ def test_session_05(tmp_path, mocker):
     """test Session.config_server()"""
     Status.PATH = str(tmp_path)
     fake_adapter = mocker.Mock(spec=Adapter)
-    fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
+    mocker.patch("sapphire.Sapphire", autospec=True)
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
-    fake_iomgr.server_map.includes = [("test", "test")]
-    fake_iomgr.server_map.dynamic_responses = [{"url": "a", "callback": lambda: 1, "mime": "x"}]
-    fake_iomgr.server_map.redirects = [{"url":"", "file_name":"somefile", "required":True}]
     session = Session(fake_adapter, False, [], fake_iomgr, None, mocker.Mock(spec=Target))
     session.config_server(5)
-    assert fake_server.return_value.add_dynamic_response.call_count == 2
-    assert fake_server.return_value.add_include.call_count == 1
+    assert fake_iomgr.server_map.set_dynamic_response.call_count == 1
 
 def test_session_06(tmp_path, mocker):
     """test Session.run()"""

@@ -90,7 +90,7 @@ class IOManager(object):
         for e_file in self._environ_files:
             test.add_meta(e_file.clone())
         # reset redirect map
-        self.server_map.reset(redirect=True)
+        self.server_map.redirect.clear()
         if self.harness is not None:
             # setup redirects for harness
             self.server_map.set_redirect("first_test", self.page_name(), required=False)
