@@ -42,7 +42,6 @@ SERVED_TIMEOUT = 3  # timeout occurred
 
 
 Tracker = namedtuple("Tracker", "files lock")
-UrlMap = namedtuple("UrlMap", "dynamic include redirect")
 WorkerHandle = namedtuple("WorkerHandle", "conn thread")
 
 
@@ -57,13 +56,7 @@ class ServeJob(object):
         self.exceptions = Queue()
         self.forever = forever
         self.initial_queue_size = 0
-        if server_map:
-            self.url_map = UrlMap(
-                dynamic=server_map.dynamic,  # paths that map to a callback
-                include=server_map.include,  # extra paths to serve from
-                redirect=server_map.redirect)
-        else:
-            self.url_map = None
+        self.server_map = server_map
         self.worker_complete = threading.Event()
         self._build_queue(optional_files)
 
@@ -83,8 +76,8 @@ class ServeJob(object):
                 self._pending.files.add(file_path)
                 LOG.debug("required: %r", f_name)
 
-        if self.url_map:
-            for redirect, resource in self.url_map.redirect.items():
+        if self.server_map:
+            for redirect, resource in self.server_map.redirect.items():
                 if resource.required:
                     self._pending.files.add(redirect)
                 LOG.debug(
@@ -104,15 +97,15 @@ class ServeJob(object):
             with self._pending.lock:
                 res.required = to_serve in self._pending.files
             return res
-        if self.url_map is None:
+        if self.server_map is None:
             return None
-        if request in self.url_map.redirect:
-            return self.url_map.redirect[request]
-        if request in self.url_map.dynamic:
-            return self.url_map.dynamic[request]
-        if self.url_map.include:
+        if request in self.server_map.redirect:
+            return self.server_map.redirect[request]
+        if request in self.server_map.dynamic:
+            return self.server_map.dynamic[request]
+        if self.server_map.include:
             check_includes = False
-            for include in self.url_map.include:
+            for include in self.server_map.include:
                 if include != "":
                     check_includes = True
                     break
@@ -126,25 +119,27 @@ class ServeJob(object):
                 target_path = split_req[1:]
 
                 LOG.debug("looking up %r in include map", inc_path)
-                if inc_path in self.url_map.include:
-                    to_serve = os.path.normpath("/".join([self.url_map.include[inc_path].target] + target_path))
+                if inc_path in self.server_map.include:
+                    to_serve = os.path.normpath(
+                        "/".join([self.server_map.include[inc_path].target] + target_path))
                     return Resource(
                         Resource.URL_INCLUDE,
                         to_serve,
-                        mime=self.url_map.include[inc_path].mime,
-                        required=self.url_map.include[inc_path].required)
+                        mime=self.server_map.include[inc_path].mime,
+                        required=self.server_map.include[inc_path].required)
                 LOG.debug("include map does not contain %r", inc_path)
                 last_split += 1
 
             # check if this is a nested directory in a directory mounted at '/'
             LOG.debug("checking include map at '/'")
-            if "" in self.url_map.include:
-                to_serve = os.path.normpath(os.path.join(self.url_map.include[""].target, request.lstrip("/")))
+            if "" in self.server_map.include:
+                to_serve = os.path.normpath(
+                    os.path.join(self.server_map.include[""].target, request.lstrip("/")))
                 return Resource(
                     Resource.URL_INCLUDE,
                     to_serve,
-                    mime=self.url_map.include[""].mime,
-                    required=self.url_map.include[""].required)
+                    mime=self.server_map.include[""].mime,
+                    required=self.server_map.include[""].required)
             LOG.debug("include map does not contain an entry at '/'")
 
         return None
@@ -166,8 +161,8 @@ class ServeJob(object):
         target_file = os.path.abspath(target_file)
         # check if target_file lives somewhere in wwwroot
         if not target_file.startswith(self.base_path):
-            if self.url_map:
-                for resources in self.url_map.include.values():
+            if self.server_map:
+                for resources in self.server_map.include.values():
                     if target_file.startswith(resources.target):
                         return False  # this is a valid include path
             return True  # this is NOT a valid include path
