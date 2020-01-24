@@ -26,6 +26,9 @@ import threading
 import time
 import traceback
 
+from .server_map import Resource
+
+
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -43,26 +46,8 @@ UrlMap = namedtuple("UrlMap", "dynamic include redirect")
 WorkerHandle = namedtuple("WorkerHandle", "conn thread")
 
 
-class Resource(object):
-    __slots__ = ("mime", "required", "target", "type")
-
-    def __init__(self, resource_type, target, mime=None, required=False):
-        self.mime = mime
-        self.required = required
-        self.target = target
-        self.type = resource_type
-
-
 class ServeJob(object):
-    URL_DYNAMIC = 0
-    URL_FILE = 1
-    URL_INCLUDE = 2
-    URL_REDIRECT = 3
-
-    def __init__(self, base_path, dynamic_map, include_map, redirect_map, forever=False, optional_files=None):
-        assert isinstance(dynamic_map, dict)
-        assert isinstance(include_map, dict)
-        assert isinstance(redirect_map, dict)
+    def __init__(self, base_path, forever=False, optional_files=None, server_map=None):
         self._complete = threading.Event()
         self._pending = Tracker(files=set(), lock=threading.Lock())
         self._served = Tracker(files=defaultdict(int), lock=threading.Lock())
@@ -72,10 +57,13 @@ class ServeJob(object):
         self.exceptions = Queue()
         self.forever = forever
         self.initial_queue_size = 0
-        self.url_map = UrlMap(
-            dynamic=dynamic_map,  # paths that map to a callback
-            include=include_map,  # extra paths to serve from
-            redirect=redirect_map)
+        if server_map:
+            self.url_map = UrlMap(
+                dynamic=server_map.dynamic,  # paths that map to a callback
+                include=server_map.include,  # extra paths to serve from
+                redirect=server_map.redirect)
+        else:
+            self.url_map = None
         self.worker_complete = threading.Event()
         self._build_queue(optional_files)
 
@@ -95,14 +83,15 @@ class ServeJob(object):
                 self._pending.files.add(file_path)
                 LOG.debug("required: %r", f_name)
 
-        for redirect, resource in self.url_map.redirect.items():
-            if resource.required:
-                self._pending.files.add(redirect)
-            LOG.debug(
-                "%s: %r -> %r",
-                "required" if resource.required else "optional",
-                redirect,
-                resource.target)
+        if self.url_map:
+            for redirect, resource in self.url_map.redirect.items():
+                if resource.required:
+                    self._pending.files.add(redirect)
+                LOG.debug(
+                    "%s: %r -> %r",
+                    "required" if resource.required else "optional",
+                    redirect,
+                    resource.target)
         self.initial_queue_size = len(self._pending.files)
         LOG.debug("sapphire has %d files required to serve", self.initial_queue_size)
 
@@ -111,10 +100,12 @@ class ServeJob(object):
             request = request.split("?", 1)[0]
         to_serve = os.path.normpath(os.path.join(self.base_path, request))
         if os.path.isfile(to_serve):
-            res = Resource(self.URL_FILE, to_serve)
+            res = Resource(Resource.URL_FILE, to_serve)
             with self._pending.lock:
                 res.required = to_serve in self._pending.files
             return res
+        if self.url_map is None:
+            return None
         if request in self.url_map.redirect:
             return self.url_map.redirect[request]
         if request in self.url_map.dynamic:
@@ -138,7 +129,7 @@ class ServeJob(object):
                 if inc_path in self.url_map.include:
                     to_serve = os.path.normpath("/".join([self.url_map.include[inc_path].target] + target_path))
                     return Resource(
-                        self.URL_INCLUDE,
+                        Resource.URL_INCLUDE,
                         to_serve,
                         mime=self.url_map.include[inc_path].mime,
                         required=self.url_map.include[inc_path].required)
@@ -150,7 +141,7 @@ class ServeJob(object):
             if "" in self.url_map.include:
                 to_serve = os.path.normpath(os.path.join(self.url_map.include[""].target, request.lstrip("/")))
                 return Resource(
-                    self.URL_INCLUDE,
+                    Resource.URL_INCLUDE,
                     to_serve,
                     mime=self.url_map.include[""].mime,
                     required=self.url_map.include[""].required)
@@ -175,9 +166,10 @@ class ServeJob(object):
         target_file = os.path.abspath(target_file)
         # check if target_file lives somewhere in wwwroot
         if not target_file.startswith(self.base_path):
-            for resources in self.url_map.include.values():
-                if target_file.startswith(resources.target):
-                    return False  # this is a valid include path
+            if self.url_map:
+                for resources in self.url_map.include.values():
+                    if target_file.startswith(resources.target):
+                        return False  # this is a valid include path
             return True  # this is NOT a valid include path
         return False  # this is a valid path
 
@@ -214,9 +206,6 @@ class Sapphire(object):
     _request = re.compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
 
     def __init__(self, allow_remote=False, port=None, timeout=60):
-        self._dr_map = dict()
-        self._include_map = dict()
-        self._redirect_map = dict()
         self._timeout = None
         self._socket = Sapphire._create_listening_socket(allow_remote, port)
         self.timeout = timeout
@@ -323,9 +312,9 @@ class Sapphire(object):
             resource = serv_job.check_request(request)
             if resource is None:
                 LOG.debug("resource is None")  # 404
-            elif resource.type in (serv_job.URL_FILE, serv_job.URL_INCLUDE):
+            elif resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                 finish_job = serv_job.remove_pending(resource.target)
-            elif resource.type == serv_job.URL_REDIRECT:
+            elif resource.type == Resource.URL_REDIRECT:
                 finish_job = serv_job.remove_pending(request)
 
             if finish_job and serv_job.forever:
@@ -341,7 +330,7 @@ class Sapphire(object):
                 conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
                 LOG.debug("404 %r (%d to go)", request, serv_job.pending_files())
                 return
-            if resource.type in (serv_job.URL_FILE, serv_job.URL_INCLUDE):
+            if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                 LOG.debug("target %r", resource.target)
                 if not os.path.isfile(resource.target):
                     conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
@@ -354,7 +343,7 @@ class Sapphire(object):
                     conn.sendall(Sapphire._4xx_page(403, "Forbidden").encode("ascii"))
                     LOG.debug("403 %r (%d to go)", request, serv_job.pending_files())
                     return
-            elif resource.type == serv_job.URL_REDIRECT:
+            elif resource.type == Resource.URL_REDIRECT:
                 conn.sendall(Sapphire._307_redirect(resource.target).encode("ascii"))
                 LOG.debug(
                     "307 %r -> %r (%d to go)",
@@ -362,7 +351,7 @@ class Sapphire(object):
                     resource.target,
                     serv_job.pending_files())
                 return
-            elif resource.type == serv_job.URL_DYNAMIC:
+            elif resource.type == Resource.URL_DYNAMIC:
                 data = resource.target()
                 if not isinstance(data, bytes):
                     LOG.debug("dynamic request: %r", request)
@@ -477,7 +466,7 @@ class Sapphire(object):
             for worker in worker_pool:
                 worker.thread.join()
 
-    def serve_path(self, path, continue_cb=None, forever=False, optional_files=None):
+    def serve_path(self, path, continue_cb=None, forever=False, optional_files=None, server_map=None):
         """
         serve_path() -> tuple
         path is the directory that will be used as wwwroot. The callback continue_cb should
@@ -501,13 +490,7 @@ class Sapphire(object):
         if not os.path.isdir(os.path.abspath(path)):
             raise IOError("%r does not exist" % path)
 
-        job = ServeJob(
-            path,
-            self._dr_map,
-            self._include_map,
-            self._redirect_map,
-            forever=forever,
-            optional_files=optional_files)
+        job = ServeJob(path, forever=forever, optional_files=optional_files, server_map=server_map)
 
         if not job.pending_files():
             job.finish()
@@ -565,15 +548,13 @@ class Sapphire(object):
             if listener.ident is not None:
                 listener.join()
 
-        self._redirect_map.clear()
-
         # served files should be relative to the www root, since that path could be a temporary
         # path created by serve_testcase()
         served_files = {os.path.relpath(file, path) for file in job._served.files.keys()}
 
         return status, served_files  # pylint: disable=protected-access
 
-    def serve_testcase(self, testcase, continue_cb=None, forever=False, working_path=None):
+    def serve_testcase(self, testcase, continue_cb=None, forever=False, working_path=None, server_map=None):
         """
         serve_testcase() -> tuple
         testcase is the Grizzly TestCase to serve. The callback continue_cb should
@@ -593,7 +574,8 @@ class Sapphire(object):
                 wwwdir,
                 continue_cb=continue_cb,
                 forever=forever,
-                optional_files=tuple(testcase.optional))
+                optional_files=tuple(testcase.optional),
+                server_map=server_map)
             testcase.duration = time.time() - serve_start
             return result
         finally:
@@ -610,50 +592,6 @@ class Sapphire(object):
             self._timeout = 0
         else:
             self._timeout = max(value, 1)
-
-    @staticmethod
-    def _check_potential_url(url_path):
-        url_path = url_path.strip("/")
-        if re.search(r"\W", url_path) is not None:
-            raise RuntimeError("Invalid character, only alpha-numeric characters accepted.")
-        return url_path
-
-    def add_dynamic_response(self, url, callback, mime_type="application/octet-stream"):
-        # check and sanitize url
-        url = self._check_potential_url(url)
-        if not callable(callback):
-            raise TypeError("callback must be of type 'function'")
-        if not isinstance(mime_type, str):
-            raise TypeError("mime_type must be of type 'str'")
-        LOG.debug("mapping dynamic response %r -> %r (%r)", url, callback, mime_type)
-        self._dr_map[url] = Resource(
-            ServeJob.URL_DYNAMIC,
-            callback,
-            mime=mime_type)
-
-    def add_include(self, url, target_path):
-        # check and sanitize mount point
-        url = self._check_potential_url(url)
-        if not os.path.isdir(target_path):
-            raise IOError("Include path not found: %s" % target_path)
-        if url in self._include_map:
-            raise RuntimeError("%r already mapped to %r" % (url, self._include_map[url]))
-        LOG.debug("mapping include %r -> %r", url, target_path)
-        self._include_map[url] = Resource(
-            ServeJob.URL_INCLUDE,
-            os.path.abspath(target_path))
-
-    def set_redirect(self, url, target, required=True):
-        # check and sanitize url
-        url = self._check_potential_url(url)
-        if not isinstance(target, str):
-            raise TypeError("target must be of type 'str'")
-        if not target:
-            raise TypeError("target must not be an empty string")
-        self._redirect_map[url] = Resource(
-            ServeJob.URL_REDIRECT,
-            target,
-            required=required)
 
 
 def main():

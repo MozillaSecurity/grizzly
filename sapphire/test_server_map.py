@@ -2,67 +2,87 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
 
 import pytest
 
-from .server_map import ServerMap
+from .server_map import InvalidURLError, MapCollisionError, Resource, ServerMap
+
 
 def test_servermap_01():
     """test empty ServerMap"""
     srv_map = ServerMap()
-    assert not srv_map.dynamic_responses
-    assert not srv_map.includes
-    assert not srv_map.redirects
-    with pytest.raises(AssertionError) as exc:
-        srv_map.reset()
-    assert "At least one kwarg should be True" in str(exc.value)
+    assert not srv_map.dynamic
+    assert not srv_map.include
+    assert not srv_map.redirect
 
-def test_servermap_02():
+def test_servermap_02(tmp_path):
     """test ServerMap dynamic responses"""
     def fake_cb():
         pass
     srv_map = ServerMap()
     srv_map.set_dynamic_response("url_01", fake_cb, mime_type="test/type")
-    assert len(srv_map.dynamic_responses) == 1
-    assert srv_map.dynamic_responses[0]["url"] == "url_01"
-    assert srv_map.dynamic_responses[0]["mime"] == "test/type"
-    assert callable(srv_map.dynamic_responses[0]["callback"])
+    assert len(srv_map.dynamic) == 1
+    assert "url_01" in srv_map.dynamic
+    assert srv_map.dynamic["url_01"].mime == "test/type"
+    assert callable(srv_map.dynamic["url_01"].target)
+    assert srv_map.dynamic["url_01"].type == Resource.URL_DYNAMIC
     srv_map.set_dynamic_response("url_02", fake_cb, mime_type="foo")
-    assert len(srv_map.dynamic_responses) == 2
-    srv_map.remove_dynamic_response("url_02")
-    assert len(srv_map.dynamic_responses) == 1
-    srv_map.reset(dynamic_response=True)
-    assert not srv_map.dynamic_responses
+    assert len(srv_map.dynamic) == 2
+    assert not srv_map.include
+    assert not srv_map.redirect
+    with pytest.raises(MapCollisionError):
+        srv_map.set_include("url_01", str(tmp_path))
+    with pytest.raises(MapCollisionError):
+        srv_map.set_redirect("url_01", "test_file")
 
 def test_servermap_03(tmp_path):
     """test ServerMap includes"""
     srv_map = ServerMap()
-    with pytest.raises(IOError) as exc:
+    with pytest.raises(IOError, match=r"Include path not found: no_dir"):
         srv_map.set_include("test_url", "no_dir")
-    assert "'no_dir' does not exist" in str(exc.value)
-    assert not srv_map.includes
+    assert not srv_map.include
     srv_map.set_include("url_01", str(tmp_path))
-    assert len(srv_map.includes) == 1
-    assert srv_map.includes[0][0] == "url_01"
-    assert srv_map.includes[0][1] == str(tmp_path)
+    assert len(srv_map.include) == 1
+    assert "url_01" in srv_map.include
+    assert srv_map.include["url_01"].target == str(tmp_path)
     srv_map.set_include("url_02", str(tmp_path))
-    assert len(srv_map.includes) == 2
-    srv_map.remove_include("url_02")
-    assert len(srv_map.includes) == 1
-    srv_map.reset(include=True)
-    assert not srv_map.includes
+    assert len(srv_map.include) == 2
+    assert not srv_map.dynamic
+    assert not srv_map.redirect
+    with pytest.raises(MapCollisionError):
+        srv_map.set_redirect("url_01", "test_file")
+    with pytest.raises(MapCollisionError):
+        srv_map.set_dynamic_response("url_01", lambda: 0, mime_type="test/type")
 
-def test_servermap_04():
+def test_servermap_04(tmp_path):
     """test ServerMap redirects"""
     srv_map = ServerMap()
     srv_map.set_redirect("url_01", "test_file", required=True)
-    assert len(srv_map.redirects) == 1
-    assert srv_map.redirects[0]["url"] == "url_01"
-    assert srv_map.redirects[0]["file_name"] == "test_file"
-    assert srv_map.redirects[0]["required"]
+    assert len(srv_map.redirect) == 1
+    assert "url_01" in srv_map.redirect
+    assert srv_map.redirect["url_01"].target == "test_file"
+    assert srv_map.redirect["url_01"].required
     srv_map.set_redirect("url_02", "test_file", required=False)
-    assert len(srv_map.redirects) == 2
-    srv_map.remove_redirect("url_02")
-    assert len(srv_map.redirects) == 1
-    srv_map.reset(redirect=True)
-    assert not srv_map.redirects
+    assert len(srv_map.redirect) == 2
+    assert not srv_map.redirect["url_02"].required
+    assert not srv_map.dynamic
+    assert not srv_map.include
+    with pytest.raises(MapCollisionError):
+        srv_map.set_include("url_01", str(tmp_path))
+    with pytest.raises(MapCollisionError):
+        srv_map.set_dynamic_response("url_01", lambda: 0, mime_type="test/type")
+
+def test_servermap_05():
+    """test ServerMap._check_url()"""
+    assert ServerMap._check_url("test") == "test"
+    assert ServerMap._check_url("") == ""
+    # only alpha-numeric is allowed
+    with pytest.raises(InvalidURLError):
+        ServerMap._check_url("asd!@#")
+    # '..'' should not be accepted
+    with pytest.raises(InvalidURLError):
+        ServerMap._check_url("/..")
+    # cannot map more than one '/' deep
+    with pytest.raises(InvalidURLError):
+        ServerMap._check_url("/test/test")

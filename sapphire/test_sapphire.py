@@ -15,8 +15,8 @@ import pytest
 
 from grizzly.common import TestCase
 
-from .core import Resource, Sapphire, ServeJob, SERVED_ALL, SERVED_NONE, \
-    SERVED_REQUEST, SERVED_TIMEOUT
+from .core import Sapphire, ServeJob, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
+from .server_map import Resource, ServerMap
 
 
 LOG = logging.getLogger("sphr_test")
@@ -365,12 +365,13 @@ def test_sapphire_15(client, tmp_path):
 
 def test_sapphire_16(client, tmp_path):
     """test non required mapped redirects"""
+    smap = ServerMap()
+    smap.set_redirect("test_url", "blah", required=False)
     serv = Sapphire(timeout=10)
     try:
-        serv.set_redirect("test_url", "blah", required=False)
         test = _create_test("test_case.html", tmp_path)
         client.launch("127.0.0.1", serv.get_port(), [test])
-        assert serv.serve_path(str(tmp_path))[0] == SERVED_ALL
+        assert serv.serve_path(str(tmp_path), server_map=smap)[0] == SERVED_ALL
     finally:
         serv.close()
     assert client.wait(timeout=10)
@@ -380,18 +381,19 @@ def test_sapphire_16(client, tmp_path):
 
 def test_sapphire_17(client, tmp_path):
     """test required mapped redirects"""
+    smap = ServerMap()
     serv = Sapphire(timeout=10)
     try:
         files_to_serve = list()
         # redir_target will be requested indirectly via the redirect
         redir_target = _create_test("redir_test_case.html", tmp_path, data=b"Redirect DATA!")
         redir_test = _TestFile("redirect_test")
-        serv.set_redirect(redir_test.url, redir_target.url, required=True)
+        smap.set_redirect(redir_test.url, redir_target.url, required=True)
         files_to_serve.append(redir_test)
         test = _create_test("test_case.html", tmp_path)
         files_to_serve.append(test)
         client.launch("127.0.0.1", serv.get_port(), files_to_serve)
-        status, served_list = serv.serve_path(str(tmp_path))
+        status, served_list = serv.serve_path(str(tmp_path), server_map=smap)
         assert status == SERVED_ALL
         assert len(served_list) == len(files_to_serve)
     finally:
@@ -413,6 +415,7 @@ def test_sapphire_18(client, tmp_path):
     root_path.mkdir()
     files_to_serve = list()
     serv = Sapphire(timeout=10)
+    smap = ServerMap()
     try:
         # add files to inc dirs
         inc1 = _create_test("included_file1.html", inc1_path, data=b"blah....1")
@@ -442,10 +445,10 @@ def test_sapphire_18(client, tmp_path):
         test = _create_test("test_case.html", root_path)
         files_to_serve.append(test)
         # add include paths
-        serv.add_include("/", str(inc1_path))  # mount at '/'
-        serv.add_include("inc_test", str(inc2_path))  # mount at '/inc_test'
+        smap.set_include("/", str(inc1_path))  # mount at '/'
+        smap.set_include("inc_test", str(inc2_path))  # mount at '/inc_test'
         client.launch("127.0.0.1", serv.get_port(), files_to_serve, in_order=True)
-        status, files_served = serv.serve_path(str(root_path))
+        status, files_served = serv.serve_path(str(root_path), server_map=smap)
         assert status == SERVED_ALL
         assert len(files_served) == 4
     finally:
@@ -460,34 +463,23 @@ def test_sapphire_18(client, tmp_path):
     assert inc403.code == 403
 
 
-def test_sapphire_19():
-    """test mapping with bad urls"""
-    serv = Sapphire(timeout=1)
-    try:
-        with pytest.raises(RuntimeError):
-            serv.set_redirect("/test/test", "a.html")  # cannot map more than one '/' deep
-        with pytest.raises(RuntimeError):
-            serv.set_redirect("asd!@#", "a.html")  # only alpha-numeric is allowed
-    finally:
-        serv.close()
-
-
-def test_sapphire_20(client, tmp_path):
+def test_sapphire_19(client, tmp_path):
     """test dynamic response"""
     _test_string = b"dynamic response -- TEST DATA!"
 
     def _dyn_test_cb():
         return _test_string
 
+    smap = ServerMap()
     serv = Sapphire(timeout=10)
     try:
         test_dr = _TestFile("dynm_test")
         test_dr.len_org = len(_test_string)
         test_dr.md5_org = hashlib.md5(_test_string).hexdigest()
-        serv.add_dynamic_response("dynm_test", _dyn_test_cb, mime_type="text/plain")
+        smap.set_dynamic_response("dynm_test", _dyn_test_cb, mime_type="text/plain")
         test = _create_test("test_case.html", tmp_path)
         client.launch("127.0.0.1", serv.get_port(), [test_dr, test], in_order=True)
-        assert serv.serve_path(str(tmp_path))[0] == SERVED_ALL
+        assert serv.serve_path(str(tmp_path), server_map=smap)[0] == SERVED_ALL
     finally:
         serv.close()
     assert client.wait(timeout=10)
@@ -498,7 +490,7 @@ def test_sapphire_20(client, tmp_path):
     assert test_dr.md5_srv == test_dr.md5_org
 
 
-def test_sapphire_21(client_factory, tmp_path):
+def test_sapphire_20(client_factory, tmp_path):
     """test pending_files == 0 in worker thread"""
     serv = Sapphire(timeout=10)
     client_defer = client_factory(rx_size=2)
@@ -521,7 +513,7 @@ def test_sapphire_21(client_factory, tmp_path):
     assert test_defer.code == 0
 
 
-def test_sapphire_22(client, tmp_path):
+def test_sapphire_21(client, tmp_path):
     """test handling an invalid request"""
     serv = Sapphire(timeout=10)
     try:
@@ -538,7 +530,7 @@ def test_sapphire_22(client, tmp_path):
     assert bad_test.code == 400
 
 
-def test_sapphire_23(client, tmp_path):
+def test_sapphire_22(client, tmp_path):
     """test handling an empty request"""
     serv = Sapphire(timeout=10)
     try:
@@ -555,7 +547,7 @@ def test_sapphire_23(client, tmp_path):
     assert bad_test.code == 0
 
 
-def test_sapphire_24(client_factory, tmp_path):
+def test_sapphire_23(client_factory, tmp_path):
     """test requesting multiple files via multiple connections"""
     default_pool_limit = Sapphire.WORKER_POOL_LIMIT
     serv = Sapphire(timeout=60)
@@ -583,11 +575,12 @@ def test_sapphire_24(client_factory, tmp_path):
         assert t_file.len_srv == t_file.len_org
 
 
-def test_sapphire_25(client_factory, tmp_path):
+def test_sapphire_24(client_factory, tmp_path):
     """test all request types via multiple connections"""
     def _dyn_test_cb():
         return b"A" if random.getrandbits(1) else b"AA"
 
+    smap = ServerMap()
     serv = Sapphire(timeout=60)
     default_pool_limit = Sapphire.WORKER_POOL_LIMIT
     try:
@@ -605,39 +598,37 @@ def test_sapphire_25(client_factory, tmp_path):
             # add redirects
             redir_target = _create_test("redir_%03d.html" % i, tmp_path, data=b"AA")
             to_serve.append(_TestFile("redir_%03d" % i))
-            serv.set_redirect(to_serve[-1].url, redir_target.url, required=random.getrandbits(1) > 0)
+            smap.set_redirect(to_serve[-1].url, redir_target.url, required=random.getrandbits(1) > 0)
             # add dynamic responses
             to_serve.append(_TestFile("dynm_%03d" % i))
-            serv.add_dynamic_response(to_serve[-1].url, _dyn_test_cb, mime_type="text/plain")
+            smap.set_dynamic_response(to_serve[-1].url, _dyn_test_cb, mime_type="text/plain")
         clients = list()
         for _ in range(100):  # number of clients to spawn
             clients.append(client_factory(rx_size=1))
             throttle = 0.05 if random.getrandbits(1) else 0
             clients[-1].launch("127.0.0.1", serv.get_port(), to_serve, throttle=throttle)
-        assert serv.serve_path(str(tmp_path))[0] == SERVED_ALL
+        assert serv.serve_path(str(tmp_path), server_map=smap)[0] == SERVED_ALL
     finally:
         serv.close()
         Sapphire.WORKER_POOL_LIMIT = default_pool_limit
 
 
-def test_sapphire_26(client, tmp_path):
+def test_sapphire_25(client, tmp_path):
     """test dynamic response with bad callbacks"""
-    def _dyn_none_cb():
-        return None
-
+    smap = ServerMap()
     serv = Sapphire(timeout=10)
     try:
         test_dr = _TestFile("dynm_test")
-        serv.add_dynamic_response("dynm_test", _dyn_none_cb, mime_type="text/plain")
+        smap.set_dynamic_response("dynm_test", lambda: None, mime_type="text/plain")
         test = _create_test("test_case.html", tmp_path)
         client.launch("127.0.0.1", serv.get_port(), [test_dr, test], in_order=True)
         with pytest.raises(TypeError):
-            serv.serve_path(str(tmp_path))
+            serv.serve_path(str(tmp_path), server_map=smap)
     finally:
         serv.close()
 
 
-def test_sapphire_27(client, tmp_path):
+def test_sapphire_26(client, tmp_path):
     """test serving to a slow client"""
     serv = Sapphire(timeout=60)
     try:
@@ -657,7 +648,7 @@ def test_sapphire_27(client, tmp_path):
     assert t_file.md5_srv == t_file.md5_org
 
 
-def test_sapphire_28(client, tmp_path):
+def test_sapphire_27(client, tmp_path):
     """test timeout while requesting multiple files"""
     serv = Sapphire(timeout=1)  # minimum timeout is 1 second
     try:
@@ -674,7 +665,7 @@ def test_sapphire_28(client, tmp_path):
         serv.close()
 
 
-def test_sapphire_29(client, tmp_path):
+def test_sapphire_28(client, tmp_path):
     """test Sapphire.serve_testcase()"""
     serv = Sapphire(timeout=10)
     try:
@@ -691,7 +682,7 @@ def test_sapphire_29(client, tmp_path):
         serv.close()
 
 
-def test_sapphire_30(client_factory, tmp_path):
+def test_sapphire_29(client_factory, tmp_path):
     """test Sapphire.serve_path() with forever=True"""
     clients = list()
     serv = Sapphire(timeout=10)
@@ -718,7 +709,7 @@ def test_sapphire_30(client_factory, tmp_path):
 
 def test_serve_job_01(tmp_path):
     """test creating an empty ServeJob"""
-    job = ServeJob(str(tmp_path), dict(), dict(), dict())
+    job = ServeJob(str(tmp_path))
     assert not job.forever
     assert job.status == SERVED_ALL
     assert job.check_request("") is None
@@ -743,13 +734,13 @@ def test_serve_job_02(tmp_path):
     (tmp_path / "test").mkdir()
     req2_path = tmp_path / "test" / "req_file_2.txt"
     req2_path.write_bytes(b"a")
-    job = ServeJob(str(tmp_path), dict(), dict(), dict(), optional_files=[opt_path.name])
+    job = ServeJob(str(tmp_path), optional_files=[opt_path.name])
     assert job.status == SERVED_NONE
     assert not job.is_complete()
     resource = job.check_request("req_file_1.txt")
     assert resource.required
     assert resource.target == str(tmp_path / "req_file_1.txt")
-    assert resource.type == job.URL_FILE
+    assert resource.type == Resource.URL_FILE
     assert not job.is_forbidden(str(req1_path))
     assert not job.remove_pending("no_file.test")
     assert job.pending_files() == 2
@@ -763,7 +754,7 @@ def test_serve_job_02(tmp_path):
     resource = job.check_request("opt_file.txt")
     assert not resource.required
     assert resource.target == str(tmp_path / "opt_file.txt")
-    assert resource.type == job.URL_FILE
+    assert resource.type == Resource.URL_FILE
     assert job.remove_pending(str(opt_path))
     job.finish()
     assert job.is_complete()
@@ -771,16 +762,16 @@ def test_serve_job_02(tmp_path):
 
 def test_serve_job_03(tmp_path):
     """test ServeJob redirects"""
-    redirs = {
-        "one": Resource(ServeJob.URL_REDIRECT, "somefile.txt"),
-        "two": Resource(ServeJob.URL_REDIRECT, "reqfile.txt", required=True)}
-    job = ServeJob(str(tmp_path), dict(), dict(), redirs)
+    smap = ServerMap()
+    smap.set_redirect("one", "somefile.txt", required=False)
+    smap.set_redirect("two", "reqfile.txt")
+    job = ServeJob(str(tmp_path), server_map=smap)
     assert job.status == SERVED_NONE
     resource = job.check_request("one")
-    assert resource.type == job.URL_REDIRECT
+    assert resource.type == Resource.URL_REDIRECT
     resource = job.check_request("two?q=123")
     assert resource is not None
-    assert resource.type == job.URL_REDIRECT
+    assert resource.type == Resource.URL_REDIRECT
     assert job.pending_files() == 1
     assert job.remove_pending("two")
     assert job.pending_files() == 0
@@ -804,32 +795,35 @@ def test_serve_job_04(tmp_path):
     nst_1.write_bytes(b"c")
     inc_2 = srv_include_2 / "test_file_2.txt"
     inc_2.write_bytes(b"d")
-    includes = {
-        "testinc": Resource(ServeJob.URL_INCLUDE, str(srv_include)),
-        "testinc/fakedir": Resource(ServeJob.URL_INCLUDE, str(srv_include)),
-        "testinc/1/2/3": Resource(ServeJob.URL_INCLUDE, str(srv_include)),
-        "": Resource(ServeJob.URL_INCLUDE, str(srv_include)),
-        "testinc/inc2": Resource(ServeJob.URL_INCLUDE, str(srv_include_2))}
-    job = ServeJob(str(srv_root), dict(), includes, dict())
+    smap = ServerMap()
+    # stub out ServerMap._check_url() because it is too
+    # restrictive to allow testing of some functionality
+    smap._check_url = lambda x: x
+    smap.set_include("testinc", str(srv_include))
+    smap.set_include("testinc/fakedir", str(srv_include))
+    smap.set_include("testinc/1/2/3", str(srv_include))
+    smap.set_include("", str(srv_include))
+    smap.set_include("testinc/inc2", str(srv_include_2))
+    job = ServeJob(str(srv_root), server_map=smap)
     assert job.status == SERVED_NONE
     # test includes that map to 'srv_include'
-    for incl, inc_path in includes.items():
+    for incl, inc_path in smap.include.items():
         if inc_path != str(srv_include):  # only check 'srv_include' mappings
             continue
         resource = job.check_request("/".join([incl, "test_file.txt"]))
-        assert resource.type == job.URL_INCLUDE
+        assert resource.type == Resource.URL_INCLUDE
         assert resource.target == str(inc_1)
     # test nested include path pointing to a different include
     resource = job.check_request("testinc/inc2/test_file2.txt?q=123")
-    assert resource.type == job.URL_INCLUDE
+    assert resource.type == Resource.URL_INCLUDE
     assert resource.target == str(srv_include_2 / "test_file2.txt")
     # test redirect root without leading '/'
     resource = job.check_request("test_file.txt")
-    assert resource.type == job.URL_INCLUDE
+    assert resource.type == Resource.URL_INCLUDE
     assert resource.target == str(srv_include / "test_file.txt")
     # test redirect with file in a nested directory
     resource = job.check_request("/".join(["testinc", "nested", "nested_file.txt"]))
-    assert resource.type == job.URL_INCLUDE
+    assert resource.type == Resource.URL_INCLUDE
     assert resource.target == str(nst_1)
     assert not job.is_forbidden(str(srv_root / ".." / "test" / "test_file.txt"))
     assert not job.is_forbidden(str(srv_include / ".." / "root" / "req_file.txt"))
@@ -837,24 +831,19 @@ def test_serve_job_04(tmp_path):
 
 def test_serve_job_05(tmp_path):
     """test ServeJob dynamic"""
-    srv_root = tmp_path / "root"
-
-    def _dyn_test_cb():
-        pass
-    dynamics = {
-        "cb1": Resource(ServeJob.URL_DYNAMIC, _dyn_test_cb, mime="mime_type"),
-        "cb2": Resource(ServeJob.URL_DYNAMIC, _dyn_test_cb, mime="mime_type"),
-    }
-    job = ServeJob(str(srv_root), dynamics, dict(), dict())
+    smap = ServerMap()
+    smap.set_dynamic_response("cb1", lambda: 0, mime_type="mime_type")
+    smap.set_dynamic_response("cb2", lambda: 1)
+    job = ServeJob(str(tmp_path / "root"), server_map=smap)
     assert job.status == SERVED_ALL
     assert job.pending_files() == 0
     resource = job.check_request("cb1")
-    assert resource.type == job.URL_DYNAMIC
+    assert resource.type == Resource.URL_DYNAMIC
     assert callable(resource.target)
     assert isinstance(resource.mime, str)
     resource = job.check_request("cb2?q=123")
     assert resource is not None
-    assert resource.type == job.URL_DYNAMIC
+    assert resource.type == Resource.URL_DYNAMIC
     assert callable(resource.target)
     assert isinstance(resource.mime, str)
 
@@ -867,12 +856,12 @@ def test_serve_job_06(tmp_path):
     test_1.write_bytes(b"a")
     no_access = tmp_path / "no_access.txt"
     no_access.write_bytes(b"a")
-    job = ServeJob(str(srv_root), dict(), dict(), dict())
+    job = ServeJob(str(srv_root))
     assert job.status == SERVED_NONE
     assert job.pending_files() == 1
     resource = job.check_request("../no_access.txt")
     assert resource.target == str(no_access)
-    assert resource.type == job.URL_FILE
+    assert resource.type == Resource.URL_FILE
     assert not job.is_forbidden(str(test_1))
     assert job.is_forbidden(str(srv_root / "../no_access.txt"))
 
@@ -884,7 +873,7 @@ def test_serve_job_07(tmp_path):
     test_file = tmp_path / "test.txt"
     test_file.write_bytes(b"a")
     (tmp_path / "?_2.txt").write_bytes(b"a")
-    job = ServeJob(str(tmp_path), dict(), dict(), dict())
+    job = ServeJob(str(tmp_path))
     assert job.status == SERVED_NONE
     assert job.pending_files() == 1
     assert job.check_request("test.txt").target == str(test_file)
