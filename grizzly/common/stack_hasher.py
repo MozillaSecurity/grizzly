@@ -171,7 +171,6 @@ class StackFrame(object):
         frame["stack_line"] = m.group("num")
         #frame["offset"] = m.group("off")  # ignore binary offset for now
         input_line = m.group("line").strip()
-        print(input_line)
         if not input_line:
             return
 
@@ -292,15 +291,14 @@ class Stack(object):
 
 
     def __str__(self):
-        return "\n".join(["%s" % frame for frame in self.frames])
+        return "\n".join(str(frame) for frame in self.frames)
 
 
     def _calculate_hash(self, major=False):
-        h = hashlib.sha1()
-
         if not self.frames or (major and self._major_depth < 1):
             return None
 
+        h = hashlib.sha1()
         current_depth = 0
         for frame in self.frames:
             current_depth += 1
