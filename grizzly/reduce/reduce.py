@@ -247,9 +247,9 @@ class ReductionJob(object):
         '_fixed_timeout', '_force_no_harness', '_idle_poll', '_idle_threshold', '_idle_timeout', '_ignore',
         '_input_fname', '_interesting_prefix', '_iter_timeout', '_landing_page', '_log_handler',
         '_min_crashes', '_no_harness', '_orig_sig', '_original_relaunch', '_other_crashes',
-        '_reduce_file', '_repeat', '_reporter', '_result_cache', '_result_code', '_server', '_signature',
-        '_skip', '_skip_analysis', '_skipped', '_status', '_target', '_tcroot', '_testcase', '_tmpdir',
-        '_use_result_cache',
+        '_reduce_file', '_repeat', '_reporter', '_result_cache', '_result_code', '_server', '_server_map',
+        '_signature', '_skip', '_skip_analysis', '_skipped', '_status', '_target', '_tcroot', '_testcase',
+        '_tmpdir', '_use_result_cache',
     ]
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
@@ -285,6 +285,7 @@ class ReductionJob(object):
         self._result_cache = {}
         self._result_code = None
         self._server = None  # a server to serve with
+        self._server_map = sapphire.ServerMap()  # manage dynamic requests, includes and redirects
         self._signature = None
         self._skip = skip
         self._skip_analysis = skip_analysis
@@ -631,6 +632,8 @@ class ReductionJob(object):
         if self._target.closed and self._server is not None:
             self._server.close()
             self._server = None
+        self._server_map.dynamic.clear()
+        self._server_map.redirect.clear()
 
         # launch sapphire if needed
         if self._server is None:
@@ -646,9 +649,9 @@ class ReductionJob(object):
                 def _dyn_resp_close():
                     self._target.close()
                     return b"<h1>Close Browser</h1>"
-                self._server.add_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
-                self._server.add_dynamic_response("/harness", lambda: harness, mime_type="text/html")
-                self._server.set_redirect("/first_test", str(self.landing_page), required=True)
+                self._server_map.set_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
+                self._server_map.set_dynamic_response("/harness", lambda: harness, mime_type="text/html")
+                self._server_map.set_redirect("/first_test", str(self.landing_page), required=True)
 
         if self._no_harness:
             self._server.timeout = self._iter_timeout
@@ -685,12 +688,13 @@ class ReductionJob(object):
                 return self._target.monitor.is_healthy() and not idle_timeout_event.is_set()
 
             if not self._no_harness:
-                self._server.set_redirect("/next_test", str(self.landing_page), required=True)
+                self._server_map.set_redirect("/next_test", str(self.landing_page), required=True)
 
             # serve the testcase
             server_status, files_served = self._server.serve_testcase(testcase,
                                                                       continue_cb=keep_waiting,
-                                                                      forever=self._no_harness)
+                                                                      forever=self._no_harness,
+                                                                      server_map=self._server_map)
 
             # attempt to detect a failure
             failure_detected = self._target.detect_failure(
