@@ -63,6 +63,12 @@ class PuppetTarget(Target):
     def closed(self):
         return self._puppet.reason is not None
 
+    def is_idle(self, threshold):
+        for _, cpu in self._puppet.cpu_usage():
+            if cpu >= threshold:
+                return False
+        return True
+
     @property
     def monitor(self):
         if self._monitor is None:
@@ -81,19 +87,6 @@ class PuppetTarget(Target):
                     return self._puppet.log_length(log_id)
             self._monitor = _PuppetMonitor()
         return self._monitor
-
-    def poll_for_idle(self, threshold, interval):
-        # return POLL_IDLE if cpu usage of target is below threshold for interval seconds
-        start_time = time.time()
-        while time.time() - start_time < interval:
-            for _, cpu in self._puppet.cpu_usage():
-                if cpu >= threshold:
-                    return self.POLL_BUSY
-            if not self._puppet.is_running():
-                break
-        else:
-            log.info("Process utilized <= %d%% CPU for %ds", threshold, interval)
-        return self.POLL_IDLE
 
     def detect_failure(self, ignored, was_timeout):
         status = self.RESULT_NONE

@@ -10,7 +10,7 @@ import tempfile
 import time
 
 import sapphire
-from .common import Status, TestFile
+from .common import Runner, Status, TestFile
 from .target import TargetLaunchError, TargetLaunchTimeout
 
 
@@ -68,23 +68,6 @@ class Session(object):
         self.server = None
         self.status = Status.start()
         self.target = target
-
-    def check_results(self, unserved, was_timeout):
-        # attempt to detect a failure
-        failure_detected = self.target.detect_failure(self.ignore, was_timeout)
-        if unserved and self.adapter.IGNORE_UNSERVED:
-            # if nothing was served remove most recent
-            # test case from list to help maintain browser/fuzzer sync
-            log.info("Ignoring test case since nothing was served")
-            self.iomanager.tests.pop().cleanup()
-        # handle failure if detected
-        if failure_detected == self.target.RESULT_FAILURE:
-            self.status.results += 1
-            log.info("Result detected")
-            self.report_result()
-        elif failure_detected == self.target.RESULT_IGNORED:
-            self.status.ignored += 1
-            log.info("Ignored (%d)", self.status.ignored)
 
     def config_server(self, iteration_timeout):
         assert self.server is None
@@ -176,6 +159,7 @@ class Session(object):
 
     def run(self, iteration_limit=None):
         assert self.server is not None, "server is not configured"
+        runner = Runner(self.server, self.target)
         while True:  # main fuzzing loop
             self.status.report()
             self.status.iteration += 1
@@ -194,28 +178,34 @@ class Session(object):
             # display status
             self.display_status()
 
-            # use Sapphire to serve the most recent test case
-            server_status, files_served = self.server.serve_testcase(
-                current_test,
-                continue_cb=self.target.monitor.is_healthy,
-                server_map=self.iomanager.server_map,
-                working_path=self.iomanager.working_path)
+            # run test case
+            runner.run(self.ignore, self.iomanager.server_map, current_test)
+            # update test case
             if self.adapter.IGNORE_UNSERVED:
-                log.debug("removing unserved files from the test case")
-                current_test.purge_optional(files_served)
-
-            if server_status == sapphire.SERVED_TIMEOUT:
+                if runner.served:
+                    log.debug("removing unserved files from the test case")
+                    current_test.purge_optional(runner.served)
+                else:
+                    log.info("Ignoring test case since nothing was served")
+                    self.iomanager.tests.pop().cleanup()
+            # adapter callbacks
+            if runner.timeout:
                 log.debug("calling self.adapter.on_timeout()")
-                self.adapter.on_timeout(current_test, files_served)
+                self.adapter.on_timeout(current_test, runner.served)
             else:
                 log.debug("calling self.adapter.on_served()")
-                self.adapter.on_served(current_test, files_served)
+                self.adapter.on_served(current_test, runner.served)
+            # process results
+            if runner.result == runner.FAILED:
+                self.status.results += 1
+                log.info("Result detected")
+                self.report_result()
+            elif runner.result == runner.IGNORED:
+                self.status.ignored += 1
+                log.info("Ignored (%d)", self.status.ignored)
 
-            if self.coverage and server_status != sapphire.SERVED_TIMEOUT:
+            if self.coverage and runner.result == runner.COMPLETE:
                 self.target.dump_coverage()
-
-            # check for results and report as necessary
-            self.check_results(not files_served, server_status == sapphire.SERVED_TIMEOUT)
 
             # warn about large browser logs
             self.status.log_size = self.target.log_size()
