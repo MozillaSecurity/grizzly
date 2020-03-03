@@ -38,9 +38,6 @@ class ReducerArgs(CommonArgs):
             "--idle-timeout", type=int, default=60,
             help="Number of seconds to wait before polling testcase for idle (default: %(default)s)")
         self.parser.add_argument(
-            "--idle-poll", type=int, default=3,
-            help="Number of seconds to poll the process before evaluating threshold (default: %(default)s)")
-        self.parser.add_argument(
             "--idle-threshold", type=int, default=25,
             help="CPU usage threshold to mark the process as idle (default: %(default)s)")
         self.parser.add_argument(

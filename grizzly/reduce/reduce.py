@@ -15,7 +15,6 @@ import os
 import re
 import shutil
 import tempfile
-import threading
 import time
 import zipfile
 import zlib
@@ -28,8 +27,9 @@ from FTB.Signatures.CrashInfo import CrashSignature
 from . import strategies as strategies_module, testcase_contents
 from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..session import Session
-from ..common import FilesystemReporter, FuzzManagerReporter, ReducerStats, Report, Status, TestCase, TestFile
-from ..target import Target, load as load_target
+from ..common import FilesystemReporter, FuzzManagerReporter, ReducerStats, \
+    Report, Runner, Status, TestCase, TestFile
+from ..target import load as load_target
 
 
 __author__ = "Jesse Schwartzentruber"
@@ -244,7 +244,7 @@ class ReductionJob(object):
     DEFAULT_STRATEGIES = ("line", "jsbeautify", "collapsebraces", "jschar")
     __slots__ = [
         '_any_crash', '_best_testcase', '_cache_iter_harness_created', '_env_mod',
-        '_fixed_timeout', '_force_no_harness', '_idle_poll', '_idle_threshold', '_idle_timeout', '_ignore',
+        '_fixed_timeout', '_force_no_harness', '_idle_threshold', '_idle_timeout', '_ignore',
         '_input_fname', '_interesting_prefix', '_iter_timeout', '_landing_page', '_log_handler',
         '_min_crashes', '_no_harness', '_orig_sig', '_original_relaunch', '_other_crashes',
         '_reduce_file', '_repeat', '_reporter', '_result_cache', '_result_code', '_server', '_server_map',
@@ -253,7 +253,7 @@ class ReductionJob(object):
     ]
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
-                 repeat, idle_poll, idle_threshold, idle_timeout, status, working_path=None,
+                 repeat, idle_threshold, idle_timeout, status, working_path=None,
                  testcase_cache=True, skip_analysis=False):
         """Use lithium to reduce a testcase.
 
@@ -266,7 +266,6 @@ class ReductionJob(object):
         self._env_mod = None  # environment if specified in the testcase
         self._fixed_timeout = False  # if True iter_timeout will not be changed
         self._force_no_harness = no_harness
-        self._idle_poll = idle_poll
         self._idle_threshold = idle_threshold
         self._idle_timeout = idle_timeout
         self._ignore = ignore  # things to ignore
@@ -583,22 +582,6 @@ class ReductionJob(object):
             "&close_after=%d" % self._target.rl_reset,
             "&forced_close=0" if not self._target.forced_close else ""))
 
-    def monitor_process(self, iteration_done_event, idle_timeout_event, monitor_launched):
-        # Wait until timeout is hit before polling
-        monitor_launched.set()
-        LOG.debug('Waiting %r before polling', self._idle_timeout)
-        exp_time = time.time() + self._idle_timeout
-        while exp_time >= time.time() and not iteration_done_event.is_set():
-            time.sleep(0.1)
-
-        while not iteration_done_event.is_set():
-            result = self._target.poll_for_idle(self._idle_threshold, self._idle_poll)
-            if result != Target.POLL_BUSY:
-                if result == Target.POLL_IDLE:
-                    idle_timeout_event.set()
-                break
-            time.sleep(0.1)
-
     def update_timeout(self, run_time):
         # If run_time is less than poll-time, update it
         LOG.debug('Run time %r', run_time)
@@ -653,6 +636,7 @@ class ReductionJob(object):
                 self._server_map.set_dynamic_response("/harness", lambda: harness, mime_type="text/html")
                 self._server_map.set_redirect("/first_test", str(self.landing_page), required=True)
 
+        runner = Runner(self._server, self._target, self._idle_threshold, self._idle_timeout)
         if self._no_harness:
             self._server.timeout = self._iter_timeout
         else:
@@ -674,82 +658,56 @@ class ReductionJob(object):
                         raise
             self._target.step()
 
-        try:
-            idle_timeout_event = threading.Event()
-            iteration_done_event = threading.Event()
-            if self._idle_poll:
-                monitor_launched = threading.Event()
-                poll = threading.Thread(target=self.monitor_process,
-                                        args=(iteration_done_event, idle_timeout_event, monitor_launched))
-                poll.start()
-                assert monitor_launched.wait(30), "Failed to launch monitoring thread"
+        if not self._no_harness:
+            self._server_map.set_redirect("/next_test", str(self.landing_page), required=True)
 
-            def keep_waiting():
-                return self._target.monitor.is_healthy() and not idle_timeout_event.is_set()
+        # run test case
+        runner.run(self._ignore, self._server_map, testcase, wait_for_callback=self._no_harness)
 
-            if not self._no_harness:
-                self._server_map.set_redirect("/next_test", str(self.landing_page), required=True)
+        # handle failure if detected
+        if runner.result == Runner.FAILED:
+            self._target.close()
+            testcase.purge_optional(runner.served)
 
-            # serve the testcase
-            server_status, files_served = self._server.serve_testcase(testcase,
-                                                                      continue_cb=keep_waiting,
-                                                                      forever=self._no_harness,
-                                                                      server_map=self._server_map)
-
-            # attempt to detect a failure
-            failure_detected = self._target.detect_failure(
-                self._ignore,
-                server_status == sapphire.SERVED_TIMEOUT)
-
-            # handle failure if detected
-            if failure_detected == Target.RESULT_FAILURE:
-                self._target.close()
-                testcase.purge_optional(files_served)
-
-                # save logs
-                result_logs = temp_prefix + "_logs"
-                if not os.path.exists(result_logs):
-                    os.mkdir(result_logs)
-                self._target.save_logs(result_logs, meta=True)
-
-                # create a CrashInfo
-                crash = FuzzManagerReporter.create_crash_info(
-                    Report.from_path(result_logs),
-                    self._target.binary)
-
-                short_sig = crash.createShortSignature()
-                if short_sig == "No crash detected":
-                    # XXX: need to change this to support reducing timeouts?
-                    LOG.info("Uninteresting: no crash detected")
-                elif self._orig_sig is None or self._orig_sig.matches(crash):
-                    result = True
-                    LOG.info("Interesting: %s", short_sig)
-                    if self._orig_sig is None and not self._any_crash:
-                        max_frames = FuzzManagerReporter.signature_max_frames(crash, 5)
-                        self._orig_sig = crash.createCrashSignature(maxFrames=max_frames)
-                else:
-                    LOG.info("Uninteresting: different signature: %s", short_sig)
-                    self.on_other_crash_found(testcase, temp_prefix)
-
-            elif failure_detected == Target.RESULT_IGNORED:
-                LOG.info("Uninteresting: ignored")
-                self._target.close()
-
-                # save logs
-                result_logs = temp_prefix + "_logs"
+            # save logs
+            result_logs = temp_prefix + "_logs"
+            if not os.path.exists(result_logs):
                 os.mkdir(result_logs)
-                self._target.save_logs(result_logs, meta=True)
+            self._target.save_logs(result_logs, meta=True)
 
+            # create a CrashInfo
+            crash = FuzzManagerReporter.create_crash_info(
+                Report.from_path(result_logs),
+                self._target.binary)
+
+            short_sig = crash.createShortSignature()
+            if short_sig == "No crash detected":
+                # XXX: need to change this to support reducing timeouts?
+                LOG.info("Uninteresting: no crash detected")
+            elif self._orig_sig is None or self._orig_sig.matches(crash):
+                result = True
+                LOG.info("Interesting: %s", short_sig)
+                if self._orig_sig is None and not self._any_crash:
+                    max_frames = FuzzManagerReporter.signature_max_frames(crash, 5)
+                    self._orig_sig = crash.createCrashSignature(maxFrames=max_frames)
             else:
-                LOG.info("Uninteresting: no failure detected")
+                LOG.info("Uninteresting: different signature: %s", short_sig)
+                self.on_other_crash_found(testcase, temp_prefix)
 
-            # trigger relaunch by closing the browser if needed
-            self._target.check_relaunch()
+        elif runner.result == Runner.IGNORED:
+            LOG.info("Uninteresting: ignored")
+            self._target.close()
 
-        finally:
-            iteration_done_event.set()
-            if self._idle_poll:
-                poll.join()
+            # TODO: why is this here? save log
+            result_logs = temp_prefix + "_logs"
+            os.mkdir(result_logs)
+            self._target.save_logs(result_logs, meta=True)
+
+        else:
+            LOG.info("Uninteresting: no failure detected")
+
+        # trigger relaunch by closing the browser if needed
+        self._target.check_relaunch()
 
         return result
 
@@ -1185,7 +1143,6 @@ class ReductionJob(object):
             args.skip,
             args.min_crashes,
             args.repeat,
-            args.idle_poll,
             args.idle_threshold,
             args.idle_timeout,
             status,

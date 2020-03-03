@@ -34,9 +34,6 @@ class Target(object):
     RESULT_NONE = 0
     RESULT_FAILURE = 1
     RESULT_IGNORED = 2
-    POLL_BUSY = 0
-    POLL_IDLE = 1
-    POLL_ERROR = 2
 
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch):
         self._lock = threading.Lock()
@@ -98,6 +95,10 @@ class Target(object):
         # This is used to indicate if the browser will self close after the current iteration
         return self.rl_countdown < 1 and not self.forced_close
 
+    def is_idle(self, threshold):  # pylint: disable=no-self-use,unused-argument
+        log.debug("Target.is_idle() not implemented! returning False")
+        return False
+
     @abc.abstractmethod
     def launch(self):
         pass
@@ -109,10 +110,6 @@ class Target(object):
     @abc.abstractproperty
     def monitor(self):
         pass
-
-    def poll_for_idle(self, threshold, interval):  # pylint: disable=unused-argument
-        log.debug("poll_for_idle() not implemented! returning POLL_BUSY")
-        return self.POLL_BUSY
 
     def reverse(self, remote, local):
         # remote->device, local->desktop

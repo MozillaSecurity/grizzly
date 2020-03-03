@@ -6,13 +6,14 @@
 from .adapter import Adapter, AdapterError
 from .iomanager import IOManager, ServerMap
 from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
+from .runner import Runner
 from .status import ReducerStats, Status
 from .storage import InputFile, TestCase, TestFile
 
 
 __all__ = (
     "Adapter", "AdapterError", "FilesystemReporter", "FuzzManagerReporter", "IOManager", "InputFile",
-    "ReducerStats", "Report", "Reporter", "S3FuzzManagerReporter", "ServerMap", "Status", "TestCase",
-    "TestFile")
+    "ReducerStats", "Report", "Reporter", "Runner", "S3FuzzManagerReporter", "ServerMap", "Status",
+    "TestCase", "TestFile")
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]

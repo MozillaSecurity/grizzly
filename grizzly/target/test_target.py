@@ -41,13 +41,13 @@ def test_target_01(tmp_path):
     assert target.binary == str(fake_file)
     assert target.extension == str(fake_file)
     assert target.forced_close
+    assert not target.is_idle(0)
     assert target.launch_timeout == 321
     assert target.log_size() == 0
     assert target.log_limit == 2 * 0x100000
     assert target.memory_limit == 3 * 0x100000
     assert target.rl_countdown == 0
     assert target.rl_reset == 25
-    assert target.poll_for_idle(0, 0) == target.POLL_BUSY
     assert target.prefs == str(fake_file)
     assert not target.expect_close
 
@@ -316,17 +316,15 @@ def test_puppet_target_04(mocker, tmp_path):
     assert fake_os.kill.call_count == 2
 
 def test_puppet_target_05(mocker, tmp_path):
-    """test poll_for_idle()"""
+    """test is_idle()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 10)
-    fake_ffp.return_value.is_running.return_value = False
-    assert target.poll_for_idle(1, 0.1) == Target.POLL_IDLE
-    fake_ffp.return_value.cpu_usage.return_value = ((1234, 50.0),)
-    fake_ffp.return_value.is_running.return_value = True
-    assert target.poll_for_idle(90, 0.2) == Target.POLL_IDLE
-    assert target.poll_for_idle(10, 0.2) == Target.POLL_BUSY
+    fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
+    assert not target.is_idle(0)
+    assert not target.is_idle(25)
+    assert target.is_idle(50)
 
 def test_puppet_target_06(mocker, tmp_path):
     """test PuppetTarget.monitor"""

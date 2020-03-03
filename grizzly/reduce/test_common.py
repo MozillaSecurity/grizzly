@@ -55,6 +55,9 @@ class FakeReduceStatus(object):
 
 class FakeTarget(object):
     "Stub to fake parts of grizzly.target.Target needed for testing the reduce loop"
+    RESULT_NONE = 0
+    RESULT_FAILURE = 1
+    RESULT_IGNORED = 2
 
     def __init__(self, *args, **kwds):
         self.rl_reset = 10
@@ -66,13 +69,13 @@ class FakeTarget(object):
         self.use_valgrind = False
 
         self._calls = {
-            "save_logs": 0,
-            "poll_for_idle": 0,
-            "launch": 0,
             "check_relaunch": 0,
-            "close": 0,
             "cleanup": 0,
+            "close": 0,
             "detect_failure": 0,
+            "is_idle": 0,
+            "launch": 0,
+            "save_logs": 0,
         }
         self._is_healthy = False
 
@@ -91,8 +94,8 @@ class FakeTarget(object):
         with open(os.path.join(dest, "log_stderr.txt"), "w") as log_fp:
             log_fp.write("Assertion failure: bad thing happened, at test.c:123")
 
-    def poll_for_idle(self, *args, **kwds):
-        self._calls["poll_for_idle"] += 1
+    def is_idle(self, *args, **kwds):
+        self._calls["is_idle"] += 1
         return False
 
     def launch(self, *args, **kwds):
@@ -134,7 +137,7 @@ class TestReductionJob(reduce.ReductionJob):
     __slots__ = []
 
     def __init__(self, tmp_path, create_binary=True, testcase_cache=False, skip_analysis=True):
-        super(TestReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25, 60,
+        super(TestReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25,
                                                FakeReduceStatus(),
                                                testcase_cache=testcase_cache,
                                                skip_analysis=skip_analysis)
@@ -145,6 +148,7 @@ class TestReductionJob(reduce.ReductionJob):
         pass
 
     def _get_location(self):
+        # TODO: is this dead code?
         return "127.0.0.1" if self.no_harness else "127.0.0.1/harness"
 
     def close(self, *_args, **_kwds):
