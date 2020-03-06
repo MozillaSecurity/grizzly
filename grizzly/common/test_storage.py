@@ -9,7 +9,7 @@ import os
 
 import pytest
 
-from .storage import InputFile, TestCase, TestFile, TestFileExists
+from .storage import InputFile, TestCase, TestFile, TestCaseLoadFailure, TestFileExists
 
 
 def test_testcase_01(tmp_path):
@@ -141,6 +141,76 @@ def test_testcase_06():
         tcase.add_from_data("12", "testfile2.bin", required=False)
         tcase.add_meta(TestFile.from_data("123", "meta.bin"))
         assert tcase.data_size == 6
+    finally:
+        tcase.cleanup()
+
+def test_testcase_07(tmp_path):
+    """test TestCase.load_path() with test_info.json file"""
+    # missing test_info.json
+    with pytest.raises(TestCaseLoadFailure, match="Missing test_info.json"):
+        TestCase.load_path(str(tmp_path))
+    # test_info.json missing 'target' entry
+    (tmp_path / "test_info.json").write_bytes(b"{}")
+    with pytest.raises(TestCaseLoadFailure, match="test_info.json missing 'target' entry"):
+        TestCase.load_path(str(tmp_path))
+    # build a valid test case
+    src_dir = (tmp_path / "src")
+    src_dir.mkdir()
+    (src_dir / "prefs.js").touch()
+    entry_point = src_dir / "target.bin"
+    entry_point.touch()
+    (src_dir / "optional.bin").touch()
+    src = TestCase("target.bin", None, "test-adapter")
+    try:
+        src.add_environ_var("TEST_ENV_VAR", "100")
+        src.add_from_file(str(entry_point), "target.bin")
+        src.dump(str(src_dir), include_details=True)
+    finally:
+        src.cleanup()
+    # load test case from test_info.json
+    dst = TestCase.load_path(str(src_dir))
+    try:
+        assert dst.landing_page == "target.bin"
+        assert "prefs.js" in (x.file_name for x in dst._files.meta)
+        assert "target.bin" in (x.file_name for x in dst._files.required)
+        assert "optional.bin" in (x.file_name for x in dst._files.optional)
+        assert dst._env_vars["TEST_ENV_VAR"] == "100"
+    finally:
+        dst.cleanup()
+    # bad test_info.json 'target' entry
+    entry_point.unlink()
+    with pytest.raises(TestCaseLoadFailure, match="entry_point 'target.bin' not found in"):
+        TestCase.load_path(str(src_dir))
+    # bad test_info.json 'env' entry
+    entry_point.touch()
+    src = TestCase("target.bin", None, "test-adapter")
+    try:
+        src.add_environ_var("TEST_ENV_VAR", 100)
+        src.dump(str(src_dir), include_details=True)
+    finally:
+        src.cleanup()
+    with pytest.raises(TestCaseLoadFailure, match="test_info.json contains invalid 'env' entries"):
+        TestCase.load_path(str(src_dir))
+
+def test_testcase_08(tmp_path):
+    """test TestCase.load_path() using entry_point"""
+    # invalid entry_point specified
+    with pytest.raises(TestCaseLoadFailure, match="entry_point 'missing_file'"):
+        TestCase.load_path(str(tmp_path), entry_point="missing_file")
+    # valid test case
+    src_dir = (tmp_path / "src")
+    src_dir.mkdir()
+    (src_dir / "prefs.js").touch()
+    entry_point = src_dir / "target.bin"
+    entry_point.touch()
+    (src_dir / "optional.bin").touch()
+    # load test case
+    tcase = TestCase.load_path(str(src_dir), entry_point="target.bin")
+    try:
+        assert tcase.landing_page == "target.bin"
+        assert "prefs.js" in (x.file_name for x in tcase._files.meta)
+        assert "target.bin" in (x.file_name for x in tcase._files.required)
+        assert "optional.bin" in (x.file_name for x in tcase._files.optional)
     finally:
         tcase.cleanup()
 
