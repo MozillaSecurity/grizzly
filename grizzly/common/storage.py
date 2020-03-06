@@ -9,12 +9,17 @@ import os
 import shutil
 import tempfile
 
+import six
+
 __all__ = ("InputFile", "TestCase", "TestFile", "TestFileExists")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
-class TestFileExists(RuntimeError):
+class TestCaseLoadFailure(Exception):
+    """Raised when loading a TestCase fails"""
+
+class TestFileExists(Exception):
     """Raised when adding a TestFile to a TestCase that has an existing TestFile with the same name"""
 
 
@@ -264,6 +269,67 @@ class TestCase(object):
         for name, value in self._env_vars.items():
             if value is not None:
                 yield "=".join((name, value))
+
+    @classmethod
+    def load_path(cls, path, entry_point=None, prefs=True):
+        """Load contents of a directory as a TestCase. The directory must contain
+        a valid test_info.json file unless `entry_point` is specified in which case
+        the test_info.json file will be ignored. `entry_point` must point to
+        a file in the root of the test case.
+
+        Args:
+            path (str): Path to root of test case directory to load.
+            entry_point (str): Path to file to use as test case entry point.
+            prefs (bool): Include prefs.js file in the test case.
+
+        Returns:
+            TestCase: A TestCase.
+        """
+        path = os.path.abspath(path)
+        # load test_info.json
+        if entry_point is None:
+            if "test_info.json" not in os.listdir(path):
+                raise TestCaseLoadFailure("Missing test_info.json")
+            with open(os.path.join(path, "test_info.json"), "r") as in_fp:
+                info = json.load(in_fp)
+            if "target" not in info:
+                raise TestCaseLoadFailure("test_info.json missing 'target' entry")
+            entry_point = info["target"]
+        else:
+            info = None
+        # sanitize file path and check file is in the test root
+        entry_point = os.path.basename(entry_point)
+        if not os.path.isfile(os.path.join(path, entry_point)):
+            raise TestCaseLoadFailure("entry_point '%s' not found in '%s'" % (entry_point, path))
+        adapter = info.get("adapter", None) if info is not None else None
+        test = cls(None, None, adapter)
+        for root, _, files in os.walk(path):
+            for fname in files:
+                if fname == "test_info.json":
+                    continue
+                if root == path:
+                    if fname == "prefs.js":
+                        if prefs:
+                            test.add_meta(TestFile.from_file(os.path.join(path, fname), fname))
+                        continue
+                    if fname == entry_point:
+                        # set entry point
+                        test.add_from_file(os.path.join(root, fname), fname)
+                        test.landing_page = fname
+                        continue
+                test.add_from_file(os.path.join(path, fname), fname, required=False)
+        if test.landing_page is None:  # pragma: no cover
+            # this should not be possible
+            test.cleanup()
+            raise AssertionError("Scanning for test case 'entry point' failed")
+        # load environment variables
+        if info and info.get("env", None):
+            for name, value in info["env"].items():
+                if not isinstance(name, six.string_types) or not isinstance(value, six.string_types):
+                    test.cleanup()
+                    raise TestCaseLoadFailure("test_info.json contains invalid 'env' entries")
+                test.add_environ_var(name, value)
+        return test
 
     @property
     def optional(self):
