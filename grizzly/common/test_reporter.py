@@ -11,7 +11,7 @@ import tarfile
 
 import pytest
 
-from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
+from .reporter import FilesystemReporter, FMInfo, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
 from .storage import TestCase
 
 
@@ -79,6 +79,8 @@ def test_report_04(tmp_path):
 
 def test_report_05(tmp_path):
     """test Report.select_logs()"""
+    with pytest.raises(IOError, match="log_path does not exist"):
+        Report.select_logs("missing_path")
     # small log with nothing interesting
     with (tmp_path / "log_asan.txt.1").open("wb") as log_fp:
         log_fp.write(b"SHORT LOG\n")
@@ -211,22 +213,36 @@ def test_report_10(tmp_path):
     report.cleanup()
     assert not tmp_path.is_dir()
 
-def test_reporter_01(tmp_path):
+def test_report_11(tmp_path):
+    """test selecting Valgrind logs with Report.select_logs()"""
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    (tmp_path / "log_valgrind.txt").write_bytes(b"valgrind log")
+    log_map = Report.select_logs(str(tmp_path))
+    assert (tmp_path / log_map["stderr"]).is_file()
+    assert (tmp_path / log_map["stdout"]).is_file()
+    assert "valgrind log" in (tmp_path / log_map["aux"]).read_text()
+
+def test_reporter_01(mocker, tmp_path):
     """test creating a simple Reporter"""
     class SimpleReporter(Reporter):
-        def _pre_submit(self, report):
+        def _process_report(self, report):
             pass
         def _reset(self):
             pass
-        def _submit(self, report, test_cases):
+        def _submit_report(self, report, test_cases):
             pass
     reporter = SimpleReporter()
-    with pytest.raises(IOError) as exc:
-        reporter.submit("fake_dir", [])
-    assert "No such directory 'fake_dir'" in str(exc.value)
-    with pytest.raises(IOError) as exc:
-        reporter.submit(str(tmp_path), [])
-    assert "No logs found in" in str(exc.value)
+    with pytest.raises(AssertionError, match="Either 'log_path' or 'report' must be specified!"):
+        reporter.submit([])
+    with pytest.raises(IOError, match="No such directory 'fake_dir'"):
+        reporter.submit([], log_path="fake_dir")
+    with pytest.raises(IOError, match="No logs found in"):
+        reporter.submit([], log_path=str(tmp_path))
+    with pytest.raises(AssertionError, match="Only 'log_path' or 'report' can be specified!"):
+        reporter.submit([], log_path=str(tmp_path), report=mocker.Mock())
+    # submit a report
+    reporter.submit([], report=mocker.Mock(spec=Report))
 
 def test_filesystem_reporter_01(tmp_path):
     """test FilesystemReporter without testcases"""
@@ -240,7 +256,7 @@ def test_filesystem_reporter_01(tmp_path):
     report_path = tmp_path / "reports"
     report_path.mkdir()
     reporter = FilesystemReporter(report_path=str(report_path))
-    reporter.submit(str(log_path), [])
+    reporter.submit([], log_path=str(log_path))
 
 def test_filesystem_reporter_02(tmp_path, mocker):
     """test FilesystemReporter with testcases"""
@@ -257,7 +273,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     report_path = tmp_path / "reports"
     assert not report_path.exists()
     reporter = FilesystemReporter(report_path=str(report_path))
-    reporter.submit(str(log_path), testcases)
+    reporter.submit(testcases, log_path=str(log_path))
     assert not log_path.exists()
     assert report_path.exists()
     assert len(os.listdir(str(report_path))) == 1
@@ -270,7 +286,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     testcases = list()
     for _ in range(2):
         testcases.append(mocker.Mock(spec=TestCase))
-    reporter.submit(str(log_path), testcases)
+    reporter.submit(testcases, log_path=str(log_path))
     for tstc in testcases:
         assert tstc.dump.call_count == 1
     results = os.listdir(str(report_path))
@@ -288,7 +304,7 @@ def test_filesystem_reporter_03(tmp_path):
     reporter = FilesystemReporter(report_path=str(report_path))
     reporter.DISK_SPACE_ABORT = 2 ** 50
     with pytest.raises(RuntimeError) as exc:
-        reporter.submit(str(log_path), [])
+        reporter.submit([], log_path=str(log_path))
     assert "Running low on disk space" in str(exc.value)
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RR only supported on Linux")
@@ -319,7 +335,7 @@ def test_filesystem_reporter_04(tmp_path):
     # report
     assert not report_path.exists()
     reporter = FilesystemReporter(report_path=str(report_path))
-    reporter.submit(str(log_path), [])
+    reporter.submit([], log_path=str(log_path))
     assert report_path.exists()
     # verify report and archive
     report_log_dirs = list(report_path.glob("*/*_logs/"))
@@ -336,22 +352,36 @@ def test_filesystem_reporter_04(tmp_path):
     assert "echo-0" not in entries
     assert "latest-trace" not in entries
 
+def test_fuzzmanager_info_01(mocker, tmp_path):
+    """test FMInfo"""
+    mocker.patch("grizzly.common.reporter.ProgramConfiguration")
+    # ignore failures just set status
+    FMInfo.sanity_check("missing", ignore_error=True)
+    assert not FMInfo.is_available()
+    # missing ".fuzzmanagerconf"
+    FMInfo.CONFIG = "no_file"
+    fake_bin = tmp_path / "bin"
+    fake_bin.touch()
+    with pytest.raises(IOError, match="Missing: no_file"):
+        FMInfo.sanity_check(str(fake_bin))
+    # missing "<bin>.fuzzmanagerconf"
+    fake_fmc = tmp_path / ".fuzzmanagerconf"
+    fake_fmc.touch()
+    FMInfo.CONFIG = str(fake_fmc)
+    with pytest.raises(IOError, match="bin.fuzzmanagerconf"):
+        FMInfo.sanity_check(str(fake_bin))
+    # success
+    (tmp_path / "bin.fuzzmanagerconf").touch()
+    FMInfo.sanity_check(str(fake_bin))
+    assert FMInfo.is_available()
+
 def test_fuzzmanager_reporter_01(tmp_path, mocker):
     """test FuzzManagerReporter.sanity_check()"""
     mocker.patch("grizzly.common.reporter.ProgramConfiguration")
-    FuzzManagerReporter.FM_CONFIG = "no_file"
     fake_bin = tmp_path / "bin"
     fake_bin.touch()
-    #with pytest.raises(IOError) as exc:
-    with pytest.raises(IOError) as exc:
-        FuzzManagerReporter.sanity_check(str(fake_bin))
-    assert "Missing: no_file" in str(exc.value)
     fake_fmc = tmp_path / ".fuzzmanagerconf"
     fake_fmc.touch()
-    FuzzManagerReporter.FM_CONFIG = str(fake_fmc)
-    with pytest.raises(IOError) as exc:
-        FuzzManagerReporter.sanity_check(str(fake_bin))
-    assert "bin.fuzzmanagerconf" in str(exc.value)
     (tmp_path / "bin.fuzzmanagerconf").touch()
     FuzzManagerReporter.sanity_check(str(fake_bin))
 
@@ -361,7 +391,7 @@ def test_fuzzmanager_reporter_02(tmp_path):
     report_path = tmp_path / "report"
     report_path.mkdir()
     with pytest.raises(IOError) as exc:
-        reporter.submit(str(report_path), [])
+        reporter.submit([], log_path=str(report_path))
     assert "No logs found in" in str(exc.value)
 
 def test_fuzzmanager_reporter_03(tmp_path, mocker):
@@ -371,16 +401,19 @@ def test_fuzzmanager_reporter_03(tmp_path, mocker):
     fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (None, None)
     fake_collector.return_value.generate.return_value = str(tmp_path / "fake_sig_file")
-    reporter = FuzzManagerReporter(str("fake_bin"))
+    FMInfo.AVAILABLE = True
     log_path = tmp_path / "log_path"
     log_path.mkdir()
+    (log_path / "log_ffp_worker_blah.txt").touch()
     (log_path / "log_stderr.txt").touch()
     (log_path / "log_stdout.txt").touch()
+    report = Report.from_path(str(log_path))
     fake_test = mocker.Mock(spec=TestCase)
     fake_test.adapter_name = "adapter"
     fake_test.input_fname = "input"
-    fake_test.env_vars = ("TEST=1",)
-    reporter.submit(str(log_path), [fake_test])
+    fake_test.env_vars = {"TEST": "1"}
+    reporter = FuzzManagerReporter(str("fake_bin"))
+    reporter.submit([fake_test], report=report)
     assert not log_path.is_dir()
     assert fake_test.dump.call_count == 1
     assert fake_collector.return_value.submit.call_count == 1
@@ -395,7 +428,7 @@ def test_fuzzmanager_reporter_04(tmp_path, mocker):
     log_path.mkdir()
     (log_path / "log_stderr.txt").touch()
     (log_path / "log_stdout.txt").touch()
-    reporter.submit(str(log_path), [])
+    reporter.submit([], log_path=str(log_path))
     fake_collector.return_value.submit.assert_not_called()
 
 def test_fuzzmanager_reporter_05(tmp_path, mocker):
@@ -410,7 +443,7 @@ def test_fuzzmanager_reporter_05(tmp_path, mocker):
     (log_path / "log_stderr.txt").touch()
     (log_path / "log_stdout.txt").touch()
     reporter._ignored = lambda x: True
-    reporter.submit(str(log_path), [])
+    reporter.submit([], log_path=str(log_path))
     fake_collector.return_value.submit.assert_not_called()
 
 def test_fuzzmanager_reporter_06(tmp_path, mocker):
@@ -425,12 +458,12 @@ def test_fuzzmanager_reporter_06(tmp_path, mocker):
     (log_path / "log_stderr.txt").touch()
     (log_path / "log_stdout.txt").touch()
     with pytest.raises(RuntimeError) as exc:
-        reporter.submit(str(log_path), [])
+        reporter.submit([], log_path=str(log_path))
     assert "Failed to create FM signature" in str(exc.value)
     fake_collector.return_value.submit.assert_not_called()
     # test ignore unsymbolized crash
     reporter._ignored = lambda x: True
-    reporter.submit(str(log_path), [])
+    reporter.submit([], log_path=str(log_path))
     fake_collector.return_value.submit.assert_not_called()
 
 def test_s3fuzzmanager_reporter_01(tmp_path, mocker):

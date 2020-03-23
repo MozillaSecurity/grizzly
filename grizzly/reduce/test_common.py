@@ -10,13 +10,13 @@ from grizzly.reduce import crash, reduce
 
 
 class BaseFakeReporter(Reporter):
-    def _pre_submit(self, _):
+    def _process_report(self, _):
         pass
 
     def _reset(self):
         pass
 
-    def _submit(self, *_args, **_kwds):
+    def _submit_report(self, *_args, **_kwds):
         pass
 
 

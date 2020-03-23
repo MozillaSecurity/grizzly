@@ -1,0 +1,265 @@
+# coding=utf-8
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import logging
+import os
+import shutil
+import tempfile
+
+import sapphire
+try:
+    from FTB.Signatures.CrashInfo import CrashSignature
+except ImportError:  # pragma: no cover
+    CrashSignature = None
+
+from ..common import FuzzManagerReporter, Report, Runner, Status, TestCase, TestFile
+from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
+
+__author__ = "Tyson Smith"
+__credits__ = ["Tyson Smith"]
+
+LOG = logging.getLogger("replay")
+
+# TODO:
+# - reporter
+# - how to purge_optional?
+
+class ReplayManager(object):
+    HARNESS_FILE = os.path.join(os.path.dirname(__file__), "..", "common", "harness.html")
+
+    def __init__(self, ignore, server, target, testcase, signature=None, use_harness=True):
+        self.ignore = ignore
+        self.server = server
+        self.status = None
+        self.target = target
+        self.testcase = testcase
+        self._harness = None
+        self._reports_expected = dict()
+        self._reports_extra = dict()
+        self._runner = Runner(self.server, self.target)
+        self._signature = signature
+
+        if use_harness:
+            self._harness = TestFile.from_file(self.HARNESS_FILE, "harness.html")
+            testcase.add_file(self._harness, required=False)
+
+    def _launch(self, max_timeouts=3):
+        timeouts = 0
+        while True:
+            try:
+                LOG.info("Launching target")
+                self.target.launch(self._location(), env_mod=self.testcase.env_vars)
+            except TargetLaunchError:
+                LOG.error("Launch error detected")
+                raise
+            except TargetLaunchTimeout:
+                timeouts += 1
+                LOG.warning("Launch timeout detected (attempt #%d)", timeouts)
+                # likely has nothing to do with Grizzly but is seen frequently on machines under a high load
+                # after multiple consecutive timeouts something is likely wrong so raise
+                if timeouts < max_timeouts:
+                    continue
+                raise
+            break
+
+    def _location(self, timeout=0):
+        location = ["http://127.0.0.1:%d/" % (self.server.get_port(),)]
+        if self._harness is None:
+            location.append(self.testcase.landing_page)
+        else:
+            location.append(self._harness.file_name)
+            if timeout > 0:
+                location.append("?timeout=%d" % (timeout * 1000,))
+                location.append("&close_after=%d" % (self.target.rl_reset,))
+            else:
+                location.append("?close_after=%d" % (self.target.rl_reset,))
+            if not self.target.forced_close:
+                location.append("&forced_close=0")
+        return "".join(location)
+
+    @property
+    def extra_reports(self):
+        for report in self._reports_extra.values():
+            yield report
+
+    @property
+    def reports(self):
+        for report in self._reports_expected.values():
+            yield report
+
+    def run(self, repeat=1, min_results=1):
+        assert repeat > 0
+        assert min_results > 0
+        assert min_results <= repeat
+        self.status = Status.start()
+
+        server_map = sapphire.ServerMap()
+        if self._harness is not None:
+            def _dyn_close():  # pragma: no cover
+                self.target.close()
+                return b"<h1>Close Browser</h1>"
+            server_map.set_dynamic_response("/close_browser", _dyn_close, mime_type="text/html")
+            server_map.set_redirect("/first_test", self.testcase.landing_page, required=False)
+            server_map.set_redirect("/next_test", self.testcase.landing_page, required=True)
+
+        success = False
+        for _ in range(repeat):
+            self.status.iteration += 1
+            if self.target.closed:
+                self._launch()
+            self.target.step()
+            # run test case
+            self._runner.run(self.ignore, server_map, self.testcase, wait_for_callback=self._harness is None)
+            # process results
+            if self._runner.result == self._runner.FAILED:
+                result_logs = tempfile.mkdtemp(prefix="grzreplay_logs_")
+                self.target.save_logs(result_logs, meta=True)
+                report = Report.from_path(result_logs)
+                # check signatures if needed
+                if self._signature is not None:
+                    crash_info = report.crash_info(self.target.binary)
+                    short_sig = crash_info.createShortSignature()
+                    if short_sig == "No crash detected":
+                        # TODO: change this to support hangs/timeouts, etc
+                        LOG.info("Uninteresting: no crash detected")
+                    elif self._signature.matches(crash_info):
+                        self.status.results += 1
+                        self._reports_expected[report.crash_hash(crash_info)] = report
+                        assert len(self._reports_expected) == 1
+                        LOG.info("Interesting: %s", short_sig)
+                    else:
+                        self.status.ignored += 1
+                        self._reports_extra[report.crash_hash(crash_info)] = report
+                        LOG.info("Uninteresting: different signature: %s", short_sig)
+                else:
+                    self.status.results += 1
+                    self._reports_expected[report.major] = report
+                    LOG.info("Result detected")
+                report = None
+                # remove working path
+                if os.path.isdir(result_logs):
+                    shutil.rmtree(result_logs)
+            elif self._runner.result == self._runner.IGNORED:
+                self.status.ignored += 1
+                LOG.info("Ignored (%d)", self.status.ignored)
+
+            # check status and exit early if possible
+            if repeat - self.status.iteration + self.status.results < min_results:
+                if self.status.iteration < repeat:
+                    LOG.debug("skipping remaining attempts")
+                # failed to reproduce issue
+                LOG.debug("results (%d) < expected results (%s) after %d attempts",
+                          self.status.results, min_results, self.status.iteration)
+                break
+            if self.status.results >= min_results:
+                assert self.status.results == min_results
+                success = True
+                LOG.debug("results (%d) == expected results (%s) after %d attempts",
+                          self.status.results, min_results, self.status.iteration)
+                break
+
+            # warn about large browser logs
+            #self.status.log_size = self.target.log_size()
+            #if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
+            #    LOG.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
+
+            # trigger relaunch by closing the browser if needed
+            self.target.check_relaunch()
+
+        if success:
+            LOG.info("Result successfully reproduced")
+        else:
+            LOG.info("Failed to reproduce results")
+        self.target.close()
+        return success
+
+    @classmethod
+    def main(cls, args):
+        LOG.info("Starting Grizzly Replay")
+        if args.fuzzmanager or args.sig:
+            FuzzManagerReporter.sanity_check(args.binary)
+
+        if args.ignore:
+            LOG.info("Ignoring: %s", ", ".join(args.ignore))
+        if args.xvfb:
+            LOG.info("Running with Xvfb")
+        if args.valgrind:
+            LOG.info("Running with Valgrind. This will be SLOW!")
+        if args.rr:
+            LOG.info("Running with RR")
+
+        if not args.prefs:
+            LOG.debug("using pref.js from test case")
+            prefs = os.path.join(args.input, "prefs.js")
+            if not os.path.isfile(prefs):
+                LOG.error("prefs.js not found in %r", args.input)
+                return 1
+        else:
+            prefs = args.prefs
+
+        if args.sig:
+            assert CrashSignature is not None
+            with open(args.sig, "r") as sig_fp:
+                signature = CrashSignature(sig_fp.read())
+        else:
+            signature = None
+
+        server = None
+        target = None
+        testcase = None
+        try:
+            LOG.debug("loading the TestCase")
+            testcase = TestCase.load_path(args.input)
+
+            relaunch = min(args.relaunch, args.repeat)
+            LOG.debug("initializing the Target")
+            target = load_target(args.platform)(
+                args.binary,
+                args.extension,
+                args.launch_timeout,
+                args.log_limit,
+                args.memory,
+                prefs,
+                relaunch,
+                rr=args.rr,
+                valgrind=args.valgrind,
+                xvfb=args.xvfb)
+
+            LOG.debug("starting sapphire server")
+            # have client error pages (code 4XX) call window.close() after a few seconds
+            sapphire.Sapphire.CLOSE_CLIENT_ERROR = 1
+            # launch HTTP server used to serve test cases
+            server = sapphire.Sapphire(timeout=args.timeout)
+            target.reverse(server.get_port(), server.get_port())
+
+            if args.no_harness:
+                LOG.debug("--no-harness specified relaunch set to 1")
+                args.relaunch = 1
+            args.repeat = max(args.min_crashes, args.repeat)
+            LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
+                     args.repeat, args.min_crashes, relaunch)
+            replay = ReplayManager(
+                args.ignore,
+                server, target,
+                testcase,
+                signature=signature,
+                use_harness=not args.no_harness)
+            replay.run(repeat=args.repeat, min_results=args.min_crashes)
+            return 0 if any(replay.reports) else 1
+
+        except KeyboardInterrupt:
+            return 1
+
+        except (TargetLaunchError, TargetLaunchTimeout):
+            return 1
+
+        finally:
+            LOG.warning("Shutting down...")
+            if target is not None:
+                target.cleanup()
+            if server is not None:
+                server.close()
+            if testcase is not None:
+                testcase.cleanup()

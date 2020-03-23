@@ -336,7 +336,7 @@ def test_run_0(tmp_path):
         report_data = {"num_reports": 0}
 
         class FakeReporter(BaseFakeReporter):
-            def _submit(self, _report, test_cases):
+            def _submit_report(self, _report, test_cases):
                 assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
                 tc = test_cases[0]
                 assert len(tc._files.required) == 1, \
@@ -349,7 +349,7 @@ def test_run_0(tmp_path):
                         prefs_data = meta_file.data
                         break
                 assert prefs_data == b"some prefs"
-                assert tc._env_vars == dict(var="value", foo="bar")
+                assert tc.env_vars == dict(var="value", foo="bar")
                 assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
                 assert self.force_report
                 report_data["num_reports"] += 1
@@ -376,7 +376,7 @@ def test_run_1(tmp_path):
         report_data = {"num_reports": 0}
 
         class FakeReporter(BaseFakeReporter):
-            def _submit(self, _report, test_cases):
+            def _submit_report(self, _report, test_cases):
                 assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
                 tc = test_cases[0]
                 assert len(tc._files.required) == 1, \
@@ -389,7 +389,7 @@ def test_run_1(tmp_path):
                         prefs_data = meta_file.data
                         break
                 assert prefs_data == b"some prefs"
-                assert tc._env_vars == dict(var="value", foo="bar")
+                assert tc.env_vars == dict(var="value", foo="bar")
                 assert self.quality == FuzzManagerReporter.QUAL_UNREDUCED
                 assert not self.force_report
                 report_data["num_reports"] += 1
@@ -410,7 +410,7 @@ def test_run_2(tmp_path):
         report_data = {"num_reports": 0}
 
         class FakeReporter(BaseFakeReporter):
-            def _submit(self, _report, test_cases):
+            def _submit_report(self, _report, test_cases):
                 assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
                 tc = test_cases[0]
                 assert len(tc._files.required) == 1, \
@@ -442,7 +442,7 @@ def test_run_3(tmp_path):
         report_data = {"num_reports": 0}
 
         class FakeReporter(BaseFakeReporter):
-            def _submit(self, _report, test_cases):
+            def _submit_report(self, _report, test_cases):
                 assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
                 tc = test_cases[0]
                 assert len(tc._files.required) == 1, \
@@ -477,7 +477,7 @@ def test_run_4(tmp_path):
         report_data = {"num_reports": 0}
 
         class FakeReporter(BaseFakeReporter):
-            def _submit(self, _report, test_cases):
+            def _submit_report(self, _report, test_cases):
                 assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
                 tc = test_cases[0]
                 assert len(tc._files.required) == 1, \
@@ -512,7 +512,7 @@ def test_run_5(tmp_path):
         report_data = {"num_reports": 0}
 
         class FakeReporter(BaseFakeReporter):
-            def _submit(self, _report, test_cases):
+            def _submit_report(self, _report, test_cases):
                 assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
                 tc = test_cases[0]
                 assert len(tc._files.required) == 1, \
@@ -539,7 +539,7 @@ def test_run_6(tmp_path):
         report_data = {"num_reports": 0}
 
         class FakeReporter(BaseFakeReporter):
-            def _submit(self, _report, test_cases):
+            def _submit_report(self, _report, test_cases):
                 assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
                 tc = test_cases[0]
                 assert len(tc._files.required) == 1, \
@@ -566,7 +566,7 @@ def test_run_7(tmp_path):
         report_data = {"num_reports": 0}
 
         class FakeReporter(BaseFakeReporter):
-            def _submit(self, _report, test_cases):
+            def _submit_report(self, _report, test_cases):
                 assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
                 tc = test_cases[0]
                 assert len(tc._files.required) == 1, \

@@ -25,10 +25,10 @@ def test_testcase_01(tmp_path):
         assert tcase.duration is None
         assert tcase.data_size == 0
         assert tcase.input_fname is None
+        assert not tcase.env_vars
         assert not tcase._files.meta
         assert not tcase._files.optional
         assert not tcase._files.required
-        assert not tcase._env_vars
         assert not list(tcase.optional)
         tcase.dump(str(tmp_path))
         assert not os.listdir(str(tmp_path))
@@ -100,8 +100,7 @@ def test_testcase_04(tmp_path):
         tcase.add_environ_var("TEST_ENV_VAR", "1")
         assert len(list(tcase.env_vars)) == 1
         tcase.add_environ_var("TEST_NONE", None)
-        assert len(list(tcase.env_vars)) == 1
-        assert len(tcase._env_vars) == 2
+        assert len(tcase.env_vars) == 2
         dmp_path = tmp_path / "dmp_test"
         dmp_path.mkdir()
         tcase.dump(str(dmp_path), include_details=True)
@@ -174,7 +173,7 @@ def test_testcase_07(tmp_path):
         assert "prefs.js" in (x.file_name for x in dst._files.meta)
         assert "target.bin" in (x.file_name for x in dst._files.required)
         assert "optional.bin" in (x.file_name for x in dst._files.optional)
-        assert dst._env_vars["TEST_ENV_VAR"] == "100"
+        assert dst.env_vars["TEST_ENV_VAR"] == "100"
     finally:
         dst.cleanup()
     # bad test_info.json 'target' entry
@@ -189,7 +188,7 @@ def test_testcase_07(tmp_path):
         src.dump(str(src_dir), include_details=True)
     finally:
         src.cleanup()
-    with pytest.raises(TestCaseLoadFailure, match="test_info.json contains invalid 'env' entries"):
+    with pytest.raises(TestCaseLoadFailure, match="env_data contains invalid 'env' entries"):
         TestCase.load_path(str(src_dir))
 
 def test_testcase_08(tmp_path):
@@ -211,6 +210,26 @@ def test_testcase_08(tmp_path):
         assert "prefs.js" in (x.file_name for x in tcase._files.meta)
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
+    finally:
+        tcase.cleanup()
+
+def test_testcase_09(tmp_path):
+    """test TestCase.load_environ()"""
+    (tmp_path / "ubsan.supp").touch()
+    (tmp_path / "other_file").touch()
+    tcase = TestCase("a.html", "b.html", "test-adapter")
+    try:
+        tcase.load_environ(str(tmp_path), {})
+        assert "UBSAN_OPTIONS" in tcase.env_vars
+        assert "ubsan.supp" in tcase.env_vars["UBSAN_OPTIONS"]
+        # existing *SAN_OPTIONS
+        tcase.load_environ(str(tmp_path), {"UBSAN_OPTIONS": "a=1:b=2"})
+        assert "UBSAN_OPTIONS" in tcase.env_vars
+        assert "ubsan.supp" in tcase.env_vars["UBSAN_OPTIONS"]
+        ops = tcase.env_vars["UBSAN_OPTIONS"].split(":")
+        assert len(ops) == 3
+        assert "a=1" in ops
+        assert "b=2" in ops
     finally:
         tcase.cleanup()
 

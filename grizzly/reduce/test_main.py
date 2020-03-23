@@ -153,7 +153,7 @@ def test_main_strategies(monkeypatch, tmp_path):  # noqa pylint: disable=redefin
             super(FakeReporter, self).__init__(*args, **kwds)
             self.report_path = "foo"
 
-        def _submit(self, _report, test_cases):
+        def _submit_report(self, _report, test_cases):
             assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
             tc = test_cases[0]
             assert len(tc._files.required) == 1, \
@@ -231,7 +231,7 @@ def test_crash_main_repro(monkeypatch, tmp_path):  # noqa pylint: disable=redefi
         (tmp_path / ".fuzzmanagerconf").touch()
         FM_CONFIG = str(tmp_path / ".fuzzmanagerconf")
 
-        def _submit(self, *_args, **_kwds):
+        def _submit_report(self, *_args, **_kwds):
             # check that the crash was already marked reproducible, but not yet marked reduced
             assert expect_patch == [reporter.FuzzManagerReporter.QUAL_REDUCED_ORIGINAL]
             submitted[0] = True
@@ -302,8 +302,8 @@ def test_crash_main_no_repro(monkeypatch, tmp_path):  # noqa pylint: disable=red
         def _reset(self):
             pass
 
-        def _submit(self, *_args, **_kwds):
-            # make sure _submit() is not called
+        def _submit_report(self, *_args, **_kwds):
+            # make sure _submit_report() is not called
             assert False
 
     class FakeCollector(object):
@@ -372,8 +372,8 @@ def test_crash_main_no_repro_specific(monkeypatch, tmp_path):  # noqa pylint: di
         def _reset(self):
             pass
 
-        def _submit(self, *_args, **_kwds):
-            # make sure _submit() is not called
+        def _submit_report(self, *_args, **_kwds):
+            # make sure _submit_report() is not called
             assert False
 
     class FakeCollector(object):
