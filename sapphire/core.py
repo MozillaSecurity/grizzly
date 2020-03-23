@@ -253,11 +253,11 @@ class Sapphire(object):
                 port = random.randint(0x2000, 0xFFFF) if requested_port is None else requested_port
                 sock.bind(("0.0.0.0" if allow_remote else "127.0.0.1", port))
                 sock.listen(5)
-            except socket.error as soc_e:
+            except (OSError, socket.error) as soc_e:
                 if sock is not None:
                     sock.close()
                 # try another port if a specific port was not requested
-                if requested_port is None and soc_e.errno == errno.EADDRINUSE:
+                if requested_port is None and soc_e.errno in (errno.EADDRINUSE, 10013):
                     continue
                 raise
             break
