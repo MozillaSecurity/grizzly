@@ -5,6 +5,7 @@
 # pylint: disable=protected-access
 
 import json
+import re
 import os
 
 import pytest
@@ -226,10 +227,10 @@ def test_testcase_09(tmp_path):
         tcase.load_environ(str(tmp_path), {"UBSAN_OPTIONS": "a=1:b=2"})
         assert "UBSAN_OPTIONS" in tcase.env_vars
         assert "ubsan.supp" in tcase.env_vars["UBSAN_OPTIONS"]
-        ops = tcase.env_vars["UBSAN_OPTIONS"].split(":")
-        assert len(ops) == 3
-        assert "a=1" in ops
-        assert "b=2" in ops
+        opts = re.split(r":(?![\\|/])", tcase.env_vars["UBSAN_OPTIONS"])
+        assert len(opts) == 3
+        assert "a=1" in opts
+        assert "b=2" in opts
     finally:
         tcase.cleanup()
 
