@@ -698,7 +698,7 @@ class ReductionJob(object):
             LOG.info("Uninteresting: ignored")
             self._target.close()
 
-            # TODO: why is this here? save log
+            # TODO: why is this here?
             result_logs = temp_prefix + "_logs"
             os.mkdir(result_logs)
             self._target.save_logs(result_logs, meta=True)
@@ -976,7 +976,7 @@ class ReductionJob(object):
     def _report_result(self, testcase, temp_prefix, quality_value, force=False):
         self._reporter.quality = quality_value
         self._reporter.force_report = force
-        self._reporter.submit(temp_prefix + "_logs", [testcase])
+        self._reporter.submit([testcase], log_path=temp_prefix + "_logs")
 
     def on_interesting_crash(self, temp_prefix):
         # called for any interesting crash
@@ -993,9 +993,7 @@ class ReductionJob(object):
         crash_info = FuzzManagerReporter.create_crash_info(
             Report.from_path(temp_prefix + "_logs"),
             self._target.binary)
-        max_frames = FuzzManagerReporter.signature_max_frames(crash_info, 5)
-        this_sig = crash_info.createCrashSignature(maxFrames=max_frames)
-        crash_hash = hashlib.sha256(this_sig.rawSignature.encode("utf-8")).hexdigest()[:10]
+        crash_hash = Report.crash_hash(crash_info)
         if crash_hash in self._other_crashes:
             LOG.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
             # already counted when initially found

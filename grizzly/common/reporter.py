@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import abc
+import hashlib
 import json
 import logging
 import os
@@ -40,11 +41,56 @@ except ImportError as err:
 
 from .stack_hasher import Stack
 
-__all__ = ("FilesystemReporter", "FuzzManagerReporter", "S3FuzzManagerReporter")
+__all__ = ("FilesystemReporter", "FuzzManagerReporter", "Report", "S3FuzzManagerReporter")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
+
+
+class FMInfo(object):
+    AVAILABLE = None
+    # where Collector looks for the '.fuzzmanagerconf' (see Collector.py)
+    CONFIG = os.path.join(os.path.expanduser("~"), ".fuzzmanagerconf")
+
+    @classmethod
+    def sanity_check(cls, bin_file, ignore_error=False):
+        """Perform sanity check to determine availability of FuzzManager.
+        Exceptions will be raised if `ignore_error` is not True.
+
+        Args:
+            bin_file (str): Binary file being tested.
+            ignore_error (bool): Suppress exceptions.
+
+        Returns:
+            None
+        """
+        try:
+            if _fm_import_error is not None:
+                raise _fm_import_error  # pylint: disable=raising-bad-type
+            if not os.path.isfile(cls.CONFIG):
+                raise IOError("Missing: %s" % cls.CONFIG)
+            if not os.path.isfile("".join([bin_file, ".fuzzmanagerconf"])):
+                raise IOError("Missing: %s.fuzzmanagerconf" % (bin_file,))
+            ProgramConfiguration.fromBinary(bin_file)
+            cls.AVAILABLE = True
+        except (IOError, RuntimeError):
+            cls.AVAILABLE = False
+            if not ignore_error:
+                raise
+
+    @classmethod
+    def is_available(cls):
+        """Check if FuzzManager is available. sanity_check() must be called first.
+
+        Args:
+            None
+
+        Returns:
+            bool: True if FuzzManager is available otherwise False.
+        """
+        assert isinstance(cls.AVAILABLE, bool), "call sanity_check() first"
+        return cls.AVAILABLE
 
 
 class Report(object):
@@ -52,7 +98,10 @@ class Report(object):
     DEFAULT_MINOR = "0"
     MAX_LOG_SIZE = 1048576  # 1MB
 
+    __slots__ = ("_crash_info", "log_aux", "log_err", "log_out", "path", "prefix", "stack")
+
     def __init__(self, log_path, log_map, size_limit=MAX_LOG_SIZE):
+        self._crash_info = None
         self.log_aux = log_map.get("aux") if log_map is not None else None
         self.log_err = log_map.get("stderr") if log_map is not None else None
         self.log_out = log_map.get("stdout") if log_map is not None else None
@@ -86,8 +135,57 @@ class Report(object):
         if os.path.isdir(self.path):
             shutil.rmtree(self.path)
 
+    @staticmethod
+    def crash_hash(crash_info):
+        """Create CrashInfo object from logs.
+
+        Args:
+            crash_info (CrashInfo): Binary file being tested.
+
+        Returns:
+            str: 
+        """
+        assert FMInfo.is_available()
+        max_frames = FuzzManagerReporter.signature_max_frames(crash_info, 5)
+        sig = crash_info.createCrashSignature(maxFrames=max_frames)
+        return hashlib.sha1(sig.rawSignature.encode("utf-8")).hexdigest()[:16]
+
+    def crash_info(self, target_binary):
+        """Create CrashInfo object from logs.
+
+        Args:
+            target_binary (str): Binary file being tested.
+
+        Returns:
+            CrashInfo: CrashInfo based on Result log data.
+        """
+        if self._crash_info is None and FMInfo.is_available():
+            # read in the log files and create a CrashInfo object
+            aux_data = None
+            if self.log_aux is not None:
+                with open(os.path.join(self.path, self.log_aux), "rb") as log_fp:
+                    aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
+            stderr_file = os.path.join(self.path, self.log_err)
+            stdout_file = os.path.join(self.path, self.log_out)
+            with open(stderr_file, "rb") as err_fp, open(stdout_file, "rb") as out_fp:
+                self._crash_info = CrashInfo.fromRawCrashData(
+                    out_fp.read().decode("utf-8", errors="ignore").splitlines(),
+                    err_fp.read().decode("utf-8", errors="ignore").splitlines(),
+                    ProgramConfiguration.fromBinary(target_binary),
+                    auxCrashData=aux_data)
+        return self._crash_info
+
     @classmethod
     def from_path(cls, path, size_limit=MAX_LOG_SIZE):
+        """Create Report from a directory containing logs.
+
+        Args:
+            path (str): Directory containing log files.
+            size_limit (int): Maximum size in bytes of a log file.
+
+        Returns:
+            Report: Result object based on log data.
+        """
         return cls(path, Report.select_logs(path), size_limit=size_limit)
 
     @property
@@ -221,7 +319,7 @@ class Report(object):
 @six.add_metaclass(abc.ABCMeta)
 class Reporter(object):
     @abc.abstractmethod
-    def _pre_submit(self, report):
+    def _process_report(self, report):
         pass
 
     @abc.abstractmethod
@@ -229,29 +327,35 @@ class Reporter(object):
         pass
 
     @abc.abstractmethod
-    def _submit(self, report, test_cases):
+    def _submit_report(self, report, test_cases):
         pass
 
-    def submit(self, log_path, test_cases):
+    def submit(self, test_cases, log_path=None, report=None):
+        """Submit report containing results. Either `log_path` or `report` must
+        be specified.
+
+        Args:
+            test_cases (list): A list of testcases, ordered newest to oldest,
+                               the newest being the mostly likely to trigger
+                               the result (crash, assert... etc).
+            log_path (str):  Path to logs from the Target. A Report will
+                             be created from this.
+            report (Report): Report to submit.
+
+        Returns:
+            None
         """
-        Submit report containing results.
-
-        @type log_path: String
-        @param log_path: Path to logs from the Target.
-
-        @type test_cases: list
-        @param test_cases: A list of testcases, ordered newest to oldest,
-                           the newest being the mostly likely to trigger
-                           the result (crash, assert... etc)
-
-        @rtype: None
-        @return: None
-        """
-        if not os.path.isdir(log_path):
-            raise IOError("No such directory %r" % log_path)
-        report = Report.from_path(log_path)
-        self._pre_submit(report)
-        self._submit(report, test_cases)
+        if log_path is not None:
+            assert report is None, "Only 'log_path' or 'report' can be specified!"
+            if not os.path.isdir(log_path):
+                raise IOError("No such directory %r" % log_path)
+            report = Report.from_path(log_path)
+        elif report is not None:
+            assert isinstance(report, Report)
+        else:
+            raise AssertionError("Either 'log_path' or 'report' must be specified!")
+        self._process_report(report)
+        self._submit_report(report, test_cases)
         if report is not None:
             report.cleanup()
         self._reset()
@@ -276,7 +380,7 @@ class FilesystemReporter(Reporter):
         shutil.rmtree(src)
         return rr_arc
 
-    def _pre_submit(self, report):
+    def _process_report(self, report):
         trace_path = os.path.join(report.path, "rr-traces")
         if os.path.isdir(trace_path):
             self.compress_rr_trace(trace_path, report.path)
@@ -284,7 +388,7 @@ class FilesystemReporter(Reporter):
     def _reset(self):
         pass
 
-    def _submit(self, report, test_cases):
+    def _submit_report(self, report, test_cases):
         # create major bucket directory in working directory if needed
         major_dir = os.path.join(self.report_path, report.major)
         if not os.path.isdir(major_dir):
@@ -310,8 +414,6 @@ class FilesystemReporter(Reporter):
 
 
 class FuzzManagerReporter(Reporter):
-    # this is where Collector looks for the '.fuzzmanagerconf' (see Collector.py)
-    FM_CONFIG = os.path.join(os.path.expanduser("~"), ".fuzzmanagerconf")
     # max number of times to report a non-frequent signature to FuzzManager
     MAX_REPORTS = 10
 
@@ -335,32 +437,15 @@ class FuzzManagerReporter(Reporter):
 
     @staticmethod
     def create_crash_info(report, target_binary):
-        # read in the log files and create a CrashInfo object
-        aux_data = None
-        if report.log_aux is not None:
-            with open(os.path.join(report.path, report.log_aux), "rb") as log_fp:
-                aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
-        stderr_file = os.path.join(report.path, report.log_err)
-        stdout_file = os.path.join(report.path, report.log_out)
-        with open(stderr_file, "rb") as err_fp, open(stdout_file, "rb") as out_fp:
-            return CrashInfo.fromRawCrashData(
-                out_fp.read().decode("utf-8", errors="ignore").splitlines(),
-                err_fp.read().decode("utf-8", errors="ignore").splitlines(),
-                ProgramConfiguration.fromBinary(target_binary),
-                auxCrashData=aux_data)
+        # TODO: this is here to preserve the old way of operation
+        return report.crash_info(target_binary)
 
     def _reset(self):
         self._extra_metadata = {}
 
-    @classmethod
-    def sanity_check(cls, bin_file):
-        if _fm_import_error is not None:
-            raise _fm_import_error  # pylint: disable=raising-bad-type
-        if not os.path.isfile(cls.FM_CONFIG):
-            raise IOError("Missing: %s" % cls.FM_CONFIG)
-        if not os.path.isfile("".join([bin_file, ".fuzzmanagerconf"])):
-            raise IOError("Missing: %s" % "".join([bin_file, ".fuzzmanagerconf"]))
-        ProgramConfiguration.fromBinary(bin_file)
+    @staticmethod
+    def sanity_check(bin_file):
+        FMInfo.sanity_check(bin_file)
 
     @classmethod
     def quality_name(cls, value):
@@ -379,7 +464,7 @@ class FuzzManagerReporter(Reporter):
             suggested_frames += 6
         return suggested_frames
 
-    def _pre_submit(self, report):
+    def _process_report(self, report):
         self._process_rr_trace(report)
 
     def _process_rr_trace(self, report):
@@ -410,9 +495,10 @@ class FuzzManagerReporter(Reporter):
             return True
         return False
 
-    def _submit(self, report, test_cases):
+    def _submit_report(self, report, test_cases):
         # prepare data for submission as CrashInfo
-        crash_info = self.create_crash_info(report, self.target_binary)
+        crash_info = report.crash_info(self.target_binary)
+        assert crash_info is not None
 
         # search for a cached signature match and if the signature
         # is already in the cache and marked as frequent, don't bother submitting
@@ -467,8 +553,8 @@ class FuzzManagerReporter(Reporter):
             test_case.dump(dump_path, include_details=True)
         crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
         if test_cases:
-            crash_info.configuration.addMetadata(
-                {"recorded_envvars": " ".join(test_cases[0].env_vars)})
+            environ_string = " ".join("=".join(kv) for kv in test_cases[0].env_vars.items())
+            crash_info.configuration.addMetadata({"recorded_envvars": environ_string})
         else:
             self.quality = self.QUAL_NO_TESTCASE
         crash_info.configuration.addMetadata(self._extra_metadata)
@@ -509,7 +595,7 @@ class FuzzManagerReporter(Reporter):
 
 
 class S3FuzzManagerReporter(FuzzManagerReporter):
-    def _pre_submit(self, report):
+    def _process_report(self, report):
         self._process_rr_trace(report)
 
     def _process_rr_trace(self, report):

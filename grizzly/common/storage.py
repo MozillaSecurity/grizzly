@@ -5,6 +5,7 @@
 
 from collections import namedtuple
 import json
+import re
 import os
 import shutil
 import tempfile
@@ -98,10 +99,10 @@ class TestCase(object):
     def __init__(self, landing_page, redirect_page, adapter_name, input_fname=None):
         self.adapter_name = adapter_name
         self.duration = None
+        self.env_vars = dict()  # environment variables
         self.input_fname = input_fname  # file that was used to create the test case
         self.landing_page = landing_page
         self.redirect_page = redirect_page
-        self._env_vars = dict()  # environment variables
         self._existing_paths = list()  # file paths in use
         self._files = TestFileMap(
             meta=list(),  # environment files such as prefs.js, etc...
@@ -145,7 +146,7 @@ class TestCase(object):
         Returns:
             None
         """
-        self._env_vars[name] = value
+        self.env_vars[name] = value
 
     def add_file(self, test_file, required=True):
         """Add a test file to test case.
@@ -243,11 +244,11 @@ class TestCase(object):
         # save test case files and meta data including:
         # adapter used, input file, environment info and files
         if include_details:
-            assert isinstance(self._env_vars, dict)
+            assert isinstance(self.env_vars, dict)
             info = {
                 "adapter": self.adapter_name,
                 "duration": self.duration,
-                "env": self._env_vars,
+                "env": self.env_vars,
                 "input": os.path.basename(self.input_fname) if self.input_fname else None,
                 "target": self.landing_page}
             with open(os.path.join(out_path, "test_info.json"), "w") as out_fp:
@@ -256,19 +257,25 @@ class TestCase(object):
             for meta_file in self._files.meta:
                 meta_file.dump(out_path)
 
-    @property
-    def env_vars(self):
-        """Get TestCase environment variables
-
-        Args:
-            None
-
-        Returns:
-            generator: environment variables (str)
-        """
-        for name, value in self._env_vars.items():
-            if value is not None:
-                yield "=".join((name, value))
+    def load_environ(self, path, env_data):
+        # sanity check environment variable data
+        for name, value in env_data.items():
+            if not isinstance(name, six.string_types) or not isinstance(value, six.string_types):
+                raise TestCaseLoadFailure("env_data contains invalid 'env' entries")
+        self.env_vars = env_data
+        known_suppressions = ("lsan.supp", "tsan.supp", "ubsan.supp")
+        for supp in os.listdir(path):
+            if supp.lower() in known_suppressions:
+                # Update *SAN_OPTIONS environment variable to use
+                # provided suppression files.
+                opt_key = "%s_OPTIONS" % (supp.split(".")[0].upper(),)
+                san_opts = self.env_vars.get(opt_key, "")
+                updated = list()
+                for opt in re.split(r":(?![\\|/])", san_opts):
+                    if opt and opt != "suppressions":
+                        updated.append(opt)
+                updated.append("suppressions='%s'" % (os.path.join(path, supp),))
+                self.env_vars[opt_key] = ":".join(updated)
 
     @classmethod
     def load_path(cls, path, entry_point=None, prefs=True):
@@ -323,12 +330,12 @@ class TestCase(object):
             test.cleanup()
             raise AssertionError("Scanning for test case 'entry point' failed")
         # load environment variables
-        if info and info.get("env", None):
-            for name, value in info["env"].items():
-                if not isinstance(name, six.string_types) or not isinstance(value, six.string_types):
-                    test.cleanup()
-                    raise TestCaseLoadFailure("test_info.json contains invalid 'env' entries")
-                test.add_environ_var(name, value)
+        if info:
+            try:
+                test.load_environ(path, info.get("env", {}))
+            except TestCaseLoadFailure:
+                test.cleanup()
+                raise
         return test
 
     @property

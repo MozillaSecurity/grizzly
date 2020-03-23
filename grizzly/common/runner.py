@@ -83,7 +83,7 @@ class Runner(object):
         self.timeout = False
 
     def run(self, ignore, server_map, testcase, wait_for_callback=False):
-        """
+        """Serve a testcase and monitor the target for results.
 
         Args:
             ignore (list): List of failure types to ignore.
