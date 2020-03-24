@@ -155,7 +155,7 @@ class Session(object):
         self.target.save_logs(result_logs, meta=True)
         log.info("Reporting results...")
         self.iomanager.tests.reverse()  # order test cases newest to oldest
-        self.reporter.submit(result_logs, self.iomanager.tests)
+        self.reporter.submit(self.iomanager.tests, log_path=result_logs)
         if os.path.isdir(result_logs):
             shutil.rmtree(result_logs)
 
