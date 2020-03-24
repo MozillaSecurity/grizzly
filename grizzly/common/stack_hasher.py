@@ -45,6 +45,9 @@ class StackFrame(object):
     _re_rust_frame = re.compile(r"^\s+(?P<num>\d+):\s+0x[0-9a-f]+\s+\-\s+(?P<line>.+)")
     _re_valgrind = re.compile(r"^==\d+==\s+(at|by)\s+0x[0-9A-F]+\:\s+(?P<func>.+?)\s+\((?P<line>.+)\)")
 
+
+    __slots__ = ("function", "location", "mode", "offset", "stack_line")
+
     # TODO: winddbg?
     #_re_rust_file = re.compile(r"^\s+at\s+(?P<line>.+)")
     #_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
@@ -52,9 +55,9 @@ class StackFrame(object):
     def __init__(self, function=None, location=None, mode=None, offset=None, stack_line=None):
         self.function = function
         self.location = location
+        self.mode = mode
         self.offset = offset
         self.stack_line = stack_line
-        self.mode = mode
 
 
     def __str__(self):
@@ -282,6 +285,8 @@ class StackFrame(object):
 
 
 class Stack(object):
+    __slots__ = ("frames", "_major", "_major_depth", "_minor")
+
     def __init__(self, frames=None, major_depth=MAJOR_DEPTH):
         assert frames is None or isinstance(frames, list)
         self.frames = list() if frames is None else frames

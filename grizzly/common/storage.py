@@ -27,6 +27,8 @@ class TestFileExists(Exception):
 class InputFile(object):
     CACHE_LIMIT = 0x100000  # 1MB
 
+    __slots__ = ("extension", "file_name", "_fp")
+
     def __init__(self, file_name):
         self.extension = None
         self.file_name = file_name
@@ -96,6 +98,10 @@ class InputFile(object):
 TestFileMap = namedtuple("TestFileMap", "meta optional required")
 
 class TestCase(object):
+    __slots__ = (
+        "adapter_name", "duration", "env_vars", "input_fname", "landing_page",
+        "redirect_page", "_existing_paths", "_files")
+
     def __init__(self, landing_page, redirect_page, adapter_name, input_fname=None):
         self.adapter_name = adapter_name
         self.duration = None

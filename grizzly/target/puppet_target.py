@@ -22,6 +22,8 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class PuppetTarget(Target):
+    __slots__ = ("use_rr", "use_valgrind", "_puppet")
+
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch, **kwds):
         super(PuppetTarget, self).__init__(binary, extension, launch_timeout, log_limit,
                                            memory_limit, prefs, relaunch)

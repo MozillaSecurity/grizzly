@@ -39,6 +39,8 @@ class Resource(object):
 
 
 class ServerMap(object):
+    __slots__ = ("dynamic", "include", "redirect")
+
     def __init__(self):
         self.dynamic = dict()
         self.include = dict()  # mapping of directories that can be requested
@@ -69,7 +71,7 @@ class ServerMap(object):
     def set_include(self, url, target_path):
         url = self._check_url(url)
         if not os.path.isdir(target_path):
-            raise IOError("Include path not found: %s" % target_path)
+            raise IOError("Include path not found: %s" % (target_path,))
         if url in self.dynamic or url in self.redirect:
             raise MapCollisionError("URL collision on %r" % (url,))
         LOG.debug("mapping include %r -> %r", url, target_path)

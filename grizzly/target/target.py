@@ -35,6 +35,10 @@ class Target(object):
     RESULT_FAILURE = 1
     RESULT_IGNORED = 2
 
+    __slots__ = (
+        "_lock", "_monitor", "binary", "extension", "forced_close", "launch_timeout",
+        "log_limit", "memory_limit", "prefs", "rl_countdown", "rl_reset")
+
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch):
         self._lock = threading.Lock()
         self._monitor = None
@@ -44,9 +48,9 @@ class Target(object):
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit * 0x100000 if log_limit and log_limit > 0 else 0
         self.memory_limit = memory_limit * 0x100000 if memory_limit and memory_limit > 0 else 0
+        self.prefs = os.path.abspath(prefs) if prefs else None
         self.rl_countdown = 0
         self.rl_reset = max(relaunch, 1)
-        self.prefs = os.path.abspath(prefs) if prefs else None
 
         assert self.binary is not None and os.path.isfile(self.binary)
         if self.prefs is not None:

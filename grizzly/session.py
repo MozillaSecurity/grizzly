@@ -23,6 +23,8 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class LogOutputLimiter(object):
+    __slots__ = ("_delay", "_iterations", "_launches", "_multiplier", "_time", "_verbose")
+
     def __init__(self, delay=300, delta_multiplier=2, verbose=False):
         self._delay = delay  # maximum time delay between output
         self._iterations = 1  # next iteration to trigger output

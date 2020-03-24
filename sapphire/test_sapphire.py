@@ -777,7 +777,7 @@ def test_serve_job_03(tmp_path):
     assert job.pending_files() == 0
 
 
-def test_serve_job_04(tmp_path):
+def test_serve_job_04(mocker, tmp_path):
     """test ServeJob includes"""
     srv_root = tmp_path / "root"
     srv_include = tmp_path / "test"
@@ -795,10 +795,10 @@ def test_serve_job_04(tmp_path):
     nst_1.write_bytes(b"c")
     inc_2 = srv_include_2 / "test_file_2.txt"
     inc_2.write_bytes(b"d")
-    smap = ServerMap()
     # stub out ServerMap._check_url() because it is too
     # restrictive to allow testing of some functionality
-    smap._check_url = lambda x: x
+    mocker.patch.object(ServerMap, "_check_url", side_effect=lambda x: x)
+    smap = ServerMap()
     smap.set_include("testinc", str(srv_include))
     smap.set_include("testinc/fakedir", str(srv_include))
     smap.set_include("testinc/1/2/3", str(srv_include))

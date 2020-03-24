@@ -26,6 +26,10 @@ class Status(object):
     PATH = os.path.join(tempfile.gettempdir(), "grzstatus")
     REPORT_FREQ = 60
 
+    __slots__ = (
+        "_lock", "data_file", "ignored", "iteration", "log_size", "results",
+        "start_time", "test_name", "timestamp")
+
     def __init__(self, data_file, start_time):
         assert isinstance(data_file, str) and os.path.isfile(data_file)
         assert isinstance(start_time, float)
