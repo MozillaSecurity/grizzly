@@ -335,11 +335,11 @@ class Reporter(object):
         be specified.
 
         Args:
-            test_cases (list): A list of testcases, ordered newest to oldest,
-                               the newest being the mostly likely to trigger
-                               the result (crash, assert... etc).
-            log_path (str):  Path to logs from the Target. A Report will
-                             be created from this.
+            test_cases (iterable): A collection of testcases, ordered newest to oldest,
+                                   the newest being the mostly likely to trigger
+                                   the result (crash, assert... etc).
+            log_path (str): Path to logs from the Target. A Report will
+                            be created from this.
             report (Report): Report to submit.
 
         Returns:

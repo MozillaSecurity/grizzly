@@ -7,6 +7,8 @@
 unit tests for grizzly.Session
 """
 
+from collections import deque
+
 import pytest
 
 from sapphire import Sapphire, ServerMap, SERVED_ALL, SERVED_REQUEST, SERVED_TIMEOUT
@@ -35,7 +37,7 @@ def test_session_00(tmp_path, mocker):
     fake_iomgr.harness = None
     fake_iomgr.input_files = []
     fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
-    fake_iomgr.tests = [mocker.Mock(spec=TestCase)]
+    fake_iomgr.tests = deque([mocker.Mock(spec=TestCase)])
     fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_target = mocker.Mock(spec=Target)
@@ -62,6 +64,8 @@ def test_session_01(tmp_path, mocker):
     mocker.patch("sapphire.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
+    fake_adapter.NAME = "fake_adapter"
+    fake_adapter.ROTATION_PERIOD = 123
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.active_input = mocker.Mock(spec=InputFile)
     fake_iomgr.active_input.file_name = "infile"
@@ -74,67 +78,42 @@ def test_session_01(tmp_path, mocker):
     session.config_server(5)
     fake_adapter.generate.assert_not_called()
     testcase = session.generate_testcase()
+    assert fake_iomgr.create_testcase.call_count == 1
+    fake_iomgr.create_testcase.assert_called_with("fake_adapter", rotation_period=123)
     assert fake_adapter.generate.call_count == 1
+    fake_adapter.generate.assert_called_with(testcase, fake_iomgr.active_input, fake_iomgr.server_map)
     assert testcase.add_meta.call_count == 1
 
 def test_session_02(mocker, tmp_path):
     """test Session.launch_target()"""
     Status.PATH = str(tmp_path)
-    fake_server = mocker.Mock(spec=Sapphire)
-    fake_server.get_port.return_value = 1
-    fake_adapter = mocker.Mock(spec=Adapter)
-    fake_adapter.TEST_DURATION = 10
-    fake_iomgr = mocker.Mock(spec=IOManager)
-    fake_iomgr.harness = None
-    fake_iomgr.tests = []
-    fake_iomgr.working_path = str(tmp_path)
-    fake_iomgr.landing_page.return_value = "x"
-    class FakeTarget(object):
-        def __init__(self, launch_raise=None):
-            self._closed = True
-            self._raise = launch_raise
-            self.forced_close = False
-            self.prefs = None
-            self.rl_reset = 10
-        def cleanup(self):
-            pass
-        def close(self):
-            pass
-        @property
-        def closed(self):
-            return self._closed
-        def detect_failure(self, ignored, was_timeout):
-            pass
-        def launch(self, _):
-            if self._raise is not None:
-                raise self._raise("Test")
-            self._closed = False
-        def monitor(self):
-            pass
-        def save_logs(self, result_logs, meta=True):
-            pass
-    fake_target = FakeTarget()
-    session = Session(fake_adapter, False, [], fake_iomgr, None, fake_target)
-    session.server = fake_server
-    session.launch_target()
-    assert not fake_target.closed
+    mocker.patch.object(Session, "location", return_value="fake_location")
+    mocker.patch.object(Session, "report_result")
 
-    fake_target = FakeTarget(launch_raise=TargetLaunchError)
-    fake_reporter = mocker.Mock(spec=Reporter)
-    session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
-    session.server = fake_server
+    fake_target = mocker.Mock(spec=Target)
+    fake_target.closed = True
+    session = Session(None, False, [], None, None, fake_target)
+    session.launch_target()
+    assert fake_target.launch.call_count == 1
+    assert session.status.results == 0
+
+    fake_target = mocker.Mock(spec=Target)
+    fake_target.closed = True
+    fake_target.launch.side_effect = TargetLaunchError
+    session = Session(None, False, [], None, None, fake_target)
     with pytest.raises(TargetLaunchError):
         session.launch_target()
-    assert fake_target.closed
+    assert fake_target.launch.call_count == 1
     assert session.status.results == 1
 
-    fake_target = FakeTarget(launch_raise=TargetLaunchTimeout)
-    fake_reporter = mocker.Mock(spec=Reporter)
-    session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
-    session.server = fake_server
+    fake_target = mocker.Mock(spec=Target)
+    fake_target.closed = True
+    fake_target.launch.side_effect = TargetLaunchTimeout
+    session = Session(None, False, [], None, None, fake_target)
     with pytest.raises(TargetLaunchTimeout):
         session.launch_target()
-    assert fake_target.closed
+    assert fake_target.launch.call_count == 3
+    assert session.status.results == 0
 
 def test_session_03(tmp_path, mocker):
     """test Session.location"""
@@ -192,7 +171,7 @@ def test_session_05(tmp_path, mocker):
     fake_iomgr.input_files = []
     fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
-    fake_iomgr.tests = mocker.Mock(spec=list)
+    fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.working_path = str(tmp_path)
     fake_target = mocker.Mock(spec=Target)
@@ -248,7 +227,7 @@ def test_session_06(tmp_path, mocker):
     fake_iomgr.input_files = []
     fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
-    fake_iomgr.tests = mocker.Mock(spec=list)
+    fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_target = mocker.Mock(spec=Target)
@@ -298,7 +277,7 @@ def test_session_07(tmp_path, mocker):
     fake_iomgr.input_files = []
     fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
-    fake_iomgr.tests = mocker.Mock(spec=list)
+    fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_target = mocker.Mock(spec=Target)
@@ -329,6 +308,25 @@ def test_session_07(tmp_path, mocker):
     assert session.status.results == 0
     assert session.status.ignored == 1
     assert session.report_result.call_count == 0
+
+def test_session_08(tmp_path, mocker):
+    """test Session.report_result()"""
+    fake_tempfile = mocker.patch("grizzly.session.tempfile", autospec=True)
+    working_path = tmp_path / "fake_temp_path"
+    working_path.mkdir()
+    fake_tempfile.mkdtemp.return_value = str(working_path)
+    Status.PATH = str(tmp_path)
+    fake_iomgr = mocker.Mock(spec=IOManager)
+    fake_iomgr.tests = mocker.Mock(spec=deque)
+    fake_iomgr.working_path = str(tmp_path)
+    fake_reporter = mocker.Mock(spec=Reporter)
+    fake_target = mocker.Mock(spec=Target)
+    session = Session(None, False, [], fake_iomgr, fake_reporter, fake_target)
+    session.report_result()
+    assert fake_target.save_logs.call_count == 1
+    fake_target.save_logs.assert_called_with(str(working_path), meta=True)
+    assert fake_reporter.submit.call_count == 1
+    fake_reporter.submit.assert_called_with(fake_iomgr.tests, log_path=str(working_path))
 
 def test_log_output_limiter_01(mocker):
     """test LogOutputLimiter.ready() not ready"""
