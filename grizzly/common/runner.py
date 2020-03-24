@@ -19,6 +19,8 @@ __credits__ = ["Tyson Smith"]
 # This is not perfect! It is to be used AFTER the test case timeout
 # (initial_delay) has elapsed.
 class _IdleChecker(object):
+    __slots__ = ("_check_cb", "_init_delay", "_poll_delay", "_threshold", "_next_poll")
+
     def __init__(self, check_cb, threshold, initial_delay, poll_delay=1):
         assert callable(check_cb)
         assert initial_delay >= 0
@@ -70,6 +72,8 @@ class Runner(object):
     COMPLETE = 1
     FAILED = 2
     IGNORED = 3
+
+    __slots__ = ("_idle", "_server", "_target", "result", "served", "timeout")
 
     def __init__(self, server, target, idle_threshold=0, idle_delay=60):
         if idle_threshold > 0:

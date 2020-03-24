@@ -46,6 +46,10 @@ WorkerHandle = namedtuple("WorkerHandle", "conn thread")
 
 
 class ServeJob(object):
+    __slots__ = (
+        "_complete", "_pending", "_served", "accepting", "base_path", "exceptions",
+        "forever", "initial_queue_size", "server_map", "worker_complete")
+
     def __init__(self, base_path, forever=False, optional_files=None, server_map=None):
         self._complete = threading.Event()
         self._pending = Tracker(files=set(), lock=threading.Lock())
