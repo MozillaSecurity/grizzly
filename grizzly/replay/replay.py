@@ -5,7 +5,6 @@
 
 import logging
 import os
-import shutil
 import tempfile
 
 import sapphire
@@ -14,7 +13,7 @@ try:
 except ImportError:  # pragma: no cover
     CrashSignature = None
 
-from ..common import FuzzManagerReporter, Report, Runner, Status, TestCase, TestFile
+from ..common import FilesystemReporter, FuzzManagerReporter, Report, Runner, Status, TestCase, TestFile
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -23,8 +22,10 @@ __credits__ = ["Tyson Smith"]
 LOG = logging.getLogger("replay")
 
 # TODO:
-# - reporter
-# - how to purge_optional?
+# - require fuzzmanager
+# - fuzzmanager reporter
+# - add single file support
+# - test main()
 
 class ReplayManager(object):
     HARNESS_FILE = os.path.join(os.path.dirname(__file__), "..", "common", "harness.html")
@@ -37,7 +38,7 @@ class ReplayManager(object):
         self.testcase = testcase
         self._harness = None
         self._reports_expected = dict()
-        self._reports_extra = dict()
+        self._reports_other = dict()
         self._runner = Runner(self.server, self.target)
         self._signature = signature
 
@@ -79,9 +80,27 @@ class ReplayManager(object):
                 location.append("&forced_close=0")
         return "".join(location)
 
+    def dump_reports(self, path, include_extra=True):
+        if not os.path.isdir(path):
+            os.makedirs(path)
+        if any(self.reports):
+            reports_path = os.path.join(path, "reports")
+            if not os.path.isdir(reports_path):
+                os.makedirs(reports_path)
+            reporter = FilesystemReporter(report_path=reports_path, major_bucket=False)
+            for report in self.reports:
+                reporter.submit((), report=report)
+        if include_extra and any(self.other_reports):
+            reports_path = os.path.join(path, "other_reports")
+            if not os.path.isdir(reports_path):
+                os.makedirs(reports_path)
+            reporter = FilesystemReporter(report_path=reports_path, major_bucket=False)
+            for report in self.other_reports:
+                reporter.submit((), report=report)
+
     @property
-    def extra_reports(self):
-        for report in self._reports_extra.values():
+    def other_reports(self):
+        for report in self._reports_other.values():
             yield report
 
     @property
@@ -124,23 +143,37 @@ class ReplayManager(object):
                     if short_sig == "No crash detected":
                         # TODO: change this to support hangs/timeouts, etc
                         LOG.info("Uninteresting: no crash detected")
+                        crash_hash = None
                     elif self._signature.matches(crash_info):
                         self.status.results += 1
-                        self._reports_expected[report.crash_hash(crash_info)] = report
-                        assert len(self._reports_expected) == 1
                         LOG.info("Interesting: %s", short_sig)
+                        crash_hash = report.crash_hash(crash_info)
+                        if crash_hash not in self._reports_expected:
+                            LOG.debug("now tracking %s", crash_hash)
+                            self._reports_expected[crash_hash] = report
+                            report = None  # don't remove report
+                        assert len(self._reports_expected) == 1
                     else:
-                        self.status.ignored += 1
-                        self._reports_extra[report.crash_hash(crash_info)] = report
                         LOG.info("Uninteresting: different signature: %s", short_sig)
+                        self.status.ignored += 1
+                        crash_hash = report.crash_hash(crash_info)
+                        if crash_hash not in self._reports_other:
+                            LOG.debug("now tracking %s", crash_hash)
+                            self._reports_other[crash_hash] = report
+                            report = None  # don't remove report
                 else:
                     self.status.results += 1
-                    self._reports_expected[report.major] = report
-                    LOG.info("Result detected")
-                report = None
-                # remove working path
-                if os.path.isdir(result_logs):
-                    shutil.rmtree(result_logs)
+                    crash_hash = report.major[:16]
+                    LOG.info("Result detected (%s)", crash_hash)
+                    if crash_hash not in self._reports_expected:
+                        LOG.debug("now tracking %s", crash_hash)
+                        self._reports_expected[crash_hash] = report
+                        report = None  # don't remove report
+                if report is not None:
+                    if crash_hash is not None:
+                        LOG.debug("already tracking %s", crash_hash)
+                    report.cleanup()
+                    report = None
             elif self._runner.result == self._runner.IGNORED:
                 self.status.ignored += 1
                 LOG.info("Ignored (%d)", self.status.ignored)
@@ -206,6 +239,7 @@ class ReplayManager(object):
         else:
             signature = None
 
+        replay = None
         server = None
         target = None
         testcase = None
@@ -242,12 +276,15 @@ class ReplayManager(object):
                      args.repeat, args.min_crashes, relaunch)
             replay = ReplayManager(
                 args.ignore,
-                server, target,
+                server,
+                target,
                 testcase,
                 signature=signature,
                 use_harness=not args.no_harness)
-            replay.run(repeat=args.repeat, min_results=args.min_crashes)
-            return 0 if any(replay.reports) else 1
+            success = replay.run(repeat=args.repeat, min_results=args.min_crashes)
+            if args.logs and (any(replay.reports) or any(replay.other_reports)):
+                replay.dump_reports(args.logs)
+            return 0 if success else 1
 
         except KeyboardInterrupt:
             return 1
@@ -257,6 +294,11 @@ class ReplayManager(object):
 
         finally:
             LOG.warning("Shutting down...")
+            if replay is not None:
+                for report in replay.reports:
+                    report.cleanup()
+                for report in replay.other_reports:
+                    report.cleanup()
             if target is not None:
                 target.cleanup()
             if server is not None:

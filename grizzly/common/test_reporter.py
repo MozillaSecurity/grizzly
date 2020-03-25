@@ -72,8 +72,7 @@ def test_report_04(tmp_path):
         Report.tail(str(tmp_file), 0)
     assert tmp_file.stat().st_size == length
     Report.tail(str(tmp_file), 3)
-    with tmp_file.open("rb") as test_fp:
-        log_data = test_fp.read()
+    log_data = tmp_file.read_bytes()
     assert log_data.startswith(b"[LOG TAILED]\n")
     assert log_data[13:] == b"FOO"
 
@@ -257,6 +256,15 @@ def test_filesystem_reporter_01(tmp_path):
     report_path.mkdir()
     reporter = FilesystemReporter(report_path=str(report_path))
     reporter.submit([], log_path=str(log_path))
+    buckets = [x for x in report_path.iterdir()]
+    # check major bucket
+    assert len(buckets) == 1
+    assert buckets[0].is_dir()
+    # check log path exists
+    log_dirs = [x for x in buckets[0].iterdir()]
+    assert len(log_dirs) == 1
+    assert log_dirs[0].is_dir()
+    assert "_logs" in str(log_dirs[0])
 
 def test_filesystem_reporter_02(tmp_path, mocker):
     """test FilesystemReporter with testcases"""
@@ -276,7 +284,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     reporter.submit(testcases, log_path=str(log_path))
     assert not log_path.exists()
     assert report_path.exists()
-    assert len(os.listdir(str(report_path))) == 1
+    assert len(tuple(report_path.glob("*"))) == 1
     for tstc in testcases:
         assert tstc.dump.call_count == 1
     # call report a 2nd time
@@ -289,9 +297,8 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     reporter.submit(testcases, log_path=str(log_path))
     for tstc in testcases:
         assert tstc.dump.call_count == 1
-    results = os.listdir(str(report_path))
-    assert len(results) == 2
-    assert "NO_STACK" in results
+    assert len(tuple(report_path.glob("*"))) == 2
+    assert len(tuple(report_path.glob("NO_STACK"))) == 1
 
 def test_filesystem_reporter_03(tmp_path):
     """test FilesystemReporter disk space failsafe"""
@@ -307,50 +314,17 @@ def test_filesystem_reporter_03(tmp_path):
         reporter.submit([], log_path=str(log_path))
     assert "Running low on disk space" in str(exc.value)
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RR only supported on Linux")
-def test_filesystem_reporter_04(tmp_path):
-    """test packaging rr traces"""
-    # create fake logs
-    log_path = tmp_path / "logs"
-    log_path.mkdir()
-    (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
-    (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    with (log_path / "log_asan_blah.txt").open("wb") as log_fp:
-        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
-        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
-    # create fake trace
-    rr_trace_path = log_path / "rr-traces" / "echo-0"
-    rr_trace_path.mkdir(parents=True)
-    (rr_trace_path / "fail_file").touch()
-    rr_trace_path = log_path / "rr-traces" / "echo-1"
-    rr_trace_path.mkdir()
-    (rr_trace_path / "cloned_data_5799_1").touch()
-    (rr_trace_path / "data").write_bytes(b"test_data")
-    (rr_trace_path / "events").write_bytes(b"foo")
-    (rr_trace_path / "mmap").write_bytes(b"bar")
-    (rr_trace_path / "tasks").write_bytes(b"foo")
-    (rr_trace_path / "version").write_bytes(b"123")
-    (log_path / "rr-traces" / "latest-trace").symlink_to(str(rr_trace_path), target_is_directory=True)
-    report_path = tmp_path / "reports"
-    # report
-    assert not report_path.exists()
-    reporter = FilesystemReporter(report_path=str(report_path))
-    reporter.submit([], log_path=str(log_path))
-    assert report_path.exists()
-    # verify report and archive
-    report_log_dirs = list(report_path.glob("*/*_logs/"))
-    assert len(report_log_dirs) == 1
-    report_log_dir = str(report_log_dirs[0])
-    report_contents = os.listdir(report_log_dir)
-    assert "rr.tar.bz2" in report_contents
-    assert "rr-traces" not in report_contents
-    arc_file = os.path.join(report_log_dir, "rr.tar.bz2")
-    assert os.path.isfile(arc_file)
-    with tarfile.open(arc_file, "r:bz2") as arc_fp:
-        entries = arc_fp.getnames()
-    assert "echo-1" in entries
-    assert "echo-0" not in entries
-    assert "latest-trace" not in entries
+def test_filesystem_reporter_04(mocker, tmp_path):
+    """test FilesystemReporter w/o major bucket"""
+    report = mocker.Mock(spec=Report)
+    report_path = (tmp_path / "report")
+    report_path.mkdir()
+    report.path = str(report_path)
+    report.prefix = "0000_2020_01_01"
+    reporter = FilesystemReporter(report_path=str(tmp_path), major_bucket=False)
+    reporter.submit([], report=report)
+    assert not report_path.is_dir()
+    assert not report.major.call_count
 
 def test_fuzzmanager_info_01(mocker, tmp_path):
     """test FMInfo"""
@@ -480,14 +454,14 @@ def test_s3fuzzmanager_reporter_01(tmp_path, mocker):
         os.environ.pop("GRZ_S3_BUCKET", None)
 
 def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
-    """test S3FuzzManagerReporter._process_rr_trace()"""
+    """test S3FuzzManagerReporter._process_report()"""
     fake_boto3 = mocker.patch("grizzly.common.reporter.boto3", autospec=True)
 
     fake_report = mocker.Mock(spec=Report)
     fake_report.path = "no-path"
     reporter = S3FuzzManagerReporter("fake_bin")
     # test will missing rr-trace
-    assert reporter._process_rr_trace(fake_report) is None
+    assert reporter._process_report(fake_report) is None
     assert not reporter._extra_metadata
 
     # test will exiting rr-trace
@@ -497,10 +471,10 @@ def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
     fake_report.path = str(tmp_path)
     os.environ["GRZ_S3_BUCKET"] = "test"
     try:
-        reporter._process_rr_trace(fake_report)
+        reporter._process_report(fake_report)
     finally:
         os.environ.pop("GRZ_S3_BUCKET", None)
-    assert not os.listdir(str(tmp_path))
+    assert not tuple(tmp_path.glob("*"))
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
     fake_boto3.resource.return_value.meta.client.upload_file.assert_not_called()
@@ -518,12 +492,40 @@ def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
     fake_boto3.resource.return_value.Object.side_effect = FakeClientError("test", {"Error": {"Code": "404"}})
     os.environ["GRZ_S3_BUCKET"] = "test"
     try:
-        reporter._process_rr_trace(fake_report)
+        reporter._process_report(fake_report)
     finally:
         os.environ.pop("GRZ_S3_BUCKET", None)
-    assert not os.listdir(str(tmp_path))
+    assert not tuple(tmp_path.glob("*"))
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
     assert fake_boto3.resource.return_value.meta.client.upload_file.call_count == 1
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RR only supported on Linux")
+def test_s3fuzzmanager_reporter_03(tmp_path):
+    """test S3FuzzManagerReporter.compress_rr_trace()"""
+    # create fake trace
+    src = tmp_path / "rr-traces" / "echo-0"
+    src.mkdir(parents=True)
+    (src / "fail_file").touch()
+    src = tmp_path / "rr-traces" / "echo-1"
+    src.mkdir()
+    (src / "cloned_data_5799_1").touch()
+    (src / "data").write_bytes(b"test_data")
+    (src / "events").write_bytes(b"foo")
+    (src / "mmap").write_bytes(b"bar")
+    (src / "tasks").write_bytes(b"foo")
+    (src / "version").write_bytes(b"123")
+    (tmp_path / "rr-traces" / "latest-trace").symlink_to(str(src), target_is_directory=True)
+    src = tmp_path / "rr-traces"
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    S3FuzzManagerReporter.compress_rr_trace(str(src), str(dest))
+    assert not src.is_dir()
+    assert (dest / "rr.tar.bz2").is_file()
+    with tarfile.open(str(dest / "rr.tar.bz2"), "r:bz2") as arc_fp:
+        entries = arc_fp.getnames()
+    assert "echo-1" in entries
+    assert "echo-0" not in entries
+    assert "latest-trace" not in entries
 
 # TODO: fill out tests for FuzzManagerReporter and S3FuzzManagerReporter
