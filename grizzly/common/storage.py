@@ -12,7 +12,7 @@ import tempfile
 
 import six
 
-__all__ = ("InputFile", "TestCase", "TestFile", "TestFileExists")
+__all__ = ("InputFile", "TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -267,7 +267,7 @@ class TestCase(object):
         # sanity check environment variable data
         for name, value in env_data.items():
             if not isinstance(name, six.string_types) or not isinstance(value, six.string_types):
-                raise TestCaseLoadFailure("env_data contains invalid 'env' entries")
+                raise TestCaseLoadFailure("'env_data' contains invalid 'env' entries")
         self.env_vars = env_data
         known_suppressions = ("lsan.supp", "tsan.supp", "ubsan.supp")
         for supp in os.listdir(path):
@@ -302,11 +302,14 @@ class TestCase(object):
         # load test_info.json
         if entry_point is None:
             if "test_info.json" not in os.listdir(path):
-                raise TestCaseLoadFailure("Missing test_info.json")
-            with open(os.path.join(path, "test_info.json"), "r") as in_fp:
-                info = json.load(in_fp)
+                raise TestCaseLoadFailure("Missing 'test_info.json'")
+            try:
+                with open(os.path.join(path, "test_info.json"), "r") as in_fp:
+                    info = json.load(in_fp)
+            except ValueError:
+                raise TestCaseLoadFailure("Invalid 'test_info.json'")
             if "target" not in info:
-                raise TestCaseLoadFailure("test_info.json missing 'target' entry")
+                raise TestCaseLoadFailure("'test_info.json' missing 'target' entry")
             entry_point = info["target"]
         else:
             info = None

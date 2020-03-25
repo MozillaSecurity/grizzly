@@ -145,11 +145,15 @@ def test_testcase_06():
 def test_testcase_07(tmp_path):
     """test TestCase.load_path() with test_info.json file"""
     # missing test_info.json
-    with pytest.raises(TestCaseLoadFailure, match="Missing test_info.json"):
+    with pytest.raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
+        TestCase.load_path(str(tmp_path))
+    # invalid test_info.json
+    (tmp_path / "test_info.json").write_bytes(b"X")
+    with pytest.raises(TestCaseLoadFailure, match="Invalid 'test_info.json'"):
         TestCase.load_path(str(tmp_path))
     # test_info.json missing 'target' entry
     (tmp_path / "test_info.json").write_bytes(b"{}")
-    with pytest.raises(TestCaseLoadFailure, match="test_info.json missing 'target' entry"):
+    with pytest.raises(TestCaseLoadFailure, match="'test_info.json' missing 'target' entry"):
         TestCase.load_path(str(tmp_path))
     # build a valid test case
     src_dir = (tmp_path / "src")
@@ -187,7 +191,7 @@ def test_testcase_07(tmp_path):
         src.dump(str(src_dir), include_details=True)
     finally:
         src.cleanup()
-    with pytest.raises(TestCaseLoadFailure, match="env_data contains invalid 'env' entries"):
+    with pytest.raises(TestCaseLoadFailure, match="'env_data' contains invalid 'env' entries"):
         TestCase.load_path(str(src_dir))
 
 def test_testcase_08(tmp_path):
