@@ -11,7 +11,7 @@ import pytest
 
 from sapphire import Sapphire, SERVED_ALL
 from .replay import ReplayManager
-from ..common import TestCase
+from ..common import Report, TestCase
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 
 
@@ -106,7 +106,7 @@ def test_replay_04(mocker):
     assert replay.status.results == 2
     assert replay.status.ignored == 1
     assert len(replay._reports_expected) == 1
-    assert not replay._reports_extra
+    assert not replay._reports_other
     assert len([replay.reports]) == 1
 
 def test_replay_05(mocker):
@@ -134,7 +134,7 @@ def test_replay_05(mocker):
     assert replay.status.results == 1
     assert replay.status.ignored == 1
     assert len(replay._reports_expected) == 1
-    assert len(replay._reports_extra) == 1
+    assert len(replay._reports_other) == 1
     assert len([replay.reports]) == 1
     assert signature.matches.call_count == 2
 
@@ -189,3 +189,41 @@ def test_replay_07(mocker):
     target.forced_close = True
     replay = ReplayManager(ignore, server, target, testcase, use_harness=True)
     assert replay._location(timeout=60) == "http://127.0.0.1:34567/harness.html?timeout=60000&close_after=10"
+
+def test_replay_08(mocker, tmp_path):
+    """test ReplayManager.dump_reports()"""
+    server = mocker.Mock(spec=Sapphire)
+    server.get_port.return_value = 34567
+    target = mocker.Mock(spec=Target)
+    target.rl_reset = 10
+
+    replay = ReplayManager(None, server, target, None, use_harness=False)
+
+    # no reports
+    replay.dump_reports(str(tmp_path))
+    assert not list(tmp_path.glob("*"))
+
+    # with reports
+    path = tmp_path / "dest"
+    replay._reports_expected["testhash"] = mocker.Mock(spec=Report)
+    replay._reports_expected["testhash"].prefix = "expected"
+    (tmp_path / "report_expected").mkdir()
+    replay._reports_expected["testhash"].path = str(tmp_path / "report_expected")
+    replay._reports_other["other1"] = mocker.Mock(spec=Report)
+    replay._reports_other["other1"].prefix = "other1"
+    (tmp_path / "report_other1").mkdir()
+    replay._reports_other["other1"].path = str(tmp_path / "report_other1")
+    replay._reports_other["other2"] = mocker.Mock(spec=Report)
+    replay._reports_other["other2"].prefix = "other2"
+    (tmp_path / "report_other2").mkdir()
+    replay._reports_other["other2"].path = str(tmp_path / "report_other2")
+    replay.dump_reports(str(path))
+    assert not (tmp_path / "report_expected").is_dir()
+    assert not (tmp_path / "report_other1").is_dir()
+    assert not (tmp_path / "report_other2").is_dir()
+    assert path.is_dir()
+    assert (path / "reports").is_dir()
+    assert (path / "reports" / "expected_logs").is_dir()
+    assert (path / "other_reports").is_dir()
+    assert (path / "other_reports" / "other1_logs").is_dir()
+    assert (path / "other_reports" / "other2_logs").is_dir()

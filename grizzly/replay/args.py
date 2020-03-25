@@ -14,15 +14,19 @@ class ReplayArgs(CommonArgs):
         self.parser.add_argument(
             "input",
             help="Directory containing test case")
-        self.parser.add_argument(
-            "--any-crash", action="store_true",
-            help="Any crash is interesting, not only crashes which match the original first crash")
+        #self.parser.add_argument(
+        #    "--any-crash", action="store_true",
+        #    help="Any crash is interesting, not only crashes which match the original first crash")
         self.parser.add_argument(
             "--idle-timeout", type=int, default=60,
             help="Number of seconds to wait before polling testcase for idle (default: %(default)s)")
         self.parser.add_argument(
             "--idle-threshold", type=int, default=25,
             help="CPU usage threshold to mark the process as idle (default: %(default)s)")
+        self.parser.add_argument(
+            "--logs",
+            help="Location to save logs. If the path exists it must be empty, if it " \
+            "does not exist it will be created.")
         self.parser.add_argument(
             "--min-crashes", type=int, default=1,
             help="Require the testcase to crash n times before accepting the result. (default: %(default)sx)")
@@ -44,6 +48,9 @@ class ReplayArgs(CommonArgs):
 
         if not os.path.isdir(args.input) or not os.path.isfile(os.path.join(args.input, "test_info.json")):
             self.parser.error("Test case must be a folder containing a test_info.json")
+
+        if args.logs is not None and os.path.isdir(args.logs) and os.listdir(args.logs):
+            self.parser.error("--logs %r must be empty" % (args.logs,))
 
         if args.min_crashes < 1:
             self.parser.error("'--min-crashes' value must be positive")

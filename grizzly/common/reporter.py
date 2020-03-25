@@ -320,15 +320,15 @@ class Report(object):
 class Reporter(object):
     @abc.abstractmethod
     def _process_report(self, report):
-        pass
+        pass  # pragma: no cover
 
     @abc.abstractmethod
     def _reset(self):
-        pass
+        pass  # pragma: no cover
 
     @abc.abstractmethod
     def _submit_report(self, report, test_cases):
-        pass
+        pass  # pragma: no cover
 
     def submit(self, test_cases, log_path=None, report=None):
         """Submit report containing results. Either `log_path` or `report` must
@@ -364,51 +364,37 @@ class Reporter(object):
 class FilesystemReporter(Reporter):
     DISK_SPACE_ABORT = 512 * 1024 * 1024  # 512 MB
 
-    def __init__(self, report_path=None):
+    def __init__(self, report_path=None, major_bucket=True):
+        self.major_bucket = major_bucket
         self.report_path = os.path.join(os.getcwd(), "results") if report_path is None else report_path
 
-    @staticmethod
-    def compress_rr_trace(src, dest):
-        # resolve symlink to latest trace available
-        latest_trace = os.path.realpath(os.path.join(src, "latest-trace"))
-        assert os.path.isdir(latest_trace), "missing latest-trace directory"
-        rr_arc = os.path.join(dest, "rr.tar.bz2")
-        log.debug("creating %r from %r", rr_arc, latest_trace)
-        with tarfile.open(rr_arc, "w:bz2") as arc_fp:
-            arc_fp.add(latest_trace, arcname=os.path.basename(latest_trace))
-        # remove path containing uncompressed traces
-        shutil.rmtree(src)
-        return rr_arc
-
     def _process_report(self, report):
-        trace_path = os.path.join(report.path, "rr-traces")
-        if os.path.isdir(trace_path):
-            self.compress_rr_trace(trace_path, report.path)
+        pass
 
     def _reset(self):
         pass
 
     def _submit_report(self, report, test_cases):
         # create major bucket directory in working directory if needed
-        major_dir = os.path.join(self.report_path, report.major)
-        if not os.path.isdir(major_dir):
-            os.makedirs(major_dir)
-
+        if self.major_bucket:
+            dest_path = os.path.join(self.report_path, report.major[:16])
+        else:
+            dest_path = self.report_path
+        if not os.path.isdir(dest_path):
+            os.makedirs(dest_path)
         # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(test_cases):
-            dump_path = os.path.join(major_dir, "%s-%d" % (report.prefix, test_number))
+            dump_path = os.path.join(dest_path, "%s-%d" % (report.prefix, test_number))
             if not os.path.isdir(dump_path):
                 os.mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
-
         # move logs into bucket directory
-        target_dir = os.path.join(major_dir, "%s_%s" % (report.prefix, "logs"))
-        if os.path.isdir(target_dir):
-            log.warning("Report log path exists %r", target_dir)
-        shutil.move(report.path, target_dir)
-
+        log_path = os.path.join(dest_path, "%s_%s" % (report.prefix, "logs"))
+        if os.path.isdir(log_path):
+            log.warning("Report log path exists %r", log_path)
+        shutil.move(report.path, log_path)
         # avoid filling the disk
-        free_space = psutil.disk_usage(target_dir).free
+        free_space = psutil.disk_usage(log_path).free
         if free_space < self.DISK_SPACE_ABORT:
             raise RuntimeError("Running low on disk space (%0.1fMB)" % (free_space / 1048576.0,))
 
@@ -595,6 +581,19 @@ class FuzzManagerReporter(Reporter):
 
 
 class S3FuzzManagerReporter(FuzzManagerReporter):
+    @staticmethod
+    def compress_rr_trace(src, dest):
+        # resolve symlink to latest trace available
+        latest_trace = os.path.realpath(os.path.join(src, "latest-trace"))
+        assert os.path.isdir(latest_trace), "missing latest-trace directory"
+        rr_arc = os.path.join(dest, "rr.tar.bz2")
+        log.debug("creating %r from %r", rr_arc, latest_trace)
+        with tarfile.open(rr_arc, "w:bz2") as arc_fp:
+            arc_fp.add(latest_trace, arcname=os.path.basename(latest_trace))
+        # remove path containing uncompressed traces
+        shutil.rmtree(src)
+        return rr_arc
+
     def _process_report(self, report):
         self._process_rr_trace(report)
 
@@ -626,7 +625,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
             return s3_url
 
         # Upload to S3
-        rr_arc = FilesystemReporter.compress_rr_trace(trace_path, report.path)
+        rr_arc = self.compress_rr_trace(trace_path, report.path)
         s3.meta.client.upload_file(rr_arc, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"})
         os.unlink(rr_arc)
         self._extra_metadata["rr-trace"] = s3_url
