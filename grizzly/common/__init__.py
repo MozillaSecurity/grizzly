@@ -8,12 +8,12 @@ from .iomanager import IOManager, ServerMap
 from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
 from .runner import Runner
 from .status import ReducerStats, Status
-from .storage import InputFile, TestCase, TestFile
+from .storage import InputFile, TestCaseLoadFailure, TestCase, TestFile, TestFileExists
 
 
 __all__ = (
     "Adapter", "AdapterError", "FilesystemReporter", "FuzzManagerReporter", "IOManager", "InputFile",
     "ReducerStats", "Report", "Reporter", "Runner", "S3FuzzManagerReporter", "ServerMap", "Status",
-    "TestCase", "TestFile")
+    "TestCase", "TestCaseLoadFailure", "TestFile", "TestFileExists")
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]

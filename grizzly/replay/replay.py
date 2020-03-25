@@ -13,7 +13,8 @@ try:
 except ImportError:  # pragma: no cover
     CrashSignature = None
 
-from ..common import FilesystemReporter, FuzzManagerReporter, Report, Runner, Status, TestCase, TestFile
+from ..common import FilesystemReporter, FuzzManagerReporter, Report, Runner, \
+    Status, TestCase, TestCaseLoadFailure, TestFile
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -239,14 +240,17 @@ class ReplayManager(object):
         else:
             signature = None
 
-        replay = None
-        server = None
-        target = None
-        testcase = None
         try:
             LOG.debug("loading the TestCase")
             testcase = TestCase.load_path(args.input)
+        except TestCaseLoadFailure as exc:
+            LOG.error("Error: %s", str(exc))
+            return 1
 
+        replay = None
+        server = None
+        target = None
+        try:
             relaunch = min(args.relaunch, args.repeat)
             LOG.debug("initializing the Target")
             target = load_target(args.platform)(
