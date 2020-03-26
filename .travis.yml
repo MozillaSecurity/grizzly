@@ -1,14 +1,14 @@
 dist: bionic
-sudo: false
 cache: pip
 language: python
+os: linux
 python:
   - 2.7
   - 3.5
   - 3.6
   - 3.7
   - 3.8
-matrix:
+jobs:
   include:
     - os: osx
       python: 2.7
@@ -17,6 +17,8 @@ matrix:
       python: 3.7
       osx_image: xcode11.2
       language: shell
+      before_install:
+        - alias pip='python3 -m pip'
     - os: windows
       python: 2.7
       language: shell
