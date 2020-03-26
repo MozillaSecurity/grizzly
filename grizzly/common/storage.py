@@ -284,23 +284,25 @@ class TestCase(object):
                 self.env_vars[opt_key] = ":".join(updated)
 
     @classmethod
-    def load_path(cls, path, entry_point=None, prefs=True):
-        """Load contents of a directory as a TestCase. The directory must contain
-        a valid test_info.json file unless `entry_point` is specified in which case
-        the test_info.json file will be ignored. `entry_point` must point to
-        a file in the root of the test case.
+    def load_path(cls, path, full_scan=False, prefs=True):
+        """Load contents of a TestCase from disk. If `path` is a directory it must
+        contain a valid test_info.json file.
 
         Args:
-            path (str): Path to root of test case directory to load.
-            entry_point (str): Path to file to use as test case entry point.
+            path (str): Path to the directory or file to load.
+            full_scan (bool): Include all files in the directory containing the
+                              test case entry point as well as the contents of
+                              subdirectories. This is always the case when
+                              loading a directory.
+                              WARNING: This should be used with caution!
             prefs (bool): Include prefs.js file in the test case.
 
         Returns:
             TestCase: A TestCase.
         """
         path = os.path.abspath(path)
-        # load test_info.json
-        if entry_point is None:
+        if os.path.isdir(path):
+            # load a directory using test_info.json
             if "test_info.json" not in os.listdir(path):
                 raise TestCaseLoadFailure("Missing 'test_info.json'")
             try:
@@ -310,30 +312,40 @@ class TestCase(object):
                 raise TestCaseLoadFailure("Invalid 'test_info.json'")
             if "target" not in info:
                 raise TestCaseLoadFailure("'test_info.json' missing 'target' entry")
-            entry_point = info["target"]
-        else:
+            entry_point = os.path.basename(info["target"])
+            if not os.path.isfile(os.path.join(path, entry_point)):
+                raise TestCaseLoadFailure("entry_point '%s' not found in '%s'" % (entry_point, path))
+            adapter = info.get("adapter", None)
+            full_scan = True
+        elif os.path.isfile(path):
+            adapter = None
+            entry_point = os.path.basename(path)
+            path = os.path.dirname(path)
             info = None
-        # sanitize file path and check file is in the test root
-        entry_point = os.path.basename(entry_point)
-        if not os.path.isfile(os.path.join(path, entry_point)):
-            raise TestCaseLoadFailure("entry_point '%s' not found in '%s'" % (entry_point, path))
-        adapter = info.get("adapter", None) if info is not None else None
+        else:
+            raise TestCaseLoadFailure("Cannot find %r" % (path,))
         test = cls(None, None, adapter)
-        for root, _, files in os.walk(path):
-            for fname in files:
-                if fname == "test_info.json":
-                    continue
-                if root == path:
-                    if fname == "prefs.js":
-                        if prefs:
-                            test.add_meta(TestFile.from_file(os.path.join(path, fname), fname))
+        if full_scan:
+            # load all files from directory as test
+            for root, _, files in os.walk(path):
+                for fname in files:
+                    if fname == "test_info.json":
                         continue
-                    if fname == entry_point:
-                        # set entry point
-                        test.add_from_file(os.path.join(root, fname), fname)
-                        test.landing_page = fname
-                        continue
-                test.add_from_file(os.path.join(path, fname), fname, required=False)
+                    if root == path:
+                        if fname == "prefs.js":
+                            if prefs:
+                                test.add_meta(TestFile.from_file(os.path.join(path, fname), fname))
+                            continue
+                        if fname == entry_point:
+                            test.add_from_file(os.path.join(root, fname), fname)
+                            # set entry point
+                            test.landing_page = fname
+                            continue
+                    test.add_from_file(os.path.join(path, fname), fname, required=False)
+        else:
+            # load single file as test
+            test.add_from_file(os.path.join(path, entry_point), entry_point)
+            test.landing_page = entry_point
         if test.landing_page is None:  # pragma: no cover
             # this should not be possible
             test.cleanup()
