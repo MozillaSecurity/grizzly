@@ -13,10 +13,11 @@ jobs:
     - os: osx
       python: 2.7
       language: shell
-    - os: osx
-      python: 3.7
-      osx_image: xcode11.3
-      language: shell
+    # Python 3 on MacOS is broken
+    #- os: osx
+    #  python: 3.7
+    #  osx_image: xcode11.2
+    #  language: shell
     - os: windows
       python: 2.7
       language: shell
@@ -29,9 +30,6 @@ jobs:
       before_install:
         - choco install python --version 3.8.0
       env: PATH=/c/Python38:/c/Python38/Scripts:$PATH
-  allow_failures:
-    - os: osx # temporary disable while image is broken
-      python: 3.7
 before_install:
   - pip install --upgrade setuptools pip
 install:
