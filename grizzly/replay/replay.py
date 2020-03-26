@@ -25,7 +25,6 @@ LOG = logging.getLogger("replay")
 # TODO:
 # - require fuzzmanager
 # - fuzzmanager reporter
-# - add single file support
 # - test main()
 
 class ReplayManager(object):
@@ -51,14 +50,13 @@ class ReplayManager(object):
         timeouts = 0
         while True:
             try:
-                LOG.info("Launching target")
                 self.target.launch(self._location(), env_mod=self.testcase.env_vars)
             except TargetLaunchError:
                 LOG.error("Launch error detected")
                 raise
             except TargetLaunchTimeout:
                 timeouts += 1
-                LOG.warning("Launch timeout detected (attempt #%d)", timeouts)
+                LOG.warning("Launch timeout detected (attempt #%d of %d)", timeouts, max_timeouts)
                 # likely has nothing to do with Grizzly but is seen frequently on machines under a high load
                 # after multiple consecutive timeouts something is likely wrong so raise
                 if timeouts < max_timeouts:
@@ -128,8 +126,10 @@ class ReplayManager(object):
         for _ in range(repeat):
             self.status.iteration += 1
             if self.target.closed:
+                LOG.info("Launching target...")
                 self._launch()
             self.target.step()
+            LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
             # run test case
             self._runner.run(self.ignore, server_map, self.testcase, wait_for_callback=self._harness is None)
             # process results
@@ -224,14 +224,20 @@ class ReplayManager(object):
         if args.rr:
             LOG.info("Running with RR")
 
-        if not args.prefs:
-            LOG.debug("using pref.js from test case")
+        if args.prefs is None:
+            if not os.path.isdir(args.input):
+                LOG.error("Error: prefs.js not specified")
+                return 1
+            LOG.debug("using prefs.js from test case")
             prefs = os.path.join(args.input, "prefs.js")
             if not os.path.isfile(prefs):
-                LOG.error("prefs.js not found in %r", args.input)
+                LOG.error("Error: prefs.js not found in %r", args.input)
                 return 1
         else:
             prefs = args.prefs
+            if not os.path.isfile(prefs):
+                LOG.error("Error: prefs.js not found")
+                return 1
 
         if args.sig:
             assert CrashSignature is not None
@@ -242,7 +248,9 @@ class ReplayManager(object):
 
         try:
             LOG.debug("loading the TestCase")
-            testcase = TestCase.load_path(args.input)
+            testcase = TestCase.load_path(args.input, prefs=args.prefs is None)
+            if args.prefs is not None:
+                testcase.add_meta(TestFile.from_file(prefs, "prefs.js"))
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return 1
@@ -309,3 +317,4 @@ class ReplayManager(object):
                 server.close()
             if testcase is not None:
                 testcase.cleanup()
+            LOG.info("Done.")

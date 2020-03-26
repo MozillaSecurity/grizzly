@@ -143,7 +143,7 @@ def test_testcase_06():
         tcase.cleanup()
 
 def test_testcase_07(tmp_path):
-    """test TestCase.load_path() with test_info.json file"""
+    """test TestCase.load_path() using a directory"""
     # missing test_info.json
     with pytest.raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
         TestCase.load_path(str(tmp_path))
@@ -195,10 +195,10 @@ def test_testcase_07(tmp_path):
         TestCase.load_path(str(src_dir))
 
 def test_testcase_08(tmp_path):
-    """test TestCase.load_path() using entry_point"""
+    """test TestCase.load_path() using a file"""
     # invalid entry_point specified
-    with pytest.raises(TestCaseLoadFailure, match="entry_point 'missing_file'"):
-        TestCase.load_path(str(tmp_path), entry_point="missing_file")
+    with pytest.raises(TestCaseLoadFailure, match=r"Cannot find"):
+        TestCase.load_path(str(tmp_path / "missing_file"))
     # valid test case
     src_dir = (tmp_path / "src")
     src_dir.mkdir()
@@ -206,8 +206,17 @@ def test_testcase_08(tmp_path):
     entry_point = src_dir / "target.bin"
     entry_point.touch()
     (src_dir / "optional.bin").touch()
-    # load test case
-    tcase = TestCase.load_path(str(src_dir), entry_point="target.bin")
+    # load single file test case
+    tcase = TestCase.load_path(str(entry_point))
+    try:
+        assert tcase.landing_page == "target.bin"
+        assert "prefs.js" not in (x.file_name for x in tcase._files.meta)
+        assert "target.bin" in (x.file_name for x in tcase._files.required)
+        assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
+    finally:
+        tcase.cleanup()
+    # load full test case
+    tcase = TestCase.load_path(str(entry_point), full_scan=True, prefs=True)
     try:
         assert tcase.landing_page == "target.bin"
         assert "prefs.js" in (x.file_name for x in tcase._files.meta)

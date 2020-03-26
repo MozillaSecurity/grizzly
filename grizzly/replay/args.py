@@ -46,8 +46,10 @@ class ReplayArgs(CommonArgs):
     def sanity_check(self, args):
         super(ReplayArgs, self).sanity_check(args)
 
-        if not os.path.isdir(args.input) or not os.path.isfile(os.path.join(args.input, "test_info.json")):
-            self.parser.error("Test case must be a folder containing a test_info.json")
+        if not (os.path.isfile(args.input) or os.path.isdir(args.input)):
+            self.parser.error("Test case %r does not exist!" % (args.input,))
+        elif os.path.isdir(args.input) and not os.path.isfile(os.path.join(args.input, "test_info.json")):
+            self.parser.error("Test case folder must contain 'test_info.json'")
 
         if args.logs is not None and os.path.isdir(args.logs) and os.listdir(args.logs):
             self.parser.error("--logs %r must be empty" % (args.logs,))
