@@ -688,8 +688,7 @@ class ReductionJob(object):
                 result = True
                 LOG.info("Interesting: %s", short_sig)
                 if self._orig_sig is None and not self._any_crash:
-                    max_frames = FuzzManagerReporter.signature_max_frames(crash, 5)
-                    self._orig_sig = crash.createCrashSignature(maxFrames=max_frames)
+                    self._orig_sig = Report.crash_signature(crash)
             else:
                 LOG.info("Uninteresting: different signature: %s", short_sig)
                 self.on_other_crash_found(testcase, temp_prefix)

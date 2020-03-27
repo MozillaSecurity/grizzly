@@ -19,14 +19,10 @@ import fasteners
 import psutil
 import six
 
-# check if required FuzzManager modules are available
-try:
-    from Collector.Collector import Collector
-    from FTB.ProgramConfiguration import ProgramConfiguration
-    from FTB.Signatures.CrashInfo import CrashInfo
-    _fm_import_error = None  # pylint: disable=invalid-name
-except ImportError as err:
-    _fm_import_error = err  # pylint: disable=invalid-name
+# import FuzzManager utilities
+from Collector.Collector import Collector
+from FTB.ProgramConfiguration import ProgramConfiguration
+from FTB.Signatures.CrashInfo import CrashInfo
 
 # check if boto is available for S3FuzzManager reporter
 try:
@@ -46,51 +42,6 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
-
-
-class FMInfo(object):
-    AVAILABLE = None
-    # where Collector looks for the '.fuzzmanagerconf' (see Collector.py)
-    CONFIG = os.path.join(os.path.expanduser("~"), ".fuzzmanagerconf")
-
-    @classmethod
-    def sanity_check(cls, bin_file, ignore_error=False):
-        """Perform sanity check to determine availability of FuzzManager.
-        Exceptions will be raised if `ignore_error` is not True.
-
-        Args:
-            bin_file (str): Binary file being tested.
-            ignore_error (bool): Suppress exceptions.
-
-        Returns:
-            None
-        """
-        try:
-            if _fm_import_error is not None:
-                raise _fm_import_error  # pylint: disable=raising-bad-type
-            if not os.path.isfile(cls.CONFIG):
-                raise IOError("Missing: %s" % cls.CONFIG)
-            if not os.path.isfile("".join([bin_file, ".fuzzmanagerconf"])):
-                raise IOError("Missing: %s.fuzzmanagerconf" % (bin_file,))
-            ProgramConfiguration.fromBinary(bin_file)
-            cls.AVAILABLE = True
-        except (IOError, RuntimeError):
-            cls.AVAILABLE = False
-            if not ignore_error:
-                raise
-
-    @classmethod
-    def is_available(cls):
-        """Check if FuzzManager is available. sanity_check() must be called first.
-
-        Args:
-            None
-
-        Returns:
-            bool: True if FuzzManager is available otherwise False.
-        """
-        assert isinstance(cls.AVAILABLE, bool), "call sanity_check() first"
-        return cls.AVAILABLE
 
 
 class Report(object):
@@ -143,23 +94,23 @@ class Report(object):
             crash_info (CrashInfo): Binary file being tested.
 
         Returns:
-            str: 
+            str: Hash of the raw signature of the crash.
         """
-        assert FMInfo.is_available()
-        max_frames = FuzzManagerReporter.signature_max_frames(crash_info, 5)
-        sig = crash_info.createCrashSignature(maxFrames=max_frames)
+        max_frames = Report.crash_signature_max_frames(crash_info, 5)
+        sig = Report.crash_signature(crash_info, max_frames)
         return hashlib.sha1(sig.rawSignature.encode("utf-8")).hexdigest()[:16]
 
-    def crash_info(self, target_binary):
+    def crash_info(self, target_binary, local_only=True):
         """Create CrashInfo object from logs.
 
         Args:
             target_binary (str): Binary file being tested.
+            local_only (bool): CrashInfo will not be uploaded to a FM server.
 
         Returns:
             CrashInfo: CrashInfo based on Result log data.
         """
-        if self._crash_info is None and FMInfo.is_available():
+        if self._crash_info is None:
             # read in the log files and create a CrashInfo object
             aux_data = None
             if self.log_aux is not None:
@@ -167,13 +118,34 @@ class Report(object):
                     aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
             stderr_file = os.path.join(self.path, self.log_err)
             stdout_file = os.path.join(self.path, self.log_out)
+            if local_only:
+                # create dummy ProgramConfiguration for local use only
+                fm_cfg = ProgramConfiguration("", "", "")
+            else:
+                # create ProgramConfiguration that can be reported to a FM server
+                fm_cfg = ProgramConfiguration.fromBinary(target_binary)
             with open(stderr_file, "rb") as err_fp, open(stdout_file, "rb") as out_fp:
                 self._crash_info = CrashInfo.fromRawCrashData(
                     out_fp.read().decode("utf-8", errors="ignore").splitlines(),
                     err_fp.read().decode("utf-8", errors="ignore").splitlines(),
-                    ProgramConfiguration.fromBinary(target_binary),
+                    fm_cfg,
                     auxCrashData=aux_data)
         return self._crash_info
+
+    @staticmethod
+    def crash_signature(crash_info, max_frames=5):
+        return crash_info.createCrashSignature(
+            maxFrames=Report.crash_signature_max_frames(crash_info, max_frames))
+
+    @staticmethod
+    def crash_signature_max_frames(crash_info, suggested_frames=8):
+        if set(crash_info.backtrace) & {
+                "std::panicking::rust_panic",
+                "std::panicking::rust_panic_with_hook",
+        }:
+            # rust panic adds 5-6 frames of noise at the top of the stack
+            suggested_frames += 6
+        return suggested_frames
 
     @classmethod
     def from_path(cls, path, size_limit=MAX_LOG_SIZE):
@@ -400,6 +372,7 @@ class FilesystemReporter(Reporter):
 
 
 class FuzzManagerReporter(Reporter):
+    FM_CONFIG = os.path.join(os.path.expanduser("~"), ".fuzzmanagerconf")
     # max number of times to report a non-frequent signature to FuzzManager
     MAX_REPORTS = 10
 
@@ -423,15 +396,27 @@ class FuzzManagerReporter(Reporter):
 
     @staticmethod
     def create_crash_info(report, target_binary):
-        # TODO: this is here to preserve the old way of operation
-        return report.crash_info(target_binary)
+        # TODO: this is here to preserve the old way of operation (used by reducer)
+        return report.crash_info(target_binary, local_only=False)
 
     def _reset(self):
         self._extra_metadata = {}
 
     @staticmethod
     def sanity_check(bin_file):
-        FMInfo.sanity_check(bin_file)
+        """Perform FuzzManager sanity check.
+
+        Args:
+            bin_file (str): Binary file being tested.
+
+        Returns:
+            None
+        """
+        if not os.path.isfile(FuzzManagerReporter.FM_CONFIG):
+            raise IOError("Missing: %s" % FuzzManagerReporter.FM_CONFIG)
+        if not os.path.isfile("".join([bin_file, ".fuzzmanagerconf"])):
+            raise IOError("Missing: %s.fuzzmanagerconf" % (bin_file,))
+        ProgramConfiguration.fromBinary(bin_file)
 
     @classmethod
     def quality_name(cls, value):
@@ -439,16 +424,6 @@ class FuzzManagerReporter(Reporter):
             if name.startswith("QUAL_") and getattr(cls, name) == value:
                 return name
         return "unknown quality (%r)" % (value,)
-
-    @staticmethod
-    def signature_max_frames(crash_info, suggested_frames=8):
-        if set(crash_info.backtrace) & {
-                "std::panicking::rust_panic",
-                "std::panicking::rust_panic_with_hook",
-        }:
-            # rust panic adds 5-6 frames of noise at the top of the stack
-            suggested_frames += 6
-        return suggested_frames
 
     def _process_report(self, report):
         self._process_rr_trace(report)
@@ -483,7 +458,7 @@ class FuzzManagerReporter(Reporter):
 
     def _submit_report(self, report, test_cases):
         # prepare data for submission as CrashInfo
-        crash_info = report.crash_info(self.target_binary)
+        crash_info = report.crash_info(self.target_binary, local_only=False)
         assert crash_info is not None
 
         # search for a cached signature match and if the signature
@@ -508,7 +483,7 @@ class FuzzManagerReporter(Reporter):
             else:
                 # there is no signature, create one locally so we can count
                 # the number of times we've seen it
-                max_frames = self.signature_max_frames(crash_info)
+                max_frames = Report.crash_signature_max_frames(crash_info)
                 cache_sig_file = collector.generate(crash_info, numFrames=max_frames)
                 cache_metadata = {
                     "_grizzly_seen_count": 0,

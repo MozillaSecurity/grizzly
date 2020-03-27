@@ -11,7 +11,10 @@ import tarfile
 
 import pytest
 
-from .reporter import FilesystemReporter, FMInfo, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
+from FTB.ProgramConfiguration import ProgramConfiguration
+from FTB.Signatures.CrashInfo import CrashInfo
+
+from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
 from .storage import TestCase
 
 
@@ -222,6 +225,50 @@ def test_report_11(tmp_path):
     assert (tmp_path / log_map["stdout"]).is_file()
     assert "valgrind log" in (tmp_path / log_map["aux"]).read_text()
 
+def test_report_12(mocker, tmp_path):
+    """test Report.crash_info()"""
+    fake_reporter = mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
+    fake_reporter.fromBinary.return_value = mocker.Mock(spec=ProgramConfiguration)
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    with (tmp_path / "log_asan_blah.txt").open("wb") as log_fp:
+        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
+        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
+    report = Report.from_path(str(tmp_path))
+    assert report._crash_info is None
+    assert report.crash_info("fake_bin", local_only=True) is not None
+    assert report._crash_info is not None
+    report = Report.from_path(str(tmp_path))
+    assert report._crash_info is None
+    assert report.crash_info("fake_bin", local_only=False) is not None
+    assert report._crash_info is not None
+
+def test_report_13(mocker, tmp_path):
+    """test Report.crash_signature() and Report.crash_hash()"""
+    mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    with (tmp_path / "log_asan_blah.txt").open("wb") as log_fp:
+        log_fp.write(b"==1==ERROR: AddressSanitizer: SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
+        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
+    report = Report.from_path(str(tmp_path))
+    assert report._crash_info is None
+    info = report.crash_info("fake_bin", local_only=True)
+    sig = Report.crash_signature(info)
+    assert sig.symptoms
+    short_sig = info.createShortSignature()
+    assert short_sig == "[@ foo]"
+    assert Report.crash_hash(info)
+
+def test_report_14(mocker):
+    """test Report.crash_signature_max_frames()"""
+    info = mocker.Mock(spec=CrashInfo)
+    info.backtrace = ("blah")
+    assert Report.crash_signature_max_frames(info) == 8
+    info.backtrace = ("std::panicking::rust_panic", "std::panicking::rust_panic_with_hook")
+    assert Report.crash_signature_max_frames(info) == 14
+
 def test_reporter_01(mocker, tmp_path):
     """test creating a simple Reporter"""
     class SimpleReporter(Reporter):
@@ -326,36 +373,22 @@ def test_filesystem_reporter_04(mocker, tmp_path):
     assert not report_path.is_dir()
     assert not report.major.call_count
 
-def test_fuzzmanager_info_01(mocker, tmp_path):
-    """test FMInfo"""
-    mocker.patch("grizzly.common.reporter.ProgramConfiguration")
-    # ignore failures just set status
-    FMInfo.sanity_check("missing", ignore_error=True)
-    assert not FMInfo.is_available()
-    # missing ".fuzzmanagerconf"
-    FMInfo.CONFIG = "no_file"
-    fake_bin = tmp_path / "bin"
-    fake_bin.touch()
-    with pytest.raises(IOError, match="Missing: no_file"):
-        FMInfo.sanity_check(str(fake_bin))
-    # missing "<bin>.fuzzmanagerconf"
-    fake_fmc = tmp_path / ".fuzzmanagerconf"
-    fake_fmc.touch()
-    FMInfo.CONFIG = str(fake_fmc)
-    with pytest.raises(IOError, match="bin.fuzzmanagerconf"):
-        FMInfo.sanity_check(str(fake_bin))
-    # success
-    (tmp_path / "bin.fuzzmanagerconf").touch()
-    FMInfo.sanity_check(str(fake_bin))
-    assert FMInfo.is_available()
-
 def test_fuzzmanager_reporter_01(tmp_path, mocker):
     """test FuzzManagerReporter.sanity_check()"""
-    mocker.patch("grizzly.common.reporter.ProgramConfiguration")
-    fake_bin = tmp_path / "bin"
-    fake_bin.touch()
+    mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
+    # missing global FM config file
+    FuzzManagerReporter.FM_CONFIG = "no_file"
+    with pytest.raises(IOError, match="Missing: no_file"):
+        FuzzManagerReporter.sanity_check("fake")
+    # missing binary FM config file
     fake_fmc = tmp_path / ".fuzzmanagerconf"
     fake_fmc.touch()
+    fake_bin = tmp_path / "bin"
+    fake_bin.touch()
+    FuzzManagerReporter.FM_CONFIG = str(fake_fmc)
+    with pytest.raises(IOError, match="bin.fuzzmanagerconf"):
+        FuzzManagerReporter.sanity_check(str(fake_bin))
+    # success
     (tmp_path / "bin.fuzzmanagerconf").touch()
     FuzzManagerReporter.sanity_check(str(fake_bin))
 
@@ -375,7 +408,6 @@ def test_fuzzmanager_reporter_03(tmp_path, mocker):
     fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (None, None)
     fake_collector.return_value.generate.return_value = str(tmp_path / "fake_sig_file")
-    FMInfo.AVAILABLE = True
     log_path = tmp_path / "log_path"
     log_path.mkdir()
     (log_path / "log_ffp_worker_blah.txt").touch()

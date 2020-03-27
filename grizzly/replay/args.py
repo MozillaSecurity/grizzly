@@ -13,7 +13,8 @@ class ReplayArgs(CommonArgs):
         super(ReplayArgs, self).__init__()
         self.parser.add_argument(
             "input",
-            help="Directory containing test case")
+            help="Directory containing test case data or file to use as a test case." \
+            "When using a directory it must contain a 'test_info.json' file.")
         #self.parser.add_argument(
         #    "--any-crash", action="store_true",
         #    help="Any crash is interesting, not only crashes which match the original first crash")
@@ -46,10 +47,17 @@ class ReplayArgs(CommonArgs):
     def sanity_check(self, args):
         super(ReplayArgs, self).sanity_check(args)
 
-        if not (os.path.isfile(args.input) or os.path.isdir(args.input)):
-            self.parser.error("Test case %r does not exist!" % (args.input,))
-        elif os.path.isdir(args.input) and not os.path.isfile(os.path.join(args.input, "test_info.json")):
-            self.parser.error("Test case folder must contain 'test_info.json'")
+        if os.path.isdir(args.input):
+            if not os.path.isfile(os.path.join(args.input, "test_info.json")):
+                self.parser.error("Test case folder must contain 'test_info.json'")
+            if args.prefs is None:
+                # prefs.js not specified assume it is in the test case directory
+                args.prefs = os.path.join(args.input, "prefs.js")
+
+        if args.prefs is None:
+            self.parser.error("'prefs.js' not specified")
+        elif not os.path.isfile(args.prefs):
+            self.parser.error("'prefs.js' not found")
 
         if args.logs is not None and os.path.isdir(args.logs) and os.listdir(args.logs):
             self.parser.error("--logs %r must be empty" % (args.logs,))

@@ -11,7 +11,7 @@ from setuptools import setup
 
 
 EXTRAS = {
-    'reduce': ['lithium-reducer', 'FuzzManager', 'jsbeautifier'],
+    'reduce': ['lithium-reducer', 'jsbeautifier'],
     's3': ['boto3'],
 }
 EXTRAS['all'] = list(set(itertools.chain.from_iterable(EXTRAS.values())))
@@ -43,7 +43,7 @@ if __name__ == '__main__':
             ],
         },
         extras_require=EXTRAS,
-        install_requires=['fasteners', 'ffpuppet', 'psutil', 'six'],
+        install_requires=['fasteners', 'ffpuppet', 'FuzzManager', 'psutil', 'six'],
         license='MPL 2.0',
         maintainer='Tyson Smith',
         maintainer_email='twsmith@mozilla.com',

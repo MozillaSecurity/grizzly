@@ -8,10 +8,7 @@ import os
 import tempfile
 
 import sapphire
-try:
-    from FTB.Signatures.CrashInfo import CrashSignature
-except ImportError:  # pragma: no cover
-    CrashSignature = None
+from FTB.Signatures.CrashInfo import CrashSignature
 
 from ..common import FilesystemReporter, FuzzManagerReporter, Report, Runner, \
     Status, TestCase, TestCaseLoadFailure, TestFile
@@ -23,9 +20,10 @@ __credits__ = ["Tyson Smith"]
 LOG = logging.getLogger("replay")
 
 # TODO:
-# - require fuzzmanager
-# - fuzzmanager reporter
 # - test main()
+# - fuzzmanager reporter
+# - option to include test in report
+# - option to map include paths
 
 class ReplayManager(object):
     HARNESS_FILE = os.path.join(os.path.dirname(__file__), "..", "common", "harness.html")
@@ -56,9 +54,10 @@ class ReplayManager(object):
                 raise
             except TargetLaunchTimeout:
                 timeouts += 1
-                LOG.warning("Launch timeout detected (attempt #%d of %d)", timeouts, max_timeouts)
-                # likely has nothing to do with Grizzly but is seen frequently on machines under a high load
-                # after multiple consecutive timeouts something is likely wrong so raise
+                LOG.warning("Launch timeout (attempt #%d of %d)", timeouts, max_timeouts)
+                # likely has nothing to do with Grizzly but is seen frequently
+                # on machines under a high load after multiple consecutive timeouts
+                # something is likely wrong so raise
                 if timeouts < max_timeouts:
                     continue
                 raise
@@ -137,39 +136,34 @@ class ReplayManager(object):
                 result_logs = tempfile.mkdtemp(prefix="grzreplay_logs_")
                 self.target.save_logs(result_logs, meta=True)
                 report = Report.from_path(result_logs)
-                # check signatures if needed
-                if self._signature is not None:
-                    crash_info = report.crash_info(self.target.binary)
-                    short_sig = crash_info.createShortSignature()
-                    if short_sig == "No crash detected":
-                        # TODO: change this to support hangs/timeouts, etc
-                        LOG.info("Uninteresting: no crash detected")
-                        crash_hash = None
-                    elif self._signature.matches(crash_info):
-                        self.status.results += 1
-                        LOG.info("Interesting: %s", short_sig)
-                        crash_hash = report.crash_hash(crash_info)
-                        if crash_hash not in self._reports_expected:
-                            LOG.debug("now tracking %s", crash_hash)
-                            self._reports_expected[crash_hash] = report
-                            report = None  # don't remove report
-                        assert len(self._reports_expected) == 1
-                    else:
-                        LOG.info("Uninteresting: different signature: %s", short_sig)
-                        self.status.ignored += 1
-                        crash_hash = report.crash_hash(crash_info)
-                        if crash_hash not in self._reports_other:
-                            LOG.debug("now tracking %s", crash_hash)
-                            self._reports_other[crash_hash] = report
-                            report = None  # don't remove report
-                else:
+                # check signatures
+                crash_info = report.crash_info(self.target.binary)
+                short_sig = crash_info.createShortSignature()
+                if self._signature is None and short_sig != "No crash detected":
+                    # if a signature is not specified use the first one created
+                    self._signature = report.crash_signature(crash_info)
+                if short_sig == "No crash detected":
+                    # TODO: change this to support hangs/timeouts, etc
+                    LOG.info("Uninteresting: no crash detected")
+                    crash_hash = None
+                elif self._signature.matches(crash_info):
                     self.status.results += 1
-                    crash_hash = report.major[:16]
-                    LOG.info("Result detected (%s)", crash_hash)
+                    LOG.info("Interesting: %s", short_sig)
+                    crash_hash = report.crash_hash(crash_info)
                     if crash_hash not in self._reports_expected:
                         LOG.debug("now tracking %s", crash_hash)
                         self._reports_expected[crash_hash] = report
                         report = None  # don't remove report
+                    assert len(self._reports_expected) == 1
+                else:
+                    LOG.info("Uninteresting: different signature: %s", short_sig)
+                    self.status.ignored += 1
+                    crash_hash = report.crash_hash(crash_info)
+                    if crash_hash not in self._reports_other:
+                        LOG.debug("now tracking %s", crash_hash)
+                        self._reports_other[crash_hash] = report
+                        report = None  # don't remove report
+                # purge untracked report
                 if report is not None:
                     if crash_hash is not None:
                         LOG.debug("already tracking %s", crash_hash)
@@ -211,9 +205,10 @@ class ReplayManager(object):
 
     @classmethod
     def main(cls, args):
-        LOG.info("Starting Grizzly Replay")
-        if args.fuzzmanager or args.sig:
+        if args.fuzzmanager:
             FuzzManagerReporter.sanity_check(args.binary)
+
+        LOG.info("Starting Grizzly Replay")
 
         if args.ignore:
             LOG.info("Ignoring: %s", ", ".join(args.ignore))
@@ -224,33 +219,16 @@ class ReplayManager(object):
         if args.rr:
             LOG.info("Running with RR")
 
-        if args.prefs is None:
-            if not os.path.isdir(args.input):
-                LOG.error("Error: prefs.js not specified")
-                return 1
-            LOG.debug("using prefs.js from test case")
-            prefs = os.path.join(args.input, "prefs.js")
-            if not os.path.isfile(prefs):
-                LOG.error("Error: prefs.js not found in %r", args.input)
-                return 1
-        else:
-            prefs = args.prefs
-            if not os.path.isfile(prefs):
-                LOG.error("Error: prefs.js not found")
-                return 1
-
         if args.sig:
-            assert CrashSignature is not None
-            with open(args.sig, "r") as sig_fp:
-                signature = CrashSignature(sig_fp.read())
+            signature = CrashSignature.fromFile(args.sig)
         else:
             signature = None
 
         try:
             LOG.debug("loading the TestCase")
-            testcase = TestCase.load_path(args.input, prefs=args.prefs is None)
-            if args.prefs is not None:
-                testcase.add_meta(TestFile.from_file(prefs, "prefs.js"))
+            testcase = TestCase.load_path(args.input)
+            if os.path.isfile(args.input):
+                testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return 1
@@ -267,7 +245,7 @@ class ReplayManager(object):
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
-                prefs,
+                args.prefs,
                 relaunch,
                 rr=args.rr,
                 valgrind=args.valgrind,
