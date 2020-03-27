@@ -9,7 +9,6 @@ import time
 import pytest
 import ffpuppet
 import sapphire
-from grizzly.common.reporter import FMInfo
 from grizzly.reduce.reduce import ReductionJob
 from grizzly.target.target import Target
 from .test_common import FakeTarget, FakeReduceStatus, create_target_binary
@@ -59,12 +58,7 @@ def fake_sapphire(monkeypatch):
 def fake_timesleep(monkeypatch):
     monkeypatch.setattr(time, "sleep", lambda x: None)
 
-@pytest.fixture
-def set_fminfo():
-    # FM is always required for the reducer (if that changes this should be removed)
-    FMInfo.AVAILABLE = True
-
-pytestmark = pytest.mark.usefixtures("fake_sapphire", "fake_timesleep", "set_fminfo")
+pytestmark = pytest.mark.usefixtures("fake_sapphire", "fake_timesleep")
 
 
 def test_interesting(tmp_path):
