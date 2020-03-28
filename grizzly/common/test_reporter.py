@@ -227,8 +227,6 @@ def test_report_11(tmp_path):
 
 def test_report_12(mocker, tmp_path):
     """test Report.crash_info()"""
-    fake_reporter = mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
-    fake_reporter.fromBinary.return_value = mocker.Mock(spec=ProgramConfiguration)
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     with (tmp_path / "log_asan_blah.txt").open("wb") as log_fp:
@@ -240,8 +238,11 @@ def test_report_12(mocker, tmp_path):
     assert report._crash_info is not None
     report = Report.from_path(str(tmp_path))
     assert report._crash_info is None
+    fake_reporter = mocker.patch("grizzly.common.reporter.ProgramConfiguration")
+    fake_reporter.fromBinary.return_value = mocker.Mock(spec=ProgramConfiguration)
     assert report.crash_info("fake_bin", local_only=False) is not None
     assert report._crash_info is not None
+    assert fake_reporter.fromBinary.call_count == 1
 
 def test_report_13(mocker, tmp_path):
     """test Report.crash_signature() and Report.crash_hash()"""
@@ -375,7 +376,8 @@ def test_filesystem_reporter_04(mocker, tmp_path):
 
 def test_fuzzmanager_reporter_01(tmp_path, mocker):
     """test FuzzManagerReporter.sanity_check()"""
-    mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
+    fake_reporter = mocker.patch("grizzly.common.reporter.ProgramConfiguration")
+    fake_reporter.fromBinary.return_value = mocker.Mock(spec=ProgramConfiguration)
     # missing global FM config file
     FuzzManagerReporter.FM_CONFIG = "no_file"
     with pytest.raises(IOError, match="Missing: no_file"):
@@ -391,6 +393,7 @@ def test_fuzzmanager_reporter_01(tmp_path, mocker):
     # success
     (tmp_path / "bin.fuzzmanagerconf").touch()
     FuzzManagerReporter.sanity_check(str(fake_bin))
+    assert fake_reporter.fromBinary.call_count == 1
 
 def test_fuzzmanager_reporter_02(tmp_path):
     """test FuzzManagerReporter.submit() empty path"""

@@ -17,7 +17,6 @@ def test_args_01(capsys, tmp_path):
     # missing args tests
     with pytest.raises(SystemExit):
         ReplayArgs().parse_args([])
-    assert "the following arguments are required: binary, input" in capsys.readouterr()[-1]
 
     # test case directory missing test_info.json
     exe = tmp_path / "binary"
