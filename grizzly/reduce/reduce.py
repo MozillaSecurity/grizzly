@@ -575,9 +575,9 @@ class ReductionJob(object):
 
     def _get_location(self):
         if self._no_harness:
-            return "http://127.0.0.1:%d/%s" % (self._server.get_port(), self.landing_page)
+            return "http://127.0.0.1:%d/%s" % (self._server.port, self.landing_page)
         return "".join((
-            "http://127.0.0.1:%d/harness" % self._server.get_port(),
+            "http://127.0.0.1:%d/harness" % self._server.port,
             "?timeout=%d" % (self._iter_timeout * 1000,),
             "&close_after=%d" % self._target.rl_reset,
             "&forced_close=0" if not self._target.forced_close else ""))

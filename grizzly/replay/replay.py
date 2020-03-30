@@ -64,7 +64,7 @@ class ReplayManager(object):
             break
 
     def _location(self, timeout=0):
-        location = ["http://127.0.0.1:%d/" % (self.server.get_port(),)]
+        location = ["http://127.0.0.1:%d/" % (self.server.port,)]
         if self._harness is None:
             location.append(self.testcase.landing_page)
         else:
@@ -234,7 +234,6 @@ class ReplayManager(object):
             return 1
 
         replay = None
-        server = None
         target = None
         try:
             relaunch = min(args.relaunch, args.repeat)
@@ -255,23 +254,22 @@ class ReplayManager(object):
             # have client error pages (code 4XX) call window.close() after a few seconds
             sapphire.Sapphire.CLOSE_CLIENT_ERROR = 1
             # launch HTTP server used to serve test cases
-            server = sapphire.Sapphire(timeout=args.timeout)
-            target.reverse(server.get_port(), server.get_port())
-
-            if args.no_harness:
-                LOG.debug("--no-harness specified relaunch set to 1")
-                args.relaunch = 1
-            args.repeat = max(args.min_crashes, args.repeat)
-            LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
-                     args.repeat, args.min_crashes, relaunch)
-            replay = ReplayManager(
-                args.ignore,
-                server,
-                target,
-                testcase,
-                signature=signature,
-                use_harness=not args.no_harness)
-            success = replay.run(repeat=args.repeat, min_results=args.min_crashes)
+            with sapphire.Sapphire(timeout=args.timeout) as server:
+                target.reverse(server.port, server.port)
+                if args.no_harness:
+                    LOG.debug("--no-harness specified relaunch set to 1")
+                    args.relaunch = 1
+                args.repeat = max(args.min_crashes, args.repeat)
+                LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
+                         args.repeat, args.min_crashes, relaunch)
+                replay = ReplayManager(
+                    args.ignore,
+                    server,
+                    target,
+                    testcase,
+                    signature=signature,
+                    use_harness=not args.no_harness)
+                success = replay.run(repeat=args.repeat, min_results=args.min_crashes)
             if args.logs and (any(replay.reports) or any(replay.other_reports)):
                 replay.dump_reports(args.logs)
             return 0 if success else 1
@@ -291,8 +289,6 @@ class ReplayManager(object):
                     report.cleanup()
             if target is not None:
                 target.cleanup()
-            if server is not None:
-                server.close()
             if testcase is not None:
                 testcase.cleanup()
             LOG.info("Done.")

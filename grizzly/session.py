@@ -141,7 +141,7 @@ class Session(object):
     @property
     def location(self):
         assert self.server is not None
-        location = ["http://127.0.0.1:%d/" % self.server.get_port(), self.iomanager.landing_page()]
+        location = ["http://127.0.0.1:%d/" % self.server.port, self.iomanager.landing_page()]
         if self.iomanager.harness is not None:
             location.append("?timeout=%d" % (self.adapter.TEST_DURATION * 1000))
             location.append("&close_after=%d" % self.target.rl_reset)

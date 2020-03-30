@@ -19,7 +19,7 @@ def test_replay_01(mocker):
     """test ReplayManager.run() - no repro"""
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
-    server.get_port.return_value = 0x1337
+    server.port = 0x1337
     server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_NONE = Target.RESULT_NONE
@@ -42,7 +42,7 @@ def test_replay_02(mocker):
     mocker.patch("grizzly.replay.replay.Report", autospec=True)
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
-    server.get_port.return_value = 0x1337
+    server.port = 0x1337
     server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
@@ -61,7 +61,7 @@ def test_replay_03(mocker):
     """test ReplayManager.run() - ignored"""
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
-    server.get_port.return_value = 0x1337
+    server.port = 0x1337
     server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_IGNORED = Target.RESULT_IGNORED
@@ -81,7 +81,7 @@ def test_replay_04(mocker):
     mocker.patch("grizzly.replay.replay.Report", autospec=True)
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
-    server.get_port.return_value = 0x1337
+    server.port = 0x1337
     server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
@@ -117,7 +117,7 @@ def test_replay_05(mocker):
     report.from_path.return_value.crash_info.return_value = crash_info
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
-    server.get_port.return_value = 0x1337
+    server.port = 0x1337
     server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
     signature = mocker.Mock()
     signature.matches.side_effect = (True, False)
@@ -142,7 +142,7 @@ def test_replay_06(mocker):
     """test ReplayManager._launch()"""
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
-    server.get_port.return_value = 0x1337
+    server.port = 0x1337
     target = mocker.Mock(spec=Target)
     testcase = mocker.Mock(spec=TestCase)
     testcase.env_vars = dict()
@@ -168,7 +168,7 @@ def test_replay_07(mocker):
     """test ReplayManager._location()"""
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
-    server.get_port.return_value = 34567
+    server.port = 34567
     target = mocker.Mock(spec=Target)
     target.rl_reset = 10
     testcase = mocker.Mock(spec=TestCase)
@@ -193,7 +193,7 @@ def test_replay_07(mocker):
 def test_replay_08(mocker, tmp_path):
     """test ReplayManager.dump_reports()"""
     server = mocker.Mock(spec=Sapphire)
-    server.get_port.return_value = 34567
+    server.port = 34567
     target = mocker.Mock(spec=Target)
     target.rl_reset = 10
 

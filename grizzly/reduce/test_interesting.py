@@ -23,7 +23,8 @@ class FakeServer(object):
     def close(self):
         pass
 
-    def get_port(self):  # pylint: disable=no-self-use
+    @property
+    def port(self):  # pylint: disable=no-self-use
         return 8000
 
     def add_dynamic_response(self, *args, **kwds):

@@ -209,6 +209,11 @@ class Sapphire(object):
         self._socket = Sapphire._create_listening_socket(allow_remote, port)
         self.timeout = timeout
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     @staticmethod
     def _200_header(c_length, c_type):
@@ -222,7 +227,7 @@ class Sapphire(object):
     def _307_redirect(redirct_to):
         return "HTTP/1.1 307 Temporary Redirect\r\n" \
                "Location: %s\r\n" \
-               "Connection: close\r\n\r\n" % (redirct_to)
+               "Connection: close\r\n\r\n" % (redirct_to,)
 
     @staticmethod
     def _4xx_page(code, hdr_msg):
@@ -275,15 +280,6 @@ class Sapphire(object):
         """
         if self._socket is not None:
             self._socket.close()
-
-    def get_port(self):
-        """
-        get_port() -> int
-
-        returns the port number the socket is listening on
-        """
-
-        return self._socket.getsockname()[1]
 
     @staticmethod
     def _handle_request(conn, serv_job):
@@ -465,6 +461,16 @@ class Sapphire(object):
             for worker in worker_pool:
                 worker.thread.join()
 
+    @property
+    def port(self):
+        """
+        port -> int
+
+        returns the port number the socket is listening on
+        """
+
+        return self._socket.getsockname()[1]
+
     def serve_path(self, path, continue_cb=None, forever=False, optional_files=None, server_map=None):
         """
         serve_path() -> tuple
@@ -612,14 +618,13 @@ def main():
     if not os.path.isdir(args.path):
         parser.error("Invalid path to use as wwwroot")
 
-    serv = None
     try:
-        serv = Sapphire(allow_remote=args.remote, port=args.port, timeout=args.timeout)
-        LOG.info(
-            "Serving %r @ http://%s:%d/",
-            os.path.abspath(args.path),
-            socket.gethostname() if args.remote else "127.0.0.1",
-            serv.get_port())
+        with Sapphire(allow_remote=args.remote, port=args.port, timeout=args.timeout) as serv:
+            LOG.info(
+                "Serving %r @ http://%s:%d/",
+                os.path.abspath(args.path),
+                socket.gethostname() if args.remote else "127.0.0.1",
+                serv.get_port())
         status = serv.serve_path(args.path)
         if status == SERVED_ALL:
             LOG.info("All test case content was served")
@@ -627,6 +632,3 @@ def main():
             LOG.warning("Failed to serve all test content")
     except KeyboardInterrupt:
         LOG.warning("Ctrl+C detected. Shutting down...")
-    finally:
-        if serv is not None:
-            serv.close()

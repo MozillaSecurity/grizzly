@@ -156,7 +156,7 @@ def main(args):
             display_mode=display_mode)
 
         session.config_server(args.timeout)
-        target.reverse(session.server.get_port(), session.server.get_port())
+        target.reverse(session.server.port, session.server.port)
 
         session.run()
 

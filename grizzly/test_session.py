@@ -119,7 +119,7 @@ def test_session_03(tmp_path, mocker):
     """test Session.location"""
     Status.PATH = str(tmp_path)
     fake_server = mocker.Mock(spec=Sapphire)
-    fake_server.get_port.return_value = 1
+    fake_server.port = 1
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 1
     fake_iomgr = mocker.Mock(spec=IOManager)
