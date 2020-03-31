@@ -9,7 +9,7 @@ import threading
 
 import pytest
 
-from .core import ServeJob
+from .sapphire_job import SapphireJob
 from .sapphire_worker import SapphireWorker
 
 
@@ -30,7 +30,7 @@ def test_sapphire_worker_01(mocker):
 def test_sapphire_worker_02(mocker):
     """test SapphireWorker.launch() fail cases"""
     serv_con = mocker.Mock(spec=socket.socket)
-    serv_job = mocker.Mock(spec=ServeJob)
+    serv_job = mocker.Mock(spec=SapphireJob)
     fake_thread = mocker.patch("threading.Thread", autospec=True)
 
     serv_con.accept.side_effect = socket.timeout
@@ -51,7 +51,7 @@ def test_sapphire_worker_03(mocker):
     serv_con = mocker.Mock(spec=socket.socket)
     conn = mocker.Mock(spec=socket.socket)
     serv_con.accept.return_value = (conn, None)
-    serv_job = mocker.Mock(spec=ServeJob)
+    serv_job = mocker.Mock(spec=SapphireJob)
     fake_thread = mocker.patch("threading.Thread", autospec=True)
     worker = SapphireWorker.launch(serv_con, serv_job)
     assert serv_job.accepting.clear.call_count == 1
