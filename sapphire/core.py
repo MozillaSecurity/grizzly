@@ -26,6 +26,7 @@ import threading
 import time
 import traceback
 
+from .sapphire_worker import SapphireWorker
 from .server_map import Resource
 
 
@@ -42,7 +43,6 @@ SERVED_TIMEOUT = 3  # timeout occurred
 
 
 Tracker = namedtuple("Tracker", "files lock")
-WorkerHandle = namedtuple("WorkerHandle", "conn thread")
 
 
 class ServeJob(object):
@@ -205,8 +205,8 @@ class Sapphire(object):
     _request = re.compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
 
     def __init__(self, allow_remote=False, port=None, timeout=60):
-        self._timeout = None
         self._socket = Sapphire._create_listening_socket(allow_remote, port)
+        self._timeout = None
         self.timeout = timeout
 
     def __enter__(self):
@@ -398,26 +398,9 @@ class Sapphire(object):
             while not serv_job.is_complete():
                 if not serv_job.accepting.wait(0.05):
                     continue
-                w_conn = None
                 try:
-                    w_conn, _ = serv_sock.accept()
-                    w_conn.settimeout(None)
-                    # create a worker thread to handle client request
-                    w_thread = threading.Thread(
-                        target=Sapphire._handle_request,
-                        args=(w_conn, serv_job))
-                    serv_job.accepting.clear()
-                    w_thread.start()
-                    worker_pool.append(WorkerHandle(conn=w_conn, thread=w_thread))
-                    pool_size += 1
-                except socket.timeout:
-                    pass
-                except socket.error:
-                    if w_conn is not None:
-                        w_conn.close()
+                    worker = SapphireWorker.launch(serv_sock, serv_job)
                 except threading.ThreadError:
-                    if w_conn is not None:
-                        w_conn.close()
                     LOG.warning(
                         "ThreadError! pool size: %d, total active threads: %d",
                         pool_size,
@@ -426,9 +409,12 @@ class Sapphire(object):
                         raise
                     # wait for system resources to free up
                     time.sleep(0.1)
-
+                    continue
+                if worker is not None:
+                    worker_pool.append(worker)
+                    pool_size += 1
                 # manage worker pool
-                if pool_size > Sapphire.WORKER_POOL_LIMIT:
+                if pool_size >= Sapphire.WORKER_POOL_LIMIT:
                     LOG.debug("active pool size: %d, waiting for worker to finish...", pool_size)
                     serv_job.worker_complete.wait()
                     serv_job.worker_complete.clear()
@@ -437,29 +423,23 @@ class Sapphire(object):
                     # sometimes the thread that triggered the event doesn't quite cleanup in time
                     # so add a retry (10x with a 0.1 second sleep on failure)
                     for _ in range(10, 0, -1):
-                        for worker in list(worker_pool):
-                            if not worker.thread.is_alive():
-                                # no need to call close() because worker threads do on exit
-                                worker.thread.join()
-                                worker_pool.remove(worker)
-                        if len(worker_pool) < pool_size:
+                        worker_pool = list(w for w in worker_pool if not w.done)
+                        pool_size = len(worker_pool)
+                        if pool_size < Sapphire.WORKER_POOL_LIMIT:
                             break
                         time.sleep(0.1)
                     else:
                         raise RuntimeError("Failed to trim worker pool!")
-                    pool_size = len(worker_pool)
                     LOG.debug("trimmed worker pool (size: %d)", pool_size)
         finally:
             LOG.debug("shutting down and cleaning up workers")
             deadline = time.time() + Sapphire.SHUTDOWN_DELAY
             for worker in worker_pool:
                 # avoid cutting off connections
-                while worker.thread.is_alive() and time.time() < deadline:
+                while not worker.done and time.time() < deadline:
                     LOG.debug("delaying shutdown...")
                     time.sleep(0.01)
-                worker.conn.close()
-            for worker in worker_pool:
-                worker.thread.join()
+                worker.close()
 
     @property
     def port(self):
