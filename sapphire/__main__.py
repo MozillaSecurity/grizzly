@@ -9,8 +9,7 @@ Sapphire HTTP server
 import logging
 import os
 
-from .core import main
-
+from .core import Sapphire
 
 def init_logger():
     log_level = logging.INFO
@@ -22,4 +21,4 @@ def init_logger():
 
 
 init_logger()
-main()
+Sapphire.main()
