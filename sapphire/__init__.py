@@ -6,8 +6,9 @@ Sapphire HTTP server
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from .core import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
+from .core import Sapphire
 from .server_map import ServerMap
+from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
 
 __all__ = ("Sapphire", "SERVED_ALL", "SERVED_NONE", "SERVED_REQUEST", "SERVED_TIMEOUT", "ServerMap")
 __author__ = "Tyson Smith"
