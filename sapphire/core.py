@@ -417,37 +417,37 @@ class Sapphire(object):
         else:
             self._timeout = max(value, 1)
 
+    @classmethod
+    def main(cls, argv=None):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "path",
+            help="Specify a directory to act as wwwroot")
+        parser.add_argument(
+            "--port", type=int,
+            help="Specify a port to bind to (default: random)")
+        parser.add_argument(
+            "--remote", action="store_true",
+            help="Allow connections from addresses other than 127.0.0.1")
+        parser.add_argument(
+            "--timeout", type=int,
+            help="Duration in seconds to serve before exiting, 0 run until served (default: 0)")
+        args = parser.parse_args(argv)
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "path",
-        help="Specify a directory to act as wwwroot")
-    parser.add_argument(
-        "--port", type=int,
-        help="Specify a port to bind to (default: random)")
-    parser.add_argument(
-        "--remote", action="store_true",
-        help="Allow connections from addresses other than 127.0.0.1")
-    parser.add_argument(
-        "--timeout", type=int,
-        help="Duration in seconds to serve before exiting, 0 run until served (default: 0)")
-    args = parser.parse_args()
+        if not os.path.isdir(args.path):
+            parser.error("Path does not exist %r" % (args.path,))
 
-    if not os.path.isdir(args.path):
-        parser.error("Invalid path to use as wwwroot")
-
-    try:
-        with Sapphire(allow_remote=args.remote, port=args.port, timeout=args.timeout) as serv:
-            LOG.info(
-                "Serving %r @ http://%s:%d/",
-                os.path.abspath(args.path),
-                socket.gethostname() if args.remote else "127.0.0.1",
-                serv.get_port())
-        status = serv.serve_path(args.path)
-        if status == SERVED_ALL:
-            LOG.info("All test case content was served")
-        else:
-            LOG.warning("Failed to serve all test content")
-    except KeyboardInterrupt:
-        LOG.warning("Ctrl+C detected. Shutting down...")
+        try:
+            with cls(allow_remote=args.remote, port=args.port, timeout=args.timeout) as serv:
+                LOG.info(
+                    "Serving %r @ http://%s:%d/",
+                    os.path.abspath(args.path),
+                    socket.gethostname() if args.remote else "127.0.0.1",
+                    serv.port)
+                status = serv.serve_path(args.path)[0]
+            if status == SERVED_ALL:
+                LOG.info("All test case content was served")
+            else:
+                LOG.warning("Failed to serve all test content")
+        except KeyboardInterrupt:
+            LOG.warning("Ctrl+C detected. Shutting down...")

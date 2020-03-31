@@ -618,3 +618,9 @@ def test_response_data_04():
         assert "<script>window.setTimeout(window.close, 10000)</script>" in output
     finally:
         Sapphire.CLOSE_CLIENT_ERROR = None
+
+def test_main_01(tmp_path):
+    """test Sapphire.main()"""
+    with pytest.raises(SystemExit):
+        Sapphire.main(["missing_path"])
+    Sapphire.main([str(tmp_path)])
