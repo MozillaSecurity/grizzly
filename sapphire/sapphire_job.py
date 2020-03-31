@@ -155,7 +155,9 @@ class SapphireJob(object):
             return True  # this is NOT a valid include path
         return False  # this is a valid path
 
-    def pending_files(self):
+    @property
+    def pending(self):
+        # number of pending files
         with self._pending.lock:
             return len(self._pending.files)
 
@@ -165,6 +167,12 @@ class SapphireJob(object):
             if self._pending.files:
                 self._pending.files.discard(file_name)
             return not self._pending.files
+
+    @property
+    def served(self):
+        # served files (with path relative to www root)
+        with self._served.lock:
+            return tuple(os.path.relpath(x, self.base_path) for x in self._served.files.keys())
 
     @property
     def status(self):

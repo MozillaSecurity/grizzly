@@ -139,7 +139,7 @@ class Sapphire(object):
                 LOG.debug(
                     "400 request length %d (%d to go)",
                     len(raw_request),
-                    serv_job.pending_files())
+                    serv_job.pending)
                 return
 
             request = request.group("request").decode("ascii")
@@ -163,20 +163,20 @@ class Sapphire(object):
 
             if resource is None:
                 conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
-                LOG.debug("404 %r (%d to go)", request, serv_job.pending_files())
+                LOG.debug("404 %r (%d to go)", request, serv_job.pending)
                 return
             if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                 LOG.debug("target %r", resource.target)
                 if not os.path.isfile(resource.target):
                     conn.sendall(Sapphire._4xx_page(404, "Not Found").encode("ascii"))
-                    LOG.debug("404 %r (%d to go)", request, serv_job.pending_files())
+                    LOG.debug("404 %r (%d to go)", request, serv_job.pending)
                     return
                 if serv_job.is_forbidden(resource.target):
                     # NOTE: this does info leak if files exist on disk.
                     # We could replace 403 with 404 if it turns out we care but this
                     # is meant to run locally and only be accessible from localhost
                     conn.sendall(Sapphire._4xx_page(403, "Forbidden").encode("ascii"))
-                    LOG.debug("403 %r (%d to go)", request, serv_job.pending_files())
+                    LOG.debug("403 %r (%d to go)", request, serv_job.pending)
                     return
             elif resource.type == Resource.URL_REDIRECT:
                 conn.sendall(Sapphire._307_redirect(resource.target).encode("ascii"))
@@ -184,7 +184,7 @@ class Sapphire(object):
                     "307 %r -> %r (%d to go)",
                     request,
                     resource.target,
-                    serv_job.pending_files())
+                    serv_job.pending)
                 return
             elif resource.type == Resource.URL_DYNAMIC:
                 data = resource.target()
@@ -210,7 +210,7 @@ class Sapphire(object):
                 while offset < data_size:
                     conn.sendall(in_fp.read(Sapphire.DEFAULT_TX_SIZE))
                     offset = in_fp.tell()
-            LOG.debug("200 %r (%d to go)", resource.target, serv_job.pending_files())
+            LOG.debug("200 %r (%d to go)", resource.target, serv_job.pending)
             serv_job.increment_served(resource.target)
 
         except (socket.timeout, socket.error):
@@ -310,15 +310,15 @@ class Sapphire(object):
         LOG.debug("serving forever: %r", forever)
 
         if continue_cb is not None and not callable(continue_cb):
-            raise TypeError("continue_cb must be of type 'function'")
+            raise TypeError("continue_cb must be callable")
         if not os.path.isdir(os.path.abspath(path)):
-            raise IOError("%r does not exist" % path)
+            raise IOError("%r does not exist" % (path,))
 
         job = SapphireJob(path, forever=forever, optional_files=optional_files, server_map=server_map)
 
-        if not job.pending_files():
+        if not job.pending:
             job.finish()
-            return SERVED_NONE, list()
+            return SERVED_NONE, tuple()
 
         # create the client listener thread to handle incoming requests
         listener = threading.Thread(
@@ -372,11 +372,7 @@ class Sapphire(object):
             if listener.ident is not None:
                 listener.join()
 
-        # served files should be relative to the www root, since that path could be a temporary
-        # path created by serve_testcase()
-        served_files = {os.path.relpath(file, path) for file in job._served.files.keys()}
-
-        return status, served_files  # pylint: disable=protected-access
+        return status, job.served
 
     def serve_testcase(self, testcase, continue_cb=None, forever=False, working_path=None, server_map=None):
         """
