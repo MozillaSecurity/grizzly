@@ -24,7 +24,7 @@ def test_sapphire_job_01(tmp_path):
     assert job.check_request("test/../../") is None
     assert not job.is_forbidden(str(tmp_path))
     assert not job.is_forbidden(str(tmp_path / "missing_file"))
-    assert job.pending_files() == 0
+    assert job.pending == 0
     assert not job.is_complete()
     assert job.remove_pending("no_file.test")
     job.finish()
@@ -48,13 +48,13 @@ def test_sapphire_job_02(tmp_path):
     assert resource.type == Resource.URL_FILE
     assert not job.is_forbidden(str(req1_path))
     assert not job.remove_pending("no_file.test")
-    assert job.pending_files() == 2
+    assert job.pending == 2
     assert not job.remove_pending(str(req1_path))
     assert job.status == SERVED_REQUEST
-    assert job.pending_files() == 1
+    assert job.pending == 1
     assert job.remove_pending(str(req2_path))
     assert job.status == SERVED_ALL
-    assert job.pending_files() == 0
+    assert job.pending == 0
     assert job.remove_pending(str(req1_path))
     resource = job.check_request("opt_file.txt")
     assert not resource.required
@@ -76,9 +76,9 @@ def test_sapphire_job_03(tmp_path):
     resource = job.check_request("two?q=123")
     assert resource is not None
     assert resource.type == Resource.URL_REDIRECT
-    assert job.pending_files() == 1
+    assert job.pending == 1
     assert job.remove_pending("two")
-    assert job.pending_files() == 0
+    assert job.pending == 0
 
 def test_sapphire_job_04(mocker, tmp_path):
     """test SapphireJob includes"""
@@ -138,7 +138,7 @@ def test_sapphire_job_05(tmp_path):
     smap.set_dynamic_response("cb2", lambda: 1)
     job = SapphireJob(str(tmp_path / "root"), server_map=smap)
     assert job.status == SERVED_ALL
-    assert job.pending_files() == 0
+    assert job.pending == 0
     resource = job.check_request("cb1")
     assert resource.type == Resource.URL_DYNAMIC
     assert callable(resource.target)
@@ -159,7 +159,7 @@ def test_sapphire_job_06(tmp_path):
     no_access.write_bytes(b"a")
     job = SapphireJob(str(srv_root))
     assert job.status == SERVED_NONE
-    assert job.pending_files() == 1
+    assert job.pending == 1
     resource = job.check_request("../no_access.txt")
     assert resource.target == str(no_access)
     assert resource.type == Resource.URL_FILE
@@ -175,5 +175,5 @@ def test_sapphire_job_07(tmp_path):
     (tmp_path / "?_2.txt").write_bytes(b"a")
     job = SapphireJob(str(tmp_path))
     assert job.status == SERVED_NONE
-    assert job.pending_files() == 1
+    assert job.pending == 1
     assert job.check_request("test.txt").target == str(test_file)
