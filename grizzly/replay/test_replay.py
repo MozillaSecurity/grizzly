@@ -6,6 +6,7 @@
 """
 unit tests for grizzly.ReplayManager
 """
+import os
 
 import pytest
 
@@ -15,7 +16,30 @@ from ..common import Report, TestCase
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 
 
+def _fake_save_logs_result(result_logs, meta=False):  # pylint: disable=unused-argument
+    """write fake log data to disk"""
+    with open(os.path.join(result_logs, "log_stderr.txt"), "w") as log_fp:
+        log_fp.write("STDERR log\n")
+    with open(os.path.join(result_logs, "log_stdout.txt"), "w") as log_fp:
+        log_fp.write("STDOUT log\n")
+    with open(os.path.join(result_logs, "log_asan_blah.txt"), "w") as log_fp:
+        log_fp.write("==1==ERROR: AddressSanitizer: ")
+        log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+        log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+        log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19\n")
+
 def test_replay_01(mocker):
+    """test ReplayManager.cleanup()"""
+    replay = ReplayManager([], mocker.Mock(spec=Sapphire), mocker.Mock(spec=Target), mocker.Mock())
+    replay._reports_expected = {"A":  mocker.Mock(spec=Report)}
+    replay._reports_other = {"B":  mocker.Mock(spec=Report)}
+    ereport = tuple(replay.reports)[0]
+    oreport = tuple(replay.other_reports)[0]
+    replay.cleanup()
+    assert ereport.cleanup.call_count == 1
+    assert oreport.cleanup.call_count == 1
+
+def test_replay_02(mocker):
     """test ReplayManager.run() - no repro"""
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
@@ -37,9 +61,8 @@ def test_replay_01(mocker):
     assert replay.status.results == 0
     assert not any(replay.reports)
 
-def test_replay_02(mocker):
+def test_replay_03(mocker):
     """test ReplayManager.run() - successful repro"""
-    mocker.patch("grizzly.replay.replay.Report", autospec=True)
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
     server.port = 0x1337
@@ -47,6 +70,7 @@ def test_replay_02(mocker):
     target = mocker.Mock(spec=Target)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.save_logs = _fake_save_logs_result
     testcase = mocker.Mock(spec=TestCase)
     testcase.env_vars = dict()
     testcase.landing_page = "index.html"
@@ -56,8 +80,10 @@ def test_replay_02(mocker):
     assert replay.status.iteration == 1
     assert replay.status.results == 1
     assert len([replay.reports]) == 1
+    assert not any(replay.other_reports)
+    replay.cleanup()
 
-def test_replay_03(mocker):
+def test_replay_04(mocker):
     """test ReplayManager.run() - ignored"""
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
@@ -75,10 +101,10 @@ def test_replay_03(mocker):
     assert replay.status.iteration == 1
     assert replay.status.results == 0
     assert not any(replay.reports)
+    assert not any(replay.other_reports)
 
-def test_replay_04(mocker):
+def test_replay_05(mocker):
     """test ReplayManager.run() - early exit"""
-    mocker.patch("grizzly.replay.replay.Report", autospec=True)
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
     server.port = 0x1337
@@ -87,6 +113,7 @@ def test_replay_04(mocker):
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.RESULT_NONE = Target.RESULT_NONE
+    target.save_logs = _fake_save_logs_result
     testcase = mocker.Mock(spec=TestCase)
     testcase.env_vars = dict()
     testcase.landing_page = "index.html"
@@ -98,6 +125,7 @@ def test_replay_04(mocker):
     assert replay.status.results == 1
     assert replay.status.ignored == 1
     assert len([replay.reports]) == 1
+    replay.cleanup()
     # early success
     target.detect_failure.side_effect = [Target.RESULT_FAILURE, Target.RESULT_IGNORED, Target.RESULT_FAILURE]
     replay = ReplayManager(ignore, server, target, testcase, use_harness=False)
@@ -108,14 +136,20 @@ def test_replay_04(mocker):
     assert len(replay._reports_expected) == 1
     assert not replay._reports_other
     assert len([replay.reports]) == 1
+    replay.cleanup()
 
-def test_replay_05(mocker):
+def test_replay_06(mocker, tmp_path):
     """test ReplayManager.run() - test signatures"""
     report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    crash_info = mocker.Mock()
-    crash_info.createShortSignature.side_effect = ("No crash detected", "[@ test]", "[@ test]")
-    report.from_path.return_value.crash_info.return_value = crash_info
-    ignore = mocker.Mock(spec=list)
+    mkdtemp = mocker.patch("grizzly.replay.replay.tempfile.mkdtemp", autospec=True)
+    mkdtemp.return_value = str(tmp_path)
+    report_0 = mocker.Mock(spec=Report)
+    report_0.crash_info.return_value.createShortSignature.return_value = "No crash detected"
+    report_1 = mocker.Mock(spec=Report)
+    report_1.crash_info.return_value.createShortSignature.return_value = "[@ test1]"
+    report_2 = mocker.Mock(spec=Report)
+    report_2.crash_info.return_value.createShortSignature.return_value = "[@ test2]"
+    report.from_path.side_effect = (report_0, report_1, report_2)
     server = mocker.Mock(spec=Sapphire)
     server.port = 0x1337
     server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
@@ -128,17 +162,20 @@ def test_replay_05(mocker):
     testcase = mocker.Mock(spec=TestCase)
     testcase.env_vars = dict()
     testcase.landing_page = "index.html"
-    replay = ReplayManager(ignore, server, target, testcase, signature=signature, use_harness=False)
+    replay = ReplayManager([], server, target, testcase, signature=signature, use_harness=False)
     assert not replay.run(repeat=3, min_results=2)
+    assert report.from_path.call_count == 3
     assert replay.status.iteration == 3
     assert replay.status.results == 1
     assert replay.status.ignored == 1
-    assert len(replay._reports_expected) == 1
-    assert len(replay._reports_other) == 1
     assert len([replay.reports]) == 1
+    assert len([replay.other_reports]) == 1
+    assert report_0.cleanup.call_count == 1
+    assert report_1.cleanup.call_count == 0
+    assert report_2.cleanup.call_count == 0
     assert signature.matches.call_count == 2
 
-def test_replay_06(mocker):
+def test_replay_07(mocker):
     """test ReplayManager._launch()"""
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
@@ -164,7 +201,7 @@ def test_replay_06(mocker):
         replay._launch(max_timeouts=3)
     assert target.launch.call_count == 3
 
-def test_replay_07(mocker):
+def test_replay_08(mocker):
     """test ReplayManager._location()"""
     ignore = mocker.Mock(spec=list)
     server = mocker.Mock(spec=Sapphire)
@@ -190,19 +227,16 @@ def test_replay_07(mocker):
     replay = ReplayManager(ignore, server, target, testcase, use_harness=True)
     assert replay._location(timeout=60) == "http://127.0.0.1:34567/harness.html?timeout=60000&close_after=10"
 
-def test_replay_08(mocker, tmp_path):
+def test_replay_09(mocker, tmp_path):
     """test ReplayManager.dump_reports()"""
     server = mocker.Mock(spec=Sapphire)
     server.port = 34567
     target = mocker.Mock(spec=Target)
     target.rl_reset = 10
-
     replay = ReplayManager(None, server, target, None, use_harness=False)
-
     # no reports
     replay.dump_reports(str(tmp_path))
-    assert not list(tmp_path.glob("*"))
-
+    assert not any(tmp_path.glob("*"))
     # with reports
     path = tmp_path / "dest"
     replay._reports_expected["testhash"] = mocker.Mock(spec=Report)
