@@ -24,6 +24,7 @@ LOG = logging.getLogger("replay")
 # - fuzzmanager reporter
 # - option to include test in report
 # - option to map include paths
+# - add method comments
 
 class ReplayManager(object):
     HARNESS_FILE = os.path.join(os.path.dirname(__file__), "..", "common", "harness.html")
@@ -77,6 +78,14 @@ class ReplayManager(object):
             if not self.target.forced_close:
                 location.append("&forced_close=0")
         return "".join(location)
+
+    def cleanup(self):
+        for report in self._reports_expected.values():
+            report.cleanup()
+        self._reports_expected.clear()
+        for report in self._reports_other.values():
+            report.cleanup()
+        self._reports_other.clear()
 
     def dump_reports(self, path, include_extra=True):
         if not os.path.isdir(path):
@@ -283,10 +292,7 @@ class ReplayManager(object):
         finally:
             LOG.warning("Shutting down...")
             if replay is not None:
-                for report in replay.reports:
-                    report.cleanup()
-                for report in replay.other_reports:
-                    report.cleanup()
+                replay.cleanup()
             if target is not None:
                 target.cleanup()
             if testcase is not None:
