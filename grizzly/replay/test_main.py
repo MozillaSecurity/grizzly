@@ -6,9 +6,12 @@
 """
 unit tests for grizzly.replay.main
 """
+import os
 
 import pytest
 
+from grizzly.target import Target
+from grizzly.replay import ReplayManager
 from grizzly.replay.args import ReplayArgs
 
 
@@ -66,4 +69,60 @@ def test_args_01(capsys, tmp_path):
         ReplayArgs().parse_args([str(exe), str(inp), "--sig", "missing"])
     assert "error: signature file not found" in capsys.readouterr()[-1]
 
-#TODO: main() tests
+def test_main_01(mocker, tmp_path):
+    """test ReplayManager.main()"""
+    # This is a typical scenario - a test that reproduces results ~50% of the time.
+    # Of the four attempts only the first and third will 'reproduce' the result
+    # and the forth attempt should be skipped.
+    mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
+    # mock Sapphire.serve_testcase only
+    serve_testcase = mocker.patch("grizzly.replay.replay.sapphire.Sapphire.serve_testcase", autospec=True)
+    serve_testcase.return_value = (None, None)  # passed to mocked Target.detect_failure
+    # setup Target
+    load_target = mocker.patch("grizzly.replay.replay.load_target")
+    target = mocker.Mock(spec=Target)
+    target.RESULT_FAILURE = Target.RESULT_FAILURE
+    target.RESULT_IGNORED = Target.RESULT_IGNORED
+    target.RESULT_NONE = Target.RESULT_NONE
+    target.detect_failure.side_effect = (Target.RESULT_FAILURE, Target.RESULT_NONE, Target.RESULT_FAILURE)
+    def _fake_save_logs(result_logs, meta=False):  # pylint: disable=unused-argument
+        """write fake log data to disk"""
+        with open(os.path.join(result_logs, "log_stderr.txt"), "w") as log_fp:
+            log_fp.write("STDERR log\n")
+        with open(os.path.join(result_logs, "log_stdout.txt"), "w") as log_fp:
+            log_fp.write("STDOUT log\n")
+        with open(os.path.join(result_logs, "log_asan_blah.txt"), "w") as log_fp:
+            log_fp.write("==1==ERROR: AddressSanitizer: ")
+            log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19\n")
+    target.save_logs = _fake_save_logs
+    load_target.return_value.return_value = target
+    # setup args
+    args = mocker.Mock()
+    args.ignore = ["fake", "timeout"]
+    (tmp_path / "test.html").touch()
+    log_path = (tmp_path / "logs")
+    args.logs = str(log_path)
+    args.input = str(tmp_path / "test.html")
+    args.min_crashes = 2
+    (tmp_path / "prefs.js").touch()
+    args.prefs = str(tmp_path / "prefs.js")
+    args.relaunch = 1
+    args.repeat = 4
+    args.sig = None
+    args.timeout = 10
+    assert ReplayManager.main(args) == 0
+    assert target.reverse.call_count == 1
+    assert target.launch.call_count == 3
+    assert target.step.call_count == 3
+    assert target.detect_failure.call_count == 3
+    assert serve_testcase.call_count == 3
+    assert load_target.call_count == 1
+    assert target.close.call_count == 1
+    assert target.cleanup.call_count == 1
+    assert target.check_relaunch.call_count == 2
+    assert log_path.is_dir()
+    assert tuple(log_path.glob('**/log_asan_blah.txt'))
+    assert tuple(log_path.glob('**/log_stderr.txt'))
+    assert tuple(log_path.glob('**/log_stdout.txt'))
