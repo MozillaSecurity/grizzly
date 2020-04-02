@@ -39,6 +39,12 @@ class InputFile(object):
         if "." in self.file_name:
             self.extension = os.path.splitext(self.file_name)[-1].lstrip(".")
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
     def _cache_data(self):
         """Cache file data.
 
@@ -114,6 +120,12 @@ class TestCase(object):
             meta=list(),  # environment files such as prefs.js, etc...
             optional=list(),
             required=list())
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
 
     def _add(self, target, test_file):
         """Add a test file to test case and perform sanity checks.
@@ -405,6 +417,12 @@ class TestFile(object):
             file_name = file_name.lstrip("/")
         self.file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
     def clone(self):
         """Make a copy of the TestFile.
 
@@ -441,7 +459,6 @@ class TestFile(object):
             bytes: Data from the TestFile
         """
         pos = self._fp.tell()
-        self._fp.flush()
         self._fp.seek(0)
         data = self._fp.read()
         self._fp.seek(pos)
@@ -510,12 +527,10 @@ class TestFile(object):
             int: Size in bytes.
         """
         pos = self._fp.tell()
-        self._fp.flush()
         self._fp.seek(0, os.SEEK_END)
         size = self._fp.tell()
         self._fp.seek(pos)
         return size
-
 
     def write(self, data):
         """Add data to the TestFile.

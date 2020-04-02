@@ -18,8 +18,7 @@ def test_testcase_01(tmp_path):
     l_page = "land.html"
     r_page = "redirect.html"
     adpt_name = "test-adapter"
-    tcase = TestCase(l_page, r_page, adpt_name)
-    try:
+    with TestCase(l_page, r_page, adpt_name) as tcase:
         assert tcase.landing_page == l_page
         assert tcase.redirect_page == r_page
         assert tcase.adapter_name == adpt_name
@@ -30,13 +29,11 @@ def test_testcase_01(tmp_path):
         assert not tcase._files.meta
         assert not tcase._files.optional
         assert not tcase._files.required
-        assert not list(tcase.optional)
+        assert not any(tcase.optional)
         tcase.dump(str(tmp_path))
-        assert not os.listdir(str(tmp_path))
+        assert not any(tmp_path.glob("*"))
         tcase.dump(str(tmp_path), include_details=True)
         assert (tmp_path / "test_info.json").is_file()
-    finally:
-        tcase.cleanup()
 
 def test_testcase_02(tmp_path):
     """test TestCase with TestFiles"""
@@ -76,9 +73,8 @@ def test_testcase_02(tmp_path):
         tcase.cleanup()
 
 def test_testcase_03(tmp_path):
-    """test TestCase add_meta()"""
-    tcase = TestCase("land_page.html", "redirect.html", "test-adapter")
-    try:
+    """test TestCase.add_meta()"""
+    with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         dmp_path = tmp_path / "dmp_test"
         dmp_path.mkdir()
         meta_file = dmp_path / "metafile.bin"
@@ -89,13 +85,10 @@ def test_testcase_03(tmp_path):
         assert meta_file.is_file()
         with meta_file.open("rb") as test_fp:
             assert test_fp.read() == meta_data
-    finally:
-        tcase.cleanup()
 
 def test_testcase_04(tmp_path):
     """test TestCase.add_environ_var() and TestCase.env_vars"""
-    tcase = TestCase("land_page.html", "redirect.html", "test-adapter")
-    try:
+    with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         tcase.add_environ_var("TEST_ENV_VAR", "1")
         assert len(list(tcase.env_vars)) == 1
         tcase.add_environ_var("TEST_NONE", None)
@@ -107,13 +100,10 @@ def test_testcase_04(tmp_path):
             data = json.load(test_fp)["env"]
         assert data["TEST_ENV_VAR"] == "1"
         assert data["TEST_NONE"] is None
-    finally:
-        tcase.cleanup()
 
 def test_testcase_05(tmp_path):
     """test TestCase.purge_optional()"""
-    tcase = TestCase("land_page.html", "redirect.html", "test-adapter")
-    try:
+    with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         tcase.add_from_data("foo", "testfile1.bin")
         tcase.add_from_data("foo", "testfile2.bin", required=False)
         tcase.add_from_data("foo", "testfile3.bin", required=False)
@@ -127,20 +117,17 @@ def test_testcase_05(tmp_path):
         tcase.dump(str(tmp_path))
         assert "testfile1.bin" in os.listdir(str(tmp_path))
         assert "not_served.bin" not in os.listdir(str(tmp_path))
-    finally:
-        tcase.cleanup()
 
 def test_testcase_06():
     """test TestCase.data_size"""
-    tcase = TestCase("land_page.html", "redirect.html", "test-adapter")
-    try:
+    with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         assert tcase.data_size == 0
         tcase.add_from_data("1", "testfile1.bin", required=True)
+        assert tcase.data_size == 1
         tcase.add_from_data("12", "testfile2.bin", required=False)
+        assert tcase.data_size == 3
         tcase.add_meta(TestFile.from_data("123", "meta.bin"))
         assert tcase.data_size == 6
-    finally:
-        tcase.cleanup()
 
 def test_testcase_07(tmp_path):
     """test TestCase.load_path() using a directory"""
@@ -162,35 +149,26 @@ def test_testcase_07(tmp_path):
     entry_point = src_dir / "target.bin"
     entry_point.touch()
     (src_dir / "optional.bin").touch()
-    src = TestCase("target.bin", None, "test-adapter")
-    try:
+    with TestCase("target.bin", None, "test-adapter") as src:
         src.add_environ_var("TEST_ENV_VAR", "100")
         src.add_from_file(str(entry_point), "target.bin")
         src.dump(str(src_dir), include_details=True)
-    finally:
-        src.cleanup()
     # load test case from test_info.json
-    dst = TestCase.load_path(str(src_dir))
-    try:
+    with TestCase.load_path(str(src_dir)) as dst:
         assert dst.landing_page == "target.bin"
         assert "prefs.js" in (x.file_name for x in dst._files.meta)
         assert "target.bin" in (x.file_name for x in dst._files.required)
         assert "optional.bin" in (x.file_name for x in dst._files.optional)
         assert dst.env_vars["TEST_ENV_VAR"] == "100"
-    finally:
-        dst.cleanup()
     # bad test_info.json 'target' entry
     entry_point.unlink()
     with pytest.raises(TestCaseLoadFailure, match="entry_point 'target.bin' not found in"):
         TestCase.load_path(str(src_dir))
     # bad test_info.json 'env' entry
     entry_point.touch()
-    src = TestCase("target.bin", None, "test-adapter")
-    try:
+    with TestCase("target.bin", None, "test-adapter") as src:
         src.add_environ_var("TEST_ENV_VAR", 100)
         src.dump(str(src_dir), include_details=True)
-    finally:
-        src.cleanup()
     with pytest.raises(TestCaseLoadFailure, match="'env_data' contains invalid 'env' entries"):
         TestCase.load_path(str(src_dir))
 
@@ -207,30 +185,23 @@ def test_testcase_08(tmp_path):
     entry_point.touch()
     (src_dir / "optional.bin").touch()
     # load single file test case
-    tcase = TestCase.load_path(str(entry_point))
-    try:
+    with TestCase.load_path(str(entry_point)) as tcase:
         assert tcase.landing_page == "target.bin"
         assert "prefs.js" not in (x.file_name for x in tcase._files.meta)
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
-    finally:
-        tcase.cleanup()
     # load full test case
-    tcase = TestCase.load_path(str(entry_point), full_scan=True, prefs=True)
-    try:
+    with TestCase.load_path(str(entry_point), full_scan=True, prefs=True) as tcase:
         assert tcase.landing_page == "target.bin"
         assert "prefs.js" in (x.file_name for x in tcase._files.meta)
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
-    finally:
-        tcase.cleanup()
 
 def test_testcase_09(tmp_path):
     """test TestCase.load_environ()"""
     (tmp_path / "ubsan.supp").touch()
     (tmp_path / "other_file").touch()
-    tcase = TestCase("a.html", "b.html", "test-adapter")
-    try:
+    with TestCase("a.html", "b.html", "test-adapter") as tcase:
         tcase.load_environ(str(tmp_path), {})
         assert "UBSAN_OPTIONS" in tcase.env_vars
         assert "ubsan.supp" in tcase.env_vars["UBSAN_OPTIONS"]
@@ -242,8 +213,6 @@ def test_testcase_09(tmp_path):
         assert len(opts) == 3
         assert "a=1" in opts
         assert "b=2" in opts
-    finally:
-        tcase.cleanup()
 
 def test_inputfile_01():
     """test InputFile with non-existing file"""
@@ -254,8 +223,7 @@ def test_inputfile_02(tmp_path):
     """test InputFile object"""
     tfile = tmp_path / "testfile.bin"
     tfile.write_bytes(b"test")
-    in_file = InputFile(str(tfile))
-    try:
+    with InputFile(str(tfile)) as in_file:
         assert in_file.extension == "bin"
         assert in_file.file_name == str(tfile)
         assert in_file._fp is None
@@ -265,26 +233,20 @@ def test_inputfile_02(tmp_path):
         assert in_file._fp is None
         assert in_file.get_fp().read() == b"test"
         assert in_file._fp is not None
-    finally:
-        in_file.close()
 
 def test_testfile_01():
     """test simple TestFile"""
-    tfile = TestFile("test_file.txt")
-    try:
+    with TestFile("test_file.txt") as tfile:
         assert tfile.file_name == "test_file.txt"
         assert not tfile._fp.closed
         assert tfile.size == 0
         tfile.close()
         assert tfile._fp.closed
-    finally:
-        tfile.close()
 
 def test_testfile_02(tmp_path):
     """test TestFile.write() and TestFile.dump()"""
     out_file = tmp_path / "test_file.txt"
-    tfile = TestFile(out_file.name)
-    try:
+    with TestFile(out_file.name) as tfile:
         tfile.write(b"foo")
         assert not out_file.is_file()
         tfile.dump(str(tmp_path))
@@ -295,54 +257,42 @@ def test_testfile_02(tmp_path):
         tfile.dump(str(tmp_path))
         with out_file.open("r") as in_fp:
             assert in_fp.read() == "foobar"
-    finally:
-        tfile.close()
 
 def test_testfile_03(tmp_path):
     """test TestFile.dump() file with nested path"""
     file_path = "test/dir/path/file.txt"
-    tfile = TestFile(file_path)
-    try:
+    with TestFile(file_path) as tfile:
         out_file = tmp_path / file_path
         tfile.write(b"foo")
         assert not out_file.is_file()
         tfile.dump(str(tmp_path))
         assert out_file.is_file()
-    finally:
-        tfile.close()
 
 def test_testfile_04(tmp_path):
     """test TestFile.from_data()"""
     # TODO: different encodings
-    tfile = TestFile.from_data("foo", "test_file.txt")
-    try:
+    with TestFile.from_data("foo", "test_file.txt") as tfile:
         out_file = tmp_path / "test_file.txt"
         tfile.dump(str(tmp_path))
         assert out_file.is_file()
         with out_file.open("r") as in_fp:
             assert in_fp.read() == "foo"
-    finally:
-        tfile.close()
 
 def test_testfile_05(tmp_path):
     """test TestFile.from_file()"""
     in_file = tmp_path / "infile.txt"
     in_file.write_bytes(b"foobar")
-    tfile = TestFile.from_file(str(in_file), "outfile.txt")
-    try:
+    with TestFile.from_file(str(in_file), "outfile.txt") as tfile:
         out_file = tmp_path / "outfile.txt"
         tfile.dump(str(tmp_path))
         assert out_file.is_file()
         with out_file.open("r") as in_fp:
             assert in_fp.read() == "foobar"
-    finally:
-        tfile.close()
 
 def test_testfile_06(tmp_path):
     """test TestFile.clone()"""
     out_file = tmp_path / "test_file.txt"
-    tf1 = TestFile(out_file.name)
-    try:
+    with TestFile(out_file.name) as tf1:
         tf1.write(b"foobar")
         try:
             tf2 = tf1.clone()
@@ -359,15 +309,10 @@ def test_testfile_06(tmp_path):
         assert out_file.is_file()
         with out_file.open("r") as in_fp:
             assert in_fp.read() == "foobar"
-    finally:
-        tf1.close()
 
 def test_testfile_07(tmp_path):
     """test TestFile.data()"""
     in_file = tmp_path / "infile.txt"
     in_file.write_bytes(b"foobar")
-    tfile = TestFile.from_file(str(in_file), "outfile.txt")
-    try:
+    with TestFile.from_file(str(in_file), "outfile.txt") as tfile:
         assert tfile.data == b"foobar"
-    finally:
-        tfile.close()
