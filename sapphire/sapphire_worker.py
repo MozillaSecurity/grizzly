@@ -6,24 +6,63 @@
 Sapphire HTTP server worker
 """
 
+import mimetypes
 import logging
+import os
+import re
 import socket
+import sys
 import threading
 
-import sapphire
+from .server_map import Resource
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = logging.getLogger("sapphire_worker")  # pylint: disable=invalid-name
+LOG = logging.getLogger("sphr_worker")
 
 
 class SapphireWorker(object):
+    DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
+    DEFAULT_TX_SIZE = 0x10000  # 64KB
+    REQ_PATTERN = re.compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
+
     __slots__ = ("_conn", "_thread")
 
     def __init__(self, conn, thread):
         self._conn = conn
         self._thread = thread
+
+    @staticmethod
+    def _200_header(c_length, c_type, encoding="ascii"):
+        data = "HTTP/1.1 200 OK\r\n" \
+               "Cache-Control: max-age=0, no-cache\r\n" \
+               "Content-Length: %s\r\n" \
+               "Content-Type: %s\r\n" \
+               "Connection: close\r\n\r\n" % (c_length, c_type)
+        return data.encode(encoding)
+
+    @staticmethod
+    def _307_redirect(redirct_to, encoding="ascii"):
+        data = "HTTP/1.1 307 Temporary Redirect\r\n" \
+               "Location: %s\r\n" \
+               "Connection: close\r\n\r\n" % (redirct_to,)
+        return data.encode(encoding)
+
+    @staticmethod
+    def _4xx_page(code, hdr_msg, close=-1, encoding="ascii"):
+        if close < 0:
+            content = "<h3>%d!</h3>" % (code,)
+        else:
+            content = "<script>window.setTimeout(window.close, %d)</script>\n" \
+                      "<body style=\"background-color:#ffffe0\">\n" \
+                      "<h3>%d! - Calling window.close() in %d seconds</h3>\n" \
+                      "</body>\n" % (close * 1000, code, close)
+        data = "HTTP/1.1 %d %s\r\n" \
+               "Content-Length: %d\r\n" \
+               "Content-Type: text/html\r\n" \
+               "Connection: close\r\n\r\n%s" % (code, hdr_msg, len(content), content)
+        return data.encode(encoding)
 
     def close(self):
         if not self.done:
@@ -38,6 +77,111 @@ class SapphireWorker(object):
                 self.join()
         return self._thread is None
 
+    @classmethod
+    def handle_request(cls, conn, serv_job):
+        finish_job = False  # call finish() on return
+        try:
+            # receive all the incoming data
+            raw_request = conn.recv(cls.DEFAULT_REQUEST_LIMIT)
+            if not raw_request:
+                LOG.debug("raw_request was empty")
+                serv_job.accepting.set()
+                return
+
+            request = cls.REQ_PATTERN.match(raw_request)
+            if request is None:
+                serv_job.accepting.set()
+                conn.sendall(cls._4xx_page(400, "Bad Request", serv_job.auto_close))
+                LOG.debug("400 request length %d (%d to go)", len(raw_request), serv_job.pending)
+                return
+
+            request = request.group("request").decode("ascii")
+            LOG.debug("check_request(%r)", request)
+            resource = serv_job.check_request(request)
+            if resource is None:
+                LOG.debug("resource is None")  # 404
+            elif resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
+                finish_job = serv_job.remove_pending(resource.target)
+            elif resource.type == Resource.URL_REDIRECT:
+                finish_job = serv_job.remove_pending(request)
+
+            if finish_job and serv_job.forever:
+                LOG.debug("serv_job.forever is set, resetting finish_job")
+                finish_job = False
+
+            if not finish_job:
+                serv_job.accepting.set()
+            else:
+                LOG.debug("expecting to finish")
+
+            if resource is None:
+                conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
+                LOG.debug("404 %r (%d to go)", request, serv_job.pending)
+                return
+            if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
+                LOG.debug("target %r", resource.target)
+                if not os.path.isfile(resource.target):
+                    conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
+                    LOG.debug("404 %r (%d to go)", request, serv_job.pending)
+                    return
+                if serv_job.is_forbidden(resource.target):
+                    # NOTE: this does info leak if files exist on disk.
+                    # We could replace 403 with 404 if it turns out we care but this
+                    # is meant to run locally and only be accessible from localhost
+                    conn.sendall(cls._4xx_page(403, "Forbidden", serv_job.auto_close))
+                    LOG.debug("403 %r (%d to go)", request, serv_job.pending)
+                    return
+            elif resource.type == Resource.URL_REDIRECT:
+                conn.sendall(cls._307_redirect(resource.target))
+                LOG.debug(
+                    "307 %r -> %r (%d to go)",
+                    request,
+                    resource.target,
+                    serv_job.pending)
+                return
+            elif resource.type == Resource.URL_DYNAMIC:
+                data = resource.target()
+                if not isinstance(data, bytes):
+                    LOG.debug("dynamic request: %r", request)
+                    raise TypeError("dynamic request callback must return 'bytes'")
+                conn.sendall(cls._200_header(len(data), resource.mime))
+                conn.sendall(data)
+                LOG.debug("200 %r (dynamic request)", request)
+                return
+            else:
+                raise RuntimeError("Unknown resource type %r" % resource.type)
+
+            # at this point we know "resource.target" maps to a file on disk
+            # default to "application/octet-stream"
+            c_type = mimetypes.guess_type(resource.target)[0] or "application/octet-stream"
+            # serve the file
+            data_size = os.stat(resource.target).st_size
+            LOG.debug("sending file: %s bytes", format(data_size, ","))
+            with open(resource.target, "rb") as in_fp:
+                conn.sendall(cls._200_header(data_size, c_type))
+                offset = 0
+                while offset < data_size:
+                    conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
+                    offset = in_fp.tell()
+            LOG.debug("200 %r (%d to go)", resource.target, serv_job.pending)
+            serv_job.increment_served(resource.target)
+
+        except (socket.timeout, socket.error):
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            LOG.debug("%s: %r (line %d)", exc_type.__name__, exc_obj, exc_tb.tb_lineno)
+            if not finish_job:
+                serv_job.accepting.set()
+
+        except Exception:  # pylint: disable=broad-except
+            # TODO: should the job be marked as complete to abort immediately?
+            serv_job.exceptions.put(sys.exc_info())
+
+        finally:
+            conn.close()
+            if finish_job:
+                serv_job.finish()
+            serv_job.worker_complete.set()
+
     def join(self, timeout=None):
         if self._thread is not None:
             self._thread.join(timeout=timeout)
@@ -51,7 +195,7 @@ class SapphireWorker(object):
             conn, _ = listen_sock.accept()
             conn.settimeout(None)
             # create a worker thread to handle client request
-            w_thread = threading.Thread(target=sapphire.Sapphire._handle_request, args=(conn, job))
+            w_thread = threading.Thread(target=cls.handle_request, args=(conn, job))
             job.accepting.clear()
             w_thread.start()
             return cls(conn, w_thread)

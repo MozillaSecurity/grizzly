@@ -62,3 +62,28 @@ def test_sapphire_worker_03(mocker):
     assert worker.done
     worker.close()
     assert conn.close.call_count == 1
+
+def test_response_data_01():
+    """test _200_header()"""
+    output = SapphireWorker._200_header("10", "text/html")
+    assert b"Content-Length: 10" in output
+    assert b"Content-Type: text/html" in output
+
+def test_response_data_02():
+    """test _307_redirect()"""
+    output = SapphireWorker._307_redirect("http://some.test.url")
+    assert b"Location: http://some.test.url" in output
+
+def test_response_data_03():
+    """test _4xx_page() without close timeout"""
+    output = SapphireWorker._4xx_page(400, "Bad Request")
+    assert b"Content-Length: " in output
+    assert b"HTTP/1.1 400 Bad Request" in output
+    assert b"400!" in output
+
+def test_response_data_04():
+    """test _4xx_page() with close timeout"""
+    output = SapphireWorker._4xx_page(404, "Not Found", close=10)
+    assert b"Content-Length: " in output
+    assert b"HTTP/1.1 404 Not Found" in output
+    assert b"<script>window.setTimeout(window.close, 10000)</script>" in output

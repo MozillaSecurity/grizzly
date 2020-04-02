@@ -24,6 +24,7 @@ LOG = logging.getLogger("replay")
 # - fuzzmanager reporter
 # - option to include test in report
 # - option to map include paths
+# - add any_crash support
 # - add method comments
 
 class ReplayManager(object):
@@ -260,10 +261,8 @@ class ReplayManager(object):
                 xvfb=args.xvfb)
 
             LOG.debug("starting sapphire server")
-            # have client error pages (code 4XX) call window.close() after a few seconds
-            sapphire.Sapphire.CLOSE_CLIENT_ERROR = 1
             # launch HTTP server used to serve test cases
-            with sapphire.Sapphire(timeout=args.timeout) as server:
+            with sapphire.Sapphire(auto_close=1, timeout=args.timeout) as server:
                 target.reverse(server.port, server.port)
                 if args.no_harness:
                     LOG.debug("--no-harness specified relaunch set to 1")
