@@ -621,8 +621,7 @@ class ReductionJob(object):
         # launch sapphire if needed
         if self._server is None:
             # have client error pages (code 4XX) call window.close() after a few seconds
-            sapphire.Sapphire.CLOSE_CLIENT_ERROR = 2
-            self._server = sapphire.Sapphire()
+            self._server = sapphire.Sapphire(auto_close=2)
 
             if not self._no_harness:
                 harness = os.path.join(os.path.dirname(__file__), '..', 'common', 'harness.html')

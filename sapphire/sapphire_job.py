@@ -14,10 +14,11 @@ try:  # py 2-3 compatibility
 except ImportError:
     from queue import Queue
 import threading
+import time
 
+from .sapphire_worker import SapphireWorker
 from .server_map import Resource
 from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST
-
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -30,15 +31,16 @@ Tracker = namedtuple("Tracker", "files lock")
 
 class SapphireJob(object):
     __slots__ = (
-        "_complete", "_pending", "_served", "accepting", "base_path", "exceptions",
-        "forever", "initial_queue_size", "server_map", "worker_complete")
+        "_complete", "_pending", "_served", "auto_close", "accepting", "base_path",
+        "exceptions", "forever", "initial_queue_size", "server_map", "worker_complete")
 
-    def __init__(self, base_path, forever=False, optional_files=None, server_map=None):
+    def __init__(self, base_path, auto_close=-1, forever=False, optional_files=None, server_map=None):
         self._complete = threading.Event()
         self._pending = Tracker(files=set(), lock=threading.Lock())
         self._served = Tracker(files=defaultdict(int), lock=threading.Lock())
         self.accepting = threading.Event()
         self.accepting.set()
+        self.auto_close = auto_close
         self.base_path = os.path.abspath(base_path)  # wwwroot
         self.exceptions = Queue()
         self.forever = forever
@@ -130,6 +132,59 @@ class SapphireJob(object):
             LOG.debug("include map does not contain an entry at '/'")
 
         return None
+
+    @staticmethod
+    def client_listener(serv_sock, serv_job, max_workers, raise_thread_error=False, shutdown_delay=0):
+        worker_pool = list()
+        pool_size = 0
+
+        LOG.debug("starting client_listener")
+        try:
+            while not serv_job.is_complete():
+                if not serv_job.accepting.wait(0.05):
+                    continue
+                try:
+                    worker = SapphireWorker.launch(serv_sock, serv_job)
+                    if worker is not None:
+                        worker_pool.append(worker)
+                        pool_size += 1
+                except threading.ThreadError:
+                    LOG.warning(
+                        "ThreadError! pool size: %d, total active threads: %d",
+                        pool_size,
+                        threading.active_count())
+                    if raise_thread_error:
+                        raise
+                    # wait for system resources to free up
+                    time.sleep(0.1)
+                # manage worker pool
+                if pool_size >= max_workers:
+                    LOG.debug("active pool size: %d, waiting for worker to finish...", pool_size)
+                    serv_job.worker_complete.wait()
+                    serv_job.worker_complete.clear()
+                    # remove complete workers
+                    LOG.debug("trimming worker pool")
+                    # sometimes the thread that triggered the event doesn't quite cleanup in time
+                    # so add a retry (10x with a 0.1 second sleep on failure)
+                    for _ in range(10, 0, -1):
+                        worker_pool = list(w for w in worker_pool if not w.done)
+                        pool_size = len(worker_pool)
+                        if pool_size < max_workers:
+                            break
+                        time.sleep(0.1)
+                    else:
+                        raise RuntimeError("Failed to trim worker pool!")
+                    LOG.debug("trimmed worker pool (size: %d)", pool_size)
+        finally:
+            LOG.debug("shutting down and cleaning up workers")
+            deadline = time.time() + shutdown_delay
+            for worker in worker_pool:
+                # avoid cutting off connections
+                while not worker.done and time.time() < deadline:
+                    LOG.debug("delaying shutdown...")
+                    time.sleep(0.01)
+                worker.close()
+
 
     def finish(self):
         self._complete.set()

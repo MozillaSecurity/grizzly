@@ -74,10 +74,10 @@ class Session(object):
     def config_server(self, iteration_timeout):
         assert self.server is None
         log.debug("starting sapphire server")
-        # have client error pages (code 4XX) call window.close() after a few seconds
-        sapphire.Sapphire.CLOSE_CLIENT_ERROR = 1
+        # set 'auto_close=1' so the client error pages (code 4XX) will
+        # call 'window.close()' after a second.
         # launch http server used to serve test cases
-        self.server = sapphire.Sapphire(timeout=iteration_timeout)
+        self.server = sapphire.Sapphire(auto_close=1, timeout=iteration_timeout)
         def _dyn_resp_close():
             self.target.close()
             return b"<h1>Close Browser</h1>"
