@@ -10,7 +10,8 @@ import os
 
 import pytest
 
-from grizzly.target import Target
+from grizzly.common import TestCaseLoadFailure
+from grizzly.target import Target, TargetLaunchError
 from grizzly.replay import ReplayManager
 from grizzly.replay.args import ReplayArgs
 
@@ -74,7 +75,6 @@ def test_main_01(mocker, tmp_path):
     # This is a typical scenario - a test that reproduces results ~50% of the time.
     # Of the four attempts only the first and third will 'reproduce' the result
     # and the forth attempt should be skipped.
-    mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
     # mock Sapphire.serve_testcase only
     serve_testcase = mocker.patch("grizzly.replay.replay.sapphire.Sapphire.serve_testcase", autospec=True)
     serve_testcase.return_value = (None, None)  # passed to mocked Target.detect_failure
@@ -100,17 +100,19 @@ def test_main_01(mocker, tmp_path):
     load_target.return_value.return_value = target
     # setup args
     args = mocker.Mock()
+    args.fuzzmanager = False
     args.ignore = ["fake", "timeout"]
-    (tmp_path / "test.html").touch()
     log_path = (tmp_path / "logs")
     args.logs = str(log_path)
+    (tmp_path / "test.html").touch()
     args.input = str(tmp_path / "test.html")
     args.min_crashes = 2
     (tmp_path / "prefs.js").touch()
     args.prefs = str(tmp_path / "prefs.js")
     args.relaunch = 1
     args.repeat = 4
-    args.sig = None
+    (tmp_path / "sig.json").write_bytes(b"{\"symptoms\": [{\"type\": \"crashAddress\", \"address\": \"0\"}]}")
+    args.sig = str(tmp_path / "sig.json")
     args.timeout = 10
     assert ReplayManager.main(args) == 0
     assert target.reverse.call_count == 1
@@ -123,6 +125,29 @@ def test_main_01(mocker, tmp_path):
     assert target.cleanup.call_count == 1
     assert target.check_relaunch.call_count == 2
     assert log_path.is_dir()
-    assert tuple(log_path.glob('**/log_asan_blah.txt'))
-    assert tuple(log_path.glob('**/log_stderr.txt'))
-    assert tuple(log_path.glob('**/log_stdout.txt'))
+    assert any(log_path.glob('**/log_asan_blah.txt'))
+    assert any(log_path.glob('**/log_stderr.txt'))
+    assert any(log_path.glob('**/log_stdout.txt'))
+
+def test_main_02(mocker):
+    """test ReplayManager.main() failure cases"""
+    mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
+    mocker.patch("grizzly.replay.replay.sapphire", autospec=True)
+    mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
+    # setup args
+    args = mocker.Mock()
+    args.ignore = None
+    args.input = "test"
+    args.min_crashes = 1
+    args.relaunch = 1
+    args.repeat = 1
+    args.sig = None
+
+    mocker.patch("grizzly.replay.replay.load_target", side_effect=TargetLaunchError)
+    assert ReplayManager.main(args) == 1
+
+    mocker.patch("grizzly.replay.replay.load_target", side_effect=KeyboardInterrupt)
+    assert ReplayManager.main(args) == 1
+
+    mocker.patch("grizzly.replay.replay.TestCase.load_path", side_effect=TestCaseLoadFailure)
+    assert ReplayManager.main(args) == 1
