@@ -66,15 +66,18 @@ class SapphireWorker(object):
 
     def close(self):
         if not self.done:
-            LOG.warning("Closing socket while thread is running!")
+            LOG.debug("closing socket while thread is running!")
         self._conn.close()
-        self.join()
+        self.join(timeout=60)
+        if self._thread is not None and self._thread.is_alive():
+            # this is here to catch unexpected hangs
+            raise RuntimeError("Worker thread failed to join!")
 
     @property
     def done(self):
-        if self._thread is not None:
-            if not self._thread.is_alive():
-                self.join()
+        if self._thread is not None and not self._thread.is_alive():
+            self.join()
+            self._thread = None
         return self._thread is None
 
     @classmethod
@@ -185,7 +188,8 @@ class SapphireWorker(object):
     def join(self, timeout=None):
         if self._thread is not None:
             self._thread.join(timeout=timeout)
-            self._thread = None
+            if not self._thread.is_alive():
+                self._thread = None
 
     @classmethod
     def launch(cls, listen_sock, job):
