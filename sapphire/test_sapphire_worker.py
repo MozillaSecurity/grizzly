@@ -12,22 +12,38 @@ import pytest
 from .sapphire_job import SapphireJob
 from .sapphire_worker import SapphireWorker
 
-
 def test_sapphire_worker_01(mocker):
-    """test simple SapphireWorker()"""
-    conn = mocker.Mock(spec=socket.socket)
+    """test simple SapphireWorker in running state"""
     wthread = mocker.Mock(spec=threading.Thread)
-    worker = SapphireWorker(conn, wthread)
+    wthread.is_alive.return_value = True
+    worker = SapphireWorker(mocker.Mock(spec=socket.socket), wthread)
+    assert worker._conn is not None
+    assert worker._thread is not None
+    # it is assumed that launch() has already been called at this point
     assert not worker.done
     assert wthread.join.call_count == 0
     assert wthread.is_alive.call_count == 1
-    worker.close()
-    assert conn.close.call_count == 1
-    assert worker._thread is None
+    worker.join(timeout=0)
     assert wthread.join.call_count == 1
+    assert wthread.is_alive.call_count == 2
+    assert worker._conn.close.call_count == 0
+    wthread.is_alive.return_value = False
+    worker.close()
+    assert worker._conn.close.call_count == 1
+    assert worker._thread is None
     assert worker.done
 
 def test_sapphire_worker_02(mocker):
+    """test simple SapphireWorker fails to close"""
+    worker = SapphireWorker(
+        mocker.Mock(spec=socket.socket),
+        mocker.Mock(spec=threading.Thread))
+    # it is assumed that launch() has already been called at this point
+    worker._thread.is_alive.return_value = True
+    with pytest.raises(RuntimeError, match="Worker thread failed to join!"):
+        worker.close()
+
+def test_sapphire_worker_03(mocker):
     """test SapphireWorker.launch() fail cases"""
     serv_con = mocker.Mock(spec=socket.socket)
     serv_job = mocker.Mock(spec=SapphireJob)
@@ -46,7 +62,7 @@ def test_sapphire_worker_02(mocker):
     assert serv_job.accepting.clear.call_count == 0
     assert serv_job.accepting.set.call_count == 1
 
-def test_sapphire_worker_03(mocker):
+def test_sapphire_worker_04(mocker):
     """test SapphireWorker.launch()"""
     serv_con = mocker.Mock(spec=socket.socket)
     conn = mocker.Mock(spec=socket.socket)
@@ -54,6 +70,7 @@ def test_sapphire_worker_03(mocker):
     serv_job = mocker.Mock(spec=SapphireJob)
     fake_thread = mocker.patch("threading.Thread", autospec=True)
     worker = SapphireWorker.launch(serv_con, serv_job)
+    assert serv_con.accept.call_count == 1
     assert serv_job.accepting.clear.call_count == 1
     assert serv_job.accepting.set.call_count == 0
     assert fake_thread.return_value.start.call_count == 1
