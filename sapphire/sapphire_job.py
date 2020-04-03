@@ -135,6 +135,7 @@ class SapphireJob(object):
 
     @staticmethod
     def client_listener(serv_sock, serv_job, max_workers, raise_thread_error=False, shutdown_delay=0):
+        assert max_workers > 0
         worker_pool = list()
         pool_size = 0
 
@@ -165,26 +166,29 @@ class SapphireJob(object):
                     # remove complete workers
                     LOG.debug("trimming worker pool")
                     # sometimes the thread that triggered the event doesn't quite cleanup in time
-                    # so add a retry (10x with a 0.1 second sleep on failure)
+                    # so add a retry (10x with 0.5 second sleep on failure)
                     for _ in range(10, 0, -1):
                         worker_pool = list(w for w in worker_pool if not w.done)
                         pool_size = len(worker_pool)
                         if pool_size < max_workers:
                             break
-                        time.sleep(0.1)
-                    else:
+                        time.sleep(0.5)
+                    else:  # pragma: no cover
                         raise RuntimeError("Failed to trim worker pool!")
                     LOG.debug("trimmed worker pool (size: %d)", pool_size)
         finally:
             LOG.debug("shutting down and cleaning up workers")
             deadline = time.time() + shutdown_delay
-            for worker in worker_pool:
+            while time.time() < deadline:
+                if all(w.done for w in worker_pool):
+                    break
                 # avoid cutting off connections
-                while not worker.done and time.time() < deadline:
-                    LOG.debug("delaying shutdown...")
-                    time.sleep(0.01)
+                LOG.debug("delaying shutdown...")
+                time.sleep(0.01)
+            else:  # pragma: no cover
+                LOG.debug("not all worker threads exited")
+            for worker in worker_pool:
                 worker.close()
-
 
     def finish(self):
         self._complete.set()

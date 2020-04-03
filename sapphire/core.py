@@ -34,7 +34,6 @@ class Sapphire(object):
     SHUTDOWN_DELAY = 0.25  # allow extra time before closing socket if needed
 
     def __init__(self, allow_remote=False, auto_close=-1, max_workers=10, port=None, timeout=60):
-        assert max_workers > 0
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
         self._socket = Sapphire._create_listening_socket(allow_remote, port)
@@ -130,8 +129,10 @@ class Sapphire(object):
         # create the client listener thread to handle incoming requests
         listener = threading.Thread(
             target=job.client_listener,
-            args=(self._socket, job, self._max_workers),
-            kwargs={"raise_thread_error": self.ABORT_ON_THREAD_ERROR, "shutdown_delay": 0})
+            args=(self._socket, job,
+                  self._max_workers),
+            kwargs={"raise_thread_error": self.ABORT_ON_THREAD_ERROR,
+                    "shutdown_delay": self.SHUTDOWN_DELAY})
 
         # launch listener thread and handle thread errors
         # thread errors can be due to low system resources while fuzzing
