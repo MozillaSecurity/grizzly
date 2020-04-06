@@ -20,22 +20,21 @@ __credits__ = ["Tyson Smith"]
 LOG = logging.getLogger("replay")
 
 # TODO:
-# - test main()
 # - fuzzmanager reporter
 # - option to include test in report
 # - option to map include paths
-# - add any_crash support
 # - add method comments
 
 class ReplayManager(object):
     HARNESS_FILE = os.path.join(os.path.dirname(__file__), "..", "common", "harness.html")
 
-    def __init__(self, ignore, server, target, testcase, signature=None, use_harness=True):
+    def __init__(self, ignore, server, target, testcase, any_crash=False, signature=None, use_harness=True):
         self.ignore = ignore
         self.server = server
         self.status = None
         self.target = target
         self.testcase = testcase
+        self._any_crash = any_crash
         self._harness = None
         self._reports_expected = dict()
         self._reports_other = dict()
@@ -91,30 +90,28 @@ class ReplayManager(object):
     def dump_reports(self, path, include_extra=True):
         if not os.path.isdir(path):
             os.makedirs(path)
-        if any(self.reports):
+        if self._reports_expected:
             reports_path = os.path.join(path, "reports")
             if not os.path.isdir(reports_path):
                 os.makedirs(reports_path)
             reporter = FilesystemReporter(report_path=reports_path, major_bucket=False)
-            for report in self.reports:
+            for report in self._reports_expected.values():
                 reporter.submit((), report=report)
-        if include_extra and any(self.other_reports):
+        if include_extra and self._reports_other:
             reports_path = os.path.join(path, "other_reports")
             if not os.path.isdir(reports_path):
                 os.makedirs(reports_path)
             reporter = FilesystemReporter(report_path=reports_path, major_bucket=False)
-            for report in self.other_reports:
+            for report in self._reports_other.values():
                 reporter.submit((), report=report)
 
     @property
     def other_reports(self):
-        for report in self._reports_other.values():
-            yield report
+        return self._reports_other.values()
 
     @property
     def reports(self):
-        for report in self._reports_expected.values():
-            yield report
+        return self._reports_expected.values()
 
     def run(self, repeat=1, min_results=1):
         assert repeat > 0
@@ -149,14 +146,14 @@ class ReplayManager(object):
                 # check signatures
                 crash_info = report.crash_info(self.target.binary)
                 short_sig = crash_info.createShortSignature()
-                if self._signature is None and short_sig != "No crash detected":
-                    # if a signature is not specified use the first one created
+                if not self._any_crash and self._signature is None and short_sig != "No crash detected":
+                    # signature has not been specified use the first one created
                     self._signature = report.crash_signature(crash_info)
                 if short_sig == "No crash detected":
                     # TODO: change this to support hangs/timeouts, etc
                     LOG.info("Uninteresting: no crash detected")
                     crash_hash = None
-                elif self._signature.matches(crash_info):
+                elif self._any_crash or self._signature.matches(crash_info):
                     self.status.results += 1
                     LOG.info("Interesting: %s", short_sig)
                     crash_hash = report.crash_hash(crash_info)
@@ -164,7 +161,7 @@ class ReplayManager(object):
                         LOG.debug("now tracking %s", crash_hash)
                         self._reports_expected[crash_hash] = report
                         report = None  # don't remove report
-                    assert len(self._reports_expected) == 1
+                    assert self._any_crash or len(self._reports_expected) == 1
                 else:
                     LOG.info("Uninteresting: different signature: %s", short_sig)
                     self.status.ignored += 1
@@ -275,10 +272,11 @@ class ReplayManager(object):
                     server,
                     target,
                     testcase,
+                    any_crash=args.any_crash,
                     signature=signature,
                     use_harness=not args.no_harness)
                 success = replay.run(repeat=args.repeat, min_results=args.min_crashes)
-            if args.logs and (any(replay.reports) or any(replay.other_reports)):
+            if args.logs and (replay.reports or replay.other_reports):
                 replay.dump_reports(args.logs)
             return 0 if success else 1
 
