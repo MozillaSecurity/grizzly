@@ -15,9 +15,9 @@ class ReplayArgs(CommonArgs):
             "input",
             help="Directory containing test case data or file to use as a test case." \
             "When using a directory it must contain a 'test_info.json' file.")
-        #self.parser.add_argument(
-        #    "--any-crash", action="store_true",
-        #    help="Any crash is interesting, not only crashes which match the original first crash")
+        self.parser.add_argument(
+            "--any-crash", action="store_true",
+            help="Any crash is interesting, not only crashes which match the original signature")
         self.parser.add_argument(
             "--idle-timeout", type=int, default=60,
             help="Number of seconds to wait before polling testcase for idle (default: %(default)s)")
@@ -53,6 +53,9 @@ class ReplayArgs(CommonArgs):
             if args.prefs is None:
                 # prefs.js not specified assume it is in the test case directory
                 args.prefs = os.path.join(args.input, "prefs.js")
+
+        if args.any_crash and args.sig is not None:
+            self.parser.error("signature is ignored when running with '--any-crash'")
 
         if args.prefs is None:
             self.parser.error("'prefs.js' not specified")

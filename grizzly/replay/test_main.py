@@ -70,6 +70,11 @@ def test_args_01(capsys, tmp_path):
         ReplayArgs().parse_args([str(exe), str(inp), "--sig", "missing"])
     assert "error: signature file not found" in capsys.readouterr()[-1]
 
+    # test any crash and signature
+    with pytest.raises(SystemExit):
+        ReplayArgs().parse_args([str(exe), str(inp), "--any-crash", "--sig", "x"])
+    assert "error: signature is ignored when running with '--any-crash'" in capsys.readouterr()[-1]
+
 def test_main_01(mocker, tmp_path):
     """test ReplayManager.main()"""
     # This is a typical scenario - a test that reproduces results ~50% of the time.
