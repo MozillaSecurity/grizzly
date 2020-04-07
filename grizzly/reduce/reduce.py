@@ -15,11 +15,9 @@ import os
 import re
 import shutil
 import tempfile
-import time
 import zipfile
 import zlib
 
-import ffpuppet
 import lithium
 import sapphire
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -29,7 +27,7 @@ from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..session import Session
 from ..common import FilesystemReporter, FuzzManagerReporter, ReducerStats, \
     Report, Runner, Status, TestCase, TestFile
-from ..target import load as load_target
+from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
 
 __author__ = "Jesse Schwartzentruber"
@@ -573,15 +571,6 @@ class ReductionJob(object):
 
         return handler
 
-    def _get_location(self):
-        if self._no_harness:
-            return "http://127.0.0.1:%d/%s" % (self._server.port, self.landing_page)
-        return "".join((
-            "http://127.0.0.1:%d/harness" % self._server.port,
-            "?timeout=%d" % (self._iter_timeout * 1000,),
-            "&close_after=%d" % self._target.rl_reset,
-            "&forced_close=0" if not self._target.forced_close else ""))
-
     def update_timeout(self, run_time):
         # If run_time is less than poll-time, update it
         LOG.debug('Run time %r', run_time)
@@ -628,7 +617,7 @@ class ReductionJob(object):
                 with open(harness, 'rb') as harness_fp:
                     harness = harness_fp.read()
 
-                def _dyn_resp_close():
+                def _dyn_resp_close():  # pragma: no cover
                     self._target.close()
                     return b"<h1>Close Browser</h1>"
                 self._server_map.set_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
@@ -644,17 +633,21 @@ class ReductionJob(object):
 
         # (re)launch Target
         if self._target.closed:
+            if self._no_harness:
+                location = runner.location(self.landing_page, self._server.port)
+            else:
+                location = runner.location(
+                    "harness",
+                    self._server.port,
+                    close_after=self._target.rl_reset,
+                    forced_close=self._target.forced_close,
+                    timeout=self._iter_timeout)
             # Try to launch the browser at most, 4 times
-            for retries in reversed(range(4)):
-                try:
-                    self._target.launch(self._get_location(), env_mod=self._env_mod)
-                    break
-                except ffpuppet.LaunchError as exc:
-                    if retries:
-                        LOG.warning(str(exc))
-                        time.sleep(15)
-                    else:
-                        raise
+            runner.launch(
+                location,
+                env_mod=self._env_mod,
+                max_retries=4,
+                retry_delay=15)
             self._target.step()
 
         if not self._no_harness:
@@ -1246,7 +1239,7 @@ class ReductionJob(object):
             job_cancelled = True
             return Session.EXIT_ABORT
 
-        except ffpuppet.LaunchError as exc:
+        except (TargetLaunchError, TargetLaunchTimeout) as exc:
             LOG.error("Error launching target: %s", exc)
             with ReducerStats() as stats:
                 stats.error += 1

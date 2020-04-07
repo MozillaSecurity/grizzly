@@ -2,15 +2,17 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
+import logging
 import time
 
 from sapphire import SERVED_TIMEOUT
+from ..target import TargetLaunchError, TargetLaunchTimeout
 
 __all__ = ("Runner",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
+LOG = logging.getLogger("grz_runner")
 
 # _IdleChecker is used to help determine if the target is hung (actively using CPU)
 # or if it has not made expected the HTTP requests for other reasons (idle).
@@ -85,6 +87,67 @@ class Runner(object):
         self.result = None
         self.served = None
         self.timeout = False
+
+    def launch(self, location, env_mod=None, max_retries=3, retry_delay=0):
+        """Launch a target and open `location`.
+
+        Args:
+            location (str): URL to open via Target.
+            env_mod (dict): Environment modifications.
+            max_retries (int): Number of retries to preform before re-raising TargetLaunchTimeout.
+            retry_delay (int): Time in seconds to wait between retries.
+
+        Returns:
+            None
+        """
+        assert self._server is not None
+        assert self._target is not None
+        assert max_retries >= 0
+        assert retry_delay >= 0
+        for retries in reversed(range(max_retries)):
+            try:
+                self._target.launch(location, env_mod=env_mod)
+                break
+            except TargetLaunchError:
+                raise
+            except TargetLaunchTimeout:
+                # likely has nothing to do with Grizzly but is seen frequently
+                # on machines under a high load. After multiple consecutive timeouts
+                # something is likely wrong so raise.
+                if retries:
+                    LOG.warning("Launch timeout (attempts remaining %d)", retries)
+                    time.sleep(retry_delay)
+                    continue
+                raise
+
+    @staticmethod
+    def location(srv_path, srv_port, close_after=None, forced_close=True, timeout=None):
+        """Build a valid URL to pass to a browser.
+
+        Args:
+            srv_path (str): Path segment of the URL
+            srv_port (int): Server listening port
+            close_after (int): Harness argument.
+            forced_close (bool): Harness argument.
+            timeout (int): Harness argument.
+
+        Returns:
+            str: A valid URL.
+        """
+        location = "http://127.0.0.1:%d/%s" % (srv_port, srv_path)
+        # set harness related arguments
+        args = []
+        if close_after is not None:
+            assert close_after >= 0
+            args.append("close_after=%d" % (close_after,))
+        if not forced_close:
+            args.append("forced_close=0")
+        if timeout is not None:
+            assert timeout >= 0
+            args.append("timeout=%d" % (timeout * 1000,))
+        if args:
+            return "?".join([location, "&".join(args)])
+        return location
 
     def run(self, ignore, server_map, testcase, wait_for_callback=False):
         """Serve a testcase and monitor the target for results.

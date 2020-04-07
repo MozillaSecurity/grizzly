@@ -45,40 +45,6 @@ class ReplayManager(object):
             self._harness = TestFile.from_file(self.HARNESS_FILE, "harness.html")
             testcase.add_file(self._harness, required=False)
 
-    def _launch(self, max_timeouts=3):
-        timeouts = 0
-        while True:
-            try:
-                self.target.launch(self._location(), env_mod=self.testcase.env_vars)
-            except TargetLaunchError:
-                LOG.error("Launch error detected")
-                raise
-            except TargetLaunchTimeout:
-                timeouts += 1
-                LOG.warning("Launch timeout (attempt #%d of %d)", timeouts, max_timeouts)
-                # likely has nothing to do with Grizzly but is seen frequently
-                # on machines under a high load after multiple consecutive timeouts
-                # something is likely wrong so raise
-                if timeouts < max_timeouts:
-                    continue
-                raise
-            break
-
-    def _location(self, timeout=0):
-        location = ["http://127.0.0.1:%d/" % (self.server.port,)]
-        if self._harness is None:
-            location.append(self.testcase.landing_page)
-        else:
-            location.append(self._harness.file_name)
-            if timeout > 0:
-                location.append("?timeout=%d" % (timeout * 1000,))
-                location.append("&close_after=%d" % (self.target.rl_reset,))
-            else:
-                location.append("?close_after=%d" % (self.target.rl_reset,))
-            if not self.target.forced_close:
-                location.append("&forced_close=0")
-        return "".join(location)
-
     def cleanup(self):
         for report in self._reports_expected.values():
             report.cleanup()
@@ -133,7 +99,15 @@ class ReplayManager(object):
             self.status.iteration += 1
             if self.target.closed:
                 LOG.info("Launching target...")
-                self._launch()
+                if self._harness is None:
+                    location = self._runner.location(self.testcase.landing_page, self.server.port)
+                else:
+                    location = self._runner.location(
+                        self._harness.file_name,
+                        self.server.port,
+                        close_after=self.target.rl_reset,
+                        forced_close=self.target.forced_close)
+                self._runner.launch(location, env_mod=self.testcase.env_vars)
             self.target.step()
             LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
             # run test case

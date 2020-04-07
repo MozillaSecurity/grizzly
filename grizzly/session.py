@@ -11,7 +11,7 @@ import time
 
 import sapphire
 from .common import Runner, Status, TestFile
-from .target import TargetLaunchError, TargetLaunchTimeout
+from .target import TargetLaunchError
 
 
 __all__ = ("LogOutputLimiter", "Session")
@@ -78,7 +78,7 @@ class Session(object):
         # call 'window.close()' after a second.
         # launch http server used to serve test cases
         self.server = sapphire.Sapphire(auto_close=1, timeout=iteration_timeout)
-        def _dyn_resp_close():
+        def _dyn_resp_close():  # pragma: no cover
             self.target.close()
             return b"<h1>Close Browser</h1>"
         self.iomanager.server_map.set_dynamic_response(
@@ -115,40 +115,6 @@ class Session(object):
             test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
         return test
 
-    def launch_target(self):
-        assert self.target.closed
-        launch_timeouts = 0
-        while True:
-            try:
-                log.info("Launching target")
-                self.target.launch(self.location)
-            except TargetLaunchError:
-                # this result likely has nothing to do with Grizzly
-                self.status.results += 1
-                log.error("Launch error detected")
-                self.report_result()
-                raise
-            except TargetLaunchTimeout:
-                launch_timeouts += 1
-                log.warning("Launch timeout detected (attempt #%d)", launch_timeouts)
-                # likely has nothing to do with Grizzly but is seen frequently on machines under a high load
-                # after 3 timeouts in a row something is likely wrong so raise
-                if launch_timeouts < 3:
-                    continue
-                raise
-            break
-
-    @property
-    def location(self):
-        assert self.server is not None
-        location = ["http://127.0.0.1:%d/" % self.server.port, self.iomanager.landing_page()]
-        if self.iomanager.harness is not None:
-            location.append("?timeout=%d" % (self.adapter.TEST_DURATION * 1000))
-            location.append("&close_after=%d" % self.target.rl_reset)
-            if not self.target.forced_close:
-                location.append("&forced_close=0")
-        return "".join(location)
-
     def report_result(self):
         # create working directory for current testcase
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
@@ -167,9 +133,27 @@ class Session(object):
             self.status.iteration += 1
 
             if self.target.closed:
+                # (re-)launch target
                 self.iomanager.purge_tests()
                 self.adapter.pre_launch()
-                self.launch_target()
+                if self.iomanager.harness is None:
+                    location = runner.location(self.iomanager.landing_page(), self.server.port)
+                else:
+                    location = runner.location(
+                        self.iomanager.landing_page(),
+                        self.server.port,
+                        close_after=self.target.rl_reset,
+                        forced_close=self.target.forced_close,
+                        timeout=self.adapter.TEST_DURATION)
+                log.info("Launching target")
+                try:
+                    runner.launch(location, max_retries=3, retry_delay=0)
+                except TargetLaunchError:
+                    # this result likely has nothing to do with Grizzly
+                    self.status.results += 1
+                    log.error("Launch error detected")
+                    self.report_result()
+                    raise
             self.target.step()
 
             # create and populate a test case
