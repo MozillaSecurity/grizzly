@@ -21,7 +21,6 @@ LOG = logging.getLogger("replay")
 
 # TODO:
 # - fuzzmanager reporter
-# - option to include test in report
 # - option to map include paths
 # - add method comments
 
@@ -53,24 +52,6 @@ class ReplayManager(object):
             report.cleanup()
         self._reports_other.clear()
 
-    def dump_reports(self, path, include_extra=True):
-        if not os.path.isdir(path):
-            os.makedirs(path)
-        if self._reports_expected:
-            reports_path = os.path.join(path, "reports")
-            if not os.path.isdir(reports_path):
-                os.makedirs(reports_path)
-            reporter = FilesystemReporter(report_path=reports_path, major_bucket=False)
-            for report in self._reports_expected.values():
-                reporter.submit((), report=report)
-        if include_extra and self._reports_other:
-            reports_path = os.path.join(path, "other_reports")
-            if not os.path.isdir(reports_path):
-                os.makedirs(reports_path)
-            reporter = FilesystemReporter(report_path=reports_path, major_bucket=False)
-            for report in self._reports_other.values():
-                reporter.submit((), report=report)
-
     @property
     def other_reports(self):
         return self._reports_other.values()
@@ -78,6 +59,23 @@ class ReplayManager(object):
     @property
     def reports(self):
         return self._reports_expected.values()
+
+    @staticmethod
+    def report_to_filesystem(path, reports, other_reports=None, test=None):
+        assert test is None or isinstance(test, TestCase)
+        tests = [test] if test else tuple()
+        if reports:
+            reporter = FilesystemReporter(
+                report_path=os.path.join(path, "reports"),
+                major_bucket=False)
+            for report in reports:
+                reporter.submit(tests, report=report)
+        if other_reports:
+            reporter = FilesystemReporter(
+                report_path=os.path.join(path, "other_reports"),
+                major_bucket=False)
+            for report in other_reports:
+                reporter.submit(tests, report=report)
 
     def run(self, repeat=1, min_results=1):
         assert repeat > 0
@@ -250,8 +248,12 @@ class ReplayManager(object):
                     signature=signature,
                     use_harness=not args.no_harness)
                 success = replay.run(repeat=args.repeat, min_results=args.min_crashes)
-            if args.logs and (replay.reports or replay.other_reports):
-                replay.dump_reports(args.logs)
+            if args.logs:
+                replay.report_to_filesystem(
+                    args.logs,
+                    replay.reports,
+                    replay.other_reports,
+                    replay.testcase if args.include_test else None)
             return 0 if success else 1
 
         except KeyboardInterrupt:
