@@ -7,8 +7,8 @@ import logging
 import os
 import tempfile
 
-import sapphire
 from FTB.Signatures.CrashInfo import CrashSignature
+from sapphire import Sapphire, ServerMap
 
 from ..common import FilesystemReporter, FuzzManagerReporter, Report, Runner, \
     Status, TestCase, TestCaseLoadFailure, TestFile
@@ -127,7 +127,7 @@ class ReplayManager(object):
         assert min_results <= repeat
         self.status = Status.start()
 
-        server_map = sapphire.ServerMap()
+        server_map = ServerMap()
         if self._harness is not None:
             def _dyn_close():  # pragma: no cover
                 self.target.close()
@@ -275,7 +275,7 @@ class ReplayManager(object):
 
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
-            with sapphire.Sapphire(auto_close=1, timeout=args.timeout) as server:
+            with Sapphire(auto_close=1, timeout=args.timeout) as server:
                 target.reverse(server.port, server.port)
                 if args.no_harness:
                     LOG.debug("--no-harness specified relaunch set to 1")

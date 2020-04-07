@@ -17,7 +17,7 @@ from .target import Target
 def test_session_00(tmp_path, mocker):
     """test basic Session functions"""
     Status.PATH = str(tmp_path)
-    fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
+    fake_server = mocker.patch("grizzly.session.Sapphire", autospec=True)
     fake_server.return_value.serve_testcase.return_value = (SERVED_TIMEOUT, [])
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
@@ -58,7 +58,7 @@ def test_session_00(tmp_path, mocker):
 def test_session_01(tmp_path, mocker):
     """test Session.generate_testcase()"""
     Status.PATH = str(tmp_path)
-    mocker.patch("sapphire.Sapphire", autospec=True)
+    mocker.patch("grizzly.session.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.NAME = "fake_adapter"
@@ -85,7 +85,7 @@ def test_session_02(tmp_path, mocker):
     """test Session.config_server()"""
     Status.PATH = str(tmp_path)
     fake_adapter = mocker.Mock(spec=Adapter)
-    mocker.patch("sapphire.Sapphire", autospec=True)
+    mocker.patch("grizzly.session.Sapphire", autospec=True)
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
     session = Session(fake_adapter, False, [], fake_iomgr, None, mocker.Mock(spec=Target))
@@ -95,7 +95,7 @@ def test_session_02(tmp_path, mocker):
 def test_session_03(tmp_path, mocker):
     """test Session.run()"""
     Status.PATH = str(tmp_path)
-    fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
+    fake_server = mocker.patch("grizzly.session.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.IGNORE_UNSERVED = True
@@ -151,7 +151,7 @@ def test_session_04(tmp_path, mocker):
     """test Session.run() reporting failures"""
     Status.PATH = str(tmp_path)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
+    fake_server = mocker.patch("grizzly.session.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.IGNORE_UNSERVED = True
@@ -201,7 +201,7 @@ def test_session_05(tmp_path, mocker):
     """test Session.run() ignoring failures"""
     Status.PATH = str(tmp_path)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
+    fake_server = mocker.patch("grizzly.session.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.IGNORE_UNSERVED = True
