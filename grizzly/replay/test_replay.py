@@ -8,12 +8,10 @@ unit tests for grizzly.ReplayManager
 """
 import os
 
-import pytest
-
 from sapphire import Sapphire, SERVED_ALL
 from .replay import ReplayManager
 from ..common import Report, TestCase
-from ..target import Target, TargetLaunchError, TargetLaunchTimeout
+from ..target import Target
 
 
 def _fake_save_logs_result(result_logs, meta=False):  # pylint: disable=unused-argument
@@ -215,59 +213,7 @@ def test_replay_07(mocker, tmp_path):
     assert report_1.cleanup.call_count == 0
     assert report_2.cleanup.call_count == 0
 
-def test_replay_08(mocker):
-    """test ReplayManager._launch()"""
-    ignore = mocker.Mock(spec=list)
-    server = mocker.Mock(spec=Sapphire)
-    server.port = 0x1337
-    target = mocker.Mock(spec=Target)
-    testcase = mocker.Mock(spec=TestCase)
-    testcase.env_vars = dict()
-    testcase.landing_page = "index.html"
-
-    replay = ReplayManager(ignore, server, target, testcase, use_harness=False)
-    replay._launch()
-    assert target.launch.call_count == 1
-    target.reset_mock()
-
-    target.launch.side_effect = TargetLaunchError
-    with pytest.raises(TargetLaunchError):
-        replay._launch()
-    assert target.launch.call_count == 1
-    target.reset_mock()
-
-    target.launch.side_effect = TargetLaunchTimeout
-    with pytest.raises(TargetLaunchTimeout):
-        replay._launch(max_timeouts=3)
-    assert target.launch.call_count == 3
-
-def test_replay_09(mocker):
-    """test ReplayManager._location()"""
-    ignore = mocker.Mock(spec=list)
-    server = mocker.Mock(spec=Sapphire)
-    server.port = 34567
-    target = mocker.Mock(spec=Target)
-    target.rl_reset = 10
-    testcase = mocker.Mock(spec=TestCase)
-    testcase.env_vars = dict()
-    testcase.landing_page = "index.html"
-
-    replay = ReplayManager(ignore, server, target, testcase, use_harness=False)
-    assert replay._location() == "http://127.0.0.1:34567/index.html"
-
-    target.forced_close = True
-    replay = ReplayManager(ignore, server, target, testcase, use_harness=True)
-    assert replay._location() == "http://127.0.0.1:34567/harness.html?close_after=10"
-
-    target.forced_close = False
-    replay = ReplayManager(ignore, server, target, testcase, use_harness=True)
-    assert replay._location() == "http://127.0.0.1:34567/harness.html?close_after=10&forced_close=0"
-
-    target.forced_close = True
-    replay = ReplayManager(ignore, server, target, testcase, use_harness=True)
-    assert replay._location(timeout=60) == "http://127.0.0.1:34567/harness.html?timeout=60000&close_after=10"
-
-def test_replay_10(mocker, tmp_path):
+def test_replay_08(mocker, tmp_path):
     """test ReplayManager.dump_reports()"""
     server = mocker.Mock(spec=Sapphire)
     server.port = 34567

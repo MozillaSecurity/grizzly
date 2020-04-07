@@ -6,15 +6,12 @@
 """
 unit tests for grizzly.Session
 """
-
 from collections import deque
 
-import pytest
-
-from sapphire import Sapphire, ServerMap, SERVED_ALL, SERVED_REQUEST, SERVED_TIMEOUT
-from grizzly.common import Adapter, InputFile, IOManager, Reporter, Status, TestCase, TestFile
-from grizzly.session import LogOutputLimiter, Session
-from grizzly.target import Target, TargetLaunchError, TargetLaunchTimeout
+from sapphire import ServerMap, SERVED_ALL, SERVED_REQUEST, SERVED_TIMEOUT
+from .common import Adapter, InputFile, IOManager, Reporter, Status, TestCase
+from .session import LogOutputLimiter, Session
+from .target import Target
 
 
 def test_session_00(tmp_path, mocker):
@@ -84,66 +81,7 @@ def test_session_01(tmp_path, mocker):
     fake_adapter.generate.assert_called_with(testcase, fake_iomgr.active_input, fake_iomgr.server_map)
     assert testcase.add_meta.call_count == 1
 
-def test_session_02(mocker, tmp_path):
-    """test Session.launch_target()"""
-    Status.PATH = str(tmp_path)
-    mocker.patch.object(Session, "location", return_value="fake_location")
-    mocker.patch.object(Session, "report_result")
-
-    fake_target = mocker.Mock(spec=Target)
-    fake_target.closed = True
-    session = Session(None, False, [], None, None, fake_target)
-    session.launch_target()
-    assert fake_target.launch.call_count == 1
-    assert session.status.results == 0
-
-    fake_target = mocker.Mock(spec=Target)
-    fake_target.closed = True
-    fake_target.launch.side_effect = TargetLaunchError
-    session = Session(None, False, [], None, None, fake_target)
-    with pytest.raises(TargetLaunchError):
-        session.launch_target()
-    assert fake_target.launch.call_count == 1
-    assert session.status.results == 1
-
-    fake_target = mocker.Mock(spec=Target)
-    fake_target.closed = True
-    fake_target.launch.side_effect = TargetLaunchTimeout
-    session = Session(None, False, [], None, None, fake_target)
-    with pytest.raises(TargetLaunchTimeout):
-        session.launch_target()
-    assert fake_target.launch.call_count == 3
-    assert session.status.results == 0
-
-def test_session_03(tmp_path, mocker):
-    """test Session.location"""
-    Status.PATH = str(tmp_path)
-    fake_server = mocker.Mock(spec=Sapphire)
-    fake_server.port = 1
-    fake_adapter = mocker.Mock(spec=Adapter)
-    fake_adapter.TEST_DURATION = 1
-    fake_iomgr = mocker.Mock(spec=IOManager)
-    fake_iomgr.harness = mocker.Mock(spec=TestFile)
-    fake_iomgr.landing_page.return_value = "x"
-    fake_target = mocker.Mock(spec=Target)
-    fake_target.rl_reset = 1
-
-    fake_target.forced_close = False
-    session = Session(fake_adapter, False, [], fake_iomgr, fake_adapter, fake_target)
-    session.server = fake_server
-    assert session.location == "http://127.0.0.1:1/x?timeout=1000&close_after=1&forced_close=0"
-
-    fake_target.forced_close = True
-    session = Session(fake_adapter, False, [], fake_iomgr, fake_adapter, fake_target)
-    session.server = fake_server
-    assert session.location == "http://127.0.0.1:1/x?timeout=1000&close_after=1"
-
-    fake_iomgr.harness = None
-    session = Session(fake_adapter, False, [], fake_iomgr, fake_adapter, fake_target)
-    session.server = fake_server
-    assert session.location == "http://127.0.0.1:1/x"
-
-def test_session_04(tmp_path, mocker):
+def test_session_02(tmp_path, mocker):
     """test Session.config_server()"""
     Status.PATH = str(tmp_path)
     fake_adapter = mocker.Mock(spec=Adapter)
@@ -154,7 +92,7 @@ def test_session_04(tmp_path, mocker):
     session.config_server(5)
     assert fake_iomgr.server_map.set_dynamic_response.call_count == 1
 
-def test_session_05(tmp_path, mocker):
+def test_session_03(tmp_path, mocker):
     """test Session.run()"""
     Status.PATH = str(tmp_path)
     fake_server = mocker.patch("sapphire.Sapphire", autospec=True)
@@ -209,7 +147,7 @@ def test_session_05(tmp_path, mocker):
     assert fake_iomgr.create_testcase.return_value.purge_optional.call_count == 5
     assert fake_iomgr.tests.pop.call_count == 5
 
-def test_session_06(tmp_path, mocker):
+def test_session_04(tmp_path, mocker):
     """test Session.run() reporting failures"""
     Status.PATH = str(tmp_path)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
@@ -250,7 +188,7 @@ def test_session_06(tmp_path, mocker):
     assert fake_adapter.on_timeout.call_count == 0
     assert fake_adapter.pre_launch.call_count == 1
     assert fake_iomgr.purge_tests.call_count == 1
-    assert fake_target.launch.call_count == fake_iomgr.purge_tests.call_count
+    assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
     session.close()
     assert fake_server.call_count == 1
     assert fake_server.return_value.close.call_count == 1
@@ -259,7 +197,7 @@ def test_session_06(tmp_path, mocker):
     assert session.status.ignored == 0
     assert session.report_result.call_count == 1
 
-def test_session_07(tmp_path, mocker):
+def test_session_05(tmp_path, mocker):
     """test Session.run() ignoring failures"""
     Status.PATH = str(tmp_path)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
@@ -300,7 +238,7 @@ def test_session_07(tmp_path, mocker):
     assert fake_adapter.on_timeout.call_count == 0
     assert fake_adapter.pre_launch.call_count == 1
     assert fake_iomgr.purge_tests.call_count == 1
-    assert fake_target.launch.call_count == fake_iomgr.purge_tests.call_count
+    assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
     session.close()
     assert fake_server.call_count == 1
     assert fake_server.return_value.close.call_count == 1
@@ -309,7 +247,7 @@ def test_session_07(tmp_path, mocker):
     assert session.status.ignored == 1
     assert session.report_result.call_count == 0
 
-def test_session_08(tmp_path, mocker):
+def test_session_06(tmp_path, mocker):
     """test Session.report_result()"""
     fake_tempfile = mocker.patch("grizzly.session.tempfile", autospec=True)
     working_path = tmp_path / "fake_temp_path"

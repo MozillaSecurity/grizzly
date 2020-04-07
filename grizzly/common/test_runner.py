@@ -3,13 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
+import pytest
 
-from grizzly.target import Target
 from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT, ServerMap
 
 from .runner import _IdleChecker, Runner
 from .storage import TestCase
-
+from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 
 def test_runner_01(mocker):
     """test Runner()"""
@@ -115,6 +115,41 @@ def test_runner_05(mocker):
     runner._idle.is_idle.return_value = False
     target.monitor.is_healthy.return_value = False
     assert not runner._keep_waiting()
+
+def test_runner_06():
+    """test Runner.location()"""
+    result = Runner.location("a.html", 34567)
+    assert result == "http://127.0.0.1:34567/a.html"
+    result = Runner.location("a.html", 34567, close_after=10)
+    assert result == "http://127.0.0.1:34567/a.html?close_after=10"
+    result = Runner.location("a.html", 34567, close_after=10, forced_close=False)
+    assert result == "http://127.0.0.1:34567/a.html?close_after=10&forced_close=0"
+    result = Runner.location("a.html", 34567, forced_close=False)
+    assert result == "http://127.0.0.1:34567/a.html?forced_close=0"
+    result = Runner.location("a.html", 9999, close_after=10, forced_close=False, timeout=60)
+    assert result == "http://127.0.0.1:9999/a.html?close_after=10&forced_close=0&timeout=60000"
+
+def test_runner_07(mocker):
+    """test Runner.launch()"""
+    server = mocker.Mock(spec=Sapphire)
+    server.port = 0x1337
+    target = mocker.Mock(spec=Target)
+
+    runner = Runner(server, target)
+    runner.launch("http://a/")
+    assert target.launch.call_count == 1
+    target.reset_mock()
+
+    target.launch.side_effect = TargetLaunchError
+    with pytest.raises(TargetLaunchError):
+        runner.launch("http://a/")
+    assert target.launch.call_count == 1
+    target.reset_mock()
+
+    target.launch.side_effect = TargetLaunchTimeout
+    with pytest.raises(TargetLaunchTimeout):
+        runner.launch("http://a/", max_retries=3)
+    assert target.launch.call_count == 3
 
 def test_idle_check_01(mocker):
     """test simple _IdleChecker"""
