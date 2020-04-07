@@ -214,30 +214,33 @@ def test_replay_07(mocker, tmp_path):
     assert report_2.cleanup.call_count == 0
 
 def test_replay_08(mocker, tmp_path):
-    """test ReplayManager.dump_reports()"""
+    """test ReplayManager.report_to_filesystem()"""
     server = mocker.Mock(spec=Sapphire)
     server.port = 34567
     target = mocker.Mock(spec=Target)
     target.rl_reset = 10
-    replay = ReplayManager(None, server, target, None, use_harness=False)
     # no reports
-    replay.dump_reports(str(tmp_path))
+    ReplayManager.report_to_filesystem(str(tmp_path), [])
     assert not any(tmp_path.glob("*"))
     # with reports
-    path = tmp_path / "dest"
-    replay._reports_expected["testhash"] = mocker.Mock(spec=Report)
-    replay._reports_expected["testhash"].prefix = "expected"
+    reports_expected = list()
+    reports_expected.append(mocker.Mock(spec=Report))
+    reports_expected[-1].prefix = "expected"
     (tmp_path / "report_expected").mkdir()
-    replay._reports_expected["testhash"].path = str(tmp_path / "report_expected")
-    replay._reports_other["other1"] = mocker.Mock(spec=Report)
-    replay._reports_other["other1"].prefix = "other1"
+    reports_expected[-1].path = str(tmp_path / "report_expected")
+    reports_other = list()
+    reports_other.append(mocker.Mock(spec=Report))
+    reports_other[-1].prefix = "other1"
     (tmp_path / "report_other1").mkdir()
-    replay._reports_other["other1"].path = str(tmp_path / "report_other1")
-    replay._reports_other["other2"] = mocker.Mock(spec=Report)
-    replay._reports_other["other2"].prefix = "other2"
+    reports_other[-1].path = str(tmp_path / "report_other1")
+    reports_other.append(mocker.Mock(spec=Report))
+    reports_other[-1].prefix = "other2"
     (tmp_path / "report_other2").mkdir()
-    replay._reports_other["other2"].path = str(tmp_path / "report_other2")
-    replay.dump_reports(str(path))
+    reports_other[-1].path = str(tmp_path / "report_other2")
+    test = mocker.Mock(spec=TestCase)
+    path = tmp_path / "dest"
+    ReplayManager.report_to_filesystem(str(path), reports_expected, reports_other, test=test)
+    assert test.dump.call_count == 3  # called once per report
     assert not (tmp_path / "report_expected").is_dir()
     assert not (tmp_path / "report_other1").is_dir()
     assert not (tmp_path / "report_other2").is_dir()

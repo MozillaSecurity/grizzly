@@ -17,13 +17,16 @@ class ReplayArgs(CommonArgs):
             "When using a directory it must contain a 'test_info.json' file.")
         self.parser.add_argument(
             "--any-crash", action="store_true",
-            help="Any crash is interesting, not only crashes which match the original signature")
+            help="Any crash is interesting, not only crashes which match the original signature.")
         self.parser.add_argument(
             "--idle-timeout", type=int, default=60,
             help="Number of seconds to wait before polling testcase for idle (default: %(default)s)")
         self.parser.add_argument(
             "--idle-threshold", type=int, default=25,
             help="CPU usage threshold to mark the process as idle (default: %(default)s)")
+        self.parser.add_argument(
+            "--include-test", action="store_true",
+            help="Include the testcase when reporting results.")
         self.parser.add_argument(
             "--logs",
             help="Location to save logs. If the path exists it must be empty, if it " \
@@ -42,7 +45,7 @@ class ReplayArgs(CommonArgs):
             help="Use RR (Linux only)")
         self.parser.add_argument(
             "--sig",
-            help="Signature (JSON) file to match (Requires FuzzManager)")
+            help="Signature (JSON) file to match.")
 
     def sanity_check(self, args):
         super(ReplayArgs, self).sanity_check(args)
