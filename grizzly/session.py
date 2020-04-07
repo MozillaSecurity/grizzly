@@ -9,7 +9,7 @@ import shutil
 import tempfile
 import time
 
-import sapphire
+from sapphire import Sapphire
 from .common import Runner, Status, TestFile
 from .target import TargetLaunchError
 
@@ -77,7 +77,7 @@ class Session(object):
         # set 'auto_close=1' so the client error pages (code 4XX) will
         # call 'window.close()' after a second.
         # launch http server used to serve test cases
-        self.server = sapphire.Sapphire(auto_close=1, timeout=iteration_timeout)
+        self.server = Sapphire(auto_close=1, timeout=iteration_timeout)
         def _dyn_resp_close():  # pragma: no cover
             self.target.close()
             return b"<h1>Close Browser</h1>"

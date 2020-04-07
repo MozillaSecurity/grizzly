@@ -81,7 +81,7 @@ def test_main_01(mocker, tmp_path):
     # Of the four attempts only the first and third will 'reproduce' the result
     # and the forth attempt should be skipped.
     # mock Sapphire.serve_testcase only
-    serve_testcase = mocker.patch("grizzly.replay.replay.sapphire.Sapphire.serve_testcase", autospec=True)
+    serve_testcase = mocker.patch("grizzly.replay.replay.Sapphire.serve_testcase", autospec=True)
     serve_testcase.return_value = (None, None)  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_target")
@@ -137,7 +137,7 @@ def test_main_01(mocker, tmp_path):
 def test_main_02(mocker):
     """test ReplayManager.main() failure cases"""
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
-    mocker.patch("grizzly.replay.replay.sapphire", autospec=True)
+    mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
     mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
     # setup args
     args = mocker.Mock()
