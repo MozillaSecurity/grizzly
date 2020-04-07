@@ -8,21 +8,21 @@ unit tests for grizzly.Session
 """
 from collections import deque
 
-from sapphire import ServerMap, SERVED_ALL, SERVED_REQUEST, SERVED_TIMEOUT
-from .common import Adapter, InputFile, IOManager, Reporter, Status, TestCase
+import pytest
+
+from sapphire import Sapphire, ServerMap, SERVED_ALL, SERVED_REQUEST, SERVED_TIMEOUT
+from .common import Adapter, InputFile, IOManager, Reporter, Status, TestCase, TestFile
 from .session import LogOutputLimiter, Session
-from .target import Target
+from .target import Target, TargetLaunchError
 
 
-def test_session_00(tmp_path, mocker):
+def test_session_01(tmp_path, mocker):
     """test basic Session functions"""
     Status.PATH = str(tmp_path)
-    fake_server = mocker.patch("grizzly.session.Sapphire", autospec=True)
-    fake_server.return_value.serve_testcase.return_value = (SERVED_TIMEOUT, [])
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
-    fake_adapter.TEST_DURATION = 10
     fake_adapter.ROTATION_PERIOD = 0
+    fake_adapter.TEST_DURATION = 10
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
     fake_iomgr.server_map.includes = []
@@ -31,34 +31,32 @@ def test_session_00(tmp_path, mocker):
     fake_iomgr.active_input = mocker.Mock(spec=InputFile)
     fake_iomgr.active_input.file_name = "input.txt"
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
-    fake_iomgr.harness = None
+    fake_iomgr.harness = mocker.Mock(spec=TestFile)
     fake_iomgr.input_files = []
     fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
     fake_iomgr.tests = deque([mocker.Mock(spec=TestCase)])
     fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
+    fake_serv = mocker.Mock(spec=Sapphire)
+    fake_serv.serve_testcase.return_value = (SERVED_TIMEOUT, [])
+    fake_serv.port = 0x1337
     fake_target = mocker.Mock(spec=Target)
     fake_target.log_size.return_value = 1000
     fake_target.rl_reset = 10
     fake_target.prefs = None
 
-    session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
+    session = Session(fake_adapter, True, fake_iomgr, fake_reporter, fake_serv, fake_target)
     session.TARGET_LOG_SIZE_WARN = 100
-    session.coverage = True
-    session.config_server(5)
-    session.run()
+    session.run([])
     session.close()
 
     assert fake_iomgr.create_testcase.call_count == 1
-    assert fake_server.call_count == 1
-    assert fake_server.return_value.serve_testcase.call_count == 1
-    assert fake_server.return_value.close.call_count == 1
+    assert fake_serv.serve_testcase.call_count == 1
     assert fake_target.detect_failure.call_count == 1
 
-def test_session_01(tmp_path, mocker):
+def test_session_02(tmp_path, mocker):
     """test Session.generate_testcase()"""
     Status.PATH = str(tmp_path)
-    mocker.patch("grizzly.session.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.NAME = "fake_adapter"
@@ -71,8 +69,7 @@ def test_session_01(tmp_path, mocker):
     fake_target = mocker.Mock(spec=Target)
     fake_target.prefs = "fake_prefs.js"
 
-    session = Session(fake_adapter, False, [], fake_iomgr, None, fake_target)
-    session.config_server(5)
+    session = Session(fake_adapter, False, fake_iomgr, None, None, fake_target)
     fake_adapter.generate.assert_not_called()
     testcase = session.generate_testcase()
     assert fake_iomgr.create_testcase.call_count == 1
@@ -81,21 +78,9 @@ def test_session_01(tmp_path, mocker):
     fake_adapter.generate.assert_called_with(testcase, fake_iomgr.active_input, fake_iomgr.server_map)
     assert testcase.add_meta.call_count == 1
 
-def test_session_02(tmp_path, mocker):
-    """test Session.config_server()"""
-    Status.PATH = str(tmp_path)
-    fake_adapter = mocker.Mock(spec=Adapter)
-    mocker.patch("grizzly.session.Sapphire", autospec=True)
-    fake_iomgr = mocker.Mock(spec=IOManager)
-    fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
-    session = Session(fake_adapter, False, [], fake_iomgr, None, mocker.Mock(spec=Target))
-    session.config_server(5)
-    assert fake_iomgr.server_map.set_dynamic_response.call_count == 1
-
 def test_session_03(tmp_path, mocker):
     """test Session.run()"""
     Status.PATH = str(tmp_path)
-    fake_server = mocker.patch("grizzly.session.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.IGNORE_UNSERVED = True
@@ -112,33 +97,35 @@ def test_session_03(tmp_path, mocker):
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.working_path = str(tmp_path)
+    fake_serv = mocker.Mock(spec=Sapphire)
+    fake_serv.port = 0x1337
+    fake_serv.serve_testcase.side_effect = (
+        (SERVED_ALL, ["/fake/file"]),
+        (SERVED_TIMEOUT, []),
+        (SERVED_ALL, ["/fake/file"]),
+        (SERVED_TIMEOUT, []),
+        (SERVED_ALL, ["/fake/file"]),
+        (SERVED_TIMEOUT, []),
+        (SERVED_ALL, ["/fake/file"]),
+        (SERVED_TIMEOUT, []),
+        (SERVED_ALL, ["/fake/file"]),
+        (SERVED_TIMEOUT, []))
     fake_target = mocker.Mock(spec=Target)
-    fake_target.rl_reset = 5
     fake_target.log_size.return_value = 1000
+    fake_target.monitor.launches = 1
     fake_target.prefs = "prefs.js"
 
-    session = Session(fake_adapter, False, [], fake_iomgr, mocker.Mock(spec=Reporter), fake_target)
-    session.TARGET_LOG_SIZE_WARN = 100
-    session.config_server(5)
-    session._lol = mocker.Mock(spec=LogOutputLimiter)
-    def fake_serve_testcase(*_a, **_kw):
-        if session.status.iteration % 2:
-            return SERVED_ALL, ["/fake/file"]
-        return SERVED_TIMEOUT, []
-    session.server.serve_testcase = fake_serve_testcase
+    session = Session(fake_adapter, False, fake_iomgr, mocker.Mock(spec=Reporter), fake_serv, fake_target)
     fake_adapter.on_served.assert_not_called()
     fake_adapter.on_timeout.assert_not_called()
     fake_adapter.pre_launch.assert_not_called()
-    session.run(10)
+    session.run([], iteration_limit=10)
     assert fake_adapter.on_served.call_count == 5
     assert fake_adapter.on_timeout.call_count == 5
     assert fake_adapter.pre_launch.call_count == 10
     assert fake_iomgr.purge_tests.call_count == 10
     assert fake_target.launch.call_count == fake_iomgr.purge_tests.call_count
     session.close()
-
-    assert fake_server.call_count == 1
-    assert fake_server.return_value.close.call_count == 1
     assert session.status.ignored == 0
     assert session.status.iteration == 10
     assert session.status.results == 0
@@ -151,11 +138,9 @@ def test_session_04(tmp_path, mocker):
     """test Session.run() reporting failures"""
     Status.PATH = str(tmp_path)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_server = mocker.patch("grizzly.session.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.IGNORE_UNSERVED = True
-    fake_adapter.ROTATION_PERIOD = 2
     fake_adapter.TEST_DURATION = 10
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.active_input = mocker.Mock(spec=InputFile)
@@ -166,46 +151,39 @@ def test_session_04(tmp_path, mocker):
     fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
     fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
     fake_iomgr.tests = mocker.Mock(spec=deque)
-    fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
+    fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
+    fake_serv = mocker.Mock(spec=Sapphire)
+    fake_serv.port = 0x1337
     fake_target = mocker.Mock(spec=Target)
-    fake_target.rl_reset = 5
     fake_target.log_size.return_value = 1000
+    fake_target.monitor.launches = 1
     fake_target.prefs = "prefs.js"
 
-    session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
-    session.report_result = mocker.Mock()
-    session.TARGET_LOG_SIZE_WARN = 100
-    session.config_server(5)
-    session._lol = mocker.Mock(spec=LogOutputLimiter)
-
+    session = Session(fake_adapter, False, fake_iomgr, fake_reporter, fake_serv, fake_target)
     session.server.serve_testcase.return_value = SERVED_REQUEST
     fake_runner.return_value.result = fake_runner.return_value.FAILED
     fake_runner.return_value.served = ["/fake/file"]
     fake_runner.return_value.timeout = False
-    session.run(1)
+    session.run([], iteration_limit=1)
     assert fake_adapter.on_served.call_count == 1
     assert fake_adapter.on_timeout.call_count == 0
     assert fake_adapter.pre_launch.call_count == 1
     assert fake_iomgr.purge_tests.call_count == 1
     assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
     session.close()
-    assert fake_server.call_count == 1
-    assert fake_server.return_value.close.call_count == 1
     assert session.status.iteration == 1
     assert session.status.results == 1
     assert session.status.ignored == 0
-    assert session.report_result.call_count == 1
+    assert fake_reporter.submit.call_count == 1
 
 def test_session_05(tmp_path, mocker):
     """test Session.run() ignoring failures"""
     Status.PATH = str(tmp_path)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_server = mocker.patch("grizzly.session.Sapphire", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.IGNORE_UNSERVED = True
-    fake_adapter.ROTATION_PERIOD = 2
     fake_adapter.TEST_DURATION = 10
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.active_input = mocker.Mock(spec=InputFile)
@@ -218,36 +196,63 @@ def test_session_05(tmp_path, mocker):
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
     fake_reporter = mocker.Mock(spec=Reporter)
+    fake_serv = mocker.Mock(spec=Sapphire)
+    fake_serv.port = 0x1337
     fake_target = mocker.Mock(spec=Target)
-    fake_target.rl_reset = 5
     fake_target.log_size.return_value = 1000
+    fake_target.monitor.launches = 1
     fake_target.prefs = "prefs.js"
 
-    session = Session(fake_adapter, False, [], fake_iomgr, fake_reporter, fake_target)
-    session.report_result = mocker.Mock()
-    session.TARGET_LOG_SIZE_WARN = 100
-    session.config_server(5)
-    session._lol = mocker.Mock(spec=LogOutputLimiter)
-
+    # ignored results should not be reported so raise AssertionError if report_result is called
+    mocker.patch.object(Session, 'report_result', side_effect=AssertionError)
+    session = Session(fake_adapter, False, fake_iomgr, fake_reporter, fake_serv, fake_target)
     session.server.serve_testcase.return_value = SERVED_REQUEST
     fake_runner.return_value.result = fake_runner.return_value.IGNORED
     fake_runner.return_value.served = ["/fake/file"]
     fake_runner.return_value.timeout = False
-    session.run(1)
+    session.run([], iteration_limit=1)
     assert fake_adapter.on_served.call_count == 1
     assert fake_adapter.on_timeout.call_count == 0
     assert fake_adapter.pre_launch.call_count == 1
     assert fake_iomgr.purge_tests.call_count == 1
     assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
     session.close()
-    assert fake_server.call_count == 1
-    assert fake_server.return_value.close.call_count == 1
     assert session.status.iteration == 1
     assert session.status.results == 0
     assert session.status.ignored == 1
-    assert session.report_result.call_count == 0
 
 def test_session_06(tmp_path, mocker):
+    """test Session.run() handle TargetLaunchError"""
+    Status.PATH = str(tmp_path)
+    fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
+    fake_runner.return_value.launch.side_effect = TargetLaunchError
+    mocker.patch("grizzly.session.TestFile", autospec=True)
+    fake_adapter = mocker.Mock(spec=Adapter)
+    fake_iomgr = mocker.Mock(spec=IOManager)
+    fake_iomgr.harness = None
+    fake_iomgr.input_files = []
+    fake_iomgr.landing_page.return_value = "x.html"
+    fake_iomgr.server_map = mocker.Mock(spec=ServerMap)
+    fake_iomgr.tests = mocker.Mock(spec=deque)
+    fake_iomgr.working_path = str(tmp_path)
+    fake_reporter = mocker.Mock(spec=Reporter)
+    fake_serv = mocker.Mock(spec=Sapphire)
+    fake_serv.port = 0x1337
+    fake_target = mocker.Mock(spec=Target)
+    fake_target.log_size.return_value = 1000
+    fake_target.monitor.launches = 1
+    fake_target.prefs = "prefs.js"
+
+    session = Session(fake_adapter, False, fake_iomgr, fake_reporter, fake_serv, fake_target)
+    with pytest.raises(TargetLaunchError):
+        session.run([], iteration_limit=1)
+    session.close()
+    assert session.status.iteration == 1
+    assert session.status.results == 1
+    assert session.status.ignored == 0
+    assert fake_reporter.submit.call_count == 1
+
+def test_session_07(tmp_path, mocker):
     """test Session.report_result()"""
     fake_tempfile = mocker.patch("grizzly.session.tempfile", autospec=True)
     working_path = tmp_path / "fake_temp_path"
@@ -259,7 +264,7 @@ def test_session_06(tmp_path, mocker):
     fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_target = mocker.Mock(spec=Target)
-    session = Session(None, False, [], fake_iomgr, fake_reporter, fake_target)
+    session = Session(None, False, fake_iomgr, fake_reporter, None, fake_target)
     session.report_result()
     assert fake_target.save_logs.call_count == 1
     fake_target.save_logs.assert_called_with(str(working_path), meta=True)

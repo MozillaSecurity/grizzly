@@ -8,7 +8,7 @@ import pytest
 
 from sapphire import Sapphire
 from .common import Adapter
-from .main import main
+from .main import console_init_logging, main
 from .session import Session
 from .target import TargetLaunchError
 
@@ -109,3 +109,9 @@ def test_main_03(tmp_path, mocker):
     assert main(args) == Session.EXIT_ABORT
     fake_session.return_value.run.side_effect = TargetLaunchError("test")
     assert main(args) == Session.EXIT_LAUNCH_FAILURE
+
+def test_console_init_logging_01(mocker):
+    mocker.patch("grizzly.main.logging", autospec=True)
+    fake_os = mocker.patch("grizzly.main.os", autospec=True)
+    fake_os.getenv.return_value = "1"
+    console_init_logging()

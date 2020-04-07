@@ -23,7 +23,7 @@ import logging
 import os
 
 import grizzly.adapters
-from .args import GrizzlyArgs
+from sapphire import Sapphire
 from .common import FilesystemReporter, FuzzManagerReporter, IOManager, S3FuzzManagerReporter
 from .session import Session
 from .target import load as load_target, TargetLaunchError, TargetLaunchTimeout
@@ -43,12 +43,6 @@ def console_init_logging():
         log_level = logging.DEBUG
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
     logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
-
-
-def console_main():
-    console_init_logging()
-    grizzly.adapters.load()
-    return main(GrizzlyArgs().parse_args())
 
 
 def main(args):
@@ -141,24 +135,22 @@ def main(args):
             reporter = FilesystemReporter()
             log.info("Results will be stored in %r", reporter.report_path)
 
-        log.debug("initializing the Session")
-        if bool(os.getenv("DEBUG")):
-            display_mode = Session.DISPLAY_VERBOSE
-        else:
-            display_mode = Session.DISPLAY_NORMAL
-        session = Session(
-            adapter,
-            args.coverage,
-            args.ignore,
-            iomanager,
-            reporter,
-            target,
-            display_mode=display_mode)
-
-        session.config_server(args.timeout)
-        target.reverse(session.server.port, session.server.port)
-
-        session.run()
+        # set 'auto_close=1' so the client error pages (code 4XX) will
+        # call 'window.close()' after a second.
+        # launch http server used to serve test cases
+        log.debug("starting Sapphire server")
+        with Sapphire(auto_close=1, timeout=args.timeout) as server:
+            log.debug("initializing the Session")
+            session = Session(
+                adapter,
+                args.coverage,
+                iomanager,
+                reporter,
+                server,
+                target)
+            target.reverse(session.server.port, session.server.port)
+            display_mode = Session.DISPLAY_VERBOSE if os.getenv("DEBUG") else Session.DISPLAY_NORMAL
+            session.run(args.ignore, display_mode=display_mode)
 
     except KeyboardInterrupt:
         return Session.EXIT_ABORT
