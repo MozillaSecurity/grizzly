@@ -19,10 +19,6 @@ __credits__ = ["Tyson Smith"]
 
 LOG = logging.getLogger("replay")
 
-# TODO:
-# - fuzzmanager reporter
-# - option to map include paths
-# - add method comments
 
 class ReplayManager(object):
     HARNESS_FILE = os.path.join(os.path.dirname(__file__), "..", "common", "harness.html")
@@ -45,6 +41,14 @@ class ReplayManager(object):
             testcase.add_file(self._harness, required=False)
 
     def cleanup(self):
+        """Remove temporary files from disk.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         for report in self._reports_expected.values():
             report.cleanup()
         self._reports_expected.clear()
@@ -54,14 +58,44 @@ class ReplayManager(object):
 
     @property
     def other_reports(self):
+        """Reports from results that do not match:
+            - the given signature
+            - the initial result (if any-crash is not specified)
+
+        Args:
+            None
+
+        Returns:
+            iterable: Reports.
+        """
         return self._reports_other.values()
 
     @property
     def reports(self):
+        """Reports from results.
+
+        Args:
+            None
+
+        Returns:
+            iterable: Reports.
+        """
         return self._reports_expected.values()
 
     @staticmethod
     def report_to_filesystem(path, reports, other_reports=None, test=None):
+        """Use FilesystemReporter to write reports and testcase to disk in a
+        known location.
+
+        Args:
+            path (str): Location to write data.
+            reports (iterable): Reports to output.
+            other_reports (iterable): Reports to output.
+            test (TestCase): Testcase to output.
+
+        Returns:
+            None
+        """
         assert test is None or isinstance(test, TestCase)
         tests = [test] if test else tuple()
         if reports:
@@ -78,6 +112,16 @@ class ReplayManager(object):
                 reporter.submit(tests, report=report)
 
     def run(self, repeat=1, min_results=1):
+        """Run testcase replay.
+
+        Args:
+            repeat (int): Maximum number of times to run the test case.
+            min_results (int): Minimum number of results needed before run can
+                               be considered successful.
+
+        Returns:
+            bool: Results were reproduced.
+        """
         assert repeat > 0
         assert min_results > 0
         assert min_results <= repeat
