@@ -9,7 +9,6 @@ import shutil
 import tempfile
 import time
 
-from sapphire import Sapphire
 from .common import Runner, Status, TestFile
 from .target import TargetLaunchError
 
@@ -60,38 +59,19 @@ class Session(object):
     EXIT_LAUNCH_FAILURE = 7
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, adapter, coverage, ignore, iomanager, reporter, target, display_mode=DISPLAY_NORMAL):
-        self._lol = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
+    def __init__(self, adapter, coverage, iomanager, reporter, server, target):
         self.adapter = adapter
         self.coverage = coverage
-        self.ignore = ignore
         self.iomanager = iomanager
         self.reporter = reporter
-        self.server = None
+        self.server = server
         self.status = Status.start()
         self.target = target
 
-    def config_server(self, iteration_timeout):
-        assert self.server is None
-        log.debug("starting sapphire server")
-        # set 'auto_close=1' so the client error pages (code 4XX) will
-        # call 'window.close()' after a second.
-        # launch http server used to serve test cases
-        self.server = Sapphire(auto_close=1, timeout=iteration_timeout)
-        def _dyn_resp_close():  # pragma: no cover
-            self.target.close()
-            return b"<h1>Close Browser</h1>"
-        self.iomanager.server_map.set_dynamic_response(
-            "/close_browser",
-            _dyn_resp_close,
-            mime_type="text/html")
-
     def close(self):
         self.status.cleanup()
-        if self.server is not None:
-            self.server.close()
 
-    def display_status(self):
+    def display_status(self, log_limiter):
         if not self.adapter.ROTATION_PERIOD:
             assert self.status.test_name is not None
             log.info(
@@ -100,13 +80,12 @@ class Session(object):
                 len(self.iomanager.input_files),
                 self.status.results,
                 os.path.basename(self.status.test_name))
-        elif self._lol.ready(self.status.iteration, self.target.monitor.launches):
+        elif log_limiter.ready(self.status.iteration, self.target.monitor.launches):
             if self.status.test_name:
                 log.debug("fuzzing: %s", os.path.basename(self.status.test_name))
             log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
     def generate_testcase(self):
-        assert self.server is not None
         log.debug("calling iomanager.create_testcase()")
         test = self.iomanager.create_testcase(self.adapter.NAME, rotation_period=self.adapter.ROTATION_PERIOD)
         log.debug("calling self.adapter.generate()")
@@ -125,9 +104,18 @@ class Session(object):
         if os.path.isdir(result_logs):
             shutil.rmtree(result_logs)
 
-    def run(self, iteration_limit=None):
-        assert self.server is not None, "server is not configured"
+    def run(self, ignore, iteration_limit=None, display_mode=DISPLAY_NORMAL):
+        log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         runner = Runner(self.server, self.target)
+
+        def _dyn_close():  # pragma: no cover
+            self.target.close()
+            return b"<h1>Close Browser</h1>"
+        self.iomanager.server_map.set_dynamic_response(
+            "/close_browser",
+            _dyn_close,
+            mime_type="text/html")
+
         while True:  # main fuzzing loop
             self.status.report()
             self.status.iteration += 1
@@ -162,10 +150,10 @@ class Session(object):
                 self.status.test_name = self.iomanager.active_input.file_name
 
             # display status
-            self.display_status()
+            self.display_status(log_limiter=log_limiter)
 
             # run test case
-            runner.run(self.ignore, self.iomanager.server_map, current_test)
+            runner.run(ignore, self.iomanager.server_map, current_test)
             # update test case
             if self.adapter.IGNORE_UNSERVED:
                 if runner.served:

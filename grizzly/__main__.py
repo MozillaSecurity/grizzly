@@ -2,12 +2,17 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 import sys
 
-from .main import console_main
+import grizzly.adapters
+
+from .args import GrizzlyArgs
+from .main import console_init_logging, main
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-sys.exit(console_main())
+
+console_init_logging()
+grizzly.adapters.load()
+sys.exit(main(GrizzlyArgs().parse_args()))
