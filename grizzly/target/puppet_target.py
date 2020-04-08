@@ -145,7 +145,7 @@ class PuppetTarget(Target):
             for child in psutil.Process(pid).children(recursive=True):
                 log.debug("Sending SIGUSR1 to %d (child)", child.pid)
                 os.kill(child.pid, signal.SIGUSR1)
-        except (psutil.AccessDenied, psutil.NoSuchProcess):
+        except (psutil.AccessDenied, psutil.NoSuchProcess):  # pragma: no cover
             pass
         log.debug("Sending SIGUSR1 to %d (parent)", pid)
         os.kill(pid, signal.SIGUSR1)

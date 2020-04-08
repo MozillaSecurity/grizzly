@@ -58,6 +58,12 @@ class Target(object):
                 raise TargetError("Prefs file does not exist %r" % (self.prefs,))
             log.info("Using prefs %r", self.prefs)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
+
     def add_abort_token(self, token):  # pylint: disable=no-self-use,unused-argument
         log.warning("add_abort_token() not implemented!")
 
@@ -92,7 +98,7 @@ class Target(object):
         pass
 
     def dump_coverage(self):  # pylint: disable=no-self-use
-        log.error("dump_coverage() is not supported!")
+        log.warning("dump_coverage() is not supported!")
 
     @property
     def expect_close(self):
