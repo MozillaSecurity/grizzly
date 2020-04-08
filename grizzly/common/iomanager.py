@@ -41,6 +41,12 @@ class IOManager(object):
         self._tracked_env = self.tracked_environ()
         self._add_suppressions()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
+
     def _add_suppressions(self):
         # Add suppression files to environment files
         for opt_var in (e_var for e_var in os.environ if "SAN_OPTIONS" in e_var):
@@ -116,9 +122,6 @@ class IOManager(object):
         for testcase in self.tests:
             testcase.cleanup()
         self.tests.clear()
-
-    def redirect_page(self):
-        return self.page_name(offset=1)
 
     def _rotation_required(self, rotation_period):
         if not self.input_files:
