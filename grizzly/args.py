@@ -6,7 +6,7 @@ import argparse
 import os.path
 import tempfile
 
-import grizzly.adapters
+from .adapters import names as adapter_names
 from .target import available as available_targets
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
@@ -131,7 +131,7 @@ class CommonArgs(object):
 
 class GrizzlyArgs(CommonArgs):
     def __init__(self):
-        self.adapters = sorted(grizzly.adapters.names())
+        self.adapters = sorted(adapter_names())
         super(GrizzlyArgs, self).__init__()
         self._sanity_skip.add("tool")
         self.parser.add_argument(

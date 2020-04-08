@@ -4,8 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import sys
 
-import grizzly.adapters
-
+from .adapters import load
 from .args import GrizzlyArgs
 from .main import console_init_logging, main
 
@@ -14,5 +13,5 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
 console_init_logging()
-grizzly.adapters.load()
+load()
 sys.exit(main(GrizzlyArgs().parse_args()))

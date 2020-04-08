@@ -22,8 +22,9 @@ module (see ffpuppet). TODO: Implement generic "puppet" support.
 import logging
 import os
 
-import grizzly.adapters
 from sapphire import Sapphire
+
+from .adapters import get as get_adapter
 from .common import FilesystemReporter, FuzzManagerReporter, IOManager, S3FuzzManagerReporter
 from .session import Session
 from .target import load as load_target, TargetLaunchError, TargetLaunchTimeout
@@ -75,7 +76,7 @@ def main(args):
             working_path=args.working_path)
 
         log.debug("initializing Adapter %r", args.adapter)
-        adapter = grizzly.adapters.get(args.adapter)()
+        adapter = get_adapter(args.adapter)()
 
         if adapter.TEST_DURATION >= args.timeout:
             raise RuntimeError("Test duration (%ds) should be less than browser timeout (%ds)" % (

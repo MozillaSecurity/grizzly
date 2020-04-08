@@ -10,10 +10,10 @@ import os
 
 import pytest
 
-from grizzly.common import TestCaseLoadFailure
-from grizzly.target import Target, TargetLaunchError
-from grizzly.replay import ReplayManager
-from grizzly.replay.args import ReplayArgs
+from ..common import TestCaseLoadFailure
+from ..target import Target, TargetLaunchError
+from ..replay import ReplayManager
+from ..replay.args import ReplayArgs
 
 
 def test_args_01(capsys, tmp_path):

@@ -46,7 +46,7 @@ def test_main_01(tmp_path, mocker):
     fake_adapter.NAME = "fake"
     fake_adapter.RELAUNCH = 1
     fake_adapter.TEST_DURATION = 10
-    adapter_get = mocker.patch("grizzly.adapters.get")
+    adapter_get = mocker.patch("grizzly.main.get_adapter")
     adapter_get.return_value = lambda: fake_adapter
     targets = mocker.patch("grizzly.target.TARGETS")
     targets.return_value = "fake-target"
@@ -77,7 +77,7 @@ def test_main_01(tmp_path, mocker):
 def test_main_02(tmp_path, mocker):
     """test main()"""
     fake_adapter = mocker.Mock(spec=Adapter)
-    adapter_get = mocker.patch("grizzly.adapters.get")
+    adapter_get = mocker.patch("grizzly.main.get_adapter")
     adapter_get.return_value = lambda: fake_adapter
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
@@ -93,7 +93,7 @@ def test_main_03(tmp_path, mocker):
     fake_adapter.TEST_DURATION = 10
     fake_adapter.RELAUNCH = 0
     fake_adapter.ROTATION_PERIOD = 0
-    adapter_get = mocker.patch("grizzly.adapters.get")
+    adapter_get = mocker.patch("grizzly.main.get_adapter")
     adapter_get.return_value = lambda: fake_adapter
     targets = mocker.patch("grizzly.target.TARGETS")
     targets.return_value = "fake-target"
@@ -111,6 +111,7 @@ def test_main_03(tmp_path, mocker):
     assert main(args) == Session.EXIT_LAUNCH_FAILURE
 
 def test_console_init_logging_01(mocker):
+    """test console_init_logging()"""
     mocker.patch("grizzly.main.logging", autospec=True)
     fake_os = mocker.patch("grizzly.main.os", autospec=True)
     fake_os.getenv.return_value = "1"
