@@ -689,11 +689,6 @@ class ReductionJob(object):
             LOG.info("Uninteresting: ignored")
             self._target.close()
 
-            # TODO: why is this here?
-            result_logs = temp_prefix + "_logs"
-            os.mkdir(result_logs)
-            self._target.save_logs(result_logs, meta=True)
-
         else:
             LOG.info("Uninteresting: no failure detected")
 
