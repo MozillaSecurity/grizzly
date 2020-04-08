@@ -147,10 +147,6 @@ class TestReductionJob(reduce.ReductionJob):
     def lithium_init(self):
         pass
 
-    def _get_location(self):
-        # TODO: is this dead code?
-        return "127.0.0.1" if self.no_harness else "127.0.0.1/harness"
-
     def close(self, *_args, **_kwds):
         super(TestReductionJob, self).close(keep_temp=False)
 
