@@ -8,11 +8,13 @@ import sys
 import traceback
 import pkg_resources
 
-from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
+from .target import sanitizer_opts, Target, TargetError, TargetLaunchError, TargetLaunchTimeout
 
-__all__ = ("Target", "TargetError", "TargetLaunchError", "TargetLaunchTimeout", "available", "load")
+__all__ = ("Target", "TargetError", "TargetLaunchError", "TargetLaunchTimeout",
+           "available", "load", "sanitizer_opts")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
+
 TARGETS = None
 LOG = logging.getLogger("grizzly")
 

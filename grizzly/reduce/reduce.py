@@ -27,7 +27,8 @@ from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..session import Session
 from ..common import FilesystemReporter, FuzzManagerReporter, ReducerStats, \
     Report, Runner, Status, TestCase, TestFile
-from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
+from ..target import load as load_target, sanitizer_opts, TargetLaunchError, \
+    TargetLaunchTimeout
 
 
 __author__ = "Jesse Schwartzentruber"
@@ -530,16 +531,13 @@ class ReductionJob(object):
         # Update the sanitizer *SAN_OPTIONS environment variable to use provided
         # suppressions file
         opt_key = '%s_OPTIONS' % os.path.basename(supp_file).split('.')[0].upper()
+        opts_data = self._env_mod.get(opt_key, '')
         # the value matching *SAN_OPTIONS can be set to None
-        san_opts = self._env_mod.get(opt_key, None)
-        if san_opts is None:
-            san_opts = ''
-        updated = list()
-        for opt in re.split(r":(?![\\|/])", san_opts):
-            if opt and opt != 'suppressions':
-                updated.append(opt)
-        updated.append('suppressions=\'%s\'' % supp_file)
-        self._env_mod[opt_key] = ':'.join(updated)
+        if opts_data is None:
+            opts_data = ''
+        opts = sanitizer_opts(opts_data)
+        opts['suppressions'] = '\'%s\'' % (supp_file,)
+        self._env_mod[opt_key] = ':'.join('='.join((k, v)) for k, v in opts.items())
 
     def _start_log_capture(self):
         """Add a log handler for grizzly and lithium messages generated during this job.

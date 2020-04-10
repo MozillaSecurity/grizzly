@@ -6,10 +6,10 @@
 from collections import deque
 import os
 import random
-import re
 
 from sapphire.server_map import ServerMap
 from .storage import InputFile, TestCase, TestFile
+from ..target import sanitizer_opts
 
 
 __all__ = ("IOManager",)
@@ -49,18 +49,14 @@ class IOManager(object):
 
     def _add_suppressions(self):
         # Add suppression files to environment files
-        for opt_var in (e_var for e_var in os.environ if "SAN_OPTIONS" in e_var):
-            opts = os.environ.get(opt_var)
-            if not opts or "suppressions" not in opts:
+        for env_var in (e_var for e_var in os.environ if "SAN_OPTIONS" in e_var):
+            opts = sanitizer_opts(os.environ.get(env_var, ""))
+            if "suppressions" not in opts:
                 continue
-            for opt in re.split(r":(?![\\|/])", opts):
-                if not opt.startswith("suppressions"):
-                    continue
-                supp_file = opt.split("=")[-1].strip("'\"")
-                if os.path.isfile(supp_file):
-                    fname = "%s.supp" % (opt_var.split("_")[0].lower(),)
-                    self._environ_files.append(TestFile.from_file(supp_file, fname))
-                    break
+            supp_file = opts["suppressions"].strip("'\"")
+            if os.path.isfile(supp_file):
+                fname = "%s.supp" % (env_var.split("_")[0].lower(),)
+                self._environ_files.append(TestFile.from_file(supp_file, fname))
 
     def cleanup(self):
         if self.active_input is not None:
@@ -175,20 +171,20 @@ class IOManager(object):
         # Scan os.environ and collect environment variables
         # that are relevant to Grizzly or the test case.
         env = dict()
+        tracked_san_opts = ("detect_leaks",)
         for e_var in IOManager.TRACKED_ENVVARS:
             if e_var not in os.environ:
                 continue
-            if e_var in ("ASAN_OPTIONS", "LSAN_OPTIONS"):
+            if e_var.endswith("SAN_OPTIONS"):
+                opts = sanitizer_opts(os.environ.get(e_var, ""))
                 # strip unwanted options
-                # FFPuppet ensures that this is formatted correctly
-                track = ("detect_leaks",)
-                opts = list()
-                for opt in re.split(r":(?![\\|/])", os.environ[e_var]):
-                    if opt.split("=")[0] in track:
-                        opts.append(opt)
+                tracked = dict()
+                for opt in tracked_san_opts:
+                    if opt in opts:
+                        tracked[opt] = opts[opt]
                 # only record *SAN_OPTIONS if there are options
-                if opts:
-                    env[e_var] = ":".join(opts)
+                if tracked:
+                    env[e_var] = ":".join("=".join((k, v)) for k, v in tracked.items())
             else:
                 env[e_var] = os.environ[e_var]
         return env
