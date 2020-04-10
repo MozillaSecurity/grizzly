@@ -50,11 +50,6 @@ def test_args_01(capsys, tmp_path):
     # test case file
     ReplayArgs().parse_args([str(exe), str(inp / "somefile"), "--prefs", str(inp / "prefs.js")])
 
-    # test logs directory that is not empty
-    with pytest.raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp), "--logs", str(tmp_path)])
-    assert "must be empty" in capsys.readouterr()[-1]
-
     # test negative min-crashes value
     with pytest.raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--min-crashes", "-1"])

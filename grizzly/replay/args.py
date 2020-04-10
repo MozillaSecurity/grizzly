@@ -28,7 +28,7 @@ class ReplayArgs(CommonArgs):
             "--include-test", action="store_true",
             help="Include the testcase when reporting results.")
         self.parser.add_argument(
-            "--logs",
+            "-l", "--logs",
             help="Location to save logs. If the path exists it must be empty, if it " \
             "does not exist it will be created.")
         self.parser.add_argument(
@@ -64,9 +64,6 @@ class ReplayArgs(CommonArgs):
             self.parser.error("'prefs.js' not specified")
         elif not os.path.isfile(args.prefs):
             self.parser.error("'prefs.js' not found")
-
-        if args.logs is not None and os.path.isdir(args.logs) and os.listdir(args.logs):
-            self.parser.error("--logs %r must be empty" % (args.logs,))
 
         if args.min_crashes < 1:
             self.parser.error("'--min-crashes' value must be positive")
