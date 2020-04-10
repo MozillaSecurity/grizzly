@@ -2,23 +2,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-"""
-Grizzly is a general purpose browser fuzzer made of up of multiple modules. The
-intention is to create a platform that can be extended by the creation of corpus
-managers to fuzz different components of the browsers.
-
-Grizzly is not meant to be much more than the automation glue code between
-the modules.
-
-A corpus manager is used to wrap an existing fuzzer to allow it to be run with
-grizzly. Corpus managers take the content output by fuzzers and transform it
-into a format that can be served to and processed by a browser.
-
-Support for different browser can be added by the creation of a browser "puppet"
-module (see ffpuppet). TODO: Implement generic "puppet" support.
-"""
-
 import logging
 import os
 
@@ -47,8 +30,6 @@ def console_init_logging():
 
 
 def main(args):
-    # NOTE: grizzly.reduce.reduce.main mirrors this pretty closely
-    #       please check if updates here should go there too
     log.info("Starting Grizzly")
     if args.fuzzmanager:
         FuzzManagerReporter.sanity_check(args.binary)
