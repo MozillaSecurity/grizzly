@@ -9,7 +9,7 @@ import shutil
 import tempfile
 import time
 
-from .common import Runner, Status, TestFile
+from .common import Report, Runner, Status, TestFile
 from .target import TargetLaunchError
 
 
@@ -95,12 +95,16 @@ class Session(object):
         return test
 
     def report_result(self):
-        # create working directory for current testcase
+        # create working directory for target logs
         result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
         self.target.save_logs(result_logs, meta=True)
-        log.info("Reporting results...")
-        self.iomanager.tests.reverse()  # order test cases newest to oldest
-        self.reporter.submit(self.iomanager.tests, log_path=result_logs)
+        report = Report.from_path(result_logs)
+        crash_info = report.crash_info(self.target.binary)
+        short_sig = crash_info.createShortSignature()
+        log.info("Result: %s (%s:%s)", short_sig, report.major[:8], report.minor[:8])
+        # order test cases newest to oldest
+        self.iomanager.tests.reverse()
+        self.reporter.submit(self.iomanager.tests, report=report)
         if os.path.isdir(result_logs):
             shutil.rmtree(result_logs)
 
@@ -172,7 +176,7 @@ class Session(object):
             # process results
             if runner.result == runner.FAILED:
                 self.status.results += 1
-                log.info("Result detected")
+                log.debug("result detected")
                 self.report_result()
             elif runner.result == runner.IGNORED:
                 self.status.ignored += 1

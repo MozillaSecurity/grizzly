@@ -70,7 +70,7 @@ def test_session_02(tmp_path, mocker):
     fake_target.prefs = "fake_prefs.js"
 
     session = Session(fake_adapter, False, fake_iomgr, None, None, fake_target)
-    fake_adapter.generate.assert_not_called()
+    assert fake_adapter.generate.call_count == 0
     testcase = session.generate_testcase()
     assert fake_iomgr.create_testcase.call_count == 1
     fake_iomgr.create_testcase.assert_called_with("fake_adapter", rotation_period=123)
@@ -116,9 +116,9 @@ def test_session_03(tmp_path, mocker):
     fake_target.prefs = "prefs.js"
 
     session = Session(fake_adapter, False, fake_iomgr, mocker.Mock(spec=Reporter), fake_serv, fake_target)
-    fake_adapter.on_served.assert_not_called()
-    fake_adapter.on_timeout.assert_not_called()
-    fake_adapter.pre_launch.assert_not_called()
+    assert fake_adapter.on_served.call_count == 0
+    assert fake_adapter.on_timeout.call_count == 0
+    assert fake_adapter.pre_launch.call_count == 0
     session.run([], iteration_limit=10)
     assert fake_adapter.on_served.call_count == 5
     assert fake_adapter.on_timeout.call_count == 5
@@ -137,6 +137,7 @@ def test_session_03(tmp_path, mocker):
 def test_session_04(tmp_path, mocker):
     """test Session.run() reporting failures"""
     Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Report", autospec=True)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
@@ -224,6 +225,7 @@ def test_session_05(tmp_path, mocker):
 def test_session_06(tmp_path, mocker):
     """test Session.run() handle TargetLaunchError"""
     Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Report", autospec=True)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
     fake_runner.return_value.launch.side_effect = TargetLaunchError
     mocker.patch("grizzly.session.TestFile", autospec=True)
@@ -254,10 +256,16 @@ def test_session_06(tmp_path, mocker):
 
 def test_session_07(tmp_path, mocker):
     """test Session.report_result()"""
-    fake_tempfile = mocker.patch("grizzly.session.tempfile", autospec=True)
-    working_path = tmp_path / "fake_temp_path"
-    working_path.mkdir()
-    fake_tempfile.mkdtemp.return_value = str(working_path)
+    tmpd = tmp_path / "fake_temp_path"
+    tmpd.mkdir()
+    (tmpd / "log_stderr.txt").write_bytes(b"STDERR log\n")
+    (tmpd / "log_stdout.txt").write_bytes(b"STDOUT log\n")
+    with (tmpd / "log_asan_blah.txt").open("wb") as log_fp:
+        log_fp.write(b"==1==ERROR: AddressSanitizer: ")
+        log_fp.write(b"SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
+        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19\n")
+    mocker.patch("grizzly.session.tempfile.mkdtemp", autospec=True, return_value=str(tmpd))
     Status.PATH = str(tmp_path)
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.tests = mocker.Mock(spec=deque)
@@ -267,9 +275,9 @@ def test_session_07(tmp_path, mocker):
     session = Session(None, False, fake_iomgr, fake_reporter, None, fake_target)
     session.report_result()
     assert fake_target.save_logs.call_count == 1
-    fake_target.save_logs.assert_called_with(str(working_path), meta=True)
+    fake_target.save_logs.assert_called_with(str(tmpd), meta=True)
     assert fake_reporter.submit.call_count == 1
-    fake_reporter.submit.assert_called_with(fake_iomgr.tests, log_path=str(working_path))
+    assert not tmpd.is_dir()
 
 def test_log_output_limiter_01(mocker):
     """test LogOutputLimiter.ready() not ready"""
