@@ -12,6 +12,8 @@ import tempfile
 
 import six
 
+from ..target import sanitizer_opts
+
 __all__ = ("InputFile", "TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -284,16 +286,11 @@ class TestCase(object):
         known_suppressions = ("lsan.supp", "tsan.supp", "ubsan.supp")
         for supp in os.listdir(path):
             if supp.lower() in known_suppressions:
-                # Update *SAN_OPTIONS environment variable to use
-                # provided suppression files.
+                # Update *SAN_OPTIONS environment variable to use provided suppression files.
                 opt_key = "%s_OPTIONS" % (supp.split(".")[0].upper(),)
-                san_opts = self.env_vars.get(opt_key, "")
-                updated = list()
-                for opt in re.split(r":(?![\\|/])", san_opts):
-                    if opt and opt != "suppressions":
-                        updated.append(opt)
-                updated.append("suppressions='%s'" % (os.path.join(path, supp),))
-                self.env_vars[opt_key] = ":".join(updated)
+                opts = sanitizer_opts(self.env_vars.get(opt_key, ""))
+                opts["suppressions"] = "'%s'" % (os.path.join(path, supp),)
+                self.env_vars[opt_key] = ":".join("=".join((k, v)) for k, v in opts.items())
 
     @classmethod
     def load_path(cls, path, full_scan=False, prefs=True):

@@ -5,16 +5,37 @@
 import abc
 import logging
 import os
+import re
 import threading
 import time
 
 import six
 
-__all__ = ("Target",)
+__all__ = ("Target", "sanitizer_opts")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
+
+
+def sanitizer_opts(env_data):
+    """Parse the values defined in given *SAN_OPTIONS environment variable.
+    For example "ASAN_OPTIONS=debug=false:log_path='/test/file.log'"
+    would return {"debug": "false", "log_path": "'/test/file.log'"}
+
+    Args:
+        env_var (str): *SAN_OPTIONS environment variable to parse.
+
+    Returns:
+        dict: Sanitized values from environment.
+    """
+    opts = dict()
+    for opt in re.split(r":(?![\\|/])", env_data):
+        if not opt:
+            continue
+        key, val = opt.split("=")
+        opts[key] = val
+    return opts
 
 
 class TargetError(Exception):
