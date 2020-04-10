@@ -171,7 +171,8 @@ class ReplayManager(object):
                     crash_hash = None
                 elif self._any_crash or self._signature.matches(crash_info):
                     self.status.results += 1
-                    LOG.info("Interesting: %s", short_sig)
+                    LOG.info("Interesting: %s (%s:%s)",
+                             short_sig, report.major[:8], report.minor[:8])
                     crash_hash = report.crash_hash(crash_info)
                     if crash_hash not in self._reports_expected:
                         LOG.debug("now tracking %s", crash_hash)
@@ -179,7 +180,8 @@ class ReplayManager(object):
                         report = None  # don't remove report
                     assert self._any_crash or len(self._reports_expected) == 1
                 else:
-                    LOG.info("Uninteresting: different signature: %s", short_sig)
+                    LOG.info("Uninteresting: different signature: %s (%s:%s)",
+                             short_sig, report.major[:8], report.minor[:8])
                     self.status.ignored += 1
                     crash_hash = report.crash_hash(crash_info)
                     if crash_hash not in self._reports_other:
@@ -201,14 +203,14 @@ class ReplayManager(object):
                 if self.status.iteration < repeat:
                     LOG.debug("skipping remaining attempts")
                 # failed to reproduce issue
-                LOG.debug("results (%d) < expected results (%s) after %d attempts",
+                LOG.debug("results (%d) < expected (%s) after %d attempts",
                           self.status.results, min_results, self.status.iteration)
                 break
             if self.status.results >= min_results:
                 assert self.status.results == min_results
                 success = True
-                LOG.debug("results (%d) == expected results (%s) after %d attempts",
-                          self.status.results, min_results, self.status.iteration)
+                LOG.debug("results == expected (%s) after %d attempts",
+                          min_results, self.status.iteration)
                 break
 
             # warn about large browser logs

@@ -162,20 +162,14 @@ class Report(object):
 
     @property
     def major(self):
-        try:
-            if self.stack.major is not None:
-                return self.stack.major
-        except AttributeError:
-            pass
+        if self.stack and self.stack.major is not None:
+            return self.stack.major
         return self.DEFAULT_MAJOR
 
     @property
     def minor(self):
-        try:
-            if self.stack.minor is not None:
-                return self.stack.minor
-        except AttributeError:
-            pass
+        if self.stack and self.stack.minor is not None:
+            return self.stack.minor
         return self.DEFAULT_MINOR
 
     @property
@@ -292,15 +286,15 @@ class Report(object):
 class Reporter(object):
     @abc.abstractmethod
     def _process_report(self, report):
-        pass  # pragma: no cover
+        pass
 
     @abc.abstractmethod
     def _reset(self):
-        pass  # pragma: no cover
+        pass
 
     @abc.abstractmethod
     def _submit_report(self, report, test_cases):
-        pass  # pragma: no cover
+        pass
 
     def submit(self, test_cases, log_path=None, report=None):
         """Submit report containing results. Either `log_path` or `report` must

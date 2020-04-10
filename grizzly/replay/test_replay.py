@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 """
-unit tests for grizzly.ReplayManager
+unit tests for grizzly.replay
 """
 import os
 
@@ -139,14 +139,17 @@ def test_replay_05(mocker):
 def test_replay_06(mocker, tmp_path):
     """test ReplayManager.run() - test signatures"""
     report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    mkdtemp = mocker.patch("grizzly.replay.replay.tempfile.mkdtemp", autospec=True)
-    mkdtemp.return_value = str(tmp_path)
+    mocker.patch("grizzly.replay.replay.tempfile.mkdtemp", autospec=True, return_value=str(tmp_path))
     report_0 = mocker.Mock(spec=Report)
     report_0.crash_info.return_value.createShortSignature.return_value = "No crash detected"
     report_1 = mocker.Mock(spec=Report)
     report_1.crash_info.return_value.createShortSignature.return_value = "[@ test1]"
+    report_1.major = "0123abcd"
+    report_1.minor = "01239999"
     report_2 = mocker.Mock(spec=Report)
     report_2.crash_info.return_value.createShortSignature.return_value = "[@ test2]"
+    report_2.major = "0123abcd"
+    report_2.minor = "abcd9876"
     report.from_path.side_effect = (report_0, report_1, report_2)
     server = mocker.Mock(spec=Sapphire)
     server.port = 0x1337
@@ -177,16 +180,19 @@ def test_replay_06(mocker, tmp_path):
 def test_replay_07(mocker, tmp_path):
     """test ReplayManager.run() - any crash"""
     report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    mkdtemp = mocker.patch("grizzly.replay.replay.tempfile.mkdtemp", autospec=True)
-    mkdtemp.return_value = str(tmp_path)
+    mocker.patch("grizzly.replay.replay.tempfile.mkdtemp", autospec=True, return_value=str(tmp_path))
     report_0 = mocker.Mock(spec=Report)
     report_0.crash_info.return_value.createShortSignature.return_value = "No crash detected"
     report_1 = mocker.Mock(spec=Report)
     report_1.crash_info.return_value.createShortSignature.return_value = "[@ test1]"
     report_1.crash_hash.return_value = "hash1"
+    report_1.major = "0123abcd"
+    report_1.minor = "01239999"
     report_2 = mocker.Mock(spec=Report)
     report_2.crash_info.return_value.createShortSignature.return_value = "[@ test2]"
     report_2.crash_hash.return_value = "hash2"
+    report_2.major = "0123abcd"
+    report_2.minor = "abcd9876"
     report.from_path.side_effect = (report_0, report_1, report_2)
     server = mocker.Mock(spec=Sapphire)
     server.port = 0x1337
