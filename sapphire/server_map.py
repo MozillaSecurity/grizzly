@@ -29,10 +29,11 @@ class Resource(object):
     URL_INCLUDE = 2
     URL_REDIRECT = 3
 
-    __slots__ = ("mime", "required", "target", "type")
+    __slots__ = ("mime", "raw", "required", "target", "type")
 
-    def __init__(self, resource_type, target, mime=None, required=False):
+    def __init__(self, resource_type, target, mime=None, raw=False, required=False):
         self.mime = mime
+        self.raw = raw
         self.required = required
         self.target = target
         self.type = resource_type
@@ -54,7 +55,7 @@ class ServerMap(object):
             raise InvalidURLError("Only alpha-numeric characters accepted in URL.")
         return url
 
-    def set_dynamic_response(self, url, callback, mime_type="application/octet-stream"):
+    def set_dynamic_response(self, url, callback, mime_type="application/octet-stream", raw=False):
         url = self._check_url(url)
         if not callable(callback):
             raise TypeError("callback must be callable")
@@ -66,7 +67,8 @@ class ServerMap(object):
         self.dynamic[url] = Resource(
             Resource.URL_DYNAMIC,
             callback,
-            mime=mime_type)
+            mime=mime_type,
+            raw=raw)
 
     def set_include(self, url, target_path):
         url = self._check_url(url)

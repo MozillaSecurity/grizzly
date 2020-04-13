@@ -405,6 +405,34 @@ def test_sapphire_19(client, tmp_path):
     assert test_dr.len_srv == test_dr.len_org
     assert test_dr.md5_srv == test_dr.md5_org
 
+def test_sapphire_19_raw(client, tmp_path):
+    """test dynamic response"""
+    _test_string = b"dynamic response -- TEST DATA!"
+
+    def _dyn_test_cb(conn):
+        data = "HTTP/1.1 200 OK\r\n" \
+               "Cache-Control: max-age=0, no-cache\r\n" \
+               "Content-Length: %s\r\n" \
+               "Connection: close\r\n\r\n" % (len(_test_string))
+        conn.sendall(data.encode("ascii"))
+        conn.sendall(_test_string)
+
+    smap = ServerMap()
+    test_dr = _TestFile("dynm_test")
+    test_dr.len_org = len(_test_string)
+    test_dr.md5_org = hashlib.md5(_test_string).hexdigest()
+    smap.set_dynamic_response("dynm_test", _dyn_test_cb, mime_type="text/plain", raw=True)
+    test = _create_test("test_case.html", tmp_path)
+    with Sapphire(timeout=10) as serv:
+        client.launch("127.0.0.1", serv.port, [test_dr, test], in_order=True)
+        assert serv.serve_path(str(tmp_path), server_map=smap)[0] == SERVED_ALL
+    assert client.wait(timeout=10)
+    assert test.code == 200
+    assert test.len_srv == test.len_org
+    assert test_dr.code == 200
+    assert test_dr.len_srv == test_dr.len_org
+    assert test_dr.md5_srv == test_dr.md5_org
+
 def test_sapphire_20(client_factory, tmp_path):
     """test pending_files == 0 in worker thread"""
     client_defer = client_factory(rx_size=2)

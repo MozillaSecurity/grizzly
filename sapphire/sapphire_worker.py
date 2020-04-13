@@ -143,13 +143,16 @@ class SapphireWorker(object):
                     serv_job.pending)
                 return
             elif resource.type == Resource.URL_DYNAMIC:
-                data = resource.target()
-                if not isinstance(data, bytes):
-                    LOG.debug("dynamic request: %r", request)
-                    raise TypeError("dynamic request callback must return 'bytes'")
-                conn.sendall(cls._200_header(len(data), resource.mime))
-                conn.sendall(data)
-                LOG.debug("200 %r (dynamic request)", request)
+                LOG.debug("dynamic request (raw=%r): %r", resource.raw, request)
+                if resource.raw:
+                    resource.target(conn)
+                else:
+                    data = resource.target()
+                    if not isinstance(data, bytes):
+                        raise TypeError("dynamic request callback must return 'bytes'")
+                    conn.sendall(cls._200_header(len(data), resource.mime))
+                    conn.sendall(data)
+                    LOG.debug("200 %r (dynamic request)", request)
                 return
             else:
                 raise RuntimeError("Unknown resource type %r" % resource.type)
