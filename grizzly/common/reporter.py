@@ -7,6 +7,7 @@ import abc
 import hashlib
 import json
 import logging
+import platform
 import os
 import re
 import shutil
@@ -100,12 +101,11 @@ class Report(object):
         sig = Report.crash_signature(crash_info, max_frames)
         return hashlib.sha1(sig.rawSignature.encode("utf-8")).hexdigest()[:16]
 
-    def crash_info(self, target_binary, local_only=True):
+    def crash_info(self, target_binary):
         """Create CrashInfo object from logs.
 
         Args:
             target_binary (str): Binary file being tested.
-            local_only (bool): CrashInfo will not be uploaded to a FM server.
 
         Returns:
             CrashInfo: CrashInfo based on Result log data.
@@ -118,12 +118,20 @@ class Report(object):
                     aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
             stderr_file = os.path.join(self.path, self.log_err)
             stdout_file = os.path.join(self.path, self.log_out)
-            if local_only:
-                # create dummy ProgramConfiguration for local use only
-                fm_cfg = ProgramConfiguration("", "", "")
-            else:
-                # create ProgramConfiguration that can be reported to a FM server
+            # create ProgramConfiguration that can be reported to a FM server
+            if os.path.isfile("%s.fuzzmanagerconf" % (target_binary,)):
+                # attempt to use "<target_binary>.fuzzmanagerconf"
                 fm_cfg = ProgramConfiguration.fromBinary(target_binary)
+            else:
+                log.debug("'%s.fuzzmanagerconf' does not exist", target_binary)
+                fm_cfg = None
+            if fm_cfg is None:
+                log.debug("creating ProgramConfiguration")
+                cpu = platform.machine().lower()
+                fm_cfg = ProgramConfiguration(
+                    os.path.basename(target_binary),
+                    "x86_64" if cpu == "amd64" else cpu,
+                    platform.system())
             with open(stderr_file, "rb") as err_fp, open(stdout_file, "rb") as out_fp:
                 self._crash_info = CrashInfo.fromRawCrashData(
                     out_fp.read().decode("utf-8", errors="ignore").splitlines(),
@@ -391,7 +399,7 @@ class FuzzManagerReporter(Reporter):
     @staticmethod
     def create_crash_info(report, target_binary):
         # TODO: this is here to preserve the old way of operation (used by reducer)
-        return report.crash_info(target_binary, local_only=False)
+        return report.crash_info(target_binary)
 
     def _reset(self):
         self._extra_metadata = {}
@@ -452,7 +460,7 @@ class FuzzManagerReporter(Reporter):
 
     def _submit_report(self, report, test_cases):
         # prepare data for submission as CrashInfo
-        crash_info = report.crash_info(self.target_binary, local_only=False)
+        crash_info = report.crash_info(self.target_binary)
         assert crash_info is not None
 
         # search for a cached signature match and if the signature
