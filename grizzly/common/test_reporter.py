@@ -225,24 +225,28 @@ def test_report_11(tmp_path):
     assert (tmp_path / log_map["stdout"]).is_file()
     assert "valgrind log" in (tmp_path / log_map["aux"]).read_text()
 
-def test_report_12(mocker, tmp_path):
+def test_report_12(tmp_path):
     """test Report.crash_info()"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     with (tmp_path / "log_asan_blah.txt").open("wb") as log_fp:
         log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
+    # no binary.fuzzmanagerconf
     report = Report.from_path(str(tmp_path))
     assert report._crash_info is None
-    assert report.crash_info("fake_bin", local_only=True) is not None
+    assert report.crash_info("fake_bin") is not None
     assert report._crash_info is not None
+    # with binary.fuzzmanagerconf
+    with (tmp_path / "fake_bin.fuzzmanagerconf").open("wb") as conf:
+        conf.write(b"[Main]\n")
+        conf.write(b"platform = x86-64\n")
+        conf.write(b"product = mozilla-central\n")
+        conf.write(b"os = linux\n")
     report = Report.from_path(str(tmp_path))
     assert report._crash_info is None
-    fake_reporter = mocker.patch("grizzly.common.reporter.ProgramConfiguration")
-    fake_reporter.fromBinary.return_value = mocker.Mock(spec=ProgramConfiguration)
-    assert report.crash_info("fake_bin", local_only=False) is not None
+    assert report.crash_info(str(tmp_path / "fake_bin")) is not None
     assert report._crash_info is not None
-    assert fake_reporter.fromBinary.call_count == 1
 
 def test_report_13(mocker, tmp_path):
     """test Report.crash_signature() and Report.crash_hash()"""
@@ -255,7 +259,7 @@ def test_report_13(mocker, tmp_path):
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
     report = Report.from_path(str(tmp_path))
     assert report._crash_info is None
-    info = report.crash_info("fake_bin", local_only=True)
+    info = report.crash_info("fake_bin")
     sig = Report.crash_signature(info)
     assert sig.symptoms
     short_sig = info.createShortSignature()

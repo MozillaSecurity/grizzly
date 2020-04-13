@@ -84,6 +84,7 @@ def test_main_01(mocker, tmp_path):
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.RESULT_NONE = Target.RESULT_NONE
+    target.binary = "bin"
     target.detect_failure.side_effect = (Target.RESULT_FAILURE, Target.RESULT_NONE, Target.RESULT_FAILURE)
     def _fake_save_logs(result_logs, meta=False):  # pylint: disable=unused-argument
         """write fake log data to disk"""

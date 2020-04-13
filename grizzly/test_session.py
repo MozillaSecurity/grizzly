@@ -265,6 +265,7 @@ def test_session_07(tmp_path, mocker):
         log_fp.write(b"SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
         log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19\n")
+    fake_report = mocker.patch("grizzly.session.Report", autospec=True)
     mocker.patch("grizzly.session.tempfile.mkdtemp", autospec=True, return_value=str(tmpd))
     Status.PATH = str(tmp_path)
     fake_iomgr = mocker.Mock(spec=IOManager)
@@ -272,10 +273,13 @@ def test_session_07(tmp_path, mocker):
     fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_target = mocker.Mock(spec=Target)
+    fake_target.binary = "bin"
     session = Session(None, False, fake_iomgr, fake_reporter, None, fake_target)
     session.report_result()
     assert fake_target.save_logs.call_count == 1
     fake_target.save_logs.assert_called_with(str(tmpd), meta=True)
+    assert fake_report.from_path.return_value.crash_info.call_count == 1
+    fake_report.from_path.return_value.crash_info.assert_called_with("bin")
     assert fake_reporter.submit.call_count == 1
     assert not tmpd.is_dir()
 
