@@ -93,7 +93,7 @@ class CommonArgs(object):
         return args
 
     def sanity_check(self, args):
-        if not os.path.isfile(args.binary):
+        if "binary" not in self._sanity_skip and not os.path.isfile(args.binary):
             self.parser.error("file not found: %r" % args.binary)
 
         # sanitize ignore list
