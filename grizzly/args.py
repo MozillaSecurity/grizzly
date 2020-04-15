@@ -40,54 +40,58 @@ class CommonArgs(object):
         self.parser.add_argument(
             "binary",
             help="Firefox binary to run")
-        self.parser.add_argument(
+
+        general_args = self.parser.add_argument_group("Launcher Arguments")
+        general_args.add_argument(
             "-e", "--extension", action="append",
             help="Install an extension. Specify the path to the xpi or the directory"
                  " containing the unpacked extension. To install multiple extensions"
                  " specify multiple times")
-        self.parser.add_argument(
-            "--fuzzmanager", action="store_true",
-            help="Report results to FuzzManager")
-        self.parser.add_argument(
-            "--ignore", nargs="+", default=list(),
-            help="Space separated ignore list. ie: %s (default: nothing)" % " ".join(self.IGNORABLE))
-        self.parser.add_argument(
+        general_args.add_argument(
             "--launch-timeout", type=int, default=300,
             help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
-        self.parser.add_argument(
+        general_args.add_argument(
             "--log-limit", type=int,
             help="Log file size limit in MBs (default: 'no limit')")
-        self.parser.add_argument(
+        general_args.add_argument(
             "-m", "--memory", type=int,
             help="Browser process memory limit in MBs (default: 'no limit')")
-        self.parser.add_argument(
+        general_args.add_argument(
             "--platform", default="ffpuppet",
             help="Platforms available: %s (default: %%(default)s)" % ", ".join(available_targets()))
-        self.parser.add_argument(
+        general_args.add_argument(
             "-p", "--prefs",
             help="prefs.js file to use")
-        self.parser.add_argument(
+        general_args.add_argument(
             "--relaunch", type=int, default=1000,
             help="Number of iterations performed before relaunching the browser (default: %(default)s)")
-        self.parser.add_argument(
+        general_args.add_argument(
             "--soft-asserts", action="store_true",
             help="Detect soft assertions")
-        self.parser.add_argument(
+        general_args.add_argument(
             "-t", "--timeout", type=int, default=60,
             help="Iteration timeout in seconds (default: %(default)s)")
-        self.parser.add_argument(
-            "--tool",
-            help="Override tool name used when reporting issues to FuzzManager")
-        self.parser.add_argument(
+        general_args.add_argument(
             "--valgrind", action="store_true",
             help="Use Valgrind (Linux only)")
-        self.parser.add_argument(
+        general_args.add_argument(
             "-w", "--working-path",
             help="Working directory. Intended to be used with ram-drives."
                  " (default: %r)" % tempfile.gettempdir())
-        self.parser.add_argument(
+        general_args.add_argument(
             "--xvfb", action="store_true",
             help="Use Xvfb (Linux only)")
+
+        reporter_args = self.parser.add_argument_group("Reporter Arguments")
+        reporter_args.add_argument(
+            "--fuzzmanager", action="store_true",
+            help="Report results to FuzzManager")
+        reporter_args.add_argument(
+            "--ignore", nargs="+", default=list(),
+            help="Space separated ignore list. ie: %s (default: nothing)" % " ".join(self.IGNORABLE))
+        reporter_args.add_argument(
+            "--tool",
+            help="Override tool name used when reporting issues to FuzzManager")
 
     def parse_args(self, argv=None):
         args = self.parser.parse_args(argv)

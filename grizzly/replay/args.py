@@ -11,39 +11,40 @@ class ReplayArgs(CommonArgs):
 
     def __init__(self):
         super(ReplayArgs, self).__init__()
-        self.parser.add_argument(
+        replay_args = self.parser.add_argument_group("Replay Arguments")
+        replay_args.add_argument(
             "input",
             help="Directory containing test case data or file to use as a test case." \
             "When using a directory it must contain a 'test_info.json' file.")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--any-crash", action="store_true",
             help="Any crash is interesting, not only crashes which match the original signature.")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--idle-timeout", type=int, default=60,
             help="Number of seconds to wait before polling testcase for idle (default: %(default)s)")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--idle-threshold", type=int, default=25,
             help="CPU usage threshold to mark the process as idle (default: %(default)s)")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--include-test", action="store_true",
             help="Include the testcase when reporting results.")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "-l", "--logs",
             help="Location to save logs. If the path exists it must be empty, if it " \
             "does not exist it will be created.")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--min-crashes", type=int, default=1,
             help="Require the testcase to crash n times before accepting the result. (default: %(default)sx)")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--no-harness", action="store_true",
             help="Don't use the harness for redirection")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--repeat", type=int, default=1,
             help="Try to run the testcase multiple times, for intermittent testcases (default: %(default)sx)")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--rr", action="store_true",
             help="Use RR (Linux only)")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--sig",
             help="Signature (JSON) file to match.")
 
