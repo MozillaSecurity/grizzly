@@ -57,15 +57,13 @@ def test_sapphire_load_manager_03(mocker, tmp_path):
         b"GET /test2 HTTP/1.1",
         b"GET /test1 HTTP/1.1",
         b"GET /test1 HTTP/1.1",
-        b"GET /test1 HTTP/1.1",
-        b"GET /test1 HTTP/1.1",
         b"GET /test3 HTTP/1.1")
     serv_sock = mocker.Mock(spec=socket.socket)
     serv_sock.accept.return_value = (clnt_sock, None)
     assert not job.is_complete()
     with SapphireLoadManager(job, serv_sock, max_workers=2) as loadmgr:
         assert loadmgr.wait(1)
-    assert clnt_sock.close.call_count == 10
+    assert clnt_sock.close.call_count == 8
     assert job.is_complete()
 
 def test_sapphire_load_manager_04(mocker, tmp_path):
