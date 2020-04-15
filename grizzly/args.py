@@ -31,6 +31,7 @@ class CommonArgs(object):
     IGNORABLE = ("log-limit", "memory", "timeout")
 
     def __init__(self):
+        super(CommonArgs, self).__init__()
         self._sanity_skip = set()
 
         self.parser = argparse.ArgumentParser(formatter_class=SortingHelpFormatter)
