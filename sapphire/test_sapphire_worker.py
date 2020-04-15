@@ -62,23 +62,33 @@ def test_sapphire_worker_03(mocker):
     assert serv_job.accepting.clear.call_count == 0
     assert serv_job.accepting.set.call_count == 1
 
-def test_sapphire_worker_04(mocker):
+def test_sapphire_worker_04(mocker, tmp_path):
     """test SapphireWorker.launch()"""
-    serv_con = mocker.Mock(spec=socket.socket)
-    conn = mocker.Mock(spec=socket.socket)
-    serv_con.accept.return_value = (conn, None)
-    serv_job = mocker.Mock(spec=SapphireJob)
-    fake_thread = mocker.patch("sapphire.sapphire_worker.threading.Thread", autospec=True)
-    worker = SapphireWorker.launch(serv_con, serv_job)
-    assert serv_con.accept.call_count == 1
-    assert serv_job.accepting.clear.call_count == 1
-    assert serv_job.accepting.set.call_count == 0
-    assert fake_thread.return_value.start.call_count == 1
-    assert not worker.done
-    fake_thread.return_value.is_alive.return_value = False
+    (tmp_path / "testfile").touch()
+    job = SapphireJob(str(tmp_path))
+    clnt_sock = mocker.Mock(spec=socket.socket)
+    clnt_sock.recv.return_value = b"GET /testfile HTTP/1.1"
+    serv_sock = mocker.Mock(spec=socket.socket)
+    serv_sock.accept.return_value = (clnt_sock, None)
+    worker = SapphireWorker.launch(serv_sock, job)
+    assert worker is not None
+    try:
+        assert job.is_complete(wait=1)
+    finally:
+        worker.close()
     assert worker.done
-    worker.close()
-    assert conn.close.call_count == 1
+    assert serv_sock.accept.call_count == 1
+    assert clnt_sock.close.call_count == 2
+
+def test_sapphire_worker_05(mocker):
+    """test SapphireWorker.handle_request() socket errors"""
+    serv_con = mocker.Mock(spec=socket.socket)
+    serv_con.recv.side_effect = socket.error
+    serv_job = mocker.Mock(spec=SapphireJob)
+    SapphireWorker.handle_request(serv_con, serv_job)
+    assert serv_job.accepting.set.call_count == 1
+    assert serv_con.sendall.call_count == 0
+    assert serv_con.close.call_count == 1
 
 def test_response_data_01():
     """test _200_header()"""
