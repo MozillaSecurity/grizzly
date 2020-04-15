@@ -34,7 +34,8 @@ class CommonArgs(object):
         super(CommonArgs, self).__init__()
         self._sanity_skip = set()
 
-        self.parser = argparse.ArgumentParser(formatter_class=SortingHelpFormatter)
+        if not hasattr(self, "parser"):
+            self.parser = argparse.ArgumentParser(formatter_class=SortingHelpFormatter, conflict_handler='resolve')
 
         self.parser.add_argument(
             "binary",
