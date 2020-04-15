@@ -10,7 +10,7 @@ import threading
 import pytest
 
 from .sapphire_job import SapphireJob
-from .sapphire_worker import SapphireWorker
+from .sapphire_worker import SapphireWorker, SapphireWorkerError
 
 def test_sapphire_worker_01(mocker):
     """test simple SapphireWorker in running state"""
@@ -40,14 +40,15 @@ def test_sapphire_worker_02(mocker):
         mocker.Mock(spec=threading.Thread))
     # it is assumed that launch() has already been called at this point
     worker._thread.is_alive.return_value = True
-    with pytest.raises(RuntimeError, match="Worker thread failed to join!"):
+    with pytest.raises(SapphireWorkerError, match="Worker thread failed to join!"):
         worker.close()
 
 def test_sapphire_worker_03(mocker):
     """test SapphireWorker.launch() fail cases"""
     serv_con = mocker.Mock(spec=socket.socket)
     serv_job = mocker.Mock(spec=SapphireJob)
-    fake_thread = mocker.patch("threading.Thread", autospec=True)
+    fake_thread = mocker.patch("sapphire.sapphire_worker.threading.Thread", autospec=True)
+    mocker.patch("sapphire.sapphire_worker.time.sleep", autospec=True)
 
     serv_con.accept.side_effect = socket.timeout
     assert SapphireWorker.launch(serv_con, serv_job) is None
@@ -56,8 +57,7 @@ def test_sapphire_worker_03(mocker):
     conn = mocker.Mock(spec=socket.socket)
     serv_con.accept.return_value = (conn, None)
     fake_thread.side_effect = threading.ThreadError
-    with pytest.raises(threading.ThreadError):
-        SapphireWorker.launch(serv_con, serv_job)
+    assert SapphireWorker.launch(serv_con, serv_job) is None
     assert conn.close.call_count == 1
     assert serv_job.accepting.clear.call_count == 0
     assert serv_job.accepting.set.call_count == 1
@@ -68,7 +68,7 @@ def test_sapphire_worker_04(mocker):
     conn = mocker.Mock(spec=socket.socket)
     serv_con.accept.return_value = (conn, None)
     serv_job = mocker.Mock(spec=SapphireJob)
-    fake_thread = mocker.patch("threading.Thread", autospec=True)
+    fake_thread = mocker.patch("sapphire.sapphire_worker.threading.Thread", autospec=True)
     worker = SapphireWorker.launch(serv_con, serv_job)
     assert serv_con.accept.call_count == 1
     assert serv_job.accepting.clear.call_count == 1
@@ -82,7 +82,7 @@ def test_sapphire_worker_04(mocker):
 
 def test_response_data_01():
     """test _200_header()"""
-    output = SapphireWorker._200_header("10", "text/html")
+    output = SapphireWorker._200_header(10, "text/html")
     assert b"Content-Length: 10" in output
     assert b"Content-Type: text/html" in output
 
