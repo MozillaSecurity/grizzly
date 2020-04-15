@@ -5,7 +5,6 @@
 
 from collections import namedtuple
 import json
-import re
 import os
 import shutil
 import tempfile
@@ -400,7 +399,7 @@ class TestCase(object):
 
 
 class TestFile(object):
-    CACHE_LIMIT = 0x40000  # data cache limit per file: 256KB
+    CACHE_LIMIT = 0x80000  # data cache limit per file: 512KB
     XFER_BUF = 0x10000  # transfer buffer size: 64KB
 
     __slots__ = ("_fp", "file_name")

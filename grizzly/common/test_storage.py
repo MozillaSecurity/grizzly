@@ -175,7 +175,7 @@ def test_testcase_07(tmp_path):
 def test_testcase_08(tmp_path):
     """test TestCase.load_path() using a file"""
     # invalid entry_point specified
-    with pytest.raises(TestCaseLoadFailure, match=r"Cannot find"):
+    with pytest.raises(TestCaseLoadFailure, match="Cannot find"):
         TestCase.load_path(str(tmp_path / "missing_file"))
     # valid test case
     src_dir = (tmp_path / "src")
