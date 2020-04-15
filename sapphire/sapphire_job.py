@@ -14,9 +14,7 @@ try:  # py 2-3 compatibility
 except ImportError:
     from queue import Queue
 import threading
-import time
 
-from .sapphire_worker import SapphireWorker
 from .server_map import Resource
 from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST
 
@@ -132,63 +130,6 @@ class SapphireJob(object):
             LOG.debug("include map does not contain an entry at '/'")
 
         return None
-
-    @staticmethod
-    def client_listener(serv_sock, serv_job, max_workers, raise_thread_error=False, shutdown_delay=0):
-        assert max_workers > 0
-        worker_pool = list()
-        pool_size = 0
-
-        LOG.debug("starting client_listener")
-        try:
-            while not serv_job.is_complete():
-                if not serv_job.accepting.wait(0.05):
-                    continue
-                try:
-                    worker = SapphireWorker.launch(serv_sock, serv_job)
-                    if worker is not None:
-                        worker_pool.append(worker)
-                        pool_size += 1
-                except threading.ThreadError:
-                    LOG.warning(
-                        "ThreadError! pool size: %d, total active threads: %d",
-                        pool_size,
-                        threading.active_count())
-                    if raise_thread_error:
-                        raise
-                    # wait for system resources to free up
-                    time.sleep(0.1)
-                # manage worker pool
-                if pool_size >= max_workers:
-                    LOG.debug("active pool size: %d, waiting for worker to finish...", pool_size)
-                    serv_job.worker_complete.wait()
-                    serv_job.worker_complete.clear()
-                    # remove complete workers
-                    LOG.debug("trimming worker pool")
-                    # sometimes the thread that triggered the event doesn't quite cleanup in time
-                    # so add a retry (10x with 0.5 second sleep on failure)
-                    for _ in range(10, 0, -1):
-                        worker_pool = list(w for w in worker_pool if not w.done)
-                        pool_size = len(worker_pool)
-                        if pool_size < max_workers:
-                            break
-                        time.sleep(0.5)
-                    else:  # pragma: no cover
-                        raise RuntimeError("Failed to trim worker pool!")
-                    LOG.debug("trimmed worker pool (size: %d)", pool_size)
-        finally:
-            LOG.debug("shutting down and cleaning up workers")
-            deadline = time.time() + shutdown_delay
-            while time.time() < deadline:
-                if all(w.done for w in worker_pool):
-                    break
-                # avoid cutting off connections
-                LOG.debug("delaying shutdown...")
-                time.sleep(0.01)
-            else:  # pragma: no cover
-                LOG.debug("not all worker threads exited")
-            for worker in worker_pool:
-                worker.close()
 
     def finish(self):
         self._complete.set()

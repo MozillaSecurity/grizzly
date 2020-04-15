@@ -13,6 +13,7 @@ import re
 import socket
 import sys
 import threading
+import time
 
 from .server_map import Resource
 
@@ -20,6 +21,10 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 LOG = logging.getLogger("sphr_worker")
+
+
+class SapphireWorkerError(Exception):
+    """Raised by SapphireWorker"""
 
 
 class SapphireWorker(object):
@@ -37,7 +42,7 @@ class SapphireWorker(object):
     def _200_header(c_length, c_type, encoding="ascii"):
         data = "HTTP/1.1 200 OK\r\n" \
                "Cache-Control: max-age=0, no-cache\r\n" \
-               "Content-Length: %s\r\n" \
+               "Content-Length: %d\r\n" \
                "Content-Type: %s\r\n" \
                "Connection: close\r\n\r\n" % (c_length, c_type)
         return data.encode(encoding)
@@ -71,7 +76,7 @@ class SapphireWorker(object):
         self.join(timeout=60)
         if self._thread is not None and self._thread.is_alive():
             # this is here to catch unexpected hangs
-            raise RuntimeError("Worker thread failed to join!")
+            raise SapphireWorkerError("Worker thread failed to join!")
 
     @property
     def done(self):
@@ -152,7 +157,7 @@ class SapphireWorker(object):
                 LOG.debug("200 %r (dynamic request)", request)
                 return
             else:
-                raise RuntimeError("Unknown resource type %r" % resource.type)
+                raise SapphireWorkerError("Unknown resource type %r" % (resource.type,))
 
             # at this point we know "resource.target" maps to a file on disk
             # default to "application/octet-stream"
@@ -176,8 +181,10 @@ class SapphireWorker(object):
                 serv_job.accepting.set()
 
         except Exception:  # pylint: disable=broad-except
-            # TODO: should the job be marked as complete to abort immediately?
-            serv_job.exceptions.put(sys.exc_info())
+            # set finish_job to abort immediately
+            finish_job = True
+            if serv_job.exceptions.empty():
+                serv_job.exceptions.put(sys.exc_info())
 
         finally:
             conn.close()
@@ -207,8 +214,11 @@ class SapphireWorker(object):
             if conn is not None:  # pragma: no cover
                 conn.close()
         except threading.ThreadError:
-            conn.close()
+            if conn is not None:  # pragma: no cover
+                conn.close()
             # reset accepting status
             job.accepting.set()
-            raise
+            LOG.warning("ThreadError (worker), threads: %d", threading.active_count())
+            # wait for system resources to free up
+            time.sleep(0.1)
         return None

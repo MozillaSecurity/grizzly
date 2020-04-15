@@ -14,11 +14,10 @@ import random
 import shutil
 import socket
 import tempfile
-import threading
 import time
-import traceback
 
 from .sapphire_job import SapphireJob
+from .sapphire_load_manager import SapphireLoadManager
 from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
 
 
@@ -30,9 +29,6 @@ LOG = logging.getLogger("sapphire")
 
 
 class Sapphire(object):
-    ABORT_ON_THREAD_ERROR = False
-    SHUTDOWN_DELAY = 0.25  # allow extra time before closing socket if needed
-
     def __init__(self, allow_remote=False, auto_close=-1, max_workers=10, port=None, timeout=60):
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
@@ -106,14 +102,11 @@ class Sapphire(object):
         - SERVED_REQUEST: Some files were requested
         files served is a list of the files that were served
         """
-
         LOG.debug("serve_path: %s", path)
         LOG.debug("serving forever: %r", forever)
 
-        if continue_cb is not None and not callable(continue_cb):
-            raise TypeError("continue_cb must be callable")
-        if not os.path.isdir(os.path.abspath(path)):
-            raise IOError("%r does not exist" % (path,))
+        if not os.path.isdir(path):
+            raise IOError("%r does not exist" % (os.path.abspath(path),))
 
         job = SapphireJob(
             path,
@@ -121,67 +114,12 @@ class Sapphire(object):
             forever=forever,
             optional_files=optional_files,
             server_map=server_map)
-
         if not job.pending:
             job.finish()
-            return SERVED_NONE, tuple()
-
-        # create the client listener thread to handle incoming requests
-        listener = threading.Thread(
-            target=job.client_listener,
-            args=(self._socket, job,
-                  self._max_workers),
-            kwargs={"raise_thread_error": self.ABORT_ON_THREAD_ERROR,
-                    "shutdown_delay": self.SHUTDOWN_DELAY})
-
-        # launch listener thread and handle thread errors
-        # thread errors can be due to low system resources while fuzzing
-        tries = 10
-        while True:
-            try:
-                listener.start()
-            except threading.ThreadError:
-                LOG.warning(
-                    "ThreadError launching listener, active threads: %d",
-                    threading.active_count())
-                tries -= 1
-                if tries < 1:
-                    raise
-                time.sleep(0.1)  # wait for system resources to free up
-            if self._timeout:
-                exp_time = time.time() + self._timeout
-            else:
-                exp_time = None
-                LOG.warning("timeout is not set!")
-            break
-
-        status = None
-        try:
-            # it is important to keep this loop fast because it can limit
-            # the total iteration rate of Grizzly
-            while not job.is_complete(wait=0.5):
-                # check for a timeout
-                if exp_time is not None and exp_time <= time.time():
-                    status = SERVED_TIMEOUT
-                    break
-                # check if callback returns False
-                if continue_cb is not None and not continue_cb():
-                    break
-            # check for exceptions from workers
-            if not job.exceptions.empty():
-                exc_type, exc_obj, exc_tb = job.exceptions.get()
-                LOG.error(
-                    "Sapphire worker exception:\n%s",
-                    "".join(traceback.format_exception(exc_type, exc_obj, exc_tb)))
-                raise exc_obj  # re-raise exception from worker
-        finally:
-            if status is None:
-                status = job.status
-            job.finish()
-            if listener.ident is not None:
-                listener.join()
-
-        return status, job.served
+            return (SERVED_NONE, tuple())
+        with SapphireLoadManager(job, self._socket, self._max_workers) as loadmgr:
+            was_timeout = not loadmgr.wait(self.timeout, continue_cb=continue_cb)
+        return (SERVED_TIMEOUT if was_timeout else job.status, job.served)
 
     def serve_testcase(self, testcase, continue_cb=None, forever=False, working_path=None, server_map=None):
         """
@@ -206,10 +144,10 @@ class Sapphire(object):
                 optional_files=tuple(testcase.optional),
                 server_map=server_map)
             testcase.duration = time.time() - serve_start
-            return result
         finally:
             # remove test case working directory
             shutil.rmtree(wwwdir, ignore_errors=True)
+        return result
 
     @property
     def timeout(self):
