@@ -99,6 +99,9 @@ class CommonArgs(object):
         return args
 
     def sanity_check(self, args):
+        if hasattr(super(CommonArgs, self), 'sanity_check'):
+            super(CommonArgs, self).sanity_check(args)
+
         if "binary" not in self._sanity_skip and not os.path.isfile(args.binary):
             self.parser.error("file not found: %r" % args.binary)
 
