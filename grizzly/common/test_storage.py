@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from .storage import InputFile, TestCase, TestFile, TestCaseLoadFailure, TestFileExists
+from .storage import TestCase, TestFile, TestCaseLoadFailure, TestFileExists
 
 
 def test_testcase_01(tmp_path):
@@ -41,7 +41,7 @@ def test_testcase_02(tmp_path):
     try:
         in_file = tmp_path / "testfile1.bin"
         in_file.write_bytes(b"test_req")
-        tcase.add_from_file(str(in_file), "testfile1.bin")
+        tcase.add_from_file(str(in_file))
         assert tcase.data_size == 8
         with pytest.raises(TestFileExists, match="'testfile1.bin' exists in test"):
             tcase.add_from_file(str(in_file), "testfile1.bin")
@@ -55,20 +55,15 @@ def test_testcase_02(tmp_path):
         assert os.path.join("nested", "testfile2.bin") in opt_files
         tcase.dump(str(tmp_path), include_details=True)
         assert (tmp_path / "nested").is_dir()
-        with (tmp_path / "test_info.json").open() as info:
-            test_info = json.load(info)
+        test_info = json.loads((tmp_path / "test_info.json").read_text())
         assert test_info["adapter"] == "test-adapter"
         assert test_info["input"] == "testinput.bin"
         assert test_info["target"] == "land_page.html"
         assert isinstance(test_info["env"], dict)
-        with (tmp_path / "testfile1.bin").open() as test_fp:
-            assert test_fp.read() == "test_req"
-        with (tmp_path / "nested" / "testfile2.bin").open() as test_fp:
-            assert test_fp.read() == "test_nreq"
-        with (tmp_path / "testfile3.bin").open() as test_fp:
-            assert test_fp.read() == "test_blah"
-        with (tmp_path / "dir" / "file.bin").open() as test_fp:
-            assert test_fp.read() == "test_windows"
+        assert in_file.read_bytes() == b"test_req"
+        assert (tmp_path / "nested" / "testfile2.bin").read_bytes() == b"test_nreq"
+        assert (tmp_path / "testfile3.bin").read_bytes() == b"test_blah"
+        assert (tmp_path / "dir" / "file.bin").read_bytes() == b"test_windows"
     finally:
         tcase.cleanup()
 
@@ -83,8 +78,7 @@ def test_testcase_03(tmp_path):
         tcase.dump(str(dmp_path), include_details=True)
         assert tcase.data_size == 6
         assert meta_file.is_file()
-        with meta_file.open("rb") as test_fp:
-            assert test_fp.read() == meta_data
+        assert meta_file.read_bytes() == meta_data
 
 def test_testcase_04(tmp_path):
     """test TestCase.add_environ_var() and TestCase.env_vars"""
@@ -96,10 +90,10 @@ def test_testcase_04(tmp_path):
         dmp_path = tmp_path / "dmp_test"
         dmp_path.mkdir()
         tcase.dump(str(dmp_path), include_details=True)
-        with (dmp_path / "test_info.json").open("r") as test_fp:
-            data = json.load(test_fp)["env"]
-        assert data["TEST_ENV_VAR"] == "1"
-        assert data["TEST_NONE"] is None
+        data = json.loads((dmp_path / "test_info.json").read_text())
+        assert "env" in data
+        assert data["env"]["TEST_ENV_VAR"] == "1"
+        assert data["env"]["TEST_NONE"] is None
 
 def test_testcase_05(tmp_path):
     """test TestCase.purge_optional()"""
@@ -111,12 +105,11 @@ def test_testcase_05(tmp_path):
         assert len(tuple(tcase.optional)) == 3
         tcase.purge_optional(tcase.optional)
         assert len(tuple(tcase.optional)) == 3
-        served = ["testfile2.bin", "testfile3.bin"]
-        tcase.purge_optional(served)
+        tcase.purge_optional(["testfile2.bin", "testfile3.bin"])
         assert len(tuple(tcase.optional)) == 2
         tcase.dump(str(tmp_path))
-        assert "testfile1.bin" in os.listdir(str(tmp_path))
-        assert "not_served.bin" not in os.listdir(str(tmp_path))
+        assert tmp_path.glob("testfile1.bin")
+        assert not any(tmp_path.glob("not_served.bin"))
 
 def test_testcase_06():
     """test TestCase.data_size"""
@@ -214,28 +207,10 @@ def test_testcase_09(tmp_path):
         assert "a=1" in opts
         assert "b=2" in opts
 
-def test_inputfile_01():
-    """test InputFile with non-existing file"""
-    with pytest.raises(IOError, match="File '/foo/bar/none' does not exist"):
-        InputFile("/foo/bar/none")
-
-def test_inputfile_02(tmp_path):
-    """test InputFile object"""
-    tfile = tmp_path / "testfile.bin"
-    tfile.write_bytes(b"test")
-    with InputFile(str(tfile)) as in_file:
-        assert in_file.extension == "bin"
-        assert in_file.file_name == str(tfile)
-        assert in_file._fp is None
-        assert in_file.get_data() == b"test"
-        assert in_file._fp is not None
-        in_file.close()
-        assert in_file._fp is None
-        assert in_file.get_fp().read() == b"test"
-        assert in_file._fp is not None
-
 def test_testfile_01():
     """test simple TestFile"""
+    with pytest.raises(TypeError, match="TestFile requires a name"):
+        TestFile("")
     with TestFile("test_file.txt") as tfile:
         assert tfile.file_name == "test_file.txt"
         assert not tfile._fp.closed
@@ -251,12 +226,10 @@ def test_testfile_02(tmp_path):
         assert not out_file.is_file()
         tfile.dump(str(tmp_path))
         assert out_file.is_file()
-        with out_file.open("r") as in_fp:
-            assert in_fp.read() == "foo"
+        assert out_file.read_text() == "foo"
         tfile.write(b"bar")
         tfile.dump(str(tmp_path))
-        with out_file.open("r") as in_fp:
-            assert in_fp.read() == "foobar"
+        assert out_file.read_text() == "foobar"
 
 def test_testfile_03(tmp_path):
     """test TestFile.dump() file with nested path"""
@@ -275,19 +248,21 @@ def test_testfile_04(tmp_path):
         out_file = tmp_path / "test_file.txt"
         tfile.dump(str(tmp_path))
         assert out_file.is_file()
-        with out_file.open("r") as in_fp:
-            assert in_fp.read() == "foo"
+        assert out_file.read_text() == "foo"
 
 def test_testfile_05(tmp_path):
     """test TestFile.from_file()"""
     in_file = tmp_path / "infile.txt"
     in_file.write_bytes(b"foobar")
+    # check re-using filename
+    with TestFile.from_file(str(in_file)) as tfile:
+        assert tfile.file_name == "infile.txt"
+    # check data
     with TestFile.from_file(str(in_file), "outfile.txt") as tfile:
-        out_file = tmp_path / "outfile.txt"
         tfile.dump(str(tmp_path))
+        out_file = tmp_path / "outfile.txt"
         assert out_file.is_file()
-        with out_file.open("r") as in_fp:
-            assert in_fp.read() == "foobar"
+        assert out_file.read_text() == "foobar"
 
 def test_testfile_06(tmp_path):
     """test TestFile.clone()"""
@@ -301,14 +276,12 @@ def test_testfile_06(tmp_path):
             assert tf1._fp != tf2._fp
             tf2.dump(str(tmp_path))
             assert out_file.is_file()
-            with out_file.open("r") as in_fp:
-                assert in_fp.read() == "foobartest"
+            assert out_file.read_text() == "foobartest"
         finally:
             tf2.close()
         tf1.dump(str(tmp_path))
         assert out_file.is_file()
-        with out_file.open("r") as in_fp:
-            assert in_fp.read() == "foobar"
+        assert out_file.read_text() == "foobar"
 
 def test_testfile_07(tmp_path):
     """test TestFile.data()"""

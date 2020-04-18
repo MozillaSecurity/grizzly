@@ -14,7 +14,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
-class AdapterError(RuntimeError):
+class AdapterError(Exception):
     """The base class for exceptions raised by an Adapter"""
 
 
@@ -24,7 +24,6 @@ class Adapter(object):
     IGNORE_UNSERVED = True  # Only report test cases with served content
     NAME = None  # must be set to a unique 'str' by subclass
     RELAUNCH = 0  # maximum iterations between Target relaunches (<1 use default)
-    ROTATION_PERIOD = 10  # iterations per input file before switching
     TEST_DURATION = 30  # maximum execution time per test
 
     #############################
@@ -38,6 +37,8 @@ class Adapter(object):
         self._harness = None
         self.fuzz = dict()
         self.monitor = None
+        # remaining can be used to indicate the number of TestCases remaining to process
+        self.remaining = None
 
     def cleanup(self):
         """Automatically called once at shutdown.
@@ -57,7 +58,7 @@ class Adapter(object):
         """Enable use of a harness during fuzzing. By default no harness is used.
 
         Args:
-            file_path (str or None): Path to file to use as a harness. If None the default harness is used.
+            file_path (str): Path to file to use as a harness. If None the default harness is used.
 
         Returns:
             None
@@ -75,7 +76,7 @@ class Adapter(object):
             None
 
         Returns:
-            grizzly.common.TestFile: The current harness
+            TestFile: The current harness
         """
         return self._harness
 
@@ -84,13 +85,12 @@ class Adapter(object):
     #############################
 
     @abc.abstractmethod
-    def generate(self, testcase, input_file, server_map):
+    def generate(self, testcase, server_map):
         """Automatically called. Populate testcase here.
 
         Args:
-            testcase (grizzly.common.TestCase): TestCase intended to be populated
-            input_file (grizzly.common.InputFile): Contains input data (or None)
-            server_map (grizzly.common.ServerMap): A ServerMap
+            testcase (TestCase): TestCase intended to be populated
+            server_map (ServerMap): A ServerMap
 
         Returns:
             None
@@ -100,7 +100,7 @@ class Adapter(object):
         """Optional. Automatically called after a test case is successfully served.
 
         Args:
-            testcase (grizzly.common.TestCase): TestCase that was served
+            testcase (TestCase): TestCase that was served
             served (list): A list of file names served from testcase
 
         Returns:
@@ -111,7 +111,7 @@ class Adapter(object):
         """Optional. Automatically called if timeout occurs attempting to serve a test case.
 
         Args:
-            testcase (grizzly.common.TestCase): TestCase that was served
+            testcase (TestCase): TestCase that was served
             served (list): A list of file names served from testcase
 
         Returns:
@@ -129,11 +129,13 @@ class Adapter(object):
             None
         """
 
-    def setup(self, server_map):
+    def setup(self, input_path, server_map):
         """Optional. Automatically called once at startup.
 
         Args:
-            server_map (grizzly.common.ServerMap): A ServerMap
+            input_path (str): Points to a file or directory passed by the user.
+                              None is passed by default.
+            server_map (ServerMap): A ServerMap
 
         Returns:
             None

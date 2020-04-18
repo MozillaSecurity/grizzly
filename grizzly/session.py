@@ -72,25 +72,24 @@ class Session(object):
         self.status.cleanup()
 
     def display_status(self, log_limiter):
-        if not self.adapter.ROTATION_PERIOD:
-            assert self.status.test_name is not None
+        if self.adapter.remaining is not None:
             log.info(
                 "[I%04d-L%02d-R%02d] %s",
                 self.status.iteration,
-                len(self.iomanager.input_files),
+                self.adapter.remaining,
                 self.status.results,
-                os.path.basename(self.status.test_name))
+                self.status.test_name)
         elif log_limiter.ready(self.status.iteration, self.target.monitor.launches):
-            if self.status.test_name:
-                log.debug("fuzzing: %s", os.path.basename(self.status.test_name))
             log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
     def generate_testcase(self):
         log.debug("calling iomanager.create_testcase()")
-        test = self.iomanager.create_testcase(self.adapter.NAME, rotation_period=self.adapter.ROTATION_PERIOD)
+        test = self.iomanager.create_testcase(self.adapter.NAME)
         log.debug("calling self.adapter.generate()")
-        self.adapter.generate(test, self.iomanager.active_input, self.iomanager.server_map)
+        self.adapter.generate(test, self.iomanager.server_map)
+        self.status.test_name = test.input_fname
         if self.target.prefs is not None:
+            # TODO: this can likely be improved
             test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
         return test
 
@@ -120,7 +119,7 @@ class Session(object):
             _dyn_close,
             mime_type="text/html")
 
-        while True:  # main fuzzing loop
+        while True:
             self.status.report()
             self.status.iteration += 1
 
@@ -150,9 +149,6 @@ class Session(object):
 
             # create and populate a test case
             current_test = self.generate_testcase()
-            if self.iomanager.active_input is not None:
-                self.status.test_name = self.iomanager.active_input.file_name
-
             # display status
             self.display_status(log_limiter=log_limiter)
 
@@ -194,7 +190,7 @@ class Session(object):
             self.target.check_relaunch()
 
             # all test cases have been replayed
-            if not self.adapter.ROTATION_PERIOD and not self.iomanager.input_files:
+            if self.adapter.remaining is not None and self.adapter.remaining < 1:
                 log.info("Replay Complete")
                 break
 

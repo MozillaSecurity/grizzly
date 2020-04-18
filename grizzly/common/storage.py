@@ -13,7 +13,7 @@ import six
 
 from ..target import sanitizer_opts
 
-__all__ = ("InputFile", "TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
+__all__ = ("TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -23,83 +23,6 @@ class TestCaseLoadFailure(Exception):
 
 class TestFileExists(Exception):
     """Raised when adding a TestFile to a TestCase that has an existing TestFile with the same name"""
-
-
-class InputFile(object):
-    CACHE_LIMIT = 0x100000  # 1MB
-
-    __slots__ = ("extension", "file_name", "_fp")
-
-    def __init__(self, file_name):
-        self.extension = None
-        self.file_name = file_name
-        self._fp = None
-        if not os.path.isfile(file_name):
-            raise IOError("File %r does not exist" % (self.file_name,))
-        # TODO: add kwarg to set self.extension?
-        if "." in self.file_name:
-            self.extension = os.path.splitext(self.file_name)[-1].lstrip(".")
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        self.close()
-
-    def _cache_data(self):
-        """Cache file data.
-
-        Args:
-            None
-
-        Returns:
-            None
-        """
-        self._fp = tempfile.SpooledTemporaryFile(max_size=self.CACHE_LIMIT)
-        with open(self.file_name, "rb") as src_fp:
-            shutil.copyfileobj(src_fp, self._fp, 0x10000)  # 64KB
-
-    def close(self):
-        """Close file handles.
-
-        Args:
-            None
-
-        Returns:
-            None
-        """
-        if self._fp is not None:
-            self._fp.close()
-        self._fp = None
-
-    def get_data(self):
-        """Read file data.
-
-        Args:
-            None
-
-        Returns:
-            bytes: Data from input file
-        """
-        if self._fp is None:
-            self._cache_data()
-        self._fp.seek(0)
-        # TODO: add size limit
-        return self._fp.read()
-
-    def get_fp(self):
-        """Get input file File object.
-
-        Args:
-            None
-
-        Returns:
-            file: input file object
-        """
-        if self._fp is None:
-            self._cache_data()
-        self._fp.seek(0)
-        return self._fp
 
 
 TestFileMap = namedtuple("TestFileMap", "meta optional required")
@@ -201,7 +124,7 @@ class TestCase(object):
             tfile.close()
             raise
 
-    def add_from_file(self, input_file, file_name, required=True):
+    def add_from_file(self, input_file, file_name=None, required=True):
         """Create a TestFile from an existing file and add it to the test case.
 
         Args:
@@ -212,6 +135,8 @@ class TestCase(object):
         Returns:
             None
         """
+        if file_name is None:
+            file_name = os.path.basename(input_file)
         tfile = TestFile.from_file(input_file=input_file, file_name=file_name)
         try:
             self.add_file(tfile, required=required)
@@ -405,7 +330,10 @@ class TestFile(object):
     __slots__ = ("_fp", "file_name")
 
     def __init__(self, file_name):
+        if not file_name:
+            raise TypeError("TestFile requires a name")
         self._fp = tempfile.SpooledTemporaryFile(max_size=self.CACHE_LIMIT, prefix="grz_tf_")
+        # TODO: Add file_name sanitation since it is used when the file is written to the fs
         # XXX: This is a naive fix for a larger path issue
         if "\\" in file_name:
             file_name = file_name.replace("\\", "/")
@@ -497,7 +425,7 @@ class TestFile(object):
         return t_file
 
     @classmethod
-    def from_file(cls, input_file, file_name):
+    def from_file(cls, input_file, file_name=None):
         """Create a TestFile from an existing file.
 
         Args:
@@ -507,6 +435,8 @@ class TestFile(object):
         Returns:
             TestFile: new instance
         """
+        if file_name is None:
+            file_name = os.path.basename(input_file)
         t_file = cls(file_name=file_name)
         with open(input_file, "rb") as src_fp:
             shutil.copyfileobj(src_fp, t_file._fp, cls.XFER_BUF)  # pylint: disable=protected-access
