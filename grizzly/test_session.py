@@ -36,13 +36,10 @@ def test_session_01(tmp_path, mocker):
     fake_target.log_size.return_value = 1000
     fake_target.prefs = None
     with IOManager() as iomgr:
-        session = Session(adapter, False, iomgr, mocker.Mock(spec=Reporter), fake_serv, fake_target)
-        try:
+        with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
             session.run([])
             assert session.status.iteration == 5
             assert session.status.test_name == "file.bin"
-        finally:
-            session.close()
 
 def test_session_02(tmp_path, mocker):
     """test Session with basic fuzzer Adapter (w/harness)"""
@@ -65,13 +62,10 @@ def test_session_02(tmp_path, mocker):
     fake_target.prefs = None
     with IOManager() as iomgr:
         iomgr.harness = adapter.get_harness()
-        session = Session(adapter, False, iomgr, mocker.Mock(spec=Reporter), fake_serv, fake_target)
-        try:
+        with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
             session.run([], iteration_limit=10)
             assert session.status.iteration == 10
             assert session.status.test_name is None
-        finally:
-            session.close()
 
 def test_session_03(tmp_path, mocker):
     """test basic Session functions"""
@@ -94,13 +88,11 @@ def test_session_03(tmp_path, mocker):
     fake_target.log_size.return_value = 1000
     fake_target.monitor.launches = 1
     fake_target.prefs = None
-    # set coverage to True to test dump_coverage() code path
-    session = Session(fake_adapter, True, fake_iomgr, mocker.Mock(spec=Reporter), fake_serv, fake_target)
     # set TARGET_LOG_SIZE_WARN < target.log_size to test code path
-    session.TARGET_LOG_SIZE_WARN = 100
-    session.run([], iteration_limit=1)
-    session.close()
-
+    Session.TARGET_LOG_SIZE_WARN = 100
+    # set coverage to True to test dump_coverage() code path
+    with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target, coverage=True) as session:
+        session.run([], iteration_limit=1)
     assert fake_adapter.setup.call_count == 0
     assert fake_adapter.pre_launch.call_count == 1
     assert fake_adapter.generate.call_count == 1
@@ -121,17 +113,15 @@ def test_session_04(tmp_path, mocker):
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.server_map = ServerMap()
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
-    fake_target = mocker.Mock(spec=Target)
-    fake_target.prefs = "fake_prefs.js"
-
-    session = Session(fake_adapter, False, fake_iomgr, None, None, fake_target)
-    assert fake_adapter.generate.call_count == 0
-    testcase = session.generate_testcase()
-    assert fake_iomgr.create_testcase.call_count == 1
-    fake_iomgr.create_testcase.assert_called_with("fake_adapter")
-    assert fake_adapter.generate.call_count == 1
-    fake_adapter.generate.assert_called_with(testcase, fake_iomgr.server_map)
-    assert testcase.add_meta.call_count == 1
+    fake_target = mocker.Mock(spec=Target, prefs="fake")
+    with Session(fake_adapter, fake_iomgr, None, None, fake_target) as session:
+        assert fake_adapter.generate.call_count == 0
+        testcase = session.generate_testcase()
+        assert fake_iomgr.create_testcase.call_count == 1
+        fake_iomgr.create_testcase.assert_called_with("fake_adapter")
+        assert fake_adapter.generate.call_count == 1
+        fake_adapter.generate.assert_called_with(testcase, fake_iomgr.server_map)
+        assert testcase.add_meta.call_count == 1
 
 def test_session_05(tmp_path, mocker):
     """test Session.run() reporting failures"""
@@ -151,28 +141,25 @@ def test_session_05(tmp_path, mocker):
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
-    fake_serv = mocker.Mock(spec=Sapphire)
-    fake_serv.port = 0x1337
+    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target)
     fake_target.log_size.return_value = 1000
     fake_target.monitor.launches = 1
     fake_target.prefs = "prefs.js"
-
-    session = Session(fake_adapter, False, fake_iomgr, fake_reporter, fake_serv, fake_target)
-    session.server.serve_testcase.return_value = SERVED_REQUEST
-    fake_runner.return_value.result = fake_runner.return_value.FAILED
-    fake_runner.return_value.served = ["/fake/file"]
-    fake_runner.return_value.timeout = False
-    session.run([], iteration_limit=1)
-    assert fake_adapter.on_served.call_count == 1
-    assert fake_adapter.on_timeout.call_count == 0
-    assert fake_iomgr.purge_tests.call_count == 1
-    assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
-    session.close()
-    assert session.status.iteration == 1
-    assert session.status.results == 1
-    assert session.status.ignored == 0
-    assert fake_reporter.submit.call_count == 1
+    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
+        session.server.serve_testcase.return_value = SERVED_REQUEST
+        fake_runner.return_value.result = fake_runner.return_value.FAILED
+        fake_runner.return_value.served = ["/fake/file"]
+        fake_runner.return_value.timeout = False
+        session.run([], iteration_limit=1)
+        assert fake_adapter.on_served.call_count == 1
+        assert fake_adapter.on_timeout.call_count == 0
+        assert fake_iomgr.purge_tests.call_count == 1
+        assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
+        assert session.status.iteration == 1
+        assert session.status.results == 1
+        assert session.status.ignored == 0
+        assert fake_reporter.submit.call_count == 1
 
 def test_session_06(tmp_path, mocker):
     """test Session.run() ignoring failures"""
@@ -190,30 +177,26 @@ def test_session_06(tmp_path, mocker):
     fake_iomgr.server_map = ServerMap()
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
-    fake_reporter = mocker.Mock(spec=Reporter)
-    fake_serv = mocker.Mock(spec=Sapphire)
-    fake_serv.port = 0x1337
+    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target)
     fake_target.log_size.return_value = 1000
     fake_target.monitor.launches = 1
     fake_target.prefs = "prefs.js"
-
     # ignored results should not be reported so raise AssertionError if report_result is called
     mocker.patch.object(Session, 'report_result', side_effect=AssertionError)
-    session = Session(fake_adapter, False, fake_iomgr, fake_reporter, fake_serv, fake_target)
-    session.server.serve_testcase.return_value = SERVED_REQUEST
-    fake_runner.return_value.result = fake_runner.return_value.IGNORED
-    fake_runner.return_value.served = ["/fake/file"]
-    fake_runner.return_value.timeout = False
-    session.run([], iteration_limit=1)
-    assert fake_adapter.on_served.call_count == 1
-    assert fake_adapter.on_timeout.call_count == 0
-    assert fake_iomgr.purge_tests.call_count == 1
-    assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
-    session.close()
-    assert session.status.iteration == 1
-    assert session.status.results == 0
-    assert session.status.ignored == 1
+    with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target) as session:
+        session.server.serve_testcase.return_value = SERVED_REQUEST
+        fake_runner.return_value.result = fake_runner.return_value.IGNORED
+        fake_runner.return_value.served = ["/fake/file"]
+        fake_runner.return_value.timeout = False
+        session.run([], iteration_limit=1)
+        assert fake_adapter.on_served.call_count == 1
+        assert fake_adapter.on_timeout.call_count == 0
+        assert fake_iomgr.purge_tests.call_count == 1
+        assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
+        assert session.status.iteration == 1
+        assert session.status.results == 0
+        assert session.status.ignored == 1
 
 def test_session_07(tmp_path, mocker):
     """test Session.run() handle TargetLaunchError"""
@@ -231,20 +214,15 @@ def test_session_07(tmp_path, mocker):
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
-    fake_serv = mocker.Mock(spec=Sapphire)
-    fake_serv.port = 0x1337
+    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target)
-    fake_target.log_size.return_value = 1000
     fake_target.monitor.launches = 1
-    fake_target.prefs = "prefs.js"
-
-    session = Session(fake_adapter, False, fake_iomgr, fake_reporter, fake_serv, fake_target)
-    with pytest.raises(TargetLaunchError):
-        session.run([], iteration_limit=1)
-    session.close()
-    assert session.status.iteration == 1
-    assert session.status.results == 1
-    assert session.status.ignored == 0
+    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
+        with pytest.raises(TargetLaunchError):
+            session.run([], iteration_limit=1)
+        assert session.status.iteration == 1
+        assert session.status.results == 1
+        assert session.status.ignored == 0
     assert fake_reporter.submit.call_count == 1
 
 def test_session_08(tmp_path, mocker):
@@ -259,16 +237,15 @@ def test_session_08(tmp_path, mocker):
         log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19\n")
     fake_report = mocker.patch("grizzly.session.Report", autospec=True)
-    mocker.patch("grizzly.session.tempfile.mkdtemp", autospec=True, return_value=str(tmpd))
+    mocker.patch("grizzly.session.mkdtemp", autospec=True, return_value=str(tmpd))
     Status.PATH = str(tmp_path)
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
-    fake_target = mocker.Mock(spec=Target)
-    fake_target.binary = "bin"
-    session = Session(None, False, fake_iomgr, fake_reporter, None, fake_target)
-    session.report_result()
+    fake_target = mocker.Mock(spec=Target, binary="bin")
+    with Session(None, fake_iomgr, fake_reporter, None, fake_target) as session:
+        session.report_result()
     assert fake_target.save_logs.call_count == 1
     fake_target.save_logs.assert_called_with(str(tmpd), meta=True)
     assert fake_report.from_path.return_value.crash_info.call_count == 1
@@ -279,7 +256,7 @@ def test_session_08(tmp_path, mocker):
 def test_log_output_limiter_01(mocker):
     """test LogOutputLimiter.ready() not ready"""
     fake_time = mocker.patch("grizzly.session.time", autospec=True)
-    fake_time.time.return_value = 1.0
+    fake_time.return_value = 1.0
     lol = LogOutputLimiter(delay=10, delta_multiplier=2)
     assert lol._delay == 10
     assert lol._iterations == 1
@@ -287,7 +264,7 @@ def test_log_output_limiter_01(mocker):
     assert lol._multiplier == 2
     assert lol._time == 1.0
     assert not lol._verbose
-    fake_time.time.return_value = 1.1
+    fake_time.return_value = 1.1
     assert not lol.ready(0, 0)
     assert lol._iterations == 1
     assert lol._launches == 1
@@ -298,9 +275,9 @@ def test_log_output_limiter_01(mocker):
 def test_log_output_limiter_02(mocker):
     """test LogOutputLimiter.ready() due to iterations"""
     fake_time = mocker.patch("grizzly.session.time", autospec=True)
-    fake_time.time.return_value = 1.0
+    fake_time.return_value = 1.0
     lol = LogOutputLimiter(delay=10, delta_multiplier=2)
-    fake_time.time.return_value = 1.1
+    fake_time.return_value = 1.1
     lol._launches = 2
     assert lol.ready(1, 1)
     assert lol._iterations == 2
@@ -310,7 +287,7 @@ def test_log_output_limiter_02(mocker):
 def test_log_output_limiter_03(mocker):
     """test LogOutputLimiter.ready() due to launches"""
     fake_time = mocker.patch("grizzly.session.time", autospec=True)
-    fake_time.time.return_value = 1.0
+    fake_time.return_value = 1.0
     lol = LogOutputLimiter(delay=10, delta_multiplier=2)
     lol._iterations = 4
     assert lol.ready(3, 1)
@@ -321,10 +298,10 @@ def test_log_output_limiter_03(mocker):
 def test_log_output_limiter_04(mocker):
     """test LogOutputLimiter.ready() due to time"""
     fake_time = mocker.patch("grizzly.session.time", autospec=True)
-    fake_time.time.return_value = 1.0
+    fake_time.return_value = 1.0
     lol = LogOutputLimiter(delay=1, delta_multiplier=2)
     lol._iterations = 4
-    fake_time.time.return_value = 2.0
+    fake_time.return_value = 2.0
     assert lol.ready(3, 0)
     assert lol._iterations == 4
     assert lol._launches == 1
