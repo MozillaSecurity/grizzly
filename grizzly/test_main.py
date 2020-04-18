@@ -113,6 +113,7 @@ def test_main_03(tmp_path, mocker):
 def test_console_init_logging_01(mocker):
     """test console_init_logging()"""
     mocker.patch("grizzly.main.logging", autospec=True)
-    fake_os = mocker.patch("grizzly.main.os", autospec=True)
-    fake_os.getenv.return_value = "1"
+    fake_getenv = mocker.patch("grizzly.main.getenv", autospec=True)
+    # enable DEBUG for additional coverage
+    fake_getenv.return_value = "1"
     console_init_logging()

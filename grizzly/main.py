@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
-import os
+from os import getenv
 
 from sapphire import Sapphire
 
@@ -23,7 +23,7 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 def console_init_logging():
     log_level = logging.INFO
     log_fmt = "[%(asctime)s] %(message)s"
-    if bool(os.getenv("DEBUG")):
+    if bool(getenv("DEBUG")):
         log_level = logging.DEBUG
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
     logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
@@ -51,6 +51,7 @@ def main(args):
     target = None
     try:
         log.debug("initializing the IOManager")
+        # TODO: move this into Session
         iomanager = IOManager(
             report_size=(max(args.cache, 0) + 1),
             mime_type=args.mime,
@@ -62,22 +63,6 @@ def main(args):
         if adapter.TEST_DURATION >= args.timeout:
             raise RuntimeError("Test duration (%ds) should be less than browser timeout (%ds)" % (
                 adapter.TEST_DURATION, args.timeout))
-
-        if args.input:
-            iomanager.scan_input(
-                args.input,
-                accepted_extensions=args.accepted_extensions,
-                sort=adapter.ROTATION_PERIOD == 0)
-        log.info("Found %d input files(s)", len(iomanager.input_files))
-
-        if adapter.ROTATION_PERIOD == 0:
-            log.info("Running in SINGLE PASS mode")
-        elif args.coverage:
-            log.info("Running in COVERAGE mode")
-            # cover as many test cases as possible
-            adapter.ROTATION_PERIOD = 1
-        else:
-            log.info("Running in FUZZING mode")
 
         if adapter.RELAUNCH > 0:
             log.debug("relaunch (%d) set in Adapter", adapter.RELAUNCH)
@@ -102,7 +87,7 @@ def main(args):
             target.add_abort_token("###!!! ASSERTION:")
 
         log.debug("calling adapter setup()")
-        adapter.setup(iomanager.server_map)
+        adapter.setup(args.input, iomanager.server_map)
         log.debug("configuring harness")
         iomanager.harness = adapter.get_harness()
 
@@ -131,7 +116,7 @@ def main(args):
                 server,
                 target)
             target.reverse(session.server.port, session.server.port)
-            display_mode = Session.DISPLAY_VERBOSE if os.getenv("DEBUG") else Session.DISPLAY_NORMAL
+            display_mode = Session.DISPLAY_VERBOSE if getenv("DEBUG") else Session.DISPLAY_NORMAL
             session.run(args.ignore, display_mode=display_mode)
 
     except KeyboardInterrupt:

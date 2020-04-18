@@ -5,10 +5,9 @@
 
 from collections import deque
 import os
-import random
 
 from sapphire.server_map import ServerMap
-from .storage import InputFile, TestCase, TestFile
+from .storage import TestCase, TestFile
 from ..target import sanitizer_opts
 
 
@@ -27,9 +26,7 @@ class IOManager(object):
 
     def __init__(self, report_size=1, mime_type=None, working_path=None):
         assert report_size > 0
-        self.active_input = None  # current active input file
         self.harness = None
-        self.input_files = list()  # paths to files to use as a corpus
         self.server_map = ServerMap()  # manage redirects, include directories and dynamic responses
         self.tests = deque()
         self.working_path = working_path
@@ -59,32 +56,18 @@ class IOManager(object):
                 self._environ_files.append(TestFile.from_file(supp_file, fname))
 
     def cleanup(self):
-        if self.active_input is not None:
-            self.active_input.close()
         if self.harness is not None:
             self.harness.close()
         for e_file in self._environ_files:
             e_file.close()
         self.purge_tests()
 
-    def create_testcase(self, adapter_name, rotation_period=10):
-        # check if we should choose a new active input file
-        if self._rotation_required(rotation_period):
-            assert self.input_files
-            # close previous input if needed
-            if self.active_input is not None:
-                self.active_input.close()
-            if rotation_period > 0:
-                self.active_input = InputFile(random.choice(self.input_files))
-            else:
-                # single pass mode
-                self.active_input = InputFile(self.input_files.pop())
+    def create_testcase(self, adapter_name):
         # create testcase object and landing page names
         test = TestCase(
             self.page_name(),
             self.page_name(offset=1),
-            adapter_name=adapter_name,
-            input_fname=self.active_input.file_name if self.active_input else None)
+            adapter_name=adapter_name)
         # add environment variable info to the test case
         for e_name, e_value in self._tracked_env.items():
             test.add_environ_var(e_name, e_value)
@@ -118,53 +101,6 @@ class IOManager(object):
         for testcase in self.tests:
             testcase.cleanup()
         self.tests.clear()
-
-    def _rotation_required(self, rotation_period):
-        if not self.input_files:
-            # only rotate if we have input files
-            return False
-        if self.active_input is None:
-            # we need a file
-            return True
-        if not rotation_period:
-            # single pass mode
-            return True
-        if len(self.input_files) < 2:
-            # single pass mode
-            return False
-        if not self._generated % rotation_period:
-            return True
-        return False
-
-    def scan_input(self, scan_path, accepted_extensions=None, sort=False):
-        assert scan_path is not None, "scan_path should be a valid path"
-        if os.path.isdir(scan_path):
-            # create a set of normalized file extensions to look in
-            if accepted_extensions is not None:
-                normalized_exts = set(ext.lstrip(".").lower() for ext in accepted_extensions)
-            else:
-                normalized_exts = set()
-
-            # ignored_list is a list of ignored files (usually auto generated OS files)
-            ignored_list = ("desktop.ini", "thumbs.db")
-            for d_name, _, filenames in os.walk(scan_path):
-                for f_name in filenames:
-                    # check for unwanted files
-                    if f_name.startswith(".") or f_name.lower() in ignored_list:
-                        continue
-                    if normalized_exts:
-                        ext = os.path.splitext(f_name)[1].lstrip(".").lower()
-                        if ext not in normalized_exts:
-                            continue
-                    input_file = os.path.abspath(os.path.join(d_name, f_name))
-                    # skip empty files
-                    if os.path.getsize(input_file) > 0:
-                        self.input_files.append(input_file)
-        elif os.path.isfile(scan_path) and os.path.getsize(scan_path) > 0:
-            self.input_files.append(os.path.abspath(scan_path))
-
-        if sort and self.input_files:
-            self.input_files.sort(reverse=True)
 
     @staticmethod
     def tracked_environ():

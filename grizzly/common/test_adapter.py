@@ -9,7 +9,7 @@ from .adapter import Adapter
 class SimpleAdapter(Adapter):
     NAME = "simple"
 
-    def generate(self, testcase, input_file, server_map):
+    def generate(self, testcase, server_map):
         pass
 
 
@@ -19,9 +19,10 @@ def test_adapter_01():
     assert isinstance(adpt.fuzz, dict)
     assert not adpt.fuzz
     assert adpt.monitor is None
+    assert adpt.remaining is None
     assert adpt.get_harness() is None
-    adpt.setup(None)
-    adpt.generate(None, None, None)
+    adpt.setup(None, None)
+    adpt.generate(None, None)
     adpt.on_served(None, None)
     adpt.on_timeout(None, None)
     adpt.pre_launch()
