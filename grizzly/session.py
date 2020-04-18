@@ -3,11 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import logging
-import os
-import shutil
-import tempfile
-import time
+from logging import getLogger
+from os.path import isdir
+from shutil import rmtree
+from tempfile import mkdtemp
+from time import time
 
 from .common import Report, Runner, Status, TestFile
 from .target import TargetLaunchError
@@ -18,7 +18,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
-log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
+log = getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class LogOutputLimiter(object):
@@ -29,7 +29,7 @@ class LogOutputLimiter(object):
         self._iterations = 1  # next iteration to trigger output
         self._launches = 1  # next launch to trigger output
         self._multiplier = delta_multiplier  # rate to decrease output (iterations)
-        self._time = time.time()
+        self._time = time()
         self._verbose = verbose  # always output
 
     def ready(self, cur_iter, launches):
@@ -42,10 +42,10 @@ class LogOutputLimiter(object):
             self._iterations *= self._multiplier
         elif launches >= self._launches:
             ready = True
-        elif time.time() - self._delay >= self._time:
+        elif time() - self._delay >= self._time:
             ready = True
         if ready:
-            self._time = time.time()
+            self._time = time()
             self._launches = launches + 1
         return ready
 
@@ -59,7 +59,9 @@ class Session(object):
     EXIT_LAUNCH_FAILURE = 7
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    def __init__(self, adapter, coverage, iomanager, reporter, server, target):
+    __slots__ = ("adapter", "coverage", "iomanager", "reporter", "server", "status", "target")
+
+    def __init__(self, adapter, iomanager, reporter, server, target, coverage=False):
         self.adapter = adapter
         self.coverage = coverage
         self.iomanager = iomanager
@@ -67,6 +69,12 @@ class Session(object):
         self.server = server
         self.status = Status.start()
         self.target = target
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     def close(self):
         self.status.cleanup()
@@ -95,7 +103,7 @@ class Session(object):
 
     def report_result(self):
         # create working directory for target logs
-        result_logs = tempfile.mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
+        result_logs = mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
         self.target.save_logs(result_logs, meta=True)
         report = Report.from_path(result_logs)
         crash_info = report.crash_info(self.target.binary)
@@ -104,8 +112,8 @@ class Session(object):
         # order test cases newest to oldest
         self.iomanager.tests.reverse()
         self.reporter.submit(self.iomanager.tests, report=report)
-        if os.path.isdir(result_logs):
-            shutil.rmtree(result_logs)
+        if isdir(result_logs):
+            rmtree(result_logs)
 
     def run(self, ignore, iteration_limit=None, display_mode=DISPLAY_NORMAL):
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)

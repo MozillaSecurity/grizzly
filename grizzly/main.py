@@ -107,15 +107,15 @@ def main(args):
         # launch http server used to serve test cases
         log.debug("starting Sapphire server")
         with Sapphire(auto_close=1, timeout=args.timeout) as server:
+            target.reverse(server.port, server.port)
             log.debug("initializing the Session")
             session = Session(
                 adapter,
-                args.coverage,
                 iomanager,
                 reporter,
                 server,
-                target)
-            target.reverse(session.server.port, session.server.port)
+                target,
+                coverage=args.coverage)
             display_mode = Session.DISPLAY_VERBOSE if getenv("DEBUG") else Session.DISPLAY_NORMAL
             session.run(args.ignore, display_mode=display_mode)
 
