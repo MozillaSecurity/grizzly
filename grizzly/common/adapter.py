@@ -22,18 +22,19 @@ class AdapterError(Exception):
 class Adapter(object):
     HARNESS_FILE = os.path.join(os.path.dirname(__file__), "harness.html")
     IGNORE_UNSERVED = True  # Only report test cases with served content
-    NAME = None  # must be set to a unique 'str' by subclass
+    NAME = None  # must be a unique string
     RELAUNCH = 0  # maximum iterations between Target relaunches (<1 use default)
     TEST_DURATION = 30  # maximum execution time per test
+
+    __slots__ = ("_harness", "fuzz", "monitor", "remaining")
 
     #############################
     # Built-ins do NOT overload!
     #############################
 
     def __init__(self):
-        if self.NAME is None:
-            raise NotImplementedError("NAME member must be set by subclass")
-        assert isinstance(self.NAME, str), "NAME must be a 'str'"
+        if not isinstance(self.NAME, six.string_types):
+            raise AdapterError("%s.NAME must be a string" % (type(self).__name__,))
         self._harness = None
         self.fuzz = dict()
         self.monitor = None
@@ -79,6 +80,31 @@ class Adapter(object):
             TestFile: The current harness
         """
         return self._harness
+
+    @staticmethod
+    def scan_path(path, ignore=("desktop.ini", "thumbs.db"), recursive=False):
+        """Scan a path and yield the files within it.
+
+        Args:
+            path (str): Path to file or directory.
+            ignore (iterable): Filenames to ignore.
+            recursive (bool): Scan recursively into directories:
+
+        Yields:
+            str: Absolute path to files.
+        """
+        full_path = os.path.abspath(path)
+        if os.path.isdir(full_path):
+            for root, _, files in os.walk(full_path):
+                if not recursive and root != full_path:
+                    continue
+                for fname in files:
+                    if fname in ignore or fname.startswith("."):
+                        # skip ignored and hidden system files
+                        continue
+                    yield os.path.join(root, fname)
+        elif os.path.isfile(full_path):
+            yield full_path
 
     #############################
     # Methods to overload
