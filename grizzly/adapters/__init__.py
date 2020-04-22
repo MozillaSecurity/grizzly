@@ -53,7 +53,6 @@ def load(path=None, skip_failures=True):
                             __adapters__[cls.NAME].__name__,
                             cls.__name__))
                 __adapters__[cls.NAME] = cls
-                break
         else:
             log.debug("ignored %r", sub)
     log.debug("%d adapters loaded", len(__adapters__))
