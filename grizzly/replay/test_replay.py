@@ -8,10 +8,12 @@ unit tests for grizzly.replay
 """
 import os
 
+import pytest
+
 from sapphire import Sapphire, SERVED_ALL
 from .replay import ReplayManager
 from ..common import Report, TestCase
-from ..target import Target
+from ..target import Target, TargetLaunchError
 
 
 def _fake_save_logs_result(result_logs, meta=False):  # pylint: disable=unused-argument
@@ -256,3 +258,21 @@ def test_replay_08(mocker, tmp_path):
     assert (path / "other_reports").is_dir()
     assert (path / "other_reports" / "other1_logs").is_dir()
     assert (path / "other_reports" / "other2_logs").is_dir()
+
+def test_replay_09(mocker, tmp_path):
+    """test ReplayManager.run() - TargetLaunchError"""
+    report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
+    mocker.patch("grizzly.replay.replay.tempfile.mkdtemp", autospec=True, return_value=str(tmp_path))
+    report.from_path.side_effect = (mocker.Mock(spec=Report),)
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    target = mocker.Mock(spec=Target)
+    target.launch.side_effect = TargetLaunchError
+    testcase = mocker.Mock(spec=TestCase)
+    testcase.env_vars = dict()
+    testcase.landing_page = "index.html"
+    replay = ReplayManager([], server, target, testcase, use_harness=False)
+    with pytest.raises(TargetLaunchError):
+        replay.run()
+    assert not any(replay.reports)
+    assert any(replay.other_reports)
+    assert "STARTUP" in replay._reports_other

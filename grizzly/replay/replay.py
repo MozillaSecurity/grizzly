@@ -149,16 +149,22 @@ class ReplayManager(object):
                         self.server.port,
                         close_after=self.target.rl_reset,
                         forced_close=self.target.forced_close)
-                self._runner.launch(location, env_mod=self.testcase.env_vars)
+                try:
+                    self._runner.launch(location, env_mod=self.testcase.env_vars)
+                except TargetLaunchError:
+                    log_path = tempfile.mkdtemp(prefix="grzreplay_logs_")
+                    self.target.save_logs(log_path, meta=True)
+                    self._reports_other["STARTUP"] = Report.from_path(log_path)
+                    raise
             self.target.step()
             LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
             # run test case
             self._runner.run(self.ignore, server_map, self.testcase, wait_for_callback=self._harness is None)
             # process results
             if self._runner.result == self._runner.FAILED:
-                result_logs = tempfile.mkdtemp(prefix="grzreplay_logs_")
-                self.target.save_logs(result_logs, meta=True)
-                report = Report.from_path(result_logs)
+                log_path = tempfile.mkdtemp(prefix="grzreplay_logs_")
+                self.target.save_logs(log_path, meta=True)
+                report = Report.from_path(log_path)
                 # check signatures
                 crash_info = report.crash_info(self.target.binary)
                 short_sig = crash_info.createShortSignature()
@@ -306,6 +312,11 @@ class ReplayManager(object):
             return 1
 
         except (TargetLaunchError, TargetLaunchTimeout):
+            if args.logs:
+                replay.report_to_filesystem(
+                    args.logs,
+                    replay.reports,
+                    replay.other_reports)
             return 1
 
         finally:
