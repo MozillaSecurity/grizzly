@@ -11,7 +11,7 @@ import os
 import pytest
 
 from ..common import TestCaseLoadFailure
-from ..target import Target, TargetLaunchError
+from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from ..replay import ReplayManager
 from ..replay.args import ReplayArgs
 
@@ -133,6 +133,7 @@ def test_main_01(mocker, tmp_path):
 def test_main_02(mocker):
     """test ReplayManager.main() failure cases"""
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
+    mocker.patch("grizzly.replay.replay.load_target", autospec=True)
     mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
     mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
     # setup args
@@ -144,7 +145,10 @@ def test_main_02(mocker):
     args.repeat = 1
     args.sig = None
 
-    mocker.patch("grizzly.replay.replay.load_target", side_effect=TargetLaunchError)
+    mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchError)
+    assert ReplayManager.main(args) == 1
+
+    mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchTimeout)
     assert ReplayManager.main(args) == 1
 
     mocker.patch("grizzly.replay.replay.load_target", side_effect=KeyboardInterrupt)
