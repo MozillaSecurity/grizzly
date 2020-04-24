@@ -97,7 +97,7 @@ class Status(object):
                 try:
                     data = json.load(out_fp)
                 except ValueError:
-                    LOG.debug("failed to json")
+                    LOG.debug("failed to load json")
                     return None
         status = cls(data_file, data["start_time"])
         for attr, value in data.items():
