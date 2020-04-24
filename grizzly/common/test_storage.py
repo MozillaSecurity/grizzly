@@ -26,9 +26,11 @@ def test_testcase_01(tmp_path):
         assert tcase.data_size == 0
         assert tcase.input_fname is None
         assert not tcase.env_vars
+        assert not tcase._existing_paths
         assert not tcase._files.meta
         assert not tcase._files.optional
         assert not tcase._files.required
+        assert not tcase.contains("no_file")
         assert not any(tcase.optional)
         tcase.dump(str(tmp_path))
         assert not any(tmp_path.glob("*"))
@@ -50,6 +52,7 @@ def test_testcase_02(tmp_path):
         tcase.add_from_data("test_nreq", "nested/testfile2.bin", required=False)
         tcase.add_from_data("test_blah", "/testfile3.bin")
         tcase.add_from_data("test_windows", "\\\\dir\\file.bin")
+        assert tcase.contains("testfile1.bin")
         opt_files = list(tcase.optional)
         assert len(opt_files) == 1
         assert os.path.join("nested", "testfile2.bin") in opt_files
