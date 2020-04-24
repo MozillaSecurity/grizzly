@@ -157,6 +157,17 @@ class TestCase(object):
             for test_file in file_group:
                 test_file.close()
 
+    def contains(self, file_name):
+        """Check TestCase contains the TestFile with name matching `file_name`.
+
+        Args:
+            file_name (str): File name to search for in TestCase.
+
+        Returns:
+            bool: True if file exists in the TestCase otherwise False
+        """
+        return file_name in self._existing_paths
+
     @property
     def data_size(self):
         """The total amount of data used by the test case (bytes).
