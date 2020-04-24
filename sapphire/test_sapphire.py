@@ -581,6 +581,20 @@ def test_sapphire_29(client_factory, tmp_path):
     assert test.code == 200
     assert test.len_srv == test.len_org
 
+def test_sapphire_30(client, tmp_path):
+    """test interesting file names"""
+    to_serve = [
+        # space in file name
+        _create_test("test case.html", tmp_path),
+        # non-alphanumeric chars (valid characters to use on filesystem)
+        _create_test("!@#$%^&(_+-=[]),;'~`{}", tmp_path)]
+    with Sapphire(timeout=10) as serv:
+        client.launch("127.0.0.1", serv.port, to_serve)
+        assert serv.serve_path(str(tmp_path))[0] == SERVED_ALL
+    assert client.wait(timeout=10)
+    for t_file in to_serve:
+        assert t_file.code == 200
+
 def test_main_01(tmp_path):
     """test Sapphire.main()"""
     with pytest.raises(SystemExit):

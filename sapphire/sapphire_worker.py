@@ -14,6 +14,11 @@ import socket
 import sys
 import threading
 import time
+try:  # py 2-3 compatibility
+    from urllib.parse import unquote_plus
+except ImportError:
+    from urllib import unquote_plus
+
 
 from .server_map import Resource
 
@@ -103,7 +108,7 @@ class SapphireWorker(object):
                 LOG.debug("400 request length %d (%d to go)", len(raw_request), serv_job.pending)
                 return
 
-            request = request.group("request").decode("ascii")
+            request = unquote_plus(request.group("request").decode("ascii"))
             LOG.debug("check_request(%r)", request)
             resource = serv_job.check_request(request)
             if resource is None:
