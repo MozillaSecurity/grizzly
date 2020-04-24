@@ -72,8 +72,9 @@ class _IdleChecker(object):
 
 class Runner(object):
     COMPLETE = 1
-    FAILED = 2
-    IGNORED = 3
+    ERROR = 2
+    FAILED = 3
+    IGNORED = 4
 
     __slots__ = ("_idle", "_server", "_target", "result", "served", "timeout")
 
@@ -177,8 +178,14 @@ class Runner(object):
         self.timeout = server_status == SERVED_TIMEOUT
         # detect failure
         failure_detected = self._target.detect_failure(ignore, self.timeout)
+        served_lpage = testcase.landing_page in self.served
+        if not served_lpage:
+            # output message even if a failure was detected
+            LOG.debug("%r not served!", testcase.landing_page)
         if failure_detected == self._target.RESULT_FAILURE:
             self.result = self.FAILED
+        elif not served_lpage:
+            self.result = self.ERROR
         elif failure_detected == self._target.RESULT_IGNORED:
             self.result = self.IGNORED
         else:
