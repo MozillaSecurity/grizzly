@@ -203,6 +203,9 @@ class ReplayManager(object):
             elif self._runner.result == self._runner.IGNORED:
                 self.status.ignored += 1
                 LOG.info("Ignored (%d)", self.status.ignored)
+            elif self._runner.result == self._runner.ERROR:
+                LOG.error("ERROR: Replay malfunction, test case was not served")
+                break
 
             # check status and exit early if possible
             if repeat - self.status.iteration + self.status.results < min_results:
