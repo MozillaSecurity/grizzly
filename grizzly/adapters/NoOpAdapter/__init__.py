@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from grizzly.common import Adapter, TestFile
+from grizzly.common import Adapter
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -15,14 +15,14 @@ class NoOpAdapter(Adapter):
     """
     NAME = "no-op"
 
-    def setup(self, _):
+    def setup(self, *_):
         self.enable_harness()
         self.fuzz["test"] = "<!DOCTYPE html>\n" \
             "<html>\n" \
             "<head>\n" \
             "<script>window.close()</script>\n" \
-            "</head>" \
+            "</head>\n" \
             "</html>"
 
-    def generate(self, testcase, *_):
-        testcase.add_file(TestFile.from_data(self.fuzz["test"], testcase.landing_page))
+    def generate(self, testcase, _):
+        testcase.add_from_data(self.fuzz["test"], testcase.landing_page)
