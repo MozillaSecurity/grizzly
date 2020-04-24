@@ -77,7 +77,7 @@ def test_main_01(mocker, tmp_path):
     # and the forth attempt should be skipped.
     # mock Sapphire.serve_testcase only
     serve_testcase = mocker.patch("grizzly.replay.replay.Sapphire.serve_testcase", autospec=True)
-    serve_testcase.return_value = (None, None)  # passed to mocked Target.detect_failure
+    serve_testcase.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_target")
     target = mocker.Mock(spec=Target)
