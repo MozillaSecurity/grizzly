@@ -88,7 +88,7 @@ class Adapter(object):
         Args:
             path (str): Path to file or directory.
             ignore (iterable): Filenames to ignore.
-            recursive (bool): Scan recursively into directories:
+            recursive (bool): Scan recursively into directories.
 
         Yields:
             str: Absolute path to files.
@@ -96,13 +96,13 @@ class Adapter(object):
         full_path = os.path.abspath(path)
         if os.path.isdir(full_path):
             for root, _, files in os.walk(full_path):
-                if not recursive and root != full_path:
-                    continue
                 for fname in files:
                     if fname in ignore or fname.startswith("."):
                         # skip ignored and hidden system files
                         continue
                     yield os.path.join(root, fname)
+                if not recursive:
+                    break
         elif os.path.isfile(full_path):
             yield full_path
 
