@@ -34,10 +34,7 @@ class FakeServer(object):
 
     def serve_testcase(self, testcase, **kwds):  # pylint: disable=no-self-use,unused-argument
         testcase.duration = 0.1
-        return sapphire.SERVED_ALL, []
-
-    def serve_path(self, *args, **kwds):  # pylint: disable=no-self-use,unused-argument
-        return sapphire.SERVED_ALL, []
+        return sapphire.SERVED_ALL, ["test.html"]
 
     @property
     def timeout(self):
