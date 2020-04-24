@@ -15,83 +15,102 @@ def test_runner_01(mocker):
     """test Runner()"""
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
+    target.detect_failure.return_value = target.RESULT_NONE
     runner = Runner(server, target)
     assert runner._idle is None
     assert runner.result is None
     assert runner.served is None
     assert not runner.timeout
-
-    fake_files = ["/fake/file", "/another/file.bin"]
-    server.serve_testcase.return_value = (SERVED_ALL, fake_files)
-    runner.run([], mocker.Mock(spec=ServerMap), mocker.Mock(spec=TestCase))
+    serv_files = ["a.bin", "/another/file.bin"]
+    testcase = mocker.Mock(spec=TestCase)
+    testcase.landing_page = serv_files[0]
+    # all files served
+    server.serve_testcase.return_value = (SERVED_ALL, serv_files)
+    runner.run([], ServerMap(), testcase)
     assert runner.result == runner.COMPLETE
-    assert runner.served == fake_files
+    assert runner.served == serv_files
     assert not runner.timeout
-
-    server.serve_testcase.return_value = (SERVED_REQUEST, fake_files)
-    runner.run([], mocker.Mock(spec=ServerMap), mocker.Mock(spec=TestCase))
+    # some files served
+    server.serve_testcase.return_value = (SERVED_REQUEST, serv_files)
+    runner.run([], ServerMap(), testcase)
     assert runner.result == runner.COMPLETE
-    assert runner.served == fake_files
-    assert not runner.timeout
-
-    server.serve_testcase.return_value = (SERVED_NONE, [])
-    runner.run([], mocker.Mock(spec=ServerMap), mocker.Mock(spec=TestCase))
-    assert runner.result == runner.COMPLETE
-    assert not runner.served
+    assert runner.served == serv_files
     assert not runner.timeout
 
 def test_runner_02(mocker):
+    """test Runner() errors"""
+    server = mocker.Mock(spec=Sapphire)
+    target = mocker.Mock(spec=Target)
+    testcase = mocker.Mock(spec=TestCase, landing_page="x")
+    runner = Runner(server, target)
+    # no files served
+    server.serve_testcase.return_value = (SERVED_NONE, [])
+    target.detect_failure.return_value = target.RESULT_NONE
+    runner.run([], ServerMap(), testcase)
+    assert runner.result == runner.ERROR
+    assert not runner.served
+    assert not runner.timeout
+    # landing page not served
+    server.serve_testcase.return_value = (SERVED_REQUEST, ["harness"])
+    target.detect_failure.return_value = target.RESULT_NONE
+    runner.run([], ServerMap(), testcase)
+    assert runner.result == runner.ERROR
+    assert runner.served
+
+def test_runner_03(mocker):
     """test reporting timeout"""
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
-    fake_files = ["/fake/file", "/another/file.bin"]
-    server.serve_testcase.return_value = (SERVED_TIMEOUT, fake_files)
+    serv_files = ["a.bin", "/another/file.bin"]
+    server.serve_testcase.return_value = (SERVED_TIMEOUT, serv_files)
     runner = Runner(server, target)
-
     target.detect_failure.return_value = target.RESULT_FAILURE
-    runner.run([], mocker.Mock(spec=ServerMap), mocker.Mock(spec=TestCase))
+    runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page="x"))
     assert runner.result == runner.FAILED
-    assert runner.served == fake_files
+    assert runner.served == serv_files
     assert runner.timeout
 
-    target.detect_failure.return_value = target.RESULT_IGNORED
-    runner.run(["fake", "ignores"], mocker.Mock(spec=ServerMap), mocker.Mock(spec=TestCase))
-    assert runner.result == runner.IGNORED
-    assert runner.served == fake_files
-    assert runner.timeout
-
-def test_runner_03(mocker):
+def test_runner_04(mocker):
     """test reporting failures"""
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
-    fake_files = ["/fake/file", "/another/file.bin"]
-    server.serve_testcase.return_value = (SERVED_REQUEST, fake_files)
+    serv_files = ["file.bin"]
+    server.serve_testcase.return_value = (SERVED_REQUEST, serv_files)
+    testcase = mocker.Mock(spec=TestCase, landing_page=serv_files[0])
     runner = Runner(server, target)
-
+    # test FAILURE
     target.detect_failure.return_value = target.RESULT_FAILURE
-    runner.run([], mocker.Mock(spec=ServerMap), mocker.Mock(spec=TestCase))
+    runner.run([], ServerMap(), testcase)
     assert runner.result == runner.FAILED
-    assert runner.served == fake_files
+    assert runner.served == serv_files
     assert not runner.timeout
-
+    # test IGNORED
     target.detect_failure.return_value = target.RESULT_IGNORED
-    runner.run([], mocker.Mock(spec=ServerMap), mocker.Mock(spec=TestCase))
+    runner.run([], ServerMap(), testcase)
     assert runner.result == runner.IGNORED
-    assert runner.served == fake_files
+    assert runner.served == serv_files
+    assert not runner.timeout
+    # failure before serving landing page
+    server.serve_testcase.return_value = (SERVED_REQUEST, ["harness"])
+    target.detect_failure.return_value = target.RESULT_FAILURE
+    runner.run([], ServerMap(), testcase)
+    assert runner.result == runner.FAILED
+    assert runner.served
     assert not runner.timeout
 
-def test_runner_04(mocker):
+def test_runner_05(mocker):
     """test Runner() with idle checking"""
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
-    fake_files = ["/fake/file", "/another/file.bin"]
-    server.serve_testcase.return_value = (SERVED_REQUEST, fake_files)
+    target.detect_failure.return_value = target.RESULT_NONE
+    serv_files = ["/fake/file", "/another/file.bin"]
+    server.serve_testcase.return_value = (SERVED_REQUEST, serv_files)
     runner = Runner(server, target, idle_threshold=0.01, idle_delay=0.01)
     assert runner._idle is not None
-    runner.run([], mocker.Mock(spec=ServerMap), mocker.Mock(spec=TestCase))
+    runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page=serv_files[0]))
     assert runner.result == runner.COMPLETE
 
-def test_runner_05(mocker):
+def test_runner_06(mocker):
     """test Runner._keep_waiting()"""
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
@@ -116,7 +135,7 @@ def test_runner_05(mocker):
     target.monitor.is_healthy.return_value = False
     assert not runner._keep_waiting()
 
-def test_runner_06():
+def test_runner_07():
     """test Runner.location()"""
     result = Runner.location("a.html", 34567)
     assert result == "http://127.0.0.1:34567/a.html"
@@ -129,10 +148,9 @@ def test_runner_06():
     result = Runner.location("a.html", 9999, close_after=10, forced_close=False, timeout=60)
     assert result == "http://127.0.0.1:9999/a.html?close_after=10&forced_close=0&timeout=60000"
 
-def test_runner_07(mocker):
+def test_runner_08(mocker):
     """test Runner.launch()"""
-    server = mocker.Mock(spec=Sapphire)
-    server.port = 0x1337
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
     target = mocker.Mock(spec=Target)
 
     runner = Runner(server, target)
