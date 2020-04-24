@@ -13,10 +13,12 @@ import time
 import pytest
 try:  # py 2-3 compatibility
     from http.client import BadStatusLine
-    from urllib.request import urlopen
     from urllib.error import HTTPError, URLError
+    from urllib.parse import quote
+    from urllib.request import urlopen
 except ImportError:
     from httplib import BadStatusLine
+    from urllib import quote  # pylint: disable=ungrouped-imports
     from urllib2 import urlopen, HTTPError, URLError
 
 
@@ -78,7 +80,7 @@ def client_factory():
                     # if t_file.md5_org is set to anything but None the test client will calculate
                     # the md5 hash
                     data_hash = hashlib.md5() if t_file.md5_org is not None else None
-                    target_url = t_file.url
+                    target_url = quote(t_file.url)
                 cli = None
                 try:
                     if t_file.custom_request is None:
