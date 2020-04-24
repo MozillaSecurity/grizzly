@@ -39,7 +39,7 @@ def test_servermap_02(tmp_path):
 def test_servermap_03(tmp_path):
     """test ServerMap includes"""
     srv_map = ServerMap()
-    with pytest.raises(IOError, match=r"Include path not found: no_dir"):
+    with pytest.raises(IOError, match="Include path not found: no_dir"):
         srv_map.set_include("test_url", "no_dir")
     assert not srv_map.include
     srv_map.set_include("url_01", str(tmp_path))
@@ -80,7 +80,7 @@ def test_servermap_05():
     # only alpha-numeric is allowed
     with pytest.raises(InvalidURLError):
         ServerMap._check_url("asd!@#")
-    # '..'' should not be accepted
+    # '..' should not be accepted
     with pytest.raises(InvalidURLError):
         ServerMap._check_url("/..")
     # cannot map more than one '/' deep
