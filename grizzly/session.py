@@ -13,12 +13,16 @@ from .common import Report, Runner, Status, TestFile
 from .target import TargetLaunchError
 
 
-__all__ = ("LogOutputLimiter", "Session")
+__all__ = ("SessionError", "LogOutputLimiter", "Session")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
 log = getLogger("grizzly")  # pylint: disable=invalid-name
+
+
+class SessionError(Exception):
+    """The base class for exceptions raised by Session"""
 
 
 class LogOutputLimiter(object):
@@ -162,14 +166,6 @@ class Session(object):
 
             # run test case
             runner.run(ignore, self.iomanager.server_map, current_test)
-            # update test case
-            if self.adapter.IGNORE_UNSERVED:
-                if runner.served:
-                    log.debug("removing unserved files from the test case")
-                    current_test.purge_optional(runner.served)
-                else:
-                    log.info("Ignoring test case since nothing was served")
-                    self.iomanager.tests.pop().cleanup()
             # adapter callbacks
             if runner.timeout:
                 log.debug("calling self.adapter.on_timeout()")
@@ -177,6 +173,15 @@ class Session(object):
             else:
                 log.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, runner.served)
+            # update test case
+            if runner.result != runner.ERROR:
+                if not runner.served:
+                    # this can happen if the target crashes between serving test cases
+                    log.info("Ignoring test case since nothing was served")
+                    self.iomanager.tests.pop().cleanup()
+                elif self.adapter.IGNORE_UNSERVED:
+                    log.debug("removing unserved files from the test case")
+                    current_test.purge_optional(runner.served)
             # process results
             if runner.result == runner.FAILED:
                 self.status.results += 1
@@ -185,14 +190,19 @@ class Session(object):
             elif runner.result == runner.IGNORED:
                 self.status.ignored += 1
                 log.info("Ignored (%d)", self.status.ignored)
+            elif runner.result == runner.ERROR:
+                log.error("ERROR: Test case was not served")
+                if not current_test.contains(current_test.landing_page):
+                    log.warning("TestCase missing landing page")
+                if self.status.iteration < 3:
+                    # since this is the first few iteration something is
+                    # likely wrong with the Target (caching?) or the Adapter
+                    raise SessionError("Please check Adapter and Target")
+                # relaunching the target to get things back on track
+                self.target.close()
 
             if self.coverage and runner.result == runner.COMPLETE:
                 self.target.dump_coverage()
-
-            # warn about large browser logs
-            self.status.log_size = self.target.log_size()
-            if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
-                log.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
 
             # trigger relaunch by closing the browser if needed
             self.target.check_relaunch()
@@ -205,3 +215,8 @@ class Session(object):
             if iteration_limit is not None and self.status.iteration == iteration_limit:
                 log.info("Hit iteration limit")
                 break
+
+            # warn about large browser logs
+            self.status.log_size = self.target.log_size()
+            if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
+                log.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))

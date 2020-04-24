@@ -40,6 +40,8 @@ class FakeArgs(object):
         self.working_path = working_path
         self.xvfb = False
 
+# TODO: these could use call_count checks and 'match=' in pytest.raises
+
 def test_main_01(tmp_path, mocker):
     """test main()"""
     fake_adapter = mocker.Mock(spec=Adapter)
