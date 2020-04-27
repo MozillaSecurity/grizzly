@@ -595,6 +595,21 @@ def test_sapphire_30(client, tmp_path):
     for t_file in to_serve:
         assert t_file.code == 200
 
+def test_sapphire_31(client, tmp_path):
+    """test interesting path string"""
+    all_bytes = "".join(chr(i) for i in range(256))
+    to_serve = [
+        # should not trigger crash
+        _TestFile(all_bytes),
+        # used to keep server running
+        _create_test("a.html", tmp_path)]
+    with Sapphire(timeout=10) as serv:
+        client.launch("127.0.0.1", serv.port, to_serve, in_order=True)
+        assert serv.serve_path(str(tmp_path), optional_files=[all_bytes])[0] == SERVED_ALL
+    assert client.wait(timeout=10)
+    for t_file in to_serve:
+        assert t_file.code is not None
+
 def test_main_01(tmp_path):
     """test Sapphire.main()"""
     with pytest.raises(SystemExit):

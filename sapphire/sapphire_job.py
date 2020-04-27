@@ -79,7 +79,7 @@ class SapphireJob(object):
         if "?" in request:
             request = request.split("?", 1)[0]
         to_serve = os.path.normpath(os.path.join(self.base_path, request))
-        if os.path.isfile(to_serve):
+        if "\x00" not in to_serve and os.path.isfile(to_serve):
             res = Resource(Resource.URL_FILE, to_serve)
             with self._pending.lock:
                 res.required = to_serve in self._pending.files
