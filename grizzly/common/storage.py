@@ -21,11 +21,13 @@ __credits__ = ["Tyson Smith"]
 class TestCaseLoadFailure(Exception):
     """Raised when loading a TestCase fails"""
 
+
 class TestFileExists(Exception):
     """Raised when adding a TestFile to a TestCase that has an existing TestFile with the same name"""
 
 
 TestFileMap = namedtuple("TestFileMap", "meta optional required")
+
 
 class TestCase(object):
     __slots__ = (
@@ -117,7 +119,7 @@ class TestCase(object):
         Returns:
             None
         """
-        tfile = TestFile.from_data(data=data, file_name=file_name, encoding=encoding)
+        tfile = TestFile.from_data(data, file_name, encoding=encoding)
         try:
             self.add_file(tfile, required=required)
         except TestFileExists:
@@ -137,7 +139,7 @@ class TestCase(object):
         """
         if file_name is None:
             file_name = os.path.basename(input_file)
-        tfile = TestFile.from_file(input_file=input_file, file_name=file_name)
+        tfile = TestFile.from_file(input_file, file_name=file_name)
         try:
             self.add_file(tfile, required=required)
         except TestFileExists:
@@ -427,7 +429,7 @@ class TestFile(object):
         Returns:
             TestFile: new instance
         """
-        t_file = cls(file_name=file_name)
+        t_file = cls(file_name)
         if data:
             if isinstance(data, bytes) or not encoding:
                 t_file.write(data)
@@ -448,7 +450,7 @@ class TestFile(object):
         """
         if file_name is None:
             file_name = os.path.basename(input_file)
-        t_file = cls(file_name=file_name)
+        t_file = cls(file_name)
         with open(input_file, "rb") as src_fp:
             shutil.copyfileobj(src_fp, t_file._fp, cls.XFER_BUF)  # pylint: disable=protected-access
         return t_file
