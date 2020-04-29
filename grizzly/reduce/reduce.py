@@ -613,6 +613,8 @@ class ReductionJob(object):
         if self._server is None:
             # have client error pages (code 4XX) call window.close() after a few seconds
             self._server = sapphire.Sapphire(auto_close=2)
+            # TODO: this gets leaked if a new server is created
+            self._target.reverse(self._server.port, self._server.port)
 
             if not self._no_harness:
                 harness = os.path.join(os.path.dirname(__file__), '..', 'common', 'harness.html')
