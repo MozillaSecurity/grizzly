@@ -120,6 +120,7 @@ def main(args):
             session.run(args.ignore, display_mode=display_mode)
 
     except KeyboardInterrupt:
+        log.info("Ctrl+C detected.")
         return Session.EXIT_ABORT
 
     except (TargetLaunchError, TargetLaunchTimeout):
@@ -128,12 +129,17 @@ def main(args):
     finally:
         log.warning("Shutting down...")
         if session is not None:
+            log.debug("calling session.close()")
             session.close()
         if target is not None:
+            log.debug("calling target.cleanup()")
             target.cleanup()
         if adapter is not None:
+            log.debug("calling adapter.cleanup()")
             adapter.cleanup()
         if iomanager is not None:
+            log.debug("calling iomanager.cleanup()")
             iomanager.cleanup()
+        log.info("Done.")
 
     return Session.EXIT_SUCCESS
