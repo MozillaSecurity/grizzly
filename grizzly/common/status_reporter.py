@@ -6,7 +6,8 @@
 """Manage Grizzly status reports."""
 
 import argparse
-import datetime
+from datetime import timedelta
+from functools import partial
 import logging
 import os
 import re
@@ -116,7 +117,7 @@ class StatusReporter(object):
             if report.timestamp < exp:
                 txt.append(" (EXPIRED)\n")
                 continue
-            txt.append(" Runtime %s\n" % str(datetime.timedelta(seconds=int(report.duration))))
+            txt.append(" Runtime %s\n" % str(timedelta(seconds=int(report.duration))))
             txt.append(" * Iterations: %03d" % report.iteration)
             txt.append(" - Rate: %0.2f" % report.rate)
             if not self._reducer:
@@ -188,14 +189,14 @@ class StatusReporter(object):
                 if self._reducer:
                     durations = tuple(x.duration for x in reports)
                     if count > 1:
-                        max_duration = str(datetime.timedelta(seconds=int(max(durations))))
-                        min_duration = str(datetime.timedelta(seconds=int(min(durations))))
+                        max_duration = str(timedelta(seconds=int(max(durations))))
+                        min_duration = str(timedelta(seconds=int(min(durations))))
                         txt.append("   Runtime : (%s, %s)" % (max_duration, min_duration))
                     else:
-                        txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(durations[0]))),))
+                        txt.append("   Runtime : %s" % (str(timedelta(seconds=int(durations[0]))),))
                 else:
-                    total_runtime = sum((x.duration for x in reports))
-                    txt.append("   Runtime : %s" % (str(datetime.timedelta(seconds=int(total_runtime))),))
+                    total_runtime = sum(x.duration for x in reports)
+                    txt.append("   Runtime : %s" % (str(timedelta(seconds=int(total_runtime))),))
             # Log size
             log_usage = sum(log_sizes) / 1048576.0
             if log_usage > self.DISPLAY_LIMIT_LOG:
@@ -212,7 +213,7 @@ class StatusReporter(object):
             txt.append(self._sys_info())
         if timestamp:
             txt.append("\n")
-            txt.append(" Timestamp : %s" % (time.strftime("%Y/%m/%d %X %z", time.gmtime()),))
+            txt.append(time.strftime(" Timestamp : %Y/%m/%d %X %z", time.gmtime()))
         msg = "".join(txt)
         if self.tracebacks:
             txt = self._merge_tracebacks(self.tracebacks, self.SUMMARY_LIMIT - len(msg))
@@ -323,31 +324,40 @@ class TracebackReport(object):
         Returns:
             TracebackReport: Contains data from input_log.
         """
-        token_traceback = "Traceback (most recent call last):"
+        token = b"Traceback (most recent call last):"
+        assert len(token) < cls.READ_LIMIT
         try:
-            with open(input_log, "r") as in_fp:
-                for line in iter(in_fp.readline, ""):
-                    if token_traceback in line:
-                        # seek 2KB before tb
-                        in_fp.seek(max(in_fp.tell() - 2048, 0))
-                        data = in_fp.read(cls.READ_LIMIT).splitlines()
+            with open(input_log, "rb") as in_fp:
+                for chunk in iter(partial(in_fp.read, cls.READ_LIMIT), b""):
+                    idx = chunk.find(token)
+                    if idx > -1:
+                        # calculate offset of data in the file
+                        pos = in_fp.tell() - len(chunk) + idx
                         break
+                    if len(chunk) == cls.READ_LIMIT:
+                        # seek back to avoid missing beginning of token
+                        in_fp.seek(len(token) * -1, os.SEEK_CUR)
                 else:
                     # no traceback here, move along
                     return None
-        except IOError:
+                # seek back 2KB to collect preceding lines
+                in_fp.seek(max(pos - 2048, 0))
+                data = in_fp.read(cls.READ_LIMIT)
+        except IOError:  # pragma: no cover
             # in case the file goes away
             return None
 
+        data = data.decode("ascii", errors="ignore").splitlines()
+        token = token.decode()
         is_kbi = False
         tb_start = None
         tb_end = None
         line_count = len(data)
         for line_num, log_line in enumerate(data):
-            if tb_start is None and token_traceback in log_line:
+            if tb_start is None and token in log_line:
                 tb_start = line_num
                 continue
-            elif tb_start is not None:
+            if tb_start is not None:
                 log_line = log_line.strip()
                 if not log_line:
                     # stop at first empty line
@@ -395,7 +405,7 @@ def main(args=None):
     """
     log_level = logging.INFO
     log_fmt = "[%(asctime)s] %(message)s"
-    if bool(os.getenv("DEBUG")):
+    if bool(os.getenv("DEBUG")):  # pragma: no cover
         log_level = logging.DEBUG
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
     logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
