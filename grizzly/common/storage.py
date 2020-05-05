@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import namedtuple
+from itertools import chain
 import json
 import os
 import shutil
@@ -137,8 +138,6 @@ class TestCase(object):
         Returns:
             None
         """
-        if file_name is None:
-            file_name = os.path.basename(input_file)
         tfile = TestFile.from_file(input_file, file_name=file_name)
         try:
             self.add_file(tfile, required=required)
@@ -196,7 +195,7 @@ class TestCase(object):
             None
         """
         # save test files to out_path
-        for test_file in self._files.required + self._files.optional:
+        for test_file in chain(self._files.required, self._files.optional):
             test_file.dump(out_path)
         # save test case files and meta data including:
         # adapter used, input file, environment info and files
@@ -249,11 +248,11 @@ class TestCase(object):
         path = os.path.abspath(path)
         if os.path.isdir(path):
             # load a directory using test_info.json
-            if "test_info.json" not in os.listdir(path):
-                raise TestCaseLoadFailure("Missing 'test_info.json'")
             try:
                 with open(os.path.join(path, "test_info.json"), "r") as in_fp:
                     info = json.load(in_fp)
+            except IOError:
+                raise TestCaseLoadFailure("Missing 'test_info.json'")
             except ValueError:
                 raise TestCaseLoadFailure("Invalid 'test_info.json'")
             if "target" not in info:
@@ -280,17 +279,17 @@ class TestCase(object):
                     if root == path:
                         if fname == "prefs.js":
                             if prefs:
-                                test.add_meta(TestFile.from_file(os.path.join(path, fname), fname))
+                                test.add_meta(TestFile.from_file(os.path.join(path, fname)))
                             continue
                         if fname == entry_point:
-                            test.add_from_file(os.path.join(root, fname), fname)
+                            test.add_from_file(os.path.join(root, fname))
                             # set entry point
                             test.landing_page = fname
                             continue
-                    test.add_from_file(os.path.join(path, fname), fname, required=False)
+                    test.add_from_file(os.path.join(path, fname), required=False)
         else:
             # load single file as test
-            test.add_from_file(os.path.join(path, entry_point), entry_point)
+            test.add_from_file(os.path.join(path, entry_point))
             test.landing_page = entry_point
         if test.landing_page is None:  # pragma: no cover
             # this should not be possible
