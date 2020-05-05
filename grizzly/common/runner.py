@@ -6,7 +6,7 @@ import logging
 import time
 
 from sapphire import SERVED_TIMEOUT
-from ..target import TargetLaunchError, TargetLaunchTimeout
+from ..target import TargetLaunchTimeout
 
 __all__ = ("Runner",)
 __author__ = "Tyson Smith"
@@ -109,8 +109,6 @@ class Runner(object):
             try:
                 self._target.launch(location, env_mod=env_mod)
                 break
-            except TargetLaunchError:
-                raise
             except TargetLaunchTimeout:
                 # likely has nothing to do with Grizzly but is seen frequently
                 # on machines under a high load. After multiple consecutive timeouts
