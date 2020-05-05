@@ -46,7 +46,7 @@ def test_testcase_02(tmp_path):
         tcase.add_from_file(str(in_file))
         assert tcase.data_size == 8
         with pytest.raises(TestFileExists, match="'testfile1.bin' exists in test"):
-            tcase.add_from_file(str(in_file), "testfile1.bin")
+            tcase.add_from_file(str(in_file), file_name="testfile1.bin")
         with pytest.raises(TestFileExists, match="'testfile1.bin' exists in test"):
             tcase.add_from_data("test", "testfile1.bin")
         tcase.add_from_data("test_nreq", "nested/testfile2.bin", required=False)
@@ -147,7 +147,7 @@ def test_testcase_07(tmp_path):
     (src_dir / "optional.bin").touch()
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_environ_var("TEST_ENV_VAR", "100")
-        src.add_from_file(str(entry_point), "target.bin")
+        src.add_from_file(str(entry_point))
         src.dump(str(src_dir), include_details=True)
     # load test case from test_info.json
     with TestCase.load_path(str(src_dir)) as dst:
@@ -261,7 +261,8 @@ def test_testfile_05(tmp_path):
     with TestFile.from_file(str(in_file)) as tfile:
         assert tfile.file_name == "infile.txt"
     # check data
-    with TestFile.from_file(str(in_file), "outfile.txt") as tfile:
+    with TestFile.from_file(str(in_file), file_name="outfile.txt") as tfile:
+        assert tfile.file_name == "outfile.txt"
         tfile.dump(str(tmp_path))
         out_file = tmp_path / "outfile.txt"
         assert out_file.is_file()
@@ -290,5 +291,5 @@ def test_testfile_07(tmp_path):
     """test TestFile.data()"""
     in_file = tmp_path / "infile.txt"
     in_file.write_bytes(b"foobar")
-    with TestFile.from_file(str(in_file), "outfile.txt") as tfile:
+    with TestFile.from_file(str(in_file), file_name="outfile.txt") as tfile:
         assert tfile.data == b"foobar"
