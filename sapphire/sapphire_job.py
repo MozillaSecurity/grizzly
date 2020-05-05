@@ -62,7 +62,9 @@ class SapphireJob(object):
                     continue
                 self._pending.files.add(file_path)
                 LOG.debug("required: %r", f_name)
-
+        # if nothing was found check if the path exists
+        if not self._pending.files and not os.path.isdir(self.base_path):
+            raise OSError("%r does not exist" % (self.base_path),)
         if self.server_map:
             for redirect, resource in self.server_map.redirect.items():
                 if resource.required:

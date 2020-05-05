@@ -104,10 +104,6 @@ class Sapphire(object):
         """
         LOG.debug("serve_path: %s", path)
         LOG.debug("serving forever: %r", forever)
-
-        if not os.path.isdir(path):
-            raise IOError("%r does not exist" % (os.path.abspath(path),))
-
         job = SapphireJob(
             path,
             auto_close=self._auto_close,

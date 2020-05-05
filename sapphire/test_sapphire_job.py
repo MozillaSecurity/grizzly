@@ -136,7 +136,7 @@ def test_sapphire_job_05(tmp_path):
     smap = ServerMap()
     smap.set_dynamic_response("cb1", lambda: 0, mime_type="mime_type")
     smap.set_dynamic_response("cb2", lambda: 1)
-    job = SapphireJob(str(tmp_path / "root"), server_map=smap)
+    job = SapphireJob(str(tmp_path), server_map=smap)
     assert job.status == SERVED_ALL
     assert job.pending == 0
     resource = job.check_request("cb1")
@@ -177,3 +177,8 @@ def test_sapphire_job_07(tmp_path):
     assert job.status == SERVED_NONE
     assert job.pending == 1
     assert job.check_request("test.txt").target == str(test_file)
+
+def test_sapphire_job_08():
+    """test SapphireJob with missing directory"""
+    with pytest.raises(OSError):
+        SapphireJob("missing")
