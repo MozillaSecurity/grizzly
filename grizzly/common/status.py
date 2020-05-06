@@ -3,11 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
-import json
-import logging
+from json import dump, load
+from logging import getLogger
 import os
-import tempfile
-import time
+from tempfile import gettempdir, mkstemp
+from time import time
 
 import fasteners
 
@@ -15,7 +15,7 @@ __all__ = ("ReducerStats", "Status")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = logging.getLogger("status")
+LOG = getLogger("status")
 
 
 class Status(object):
@@ -23,7 +23,7 @@ class Status(object):
     There can be multiple readers of the data but only a single writer.
     """
     AGE_LIMIT = 3600  # 1 hour
-    PATH = os.path.join(tempfile.gettempdir(), "grzstatus")
+    PATH = os.path.join(gettempdir(), "grzstatus")
     REPORT_FREQ = 60
 
     __slots__ = (
@@ -31,7 +31,7 @@ class Status(object):
         "start_time", "test_name", "timestamp")
 
     def __init__(self, data_file, start_time):
-        assert isinstance(data_file, str) and os.path.isfile(data_file)
+        assert ".json" in data_file
         assert isinstance(start_time, float)
         self._lock = fasteners.process_lock.InterProcessLock("%s.lock" % (data_file,))
         self.data_file = data_file
@@ -58,15 +58,14 @@ class Status(object):
             try:
                 if os.path.isfile(self.data_file):
                     os.unlink(self.data_file)
-            except OSError:
+            except OSError:  # pragma: no cover
                 LOG.warning("Failed to delete %r", self.data_file)
             lock_file = "%s.lock" % (self.data_file,)
             self.data_file = None
-        if os.path.isfile(lock_file):
-            try:
-                os.unlink(lock_file)
-            except OSError:
-                pass
+        try:
+            os.unlink(lock_file)
+        except OSError:  # pragma: no cover
+            pass
 
     @property
     def duration(self):
@@ -90,15 +89,32 @@ class Status(object):
         Returns:
             Status: Loaded status object or None
         """
-        if not os.path.isfile(data_file):
+        data = None
+        lock_file = "%s.lock" % (data_file,)
+        lock = fasteners.process_lock.InterProcessLock(lock_file)
+        # there is race between looking up status files and loading them
+        # if a status item is removed before it can be loaded a lock file
+        # would be left behind from this load attempt
+        cleanup = not lock.exists()
+        with lock:
+            try:
+                with open(data_file, "r") as out_fp:
+                    data = load(out_fp)
+            except IOError:
+                LOG.debug("%r does not exist", data_file)
+            except ValueError:
+                LOG.debug("failed to load json")
+        if cleanup:
+            # the lock file should be removed if it was created here
+            try:
+                os.unlink(lock_file)
+            except OSError:  # pragma: no cover
+                pass
+        if data is None:
             return None
-        with fasteners.process_lock.InterProcessLock("%s.lock" % (data_file,)):
-            with open(data_file, "r") as out_fp:
-                try:
-                    data = json.load(out_fp)
-                except ValueError:
-                    LOG.debug("failed to load json")
-                    return None
+        if "start_time" not in data:
+            LOG.debug("invalid status json file")
+            return None
         status = cls(data_file, data["start_time"])
         for attr, value in data.items():
             setattr(status, attr, value)
@@ -158,13 +174,13 @@ class Status(object):
         Returns:
             bool: Returns true if the report was successful otherwise false
         """
-        now = time.time()
+        now = time()
         if not force and now < (self.timestamp + report_freq):
             return False
         self.timestamp = now
         with self._lock:
             with open(self.data_file, "w") as out_fp:
-                json.dump(self._data, out_fp)
+                dump(self._data, out_fp)
         return True
 
     @classmethod
@@ -180,12 +196,12 @@ class Status(object):
         if not os.path.isdir(cls.PATH):
             try:
                 os.mkdir(cls.PATH)
-            except OSError:
+            except OSError:  # pragma: no cover
                 if not os.path.isdir(cls.PATH):
                     raise
-        tfd, filepath = tempfile.mkstemp(dir=cls.PATH, prefix="grzstatus_", suffix=".json")
+        tfd, filepath = mkstemp(dir=cls.PATH, prefix="grzstatus_", suffix=".json")
         os.close(tfd)
-        status = cls(filepath, time.time())
+        status = cls(filepath, time())
         status.report(force=True)
         return status
 
@@ -193,13 +209,12 @@ class Status(object):
 class ReducerStats(object):
     """ReducerStats holds stats for the Grizzly reducer.
     """
-
     FILE = "reducer-stats.json"
-    PATH = tempfile.gettempdir()
+    PATH = gettempdir()
+
+    __slots__ = ("_file", "_lock", "error", "failed", "passed")
 
     def __init__(self):
-        if not os.path.isdir(self.PATH):
-            raise OSError("Missing directory %r" % self.PATH)
         self._file = os.path.join(self.PATH, self.FILE)
         self._lock = None
         self.error = 0
@@ -211,10 +226,12 @@ class ReducerStats(object):
         self._lock.acquire()
         try:
             with open(self._file, "r") as in_fp:
-                data = json.load(in_fp)
+                data = load(in_fp)
             self.error = data["error"]
             self.failed = data["failed"]
             self.passed = data["passed"]
+        except KeyError:
+            LOG.debug("invalid status data in %r", self._file)
         except IOError:
             LOG.debug("%r does not exist", self._file)
         except ValueError:
@@ -224,11 +241,11 @@ class ReducerStats(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             with open(self._file, "w") as out_fp:
-                json.dump({
+                dump({
                     "error": self.error,
                     "failed": self.failed,
                     "passed": self.passed}, out_fp)
         finally:
             if self._lock:
                 self._lock.release()
-            self._lock = None
+                self._lock = None

@@ -71,19 +71,15 @@ def test_status_reporter_03(mocker):
 def test_status_reporter_04(tmp_path):
     """test StatusReporter._scan()"""
     re_filter = re.compile("TEST_FILE")
-    boring = tmp_path / "somefile.txt"
-    boring.touch()
+    (tmp_path / "somefile.txt").touch()
     test_path = tmp_path / "TEST_FILE"
     test_path.mkdir()
-    files = tuple(StatusReporter._scan(str(tmp_path), re_filter))
-    assert not files
+    assert not any(StatusReporter._scan(str(tmp_path), re_filter))
     test_path.rmdir()
     test_path.touch()
-    files = tuple(StatusReporter._scan(str(tmp_path), re_filter))
-    assert not files
+    assert not any(StatusReporter._scan(str(tmp_path), re_filter))
     test_path.write_bytes(b"test")
-    files = tuple(StatusReporter._scan(str(tmp_path), re_filter))
-    assert files
+    assert tuple(StatusReporter._scan(str(tmp_path), re_filter))
 
 def test_status_reporter_05(tmp_path):
     """test StatusReporter._summary()"""
@@ -148,8 +144,7 @@ def test_status_reporter_06(tmp_path):
     rptr._sys_info = _fake_sys_info
     assert rptr.reports is not None
     output = rptr._specific()
-    lines = output.split("\n")[:-1]
-    assert len(lines) == 2
+    assert len(output.split("\n")[:-1]) == 2
     assert "Ignored" in output
     assert "Iteration" in output
     assert "Rate" in output
@@ -165,8 +160,7 @@ def test_status_reporter_06(tmp_path):
     rptr._sys_info = _fake_sys_info
     assert len(rptr.reports) == 2
     output = rptr._specific()
-    lines = output.split("\n")[:-1]
-    assert len(lines) == 4
+    assert len(output.split("\n")[:-1]) == 4
     assert "Ignored" in output
     assert "Iteration" in output
     assert "Rate" in output
@@ -182,27 +176,23 @@ def test_status_reporter_07(tmp_path):
     status.results = 0
     status.report(force=True)
     # create boring screenlog
-    test_log = tmp_path / "screenlog.0"
-    test_log.write_bytes(b"boring\ntest\n123\n")
+    (tmp_path / "screenlog.0").write_bytes(b"boring\ntest\n123\n")
     # create first screenlog
-    test_log = tmp_path / "screenlog.1"
-    with test_log.open("wb") as test_fp:
+    with (tmp_path / "screenlog.1").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
     rptr = StatusReporter.load(tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 1
     # create second screenlog
-    test_log = tmp_path / "screenlog.1234"
-    with test_log.open("wb") as test_fp:
+    with (tmp_path / "screenlog.1234").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"foo.bar.error: blah\n")
     rptr = StatusReporter.load(tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
     # create third screenlog
-    test_log = tmp_path / "screenlog.3"
-    with test_log.open("wb") as test_fp:
+    with (tmp_path / "screenlog.3").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"KeyboardInterrupt\n")
@@ -220,8 +210,7 @@ def test_status_reporter_08(tmp_path):
     """test StatusReporter.load() no reports with traceback"""
     Status.PATH = str(tmp_path / "grzstatus")
     # create screenlog with tb
-    test_log = tmp_path / "screenlog.1"
-    with test_log.open("wb") as test_fp:
+    with (tmp_path / "screenlog.1").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
@@ -251,8 +240,7 @@ def test_status_reporter_09(tmp_path):
     status.report(force=True)
     # create screenlogs with tracebacks
     for i in range(10):
-        test_log = tmp_path / ("screenlog.%d" % (i,))
-        with test_log.open("wb") as test_fp:
+        with (tmp_path / ("screenlog.%d" % (i,))).open("wb") as test_fp:
             test_fp.write(b"Traceback (most recent call last):\n")
             for j in range(TracebackReport.MAX_LINES):
                 test_fp.write(b"  File \"some/long/path/name/foobar.py\", line 5000, in <module>\n")
@@ -289,8 +277,7 @@ def test_reduce_status_reporter_02(tmp_path):
     rptr._sys_info = _fake_sys_info
     assert rptr.reports
     output = rptr._specific()
-    lines = output.split("\n")[:-1]
-    assert len(lines) == 2
+    assert len(output.split("\n")[:-1]) == 2
     assert "Iteration" in output
     assert "Rate" in output
     assert "Ignored" not in output
@@ -327,6 +314,7 @@ def test_reduce_status_reporter_03(tmp_path):
     position = len(lines[1].split(":")[0])
     for line in lines:
         if line.startswith("="):
+            # skip headers
             continue
         assert re.match(r"\S\s:\s\S", line[position - 2:])
 
