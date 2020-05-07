@@ -173,11 +173,11 @@ class ReplayManager(object):
                     self._signature = report.crash_signature(crash_info)
                 if short_sig == "No crash detected":
                     # TODO: change this to support hangs/timeouts, etc
-                    LOG.info("Uninteresting: no crash detected")
+                    LOG.info("Result: No crash detected")
                     crash_hash = None
                 elif self._any_crash or self._signature.matches(crash_info):
                     self.status.results += 1
-                    LOG.info("Interesting: %s (%s:%s)",
+                    LOG.info("Result: %s (%s:%s)",
                              short_sig, report.major[:8], report.minor[:8])
                     crash_hash = report.crash_hash(crash_info)
                     if crash_hash not in self._reports_expected:
@@ -186,7 +186,7 @@ class ReplayManager(object):
                         report = None  # don't remove report
                     assert self._any_crash or len(self._reports_expected) == 1
                 else:
-                    LOG.info("Uninteresting: different signature: %s (%s:%s)",
+                    LOG.info("Result: Different signature: %s (%s:%s)",
                              short_sig, report.major[:8], report.minor[:8])
                     self.status.ignored += 1
                     crash_hash = report.crash_hash(crash_info)
@@ -202,7 +202,7 @@ class ReplayManager(object):
                     report = None
             elif self._runner.result == self._runner.IGNORED:
                 self.status.ignored += 1
-                LOG.info("Ignored (%d)", self.status.ignored)
+                LOG.info("Result: Ignored (%d)", self.status.ignored)
             elif self._runner.result == self._runner.ERROR:
                 LOG.error("ERROR: Replay malfunction, test case was not served")
                 break
