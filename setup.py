@@ -52,6 +52,7 @@ if __name__ == '__main__':
             'grizzly',
             'grizzly.common',
             'grizzly.reduce',
+            'grizzly.replay',
             'loki',
             'sapphire',
         ],
