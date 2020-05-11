@@ -152,6 +152,7 @@ class ReplayManager(object):
                 try:
                     self._runner.launch(location, env_mod=self.testcase.env_vars)
                 except TargetLaunchError:
+                    LOG.error("Target launch error. Check browser logs for details.")
                     log_path = tempfile.mkdtemp(prefix="grzreplay_logs_")
                     self.target.save_logs(log_path, meta=True)
                     self._reports_other["STARTUP"] = Report.from_path(log_path)

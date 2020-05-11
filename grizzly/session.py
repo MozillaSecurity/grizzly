@@ -154,7 +154,7 @@ class Session(object):
                 except TargetLaunchError:
                     # this result likely has nothing to do with Grizzly
                     self.status.results += 1
-                    log.error("Launch error detected")
+                    log.error("Target launch error. Check browser logs for details.")
                     self.report_result()
                     raise
             self.target.step()
@@ -191,9 +191,9 @@ class Session(object):
                 self.status.ignored += 1
                 log.info("Ignored (%d)", self.status.ignored)
             elif runner.result == runner.ERROR:
-                log.error("ERROR: Test case was not served")
+                log.error("Test case was not served")
                 if not current_test.contains(current_test.landing_page):
-                    log.warning("TestCase missing landing page")
+                    log.warning("Test case is missing landing page")
                 if self.status.iteration < 3:
                     # since this is the first few iteration something is
                     # likely wrong with the Target (caching?) or the Adapter
