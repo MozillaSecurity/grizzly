@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-import platform
+from platform import system
 
 import pytest
 
@@ -30,6 +30,9 @@ def test_puppet_target_01(mocker, tmp_path):
         target.save_logs("fake_dest")
         assert fake_ffp.return_value.save_logs.call_count == 1
     assert fake_ffp.return_value.clean_up.call_count == 1
+    # with extra args
+    with PuppetTarget(str(fake_file), None, 1, 1, 1, None, 1, rr=True, fake=1) as target:
+        pass
 
 def test_puppet_target_02(mocker, tmp_path):
     """test PuppetTarget.launch()"""
@@ -69,8 +72,8 @@ def test_puppet_target_03(mocker, tmp_path):
     assert target.detect_failure([], False) == Target.RESULT_NONE
     assert target.detect_failure(["memory"], False) == Target.RESULT_NONE
     assert not target.closed
+    fake_ffp.reset_mock()
     # test close
-    fake_ffp.return_value.is_healthy.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_CLOSED
@@ -78,75 +81,74 @@ def test_puppet_target_03(mocker, tmp_path):
     assert fake_ffp.return_value.is_running.call_count == 1
     assert fake_ffp.return_value.is_healthy.call_count == 1
     assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
     # test single process crash
-    fake_ffp.return_value.close.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_ALERT
     assert target.detect_failure([], False) == Target.RESULT_FAILURE
     assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
     # test multiprocess crash
-    fake_ffp.return_value.close.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = True
     fake_ffp.return_value.reason = FFPuppet.RC_ALERT
     assert target.detect_failure([], False) == Target.RESULT_FAILURE
     assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
     # test exit with no crash logs
-    fake_ffp.return_value.close.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_EXITED
     assert target.detect_failure([], False) == Target.RESULT_NONE
     assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
     # test timeout
-    fake_ffp.return_value.close.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = True
     fake_ffp.return_value.is_running.return_value = True
     fake_ffp.return_value.reason = None
     fake_ffp.return_value.cpu_usage.return_value = ((1234, 10), (1236, 75), (1238, 60))
-    fake_os = mocker.patch("grizzly.target.puppet_target.os", autospec=True)
+    fake_kill = mocker.patch("grizzly.target.puppet_target.os.kill", autospec=True)
     assert target.detect_failure([], True) == Target.RESULT_FAILURE
-    if platform.system() == "Linux":
-        assert fake_os.kill.call_count == 1
+    if system() == "Linux":
+        assert fake_kill.call_count == 1
         assert fake_ffp.return_value.wait.call_count == 1
     else:
-        assert fake_os.kill.call_count == 0
+        assert fake_kill.call_count == 0
         assert fake_ffp.return_value.wait.call_count == 0
     assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
     # test timeout ignored
-    fake_ffp.return_value.close.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = True
     fake_ffp.return_value.is_running.return_value = True
     fake_ffp.return_value.reason = None
     assert target.detect_failure(["timeout"], True) == Target.RESULT_IGNORED
     assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
     # test worker
-    fake_ffp.return_value.close.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_WORKER
     assert target.detect_failure([], False) == Target.RESULT_FAILURE
     assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
     # test memory ignored
-    fake_ffp.return_value.close.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_WORKER
     fake_ffp.return_value.available_logs.return_value = " ffp_worker_memory_usage "
     assert target.detect_failure(["memory"], False) == Target.RESULT_IGNORED
     assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
     # test log-limit ignored
-    fake_ffp.return_value.close.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_WORKER
     fake_ffp.return_value.available_logs.return_value = " ffp_worker_log_size "
     assert target.detect_failure(["log-limit"], False) == Target.RESULT_IGNORED
     assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
     # test browser closing test case
-    fake_ffp.return_value.close.call_count = 0
-    fake_ffp.return_value.wait.call_count = 0
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_EXITED
@@ -156,86 +158,82 @@ def test_puppet_target_03(mocker, tmp_path):
     assert fake_ffp.return_value.wait.call_count == 1
     assert fake_ffp.return_value.close.call_count == 1
 
-@pytest.mark.skipif(platform.system() == "Windows",
+@pytest.mark.skipif(system() == "Windows",
                     reason="Unsupported on Windows")
 def test_puppet_target_04(mocker, tmp_path):
     """test PuppetTarget.dump_coverage()"""
-    mocker.patch("grizzly.target.puppet_target.time.sleep", autospec=True)
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_time = mocker.patch("grizzly.target.puppet_target.time", autospec=True)
     fake_psutil = mocker.patch("grizzly.target.puppet_target.psutil", autospec=True)
-    fake_psutil.Process.return_value.children.return_value = (mocker.Mock(pid=123),)
+    fake_psutil.Process.return_value.children.return_value = (mocker.Mock(pid=101),)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 10)
-    fake_os = mocker.patch("grizzly.target.puppet_target.os", autospec=True)
+    fake_kill = mocker.patch("grizzly.target.puppet_target.os.kill", autospec=True)
     # not running
     fake_ffp.return_value.get_pid.return_value = None
     target.dump_coverage()
-    assert not fake_os.kill.call_count
+    assert not fake_kill.call_count
     assert fake_ffp.return_value.get_pid.call_count == 1
     assert fake_psutil.process_iter.call_count == 0
-    # timeout
+    # gcda not found
     fake_ffp.return_value.is_healthy.return_value = True
-    fake_ffp.return_value.get_pid.return_value = 1234
-    target.dump_coverage(timeout=0)
-    assert fake_os.kill.call_count == 2
-    assert fake_psutil.process_iter.call_count == 1
-    assert fake_ffp.return_value.is_healthy.call_count == 1
-    # browser crashes
-    fake_os.kill.call_count = 0
-    fake_ffp.return_value.is_healthy.call_count = 0
-    fake_ffp.return_value.is_healthy.side_effect = [True, False]
-    fake_ffp.return_value.get_pid.return_value = 1234
+    fake_ffp.return_value.get_pid.return_value = 100
+    fake_time.time.side_effect = (0, 1, 10)
     target.dump_coverage()
-    assert fake_os.kill.call_count == 2
+    assert fake_kill.call_count == 2
     assert fake_psutil.process_iter.call_count == 2
     assert fake_ffp.return_value.is_healthy.call_count == 2
-    # wait for files
-    fake_os.kill.call_count = 0
-    fake_ffp.return_value.is_healthy.call_count = 0
+    fake_ffp.reset_mock()
+    fake_kill.reset_mock()
+    fake_psutil.reset_mock()
+    # browser crashes
+    fake_ffp.return_value.is_healthy.side_effect = (True, False)
+    fake_time.time.side_effect = None
+    fake_time.time.return_value = 1.0
+    target.dump_coverage()
+    assert fake_kill.call_count == 2
+    assert fake_psutil.process_iter.call_count == 1
+    assert fake_ffp.return_value.is_healthy.call_count == 2
+    fake_ffp.reset_mock()
+    fake_kill.reset_mock()
+    fake_psutil.reset_mock()
+    # timeout while waiting for files
     fake_ffp.return_value.is_healthy.return_value = True
     fake_ffp.return_value.is_healthy.side_effect = None
-    fake_ffp.return_value.get_pid.return_value = 123
-    fpi = mocker.Mock(iters=0)
-    def fake_process_iter(*args, **kwargs):
-        fpi.iters += 1
-        if fpi.iters == 1:
-            yield mocker.Mock(info={
-                "pid": 123,
-                "ppid": 0,
-                "open_files": (mocker.Mock(path="a.bin"), mocker.Mock(path="/a/s/d"))
-            })
-            yield mocker.Mock(info={
-                "pid": 321,
-                "ppid": 0,
-                "open_files": (mocker.Mock(path="a.bin"),)
-            })
-        elif fpi.iters == 2:
-            yield mocker.Mock(info={
-                "pid": 123,
-                "ppid": 0,
-                "open_files": (mocker.Mock(path="a.gcda"),)
-            })
-            yield mocker.Mock(info={
-                "pid": 321,
-                "ppid": 0,
-                "open_files": (mocker.Mock(path="a.bin"),)
-            })
-        elif fpi.iters == 3:
-            yield mocker.Mock(info={
-                "pid": 123,
-                "ppid": 0,
-                "open_files": (mocker.Mock(path="a.bin"),)
-            })
-            yield mocker.Mock(info={
-                "pid": 321,
-                "ppid": 0,
-                "open_files": (mocker.Mock(path="ignore.gcda"),)
-            })
-    fake_psutil.process_iter = fake_process_iter
+    fake_ffp.return_value.get_pid.return_value = 100
+    fake_psutil.process_iter.return_value = (
+        mocker.Mock(info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.gcda"),)}),
+    )
+    fake_time.time.side_effect = (0, 1, 20, 20)
+    target.dump_coverage(timeout=15)
+    assert fake_kill.call_count == 2
+    assert fake_psutil.process_iter.call_count == 2
+    assert fake_ffp.return_value.is_healthy.call_count == 2
+    fake_ffp.reset_mock()
+    fake_kill.reset_mock()
+    fake_psutil.reset_mock()
+    # wait for files (success)
+    fake_ffp.return_value.get_pid.return_value = 100
+    fake_time.time.side_effect = None
+    fake_time.time.return_value = 1.0
+    fake_psutil.process_iter.side_effect = (
+        (
+            mocker.Mock(info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.bin"), mocker.Mock(path="/a/s/d"))}),
+            mocker.Mock(info={"pid": 101, "ppid": 100, "open_files": None}),
+            mocker.Mock(info={"pid": 999, "ppid": 0, "open_files": None})
+        ),
+        (
+            mocker.Mock(info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.gcda"),)}),
+        ),
+        (
+            mocker.Mock(info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.bin"),)}),
+            mocker.Mock(info={"pid": 999, "ppid": 0, "open_files": (mocker.Mock(path="ignore.gcda"),)})
+        )
+    )
     target.dump_coverage()
-    assert fpi.iters == 3
-    assert fake_os.kill.call_count == 2
+    assert fake_psutil.process_iter.call_count == 3
+    assert fake_kill.call_count == 2
 
 def test_puppet_target_05(mocker, tmp_path):
     """test is_idle()"""

@@ -130,17 +130,14 @@ class PuppetTarget(Target):
         return status
 
     def dump_coverage(self, timeout=15):
-        # If at this point, the browser is in a good state, i.e. we did
-        # not crash/timeout, then we need to signal the browser
-        # to dump coverage before attempting a new test that potentially
-        # crashes.
-        # Note: This is not required if we closed or are going to close
-        # the browser (relaunch or done with all iterations) because the
+        # Note: This is not required if the browser is going to close.
         # SIGTERM will also trigger coverage to be synced out.
         pid = self._puppet.get_pid()
         if pid is None or not self._puppet.is_healthy():
             log.debug("Skipping coverage dump")
             return
+        # If at this point, the browser is in a good state, i.e. no crashes
+        # or hangs, so signal the browser to dump coverage.
         try:
             for child in psutil.Process(pid).children(recursive=True):
                 log.debug("Sending SIGUSR1 to %d (child)", child.pid)
@@ -149,37 +146,45 @@ class PuppetTarget(Target):
             pass
         log.debug("Sending SIGUSR1 to %d (parent)", pid)
         os.kill(pid, signal.SIGUSR1)
-        # wait for processes to write .gcno files
-        # this should usually take less than 1 second
         start_time = time.time()
         gcda_found = False
-        gcda_open = False
-        while not gcda_found or gcda_open:
-            if gcda_found and gcda_open:
-                time.sleep(0.1)
-                gcda_open = False
+        delay = 0.1
+        # wait for processes to write .gcno files
+        # this should typically take less than 1 second
+        while True:
             for proc in psutil.process_iter(attrs=["pid", "ppid", "open_files"]):
-                if proc.info["pid"] == pid or proc.info["ppid"] == pid:
+                # check if proc is the target or child process
+                if pid in (proc.info["pid"], proc.info["ppid"]):
                     if proc.info["open_files"] is None:
                         continue
-                    for ofile in proc.info["open_files"]:
-                        if ofile.path.endswith(".gcda"):
-                            gcda_found = True
-                            gcda_open = True
-                            break
-                    if gcda_open:
+                    if any(x.path.endswith(".gcda") for x in proc.info["open_files"]):
+                        gcda_found = True
+                        # get the pid of the process that has the file open
+                        gcda_open = proc.info["pid"]
                         break
-            if time.time() - start_time >= timeout:
-                if gcda_found:
-                    log.warning("gcda files still open after %0.2fs", timeout)
-                else:
-                    log.warning("No gcda files seen after %0.2fs", timeout)
+            else:
+                gcda_open = None
+            elapsed = time.time() - start_time
+            if gcda_found:
+                if gcda_open is None:
+                    # success
+                    log.debug("gcda dump took %0.2fs", elapsed)
+                    break
+                if elapsed >= timeout:
+                    # timeout failure
+                    log.warning("gcda file open by pid %d after %0.2fs", gcda_open, elapsed)
+                    break
+            elif elapsed >= 5:
+                # assume we missed the process writing .gcno files
+                log.warning("No gcda files seen after %0.2fs", elapsed)
                 break
             if not self._puppet.is_healthy():
                 log.warning("Browser failure during dump_coverage()")
                 break
-        else:
-            log.debug("gcda dump took %0.2fs", time.time() - start_time)
+            time.sleep(delay)
+            if delay < 1.0:
+                # increase delay to a maximum of 1 second
+                delay = min(1.0, delay + 0.1)
 
     def launch(self, location, env_mod=None):
         if not self.prefs:
@@ -200,7 +205,7 @@ class PuppetTarget(Target):
                 extension=self.extension,
                 env_mod=env_mod)
         except LaunchError as exc:
-            log.error("FFPuppet Error: %s", str(exc))
+            log.error("FFPuppet LaunchError: %s", str(exc))
             self.close()
             if isinstance(exc, BrowserTimeoutError):
                 raise TargetLaunchTimeout(str(exc))
