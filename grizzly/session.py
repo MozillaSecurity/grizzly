@@ -201,20 +201,21 @@ class Session(object):
                 # relaunching the target to get things back on track
                 self.target.close()
 
-            if self.coverage and runner.result == runner.COMPLETE:
-                self.target.dump_coverage()
-
             # trigger relaunch by closing the browser if needed
             self.target.check_relaunch()
 
-            # all test cases have been replayed
             if self.adapter.remaining is not None and self.adapter.remaining < 1:
+                # all test cases have been replayed
                 log.info("Replay Complete")
                 break
 
             if iteration_limit is not None and self.status.iteration == iteration_limit:
                 log.info("Hit iteration limit")
                 break
+
+            if self.coverage and not self.target.closed:
+                # trigger coverage dump since the target was not closed
+                self.target.dump_coverage()
 
             # warn about large browser logs
             self.status.log_size = self.target.log_size()
