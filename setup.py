@@ -18,7 +18,7 @@ EXTRAS['test'] = ['pytest>=3.9', 'pytest-cov', 'pytest-mock']
 
 
 if __name__ == '__main__':
-    with open(pathjoin(dirname(__file__), "README.md"), "r") as infp:
+    with open(pathjoin(dirname(__file__), 'README.md'), 'r') as infp:
         README = infp.read()
     setup(
         classifiers=[
@@ -52,20 +52,23 @@ if __name__ == '__main__':
             'psutil',
             'six'
         ],
-        keywords="firefox fuzz fuzzing test testing",
+        keywords='firefox framework fuzz fuzzing test testing',
         license='MPL 2.0',
         long_description=README,
-        long_description_content_type="text/markdown",
-        maintainer="Mozilla Fuzzing Team",
-        maintainer_email="fuzzing@mozilla.com",
+        long_description_content_type='text/markdown',
+        maintainer='Mozilla Fuzzing Team',
+        maintainer_email='fuzzing@mozilla.com',
         name='grizzly-framework',
         packages=[
             'grizzly',
+            'grizzly.adapters',
+            'grizzly.adapters.NoOpAdapter',
             'grizzly.common',
             'grizzly.reduce',
             'grizzly.replay',
+            'grizzly.target',
             'loki',
             'sapphire',
         ],
         url='https://github.com/MozillaSecurity/grizzly',
-        version='0.9.1')
+        version='0.9.2')
