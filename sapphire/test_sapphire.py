@@ -610,6 +610,34 @@ def test_sapphire_31(client, tmp_path):
     for t_file in to_serve:
         assert t_file.code is not None
 
+def test_sapphire_32(mocker):
+    """test Sapphire._create_listening_socket()"""
+    fake_sleep = mocker.patch("sapphire.core.time.sleep", autospec=True)
+    fake_sock = mocker.patch("sapphire.core.socket.socket", autospec=True)
+    assert Sapphire._create_listening_socket(False, None)
+    assert fake_sock.return_value.close.call_count == 0
+    assert fake_sock.return_value.setsockopt.call_count == 1
+    assert fake_sock.return_value.settimeout.call_count == 1
+    assert fake_sock.return_value.bind.call_count == 1
+    assert fake_sock.return_value.listen.call_count == 1
+    assert fake_sleep.call_count == 0
+    fake_sock.reset_mock()
+    # failure to bind
+    fake_sock.return_value.bind.side_effect = OSError
+    with pytest.raises(OSError):
+        Sapphire._create_listening_socket(False, None)
+    assert fake_sock.return_value.close.call_count == 1
+    assert fake_sleep.call_count == 0
+    fake_sock.reset_mock()
+    # failure and pass on retry
+    exc = OSError()
+    exc.errno = 10013
+    fake_sock.return_value.bind.side_effect = (exc, None)
+    assert Sapphire._create_listening_socket(False, None)
+    assert fake_sock.return_value.close.call_count == 1
+    assert fake_sock.return_value.listen.call_count == 1
+    assert fake_sleep.call_count == 1
+
 def test_main_01(tmp_path):
     """test Sapphire.main()"""
     with pytest.raises(SystemExit):

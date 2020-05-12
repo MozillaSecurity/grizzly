@@ -43,11 +43,11 @@ class Sapphire(object):
         self.close()
 
     @staticmethod
-    def _create_listening_socket(allow_remote, requested_port):
+    def _create_listening_socket(allow_remote, requested_port, retries=20):
         # The intention of this function is to contain the socket creation code
         # along with all the searching and retrying code. If a specific port is requested
         # and it is not available a socket.error will be raised.
-        while True:
+        for retry in reversed(range(retries)):
             sock = None
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -61,8 +61,8 @@ class Sapphire(object):
             except (OSError, socket.error) as soc_e:
                 if sock is not None:
                     sock.close()
-                # try another port if a specific port was not requested
-                if requested_port is None and soc_e.errno in (errno.EADDRINUSE, 10013):
+                if retry > 1 and soc_e.errno in (errno.EADDRINUSE, 10013):
+                    time.sleep(0.1)
                     continue
                 raise
             break
