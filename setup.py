@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 # coding=utf-8
-"""
-Grizzly setup
-"""
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-import itertools
+"""Grizzly setup"""
+from os.path import dirname, join as pathjoin
+from itertools import chain
 from setuptools import setup
 
 
@@ -14,11 +13,13 @@ EXTRAS = {
     'reduce': ['lithium-reducer', 'jsbeautifier'],
     's3': ['boto3'],
 }
-EXTRAS['all'] = list(set(itertools.chain.from_iterable(EXTRAS.values())))
+EXTRAS['all'] = list(set(chain.from_iterable(EXTRAS.values())))
 EXTRAS['test'] = ['pytest>=3.9', 'pytest-cov', 'pytest-mock']
 
 
 if __name__ == '__main__':
+    with open(pathjoin(dirname(__file__), "README.md"), "r") as infp:
+        README = infp.read()
     setup(
         classifiers=[
             'Intended Audience :: Developers',
@@ -28,9 +29,10 @@ if __name__ == '__main__':
             'Programming Language :: Python :: 2',
             'Programming Language :: Python :: 2.7',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.4',
             'Programming Language :: Python :: 3.5',
-            'Programming Language :: Python :: 3.6'
+            'Programming Language :: Python :: 3.6',
+            'Programming Language :: Python :: 3.7',
+            'Programming Language :: Python :: 3.8'
         ],
         description='A framework for developing and running browser fuzzers',
         entry_points={
@@ -43,10 +45,19 @@ if __name__ == '__main__':
             ],
         },
         extras_require=EXTRAS,
-        install_requires=['fasteners', 'ffpuppet', 'FuzzManager', 'psutil', 'six'],
+        install_requires=[
+            'fasteners',
+            'ffpuppet',
+            'FuzzManager',
+            'psutil',
+            'six'
+        ],
+        keywords="firefox fuzz fuzzing test testing",
         license='MPL 2.0',
-        maintainer='Tyson Smith',
-        maintainer_email='twsmith@mozilla.com',
+        long_description=README,
+        long_description_content_type="text/markdown",
+        maintainer="Mozilla Fuzzing Team",
+        maintainer_email="fuzzing@mozilla.com",
         name='grizzly-framework',
         packages=[
             'grizzly',
@@ -57,4 +68,4 @@ if __name__ == '__main__':
             'sapphire',
         ],
         url='https://github.com/MozillaSecurity/grizzly',
-        version='0.9.0')
+        version='0.9.1')
