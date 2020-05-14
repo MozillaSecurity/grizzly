@@ -75,7 +75,7 @@ class SapphireJob(object):
                     redirect,
                     resource.target)
         self.initial_queue_size = len(self._pending.files)
-        LOG.debug("sapphire has %d files required to serve", self.initial_queue_size)
+        LOG.debug("%d files required to serve", self.initial_queue_size)
 
     def check_request(self, request):
         if "?" in request:
