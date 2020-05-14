@@ -173,8 +173,14 @@ class PuppetTarget(Target):
                 if elapsed >= timeout:
                     # timeout failure
                     log.warning("gcda file open by pid %d after %0.2fs", gcda_open, elapsed)
+                    os.kill(gcda_open, signal.SIGABRT)
+                    time.sleep(1)
+                    self.close()
                     break
-            elif elapsed >= 5:
+                if delay < 1.0:
+                    # increase delay to a maximum of 1 second
+                    delay = min(1.0, delay + 0.1)
+            elif elapsed >= 3:
                 # assume we missed the process writing .gcno files
                 log.warning("No gcda files seen after %0.2fs", elapsed)
                 break
@@ -182,9 +188,6 @@ class PuppetTarget(Target):
                 log.warning("Browser failure during dump_coverage()")
                 break
             time.sleep(delay)
-            if delay < 1.0:
-                # increase delay to a maximum of 1 second
-                delay = min(1.0, delay + 0.1)
 
     def launch(self, location, env_mod=None):
         if not self.prefs:

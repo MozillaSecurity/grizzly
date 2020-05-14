@@ -207,7 +207,7 @@ def test_puppet_target_04(mocker, tmp_path):
     )
     fake_time.time.side_effect = (0, 1, 20, 20)
     target.dump_coverage(timeout=15)
-    assert fake_kill.call_count == 2
+    assert fake_kill.call_count == 3
     assert fake_psutil.process_iter.call_count == 2
     assert fake_ffp.return_value.is_healthy.call_count == 2
     fake_ffp.reset_mock()
