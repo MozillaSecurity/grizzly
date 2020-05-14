@@ -102,8 +102,7 @@ class Sapphire(object):
         - SERVED_REQUEST: Some files were requested
         files served is a list of the files that were served
         """
-        LOG.debug("serve_path: %s", path)
-        LOG.debug("serving forever: %r", forever)
+        LOG.debug("serving %r (forever=%r)", path, forever)
         job = SapphireJob(
             path,
             auto_close=self._auto_close,
@@ -112,9 +111,11 @@ class Sapphire(object):
             server_map=server_map)
         if not job.pending:
             job.finish()
+            LOG.debug("nothing to serve")
             return (SERVED_NONE, tuple())
         with SapphireLoadManager(job, self._socket, self._max_workers) as loadmgr:
             was_timeout = not loadmgr.wait(self.timeout, continue_cb=continue_cb)
+        LOG.debug("status: %r, timeout: %r", job.status, was_timeout)
         return (SERVED_TIMEOUT if was_timeout else job.status, job.served)
 
     def serve_testcase(self, testcase, continue_cb=None, forever=False, working_path=None, server_map=None):
