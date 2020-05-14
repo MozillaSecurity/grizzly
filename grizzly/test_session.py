@@ -80,7 +80,7 @@ def test_session_03(tmp_path, mocker):
         with Session(adapter, iomgr, None, fake_serv, fake_target, coverage=True) as session:
             session.run([], iteration_limit=2)
             assert session.status.iteration == 2
-    assert fake_target.dump_coverage.call_count == 1
+    assert fake_target.dump_coverage.call_count == 2
 
 def test_session_04(tmp_path, mocker):
     """test Target not requesting landing page"""

@@ -108,7 +108,6 @@ class Runner(object):
         for retries in reversed(range(max_retries)):
             try:
                 self._target.launch(location, env_mod=env_mod)
-                break
             except TargetLaunchTimeout:
                 # likely has nothing to do with Grizzly but is seen frequently
                 # on machines under a high load. After multiple consecutive timeouts
@@ -118,6 +117,7 @@ class Runner(object):
                     time.sleep(retry_delay)
                     continue
                 raise
+            break
 
     @staticmethod
     def location(srv_path, srv_port, close_after=None, forced_close=True, timeout=None):
@@ -148,13 +148,14 @@ class Runner(object):
             return "?".join([location, "&".join(args)])
         return location
 
-    def run(self, ignore, server_map, testcase, wait_for_callback=False):
+    def run(self, ignore, server_map, testcase, coverage=False, wait_for_callback=False):
         """Serve a testcase and monitor the target for results.
 
         Args:
             ignore (list): List of failure types to ignore.
             server_map (sapphire.ServerMap): A ServerMap.
-            testcase: (grizzly.TestCase): The test case that will be served.
+            testcase (grizzly.TestCase): The test case that will be served.
+            coverage (bool): Trigger coverage dump.
             wait_for_callback: (bool): Use `_keep_waiting()` to indicate when
                                        framework should move on.
 
@@ -174,12 +175,15 @@ class Runner(object):
             forever=wait_for_callback,
             server_map=server_map)
         self.timeout = server_status == SERVED_TIMEOUT
-        # detect failure
-        failure_detected = self._target.detect_failure(ignore, self.timeout)
         served_lpage = testcase.landing_page in self.served
         if not served_lpage:
-            # output message even if a failure was detected
             LOG.debug("%r not served!", testcase.landing_page)
+        elif coverage and not self.timeout:
+            # dump_coverage() should be called before detect_failure()
+            # to help catch any coverage related issues.
+            self._target.dump_coverage()
+        # detect failure
+        failure_detected = self._target.detect_failure(ignore, self.timeout)
         if failure_detected == self._target.RESULT_FAILURE:
             self.result = self.FAILED
         elif not served_lpage:
@@ -200,5 +204,6 @@ class Runner(object):
             bool: Continue to serve test test case
         """
         if self._idle is not None and self._idle.is_idle():
+            LOG.debug("idle target detected")
             return False
         return self._target.monitor.is_healthy()

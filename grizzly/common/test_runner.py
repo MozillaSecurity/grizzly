@@ -30,12 +30,14 @@ def test_runner_01(mocker):
     assert runner.result == runner.COMPLETE
     assert runner.served == serv_files
     assert not runner.timeout
+    assert not target.dump_coverage.call_count
     # some files served
     server.serve_testcase.return_value = (SERVED_REQUEST, serv_files)
-    runner.run([], ServerMap(), testcase)
+    runner.run([], ServerMap(), testcase, coverage=True)
     assert runner.result == runner.COMPLETE
     assert runner.served == serv_files
     assert not runner.timeout
+    assert target.dump_coverage.call_count == 1
 
 def test_runner_02(mocker):
     """test Runner() errors"""

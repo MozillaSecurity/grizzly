@@ -165,7 +165,7 @@ class Session(object):
             self.display_status(log_limiter=log_limiter)
 
             # run test case
-            runner.run(ignore, self.iomanager.server_map, current_test)
+            runner.run(ignore, self.iomanager.server_map, current_test, coverage=self.coverage)
             # adapter callbacks
             if runner.timeout:
                 log.debug("calling self.adapter.on_timeout()")
@@ -212,10 +212,6 @@ class Session(object):
             if iteration_limit is not None and self.status.iteration == iteration_limit:
                 log.info("Hit iteration limit")
                 break
-
-            if self.coverage and not self.target.closed:
-                # trigger coverage dump since the target was not closed
-                self.target.dump_coverage()
 
             # warn about large browser logs
             self.status.log_size = self.target.log_size()
