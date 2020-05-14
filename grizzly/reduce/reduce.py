@@ -614,11 +614,6 @@ class ReductionJob(object):
                 harness = os.path.join(os.path.dirname(__file__), '..', 'common', 'harness.html')
                 with open(harness, 'rb') as harness_fp:
                     harness = harness_fp.read()
-
-                def _dyn_resp_close():  # pragma: no cover
-                    self._target.close()
-                    return b"<h1>Close Browser</h1>"
-                self._server_map.set_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
                 self._server_map.set_dynamic_response("/harness", lambda: harness, mime_type="text/html")
                 self._server_map.set_redirect("/first_test", str(self.landing_page), required=True)
 
@@ -640,15 +635,15 @@ class ReductionJob(object):
                     close_after=self._target.rl_reset,
                     forced_close=self._target.forced_close,
                     timeout=self._iter_timeout)
-            # Try to launch the browser at most, 4 times
-            runner.launch(
-                location,
-                env_mod=self._env_mod,
-                max_retries=4,
-                retry_delay=15)
+            # Try to launch the browser, retry 4 times at most
+            runner.launch(location, env_mod=self._env_mod, max_retries=4, retry_delay=15)
             self._target.step()
 
         if not self._no_harness:
+            def _dyn_resp_close():  # pragma: no cover
+                self._target.close()
+                return b"<h1>Close Browser</h1>"
+            self._server_map.set_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
             self._server_map.set_redirect("/next_test", str(self.landing_page), required=True)
 
         # run test case
