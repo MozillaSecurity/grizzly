@@ -198,8 +198,6 @@ class Session(object):
                     # since this is the first few iteration something is
                     # likely wrong with the Target (caching?) or the Adapter
                     raise SessionError("Please check Adapter and Target")
-                # relaunching the target to get things back on track
-                self.target.close()
 
             # trigger relaunch by closing the browser if needed
             self.target.check_relaunch()

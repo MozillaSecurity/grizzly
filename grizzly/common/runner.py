@@ -187,6 +187,9 @@ class Runner(object):
         if failure_detected == self._target.RESULT_FAILURE:
             self.result = self.FAILED
         elif not served_lpage:
+            # something is wrong so close the target
+            # previous iteration put target in a bad state?
+            self._target.close()
             self.result = self.ERROR
         elif failure_detected == self._target.RESULT_IGNORED:
             self.result = self.IGNORED

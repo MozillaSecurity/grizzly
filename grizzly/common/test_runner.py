@@ -30,13 +30,15 @@ def test_runner_01(mocker):
     assert runner.result == runner.COMPLETE
     assert runner.served == serv_files
     assert not runner.timeout
-    assert not target.dump_coverage.call_count
+    assert target.close.call_count == 0
+    assert target.dump_coverage.call_count == 0
     # some files served
     server.serve_testcase.return_value = (SERVED_REQUEST, serv_files)
     runner.run([], ServerMap(), testcase, coverage=True)
     assert runner.result == runner.COMPLETE
     assert runner.served == serv_files
     assert not runner.timeout
+    assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 1
 
 def test_runner_02(mocker):
@@ -52,12 +54,14 @@ def test_runner_02(mocker):
     assert runner.result == runner.ERROR
     assert not runner.served
     assert not runner.timeout
+    assert target.close.call_count == 1
+    target.reset_mock()
     # landing page not served
     server.serve_testcase.return_value = (SERVED_REQUEST, ["harness"])
-    target.detect_failure.return_value = target.RESULT_NONE
     runner.run([], ServerMap(), testcase)
     assert runner.result == runner.ERROR
     assert runner.served
+    assert target.close.call_count == 1
 
 def test_runner_03(mocker):
     """test reporting timeout"""
@@ -111,6 +115,7 @@ def test_runner_05(mocker):
     assert runner._idle is not None
     runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page=serv_files[0]))
     assert runner.result == runner.COMPLETE
+    assert target.close.call_count == 0
 
 def test_runner_06(mocker):
     """test Runner._keep_waiting()"""
