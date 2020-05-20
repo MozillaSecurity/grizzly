@@ -170,7 +170,14 @@ def test_puppet_target_04(mocker, tmp_path):
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 10)
     fake_kill = mocker.patch("grizzly.target.puppet_target.os.kill", autospec=True)
+    # expecting close
+    target.rl_countdown = 0
+    target.dump_coverage()
+    assert not fake_kill.call_count
+    assert fake_ffp.return_value.get_pid.call_count == 0
+    assert fake_psutil.process_iter.call_count == 0
     # not running
+    target.rl_countdown = 1
     fake_ffp.return_value.get_pid.return_value = None
     target.dump_coverage()
     assert not fake_kill.call_count

@@ -132,9 +132,12 @@ class PuppetTarget(Target):
     def dump_coverage(self, timeout=15):
         # Note: This is not required if the browser is going to close.
         # SIGTERM will also trigger coverage to be synced out.
+        if self.rl_countdown < 1:
+            log.debug("Skipping coverage dump (target is scheduled to close)")
+            return
         pid = self._puppet.get_pid()
         if pid is None or not self._puppet.is_healthy():
-            log.debug("Skipping coverage dump")
+            log.debug("Skipping coverage dump (target is not in a good state)")
             return
         # If at this point, the browser is in a good state, i.e. no crashes
         # or hangs, so signal the browser to dump coverage.
