@@ -12,45 +12,44 @@ entries on the top of the stack with the offsets removed. This returns a unique
 crash id (1st hash) and a bug id (2nd hash). This is not perfect but works very
 well in most cases.
 """
-
-__all__ = ("Stack", "StackFrame")
-__author__ = "Tyson Smith"
-__credits__ = ["Tyson Smith"]
-
 import argparse
 import hashlib
 import logging
 import os
 import re
 
+__all__ = ("Stack", "StackFrame")
+__author__ = "Tyson Smith"
+__credits__ = ["Tyson Smith"]
+
 log = logging.getLogger("stack_hasher")  # pylint: disable=invalid-name
 
 MAJOR_DEPTH = 5
 MAJOR_DEPTH_RUST = 10
 
+
 class StackFrame(object):
-    MODE_ASAN = 0
-    MODE_GDB = 1
-    MODE_MINIDUMP = 2
-    MODE_RR = 3
-    MODE_RUST = 4
+    MODE_GDB = 0
+    MODE_MINIDUMP = 1
+    MODE_RR = 2
+    MODE_RUST = 3
+    MODE_SANITIZER = 4
     MODE_VALGRIND = 5
 
     _re_func_name = re.compile(r"(?P<func>.+?)[\(|\s|\<]{1}")
     # regexs for supported stack trace lines
-    _re_asan_w_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\sin\s(?P<line>.+)")
-    _re_asan_wo_syms = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+\s+\((?P<line>.+?)(\+(?P<off>0x[0-9a-f]+))?\)")
     _re_gdb = re.compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
     _re_rr = re.compile(r"rr\((?P<loc>.+)\+(?P<off>0x[0-9a-f]+)\)\[0x[0-9a-f]+\]")
     _re_rust_frame = re.compile(r"^\s+(?P<num>\d+):\s+0x[0-9a-f]+\s+\-\s+(?P<line>.+)")
+    _re_san = re.compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+(?P<in>\sin)?\s+(?P<line>.+)")
     _re_valgrind = re.compile(r"^==\d+==\s+(at|by)\s+0x[0-9A-F]+\:\s+(?P<func>.+?)\s+\((?P<line>.+)\)")
-
-
-    __slots__ = ("function", "location", "mode", "offset", "stack_line")
 
     # TODO: winddbg?
     #_re_rust_file = re.compile(r"^\s+at\s+(?P<line>.+)")
     #_re_windbg = re.compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
+
+
+    __slots__ = ("function", "location", "mode", "offset", "stack_line")
 
     def __init__(self, function=None, location=None, mode=None, offset=None, stack_line=None):
         self.function = function
@@ -70,19 +69,15 @@ class StackFrame(object):
             out.append("location: %r" % self.location)
         if self.offset is not None:
             out.append("offset: %r" % self.offset)
-
         return " - ".join(out)
 
 
     @classmethod
     def from_line(cls, input_line, parse_mode=None):
         assert "\n" not in input_line, "Input contains unexpected new line(s)"
-        # try to match symbolized ASan output line
-        if parse_mode is None or parse_mode == StackFrame.MODE_ASAN:
-            frame_info = cls._parse_asan_with_syms(input_line)
-            if frame_info is not None:
-                return StackFrame(**frame_info)
-            frame_info = cls._parse_asan_wo_syms(input_line)
+        # try to match symbolized Sanitizer (ASan/UBSan... etc) output line
+        if parse_mode is None or parse_mode == StackFrame.MODE_SANITIZER:
+            frame_info = cls._parse_sanitizer(input_line)
             if frame_info is not None:
                 return StackFrame(**frame_info)
 
@@ -112,55 +107,6 @@ class StackFrame(object):
                 return StackFrame(**frame_info)
 
         return None
-
-
-    @staticmethod
-    def _parse_asan_with_syms(input_line):
-        if "#" not in input_line:
-            return None  # no match
-        m = StackFrame._re_asan_w_syms.match(input_line)
-        if m is None:
-            return None  # no match
-
-        frame = {"function":None, "location":None, "mode":StackFrame.MODE_ASAN, "offset":None}
-        input_line = m.group("line")
-        frame["stack_line"] = m.group("num")
-
-        # find function/method name
-        m = StackFrame._re_func_name.match(input_line)
-        if m is not None:
-            frame["function"] = m.group("func")
-
-        # find location (file name) and offset (line #)
-        input_line = input_line.strip(")").split()[-1].split(":")
-        if len(input_line) == 1:  # no line number
-            input_line = input_line[0].split("+")  # look for offset
-        frame["location"] = os.path.basename(input_line[0])
-        if len(input_line) > 1:  # with offset
-            frame["offset"] = input_line[1]
-
-        return frame
-
-
-    @staticmethod
-    def _parse_asan_wo_syms(input_line):
-        if "#" not in input_line:
-            return None  # no match
-        m = StackFrame._re_asan_wo_syms.match(input_line)
-        if m is None:
-            return None  # no match
-
-        frame = {"function":None, "mode":StackFrame.MODE_ASAN, "offset":None}
-        frame["stack_line"] = m.group("num")
-        input_line = m.group("line")
-        if input_line:
-            frame["location"] = os.path.basename(input_line)
-        # find location (binary) and offset
-        offset = m.group("off")
-        if offset:
-            frame["offset"] = offset
-
-        return frame
 
 
     @staticmethod
@@ -255,6 +201,37 @@ class StackFrame(object):
         #        frame["location"], frame["offset"] = input_line.rsplit(":", 1)
         #    else:
         #        frame["location"] = input_line
+        return frame
+
+
+    @staticmethod
+    def _parse_sanitizer(input_line):
+        if "#" not in input_line:
+            return None  # no match
+        m = StackFrame._re_san.match(input_line)
+        if m is None:
+            return None
+        frame = {"function":None, "location":None, "mode":StackFrame.MODE_SANITIZER, "offset":None}
+        frame["stack_line"] = m.group("num")
+        input_line = m.group("line")
+
+        # check if line is symbolized
+        if m.group("in"):
+            # find function/method name
+            m = StackFrame._re_func_name.match(input_line)
+            if m is not None:
+                frame["function"] = m.group("func")
+
+        # find location (file name) and offset (line #)
+        if input_line.startswith("("):
+            input_line = input_line.strip("()")
+        offset = re.match(r"(.+?)(\+(0x[0-9a-f]+)|\:([0-9a-f]+)).*", input_line)
+        if offset:
+            frame["location"] = os.path.basename(offset.group(1))
+            frame["offset"] = offset.group(3) or offset.group(4)
+        else:
+            frame["location"] = input_line
+
         return frame
 
 
