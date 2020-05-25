@@ -33,14 +33,16 @@ class StackFrame(object):
     MODE_RR = 2
     MODE_RUST = 3
     MODE_SANITIZER = 4
-    MODE_VALGRIND = 5
+    MODE_TSAN = 5
+    MODE_VALGRIND = 6
 
     _re_func_name = re_compile(r"(?P<func>.+?)[\(|\s|\<]{1}")
     # regexs for supported stack trace lines
     _re_gdb = re_compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
     _re_rr = re_compile(r"rr\((?P<loc>.+)\+(?P<off>0x[0-9a-f]+)\)\[0x[0-9a-f]+\]")
     _re_rust_frame = re_compile(r"^\s+(?P<num>\d+):\s+0x[0-9a-f]+\s+\-\s+(?P<line>.+)")
-    _re_san = re_compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+(?P<in>\sin)?\s+(?P<line>.+)")
+    _re_sanitizer = re_compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+(?P<in>\sin)?\s+(?P<line>.+)")
+    _re_tsan = re_compile(r"^\s*#(?P<num>\d+)\s(?P<line>.+)\s\(((?P<mod>.+)\+)?(?P<off>0x[0-9a-f]+)\)")
     _re_valgrind = re_compile(r"^==\d+==\s+(at|by)\s+0x[0-9A-F]+\:\s+(?P<func>.+?)\s+\((?P<line>.+)\)")
     # TODO: add additional debugger support?
     #_re_rust_file = re_compile(r"^\s+at\s+(?P<line>.+)")
@@ -81,6 +83,8 @@ class StackFrame(object):
             sframe = cls._parse_rr(input_line)
         if not sframe and parse_mode is None or parse_mode == cls.MODE_RUST:
             sframe = cls._parse_rust(input_line)
+        if not sframe and parse_mode is None or parse_mode == cls.MODE_TSAN:
+            sframe = cls._parse_tsan(input_line)
         if not sframe and parse_mode is None or parse_mode == cls.MODE_VALGRIND:
             sframe = cls._parse_valgrind(input_line)
         return sframe
@@ -167,7 +171,7 @@ class StackFrame(object):
     def _parse_sanitizer(cls, input_line):
         if "#" not in input_line:
             return None
-        m = cls._re_san.match(input_line)
+        m = cls._re_sanitizer.match(input_line)
         if m is None:
             return None
         sframe = cls(mode=cls.MODE_SANITIZER, stack_line=m.group("num"))
@@ -181,12 +185,42 @@ class StackFrame(object):
         if input_line.startswith("("):
             input_line = input_line.strip("()")
         # find location (file name or module) and offset (line # or offset)
-        offset = re_match(r"(.+?)(\+(0x[0-9a-f]+)|\:([0-9a-f]+)).*", input_line)
+        offset = re_match(r"(.+?)(\:([0-9a-f]+)|\+(0x[0-9a-f]+)).*", input_line)
         if offset:
             sframe.location = basename(offset.group(1))
             sframe.offset = offset.group(3) or offset.group(4)
         else:
             sframe.location = input_line
+        return sframe
+
+    @classmethod
+    def _parse_tsan(cls, input_line):
+        if "#" not in input_line:
+            return None
+        m = cls._re_tsan.match(input_line)
+        if m is None:
+            return None
+        sframe = cls(mode=cls.MODE_TSAN, stack_line=m.group("num"))
+        input_line = m.group("line")
+        location = basename(input_line)
+        # try to parse file name and line number
+        if location:
+            location = location.split()[-1].split(":")
+            if location and location[0] != "<null>":
+                sframe.location = location.pop(0)
+                if location and location[0] != "<null>":
+                    sframe.offset = location.pop(0)
+        # use module name if file name cannot be found
+        if not sframe.location:
+            sframe.location = m.group("mod")
+        # use module offset if line number cannot be found
+        if not sframe.offset:
+            sframe.offset = m.group("off")
+        m = cls._re_func_name.match(input_line)
+        if m is not None:
+            function = m.group("func")
+            if function and function != "<null>":
+                sframe.function = function
         return sframe
 
     @classmethod

@@ -365,6 +365,42 @@ def test_minidump_stackframe_03():
     assert frame.offset == "85"
     assert frame.mode == StackFrame.MODE_MINIDUMP
 
+def test_tsan_stackframe_01():
+    """test creating a StackFrame from a symbolized TSan line"""
+    frame = StackFrame.from_line("    #0 main race.c:10 (exe+0xa3b4)")
+    assert frame.stack_line == "0"
+    assert frame.function == "main"
+    assert frame.location == "race.c"
+    assert frame.offset == "10"
+    assert frame.mode == StackFrame.MODE_TSAN
+
+def test_tsan_stackframe_02():
+    """test creating a StackFrame from a symbolized TSan line"""
+    frame = StackFrame.from_line("    #1 test1 test2 /a b/c.h:51:10 (libxul.so+0x18c9873)")
+    assert frame.stack_line == "1"
+    assert frame.function == "test1"
+    assert frame.location == "c.h"
+    assert frame.offset == "51"
+    assert frame.mode == StackFrame.MODE_TSAN
+
+def test_tsan_stackframe_03():
+    """test creating a StackFrame from an unsymbolized TSan line"""
+    frame = StackFrame.from_line("    #2 <null> <null> (0xbad)")
+    assert frame.stack_line == "2"
+    assert frame.function is None
+    assert frame.location is None
+    assert frame.offset == "0xbad"
+    assert frame.mode == StackFrame.MODE_TSAN
+
+def test_tsan_stackframe_04():
+    """test creating a StackFrame from a TSan line missing file"""
+    frame = StackFrame.from_line("    #0 func <null> (mod+0x123ac)")
+    assert frame.stack_line == "0"
+    assert frame.function == "func"
+    assert frame.location == "mod"
+    assert frame.offset == "0x123ac"
+    assert frame.mode == StackFrame.MODE_TSAN
+
 def test_valgrind_stackframe_01():
     frame = StackFrame.from_line("==4754==    at 0x45C6C0: FuncName (decode.c:123)")
     assert frame.stack_line is None
