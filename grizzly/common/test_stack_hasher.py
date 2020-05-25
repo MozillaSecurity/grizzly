@@ -24,6 +24,11 @@ def test_stack_02():
     # at this point the hashes should match
     assert stack.minor == stack.major
     assert len(stack.frames) == 1
+    output = str(stack)
+    assert "00" in output
+    assert "function: 'a'" in output
+    assert "location: 'b'" in output
+    assert "offset: 'c'" in output
 
 def test_stack_03():
     """test creating a Stack with 2 frames"""
