@@ -85,7 +85,7 @@ def test_stack_06():
     stack = Stack.from_text(input_txt)
     assert len(stack.frames) == 6
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_ASAN
+    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
 
 def test_stack_07():
     """test creating a Stack by calling from_text() with mixed frames modes"""
@@ -98,7 +98,7 @@ def test_stack_07():
     stack = Stack.from_text(input_txt)
     assert len(stack.frames) == 4
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_ASAN
+    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
 
 def test_stack_08():
     """test creating a Stack by calling from_text() with text containing 2 stacks"""
@@ -112,7 +112,7 @@ def test_stack_08():
     assert stack.frames[0].function == "good::frame0"
     assert stack.frames[1].function == "good::frame1"
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_ASAN
+    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
 
 def test_stack_09():
     """test creating a Stack by calling from_text() with empty string"""
@@ -122,7 +122,7 @@ def test_stack_09():
     assert stack.major is None
 
 def test_stack_10():
-    """test creating a Stack from an ASan trace with an unsymbolized lib"""
+    """test creating a Stack from a Sanitizer trace with an unsymbolized lib"""
     input_txt = "" \
         "    #0 0x4c7702 in realloc asan/asan_malloc_linux.cc:107:3\n" \
         "    #1 0x7f6d056ce7fc  (/lib/x86_64-linux-gnu/libdbus-1.so.3+0x2d7fc)\n" \
@@ -133,10 +133,10 @@ def test_stack_10():
     assert stack.frames[1].location == "libdbus-1.so.3"
     assert stack.frames[2].location == "<unknown module>"
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_ASAN
+    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
 
 def test_stack_11():
-    """test creating a Stack from an ASan trace with an unsymbolized lib"""
+    """test creating a Stack from a Sanitizer trace with an unsymbolized lib"""
     input_txt = "" \
         "    #0 0x90000223  (/usr/swr_a.so+0x231223)\n" \
         "    #1 0x00000447  (/usr/as.so.1+0x42447)\n" \
@@ -149,7 +149,7 @@ def test_stack_11():
     assert stack.frames[2].function == "fSasd"
     assert stack.frames[3].function == "mz::as::asdf::SB"
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_ASAN
+    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
 
 def test_stack_12():
     """test creating a Stack from a Valgrind trace"""
@@ -234,59 +234,77 @@ def test_stackframe_02():
     assert StackFrame.from_line("==123==") is None
     assert StackFrame.from_line("==1== by 0x0: a ()") is None
 
-def test_asan_stackframe_01():
-    """test creating a StackFrame from an ASan line with symbols"""
+def test_sanitizer_stackframe_01():
+    """test creating a StackFrame from a line with symbols"""
     frame = StackFrame.from_line("    #1 0x7f00dad60565 in Abort(char const*) /blah/base/nsDebugImpl.cpp:472")
     assert frame.stack_line == "1"
     assert frame.function == "Abort"
     assert frame.location == "nsDebugImpl.cpp"
     assert frame.offset == "472"
-    assert frame.mode == StackFrame.MODE_ASAN
+    assert frame.mode == StackFrame.MODE_SANITIZER
 
-def test_asan_stackframe_02():
-    """test creating a StackFrame from an ASan line with symbols"""
+def test_sanitizer_stackframe_02():
+    """test creating a StackFrame from a line with symbols"""
     frame = StackFrame.from_line("    #36 0x48a6e4 in main /app/nsBrowserApp.cpp:399:11")
     assert frame.stack_line == "36"
     assert frame.function == "main"
     assert frame.location == "nsBrowserApp.cpp"
     assert frame.offset == "399"
-    assert frame.mode == StackFrame.MODE_ASAN
+    assert frame.mode == StackFrame.MODE_SANITIZER
 
-def test_asan_stackframe_03():
-    """test creating a StackFrame from an ASan line without symbols"""
+def test_sanitizer_stackframe_03():
+    """test creating a StackFrame from a line without symbols"""
     frame = StackFrame.from_line("    #1 0x7f00ecc1b33f (/lib/x86_64-linux-gnu/libpthread.so.0+0x1033f)")
     assert frame.stack_line == "1"
     assert frame.function is None
     assert frame.location == "libpthread.so.0"
     assert frame.offset == "0x1033f"
-    assert frame.mode == StackFrame.MODE_ASAN
+    assert frame.mode == StackFrame.MODE_SANITIZER
 
-def test_asan_stackframe_04():
-    """test creating a StackFrame from an ASan line with symbols"""
+def test_sanitizer_stackframe_04():
+    """test creating a StackFrame from a line with symbols"""
     frame = StackFrame.from_line("    #25 0x7f0155526181 in start_thread (/l/libpthread.so.0+0x8181)")
     assert frame.stack_line == "25"
     assert frame.function == "start_thread"
     assert frame.location == "libpthread.so.0"
     assert frame.offset == "0x8181"
-    assert frame.mode == StackFrame.MODE_ASAN
+    assert frame.mode == StackFrame.MODE_SANITIZER
 
-def test_asan_stackframe_05():
-    """test creating a StackFrame from an ASan line with angle brackets"""
+def test_sanitizer_stackframe_05():
+    """test creating a StackFrame from a line with angle brackets"""
     frame = StackFrame.from_line("    #123 0x7f30afea9148 in Call<nsBlah *> /a/b.cpp:356:50")
     assert frame.stack_line == "123"
     assert frame.function == "Call"
     assert frame.location == "b.cpp"
     assert frame.offset == "356"
-    assert frame.mode == StackFrame.MODE_ASAN
+    assert frame.mode == StackFrame.MODE_SANITIZER
 
-def test_asan_stackframe_06():
+def test_sanitizer_stackframe_06():
     """test creating a StackFrame from a useless frame"""
     frame = StackFrame.from_line("    #2 0x7ffffffff  (<unknown module>)")
     assert frame.stack_line == "2"
     assert frame.function is None
     assert frame.location == "<unknown module>"
     assert frame.offset is None
-    assert frame.mode == StackFrame.MODE_ASAN
+    assert frame.mode == StackFrame.MODE_SANITIZER
+
+def test_sanitizer_stackframe_07():
+    """test creating a StackFrame from a line missing a function"""
+    frame = StackFrame.from_line("    #0 0x7f0d571e04bd  /a/glibc-2.23/../syscall-template.S:84")
+    assert frame.stack_line == "0"
+    assert frame.function is None
+    assert frame.location == "syscall-template.S"
+    assert frame.offset == "84"
+    assert frame.mode == StackFrame.MODE_SANITIZER
+
+def test_sanitizer_stackframe_08():
+    """test creating a StackFrame from a line with lots of spaces"""
+    frame = StackFrame.from_line("    #0 0x48a6e4 in Call<a *> /test path/file name.c:1:2")
+    assert frame.stack_line == "0"
+    assert frame.function == "Call"
+    assert frame.location == "file name.c"
+    assert frame.offset == "1"
+    assert frame.mode == StackFrame.MODE_SANITIZER
 
 def test_gdb_stackframe_01():
     """test creating a StackFrame from a GDB line with symbols"""
