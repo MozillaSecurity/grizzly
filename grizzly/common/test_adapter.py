@@ -71,7 +71,7 @@ def test_adapter_04(tmp_path):
     # path to file
     file1 = (tmp_path / "test1.txt")
     file1.touch()
-    found = tuple(SimpleAdapter.scan_path(str(tmp_path)))
+    found = tuple(SimpleAdapter.scan_path(str(file1)))
     assert len(found) == 1
     assert str(file1) in found
     # path to directory
