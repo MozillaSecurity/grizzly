@@ -28,6 +28,7 @@ def test_sapphire_job_01(tmp_path):
     assert not job.is_complete()
     assert job.remove_pending("no_file.test")
     job.finish()
+    assert not any(job.served)
     assert job.is_complete()
 
 def test_sapphire_job_02(tmp_path):
@@ -182,3 +183,12 @@ def test_sapphire_job_08():
     """test SapphireJob with missing directory"""
     with pytest.raises(OSError):
         SapphireJob("missing")
+
+def test_sapphire_job_09(tmp_path):
+    """test SapphireJob.increment_served() and SapphireJob.served"""
+    job = SapphireJob(str(tmp_path))
+    assert not any(job.served)
+    job.increment_served(str(tmp_path / "file.bin"))
+    assert "file.bin" in job.served
+    job.increment_served("/some/include/path/inc.bin")
+    assert "/some/include/path/inc.bin" in job.served

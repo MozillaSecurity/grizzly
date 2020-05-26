@@ -172,9 +172,19 @@ class SapphireJob(object):
 
     @property
     def served(self):
-        # served files (with path relative to www root)
+        # served files
+        # files served from www root will have a path relative to www root
+        # include files will have an absolute path
         with self._served.lock:
-            return tuple(os.path.relpath(x, self.base_path) for x in self._served.files.keys())
+            # make a copy of what is available (maybe a copy not necessary?)
+            served = tuple(self._served.files.keys())
+        for fname in served:
+            if fname.startswith(self.base_path):
+                # file is in www root
+                yield os.path.relpath(fname, self.base_path)
+            else:
+                # include file
+                yield fname
 
     @property
     def status(self):

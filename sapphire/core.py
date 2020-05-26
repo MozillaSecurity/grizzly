@@ -116,7 +116,7 @@ class Sapphire(object):
         with SapphireLoadManager(job, self._socket, self._max_workers) as loadmgr:
             was_timeout = not loadmgr.wait(self.timeout, continue_cb=continue_cb)
         LOG.debug("status: %r, timeout: %r", job.status, was_timeout)
-        return (SERVED_TIMEOUT if was_timeout else job.status, job.served)
+        return (SERVED_TIMEOUT if was_timeout else job.status, tuple(job.served))
 
     def serve_testcase(self, testcase, continue_cb=None, forever=False, working_path=None, server_map=None):
         """
