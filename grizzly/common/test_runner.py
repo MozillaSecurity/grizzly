@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
+from os.path import join as pathjoin
 import pytest
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT, ServerMap
@@ -175,6 +176,37 @@ def test_runner_08(mocker):
     with pytest.raises(TargetLaunchTimeout):
         runner.launch("http://a/", max_retries=3)
     assert target.launch.call_count == 3
+
+def test_runner_09(mocker, tmp_path):
+    """test Runner.run() adding includes to testcase"""
+    server = mocker.Mock(spec=Sapphire)
+    target = mocker.Mock(spec=Target)
+    target.detect_failure.return_value = target.RESULT_NONE
+    runner = Runner(server, target)
+    # create test files
+    inc_path1 = (tmp_path / "include")
+    inc_path1.mkdir()
+    inc1 = (inc_path1 / "inc_file.bin")
+    inc1.write_bytes(b"a")
+    (inc_path1 / "nested").mkdir()
+    inc2 = (inc_path1 /  "nested" / "nested_inc.bin")
+    inc2.write_bytes(b"a")
+    inc_path2 = (tmp_path / "include2")
+    inc_path2.mkdir()
+    inc3 = (inc_path2 / "inc_file3.txt")
+    inc3.write_bytes(b"a")
+    # build server map
+    smap = ServerMap()
+    smap.set_include("/", str(inc_path1))
+    smap.set_include("/test", str(inc_path2))
+    serv_files = ["a.b", str(inc1), str(inc2), str(inc3)]
+    server.serve_testcase.return_value = (SERVED_ALL, serv_files)
+    with TestCase("a.b", "x", "x") as tcase:
+        runner.run([], smap, tcase)
+        assert runner.result == runner.COMPLETE
+        assert "inc_file.bin" in tcase._existing_paths
+        assert pathjoin("nested", "nested_inc.bin") in tcase._existing_paths
+        assert pathjoin("test", "inc_file3.txt") in tcase._existing_paths
 
 def test_idle_check_01(mocker):
     """test simple _IdleChecker"""

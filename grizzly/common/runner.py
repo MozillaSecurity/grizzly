@@ -174,6 +174,9 @@ class Runner(object):
             continue_cb=self._keep_waiting,
             forever=wait_for_callback,
             server_map=server_map)
+        # add all include files that were served
+        for url, resource in server_map.include.items():
+            testcase.add_batch(resource.target, self.served, prefix=url)
         self.timeout = server_status == SERVED_TIMEOUT
         served_lpage = testcase.landing_page in self.served
         if not served_lpage:
