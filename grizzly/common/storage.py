@@ -70,6 +70,29 @@ class TestCase(object):
         self._existing_paths.append(test_file.file_name)
         target.append(test_file)
 
+    def add_batch(self, path, include_files, prefix=None):
+        """Iterate over files in include_files and attach the files that are
+        located in path to testcase.
+
+        Args:
+            path (str): Path to the root of the directory that contains files.
+            include_files (iterable): Paths of the files to be added to the
+                                      test case if they exist in path.
+            prefix (str): Path prefix to prepend to file when adding to
+                          test case.
+
+        Returns:
+            None
+        """
+        path = os.path.abspath(path)
+        for fname in (x for x in include_files if x.startswith(path)):
+            test_path = os.path.relpath(fname, path)
+            if test_path.startswith(".."):
+                continue
+            if prefix:
+                test_path = "/".join((prefix, test_path))
+            self.add_from_file(fname, file_name=test_path)
+
     def add_meta(self, meta_file):
         """Add a test file to test case as a meta file.
 

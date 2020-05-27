@@ -54,8 +54,8 @@ def test_testcase_02(tmp_path):
         tcase.add_from_data("test_windows", "\\\\dir\\file.bin")
         assert tcase.contains("testfile1.bin")
         opt_files = list(tcase.optional)
-        assert len(opt_files) == 1
         assert os.path.join("nested", "testfile2.bin") in opt_files
+        assert len(opt_files) == 1
         tcase.dump(str(tmp_path), include_details=True)
         assert (tmp_path / "nested").is_dir()
         test_info = json.loads((tmp_path / "test_info.json").read_text())
@@ -206,9 +206,45 @@ def test_testcase_09(tmp_path):
         assert "UBSAN_OPTIONS" in tcase.env_vars
         assert "ubsan.supp" in tcase.env_vars["UBSAN_OPTIONS"]
         opts = re.split(r":(?![\\|/])", tcase.env_vars["UBSAN_OPTIONS"])
-        assert len(opts) == 3
         assert "a=1" in opts
         assert "b=2" in opts
+        assert len(opts) == 3
+
+def test_testcase_10(tmp_path):
+    """test TestCase.add_batch()"""
+    include = (tmp_path / "inc_path")
+    include.mkdir()
+    inc_1 = (include / "file.bin")
+    inc_1.write_bytes(b"a")
+    (include / "nested").mkdir()
+    inc_2 = (include / "nested" / "nested.js")
+    inc_2.write_bytes(b"a")
+    other_path = (tmp_path / "other_path")
+    other_path.mkdir()
+    (other_path / "no_include.bin").write_bytes(b"a")
+    with TestCase("a.b", "a.b", "simple") as tcase:
+        # missing directory
+        tcase.add_batch("/missing/path/", tuple())
+        assert not tcase._existing_paths
+        # missing file
+        with pytest.raises(IOError):
+            tcase.add_batch(str(tmp_path), [str(tmp_path / "missing.bin")])
+        assert not tcase._existing_paths
+        # relative file name
+        tcase.add_batch(str(include), ["file.bin"])
+        assert not tcase._existing_paths
+        # valid list
+        tcase.add_batch(str(include), [str(inc_1), str(inc_2), str(tmp_path / "inc_path2" / "extra.bin")])
+        assert tcase.contains("file.bin")
+        assert tcase.contains(os.path.join("nested", "nested.js"))
+        assert len(tcase._existing_paths) == 2
+        # nested url
+        tcase.add_batch(str(include), [str(inc_1)], prefix="test")
+        assert tcase.contains(os.path.join("test", "file.bin"))
+        assert len(tcase._existing_paths) == 3
+        # collision
+        with pytest.raises(TestFileExists, match="'file.bin' exists in test"):
+            tcase.add_batch(str(include), [str(inc_1)])
 
 def test_testfile_01():
     """test simple TestFile"""
