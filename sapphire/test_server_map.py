@@ -46,14 +46,29 @@ def test_servermap_03(tmp_path):
     assert len(srv_map.include) == 1
     assert "url_01" in srv_map.include
     assert srv_map.include["url_01"].target == str(tmp_path)
-    srv_map.set_include("url_02", str(tmp_path))
+    # overwrite existing
+    inc1 = (tmp_path / "includes" / "a")
+    inc1.mkdir(parents=True)
+    srv_map.set_include("url_01", str(inc1))
+    assert srv_map.include["url_01"].target == str(inc1)
+    # add another
+    inc2 = (tmp_path / "includes" / "b")
+    inc2.mkdir()
+    srv_map.set_include("url_02", str(inc2))
     assert len(srv_map.include) == 2
     assert not srv_map.dynamic
     assert not srv_map.redirect
-    with pytest.raises(MapCollisionError):
+    with pytest.raises(MapCollisionError, match="URL collision on 'url_01'"):
         srv_map.set_redirect("url_01", "test_file")
     with pytest.raises(MapCollisionError):
         srv_map.set_dynamic_response("url_01", lambda: 0, mime_type="test/type")
+    # test overlapping includes
+    with pytest.raises(MapCollisionError, match=r"'url_01' and '\w+' include"):
+        srv_map.set_include("url_01", str(tmp_path))
+    inc3 = (tmp_path / "includes" / "b" / "c")
+    inc3.mkdir()
+    with pytest.raises(MapCollisionError, match=r"'url_01' and '\w+' include"):
+        srv_map.set_include("url_01", str(inc3))
 
 def test_servermap_04(tmp_path):
     """test ServerMap redirects"""
