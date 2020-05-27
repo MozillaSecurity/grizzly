@@ -86,51 +86,38 @@ class SapphireJob(object):
             with self._pending.lock:
                 res.required = to_serve in self._pending.files
             return res
-        if self.server_map is None:
-            return None
-        if request in self.server_map.redirect:
-            return self.server_map.redirect[request]
-        if request in self.server_map.dynamic:
-            return self.server_map.dynamic[request]
-        if self.server_map.include:
-            check_includes = False
-            for include in self.server_map.include:
-                if include != "":
-                    check_includes = True
-                    break
-
-            last_split = 0
-            while check_includes:
-                split_req = request.rsplit("/", last_split)
-                if len(split_req) != last_split + 1:
-                    break
-                inc_path = split_req[0]
-                target_path = split_req[1:]
-
-                LOG.debug("looking up %r in include map", inc_path)
-                if inc_path in self.server_map.include:
-                    to_serve = os.path.normpath(
-                        "/".join([self.server_map.include[inc_path].target] + target_path))
-                    return Resource(
-                        Resource.URL_INCLUDE,
-                        to_serve,
-                        mime=self.server_map.include[inc_path].mime,
-                        required=self.server_map.include[inc_path].required)
-                LOG.debug("include map does not contain %r", inc_path)
-                last_split += 1
-
-            # check if this is a nested directory in a directory mounted at '/'
-            LOG.debug("checking include map at '/'")
-            if "" in self.server_map.include:
-                to_serve = os.path.normpath(
-                    os.path.join(self.server_map.include[""].target, request.lstrip("/")))
-                return Resource(
-                    Resource.URL_INCLUDE,
-                    to_serve,
-                    mime=self.server_map.include[""].mime,
-                    required=self.server_map.include[""].required)
-            LOG.debug("include map does not contain an entry at '/'")
-
+        if self.server_map is not None:
+            if request in self.server_map.redirect:
+                return self.server_map.redirect[request]
+            if request in self.server_map.dynamic:
+                return self.server_map.dynamic[request]
+            # collect possible include matches
+            includes = tuple(x for x in self.server_map.include if request.startswith(x))
+            if includes:
+                LOG.debug("potential include matches %r", includes)
+                # attempt to find match
+                url = request
+                while True:
+                    if url in includes:
+                        LOG.debug("found include match %r", url)
+                        target = os.path.join(
+                            self.server_map.include[url].target,
+                            request.split(url)[-1].lstrip("/") if url else request)
+                        # if the mapping url is empty check the file exists
+                        if url or os.path.isfile(target):
+                            return Resource(
+                                Resource.URL_INCLUDE,
+                                os.path.normpath(target),
+                                mime=self.server_map.include[url].mime,
+                                required=self.server_map.include[url].required)
+                    if "/" in url:
+                        url = url.rsplit("/", 1)[0]
+                    elif url:
+                        # try empty mount point
+                        url = ""
+                    else:
+                        # include does not exist
+                        break
         return None
 
     def finish(self):

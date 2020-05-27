@@ -104,9 +104,10 @@ def test_sapphire_job_04(mocker, tmp_path):
     mocker.patch.object(ServerMap, "_check_url", side_effect=lambda x: x)
     smap = ServerMap()
     smap.set_include("testinc", str(srv_include))
-    smap.set_include("testinc/fakedir", str(srv_include))
-    smap.set_include("testinc/1/2/3", str(srv_include))
-    smap.set_include("", str(srv_include))
+    # add manually to avoid sanity checks in ServerMap.set_include()
+    smap.include["testinc/fakedir"] = Resource(Resource.URL_INCLUDE, str(srv_include))
+    smap.include["testinc/1/2/3"] = Resource(Resource.URL_INCLUDE, str(srv_include))
+    smap.include[""] = Resource(Resource.URL_INCLUDE, str(srv_include))
     smap.set_include("testinc/inc2", str(srv_include_2))
     job = SapphireJob(str(srv_root), server_map=smap)
     assert job.status == SERVED_NONE
@@ -118,9 +119,9 @@ def test_sapphire_job_04(mocker, tmp_path):
         assert resource.type == Resource.URL_INCLUDE
         assert resource.target == str(inc_1)
     # test nested include path pointing to a different include
-    resource = job.check_request("testinc/inc2/test_file2.txt?q=123")
+    resource = job.check_request("testinc/inc2/test_file_2.txt?q=123")
     assert resource.type == Resource.URL_INCLUDE
-    assert resource.target == str(srv_include_2 / "test_file2.txt")
+    assert resource.target == str(inc_2)
     # test redirect root without leading '/'
     resource = job.check_request("test_file.txt")
     assert resource.type == Resource.URL_INCLUDE

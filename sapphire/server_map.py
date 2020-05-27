@@ -74,10 +74,25 @@ class ServerMap(object):
             raise IOError("Include path not found: %s" % (target_path,))
         if url in self.dynamic or url in self.redirect:
             raise MapCollisionError("URL collision on %r" % (url,))
+        target_path = os.path.abspath(target_path)
+        # sanity check to prevent mapping overlapping paths
+        # Note: This was added to help map file served via includes back to
+        # the files on disk. This is a temporary workaround until mapping of
+        # requests to files that were served is available outside of Sapphire.
+        for existing_url, resource in self.include.items():
+            if url == existing_url:
+                # allow overwriting entry
+                continue
+            if not os.path.relpath(target_path, resource.target).startswith(".."):
+                LOG.error("%r mapping includes path %r", existing_url, target_path)
+                raise MapCollisionError("%r and %r include %r" % (url, existing_url, target_path))
+            if not os.path.relpath(resource.target, target_path).startswith(".."):
+                LOG.error("%r mapping includes path %r", url, resource.target)
+                raise MapCollisionError("%r and %r include %r" % (url, existing_url, resource.target))
         LOG.debug("mapping include %r -> %r", url, target_path)
         self.include[url] = Resource(
             Resource.URL_INCLUDE,
-            os.path.abspath(target_path))
+            target_path)
 
     def set_redirect(self, url, target, required=True):
         url = self._check_url(url)
