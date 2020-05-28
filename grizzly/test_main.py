@@ -4,11 +4,11 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly main"""
 
-import pytest
+from pytest import raises
 
 from sapphire import Sapphire
 from .common import Adapter
-from .main import console_init_logging, main
+from .main import main
 from .session import Session
 from .target import TargetLaunchError
 
@@ -84,7 +84,7 @@ def test_main_02(tmp_path, mocker):
     args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
     fake_adapter.TEST_DURATION = args.timeout + 10
-    with pytest.raises(RuntimeError):
+    with raises(RuntimeError):
         main(args)
 
 def test_main_03(tmp_path, mocker):
@@ -107,11 +107,3 @@ def test_main_03(tmp_path, mocker):
     assert main(args) == Session.EXIT_ABORT
     fake_session.return_value.run.side_effect = TargetLaunchError("test")
     assert main(args) == Session.EXIT_LAUNCH_FAILURE
-
-def test_console_init_logging_01(mocker):
-    """test console_init_logging()"""
-    mocker.patch("grizzly.main.logging", autospec=True)
-    fake_getenv = mocker.patch("grizzly.main.getenv", autospec=True)
-    # enable DEBUG for additional coverage
-    fake_getenv.return_value = "1"
-    console_init_logging()

@@ -12,7 +12,6 @@ from Collector.Collector import Collector
 
 from .args import ReducerFuzzManagerIDArgs
 from .reduce import ReductionJob
-from ..main import console_init_logging
 from ..common import FuzzManagerReporter
 
 
@@ -180,5 +179,4 @@ class CrashReductionJob(ReductionJob):
 
 
 if __name__ == "__main__":
-    console_init_logging()
     sys.exit(CrashReductionJob.main(ReducerFuzzManagerIDArgs().parse_args()))
