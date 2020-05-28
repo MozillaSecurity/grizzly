@@ -17,7 +17,6 @@ class FakeArgs(object):
     def __init__(self, working_path):
         self.binary = None
         self.input = None
-        self.accepted_extensions = None
         self.adapter = None
         self.cache = 0
         self.coverage = False
