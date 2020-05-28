@@ -2,14 +2,15 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import logging
-import os
-import platform
+from logging import getLogger
+from os import getenv, kill, makedirs
+from os.path import isdir
+from platform import system
 import signal
-import time
-import tempfile
+from time import localtime, sleep, strftime, time
+from tempfile import mkdtemp
 
-import psutil
+from psutil import AccessDenied, NoSuchProcess, Process, process_iter
 
 from ffpuppet import BrowserTimeoutError, FFPuppet, LaunchError
 from .target_monitor import TargetMonitor
@@ -19,7 +20,7 @@ __all__ = ("PuppetTarget",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
+LOG = getLogger("puppet_target")
 
 
 class PuppetTarget(Target):
@@ -32,7 +33,7 @@ class PuppetTarget(Target):
         self.use_valgrind = kwds.pop("valgrind", False)
         use_xvfb = kwds.pop("xvfb", False)
         if kwds:
-            log.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
+            LOG.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
         self._browser_logs = None
         # create Puppet object
         self._puppet = FFPuppet(
@@ -45,8 +46,8 @@ class PuppetTarget(Target):
         with self._lock:
             proc_usage = self._puppet.cpu_usage()
         for pid, cpu in sorted(proc_usage, reverse=True, key=lambda x: x[1]):
-            log.debug("sending SIGABRT to pid: %r, cpu: %0.2f%%", pid, cpu)
-            os.kill(pid, signal.SIGABRT)
+            LOG.debug("sending SIGABRT to pid: %r, cpu: %0.2f%%", pid, cpu)
+            kill(pid, signal.SIGABRT)
             break
 
     def add_abort_token(self, token):
@@ -65,11 +66,11 @@ class PuppetTarget(Target):
             self._puppet.close()
             # save logs in lock to avoid a parallel clean_up() removing them
             if self._browser_logs:
-                log_path = tempfile.mkdtemp(
-                    prefix=time.strftime("%Y%m%d-%H%M%S_", time.localtime()),
+                log_path = mkdtemp(
+                    prefix=strftime("%Y%m%d-%H%M%S_", localtime()),
                     suffix="_browser_logs",
                     dir=self._browser_logs)
-                log.debug("saving browser logs to %r", log_path)
+                LOG.debug("saving browser logs to %r", log_path)
                 self._puppet.save_logs(log_path)
                 # only save logs once per launch
                 self._browser_logs = None
@@ -112,8 +113,8 @@ class PuppetTarget(Target):
         # check if there has been a crash, hang, etc...
         if not is_healthy or was_timeout:
             if self._puppet.is_running():
-                log.debug("terminating browser...")
-                if was_timeout and "timeout" not in ignored and platform.system() == "Linux":
+                LOG.debug("terminating browser...")
+                if was_timeout and "timeout" not in ignored and system() == "Linux":
                     self._abort_hung_proc()
                     # give the process a moment to start dump
                     self._puppet.wait(timeout=1)
@@ -121,24 +122,24 @@ class PuppetTarget(Target):
         # if something has happened figure out what
         if not is_healthy:
             if self._puppet.reason == FFPuppet.RC_CLOSED:
-                log.info("target.close() was called")
+                LOG.info("target.close() was called")
             elif self._puppet.reason == FFPuppet.RC_EXITED:
-                log.info("Target closed itself")
+                LOG.info("Target closed itself")
             elif (self._puppet.reason == FFPuppet.RC_WORKER
                   and "memory" in ignored
                   and "ffp_worker_memory_usage" in self._puppet.available_logs()):
                 status = self.RESULT_IGNORED
-                log.info("Memory limit exceeded")
+                LOG.info("Memory limit exceeded")
             elif (self._puppet.reason == FFPuppet.RC_WORKER
                   and "log-limit" in ignored
                   and "ffp_worker_log_size" in self._puppet.available_logs()):
                 status = self.RESULT_IGNORED
-                log.info("Log size limit exceeded")
+                LOG.info("Log size limit exceeded")
             else:
-                log.debug("failure detected, ffpuppet return code: %r", self._puppet.reason)
+                LOG.debug("failure detected, ffpuppet return code: %r", self._puppet.reason)
                 status = self.RESULT_FAILURE
         elif was_timeout:
-            log.info("Timeout detected")
+            LOG.info("Timeout detected")
             status = self.RESULT_IGNORED if "timeout" in ignored else self.RESULT_FAILURE
         return status
 
@@ -146,29 +147,29 @@ class PuppetTarget(Target):
         # Note: This is not required if the browser is going to close.
         # SIGTERM will also trigger coverage to be synced out.
         if self.rl_countdown < 1:
-            log.debug("Skipping coverage dump (target is scheduled to close)")
+            LOG.debug("Skipping coverage dump (target is scheduled to close)")
             return
         pid = self._puppet.get_pid()
         if pid is None or not self._puppet.is_healthy():
-            log.debug("Skipping coverage dump (target is not in a good state)")
+            LOG.debug("Skipping coverage dump (target is not in a good state)")
             return
         # If at this point, the browser is in a good state, i.e. no crashes
         # or hangs, so signal the browser to dump coverage.
         try:
-            for child in psutil.Process(pid).children(recursive=True):
-                log.debug("Sending SIGUSR1 to %d (child)", child.pid)
-                os.kill(child.pid, signal.SIGUSR1)
-        except (psutil.AccessDenied, psutil.NoSuchProcess):  # pragma: no cover
+            for child in Process(pid).children(recursive=True):
+                LOG.debug("Sending SIGUSR1 to %d (child)", child.pid)
+                kill(child.pid, signal.SIGUSR1)
+        except (AccessDenied, NoSuchProcess):  # pragma: no cover
             pass
-        log.debug("Sending SIGUSR1 to %d (parent)", pid)
-        os.kill(pid, signal.SIGUSR1)
-        start_time = time.time()
+        LOG.debug("Sending SIGUSR1 to %d (parent)", pid)
+        kill(pid, signal.SIGUSR1)
+        start_time = time()
         gcda_found = False
         delay = 0.1
         # wait for processes to write .gcno files
         # this should typically take less than 1 second
         while True:
-            for proc in psutil.process_iter(attrs=["pid", "ppid", "open_files"]):
+            for proc in process_iter(attrs=["pid", "ppid", "open_files"]):
                 # check if proc is the target or child process
                 if pid in (proc.info["pid"], proc.info["ppid"]):
                     if proc.info["open_files"] is None:
@@ -180,17 +181,17 @@ class PuppetTarget(Target):
                         break
             else:
                 gcda_open = None
-            elapsed = time.time() - start_time
+            elapsed = time() - start_time
             if gcda_found:
                 if gcda_open is None:
                     # success
-                    log.debug("gcda dump took %0.2fs", elapsed)
+                    LOG.debug("gcda dump took %0.2fs", elapsed)
                     break
                 if elapsed >= timeout:
                     # timeout failure
-                    log.warning("gcda file open by pid %d after %0.2fs", gcda_open, elapsed)
-                    os.kill(gcda_open, signal.SIGABRT)
-                    time.sleep(1)
+                    LOG.warning("gcda file open by pid %d after %0.2fs", gcda_open, elapsed)
+                    kill(gcda_open, signal.SIGABRT)
+                    sleep(1)
                     self.close()
                     break
                 if delay < 1.0:
@@ -198,12 +199,12 @@ class PuppetTarget(Target):
                     delay = min(1.0, delay + 0.1)
             elif elapsed >= 3:
                 # assume we missed the process writing .gcno files
-                log.warning("No gcda files seen after %0.2fs", elapsed)
+                LOG.warning("No gcda files seen after %0.2fs", elapsed)
                 break
             if not self._puppet.is_healthy():
-                log.warning("Browser failure during dump_coverage()")
+                LOG.warning("Browser failure during dump_coverage()")
                 break
-            time.sleep(delay)
+            sleep(delay)
 
     def launch(self, location, env_mod=None):
         if not self.prefs:
@@ -211,9 +212,9 @@ class PuppetTarget(Target):
         # GRZ_BROWSER_LOGS is intended to be used to aid in debugging.
         # when close() is called a copy of the browser logs will be saved
         # to the directory specified by GRZ_BROWSER_LOGS
-        self._browser_logs = os.getenv("GRZ_BROWSER_LOGS")
-        if self._browser_logs and not os.path.isdir(self._browser_logs):
-            os.makedirs(self._browser_logs)
+        self._browser_logs = getenv("GRZ_BROWSER_LOGS")
+        if self._browser_logs and not isdir(self._browser_logs):
+            makedirs(self._browser_logs)
         self.rl_countdown = self.rl_reset
         env_mod = dict(env_mod or [])
         # do not allow network connections to non local endpoints
@@ -230,7 +231,7 @@ class PuppetTarget(Target):
                 extension=self.extension,
                 env_mod=env_mod)
         except LaunchError as exc:
-            log.error("FFPuppet LaunchError: %s", str(exc))
+            LOG.error("FFPuppet LaunchError: %s", str(exc))
             self.close()
             if isinstance(exc, BrowserTimeoutError):
                 raise TargetLaunchTimeout(str(exc))
