@@ -6,8 +6,6 @@ import sys
 
 from .reduce import ReductionJob
 from .args import ReducerArgs
-from ..main import console_init_logging
 
 
-console_init_logging()
 sys.exit(ReductionJob.main(ReducerArgs().parse_args()))

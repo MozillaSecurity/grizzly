@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import argparse
+import logging
 import os.path
 import tempfile
 
@@ -32,6 +33,13 @@ class CommonArgs(object):
 
     def __init__(self):
         super(CommonArgs, self).__init__()
+        # log levels for console logging
+        self._level_map = {
+            "CRIT": logging.CRITICAL,
+            "ERROR": logging.ERROR,
+            "WARN": logging.WARNING,
+            "INFO": logging.INFO,
+            "DEBUG": logging.DEBUG}
         self._sanity_skip = set()
 
         if not hasattr(self, "parser"):
@@ -50,6 +58,10 @@ class CommonArgs(object):
         general_args.add_argument(
             "--launch-timeout", type=int, default=300,
             help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
+        general_args.add_argument(
+            "--log-level", default="INFO",
+            help="Configure console logging. Options: %s (default: %%(default)s)" %
+            ", ".join(k for k, v in sorted(self._level_map.items(), key=lambda x: x[1])))
         general_args.add_argument(
             "--log-limit", type=int,
             help="Log file size limit in MBs (default: 'no limit')")
@@ -116,6 +128,16 @@ class CommonArgs(object):
                 self.parser.error("%r does not exist" % args.input)
             elif os.path.isdir(args.input) and not os.listdir(args.input):
                 self.parser.error("%r is empty" % args.input)
+
+        # configure logging
+        log_level = self._level_map.get(args.log_level.upper(), None)
+        if log_level is None:
+            self.parser.error("Invalid log-level %r" % args.log_level)
+        if log_level == logging.DEBUG:
+            log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
+        else:
+            log_fmt = "[%(asctime)s] %(message)s"
+        logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
         if args.working_path is not None and not os.path.isdir(args.working_path):
             self.parser.error("%r is not a directory" % args.working_path)

@@ -13,7 +13,6 @@ from Collector.Collector import Collector
 
 from .args import ReducerFuzzManagerIDQualityArgs
 from .crash import CrashReductionJob
-from ..main import console_init_logging
 
 
 LOG = logging.getLogger("grizzly.reduce.bucket")
@@ -134,5 +133,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    console_init_logging()
     sys.exit(main(ReducerFuzzManagerIDQualityArgs().parse_args()))
