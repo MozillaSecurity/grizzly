@@ -169,9 +169,6 @@ class GrizzlyArgs(CommonArgs):
             "adapter",
             help="Available adapters: %s" % ", ".join(self.adapters))
         self.parser.add_argument(
-            "--accepted-extensions", nargs="+",
-            help="Space separated list of supported file extensions. ie: html svg (default: all)")
-        self.parser.add_argument(
             "-c", "--cache", type=int, default=0,
             help="Maximum number of additional test cases to include in report (default: %(default)s)")
         self.parser.add_argument(
