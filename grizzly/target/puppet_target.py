@@ -7,6 +7,7 @@ import os
 import platform
 import signal
 import time
+import tempfile
 
 import psutil
 
@@ -22,7 +23,7 @@ log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
 
 
 class PuppetTarget(Target):
-    __slots__ = ("use_rr", "use_valgrind", "_puppet")
+    __slots__ = ("use_rr", "use_valgrind", "_browser_logs", "_puppet")
 
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch, **kwds):
         super(PuppetTarget, self).__init__(binary, extension, launch_timeout, log_limit,
@@ -32,7 +33,7 @@ class PuppetTarget(Target):
         use_xvfb = kwds.pop("xvfb", False)
         if kwds:
             log.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
-
+        self._browser_logs = None
         # create Puppet object
         self._puppet = FFPuppet(
             use_rr=self.use_rr,
@@ -52,14 +53,26 @@ class PuppetTarget(Target):
         self._puppet.add_abort_token(token)
 
     def cleanup(self):
-        # prevent parallel calls to FFPuppet.clean_up()
+        # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
+        if self._browser_logs:
+            self.close()
         with self._lock:
             self._puppet.clean_up()
 
     def close(self):
-        # prevent parallel calls to FFPuppet.close()
+        # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
         with self._lock:
             self._puppet.close()
+            # save logs in lock to avoid a parallel clean_up() removing them
+            if self._browser_logs:
+                log_path = tempfile.mkdtemp(
+                    prefix=time.strftime("%Y%m%d-%H%M%S_", time.localtime()),
+                    suffix="_browser_logs",
+                    dir=self._browser_logs)
+                log.debug("saving browser logs to %r", log_path)
+                self._puppet.save_logs(log_path)
+                # only save logs once per launch
+                self._browser_logs = None
 
     @property
     def closed(self):
@@ -195,6 +208,12 @@ class PuppetTarget(Target):
     def launch(self, location, env_mod=None):
         if not self.prefs:
             raise TargetError("A prefs.js file is required")
+        # GRZ_BROWSER_LOGS is intended to be used to aid in debugging.
+        # when close() is called a copy of the browser logs will be saved
+        # to the directory specified by GRZ_BROWSER_LOGS
+        self._browser_logs = os.getenv("GRZ_BROWSER_LOGS")
+        if self._browser_logs and not os.path.isdir(self._browser_logs):
+            os.makedirs(self._browser_logs)
         self.rl_countdown = self.rl_reset
         env_mod = dict(env_mod or [])
         # do not allow network connections to non local endpoints

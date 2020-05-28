@@ -20,6 +20,7 @@ def test_puppet_target_01(mocker, tmp_path):
     fake_file.touch()
     with PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25) as target:
         assert target.closed
+        assert target._browser_logs is None
         assert target.detect_failure([], False) == Target.RESULT_NONE
         assert target.log_size() == 1124
         fake_ffp.return_value.log_length.assert_any_call("stderr")
@@ -45,6 +46,7 @@ def test_puppet_target_02(mocker, tmp_path):
     assert fake_ffp.return_value.launch.call_count == 0
     target.prefs = str(fake_file)
     target.launch("launch_target_page")
+    assert target._browser_logs is None
     assert fake_ffp.return_value.launch.call_count == 1
     assert fake_ffp.return_value.close.call_count == 0
     fake_ffp.return_value.launch.side_effect = BrowserTimeoutError
@@ -274,3 +276,20 @@ def test_puppet_target_06(mocker, tmp_path):
     assert target.monitor.log_length("stdout") == 100
     target.monitor.clone_log("somelog")
     assert fake_ffp.return_value.clone_log.call_count == 1
+
+def test_puppet_target_07(mocker, tmp_path):
+    """test PuppetTarget with GRZ_BROWSER_LOGS set"""
+    browser_logs = (tmp_path / "browser_logs")
+    fake_getenv = mocker.patch("grizzly.target.puppet_target.os.getenv", autospec=True)
+    fake_getenv.return_value = str(browser_logs)
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 35)
+    target.prefs = str(fake_file)
+    target.launch("launch_target_page")
+    assert target._browser_logs == str(browser_logs)
+    assert browser_logs.is_dir()
+    target.cleanup()
+    assert fake_ffp.return_value.save_logs.call_count == 1
+    assert target._browser_logs is None
