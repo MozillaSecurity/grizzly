@@ -24,9 +24,12 @@ from FTB.Signatures.CrashInfo import CrashSignature
 
 from . import strategies as strategies_module, testcase_contents
 from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
+from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
+from ..common.runner import Runner
+from ..common.status import ReducerStats, Status
+from ..common.storage import TestCase, TestFile
+from ..main import configure_logging
 from ..session import Session
-from ..common import FilesystemReporter, FuzzManagerReporter, ReducerStats, \
-    Report, Runner, Status, TestCase, TestFile
 from ..target import load as load_target, sanitizer_opts, TargetLaunchError, \
     TargetLaunchTimeout
 
@@ -1164,6 +1167,7 @@ class ReductionJob(object):
     def main(cls, args):
         # NOTE: this mirrors grizzly.core.main pretty closely
         #       please check if updates here should go there too
+        configure_logging(args.log_level)
         LOG.info("Starting Grizzly Reducer")
         if args.fuzzmanager:
             FuzzManagerReporter.sanity_check(args.binary)

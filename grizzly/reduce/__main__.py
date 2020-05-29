@@ -4,8 +4,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from sys import exit as sysexit
 
-from .reduce import ReductionJob
 from .args import ReducerArgs
+from .reduce import ReductionJob
 
 
 sysexit(ReductionJob.main(ReducerArgs().parse_args()))
