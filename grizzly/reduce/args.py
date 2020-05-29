@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import os.path
+from os.path import isdir, isfile
 
 from .reduce import ReductionJob
 from .strategies import strategies_by_name
@@ -16,48 +16,50 @@ class ReducerArgs(CommonArgs):
         self.parser.add_argument(
             "input",
             help="Test case or directory containing test cases")
-        self.parser.add_argument(
-            "--sig",
-            help="Signature to reduce (JSON)")
-        self.parser.add_argument(
-            "--no-harness", action="store_true",
-            help="Don't use the harness for sapphire redirection")
-        self.parser.add_argument(
+
+        replay_args = self.parser.add_argument_group("Reduce Arguments")
+        replay_args.add_argument(
             "--any-crash", action="store_true",
             help="Any crash is interesting, not only crashes which match the original first crash")
-        self.parser.add_argument(
-            "--skip", type=int, default=0,
-            help="Return interesting = False for the first n reductions (default: %(default)s)")
-        self.parser.add_argument(
-            "--repeat", type=int, default=1,
-            help="Try to run the testcase multiple times, for intermittent testcases (default: %(default)sx)")
-        self.parser.add_argument(
-            "--min-crashes", type=int, default=1,
-            help="Require the testcase to crash n times before accepting the result. (default: %(default)sx)")
-        self.parser.add_argument(
-            "--idle-timeout", type=int, default=60,
-            help="Number of seconds to wait before polling testcase for idle (default: %(default)s)")
-        self.parser.add_argument(
-            "--idle-threshold", type=int, default=25,
-            help="CPU usage threshold to mark the process as idle (default: %(default)s)")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--environ",
             help="DEPRICATED: File containing line separated environment variables (VAR=value)" \
-            "to be set in the firefox process.")
-        self.parser.add_argument(
-            "--reduce-file",
-            help="Value passed to lithium's --testcase option, needed for testcase cache "
-            "(default: input param)")
-        self.parser.add_argument(
-            "--no-cache", action="store_true",
-            help="Disable testcase caching")
-        self.parser.add_argument(
+                "to be set in the firefox process.")
+        replay_args.add_argument(
+            "--idle-threshold", type=int, default=25,
+            help="CPU usage threshold to mark the process as idle (default: %(default)s)")
+        replay_args.add_argument(
+            "--idle-timeout", type=int, default=60,
+            help="Number of seconds to wait before polling testcase for idle (default: %(default)s)")
+        replay_args.add_argument(
+            "--min-crashes", type=int, default=1,
+            help="Require the testcase to crash n times before accepting the result. (default: %(default)sx)")
+        replay_args.add_argument(
             "--no-analysis", action="store_true",
             help="Disable analysis to auto-set --repeat/--min-crashes.")
-        self.parser.add_argument(
+        replay_args.add_argument(
+            "--no-cache", action="store_true",
+            help="Disable testcase caching")
+        replay_args.add_argument(
+            "--no-harness", action="store_true",
+            help="Don't use the harness for sapphire redirection")
+        replay_args.add_argument(
+            "--reduce-file",
+            help="Value passed to lithium's --testcase option, needed for testcase cache " \
+                "(default: input param)")
+        replay_args.add_argument(
+            "--repeat", type=int, default=1,
+            help="Try to run the testcase multiple times, for intermittent testcases (default: %(default)sx)")
+        replay_args.add_argument(
+            "--sig",
+            help="Signature (JSON) file to match.")
+        replay_args.add_argument(
+            "--skip", type=int, default=0,
+            help="Return interesting = False for the first n reductions (default: %(default)s)")
+        replay_args.add_argument(
             "--static-timeout", action="store_true", dest="fixed_timeout",
             help="Disable automatically updating the iteration timeout.")
-        self.parser.add_argument(
+        replay_args.add_argument(
             "--strategy", nargs="+", default=list(), metavar="STRATEGY", dest="strategies",
             help="One or more strategies (space-separated). Available: %s (default: %s)"
             % (" ".join(sorted(strategies_by_name())), " ".join(ReductionJob.DEFAULT_STRATEGIES)))
@@ -66,12 +68,12 @@ class ReducerArgs(CommonArgs):
         super(ReducerArgs, self).sanity_check(args)
 
         if "input" not in self._sanity_skip:
-            if not (os.path.isdir(args.input)
-                    or (os.path.isfile(args.input) and (args.input.lower().endswith(".zip")
-                                                        or args.input.lower().endswith(".html")))):
+            if not (isdir(args.input)
+                    or (isfile(args.input) and (args.input.lower().endswith(".zip")
+                                                or args.input.lower().endswith(".html")))):
                 self.parser.error("Testcase should be a folder, zip, or html file")
 
-        if args.sig is not None and not os.path.isfile(args.sig):
+        if args.sig is not None and not isfile(args.sig):
             self.parser.error("file not found: %r" % args.sig)
 
         if args.repeat < 1:
@@ -80,7 +82,7 @@ class ReducerArgs(CommonArgs):
         if args.min_crashes < 1:
             self.parser.error("'--min-crashes' value must be positive")
 
-        if args.environ is not None and not os.path.isfile(args.environ):
+        if args.environ is not None and not isfile(args.environ):
             self.parser.error("file not found: %r" % args.environ)
 
         if args.strategies:
