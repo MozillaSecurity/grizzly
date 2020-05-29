@@ -100,16 +100,19 @@ class SapphireJob(object):
                 while True:
                     if url in includes:
                         LOG.debug("found include match %r", url)
-                        target = os.path.join(
-                            self.server_map.include[url].target,
-                            request.split(url)[-1].lstrip("/") if url else request)
-                        # if the mapping url is empty check the file exists
-                        if url or os.path.isfile(target):
-                            return Resource(
-                                Resource.URL_INCLUDE,
-                                os.path.normpath(target),
-                                mime=self.server_map.include[url].mime,
-                                required=self.server_map.include[url].required)
+                        location = request.split(url, 1)[-1].lstrip("/") if url else request
+                        # check location points to something
+                        if location:
+                            target = os.path.join(
+                                self.server_map.include[url].target,
+                                location)
+                            # if the mapping url is empty check the file exists
+                            if url or os.path.isfile(target):
+                                return Resource(
+                                    Resource.URL_INCLUDE,
+                                    os.path.normpath(target),
+                                    mime=self.server_map.include[url].mime,
+                                    required=self.server_map.include[url].required)
                     if "/" in url:
                         url = url.rsplit("/", 1)[0]
                     elif url:
