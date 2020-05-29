@@ -134,6 +134,52 @@ def test_sapphire_job_04(mocker, tmp_path):
     assert not job.is_forbidden(str(srv_include / ".." / "root" / "req_file.txt"))
 
 def test_sapphire_job_05(tmp_path):
+    """test SapphireJob.check_request() with tricky includes"""
+    srv_root = tmp_path / "root"
+    srv_root.mkdir()
+    req = srv_root / "req_file.txt"
+    req.write_bytes(b"a")
+    inc_dir = tmp_path / "inc"
+    inc_dir.mkdir()
+    (inc_dir / "sub").mkdir()
+    inc_file1 = inc_dir / "sub" / "include.js"
+    inc_file1.write_bytes(b"a")
+    inc_file2 = inc_dir / "test_inc.html"
+    inc_file2.write_bytes(b"a")
+    # test url matching part of the file name
+    smap = ServerMap()
+    smap.include["inc"] = Resource(Resource.URL_INCLUDE, str(inc_dir))
+    job = SapphireJob(str(srv_root), server_map=smap)
+    resource = job.check_request("inc/sub/include.js")
+    assert resource.type == Resource.URL_INCLUDE
+    assert resource.target == str(inc_file1)
+    # test checking only the include url
+    assert job.check_request("inc") is None
+    # file and include file collision (files should always win)
+    smap.include.clear()
+    inc_a = inc_dir / "a.bin"
+    inc_a.write_bytes(b"a")
+    file_a = srv_root / "a.bin"
+    file_a.write_bytes(b"a")
+    smap.include["/"] = Resource(Resource.URL_INCLUDE, str(inc_dir))
+    resource = job.check_request("a.bin")
+    assert resource.type == Resource.URL_FILE
+    assert resource.target == str(file_a)
+    # inc and inc subdir collision
+    # TODO: This can fail. How do we detect or support it?
+    #smap.include.clear()
+    #(inc_dir / "c").mkdir()
+    #inc_c_d = (inc_dir / "c" / "d.bin")
+    #inc_c_d.write_bytes(b"a")
+    #inc_d = (inc_dir / "d.bin")
+    #inc_d.write_bytes(b"a")
+    #smap.include["c"] = Resource(Resource.URL_INCLUDE, str(inc_dir))
+    #smap.include[""] = Resource(Resource.URL_INCLUDE, str(inc_dir / "c"))
+    #resource = job.check_request("c/d.bin")
+    #assert resource.type == Resource.URL_INCLUDE
+    #assert resource.target == str(inc_c_d)
+
+def test_sapphire_job_06(tmp_path):
     """test SapphireJob dynamic"""
     smap = ServerMap()
     smap.set_dynamic_response("cb1", lambda: 0, mime_type="mime_type")
@@ -151,7 +197,7 @@ def test_sapphire_job_05(tmp_path):
     assert callable(resource.target)
     assert isinstance(resource.mime, str)
 
-def test_sapphire_job_06(tmp_path):
+def test_sapphire_job_07(tmp_path):
     """test accessing forbidden files"""
     srv_root = tmp_path / "root"
     srv_root.mkdir()
@@ -170,7 +216,7 @@ def test_sapphire_job_06(tmp_path):
 
 @pytest.mark.skipif(platform.system() == "Windows",
                     reason="Unsupported on Windows")
-def test_sapphire_job_07(tmp_path):
+def test_sapphire_job_08(tmp_path):
     """test SapphireJob with file names containing invalid characters"""
     test_file = tmp_path / "test.txt"
     test_file.write_bytes(b"a")
@@ -180,12 +226,12 @@ def test_sapphire_job_07(tmp_path):
     assert job.pending == 1
     assert job.check_request("test.txt").target == str(test_file)
 
-def test_sapphire_job_08():
+def test_sapphire_job_09():
     """test SapphireJob with missing directory"""
     with pytest.raises(OSError):
         SapphireJob("missing")
 
-def test_sapphire_job_09(tmp_path):
+def test_sapphire_job_10(tmp_path):
     """test SapphireJob.increment_served() and SapphireJob.served"""
     job = SapphireJob(str(tmp_path))
     assert not any(job.served)
