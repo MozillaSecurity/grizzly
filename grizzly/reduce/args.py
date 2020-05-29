@@ -64,6 +64,9 @@ class ReducerArgs(CommonArgs):
             help="One or more strategies (space-separated). Available: %s (default: %s)"
             % (" ".join(sorted(strategies_by_name())), " ".join(ReductionJob.DEFAULT_STRATEGIES)))
 
+        self.parser.epilog = "For addition help check out the wiki:" \
+            " https://github.com/MozillaSecurity/grizzly/wiki"
+
     def sanity_check(self, args):
         super(ReducerArgs, self).sanity_check(args)
 
