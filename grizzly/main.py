@@ -45,7 +45,6 @@ def main(args):
         # TODO: move this into Session
         iomanager = IOManager(
             report_size=(max(args.cache, 0) + 1),
-            mime_type=args.mime,
             working_path=args.working_path)
 
         log.debug("initializing Adapter %r", args.adapter)

@@ -14,7 +14,6 @@ def test_iomanager_01():
         assert iom.server_map is not None
         assert not iom._environ_files
         assert iom._generated == 0
-        assert iom._mime is None
         assert iom._report_size == 1
 
 def test_iomanager_02():

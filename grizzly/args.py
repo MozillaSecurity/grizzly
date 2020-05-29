@@ -178,9 +178,6 @@ class GrizzlyArgs(CommonArgs):
             "-i", "--input",
             help="Test case or directory containing test cases")
         self.parser.add_argument(
-            "--mime",
-            help="Specify a mime type")
-        self.parser.add_argument(
             "--rr", action="store_true",
             help="Use RR (Linux only)")
         self.parser.add_argument(
