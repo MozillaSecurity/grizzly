@@ -24,6 +24,7 @@ class FakeArgs(object):
         self.fuzzmanager = False
         self.ignore = list()
         self.launch_timeout = 300
+        self.log_level = 10  # 10 = DEBUG, 20 = INFO
         self.log_limit = 0
         self.memory = 0
         self.platform = "test"
@@ -64,6 +65,7 @@ def test_main_01(tmp_path, mocker):
     fake_reporter = mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
     fake_reporter.sanity_check.return_value = True
     args.input = None
+    args.log_level = None
     args.fuzzmanager = True
     args.coverage = True
     assert main(args) == Session.EXIT_SUCCESS

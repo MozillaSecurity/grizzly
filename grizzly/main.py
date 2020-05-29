@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from logging import getLogger
+from logging import basicConfig, DEBUG, getLogger
 from os import getenv
 
 from sapphire import Sapphire
@@ -19,8 +19,15 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 log = getLogger("grizzly")  # pylint: disable=invalid-name
 
+def configure_logging(log_level):
+    if log_level == DEBUG:
+        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
+    else:
+        log_fmt = "[%(asctime)s] %(message)s"
+    basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
 def main(args):
+    configure_logging(args.log_level)
     log.info("Starting Grizzly")
     if args.fuzzmanager:
         FuzzManagerReporter.sanity_check(args.binary)

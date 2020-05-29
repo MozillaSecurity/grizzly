@@ -10,8 +10,11 @@ import tempfile
 from FTB.Signatures.CrashInfo import CrashSignature
 from sapphire import Sapphire, ServerMap
 
-from ..common import FilesystemReporter, FuzzManagerReporter, Report, Runner, \
-    Status, TestCase, TestCaseLoadFailure, TestFile
+from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
+from ..common.runner import Runner
+from ..common.status import Status
+from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
+from ..main import configure_logging
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -160,7 +163,11 @@ class ReplayManager(object):
             self.target.step()
             LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
             # run test case
-            self._runner.run(self.ignore, server_map, self.testcase, wait_for_callback=self._harness is None)
+            self._runner.run(
+                self.ignore,
+                server_map,
+                self.testcase,
+                wait_for_callback=self._harness is None)
             # process results
             if self._runner.result == self._runner.FAILED:
                 log_path = tempfile.mkdtemp(prefix="grzreplay_logs_")
@@ -173,6 +180,7 @@ class ReplayManager(object):
                     # signature has not been specified use the first one created
                     self._signature = report.crash_signature(crash_info)
                 if short_sig == "No crash detected":
+                    # TODO: verify report.major == "NO_STACK" otherwise FM failed to parse the logs
                     # TODO: change this to support hangs/timeouts, etc
                     LOG.info("Result: No crash detected")
                     crash_hash = None
@@ -240,6 +248,7 @@ class ReplayManager(object):
 
     @classmethod
     def main(cls, args):
+        configure_logging(args.log_level)
         if args.fuzzmanager:
             FuzzManagerReporter.sanity_check(args.binary)
 

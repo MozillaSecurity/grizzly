@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser, HelpFormatter
-from logging import basicConfig, CRITICAL, DEBUG, ERROR, INFO, WARNING
+from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import listdir
 from os.path import exists, isfile, isdir
 from tempfile import gettempdir
@@ -133,15 +133,11 @@ class CommonArgs(object):
             elif isdir(args.input) and not listdir(args.input):
                 self.parser.error("%r is empty" % args.input)
 
-        # configure logging
+        # check log level
         log_level = self._level_map.get(args.log_level.upper(), None)
         if log_level is None:
             self.parser.error("Invalid log-level %r" % args.log_level)
-        if log_level == DEBUG:
-            log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
-        else:
-            log_fmt = "[%(asctime)s] %(message)s"
-        basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+        args.log_level = log_level
 
         if args.working_path is not None and not isdir(args.working_path):
             self.parser.error("%r is not a directory" % args.working_path)
