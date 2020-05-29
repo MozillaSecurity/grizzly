@@ -5,8 +5,6 @@ Sapphire HTTP server
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-import argparse
 import errno
 import logging
 import os
@@ -158,25 +156,7 @@ class Sapphire(object):
             self._timeout = max(value, 1)
 
     @classmethod
-    def main(cls, argv=None):
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "path",
-            help="Specify a directory to act as wwwroot")
-        parser.add_argument(
-            "--port", type=int,
-            help="Specify a port to bind to (default: random)")
-        parser.add_argument(
-            "--remote", action="store_true",
-            help="Allow connections from addresses other than 127.0.0.1")
-        parser.add_argument(
-            "--timeout", type=int,
-            help="Duration in seconds to serve before exiting, 0 run until served (default: 0)")
-        args = parser.parse_args(argv)
-
-        if not os.path.isdir(args.path):
-            parser.error("Path does not exist %r" % (args.path,))
-
+    def main(cls, args):
         try:
             with cls(allow_remote=args.remote, port=args.port, timeout=args.timeout) as serv:
                 LOG.info(

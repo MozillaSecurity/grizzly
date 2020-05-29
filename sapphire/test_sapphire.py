@@ -641,8 +641,11 @@ def test_sapphire_32(mocker):
     assert fake_sock.return_value.listen.call_count == 1
     assert fake_sleep.call_count == 1
 
-def test_main_01(tmp_path):
+def test_main_01(mocker, tmp_path):
     """test Sapphire.main()"""
-    with pytest.raises(SystemExit):
-        Sapphire.main(["missing_path"])
-    Sapphire.main([str(tmp_path)])
+    args = mocker.Mock(
+        path=str(tmp_path),
+        port=4536,
+        remote=False,
+        timeout=None)
+    Sapphire.main(args)

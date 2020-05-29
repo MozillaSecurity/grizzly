@@ -71,8 +71,7 @@ class SapphireLoadManager(object):
 
     def wait(self, timeout, continue_cb=None, poll=0.5):
         assert self._listener is not None
-        if timeout is not None:
-            assert timeout > 0
+        if timeout > 0:
             deadline = time.time() + timeout
         else:
             deadline = None
