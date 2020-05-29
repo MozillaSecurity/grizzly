@@ -77,7 +77,7 @@ def test_sapphire_load_manager_04(mocker, tmp_path):
     with SapphireLoadManager(job, serv_sock, max_workers=10) as loadmgr:
         # invalid callback
         with pytest.raises(TypeError, match="continue_cb must be callable"):
-            loadmgr.wait(None, continue_cb="test")
+            loadmgr.wait(0, continue_cb="test")
         # callback abort
         assert loadmgr.wait(1, continue_cb=lambda: False, poll=0.01)
     # timeout
