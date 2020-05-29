@@ -26,7 +26,6 @@ class FakeArgs(object):
         self.launch_timeout = 300
         self.log_limit = 0
         self.memory = 0
-        self.mime = None
         self.platform = "test"
         self.prefs = None
         self.rr = False

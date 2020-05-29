@@ -24,7 +24,7 @@ class IOManager(object):
         "GRZ_FORCED_CLOSE",
         "MOZ_CHAOSMODE")
 
-    def __init__(self, report_size=1, mime_type=None, working_path=None):
+    def __init__(self, report_size=1, working_path=None):
         assert report_size > 0
         self.harness = None
         self.server_map = ServerMap()  # manage redirects, include directories and dynamic responses
@@ -32,7 +32,6 @@ class IOManager(object):
         self.working_path = working_path
         self._environ_files = list()  # collection of files that should be added to the testcase
         self._generated = 0  # number of test cases generated
-        self._mime = mime_type
         self._report_size = report_size
         # used to record environment variable that directly impact the browser
         self._tracked_env = self.tracked_environ()
