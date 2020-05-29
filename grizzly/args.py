@@ -186,6 +186,9 @@ class GrizzlyArgs(CommonArgs):
             "--s3-fuzzmanager", action="store_true",
             help="Report large attachments (if any) to S3 and then the crash & S3 link to FuzzManager")
 
+        self.parser.epilog = "For addition help check out the wiki:" \
+            " https://github.com/MozillaSecurity/grizzly/wiki"
+
     def sanity_check(self, args):
         super(GrizzlyArgs, self).sanity_check(args)
 
