@@ -126,7 +126,7 @@ def test_testcase_06():
         assert tcase.data_size == 6
 
 def test_testcase_07(tmp_path):
-    """test TestCase.load_path() using a directory"""
+    """test TestCase.load_path() using a directory fail cases"""
     # missing test_info.json
     with pytest.raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
         TestCase.load_path(str(tmp_path))
@@ -138,24 +138,15 @@ def test_testcase_07(tmp_path):
     (tmp_path / "test_info.json").write_bytes(b"{}")
     with pytest.raises(TestCaseLoadFailure, match="'test_info.json' missing 'target' entry"):
         TestCase.load_path(str(tmp_path))
-    # build a valid test case
+    # build a test case
     src_dir = (tmp_path / "src")
     src_dir.mkdir()
     (src_dir / "prefs.js").touch()
     entry_point = src_dir / "target.bin"
     entry_point.touch()
-    (src_dir / "optional.bin").touch()
     with TestCase("target.bin", None, "test-adapter") as src:
-        src.add_environ_var("TEST_ENV_VAR", "100")
         src.add_from_file(str(entry_point))
         src.dump(str(src_dir), include_details=True)
-    # load test case from test_info.json
-    with TestCase.load_path(str(src_dir)) as dst:
-        assert dst.landing_page == "target.bin"
-        assert "prefs.js" in (x.file_name for x in dst._files.meta)
-        assert "target.bin" in (x.file_name for x in dst._files.required)
-        assert "optional.bin" in (x.file_name for x in dst._files.optional)
-        assert dst.env_vars["TEST_ENV_VAR"] == "100"
     # bad test_info.json 'target' entry
     entry_point.unlink()
     with pytest.raises(TestCaseLoadFailure, match="entry_point 'target.bin' not found in"):
@@ -169,6 +160,35 @@ def test_testcase_07(tmp_path):
         TestCase.load_path(str(src_dir))
 
 def test_testcase_08(tmp_path):
+    """test TestCase.load_path() using a directory"""
+    # build a valid test case
+    src_dir = (tmp_path / "src")
+    src_dir.mkdir()
+    (src_dir / "prefs.js").touch()
+    entry_point = src_dir / "target.bin"
+    entry_point.touch()
+    (src_dir / "optional.bin").touch()
+    (src_dir / "x.bin").touch()
+    nested = (tmp_path / "src" / "nested")
+    nested.mkdir()
+    # overlap file name in different directories
+    (nested / "x.bin").touch()
+    (tmp_path / "src" / "nested" / "empty").mkdir()
+    with TestCase("target.bin", None, "test-adapter") as src:
+        src.add_environ_var("TEST_ENV_VAR", "100")
+        src.add_from_file(str(entry_point))
+        src.dump(str(src_dir), include_details=True)
+    # load test case from test_info.json
+    with TestCase.load_path(str(src_dir)) as dst:
+        assert dst.landing_page == "target.bin"
+        assert "prefs.js" in (x.file_name for x in dst._files.meta)
+        assert "target.bin" in (x.file_name for x in dst._files.required)
+        assert "optional.bin" in (x.file_name for x in dst._files.optional)
+        assert "x.bin" in (x.file_name for x in dst._files.optional)
+        assert "nested/x.bin" in (x.file_name for x in dst._files.optional)
+        assert dst.env_vars["TEST_ENV_VAR"] == "100"
+
+def test_testcase_09(tmp_path):
     """test TestCase.load_path() using a file"""
     # invalid entry_point specified
     with pytest.raises(TestCaseLoadFailure, match="Cannot find"):
@@ -193,7 +213,7 @@ def test_testcase_08(tmp_path):
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
 
-def test_testcase_09(tmp_path):
+def test_testcase_10(tmp_path):
     """test TestCase.load_environ()"""
     (tmp_path / "ubsan.supp").touch()
     (tmp_path / "other_file").touch()
@@ -210,7 +230,7 @@ def test_testcase_09(tmp_path):
         assert "b=2" in opts
         assert len(opts) == 3
 
-def test_testcase_10(tmp_path):
+def test_testcase_11(tmp_path):
     """test TestCase.add_batch()"""
     include = (tmp_path / "inc_path")
     include.mkdir()

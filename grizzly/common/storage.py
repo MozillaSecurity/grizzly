@@ -295,21 +295,28 @@ class TestCase(object):
         test = cls(None, None, adapter)
         if full_scan:
             # load all files from directory as test
-            for root, _, files in os.walk(path):
+            for dpath, _, files in os.walk(path):
                 for fname in files:
                     if fname == "test_info.json":
                         continue
-                    if root == path:
+                    if dpath == path:
                         if fname == "prefs.js":
                             if prefs:
-                                test.add_meta(TestFile.from_file(os.path.join(path, fname)))
+                                test.add_meta(TestFile.from_file(os.path.join(dpath, fname)))
                             continue
                         if fname == entry_point:
-                            test.add_from_file(os.path.join(root, fname))
+                            test.add_from_file(os.path.join(dpath, fname))
                             # set entry point
                             test.landing_page = fname
                             continue
-                    test.add_from_file(os.path.join(path, fname), required=False)
+                        location = None
+                    else:
+                        # handle nested directories
+                        location = "/".join((dpath.split(path, 1)[-1], fname))
+                    test.add_from_file(
+                        os.path.join(dpath, fname),
+                        file_name=location,
+                        required=False)
         else:
             # load single file as test
             test.add_from_file(os.path.join(path, entry_point))
