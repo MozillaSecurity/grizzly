@@ -185,7 +185,7 @@ def test_testcase_08(tmp_path):
         assert "target.bin" in (x.file_name for x in dst._files.required)
         assert "optional.bin" in (x.file_name for x in dst._files.optional)
         assert "x.bin" in (x.file_name for x in dst._files.optional)
-        assert "nested/x.bin" in (x.file_name for x in dst._files.optional)
+        assert os.path.join("nested", "x.bin") in (x.file_name for x in dst._files.optional)
         assert dst.env_vars["TEST_ENV_VAR"] == "100"
 
 def test_testcase_09(tmp_path):
