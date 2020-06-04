@@ -31,6 +31,7 @@ class SortingHelpFormatter(HelpFormatter):
 
 class CommonArgs(object):
     IGNORABLE = ("log-limit", "memory", "timeout")
+    IGNORE = ("timeout",)
 
     def __init__(self):
         super(CommonArgs, self).__init__()
@@ -69,7 +70,7 @@ class CommonArgs(object):
             help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
         self.launcher_grp.add_argument(
             "--log-limit", type=int,
-            help="Log file size limit in MBs (default: 'no limit')")
+            help="Browser log file size limit in MBs (default: 'no limit')")
         self.launcher_grp.add_argument(
             "-m", "--memory", type=int,
             help="Browser process memory limit in MBs (default: 'no limit')")
@@ -103,8 +104,9 @@ class CommonArgs(object):
             "--fuzzmanager", action="store_true",
             help="Report results to FuzzManager")
         self.reporter_grp.add_argument(
-            "--ignore", nargs="+", default=list(),
-            help="Space separated ignore list. ie: %s (default: nothing)" % " ".join(self.IGNORABLE))
+            "--ignore", nargs="*", default=list(self.IGNORE),
+            help="Space separated list of issue types to ignore. Valid options: %s"
+                 " (default: %s)" % (" ".join(self.IGNORABLE), " ".join(self.IGNORE)))
         self.reporter_grp.add_argument(
             "--tool",
             help="Override tool name used when reporting issues to FuzzManager")
@@ -123,9 +125,9 @@ class CommonArgs(object):
 
         # sanitize ignore list
         args.ignore = {arg.lower() for arg in args.ignore}
-        for ignore_token in args.ignore:
-            if ignore_token not in self.IGNORABLE:
-                self.parser.error("Unrecognized ignore value: %s" % ignore_token)
+        for ignore in args.ignore:
+            if ignore not in self.IGNORABLE:
+                self.parser.error("Unrecognized ignore value: %s" % ignore)
 
         if "input" not in self._sanity_skip and args.input:
             if not exists(args.input):
