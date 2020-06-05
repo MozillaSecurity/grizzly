@@ -69,10 +69,10 @@ class CommonArgs(object):
             "--launch-timeout", type=int, default=300,
             help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
         self.launcher_grp.add_argument(
-            "--log-limit", type=int,
+            "--log-limit", type=int, default=0,
             help="Browser log file size limit in MBs (default: 'no limit')")
         self.launcher_grp.add_argument(
-            "-m", "--memory", type=int,
+            "-m", "--memory", type=int, default=0,
             help="Browser process memory limit in MBs (default: 'no limit')")
         self.launcher_grp.add_argument(
             "--platform", default="ffpuppet",
@@ -141,10 +141,21 @@ class CommonArgs(object):
             self.parser.error("Invalid log-level %r" % args.log_level)
         args.log_level = log_level
 
+        if args.log_limit < 0:
+            self.parser.error("--log-limit must be >= 0")
+        args.log_limit *= 1048576
+
+        if args.memory < 0:
+            self.parser.error("-m/--memory must be >= 0")
+        args.memory *= 1048576
+
+        if args.relaunch < 1:
+            self.parser.error("--relaunch must be >= 1")
+
         if args.working_path is not None and not isdir(args.working_path):
             self.parser.error("%r is not a directory" % args.working_path)
 
-        if args.extension is not None:
+        if args.extension:
             for ext in args.extension:
                 if not exists(ext):
                     self.parser.error("%r does not exist" % ext)

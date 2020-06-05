@@ -38,8 +38,8 @@ def test_target_01(tmp_path):
     assert not target.is_idle(0)
     assert target.launch_timeout == 321
     assert target.log_size() == 0
-    assert target.log_limit == 2 * 0x100000
-    assert target.memory_limit == 3 * 0x100000
+    assert target.log_limit == 2
+    assert target.memory_limit == 3
     assert target.rl_countdown == 0
     assert target.rl_reset == 25
     assert target.prefs == str(fake_file)

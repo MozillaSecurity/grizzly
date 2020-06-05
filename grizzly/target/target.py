@@ -61,17 +61,20 @@ class Target(object):
         "log_limit", "memory_limit", "prefs", "rl_countdown", "rl_reset")
 
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch):
+        assert log_limit >= 0
+        assert memory_limit >= 0
+        assert relaunch >= 1
         self._lock = threading.Lock()
         self._monitor = None
         self.binary = binary
         self.extension = extension
         self.forced_close = os.getenv("GRZ_FORCED_CLOSE", "1").lower() not in ("false", "0")
         self.launch_timeout = max(launch_timeout, 300)
-        self.log_limit = log_limit * 0x100000 if log_limit and log_limit > 0 else 0
-        self.memory_limit = memory_limit * 0x100000 if memory_limit and memory_limit > 0 else 0
+        self.log_limit = log_limit
+        self.memory_limit = memory_limit
         self.prefs = os.path.abspath(prefs) if prefs else None
         self.rl_countdown = 0
-        self.rl_reset = max(relaunch, 1)
+        self.rl_reset = relaunch
 
         assert self.binary is not None and os.path.isfile(self.binary)
         if self.prefs is not None:
