@@ -7,12 +7,9 @@ Sapphire HTTP server job
 """
 
 from collections import defaultdict, namedtuple
-import logging
+from logging import getLogger
 import os
-try:  # py 2-3 compatibility
-    from Queue import Queue
-except ImportError:
-    from queue import Queue
+from queue import Queue
 import threading
 
 from .server_map import Resource
@@ -21,7 +18,7 @@ from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = logging.getLogger("sphr_job")
+LOG = getLogger("sphr_job")
 
 
 Tracker = namedtuple("Tracker", "files lock")
