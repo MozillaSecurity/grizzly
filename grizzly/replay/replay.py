@@ -157,7 +157,7 @@ class ReplayManager(object):
                 except TargetLaunchError:
                     LOG.error("Target launch error. Check browser logs for details.")
                     log_path = tempfile.mkdtemp(prefix="grzreplay_logs_")
-                    self.target.save_logs(log_path, meta=True)
+                    self.target.save_logs(log_path)
                     self._reports_other["STARTUP"] = Report.from_path(log_path)
                     raise
             self.target.step()
@@ -171,7 +171,7 @@ class ReplayManager(object):
             # process results
             if self._runner.result == self._runner.FAILED:
                 log_path = tempfile.mkdtemp(prefix="grzreplay_logs_")
-                self.target.save_logs(log_path, meta=True)
+                self.target.save_logs(log_path)
                 report = Report.from_path(log_path)
                 # check signatures
                 crash_info = report.crash_info(self.target.binary)

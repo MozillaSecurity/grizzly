@@ -153,7 +153,7 @@ class TestReductionJob(reduce.ReductionJob):
     def _run(self, testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
-        self.target.save_logs(result_logs, meta=True)
+        self.target.save_logs(result_logs)
         testcase.duration = 0.1
         with open(self.reduce_file) as fp:
             return "required" in fp.read()
@@ -185,7 +185,7 @@ class TestReductionJobAlt(TestReductionJob):
     def _run(self, testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
-        self.target.save_logs(result_logs, meta=True)
+        self.target.save_logs(result_logs)
         testcase.duration = 0.1
         with open(self.reduce_file) as fp:
             if "required" in fp.read():
@@ -209,7 +209,7 @@ class TestReductionJobKeepHarness(TestReductionJob):
     def _run(self, testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
-        self.target.save_logs(result_logs, meta=True)
+        self.target.save_logs(result_logs)
         testcase.duration = 0.1
         if self.__init_data is not None:
             with open(self.reduce_file) as fp:
@@ -237,7 +237,7 @@ class TestReductionJobSemiReliable(TestReductionJob):
     def _run(self, testcase, temp_prefix):
         result_logs = temp_prefix + "_logs"
         os.mkdir(result_logs)
-        self.target.save_logs(result_logs, meta=True)
+        self.target.save_logs(result_logs)
         testcase.duration = 0.1
         if self.__require_no_harness and not self._no_harness:
             return False

@@ -108,7 +108,7 @@ class Session(object):
     def report_result(self):
         # create working directory for target logs
         result_logs = mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
-        self.target.save_logs(result_logs, meta=True)
+        self.target.save_logs(result_logs)
         report = Report.from_path(result_logs)
         crash_info = report.crash_info(self.target.binary)
         short_sig = crash_info.createShortSignature()

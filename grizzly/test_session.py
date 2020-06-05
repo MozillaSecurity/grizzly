@@ -282,7 +282,7 @@ def test_session_10(tmp_path, mocker):
     with Session(None, fake_iomgr, fake_reporter, None, fake_target) as session:
         session.report_result()
     assert fake_target.save_logs.call_count == 1
-    fake_target.save_logs.assert_called_with(str(tmpd), meta=True)
+    fake_target.save_logs.assert_called_with(str(tmpd))
     assert fake_report.from_path.return_value.crash_info.call_count == 1
     fake_report.from_path.return_value.crash_info.assert_called_with("bin")
     assert fake_reporter.submit.call_count == 1
