@@ -3,27 +3,16 @@ cache: pip
 language: python
 os: linux
 python:
-  - 2.7
   - 3.5
   - 3.6
   - 3.7
   - 3.8
 jobs:
   include:
-    - os: osx
-      python: 2.7
-      language: shell
     # Python 3 on MacOS is broken
     #- os: osx
-    #  python: 3.7
     #  osx_image: xcode11.2
     #  language: shell
-    - os: windows
-      python: 2.7
-      language: shell
-      before_install:
-        - choco install python2
-      env: PATH=/c/Python27:/c/Python27/Scripts:$PATH
     - os: windows
       python: 3.8
       language: shell
