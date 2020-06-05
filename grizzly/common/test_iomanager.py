@@ -33,16 +33,18 @@ def test_iomanager_03():
 
 def test_iomanager_04(mocker, tmp_path):
     """test IOManager._add_suppressions()"""
-    fake_os = mocker.patch("grizzly.common.iomanager.os", autospec=True)
-    fake_os.environ = {}
+    mocker.patch.dict("grizzly.common.iomanager.environ", values={})
     with IOManager() as iom:
         assert not iom._environ_files
         supp_file = tmp_path / "supp_file.txt"
         supp_file.touch()
-        fake_os.environ = {
-            "ASAN_OPTIONS": "blah=1:suppressions='%s':foo=2" % (str(supp_file),),
-            "DEBUG": "1",
-            "JUNK": "test"}
+        mocker.patch.dict(
+            "grizzly.common.iomanager.environ",
+            values={
+                "ASAN_OPTIONS": "blah=1:suppressions='%s':foo=2" % (str(supp_file),),
+                "DEBUG": "1",
+                "LSAN_OPTIONS": "nothing=1",
+                "JUNK": "test"})
         iom._add_suppressions()
         assert "asan.supp" in (x.file_name for x in iom._environ_files)
 
@@ -70,18 +72,29 @@ def test_iomanager_05():
 
 def test_iomanager_06(mocker):
     """test IOManager.tracked_environ()"""
-    fake_os = mocker.patch("grizzly.common.iomanager.os", autospec=True)
-    fake_os.environ = {}
+    mocker.patch.dict("grizzly.common.iomanager.environ", values={})
     assert not IOManager.tracked_environ()
-    fake_os.environ = {
-        "ASAN_OPTIONS": "blah='z:/a':detect_leaks=1:foo=2",
-        "LSAN_OPTIONS": "detect_leaks='x:\\a.1':a=1",
-        "TEST_BAD": "FAIL"}
+    mocker.patch.dict(
+        "grizzly.common.iomanager.environ",
+        values={
+            "ASAN_OPTIONS": "blah='z:/a':detect_leaks=1:foo=2",
+            "LSAN_OPTIONS": "detect_leaks='x:\\a.1':a=1",
+            # should be added since it is in IOManager.TRACKED_ENVVARS
+            "MOZ_CHAOSMODE": "1",
+            # this should be skipped because it uses the FFPuppet debug
+            "XPCOM_DEBUG_BREAK": "warn",
+            "TEST_BAD": "FAIL"},
+        clear=True)
     tracked = IOManager.tracked_environ()
     assert "TEST_BAD" not in tracked
+    assert "XPCOM_DEBUG_BREAK" not in tracked
     assert "ASAN_OPTIONS" in tracked
+    assert "MOZ_CHAOSMODE" in tracked
     assert tracked["ASAN_OPTIONS"] == "detect_leaks=1"
     assert "LSAN_OPTIONS" in tracked
     assert tracked["LSAN_OPTIONS"] == "detect_leaks='x:\\a.1'"
-    fake_os.environ = {"ASAN_OPTIONS": "ignored=x"}
+    mocker.patch.dict(
+        "grizzly.common.iomanager.environ",
+        values={"ASAN_OPTIONS": "ignored=x"},
+        clear=True)
     assert not IOManager.tracked_environ()

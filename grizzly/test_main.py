@@ -32,7 +32,6 @@ class FakeArgs(object):
         self.rr = False
         self.relaunch = 1000
         self.s3_fuzzmanager = False
-        self.soft_asserts = False
         self.timeout = 60
         self.tool = None
         self.valgrind = False
@@ -57,7 +56,6 @@ def test_main_01(tmp_path, mocker):
     args.adapter = "fake"
     args.input = "fake"
     args.ignore = ["fake", "fake"]
-    args.soft_asserts = True
     args.rr = True
     args.valgrind = True
     args.xvfb = True
