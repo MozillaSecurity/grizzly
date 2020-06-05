@@ -7,25 +7,21 @@ Sapphire HTTP server worker
 """
 
 import mimetypes
-import logging
+from logging import getLogger
 import os
 import re
 import socket
 import sys
 import threading
 import time
-try:  # py 2-3 compatibility
-    from urllib.parse import unquote_plus
-except ImportError:
-    from urllib import unquote_plus
-
+from urllib.parse import unquote_plus
 
 from .server_map import Resource
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = logging.getLogger("sphr_worker")
+LOG = getLogger("sphr_worker")
 
 
 class SapphireWorkerError(Exception):

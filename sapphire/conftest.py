@@ -3,6 +3,7 @@
 Sapphire unit test fixtures
 """
 import hashlib
+from http.client import BadStatusLine
 import logging
 import random
 import re
@@ -10,16 +11,11 @@ import socket
 import sys
 import threading
 import time
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import urlopen
+
 import pytest
-try:  # py 2-3 compatibility
-    from http.client import BadStatusLine
-    from urllib.error import HTTPError, URLError
-    from urllib.parse import quote
-    from urllib.request import urlopen
-except ImportError:
-    from httplib import BadStatusLine
-    from urllib import quote  # pylint: disable=ungrouped-imports
-    from urllib2 import urlopen, HTTPError, URLError
 
 
 LOG = logging.getLogger("sphr_test")
