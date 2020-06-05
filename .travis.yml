@@ -9,10 +9,9 @@ python:
   - 3.8
 jobs:
   include:
-    # Python 3 on MacOS is broken
-    #- os: osx
-    #  osx_image: xcode11.2
-    #  language: shell
+    - os: osx
+      osx_image: xcode11.2
+      language: shell
     - os: windows
       python: 3.8
       language: shell
@@ -20,11 +19,11 @@ jobs:
         - choco install python --version 3.8.0
       env: PATH=/c/Python38:/c/Python38/Scripts:$PATH
 before_install:
-  - pip install --upgrade setuptools pip
+  - pip3 install --upgrade setuptools pip
 install:
-  - pip install -e .[all]
+  - pip3 install -e .[all]
 before_script:
-  - pip install --upgrade pytest pytest-mock pytest-pylint pytest-cov codecov
+  - pip3 install --upgrade pytest pytest-mock pytest-pylint pytest-cov codecov
 script:
   - pytest
 after_success:
