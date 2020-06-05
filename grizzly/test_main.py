@@ -35,6 +35,7 @@ class FakeArgs(object):
         self.timeout = 60
         self.tool = None
         self.valgrind = False
+        self.verbose = False
         self.working_path = working_path
         self.xvfb = False
 

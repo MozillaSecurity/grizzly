@@ -180,6 +180,12 @@ class GrizzlyArgs(CommonArgs):
         self.parser.add_argument(
             "-i", "--input",
             help="Test case or directory containing test cases")
+        self.parser.add_argument(
+            "-v", "--verbose", action="store_true",
+            help="Output console updates every iteration. By default the number"
+                 " of iterations between console updates doubles each update."
+                 " Updates are always printed when a result is detected or the"
+                 " target is relaunched.")
 
         self.launcher_grp.add_argument(
             "--coverage", action="store_true",
