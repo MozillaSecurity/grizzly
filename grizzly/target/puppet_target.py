@@ -3,16 +3,18 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
-from os import getenv, kill, makedirs
-from os.path import isdir
+from os import close, getenv, kill, makedirs, unlink
+from os.path import isdir, isfile
 from platform import system
 import signal
 from time import localtime, sleep, strftime, time
-from tempfile import mkdtemp
+from tempfile import mkdtemp, mkstemp
 
 from psutil import AccessDenied, NoSuchProcess, Process, process_iter
 
 from ffpuppet import BrowserTimeoutError, FFPuppet, LaunchError
+from prefpicker import PrefPicker
+
 from .target_monitor import TargetMonitor
 from .target import Target, TargetLaunchError, TargetLaunchTimeout, TargetError
 
@@ -24,7 +26,7 @@ LOG = getLogger("puppet_target")
 
 
 class PuppetTarget(Target):
-    __slots__ = ("use_rr", "use_valgrind", "_browser_logs", "_puppet")
+    __slots__ = ("use_rr", "use_valgrind", "_browser_logs", "_puppet", "_tmp_prefs")
 
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch, **kwds):
         super(PuppetTarget, self).__init__(binary, extension, launch_timeout, log_limit,
@@ -35,6 +37,21 @@ class PuppetTarget(Target):
         if kwds:
             LOG.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
         self._browser_logs = None
+        # generate prefs.js file if needed
+        if self.prefs is None:
+            for prefs_template in PrefPicker.templates():
+                if prefs_template.endswith("browser-fuzzing.yml"):
+                    LOG.debug("using prefpicker template %r", prefs_template)
+                    tmp_fd, self.prefs = mkstemp(prefix="prefs_", suffix=".js")
+                    close(tmp_fd)
+                    PrefPicker.load_template(prefs_template).create_prefsjs(self.prefs)
+                    LOG.debug("generated prefs.js %r", self.prefs)
+                    break
+            else:  # pragma: no cover
+                raise TargetError("Failed to generate prefs.js")
+            self._tmp_prefs = True
+        else:
+            self._tmp_prefs = False
         # create Puppet object
         self._puppet = FFPuppet(
             use_rr=self.use_rr,
@@ -59,6 +76,8 @@ class PuppetTarget(Target):
             self.close()
         with self._lock:
             self._puppet.clean_up()
+        if self._tmp_prefs and isfile(self.prefs):
+            unlink(self.prefs)
 
     def close(self):
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
@@ -207,8 +226,6 @@ class PuppetTarget(Target):
             sleep(delay)
 
     def launch(self, location, env_mod=None):
-        if not self.prefs:
-            raise TargetError("A prefs.js file is required")
         # GRZ_BROWSER_LOGS is intended to be used to aid in debugging.
         # when close() is called a copy of the browser logs will be saved
         # to the directory specified by GRZ_BROWSER_LOGS

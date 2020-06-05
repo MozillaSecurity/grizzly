@@ -26,8 +26,6 @@ if __name__ == '__main__':
             'Topic :: Software Development :: Testing',
             'Topic :: Security',
             'License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)',
-            'Programming Language :: Python :: 2',
-            'Programming Language :: Python :: 2.7',
             'Programming Language :: Python :: 3',
             'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: 3.6',
@@ -49,6 +47,7 @@ if __name__ == '__main__':
             'fasteners',
             'ffpuppet',
             'FuzzManager',
+            'prefpicker',
             'psutil',
             'six'
         ],
