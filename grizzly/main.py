@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import basicConfig, DEBUG, getLogger
-from os import getenv
 
 from sapphire import Sapphire
 
@@ -111,7 +110,10 @@ def main(args):
                 server,
                 target,
                 coverage=args.coverage)
-            display_mode = Session.DISPLAY_VERBOSE if getenv("DEBUG") else Session.DISPLAY_NORMAL
+            if args.log_level == DEBUG or args.verbose:
+                display_mode = Session.DISPLAY_VERBOSE
+            else:
+                display_mode = Session.DISPLAY_NORMAL
             session.run(args.ignore, display_mode=display_mode)
 
     except KeyboardInterrupt:
