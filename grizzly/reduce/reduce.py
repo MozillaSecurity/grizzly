@@ -661,7 +661,7 @@ class ReductionJob(object):
             result_logs = temp_prefix + "_logs"
             if not os.path.exists(result_logs):
                 os.mkdir(result_logs)
-            self._target.save_logs(result_logs, meta=True)
+            self._target.save_logs(result_logs)
 
             # create a CrashInfo
             crash = FuzzManagerReporter.create_crash_info(
