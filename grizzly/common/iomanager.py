@@ -4,7 +4,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import deque
-import os
+from os import environ
+from os.path import isfile
 
 from sapphire.server_map import ServerMap
 from .storage import TestCase, TestFile
@@ -22,7 +23,8 @@ class IOManager(object):
         "LSAN_OPTIONS",
         "GNOME_ACCESSIBILITY",
         "GRZ_FORCED_CLOSE",
-        "MOZ_CHAOSMODE")
+        "MOZ_CHAOSMODE",
+        "XPCOM_DEBUG_BREAK")
 
     def __init__(self, report_size=1, working_path=None):
         assert report_size > 0
@@ -45,12 +47,12 @@ class IOManager(object):
 
     def _add_suppressions(self):
         # Add suppression files to environment files
-        for env_var in (e_var for e_var in os.environ if "SAN_OPTIONS" in e_var):
-            opts = sanitizer_opts(os.environ.get(env_var, ""))
+        for env_var in (x for x in environ if "SAN_OPTIONS" in x):
+            opts = sanitizer_opts(environ.get(env_var, ""))
             if "suppressions" not in opts:
                 continue
             supp_file = opts["suppressions"].strip("'\"")
-            if os.path.isfile(supp_file):
+            if isfile(supp_file):
                 fname = "%s.supp" % (env_var.split("_")[0].lower(),)
                 self._environ_files.append(TestFile.from_file(supp_file, fname))
 
@@ -107,11 +109,11 @@ class IOManager(object):
         # that are relevant to Grizzly or the test case.
         env = dict()
         tracked_san_opts = ("detect_leaks",)
-        for e_var in IOManager.TRACKED_ENVVARS:
-            if e_var not in os.environ:
+        for var in IOManager.TRACKED_ENVVARS:
+            if var not in environ:
                 continue
-            if e_var.endswith("SAN_OPTIONS"):
-                opts = sanitizer_opts(os.environ.get(e_var, ""))
+            if var.endswith("SAN_OPTIONS"):
+                opts = sanitizer_opts(environ.get(var, ""))
                 # strip unwanted options
                 tracked = dict()
                 for opt in tracked_san_opts:
@@ -119,7 +121,10 @@ class IOManager(object):
                         tracked[opt] = opts[opt]
                 # only record *SAN_OPTIONS if there are options
                 if tracked:
-                    env[e_var] = ":".join("=".join((k, v)) for k, v in tracked.items())
+                    env[var] = ":".join("=".join((k, v)) for k, v in tracked.items())
+            elif var == "XPCOM_DEBUG_BREAK" and environ.get(var, "").lower() == "warn":
+                # ignore FFPuppet default XPCOM_DEBUG_BREAK value (set in helpers.py)
+                continue
             else:
-                env[e_var] = os.environ[e_var]
+                env[var] = environ[var]
         return env

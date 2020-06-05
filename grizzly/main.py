@@ -80,8 +80,6 @@ def main(args):
             valgrind=args.valgrind,
             xvfb=args.xvfb)
         adapter.monitor = target.monitor
-        if args.soft_asserts:
-            target.add_abort_token("###!!! ASSERTION:")
 
         log.debug("calling adapter setup()")
         adapter.setup(args.input, iomanager.server_map)

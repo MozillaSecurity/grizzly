@@ -82,9 +82,6 @@ class CommonArgs(object):
             "--relaunch", type=int, default=1000,
             help="Number of iterations performed before relaunching the browser (default: %(default)s)")
         self.launcher_grp.add_argument(
-            "--soft-asserts", action="store_true",
-            help="Detect soft assertions")
-        self.launcher_grp.add_argument(
             "-t", "--timeout", type=int, default=60,
             help="Iteration timeout in seconds (default: %(default)s)")
         self.launcher_grp.add_argument(

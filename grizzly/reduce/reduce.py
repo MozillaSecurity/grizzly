@@ -1157,10 +1157,6 @@ class ReductionJob(object):
             LOG.info("Using a fixed iteration timeout")
         job._fixed_timeout = args.fixed_timeout
 
-        # detect soft assertions
-        if args.soft_asserts:
-            job.target.add_abort_token("###!!! ASSERTION:")
-
         return job
 
     @classmethod
