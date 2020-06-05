@@ -31,7 +31,7 @@ class SortingHelpFormatter(HelpFormatter):
 
 class CommonArgs(object):
     IGNORABLE = ("log-limit", "memory", "timeout")
-    IGNORE = ("timeout",)
+    IGNORE = ("log-limit", "timeout")
 
     def __init__(self):
         super(CommonArgs, self).__init__()
@@ -49,9 +49,6 @@ class CommonArgs(object):
                 formatter_class=SortingHelpFormatter,
                 conflict_handler='resolve')
 
-        self.launcher_grp = self.parser.add_argument_group("Launcher Arguments")
-        self.reporter_grp = self.parser.add_argument_group("Reporter Arguments")
-
         self.parser.add_argument(
             "binary",
             help="Firefox binary to run")
@@ -60,6 +57,7 @@ class CommonArgs(object):
             help="Configure console logging. Options: %s (default: %%(default)s)" %
             ", ".join(k for k, v in sorted(self._level_map.items(), key=lambda x: x[1])))
 
+        self.launcher_grp = self.parser.add_argument_group("Launcher Arguments")
         self.launcher_grp.add_argument(
             "-e", "--extension", action="append",
             help="Install an extension. Specify the path to the xpi or the directory"
@@ -100,6 +98,7 @@ class CommonArgs(object):
             "--xvfb", action="store_true",
             help="Use Xvfb (Linux only)")
 
+        self.reporter_grp = self.parser.add_argument_group("Reporter Arguments")
         self.reporter_grp.add_argument(
             "--fuzzmanager", action="store_true",
             help="Report results to FuzzManager")
