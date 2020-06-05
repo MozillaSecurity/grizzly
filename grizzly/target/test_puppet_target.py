@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
+from os.path import isfile
 from platform import system
 
 from pytest import mark, raises
@@ -9,7 +10,7 @@ from pytest import mark, raises
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, FFPuppet
 
 from .puppet_target import PuppetTarget
-from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
+from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
 def test_puppet_target_01(mocker, tmp_path):
     """test creating a PuppetTarget"""
@@ -21,6 +22,9 @@ def test_puppet_target_01(mocker, tmp_path):
     with PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25) as target:
         assert target.closed
         assert target._browser_logs is None
+        assert isfile(target.prefs)
+        prefs_file = target.prefs
+        assert target._tmp_prefs
         assert target.detect_failure([], False) == Target.RESULT_NONE
         assert target.log_size() == 1124
         fake_ffp.return_value.log_length.assert_any_call("stderr")
@@ -31,6 +35,7 @@ def test_puppet_target_01(mocker, tmp_path):
         target.save_logs("fake_dest")
         assert fake_ffp.return_value.save_logs.call_count == 1
     assert fake_ffp.return_value.clean_up.call_count == 1
+    assert not isfile(prefs_file)
     # with extra args
     with PuppetTarget(str(fake_file), None, 1, 1, 1, None, 1, rr=True, fake=1) as target:
         pass
@@ -40,11 +45,10 @@ def test_puppet_target_02(mocker, tmp_path):
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 35)
-    with raises(TargetError, match=r"A prefs.js file is required"):
-        target.launch("launch_target_page")
-    assert fake_ffp.return_value.launch.call_count == 0
-    target.prefs = str(fake_file)
+    # test providing prefs.js
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 35)
+    assert target.prefs == str(fake_file)
+    assert not target._tmp_prefs
     target.launch("launch_target_page")
     assert target._browser_logs is None
     assert fake_ffp.return_value.launch.call_count == 1

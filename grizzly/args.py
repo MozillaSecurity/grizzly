@@ -154,8 +154,8 @@ class CommonArgs(object):
         if args.platform.lower() not in set(available_targets()):
             self.parser.error("Unsupported platform %r" % args.platform)
 
-        if args.prefs is not None and not isfile(args.prefs):
-            self.parser.error("file not found: %r" % args.prefs)
+        if args.prefs and not isfile(args.prefs):
+            self.parser.error("-p/--prefs not found %r" % args.prefs)
 
         if "tool" not in self._sanity_skip:
             if args.tool is not None and not args.fuzzmanager:
