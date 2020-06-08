@@ -7,7 +7,6 @@ import os
 
 import six
 
-from .storage import TestFile
 
 __all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"
@@ -50,9 +49,6 @@ class Adapter(object):
         Returns:
             None
         """
-        if self._harness is not None:
-            self._harness.close()
-            self._harness = None
         self.shutdown()
 
     def enable_harness(self, file_path=None):
@@ -64,11 +60,10 @@ class Adapter(object):
         Returns:
             None
         """
-        if self._harness is not None:
-            self._harness.close()
-        self._harness = TestFile.from_file(
-            self.HARNESS_FILE if file_path is None else file_path,
-            "grizzly_fuzz_harness.html")
+        if file_path is None:
+            file_path = self.HARNESS_FILE
+        with open(file_path, "rb") as in_fp:
+            self._harness = in_fp.read()
 
     def get_harness(self):
         """Get the harness. Used internally by Grizzly.

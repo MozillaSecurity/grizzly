@@ -48,7 +48,7 @@ let main = () => {
   if ((close_after !== undefined) && (close_after-- < 1)) {
     grzDump('Hit close limit.')
     if (forced_close) {
-      window.location.href = '/close_browser'
+      window.location.href = '/grz_close_browser'
     } else {
       setTimeout(window.close, 0)
     }
@@ -62,7 +62,7 @@ let main = () => {
   }
 
   // open test
-  sub = open((sub !== null) ? '/next_test' : '/first_test', 'GrizzlyFuzz')
+  sub = open((sub !== null) ? '/grz_next_test' : '/grz_current_test', 'GrizzlyFuzz')
   if (sub === null) {
     setBanner('Error! Could not open window. Blocked by the popup blocker?')
     grzDump('Could not open test! Blocked by the popup blocker?')

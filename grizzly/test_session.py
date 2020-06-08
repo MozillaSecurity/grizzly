@@ -119,7 +119,6 @@ def test_session_05(tmp_path, mocker):
     fake_iomgr.server_map = ServerMap()
     fake_iomgr.create_testcase.return_value = fake_testcase
     fake_iomgr.harness = None
-    fake_iomgr.landing_page.return_value = fake_testcase.landing_page
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.working_path = str(tmp_path)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
@@ -174,7 +173,6 @@ def test_session_07(tmp_path, mocker):
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.harness = None
-    fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
     fake_iomgr.server_map = ServerMap()
     fake_iomgr.tests = deque()
     fake_iomgr.working_path = str(tmp_path)
@@ -209,7 +207,6 @@ def test_session_08(tmp_path, mocker):
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.harness = None
-    fake_iomgr.landing_page.return_value = "HOMEPAGE.HTM"
     fake_iomgr.server_map = ServerMap()
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
@@ -244,7 +241,6 @@ def test_session_09(tmp_path, mocker):
     fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr.harness = None
     fake_iomgr.input_files = []
-    fake_iomgr.landing_page.return_value = "x.html"
     fake_iomgr.server_map = ServerMap()
     fake_iomgr.tests = deque()
     fake_iomgr.working_path = str(tmp_path)

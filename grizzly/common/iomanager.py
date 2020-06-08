@@ -57,8 +57,6 @@ class IOManager(object):
                 self._environ_files.append(TestFile.from_file(supp_file, fname))
 
     def cleanup(self):
-        if self.harness is not None:
-            self.harness.close()
         for e_file in self._environ_files:
             e_file.close()
         self.purge_tests()
@@ -77,23 +75,20 @@ class IOManager(object):
             test.add_meta(e_file.clone())
         # reset redirect map
         self.server_map.redirect.clear()
+        self.server_map.set_redirect("grz_current_test", self.page_name(), required=False)
+        self.server_map.set_redirect("grz_next_test", self.page_name(offset=1))
         if self.harness is not None:
-            # setup redirects for harness
-            self.server_map.set_redirect("first_test", self.page_name(), required=False)
-            self.server_map.set_redirect("next_test", self.page_name(offset=1))
             # add harness to testcase
-            test.add_file(self.harness.clone(), required=False)
+            self.server_map.set_dynamic_response(
+                "grz_harness",
+                lambda: self.harness,
+                mime_type="text/html")
         self._generated += 1
         self.tests.append(test)
         # manage testcase cache size
         if len(self.tests) > self._report_size:
             self.tests.popleft().cleanup()
         return test
-
-    def landing_page(self):
-        if self.harness is None:
-            return self.page_name()
-        return self.harness.file_name
 
     def page_name(self, offset=0):
         return "test_%04d.html" % (self._generated + offset,)

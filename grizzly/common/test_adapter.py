@@ -38,29 +38,20 @@ def test_adapter_02():
 
 def test_adapter_03(tmp_path):
     """test Adapter.enable_harness()"""
-    harness_file = tmp_path / "harness.html"
     adpt = SimpleAdapter()
+    # built-in harness
+    harness_file = tmp_path / "harness.html"
+    test_data = b"default_harness_data"
+    harness_file.write_bytes(test_data)
     adpt.HARNESS_FILE = str(harness_file)
-    test_data = b"fake_default_harness_data"
-    harness_file.write_bytes(test_data)
     adpt.enable_harness()
-    harness = adpt.get_harness()
-    assert harness is not None
-    harness.dump(str(tmp_path))
-    dump_harness = tmp_path / "grizzly_fuzz_harness.html"
-    assert dump_harness.is_file()
-    assert dump_harness.read_bytes() == test_data
-    harness_file.unlink()
-
-    test_data = b"fake_external_harness_data"
-    harness_file.write_bytes(test_data)
-    adpt.enable_harness(str(harness_file))
-    harness = adpt.get_harness()
-    assert harness is not None
-    harness.dump(str(tmp_path))
-    assert dump_harness.is_file()
-    assert dump_harness.read_bytes() == test_data
-    adpt.cleanup()
+    assert adpt.get_harness() == test_data
+    # external harness
+    ext_harness_file = tmp_path / "ext_harness.html"
+    test_data = b"external_harness_data"
+    ext_harness_file.write_bytes(test_data)
+    adpt.enable_harness(str(ext_harness_file))
+    assert adpt.get_harness() == test_data
 
 def test_adapter_04(tmp_path):
     """test Adapter.scan_path()"""
@@ -72,8 +63,8 @@ def test_adapter_04(tmp_path):
     file1 = (tmp_path / "test1.txt")
     file1.touch()
     found = tuple(SimpleAdapter.scan_path(str(file1)))
-    assert len(found) == 1
     assert str(file1) in found
+    assert len(found) == 1
     # path to directory
     assert len(tuple(SimpleAdapter.scan_path(str(tmp_path)))) == 1
     # path to directory (w/ ignored)
@@ -85,6 +76,6 @@ def test_adapter_04(tmp_path):
     assert len(tuple(SimpleAdapter.scan_path(str(tmp_path)))) == 1
     # path to directory (recursive)
     found = tuple(SimpleAdapter.scan_path(str(tmp_path), recursive=True))
-    assert len(found) == 2
     assert str(file1) in found
     assert str(file2) in found
+    assert len(found) == 2

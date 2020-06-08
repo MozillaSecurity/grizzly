@@ -24,14 +24,7 @@ def test_iomanager_02():
         iom._generated += 1
         assert iom.page_name() == next_page
 
-def test_iomanager_03():
-    """test IOManager.landing_page()"""
-    with IOManager() as iom:
-        assert iom.landing_page() == iom.page_name()
-        iom.harness = TestFile.from_data(b"data", "h.htm")
-        assert iom.landing_page() == "h.htm"
-
-def test_iomanager_04(mocker, tmp_path):
+def test_iomanager_03(mocker, tmp_path):
     """test IOManager._add_suppressions()"""
     mocker.patch.dict("grizzly.common.iomanager.environ", values={})
     with IOManager() as iom:
@@ -48,12 +41,15 @@ def test_iomanager_04(mocker, tmp_path):
         iom._add_suppressions()
         assert "asan.supp" in (x.file_name for x in iom._environ_files)
 
-def test_iomanager_05():
+def test_iomanager_04():
     """test IOManager.create_testcase()"""
     with IOManager() as iom:
         assert iom._generated == 0
         assert iom._report_size == 1
         assert not iom.tests
+        assert not iom.server_map.dynamic
+        assert not iom.server_map.include
+        assert not iom.server_map.redirect
         iom._tracked_env = {"TEST": "1"}
         iom._environ_files = [TestFile.from_data(b"data", "e.txt")]
         # without a harness, no input files
@@ -62,15 +58,22 @@ def test_iomanager_05():
         assert iom._generated == 1
         assert len(iom.tests) == 1
         assert not any(tcase.optional)
+        assert "grz_current_test" in iom.server_map.redirect
+        assert iom.server_map.redirect["grz_current_test"].target == tcase.landing_page
+        assert "grz_next_test" in iom.server_map.redirect
+        assert "grz_harness" not in iom.server_map.dynamic
         # with a harness
-        iom.harness = TestFile.from_data(b"data", "h.htm")
+        iom.harness = b"harness-data"
         tcase = iom.create_testcase("test-adapter")
         assert tcase is not None
         assert len(iom.tests) == 1
         assert iom._generated == 2
-        assert "h.htm" in tcase.optional
+        assert "grz_current_test" in iom.server_map.redirect
+        assert iom.server_map.redirect["grz_current_test"].target == tcase.landing_page
+        assert "grz_next_test" in iom.server_map.redirect
+        assert "grz_harness" in iom.server_map.dynamic
 
-def test_iomanager_06(mocker):
+def test_iomanager_05(mocker):
     """test IOManager.tracked_environ()"""
     mocker.patch.dict("grizzly.common.iomanager.environ", values={})
     assert not IOManager.tracked_environ()

@@ -617,8 +617,8 @@ class ReductionJob(object):
                 harness = os.path.join(os.path.dirname(__file__), '..', 'common', 'harness.html')
                 with open(harness, 'rb') as harness_fp:
                     harness = harness_fp.read()
-                self._server_map.set_dynamic_response("/harness", lambda: harness, mime_type="text/html")
-                self._server_map.set_redirect("/first_test", str(self.landing_page), required=True)
+                self._server_map.set_dynamic_response("grz_harness", lambda: harness, mime_type="text/html")
+                self._server_map.set_redirect("grz_current_test", str(self.landing_page), required=True)
 
         runner = Runner(self._server, self._target, self._idle_threshold, self._idle_timeout)
         if self._no_harness:
@@ -630,10 +630,12 @@ class ReductionJob(object):
         # (re)launch Target
         if self._target.closed:
             if self._no_harness:
-                location = runner.location(self.landing_page, self._server.port)
+                location = runner.location(
+                    "/grz_current_test",
+                    self._server.port)
             else:
                 location = runner.location(
-                    "harness",
+                    "/grz_harness",
                     self._server.port,
                     close_after=self._target.rl_reset,
                     forced_close=self._target.forced_close,
@@ -646,8 +648,8 @@ class ReductionJob(object):
             def _dyn_resp_close():  # pragma: no cover
                 self._target.close()
                 return b"<h1>Close Browser</h1>"
-            self._server_map.set_dynamic_response("/close_browser", _dyn_resp_close, mime_type="text/html")
-            self._server_map.set_redirect("/next_test", str(self.landing_page), required=True)
+            self._server_map.set_dynamic_response("grz_close_browser", _dyn_resp_close, mime_type="text/html")
+            self._server_map.set_redirect("grz_next_test", str(self.landing_page), required=True)
 
         # run test case
         runner.run(self._ignore, self._server_map, testcase, wait_for_callback=self._no_harness)
@@ -883,8 +885,8 @@ class ReductionJob(object):
                                        "to match harness!")
                 harness = new_harness
                 # make first test and next test grab from the array
-                harness = harness.replace("'/first_test'", "_reduce_next()")
-                harness = harness.replace("'/next_test'", "_reduce_next()")
+                harness = harness.replace("'/grz_current_test'", "_reduce_next()")
+                harness = harness.replace("'/grz_next_test'", "_reduce_next()")
                 # insert the close condition. we are iterating over the array of landing pages,
                 # undefined means we hit the end and the harness should close
                 # newer harness uses conditional operator in open() call

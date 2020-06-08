@@ -127,7 +127,7 @@ class Session(object):
             self.target.close()
             return b"<h1>Close Browser</h1>"
         self.iomanager.server_map.set_dynamic_response(
-            "/close_browser",
+            "grz_close_browser",
             _dyn_close,
             mime_type="text/html")
 
@@ -140,10 +140,14 @@ class Session(object):
                 self.iomanager.purge_tests()
                 self.adapter.pre_launch()
                 if self.iomanager.harness is None:
-                    location = runner.location(self.iomanager.landing_page(), self.server.port)
-                else:
+                    # harness is not in use, open the test case
                     location = runner.location(
-                        self.iomanager.landing_page(),
+                        "/grz_current_test",
+                        self.server.port)
+                else:
+                    # harness is in use, open it and it will open the test case
+                    location = runner.location(
+                        "/grz_harness",
                         self.server.port,
                         close_after=self.target.rl_reset,
                         forced_close=self.target.forced_close,
