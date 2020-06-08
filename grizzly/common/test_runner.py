@@ -147,6 +147,8 @@ def test_runner_07():
     """test Runner.location()"""
     result = Runner.location("a.html", 34567)
     assert result == "http://127.0.0.1:34567/a.html"
+    result = Runner.location("/a.html", 34567)
+    assert result == "http://127.0.0.1:34567/a.html"
     result = Runner.location("a.html", 34567, close_after=10)
     assert result == "http://127.0.0.1:34567/a.html?close_after=10"
     result = Runner.location("a.html", 34567, close_after=10, forced_close=False)

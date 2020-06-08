@@ -133,7 +133,7 @@ class Runner(object):
         Returns:
             str: A valid URL.
         """
-        location = "http://127.0.0.1:%d/%s" % (srv_port, srv_path)
+        location = "http://127.0.0.1:%d/%s" % (srv_port, srv_path.lstrip("/"))
         # set harness related arguments
         args = []
         if close_after is not None:
