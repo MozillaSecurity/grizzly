@@ -40,8 +40,8 @@ class ReplayManager(object):
         self._signature = signature
 
         if use_harness:
-            self._harness = TestFile.from_file(self.HARNESS_FILE, "harness.html")
-            testcase.add_file(self._harness, required=False)
+            with open(self.HARNESS_FILE, "rb") as in_fp:
+                self._harness = in_fp.read()
 
     def cleanup(self):
         """Remove temporary files from disk.
@@ -135,9 +135,10 @@ class ReplayManager(object):
             def _dyn_close():  # pragma: no cover
                 self.target.close()
                 return b"<h1>Close Browser</h1>"
-            server_map.set_dynamic_response("/close_browser", _dyn_close, mime_type="text/html")
-            server_map.set_redirect("/first_test", self.testcase.landing_page, required=False)
-            server_map.set_redirect("/next_test", self.testcase.landing_page, required=True)
+            server_map.set_dynamic_response("grz_close_browser", _dyn_close, mime_type="text/html")
+            server_map.set_dynamic_response("grz_harness", lambda: self._harness, mime_type="text/html")
+            server_map.set_redirect("grz_next_test", self.testcase.landing_page, required=True)
+        server_map.set_redirect("grz_current_test", self.testcase.landing_page, required=False)
 
         success = False
         for _ in range(repeat):
@@ -145,10 +146,12 @@ class ReplayManager(object):
             if self.target.closed:
                 LOG.info("Launching target...")
                 if self._harness is None:
-                    location = self._runner.location(self.testcase.landing_page, self.server.port)
+                    location = self._runner.location(
+                        "/grz_current_test",
+                        self.server.port)
                 else:
                     location = self._runner.location(
-                        self._harness.file_name,
+                        "/grz_harness",
                         self.server.port,
                         close_after=self.target.rl_reset,
                         forced_close=self.target.forced_close)
