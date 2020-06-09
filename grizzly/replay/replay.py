@@ -3,9 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import logging
-import os
-import tempfile
+from logging import getLogger
+from os.path import dirname, isfile, join as pathjoin
+from tempfile import mkdtemp
 from time import sleep
 
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -21,11 +21,11 @@ from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = logging.getLogger("replay")
+LOG = getLogger("replay")
 
 
 class ReplayManager(object):
-    HARNESS_FILE = os.path.join(os.path.dirname(__file__), "..", "common", "harness.html")
+    HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
 
     def __init__(self, ignore, server, target, testcase, any_crash=False, signature=None, use_harness=True):
         self.ignore = ignore
@@ -104,13 +104,13 @@ class ReplayManager(object):
         tests = [test] if test else tuple()
         if reports:
             reporter = FilesystemReporter(
-                report_path=os.path.join(path, "reports"),
+                report_path=pathjoin(path, "reports"),
                 major_bucket=False)
             for report in reports:
                 reporter.submit(tests, report=report)
         if other_reports:
             reporter = FilesystemReporter(
-                report_path=os.path.join(path, "other_reports"),
+                report_path=pathjoin(path, "other_reports"),
                 major_bucket=False)
             for report in other_reports:
                 reporter.submit(tests, report=report)
@@ -163,7 +163,7 @@ class ReplayManager(object):
                     self._runner.launch(location, env_mod=self.testcase.env_vars)
                 except TargetLaunchError:
                     LOG.error("Target launch error. Check browser logs for details.")
-                    log_path = tempfile.mkdtemp(prefix="grzreplay_logs_")
+                    log_path = mkdtemp(prefix="grzreplay_logs_")
                     self.target.save_logs(log_path)
                     self._reports_other["STARTUP"] = Report.from_path(log_path)
                     raise
@@ -177,7 +177,7 @@ class ReplayManager(object):
                 wait_for_callback=self._harness is None)
             # process results
             if self._runner.result == self._runner.FAILED:
-                log_path = tempfile.mkdtemp(prefix="grzreplay_logs_")
+                log_path = mkdtemp(prefix="grzreplay_logs_")
                 self.target.save_logs(log_path)
                 report = Report.from_path(log_path)
                 # check signatures
@@ -278,7 +278,7 @@ class ReplayManager(object):
         try:
             LOG.debug("loading the TestCase")
             testcase = TestCase.load_path(args.input)
-            if os.path.isfile(args.input):
+            if isfile(args.input):
                 testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
