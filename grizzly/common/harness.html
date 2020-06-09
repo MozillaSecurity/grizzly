@@ -48,10 +48,11 @@ let main = () => {
   if ((close_after !== undefined) && (close_after-- < 1)) {
     grzDump('Hit close limit.')
     if (forced_close) {
-      window.location.href = '/grz_close_browser'
-    } else {
-      setTimeout(window.close, 0)
+      // use window.open() to call `/grz_close_browser` then close the harness
+      // this helps catch crashes that are triggered when the test window closes
+      window.open('/grz_close_browser')
     }
+    setTimeout(window.close, 0)
     return
   }
 
