@@ -7,7 +7,7 @@ from logging import getLogger
 from os.path import isdir
 from shutil import rmtree
 from tempfile import mkdtemp
-from time import time
+from time import sleep, time
 
 from .common import Report, Runner, Status, TestFile
 from .target import TargetLaunchError
@@ -124,7 +124,10 @@ class Session(object):
         runner = Runner(self.server, self.target)
 
         def _dyn_close():  # pragma: no cover
-            self.target.close()
+            if self.target.monitor.is_healthy():
+                # delay to help catch window close/shutdown related crashes
+                sleep(0.1)
+                self.target.close()
             return b"<h1>Close Browser</h1>"
         self.iomanager.server_map.set_dynamic_response(
             "grz_close_browser",

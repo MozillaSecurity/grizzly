@@ -6,6 +6,7 @@
 import logging
 import os
 import tempfile
+from time import sleep
 
 from FTB.Signatures.CrashInfo import CrashSignature
 from sapphire import Sapphire, ServerMap
@@ -123,7 +124,7 @@ class ReplayManager(object):
                                be considered successful.
 
         Returns:
-            bool: Results were reproduced.
+            bool: True if results were reproduced otherwise False.
         """
         assert repeat > 0
         assert min_results > 0
@@ -133,7 +134,10 @@ class ReplayManager(object):
         server_map = ServerMap()
         if self._harness is not None:
             def _dyn_close():  # pragma: no cover
-                self.target.close()
+                if self.target.monitor.is_healthy():
+                    # delay to help catch window close/shutdown related crashes
+                    sleep(0.1)
+                    self.target.close()
                 return b"<h1>Close Browser</h1>"
             server_map.set_dynamic_response("grz_close_browser", _dyn_close, mime_type="text/html")
             server_map.set_dynamic_response("grz_harness", lambda: self._harness, mime_type="text/html")

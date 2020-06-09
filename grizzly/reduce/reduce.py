@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 import zipfile
 import zlib
 
@@ -646,7 +647,10 @@ class ReductionJob(object):
 
         if not self._no_harness:
             def _dyn_resp_close():  # pragma: no cover
-                self._target.close()
+                if self.target.monitor.is_healthy():
+                    # delay to help catch window close/shutdown related crashes
+                    time.sleep(0.1)
+                    self.target.close()
                 return b"<h1>Close Browser</h1>"
             self._server_map.set_dynamic_response("grz_close_browser", _dyn_resp_close, mime_type="text/html")
             self._server_map.set_redirect("grz_next_test", str(self.landing_page), required=True)
