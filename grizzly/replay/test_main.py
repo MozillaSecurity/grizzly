@@ -6,9 +6,9 @@
 """
 unit tests for grizzly.replay.main
 """
-import os
+from os.path import join as pathjoin
 
-import pytest
+from pytest import raises
 
 from ..common import TestCaseLoadFailure
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
@@ -19,7 +19,7 @@ from ..replay.args import ReplayArgs
 def test_args_01(capsys, tmp_path):
     """test parsing args"""
     # missing args tests
-    with pytest.raises(SystemExit):
+    with raises(SystemExit):
         ReplayArgs().parse_args([])
 
     # test case directory missing test_info.json
@@ -28,13 +28,13 @@ def test_args_01(capsys, tmp_path):
     inp = tmp_path / "input"
     inp.mkdir()
     (inp / "somefile").touch()
-    with pytest.raises(SystemExit):
+    with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp)])
     assert "error: Test case folder must contain 'test_info.json'" in capsys.readouterr()[-1]
 
     # test case directory with test_info.json missing prefs.js
     (inp / "test_info.json").touch()
-    with pytest.raises(SystemExit):
+    with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp)])
     assert "error: 'prefs.js' not found" in capsys.readouterr()[-1]
 
@@ -43,7 +43,7 @@ def test_args_01(capsys, tmp_path):
     ReplayArgs().parse_args([str(exe), str(inp)])
 
     # test case file not specified prefs.js
-    with pytest.raises(SystemExit):
+    with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp / "somefile")])
     assert "error: 'prefs.js' not specified" in capsys.readouterr()[-1]
 
@@ -51,22 +51,22 @@ def test_args_01(capsys, tmp_path):
     ReplayArgs().parse_args([str(exe), str(inp / "somefile"), "--prefs", str(inp / "prefs.js")])
 
     # test negative min-crashes value
-    with pytest.raises(SystemExit):
+    with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--min-crashes", "-1"])
     assert "error: '--min-crashes' value must be positive" in capsys.readouterr()[-1]
 
     # test negative repeat value
-    with pytest.raises(SystemExit):
+    with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--repeat", "-1"])
     assert "error: '--repeat' value must be positive" in capsys.readouterr()[-1]
 
     # test missing signature file
-    with pytest.raises(SystemExit):
+    with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--sig", "missing"])
     assert "error: signature file not found" in capsys.readouterr()[-1]
 
     # test any crash and signature
-    with pytest.raises(SystemExit):
+    with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--any-crash", "--sig", "x"])
     assert "error: signature is ignored when running with '--any-crash'" in capsys.readouterr()[-1]
 
@@ -86,13 +86,13 @@ def test_main_01(mocker, tmp_path):
     target.RESULT_NONE = Target.RESULT_NONE
     target.binary = "bin"
     target.detect_failure.side_effect = (Target.RESULT_FAILURE, Target.RESULT_NONE, Target.RESULT_FAILURE)
-    def _fake_save_logs(result_logs, meta=False):  # pylint: disable=unused-argument
+    def _fake_save_logs(result_logs):
         """write fake log data to disk"""
-        with open(os.path.join(result_logs, "log_stderr.txt"), "w") as log_fp:
+        with open(pathjoin(result_logs, "log_stderr.txt"), "w") as log_fp:
             log_fp.write("STDERR log\n")
-        with open(os.path.join(result_logs, "log_stdout.txt"), "w") as log_fp:
+        with open(pathjoin(result_logs, "log_stdout.txt"), "w") as log_fp:
             log_fp.write("STDOUT log\n")
-        with open(os.path.join(result_logs, "log_asan_blah.txt"), "w") as log_fp:
+        with open(pathjoin(result_logs, "log_asan_blah.txt"), "w") as log_fp:
             log_fp.write("==1==ERROR: AddressSanitizer: ")
             log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
             log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")

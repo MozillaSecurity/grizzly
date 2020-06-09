@@ -6,9 +6,9 @@
 """
 unit tests for grizzly.replay
 """
-import os
+from os.path import join as pathjoin
 
-import pytest
+from pytest import raises
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_REQUEST
 from .replay import ReplayManager
@@ -18,11 +18,11 @@ from ..target import Target, TargetLaunchError
 
 def _fake_save_logs_result(result_logs, meta=False):  # pylint: disable=unused-argument
     """write fake log data to disk"""
-    with open(os.path.join(result_logs, "log_stderr.txt"), "w") as log_fp:
+    with open(pathjoin(result_logs, "log_stderr.txt"), "w") as log_fp:
         log_fp.write("STDERR log\n")
-    with open(os.path.join(result_logs, "log_stdout.txt"), "w") as log_fp:
+    with open(pathjoin(result_logs, "log_stdout.txt"), "w") as log_fp:
         log_fp.write("STDOUT log\n")
-    with open(os.path.join(result_logs, "log_asan_blah.txt"), "w") as log_fp:
+    with open(pathjoin(result_logs, "log_asan_blah.txt"), "w") as log_fp:
         log_fp.write("==1==ERROR: AddressSanitizer: ")
         log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
         log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
@@ -144,7 +144,7 @@ def test_replay_06(mocker):
 def test_replay_07(mocker, tmp_path):
     """test ReplayManager.run() - test signatures"""
     report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    mocker.patch("grizzly.replay.replay.tempfile.mkdtemp", autospec=True, return_value=str(tmp_path))
+    mocker.patch("grizzly.replay.replay.mkdtemp", autospec=True, return_value=str(tmp_path))
     report_0 = mocker.Mock(spec=Report)
     report_0.crash_info.return_value.createShortSignature.return_value = "No crash detected"
     report_1 = mocker.Mock(spec=Report)
@@ -183,7 +183,7 @@ def test_replay_07(mocker, tmp_path):
 def test_replay_08(mocker, tmp_path):
     """test ReplayManager.run() - any crash"""
     report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    mocker.patch("grizzly.replay.replay.tempfile.mkdtemp", autospec=True, return_value=str(tmp_path))
+    mocker.patch("grizzly.replay.replay.mkdtemp", autospec=True, return_value=str(tmp_path))
     report_0 = mocker.Mock(spec=Report)
     report_0.crash_info.return_value.createShortSignature.return_value = "No crash detected"
     report_1 = mocker.Mock(spec=Report)
@@ -256,14 +256,14 @@ def test_replay_09(mocker, tmp_path):
 def test_replay_10(mocker, tmp_path):
     """test ReplayManager.run() - TargetLaunchError"""
     report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    mocker.patch("grizzly.replay.replay.tempfile.mkdtemp", autospec=True, return_value=str(tmp_path))
+    mocker.patch("grizzly.replay.replay.mkdtemp", autospec=True, return_value=str(tmp_path))
     report.from_path.side_effect = (mocker.Mock(spec=Report),)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     target = mocker.Mock(spec=Target)
     target.launch.side_effect = TargetLaunchError
     testcase = mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")
     replay = ReplayManager([], server, target, testcase, use_harness=False)
-    with pytest.raises(TargetLaunchError):
+    with raises(TargetLaunchError):
         replay.run()
     assert not any(replay.reports)
     assert any(replay.other_reports)
