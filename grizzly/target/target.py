@@ -68,14 +68,13 @@ class Target(object):
         self._monitor = None
         self.binary = binary
         self.extension = extension
-        self.forced_close = os.getenv("GRZ_FORCED_CLOSE", "1").lower() not in ("false", "0")
+        self.forced_close = os.getenv("GRZ_FORCED_CLOSE") != "0"
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit
         self.memory_limit = memory_limit
         self.prefs = os.path.abspath(prefs) if prefs else None
         self.rl_countdown = 0
         self.rl_reset = relaunch
-
         assert self.binary is not None and os.path.isfile(self.binary)
         if self.prefs is not None:
             if not os.path.isfile(self.prefs):

@@ -10,7 +10,7 @@ from os.path import join as pathjoin
 
 from pytest import raises
 
-from ..common import TestCaseLoadFailure
+from ..common import TestCase, TestCaseLoadFailure
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from ..replay import ReplayManager
 from ..replay.args import ReplayArgs
@@ -80,11 +80,10 @@ def test_main_01(mocker, tmp_path):
     serve_testcase.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_target")
-    target = mocker.Mock(spec=Target)
+    target = mocker.Mock(spec=Target, binary="bin", forced_close=True)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.RESULT_NONE = Target.RESULT_NONE
-    target.binary = "bin"
     target.detect_failure.side_effect = (Target.RESULT_FAILURE, Target.RESULT_NONE, Target.RESULT_FAILURE)
     def _fake_save_logs(result_logs):
         """write fake log data to disk"""
@@ -116,6 +115,7 @@ def test_main_01(mocker, tmp_path):
     args.sig = str(tmp_path / "sig.json")
     args.timeout = 10
     assert ReplayManager.main(args) == 0
+    assert target.forced_close
     assert target.reverse.call_count == 1
     assert target.launch.call_count == 3
     assert target.step.call_count == 3
@@ -156,3 +156,31 @@ def test_main_02(mocker):
 
     mocker.patch("grizzly.replay.replay.TestCase.load_path", side_effect=TestCaseLoadFailure)
     assert ReplayManager.main(args) == 1
+
+def test_main_03(mocker):
+    """test ReplayManager.main() loading GRZ_FORCED_CLOSE from test case"""
+    mocker.patch("grizzly.replay.replay.Sapphire.serve_testcase", return_value=(None, ["x.html"]))
+    target = mocker.Mock(spec=Target, forced_close=True)
+    load_target = mocker.patch("grizzly.replay.replay.load_target", autospec=True)
+    load_target.return_value.return_value = target
+    testcase = mocker.Mock(
+        spec=TestCase,
+        env_vars={"GRZ_FORCED_CLOSE": "0"},
+        landing_page="x.html")
+    mocker.patch("grizzly.replay.replay.TestCase.load_path", return_value=testcase)
+    # setup args
+    args = mocker.Mock()
+    args.fuzzmanager = False
+    args.ignore = None
+    args.input = "test"
+    args.logs = None
+    args.min_crashes = 1
+    args.relaunch = 1
+    args.repeat = 1
+    args.sig = None
+    args.timeout = 1
+
+    ReplayManager.main(args)
+    assert testcase.cleanup.call_count == 1
+    assert target.cleanup.call_count == 1
+    assert not target.forced_close

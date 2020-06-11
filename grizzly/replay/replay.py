@@ -300,6 +300,9 @@ class ReplayManager(object):
                 rr=args.rr,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb)
+            if testcase.env_vars.get("GRZ_FORCED_CLOSE") == "0":
+                LOG.debug("setting target.forced_close=False")
+                target.forced_close = False
 
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
@@ -326,6 +329,7 @@ class ReplayManager(object):
                     replay.reports,
                     replay.other_reports,
                     replay.testcase if args.include_test else None)
+            # TODO: add fuzzmanager reporting
             return 0 if success else 1
 
         except KeyboardInterrupt:

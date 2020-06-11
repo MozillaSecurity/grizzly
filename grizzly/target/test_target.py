@@ -62,7 +62,7 @@ def test_target_02(mocker, tmp_path):
         assert not target.expect_close
         target.rl_countdown = 0
         assert target.expect_close
-    getenv.assert_called_with("GRZ_FORCED_CLOSE", "1")
+    getenv.assert_called_with("GRZ_FORCED_CLOSE")
 
 def test_target_03(mocker, tmp_path):
     """test Target.check_relaunch() and Target.step()"""
