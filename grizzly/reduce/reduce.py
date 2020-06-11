@@ -850,18 +850,12 @@ class ReductionJob(object):
                 LOG.warning("Using prefs included in testcase: %r", self._target.prefs)
             if "test_info.json" in os.listdir(dirs[0]):
                 self.config_environ(os.path.join(dirs[0], "test_info.json"))
-                if self._env_mod:
-                    LOG.warning("Using environment included in testcase: %s",
-                                os.path.abspath(os.path.join(dirs[0], "test_info.json")))
-                    self._target.forced_close = \
-                        self._env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
             elif "env_vars.txt" in os.listdir(dirs[0]):
                 # TODO: remove this block once move to 'test_info.json' is complete
                 self.config_environ(os.path.join(dirs[0], "env_vars.txt"))
-                LOG.warning("Using environment included in testcase: %s",
-                            os.path.abspath(os.path.join(dirs[0], "env_vars.txt")))
-                self._target.forced_close = \
-                    self._env_mod.get("GRZ_FORCED_CLOSE", "1").lower() not in ("0", "false")
+            if self._env_mod:
+                LOG.warning("Using environment included in testcase")
+                self._target.forced_close = self._env_mod.get("GRZ_FORCED_CLOSE") != "0"
 
             # if dirs is singular, we can use the testcase directly, otherwise we need to iterate over
             # them all in order
