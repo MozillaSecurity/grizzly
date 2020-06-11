@@ -2,11 +2,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-import logging
-import sys
-import traceback
-import pkg_resources
+from logging import getLogger
+from sys import exc_info
+from traceback import extract_tb
+from pkg_resources import iter_entry_points
 
 from .target import sanitizer_opts, Target, TargetError, TargetLaunchError, TargetLaunchTimeout
 
@@ -16,19 +15,19 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 TARGETS = None
-LOG = logging.getLogger("grizzly")
+LOG = getLogger("grizzly")
 
 
 def _load_targets():
     global TARGETS  # pylint: disable=global-statement
     TARGETS = {}
-    for entry_point in pkg_resources.iter_entry_points('grizzly_targets'):
+    for entry_point in iter_entry_points('grizzly_targets'):
         LOG.debug("scanning target %r", entry_point.name)
         try:
             target = entry_point.load()
         except Exception:  # pylint: disable=broad-except
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            tbinfo = traceback.extract_tb(exc_tb)[-1]
+            exc_type, exc_obj, exc_tb = exc_info()
+            tbinfo = extract_tb(exc_tb)[-1]
             LOG.warning("Target %r raised an exception %s: %s (%s:%d)", entry_point.name, exc_type.__name__,
                         exc_obj, tbinfo[0], tbinfo[1])
             continue

@@ -2,19 +2,20 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import abc
-import logging
-import os
-import re
-import threading
-import time
+from abc import ABCMeta, abstractmethod, abstractproperty
+from logging import getLogger
+from os import getenv
+from os.path import abspath, isfile
+from re import split as resplit
+from threading import Lock
+from time import sleep, time
 
 
 __all__ = ("Target", "sanitizer_opts")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
+LOG = getLogger("grizzly")
 
 
 def sanitizer_opts(env_data):
@@ -29,7 +30,7 @@ def sanitizer_opts(env_data):
         dict: Sanitized values from environment.
     """
     opts = dict()
-    for opt in re.split(r":(?![\\|/])", env_data):
+    for opt in resplit(r":(?![\\|/])", env_data):
         if not opt:
             continue
         key, val = opt.split("=")
@@ -49,7 +50,7 @@ class TargetLaunchTimeout(TargetError):
     """Raised if the target does not launch within the defined amount of time"""
 
 
-class Target(metaclass=abc.ABCMeta):
+class Target(metaclass=ABCMeta):
     RESULT_NONE = 0
     RESULT_FAILURE = 1
     RESULT_IGNORED = 2
@@ -62,22 +63,22 @@ class Target(metaclass=abc.ABCMeta):
         assert log_limit >= 0
         assert memory_limit >= 0
         assert relaunch >= 1
-        self._lock = threading.Lock()
+        self._lock = Lock()
         self._monitor = None
         self.binary = binary
         self.extension = extension
-        self.forced_close = os.getenv("GRZ_FORCED_CLOSE") != "0"
+        self.forced_close = getenv("GRZ_FORCED_CLOSE") != "0"
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit
         self.memory_limit = memory_limit
-        self.prefs = os.path.abspath(prefs) if prefs else None
+        self.prefs = abspath(prefs) if prefs else None
         self.rl_countdown = 0
         self.rl_reset = relaunch
-        assert self.binary is not None and os.path.isfile(self.binary)
+        assert self.binary is not None and isfile(self.binary)
         if self.prefs is not None:
-            if not os.path.isfile(self.prefs):
+            if not isfile(self.prefs):
                 raise TargetError("Prefs file does not exist %r" % (self.prefs,))
-            log.info("Using prefs %r", self.prefs)
+            LOG.info("Using prefs %r", self.prefs)
 
     def __enter__(self):
         return self
@@ -86,40 +87,40 @@ class Target(metaclass=abc.ABCMeta):
         self.cleanup()
 
     def add_abort_token(self, token):  # pylint: disable=no-self-use,unused-argument
-        log.warning("add_abort_token() not implemented!")
+        LOG.warning("add_abort_token() not implemented!")
 
     def check_relaunch(self, wait=60):
         if self.rl_countdown > 0:
             return
         # if the adapter does not use the default harness
         # or close the browser it will hang here for 60 seconds
-        log.debug("relaunch will be triggered... waiting up to %0.2f seconds", wait)
-        deadline = time.time() + wait
+        LOG.debug("relaunch will be triggered... waiting up to %0.2f seconds", wait)
+        deadline = time() + wait
         while self.monitor.is_healthy():
-            if time.time() >= deadline:
-                log.info("Forcing target relaunch")
+            if time() >= deadline:
+                LOG.info("Forcing target relaunch")
                 break
-            time.sleep(1)
+            sleep(1)
         self.close()
 
-    @abc.abstractmethod
+    @abstractmethod
     def cleanup(self):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def close(self):
         pass
 
-    @abc.abstractproperty
+    @abstractproperty
     def closed(self):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def detect_failure(self, ignored, was_timeout):
         pass
 
     def dump_coverage(self):  # pylint: disable=no-self-use
-        log.warning("dump_coverage() is not supported!")
+        LOG.warning("dump_coverage() is not supported!")
 
     @property
     def expect_close(self):
@@ -127,18 +128,18 @@ class Target(metaclass=abc.ABCMeta):
         return self.rl_countdown < 1 and not self.forced_close
 
     def is_idle(self, threshold):  # pylint: disable=no-self-use,unused-argument
-        log.debug("Target.is_idle() not implemented! returning False")
+        LOG.debug("Target.is_idle() not implemented! returning False")
         return False
 
-    @abc.abstractmethod
+    @abstractmethod
     def launch(self):
         pass
 
     def log_size(self):  # pylint: disable=no-self-use
-        log.debug("log_size() not implemented! returning 0")
+        LOG.debug("log_size() not implemented! returning 0")
         return 0
 
-    @abc.abstractproperty
+    @abstractproperty
     def monitor(self):
         pass
 
@@ -146,7 +147,7 @@ class Target(metaclass=abc.ABCMeta):
         # remote->device, local->desktop
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def save_logs(self, *args, **kwargs):
         pass
 

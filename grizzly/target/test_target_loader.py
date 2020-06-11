@@ -22,7 +22,7 @@ class _FakeTarget2(Target):  # pylint: disable=abstract-method
 def test_target_load_01(mocker):
     '''If no targets are available, available() should return nothing.'''
     mocker.patch('grizzly.target.TARGETS', None)
-    mocker.patch('pkg_resources.iter_entry_points', lambda _: [])
+    mocker.patch('grizzly.target.iter_entry_points', lambda _: [])
     assert not available()
 
 
@@ -44,7 +44,7 @@ def test_target_load_02(mocker):
         def load():
             return _FakeTarget2
 
-    mocker.patch('pkg_resources.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
+    mocker.patch('grizzly.target.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
     assert set(available()) == {'test1', 'test2'}
     assert load('test1') is _FakeTarget1
     assert load('test2') is _FakeTarget2
@@ -68,7 +68,7 @@ def test_target_load_03(mocker):
         def load():
             return object
 
-    mocker.patch('pkg_resources.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
+    mocker.patch('grizzly.target.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
     assert set(available()) == {'test1'}
     assert load('test1') is Target
 
@@ -91,7 +91,7 @@ def test_target_load_04(mocker):
         def load():
             return _FakeTarget2
 
-    mocker.patch('pkg_resources.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
+    mocker.patch('grizzly.target.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
     with pytest.raises(RuntimeError, match=r"Target (.)test\1 already exists"):
         available()
 
@@ -114,6 +114,6 @@ def test_target_load_05(mocker):
         def load():
             raise Exception("boo!")
 
-    mocker.patch('pkg_resources.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
+    mocker.patch('grizzly.target.iter_entry_points', lambda _: [_FakeEntryPoint1, _FakeEntryPoint2])
     assert set(available()) == {'test1'}
     assert load('test1') is Target
