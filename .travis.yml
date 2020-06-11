@@ -13,10 +13,9 @@ jobs:
       osx_image: xcode11.2
       language: shell
     - os: windows
-      python: 3.8
       language: shell
       before_install:
-        - choco install python --version 3.8.0
+        - choco install python
       env: PATH=/c/Python38:/c/Python38/Scripts:$PATH
 before_install:
   - pip3 install --upgrade setuptools pip
