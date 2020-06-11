@@ -53,7 +53,7 @@ def test_target_02(mocker, tmp_path):
     """test setting Target.forced_close"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    getenv = mocker.patch("grizzly.target.target.os.getenv", autospec=True, return_value="0")
+    getenv = mocker.patch("grizzly.target.target.getenv", autospec=True, return_value="0")
     with SimpleTarget(str(fake_file), None, 300, 25, 5000, None, 25) as target:
         assert not target.forced_close
         assert target.extension is None
@@ -85,7 +85,7 @@ def test_target_03(mocker, tmp_path):
         target._monitor.is_healthy.side_effect = (True, False)
         target.rl_countdown = 0
         target.step()
-        mocker.patch("grizzly.target.target.time.sleep", autospec=True)
+        mocker.patch("grizzly.target.target.sleep", autospec=True)
         target.check_relaunch(wait=5)
 
 def test_sanitizer_opts_01(tmp_path):

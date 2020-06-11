@@ -2,8 +2,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import abc
-import os
+from abc import ABCMeta, abstractmethod, abstractproperty
+from os import remove
 
 
 __all__ = ("TargetMonitor",)
@@ -11,20 +11,20 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
-class TargetMonitor(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
+class TargetMonitor(metaclass=ABCMeta):
+    @abstractmethod
     def clone_log(self, log_id, offset=0):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def is_healthy(self):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def is_running(self):
         pass
 
-    @abc.abstractproperty
+    @abstractproperty
     def launches(self):
         pass
 
@@ -36,8 +36,8 @@ class TargetMonitor(metaclass=abc.ABCMeta):
             with open(log_file, "rb") as log_fp:
                 return log_fp.read()
         finally:
-            os.remove(log_file)
+            remove(log_file)
 
-    @abc.abstractmethod
+    @abstractmethod
     def log_length(self, log_id):
         pass
