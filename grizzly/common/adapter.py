@@ -5,8 +5,6 @@
 import abc
 import os
 
-import six
-
 
 __all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"
@@ -17,8 +15,7 @@ class AdapterError(Exception):
     """The base class for exceptions raised by an Adapter"""
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Adapter(object):
+class Adapter(metaclass=abc.ABCMeta):
     HARNESS_FILE = os.path.join(os.path.dirname(__file__), "harness.html")
     IGNORE_UNSERVED = True  # Only report test cases with served content
     NAME = None  # must be a unique string
@@ -32,7 +29,7 @@ class Adapter(object):
     #############################
 
     def __init__(self):
-        if not isinstance(self.NAME, six.string_types):
+        if not isinstance(self.NAME, str):
             raise AdapterError("%s.NAME must be a string" % (type(self).__name__,))
         self._harness = None
         self.fuzz = dict()

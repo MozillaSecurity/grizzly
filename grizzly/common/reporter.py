@@ -18,7 +18,6 @@ import zipfile
 
 import fasteners
 import psutil
-import six
 
 # import FuzzManager utilities
 from Collector.Collector import Collector
@@ -290,8 +289,7 @@ class Report(object):
         shutil.move(out_file, in_file)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Reporter(object):
+class Reporter(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def _process_report(self, report):
         pass
@@ -496,6 +494,7 @@ class FuzzManagerReporter(Reporter):
                     log.info("Report is unsupported and is in ignore list")
                     return
                 log.warning("Report is unsupported by FM, saved to %r", report.path)
+                # TODO: we should check if stackhasher failed too
                 raise RuntimeError("Failed to create FM signature")
             # limit the number of times we report per cycle
             cache_metadata["_grizzly_seen_count"] += 1

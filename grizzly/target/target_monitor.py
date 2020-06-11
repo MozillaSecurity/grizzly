@@ -5,15 +5,13 @@
 import abc
 import os
 
-import six
 
 __all__ = ("TargetMonitor",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
-@six.add_metaclass(abc.ABCMeta)
-class TargetMonitor(object):
+class TargetMonitor(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def clone_log(self, log_id, offset=0):
         pass

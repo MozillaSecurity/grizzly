@@ -10,8 +10,6 @@ import os
 import shutil
 import tempfile
 
-import six
-
 from ..target import sanitizer_opts
 
 __all__ = ("TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
@@ -239,7 +237,7 @@ class TestCase(object):
     def load_environ(self, path, env_data):
         # sanity check environment variable data
         for name, value in env_data.items():
-            if not isinstance(name, six.string_types) or not isinstance(value, six.string_types):
+            if not isinstance(name, str) or not isinstance(value, str):
                 raise TestCaseLoadFailure("'env_data' contains invalid 'env' entries")
         self.env_vars = env_data
         known_suppressions = ("lsan.supp", "tsan.supp", "ubsan.supp")
