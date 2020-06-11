@@ -9,7 +9,6 @@ import re
 import threading
 import time
 
-import six
 
 __all__ = ("Target", "sanitizer_opts")
 __author__ = "Tyson Smith"
@@ -50,8 +49,7 @@ class TargetLaunchTimeout(TargetError):
     """Raised if the target does not launch within the defined amount of time"""
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Target(object):
+class Target(metaclass=abc.ABCMeta):
     RESULT_NONE = 0
     RESULT_FAILURE = 1
     RESULT_IGNORED = 2

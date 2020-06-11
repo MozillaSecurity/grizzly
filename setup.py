@@ -48,8 +48,7 @@ if __name__ == '__main__':
             'ffpuppet',
             'FuzzManager',
             'prefpicker',
-            'psutil',
-            'six'
+            'psutil'
         ],
         keywords='firefox framework fuzz fuzzing test testing',
         license='MPL 2.0',

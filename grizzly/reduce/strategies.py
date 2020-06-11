@@ -13,7 +13,6 @@ try:
     HAVE_JSBEAUTIFIER = True
 except ImportError:
     HAVE_JSBEAUTIFIER = False
-import six
 import lithium
 
 from . import testcase_contents
@@ -22,8 +21,7 @@ from . import testcase_contents
 LOG = logging.getLogger("grizzly.reduce.strategies")
 
 
-@six.add_metaclass(abc.ABCMeta)
-class ReduceStage(object):
+class ReduceStage(metaclass=abc.ABCMeta):
     strategy_type = None
     testcase_type = None
 
