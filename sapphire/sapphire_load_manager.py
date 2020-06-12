@@ -17,7 +17,7 @@ LOG = getLogger("sphr_loadmgr")
 
 
 class SapphireLoadManager(object):
-    SHUTDOWN_DELAY = 0.25  # allow extra time before closing socket if needed
+    SHUTDOWN_DELAY = 0.5  # allow extra time before closing socket if needed
 
     __slots__ = ("_job", "_listener", "_socket", "_workers")
 
@@ -92,6 +92,7 @@ class SapphireLoadManager(object):
     @staticmethod
     def listener(serv_sock, serv_job, max_workers, shutdown_delay=0):
         assert max_workers > 0
+        assert shutdown_delay >= 0
         worker_pool = list()
         pool_size = 0
         LOG.debug("starting listener")
@@ -127,16 +128,16 @@ class SapphireLoadManager(object):
                 serv_job.exceptions.put(sys.exc_info())
             serv_job.finish()
         finally:
-            LOG.debug("shutting down and cleaning up workers")
+            LOG.debug("listener cleaning up workers")
             deadline = time.time() + shutdown_delay
             while time.time() < deadline:
-                if all(w.done for w in worker_pool):
+                worker_pool = list(w for w in worker_pool if not w.done)
+                if not worker_pool:
                     break
                 # avoid cutting off connections
-                LOG.debug("delaying shutdown...")
-                time.sleep(0.01)
+                LOG.debug("waiting for %d worker(s)...", len(worker_pool))
+                time.sleep(0.1)
             else:  # pragma: no cover
-                LOG.debug("not all worker threads exited")
-            for worker in (w for w in worker_pool if not w.done): # pragma: no cover
-                # close() is usually called by the worker so only call it if needed
-                worker.close()
+                LOG.debug("closing remaining workers")
+                for worker in (w for w in worker_pool if not w.done):
+                    worker.close()
