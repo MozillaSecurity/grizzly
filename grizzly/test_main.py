@@ -39,7 +39,7 @@ class FakeArgs(object):
         self.working_path = working_path
         self.xvfb = False
 
-# TODO: these could use call_count checks and 'match=' in pytest.raises
+# TODO: these could use call_count checks
 
 def test_main_01(tmp_path, mocker):
     """test main()"""
@@ -55,18 +55,21 @@ def test_main_01(tmp_path, mocker):
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
+    args.coverage = True
     args.input = "fake"
     args.ignore = ["fake", "fake"]
     args.rr = True
     args.valgrind = True
     args.xvfb = True
+    with raises(RuntimeError, match="Coverage must be run with --relaunch > 1"):
+        main(args)
+    fake_adapter.RELAUNCH = 0
     assert main(args) == Session.EXIT_SUCCESS
     fake_reporter = mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
     fake_reporter.sanity_check.return_value = True
     args.input = None
     args.log_level = None
     args.fuzzmanager = True
-    args.coverage = True
     assert main(args) == Session.EXIT_SUCCESS
     fake_reporter = mocker.patch("grizzly.main.S3FuzzManagerReporter", autospec=True)
     fake_reporter.sanity_check.return_value = True
@@ -83,7 +86,7 @@ def test_main_02(tmp_path, mocker):
     args = FakeArgs(str(tmp_path))
     args.adapter = "fake"
     fake_adapter.TEST_DURATION = args.timeout + 10
-    with raises(RuntimeError):
+    with raises(RuntimeError, match=r"Test duration \([0-9]+s\) should be less than browser timeout \([0-9]+s\)"):
         main(args)
 
 def test_main_03(tmp_path, mocker):

@@ -80,6 +80,12 @@ def main(args):
             xvfb=args.xvfb)
         adapter.monitor = target.monitor
 
+        if args.coverage and relaunch == 1 and target.forced_close:
+            # this is a workaround to avoid not dumping coverage
+            # GRZ_FORCED_CLOSE=0 is also an option but the browser MUST
+            # close itself.
+            raise RuntimeError("Coverage must be run with --relaunch > 1")
+
         log.debug("calling adapter setup()")
         adapter.setup(args.input, iomanager.server_map)
         log.debug("configuring harness")
