@@ -67,6 +67,10 @@ def test_interesting(tmp_path):
     obj.lithium_init()
     (tmp_path / "lithium").mkdir()
     assert obj.lithium_interesting(str(tmp_path / "lithium"))
+    assert "grz_close_browser" in obj._server_map.dynamic
+    assert "grz_harness" in obj._server_map.dynamic
+    assert "grz_current_test" in obj._server_map.redirect
+    assert "grz_next_test" in obj._server_map.redirect
     assert obj.target._calls["close"] == 1
     obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0
@@ -180,6 +184,10 @@ def test_no_harness(tmp_path):
     obj.reduce_file = str(reduce_file)
     obj.lithium_init()
     assert obj.lithium_interesting(str(prefix))
+    assert "grz_close_browser" not in obj._server_map.dynamic
+    assert "grz_harness" not in obj._server_map.dynamic
+    assert "grz_current_test" in obj._server_map.redirect
+    assert "grz_next_test" not in obj._server_map.redirect
     assert obj.target._calls["close"] == 1
     obj.lithium_cleanup()
     assert obj.target._calls["cleanup"] == 0

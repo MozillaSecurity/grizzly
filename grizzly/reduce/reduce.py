@@ -619,7 +619,7 @@ class ReductionJob(object):
                 with open(harness, 'rb') as harness_fp:
                     harness = harness_fp.read()
                 self._server_map.set_dynamic_response("grz_harness", lambda: harness, mime_type="text/html")
-                self._server_map.set_redirect("grz_current_test", str(self.landing_page), required=True)
+            self._server_map.set_redirect("grz_current_test", str(self.landing_page), required=False)
 
         runner = Runner(self._server, self._target, self._idle_threshold, self._idle_timeout)
         if self._no_harness:
