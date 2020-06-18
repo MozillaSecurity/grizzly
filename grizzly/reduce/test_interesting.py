@@ -51,11 +51,7 @@ def fake_sapphire(monkeypatch):
     monkeypatch.setattr(sapphire, "Sapphire", FakeServer)
     FakeServer._last_timeout = None
 
-@pytest.fixture
-def fake_timesleep(monkeypatch):
-    monkeypatch.setattr(time, "sleep", lambda x: None)
-
-pytestmark = pytest.mark.usefixtures("fake_sapphire", "fake_timesleep")
+pytestmark = pytest.mark.usefixtures("fake_sapphire")
 
 
 def test_interesting(tmp_path):
@@ -149,9 +145,10 @@ def test_target_relaunch_error(tmp_path):
     assert obj.target._calls["cleanup"] == 0
 
 
-def test_target_relaunch_timeout(tmp_path):
+def test_target_relaunch_timeout(mocker, tmp_path):
     "target should be launched more than once on TargetLaunchTimeout"
 
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
     class MyTarget(FakeTarget):
 
         def launch(self, *args, **kwds):
