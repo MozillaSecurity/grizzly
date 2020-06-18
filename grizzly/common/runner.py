@@ -2,8 +2,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import logging
-import time
+from logging import getLogger
+from time import sleep, time
 
 from sapphire import SERVED_TIMEOUT
 from ..target import TargetLaunchTimeout
@@ -12,7 +12,7 @@ __all__ = ("Runner",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = logging.getLogger("grz_runner")
+LOG = getLogger("grz_runner")
 
 # _IdleChecker is used to help determine if the target is hung (actively using CPU)
 # or if it has not made expected the HTTP requests for other reasons (idle).
@@ -45,7 +45,7 @@ class _IdleChecker(object):
             bool: True if the target idle callback returned True otherwise False
         """
         assert self._next_poll is not None, "schedule_poll() must be called first"
-        now = time.time()
+        now = time()
         if now >= self._next_poll:
             if self._check_cb(self._threshold):
                 return True
@@ -63,7 +63,7 @@ class _IdleChecker(object):
             None
         """
         if now is None:
-            now = time.time()
+            now = time()
         if initial:
             self._next_poll = now + self._init_delay
         else:
@@ -114,7 +114,7 @@ class Runner(object):
                 # something is likely wrong so raise.
                 if retries:
                     LOG.warning("Launch timeout (attempts remaining %d)", retries)
-                    time.sleep(retry_delay)
+                    sleep(retry_delay)
                     continue
                 raise
             break

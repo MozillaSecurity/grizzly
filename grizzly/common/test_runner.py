@@ -4,7 +4,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 from os.path import join as pathjoin
-import pytest
+
+from pytest import raises
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT, ServerMap
 
@@ -169,13 +170,13 @@ def test_runner_08(mocker):
     target.reset_mock()
 
     target.launch.side_effect = TargetLaunchError
-    with pytest.raises(TargetLaunchError):
+    with raises(TargetLaunchError):
         runner.launch("http://a/")
     assert target.launch.call_count == 1
     target.reset_mock()
 
     target.launch.side_effect = TargetLaunchTimeout
-    with pytest.raises(TargetLaunchTimeout):
+    with raises(TargetLaunchTimeout):
         runner.launch("http://a/", max_retries=3)
     assert target.launch.call_count == 3
 
@@ -218,7 +219,7 @@ def test_idle_check_01(mocker):
     assert ichk._init_delay == 10
     assert ichk._poll_delay == 1
     assert ichk._next_poll is None
-    fake_time.time.return_value = 0
+    fake_time.return_value = 0
     ichk.schedule_poll(initial=True)
     assert ichk._next_poll == 10
     ichk.schedule_poll()
@@ -231,18 +232,18 @@ def test_idle_check_02(mocker):
     callbk.return_value = False
     #check_cb, delay, duration, threshold
     ichk = _IdleChecker(callbk, 100, 10, poll_delay=1)
-    fake_time.time.return_value = 0
+    fake_time.return_value = 0
     ichk.schedule_poll()
     # early check
     assert not ichk.is_idle()
     assert callbk.call_count == 0
     # not idle
-    fake_time.time.return_value = 10
+    fake_time.return_value = 10
     assert not ichk.is_idle()
     assert ichk._next_poll == 11
     assert callbk.call_count == 1
     # idle
     callbk.return_value = True
-    fake_time.time.return_value = ichk._next_poll
+    fake_time.return_value = ichk._next_poll
     assert ichk.is_idle()
     assert callbk.call_count == 2
