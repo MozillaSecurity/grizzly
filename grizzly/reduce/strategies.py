@@ -9,6 +9,11 @@ import os
 import re
 
 try:
+    import cssbeautifier
+    HAVE_CSSBEAUTIFIER = True
+except ImportError:
+    HAVE_CSSBEAUTIFIER = False
+try:
     import jsbeautifier
     HAVE_JSBEAUTIFIER = True
 except ImportError:
@@ -255,6 +260,82 @@ class ScanFilesToReduce(ReduceStage):
         return True
 
 
+class CSSBeautify(ReduceStage):
+    name = "cssbeautify"
+    strategy_type = lithium.CheckOnly
+    testcase_type = lithium.TestcaseLine
+
+    def __init__(self, *args, **kwds):
+        super(CSSBeautify, self).__init__(*args, **kwds)
+        self.testcase_path = None
+        self.original_testcase = None
+        self._ext = None
+        self._force_skip = False
+
+    def read_testcase(self, testcase_path):
+        self.testcase_path = testcase_path
+        self._ext = testcase_path.rsplit(".", 1)[-1]
+
+        if self.should_skip():
+            return
+
+        # Beautify testcase
+        opts = (
+            ('end_with_newline', False),
+            ('indent_size', 2),
+            ('newline_between_rules', False),
+            ('preserve_newlines', False),
+        )
+        with open(testcase_path) as testcase_fp:
+            self.original_testcase = testcase_fp.read()
+        if self._ext == "css":
+            # DDBEGIN and DDEND are ignored here atm
+            LOG.info("Attempting to cssbeautify %s", testcase_path)
+            with open(testcase_path, "w") as testcase_fp:
+                testcase_fp.write(cssbeautifier.beautify(self.original_testcase, opts))
+        else:
+            # handle html files
+            begin = max(self.original_testcase.find("DDBEGIN"), 0)
+            end = self.original_testcase.find("DDEND")
+            if end == -1:
+                end = len(self.original_testcase)
+            re_tag = re.compile(r"(<style.*?>)(.*?)(</style>)", flags=re.DOTALL|re.IGNORECASE)
+            if not re_tag.search(self.original_testcase, begin, end):
+                LOG.debug("<style> tags not found in %r", testcase_path)
+                self._force_skip = True
+                self.original_testcase = None
+                return
+            pos = 0
+            with open(testcase_path, "w") as testcase_fp:
+                for match in re_tag.finditer(self.original_testcase, begin, end):
+                    testcase_fp.write(self.original_testcase[pos:match.start()])
+                    testcase_fp.write(match.group(1))
+                    css = cssbeautifier.beautify(match.group(2), opts)
+                    if css:
+                        testcase_fp.write("\n")
+                        testcase_fp.write(css)
+                        testcase_fp.write("\n")
+                    testcase_fp.write(match.group(3))
+                    pos = match.end()
+                testcase_fp.write(self.original_testcase[pos:])
+            LOG.info("Ran cssbeautify on %s", testcase_path)
+
+        self.lithium.strategy = self.strategy_type()  # pylint: disable=not-callable
+        self.lithium.testcase = self.testcase_type()  # pylint: disable=not-callable
+        self.lithium.testcase.readTestcase(testcase_path)
+
+    def should_skip(self):
+        if HAVE_CSSBEAUTIFIER and not self._force_skip:
+            if self._ext in ("css", "htm", "html"):
+                return False
+        return True
+
+    def on_failure(self):
+        LOG.warning("CSSBeautification failed (reverting)")
+        with open(self.testcase_path, "w") as testcase_fp:
+            testcase_fp.write(self.original_testcase)
+
+
 class JSBeautify(ReduceStage):
     name = "jsbeautify"
     strategy_type = lithium.CheckOnly
@@ -271,7 +352,7 @@ class JSBeautify(ReduceStage):
         if self.should_skip():
             return
 
-        LOG.info("Attempting to beautify %s", testcase_path)
+        LOG.info("Attempting to jsbeautify %s", testcase_path)
 
         self.lithium.strategy = self.strategy_type()  # pylint: disable=not-callable
         self.lithium.testcase = self.testcase_type()  # pylint: disable=not-callable
@@ -298,7 +379,7 @@ class JSBeautify(ReduceStage):
         return True
 
     def on_failure(self):
-        LOG.warning("Beautification failed (reverting)")
+        LOG.warning("JSBeautification failed (reverting)")
         with open(self.testcase_path, 'w') as testcase_fp:
             testcase_fp.write(self.original_testcase)
 
