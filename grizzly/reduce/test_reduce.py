@@ -319,7 +319,7 @@ def test_config_testcase_13(tmp_path):
         assert job.result_code is None
 
 
-def test_run_0(tmp_path):
+def test_run_01(tmp_path):
     """single required testcase is reduced and reported"""
     with TestReductionJob(tmp_path) as job:
         (tmp_path / "tc").mkdir()
@@ -359,7 +359,7 @@ def test_run_0(tmp_path):
         assert report_data["num_reports"] == 1
 
 
-def test_run_1(tmp_path):
+def test_run_02(tmp_path):
     """other crashes are reported as unreduced crashes"""
     with TestReductionJobAlt(tmp_path) as job:
         (tmp_path / "tc").mkdir()
@@ -399,7 +399,7 @@ def test_run_1(tmp_path):
         assert report_data["num_reports"] == 1
 
 
-def test_run_2(tmp_path):
+def test_run_03(tmp_path):
     """other files in testcase are not reduced without DDBEGIN/END"""
     with TestReductionJob(tmp_path) as job:
         (tmp_path / "tc").mkdir()
@@ -431,7 +431,7 @@ def test_run_2(tmp_path):
         assert report_data["num_reports"] == 1
 
 
-def test_run_3(tmp_path):
+def test_run_04(tmp_path):
     """other files in testcase are reduced with DDBEGIN/END"""
     with TestReductionJob(tmp_path) as job:
         (tmp_path / "tc").mkdir()
@@ -463,7 +463,7 @@ def test_run_3(tmp_path):
         assert report_data["num_reports"] == 1
 
 
-def test_run_4(tmp_path):
+def test_run_05(tmp_path):
     """multiple testcases result in harness being reported"""
     with TestReductionJobKeepHarness(tmp_path) as job:
         (tmp_path / "tc").mkdir()
@@ -498,7 +498,7 @@ def test_run_4(tmp_path):
         assert report_data["num_reports"] == 1
 
 
-def test_run_5(tmp_path):
+def test_run_06(tmp_path):
     """multiple testcases reducing to 1 file will have harness removed"""
     with TestReductionJob(tmp_path) as job:
         (tmp_path / "tc").mkdir()
@@ -529,7 +529,7 @@ def test_run_5(tmp_path):
 
 
 @pytest.mark.skipif(not strategies.HAVE_JSBEAUTIFIER, reason="jsbeautifier required")
-def test_run_6(tmp_path):
+def test_run_07(tmp_path):
     """test that jsbeautifier stage works"""
     with TestReductionJob(tmp_path) as job:
         (tmp_path / "tc").mkdir()
@@ -556,7 +556,62 @@ def test_run_6(tmp_path):
         assert report_data["num_reports"] == 1
 
 
-def test_run_7(tmp_path):
+@pytest.mark.skipif(not strategies.HAVE_CSSBEAUTIFIER, reason="cssbeautifier required")
+def test_run_08(tmp_path):
+    """test that cssbeautifier stage works with .css file"""
+    with TestReductionJob(tmp_path) as job:
+        (tmp_path / "tc").mkdir()
+        (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.css\",\"env\":{}}")
+        (tmp_path / "tc" / "test.css").write_text("*,#a{fluff:0;required:1}\n")
+        job.config_testcase(str(tmp_path / "tc"))
+        report_data = {"num_reports": 0}
+
+        class FakeReporter(BaseFakeReporter):
+            def _submit_report(self, _report, test_cases):
+                assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+                tc = test_cases[0]
+                assert len(tc._files.required) == 1, \
+                    "too many test_files: %r" % (tc._files.required,)
+                assert tc.landing_page == "test.css"
+                result = tc._files.required[0].data.decode("UTF-8").rstrip()
+                assert result == "  required: 1"
+                assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
+                assert self.force_report
+                report_data["num_reports"] += 1
+        job.set_reporter(FakeReporter())
+
+        assert job.run()
+        assert report_data["num_reports"] == 1
+
+@pytest.mark.skipif(not strategies.HAVE_CSSBEAUTIFIER, reason="cssbeautifier required")
+def test_run_09(tmp_path):
+    """test that cssbeautifier stage works with .html file"""
+    # TODO: tests specifically targeting beautifiers should be created
+    with TestReductionJob(tmp_path) as job:
+        (tmp_path / "tc").mkdir()
+        (tmp_path / "tc" / "test_info.json").write_text("{\"target\":\"test.html\",\"env\":{}}")
+        (tmp_path / "tc" / "test.html").write_text("<style>*,#a{fluff:0;required:1}</style>\n")
+        job.config_testcase(str(tmp_path / "tc"))
+        report_data = {"num_reports": 0}
+
+        class FakeReporter(BaseFakeReporter):
+            def _submit_report(self, _report, test_cases):
+                assert len(test_cases) == 1, "too many test_cases: %r" % (test_cases,)
+                tc = test_cases[0]
+                assert len(tc._files.required) == 1, \
+                    "too many test_files: %r" % (tc._files.required,)
+                assert tc.landing_page == "test.html"
+                result = tc._files.required[0].data.decode("UTF-8").rstrip()
+                assert result == "  required: 1"
+                assert self.quality == FuzzManagerReporter.QUAL_REDUCED_RESULT
+                assert self.force_report
+                report_data["num_reports"] += 1
+        job.set_reporter(FakeReporter())
+
+        assert job.run()
+        assert report_data["num_reports"] == 1
+
+def test_run_10(tmp_path):
     """test that jschar stage works"""
     with TestReductionJob(tmp_path) as job:
         (tmp_path / "tc").mkdir()
@@ -584,7 +639,7 @@ def test_run_7(tmp_path):
         assert report_data["num_reports"] == 1
 
 
-def test_run_8(tmp_path):
+def test_run_11(tmp_path):
     """test that analyze stage works"""
     with TestReductionJobSemiReliable(tmp_path, skip_analysis=False) as job:
         (tmp_path / "tc").mkdir()
@@ -621,7 +676,7 @@ def test_run_8(tmp_path):
             assert params.no_harness
 
 
-def test_run_9(tmp_path):
+def test_run_12(tmp_path):
     """test that analyze stage works with multiple testcases"""
     with TestReductionJobSemiReliable(tmp_path, testcase_cache=True, skip_analysis=False) as job:
         (tmp_path / "tc").mkdir()

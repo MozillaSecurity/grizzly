@@ -245,7 +245,7 @@ class TestcaseUpdateProxy(object):
 
 class ReductionJob(object):
     LOGGERS_TO_WATCH = ("ffpuppet", "grizzly", "lithium", "sapphire")
-    DEFAULT_STRATEGIES = ("line", "jsbeautify", "collapsebraces", "jschar")
+    DEFAULT_STRATEGIES = ("line", "cssbeautify", "jsbeautify", "collapsebraces", "jschar")
     __slots__ = [
         '_any_crash', '_best_testcase', '_cache_iter_harness_created', '_env_mod',
         '_fixed_timeout', '_force_no_harness', '_idle_threshold', '_idle_timeout', '_ignore',
