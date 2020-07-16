@@ -97,7 +97,7 @@ def test_parse_args(capsys, tmp_path):
         ReducerArgs().parse_args([str(exe), str(inp), arg, "10"])
 
 
-def test_main(tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_main(mocker, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "simple test that main functions"
 
     (tmp_path / "binary").touch()
@@ -108,10 +108,11 @@ def test_main(tmp_path):  # noqa pylint: disable=redefined-outer-name
     (inp / "test.html").write_text("fluff\nrequired\n")
     args = ReducerArgs().parse_args([str(exe), str(inp)])
     # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
+    mocker.patch("grizzly.reduce.reduce.load_target")
     assert TestMainReductionJob.main(args) == 0
 
 
-def test_main_prefs(tmp_path):
+def test_main_prefs(mocker, tmp_path):
     "cmd line prefs should override prefs in the testcase"
     run_called = [0]
 
@@ -138,11 +139,12 @@ def test_main_prefs(tmp_path):
     (tmp_path / "prefs.js").write_text("main prefs")
     args = ReducerArgs().parse_args([str(exe), str(inp),
                                      "-p", str(tmp_path / "prefs.js")])
+    mocker.patch("grizzly.reduce.reduce.load_target")
     assert MyReductionJob.main(args) == 0
     assert run_called[0] == 1
 
 
-def test_main_strategies(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_main_strategies(mocker, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "strategies list should be respected"
     # uses the job fixture from test_reduce which reduces testcases to the string "required\n"
     report_data = {"num_reports": 0}
@@ -169,6 +171,7 @@ def test_main_strategies(monkeypatch, tmp_path):  # noqa pylint: disable=redefin
     inp = tmp_path / "input"
     (inp / "test_info.txt").write_text("landing page: test.html")
     (inp / "test.html").write_bytes(b"fluff\n'xxrequired'\n")
+    mocker.patch("grizzly.reduce.reduce.load_target")
     args = ReducerArgs().parse_args([str(exe), str(inp), "--strategy", "line"])
     assert TestMainReductionJob.main(args) == 0
     assert report_data["num_reports"] == 1
@@ -220,7 +223,7 @@ def test_bucket_main(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-o
     assert main_called[0] == 1
 
 
-def test_crash_main_repro(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_repro(mocker, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     # expect Collector.patch to be called with these qualities
     expect_patch = [reporter.FuzzManagerReporter.QUAL_REPRODUCIBLE,
@@ -286,12 +289,13 @@ def test_crash_main_repro(monkeypatch, tmp_path):  # noqa pylint: disable=redefi
         zip_fp.write(str(inp / "test_info.txt"), "test_info.txt")
         zip_fp.write(str(inp / "test.html"), "test.html")
     args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
+    mocker.patch("grizzly.reduce.reduce.load_target")
     assert TestMainCrashReductionJob.main(args) == 0
     assert not expect_patch
     assert submitted[0]
 
 
-def test_crash_main_no_repro(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_no_repro(mocker, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     expect_patch = [reporter.FuzzManagerReporter.QUAL_REQUEST_SPECIFIC]
 
@@ -357,11 +361,12 @@ def test_crash_main_no_repro(monkeypatch, tmp_path):  # noqa pylint: disable=red
         zip_fp.write(str(inp / "test_info.txt"), "test_info.txt")
         zip_fp.write(str(inp / "test.html"), "test.html")
     args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
+    mocker.patch("grizzly.reduce.reduce.load_target")
     assert TestMainCrashReductionJob.main(args) == 1
     assert not expect_patch
 
 
-def test_crash_main_no_repro_specific(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
+def test_crash_main_no_repro_specific(mocker, monkeypatch, tmp_path):  # noqa pylint: disable=redefined-outer-name
     "crash.main --fuzzmanager updates quality"
     expect_patch = [reporter.FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE]
 
@@ -426,11 +431,12 @@ def test_crash_main_no_repro_specific(monkeypatch, tmp_path):  # noqa pylint: di
         zip_fp.write(str(inp / "test_info.txt"), "test_info.txt")
         zip_fp.write(str(inp / "test.html"), "test.html")
     args = ReducerFuzzManagerIDArgs().parse_args([str(exe), '1234', '--fuzzmanager'])
+    mocker.patch("grizzly.reduce.reduce.load_target")
     assert TestMainCrashReductionJob.main(args) == 1
     assert not expect_patch
 
 
-def test_environ_and_suppressions(monkeypatch, tmp_path):
+def test_environ_and_suppressions(mocker, tmp_path):
     ""
     run_called = [0]
 
@@ -461,5 +467,6 @@ def test_environ_and_suppressions(monkeypatch, tmp_path):
     (inp / "lsan.supp").write_text("foo")
     (inp / "test.html").write_text("fluff\nrequired\n")
     args = ReducerArgs().parse_args([str(exe), str(inp)])
+    mocker.patch("grizzly.reduce.reduce.load_target")
     MyReductionJob.main(args)
     assert run_called[0] == 1
