@@ -486,6 +486,7 @@ def test_s3fuzzmanager_reporter_01(tmp_path, mocker):
     with pytest.raises(EnvironmentError) as exc:
         S3FuzzManagerReporter.sanity_check(str(fake_bin))
     assert "'GRZ_S3_BUCKET' is not set in environment" in str(exc.value)
+    pytest.importorskip("boto3")
     os.environ["GRZ_S3_BUCKET"] = "test"
     try:
         S3FuzzManagerReporter.sanity_check(str(fake_bin))
@@ -494,6 +495,8 @@ def test_s3fuzzmanager_reporter_01(tmp_path, mocker):
 
 def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
     """test S3FuzzManagerReporter._process_report()"""
+    pytest.importorskip("boto3")
+    pytest.importorskip("botocore")
     fake_boto3 = mocker.patch("grizzly.common.reporter.boto3", autospec=True)
 
     fake_report = mocker.Mock(spec=Report)
