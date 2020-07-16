@@ -1239,8 +1239,8 @@ class ReductionJob(object):
                                                     FuzzManagerReporter.QUAL_REDUCER_ERROR}
             if job is not None:
                 job.close(keep_temp=job_cancelled)
-            # job handles calling cleanup if it was created
-            if job is None and target is not None:
+            elif target is not None:
+                # job handles calling cleanup if it was created
                 target.cleanup()
             # call cleanup if we are unlikely to be using status again
             status.cleanup()
