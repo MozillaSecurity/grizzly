@@ -8,9 +8,11 @@ from itertools import chain
 import json
 import os
 import shutil
-import tempfile
+from tempfile import SpooledTemporaryFile
 
 from ..target import sanitizer_opts
+from .utils import grz_tmp
+
 
 __all__ = ("TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
@@ -372,7 +374,7 @@ class TestFile(object):
     def __init__(self, file_name):
         if not file_name:
             raise TypeError("TestFile requires a name")
-        self._fp = tempfile.SpooledTemporaryFile(max_size=self.CACHE_LIMIT, prefix="grz_tf_")
+        self._fp = SpooledTemporaryFile(max_size=self.CACHE_LIMIT, dir=grz_tmp(), prefix="grz_tf_")
         # TODO: Add file_name sanitation since it is used when the file is written to the fs
         # XXX: This is a naive fix for a larger path issue
         if "\\" in file_name:

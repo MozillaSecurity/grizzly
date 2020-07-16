@@ -7,6 +7,7 @@ from time import sleep, time
 
 from sapphire import SERVED_TIMEOUT
 from ..target import TargetLaunchTimeout
+from .utils import grz_tmp
 
 __all__ = ("Runner",)
 __author__ = "Tyson Smith"
@@ -173,7 +174,8 @@ class Runner(object):
             testcase,
             continue_cb=self._keep_waiting,
             forever=wait_for_callback,
-            server_map=server_map)
+            server_map=server_map,
+            working_path=grz_tmp("serve"))
         # add all include files that were served
         for url, resource in server_map.include.items():
             testcase.add_batch(resource.target, self.served, prefix=url)

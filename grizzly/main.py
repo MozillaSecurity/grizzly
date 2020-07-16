@@ -49,9 +49,7 @@ def main(args):
     try:
         log.debug("initializing the IOManager")
         # TODO: move this into Session
-        iomanager = IOManager(
-            report_size=(max(args.cache, 0) + 1),
-            working_path=args.working_path)
+        iomanager = IOManager(report_size=(max(args.cache, 0) + 1))
 
         log.debug("initializing Adapter %r", args.adapter)
         adapter = get_adapter(args.adapter)()
