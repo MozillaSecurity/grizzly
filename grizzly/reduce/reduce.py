@@ -29,6 +29,7 @@ from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner
 from ..common.status import ReducerStats, Status
 from ..common.storage import TestCase, TestFile
+from ..common.utils import grz_tmp
 from ..main import configure_logging
 from ..session import Session
 from ..target import load as load_target, sanitizer_opts, TargetLaunchError, \
@@ -256,8 +257,7 @@ class ReductionJob(object):
     ]
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
-                 repeat, idle_threshold, idle_timeout, status, working_path=None,
-                 testcase_cache=True, skip_analysis=False):
+                 repeat, idle_threshold, idle_timeout, status, testcase_cache=True, skip_analysis=False):
         """Use lithium to reduce a testcase.
 
         Args:
@@ -298,7 +298,7 @@ class ReductionJob(object):
         # testcase cache remembers if we have seen this reduce_file before and if so return the same
         # interesting result
         self._use_result_cache = testcase_cache
-        self._tmpdir = tempfile.mkdtemp(prefix="grzreduce", dir=working_path)
+        self._tmpdir = tempfile.mkdtemp(prefix="grzreduce", dir=grz_tmp("reduce"))
         self._tcroot = os.path.join(self._tmpdir, "tc")
         self._log_handler = self._start_log_capture()
         if not self._skip_analysis:
@@ -1126,7 +1126,6 @@ class ReductionJob(object):
             args.idle_threshold,
             args.idle_timeout,
             status,
-            args.working_path,
             not args.no_cache,
             args.no_analysis)
 

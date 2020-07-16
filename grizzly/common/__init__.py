@@ -9,10 +9,11 @@ from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter,
 from .runner import Runner
 from .status import ReducerStats, Status
 from .storage import TestCaseLoadFailure, TestCase, TestFile, TestFileExists
+from .utils import grz_tmp
 
 
 __all__ = (
-    "Adapter", "AdapterError", "FilesystemReporter", "FuzzManagerReporter", "IOManager",
+    "Adapter", "AdapterError", "FilesystemReporter", "FuzzManagerReporter", "grz_tmp", "IOManager",
     "ReducerStats", "Report", "Reporter", "Runner", "S3FuzzManagerReporter", "ServerMap", "Status",
     "TestCase", "TestCaseLoadFailure", "TestFile", "TestFileExists")
 __author__ = "Jesse Schwartzentruber"

@@ -6,7 +6,6 @@ from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import listdir
 from os.path import exists, isfile, isdir
-from tempfile import gettempdir
 
 from .adapters import names as adapter_names
 from .target import available as available_targets
@@ -88,10 +87,6 @@ class CommonArgs(object):
             "--valgrind", action="store_true",
             help="Use Valgrind (Linux only)")
         self.launcher_grp.add_argument(
-            "-w", "--working-path",
-            help="Working directory. Intended to be used with ram-drives."
-                 " (default: %r)" % gettempdir())
-        self.launcher_grp.add_argument(
             "--xvfb", action="store_true",
             help="Use Xvfb (Linux only)")
 
@@ -147,9 +142,6 @@ class CommonArgs(object):
 
         if args.relaunch < 1:
             self.parser.error("--relaunch must be >= 1")
-
-        if args.working_path is not None and not isdir(args.working_path):
-            self.parser.error("%r is not a directory" % args.working_path)
 
         if args.extension:
             for ext in args.extension:

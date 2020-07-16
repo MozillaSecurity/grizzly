@@ -17,6 +17,8 @@ from prefpicker import PrefPicker
 
 from .target_monitor import TargetMonitor
 from .target import Target, TargetLaunchError, TargetLaunchTimeout, TargetError
+from ..common.utils import grz_tmp
+
 
 __all__ = ("PuppetTarget",)
 __author__ = "Tyson Smith"
@@ -42,7 +44,7 @@ class PuppetTarget(Target):
             for prefs_template in PrefPicker.templates():
                 if prefs_template.endswith("browser-fuzzing.yml"):
                     LOG.debug("using prefpicker template %r", prefs_template)
-                    tmp_fd, self.prefs = mkstemp(prefix="prefs_", suffix=".js")
+                    tmp_fd, self.prefs = mkstemp(prefix="prefs_", suffix=".js", dir=grz_tmp())
                     close(tmp_fd)
                     PrefPicker.load_template(prefs_template).create_prefsjs(self.prefs)
                     LOG.debug("generated prefs.js %r", self.prefs)

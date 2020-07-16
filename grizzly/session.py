@@ -9,7 +9,7 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from time import sleep, time
 
-from .common import Report, Runner, Status, TestFile
+from .common import grz_tmp, Report, Runner, Status, TestFile
 from .target import TargetLaunchError
 
 
@@ -107,7 +107,7 @@ class Session(object):
 
     def report_result(self):
         # create working directory for target logs
-        result_logs = mkdtemp(prefix="grz_logs_", dir=self.iomanager.working_path)
+        result_logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
         self.target.save_logs(result_logs)
         report = Report.from_path(result_logs)
         crash_info = report.crash_info(self.target.binary)

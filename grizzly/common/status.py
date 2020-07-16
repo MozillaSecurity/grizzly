@@ -6,10 +6,12 @@
 from json import dump, load
 from logging import getLogger
 import os
-from tempfile import gettempdir, mkstemp
+from tempfile import mkstemp
 from time import time
 
 import fasteners
+
+from .utils import grz_tmp
 
 __all__ = ("ReducerStats", "Status")
 __author__ = "Tyson Smith"
@@ -23,7 +25,7 @@ class Status(object):
     There can be multiple readers of the data but only a single writer.
     """
     AGE_LIMIT = 3600  # 1 hour
-    PATH = os.path.join(gettempdir(), "grzstatus")
+    PATH = grz_tmp("status")
     REPORT_FREQ = 60
 
     __slots__ = (
@@ -210,7 +212,7 @@ class ReducerStats(object):
     """ReducerStats holds stats for the Grizzly reducer.
     """
     FILE = "reducer-stats.json"
-    PATH = gettempdir()
+    PATH = grz_tmp("status")
 
     __slots__ = ("_file", "_lock", "error", "failed", "passed")
 

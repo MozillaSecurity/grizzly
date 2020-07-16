@@ -36,6 +36,7 @@ except ImportError as err:
     _boto_import_error = err  # pylint: disable=invalid-name
 
 from .stack_hasher import Stack
+from .utils import grz_tmp
 
 __all__ = ("FilesystemReporter", "FuzzManagerReporter", "Report", "S3FuzzManagerReporter")
 __author__ = "Tyson Smith"
@@ -280,7 +281,9 @@ class Report(object):
             in_fp.seek(0, os.SEEK_END)
             dump_pos = max((in_fp.tell() - size_limit), 0)
             in_fp.seek(dump_pos)
-            out_fd, out_file = tempfile.mkstemp()
+            out_fd, out_file = tempfile.mkstemp(
+                prefix="taillog_",
+                dir=grz_tmp())
             os.close(out_fd)
             with open(out_file, "wb") as out_fp:
                 out_fp.write(b"[LOG TAILED]\n")
@@ -463,7 +466,7 @@ class FuzzManagerReporter(Reporter):
 
         # search for a cached signature match and if the signature
         # is already in the cache and marked as frequent, don't bother submitting
-        with fasteners.process_lock.InterProcessLock(os.path.join(tempfile.gettempdir(), "fm_sigcache.lock")):
+        with fasteners.process_lock.InterProcessLock(os.path.join(grz_tmp(), "fm_sigcache.lock")):
             collector = Collector()
             cache_sig_file, cache_metadata = collector.search(crash_info)
             if cache_metadata is not None:

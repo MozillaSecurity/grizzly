@@ -15,6 +15,7 @@ from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner
 from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
+from ..common.utils import grz_tmp
 from ..main import configure_logging
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
@@ -163,7 +164,7 @@ class ReplayManager(object):
                     self._runner.launch(location, env_mod=self.testcase.env_vars)
                 except TargetLaunchError:
                     LOG.error("Target launch error. Check browser logs for details.")
-                    log_path = mkdtemp(prefix="grzreplay_logs_")
+                    log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
                     self._reports_other["STARTUP"] = Report.from_path(log_path)
                     raise
@@ -177,7 +178,7 @@ class ReplayManager(object):
                 wait_for_callback=self._harness is None)
             # process results
             if self._runner.result == self._runner.FAILED:
-                log_path = mkdtemp(prefix="grzreplay_logs_")
+                log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                 self.target.save_logs(log_path)
                 report = Report.from_path(log_path)
                 # check signatures
