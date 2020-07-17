@@ -28,6 +28,10 @@ LOG = getLogger("replay")
 class ReplayManager(object):
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
 
+    __slots__ = ("ignore", "server", "status", "target", "testcase", "_any_crash",
+                 "_harness", "_reports_expected", "_reports_other", "_runner",
+                 "_signature")
+
     def __init__(self, ignore, server, target, testcase, any_crash=False, signature=None, use_harness=True):
         self.ignore = ignore
         self.server = server
@@ -45,6 +49,12 @@ class ReplayManager(object):
             with open(self.HARNESS_FILE, "rb") as in_fp:
                 self._harness = in_fp.read()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
+
     def cleanup(self):
         """Remove temporary files from disk.
 
@@ -60,6 +70,8 @@ class ReplayManager(object):
         for report in self._reports_other.values():
             report.cleanup()
         self._reports_other.clear()
+        if self.status is not None:
+            self.status.cleanup()
 
     @property
     def other_reports(self):
