@@ -308,15 +308,13 @@ class CSSBeautify(ReduceStage):
             pos = 0
             with open(testcase_path, "w") as testcase_fp:
                 for match in re_tag.finditer(self.original_testcase, begin, end):
-                    testcase_fp.write(self.original_testcase[pos:match.start()])
-                    testcase_fp.write(match.group(1))
+                    testcase_fp.write(self.original_testcase[pos:match.start(2)])
                     css = cssbeautifier.beautify(match.group(2), opts)
                     if css:
                         testcase_fp.write("\n")
                         testcase_fp.write(css)
                         testcase_fp.write("\n")
-                    testcase_fp.write(match.group(3))
-                    pos = match.end()
+                    pos = match.end(2)
                 testcase_fp.write(self.original_testcase[pos:])
             LOG.info("Ran cssbeautify on %s", testcase_path)
 
