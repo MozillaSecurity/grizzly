@@ -62,17 +62,9 @@ class ReplayArgs(CommonArgs):
         if "input" not in self._sanity_skip and isdir(args.input):
             if not isfile(pathjoin(args.input, "test_info.json")):
                 self.parser.error("Test case folder must contain 'test_info.json'")
-            if args.prefs is None:
-                # prefs.js not specified assume it is in the test case directory
-                args.prefs = pathjoin(args.input, "prefs.js")
 
         if args.any_crash and args.sig is not None:
             self.parser.error("signature is ignored when running with '--any-crash'")
-
-        if args.prefs is None:
-            self.parser.error("'prefs.js' not specified")
-        elif not isfile(args.prefs):
-            self.parser.error("'prefs.js' not found")
 
         if args.min_crashes < 1:
             self.parser.error("'--min-crashes' value must be positive")
