@@ -7,6 +7,7 @@
 unit tests for grizzly.replay.main
 """
 from os.path import join as pathjoin
+from shutil import rmtree
 
 from pytest import raises
 
@@ -32,20 +33,15 @@ def test_args_01(capsys, tmp_path):
         ReplayArgs().parse_args([str(exe), str(inp)])
     assert "error: Test case folder must contain 'test_info.json'" in capsys.readouterr()[-1]
 
-    # test case directory with test_info.json missing prefs.js
     (inp / "test_info.json").touch()
+    # specified prefs.js missing
     with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp)])
-    assert "error: 'prefs.js' not found" in capsys.readouterr()[-1]
+        ReplayArgs().parse_args([str(exe), str(inp / "somefile"), "--prefs", "missing"])
+    assert "error: -p/--prefs not found 'missing'" in capsys.readouterr()[-1]
 
     # test case directory
     (inp / "prefs.js").touch()
     ReplayArgs().parse_args([str(exe), str(inp)])
-
-    # test case file not specified prefs.js
-    with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp / "somefile")])
-    assert "error: 'prefs.js' not specified" in capsys.readouterr()[-1]
 
     # test case file
     ReplayArgs().parse_args([str(exe), str(inp / "somefile"), "--prefs", str(inp / "prefs.js")])
@@ -141,6 +137,7 @@ def test_main_02(mocker):
     args.ignore = None
     args.input = "test"
     args.min_crashes = 1
+    args.prefs = None
     args.relaunch = 1
     args.repeat = 1
     args.sig = None
@@ -175,6 +172,7 @@ def test_main_03(mocker):
     args.input = "test"
     args.logs = None
     args.min_crashes = 1
+    args.prefs = None
     args.relaunch = 1
     args.repeat = 1
     args.sig = None
@@ -184,3 +182,83 @@ def test_main_03(mocker):
     assert testcase.cleanup.call_count == 1
     assert target.cleanup.call_count == 1
     assert not target.forced_close
+
+def test_main_04(mocker, tmp_path):
+    """test ReplayManager.main() loading/generating prefs.js"""
+    serve_testcase = mocker.patch("grizzly.replay.replay.Sapphire.serve_testcase", autospec=True)
+    serve_testcase.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
+    # setup Target
+    target = mocker.Mock(spec=Target, binary="bin", forced_close=True)
+    target.RESULT_FAILURE = Target.RESULT_FAILURE
+    target.detect_failure.return_value = Target.RESULT_FAILURE
+    def _fake_save_logs(result_logs):
+        """write fake log data to disk"""
+        with open(pathjoin(result_logs, "log_stderr.txt"), "w") as log_fp:
+            pass
+        with open(pathjoin(result_logs, "log_stdout.txt"), "w") as log_fp:
+            pass
+        with open(pathjoin(result_logs, "log_asan_blah.txt"), "w") as log_fp:
+            log_fp.write("==1==ERROR: AddressSanitizer: ")
+            log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+    target.save_logs = _fake_save_logs
+    load_target = mocker.patch("grizzly.replay.replay.load_target")
+    load_target.return_value.return_value = target
+    # setup args
+    args = mocker.Mock(
+        fuzzmanager=False,
+        ignore=None,
+        min_crashes=1,
+        relaunch=1,
+        repeat=1,
+        sig=None,
+        timeout=1)
+    log_path = (tmp_path / "logs")
+    args.logs = str(log_path)
+    input_path = (tmp_path / "input")
+    input_path.mkdir()
+    # build a test case
+    entry_point = (input_path / "target.bin")
+    entry_point.touch()
+    with TestCase("target.bin", None, "test-adapter") as src:
+        src.add_from_file(str(entry_point))
+        src.dump(str(input_path), include_details=True)
+    args.input = str(input_path)
+
+    # test no specified prefs.js
+    args.prefs = None
+    assert ReplayManager.main(args) == 0
+    assert target.launch.call_count == 1
+    assert target.detect_failure.call_count == 1
+    assert serve_testcase.call_count == 1
+    assert log_path.is_dir()
+    assert not any(log_path.glob('**/prefs.js'))
+
+    target.reset_mock()
+    serve_testcase.reset_mock()
+    rmtree(str(log_path), ignore_errors=True)
+
+    # test included prefs.js
+    (input_path / "prefs.js").write_bytes(b"included")
+    assert ReplayManager.main(args) == 0
+    assert target.launch.call_count == 1
+    assert target.detect_failure.call_count == 1
+    assert serve_testcase.call_count == 1
+    assert log_path.is_dir()
+    prefs = tuple(log_path.glob('**/prefs.js'))
+    assert prefs[0].read_bytes() == b"included"
+
+    target.reset_mock()
+    serve_testcase.reset_mock()
+    rmtree(str(log_path), ignore_errors=True)
+
+    # test specified prefs.js
+    (tmp_path / "prefs.js").write_bytes(b"specified")
+    args.prefs = str(tmp_path / "prefs.js")
+    assert ReplayManager.main(args) == 0
+    assert target.launch.call_count == 1
+    assert target.detect_failure.call_count == 1
+    assert serve_testcase.call_count == 1
+    assert log_path.is_dir()
+    prefs = tuple(log_path.glob('**/prefs.js'))
+    assert prefs[0].read_bytes() == b"specified"

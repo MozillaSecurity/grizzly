@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from logging import getLogger
-from os.path import dirname, isfile, join as pathjoin
+from os.path import dirname, join as pathjoin
 from tempfile import mkdtemp
 from time import sleep
 
@@ -290,9 +290,17 @@ class ReplayManager(object):
 
         try:
             LOG.debug("loading the TestCase")
-            testcase = TestCase.load_path(args.input)
-            if isfile(args.input):
+            testcase = TestCase.load_path(args.input, prefs=args.prefs is None)
+            # prioritize specified prefs.js file over included file
+            if args.prefs is not None:
+                prefs = args.prefs
                 testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
+                LOG.debug("using specified prefs.js")
+            elif testcase.contains("prefs.js"):
+                prefs = pathjoin(args.input, "prefs.js")
+                LOG.debug("using included prefs.js")
+            else:
+                prefs = None
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return 1
@@ -308,7 +316,7 @@ class ReplayManager(object):
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
-                args.prefs,
+                prefs,
                 relaunch,
                 rr=args.rr,
                 valgrind=args.valgrind,
