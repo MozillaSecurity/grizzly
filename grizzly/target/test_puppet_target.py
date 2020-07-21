@@ -46,21 +46,21 @@ def test_puppet_target_02(mocker, tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     # test providing prefs.js
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 35)
-    assert target.prefs == str(fake_file)
-    assert not target._tmp_prefs
-    target.launch("launch_target_page")
-    assert target._browser_logs is None
-    assert fake_ffp.return_value.launch.call_count == 1
-    assert fake_ffp.return_value.close.call_count == 0
-    fake_ffp.return_value.launch.side_effect = BrowserTimeoutError
-    with raises(TargetLaunchTimeout):
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 35) as target:
+        assert target.prefs == str(fake_file)
+        assert not target._tmp_prefs
         target.launch("launch_target_page")
-    assert fake_ffp.return_value.launch.call_count == 2
-    assert fake_ffp.return_value.close.call_count == 1
-    fake_ffp.return_value.launch.side_effect = BrowserTerminatedError
-    with raises(TargetLaunchError):
-        target.launch("launch_target_page")
+        assert target._browser_logs is None
+        assert fake_ffp.return_value.launch.call_count == 1
+        assert fake_ffp.return_value.close.call_count == 0
+        fake_ffp.return_value.launch.side_effect = BrowserTimeoutError
+        with raises(TargetLaunchTimeout):
+            target.launch("launch_target_page")
+        assert fake_ffp.return_value.launch.call_count == 2
+        assert fake_ffp.return_value.close.call_count == 1
+        fake_ffp.return_value.launch.side_effect = BrowserTerminatedError
+        with raises(TargetLaunchError):
+            target.launch("launch_target_page")
 
 def test_puppet_target_03(mocker, tmp_path):
     """test PuppetTarget.detect_failure()"""
@@ -246,35 +246,35 @@ def test_puppet_target_04(mocker, tmp_path):
 def test_puppet_target_05(mocker, tmp_path):
     """test is_idle()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 10)
-    fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
-    assert not target.is_idle(0)
-    assert not target.is_idle(25)
-    assert target.is_idle(50)
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 10) as target:
+        assert not target.is_idle(0)
+        assert not target.is_idle(25)
+        assert target.is_idle(50)
 
 def test_puppet_target_06(mocker, tmp_path):
     """test PuppetTarget.monitor"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25)
-    fake_ffp.return_value.is_running.return_value = False
-    fake_ffp.return_value.is_healthy.return_value = False
-    assert target.monitor is not None
-    assert not target.monitor.is_healthy()
-    assert not target.monitor.is_running()
-    fake_ffp.return_value.is_running.return_value = True
-    fake_ffp.return_value.is_healthy.return_value = True
-    assert target.monitor.is_healthy()
-    assert target.monitor.is_running()
-    fake_ffp.return_value.launches = 123
-    assert target.monitor.launches == 123
-    fake_ffp.return_value.log_length.return_value = 100
-    assert target.monitor.log_length("stdout") == 100
-    target.monitor.clone_log("somelog")
-    assert fake_ffp.return_value.clone_log.call_count == 1
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 25) as target:
+        fake_ffp.return_value.is_running.return_value = False
+        fake_ffp.return_value.is_healthy.return_value = False
+        assert target.monitor is not None
+        assert not target.monitor.is_healthy()
+        assert not target.monitor.is_running()
+        fake_ffp.return_value.is_running.return_value = True
+        fake_ffp.return_value.is_healthy.return_value = True
+        assert target.monitor.is_healthy()
+        assert target.monitor.is_running()
+        fake_ffp.return_value.launches = 123
+        assert target.monitor.launches == 123
+        fake_ffp.return_value.log_length.return_value = 100
+        assert target.monitor.log_length("stdout") == 100
+        target.monitor.clone_log("somelog")
+        assert fake_ffp.return_value.clone_log.call_count == 1
 
 def test_puppet_target_07(mocker, tmp_path):
     """test PuppetTarget with GRZ_BROWSER_LOGS set"""
@@ -284,11 +284,10 @@ def test_puppet_target_07(mocker, tmp_path):
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 35)
-    target.prefs = str(fake_file)
-    target.launch("launch_target_page")
-    assert target._browser_logs == str(browser_logs)
-    assert browser_logs.is_dir()
-    target.cleanup()
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 35) as target:
+        target.launch("launch_target_page")
+        assert target._browser_logs == str(browser_logs)
+        assert browser_logs.is_dir()
+        target.cleanup()
+        assert target._browser_logs is None
     assert fake_ffp.return_value.save_logs.call_count == 1
-    assert target._browser_logs is None
