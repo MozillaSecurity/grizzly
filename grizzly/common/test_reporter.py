@@ -497,7 +497,7 @@ def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
     """test S3FuzzManagerReporter._process_report()"""
     pytest.importorskip("boto3")
     pytest.importorskip("botocore")
-    fake_boto3 = mocker.patch("grizzly.common.reporter.boto3", autospec=True)
+    fake_resource = mocker.patch("grizzly.common.reporter.resource", autospec=True)
 
     fake_report = mocker.Mock(spec=Report)
     fake_report.path = "no-path"
@@ -519,7 +519,7 @@ def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
     assert not tuple(tmp_path.glob("*"))
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
-    fake_boto3.resource.return_value.meta.client.upload_file.assert_not_called()
+    fake_resource.return_value.meta.client.upload_file.assert_not_called()
 
     # test with new rr-trace
     reporter._extra_metadata.clear()
@@ -529,9 +529,8 @@ def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
         def __init__(self, message, response):
             super(FakeClientError, self).__init__(message)
             self.response = response
-    fake_botocore = mocker.patch("grizzly.common.reporter.botocore", autospec=True)
-    fake_botocore.exceptions.ClientError = FakeClientError
-    fake_boto3.resource.return_value.Object.side_effect = FakeClientError("test", {"Error": {"Code": "404"}})
+    mocker.patch("grizzly.common.reporter.ClientError", new=FakeClientError)
+    fake_resource.return_value.Object.side_effect = FakeClientError("test", {"Error": {"Code": "404"}})
     os.environ["GRZ_S3_BUCKET"] = "test"
     try:
         reporter._process_report(fake_report)
@@ -540,7 +539,7 @@ def test_s3fuzzmanager_reporter_02(tmp_path, mocker):
     assert not tuple(tmp_path.glob("*"))
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
-    assert fake_boto3.resource.return_value.meta.client.upload_file.call_count == 1
+    assert fake_resource.return_value.meta.client.upload_file.call_count == 1
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RR only supported on Linux")
 def test_s3fuzzmanager_reporter_03(tmp_path):
