@@ -5,11 +5,12 @@
 """Manage Grizzly status reports."""
 from json import dump, load
 from logging import getLogger
-import os
+from os import close, listdir, mkdir, unlink
+from os.path import isdir, isfile, join as pathjoin
 from tempfile import mkstemp
 from time import time
 
-import fasteners
+from fasteners.process_lock import InterProcessLock
 
 from .utils import grz_tmp
 
@@ -35,7 +36,7 @@ class Status(object):
     def __init__(self, data_file, start_time):
         assert ".json" in data_file
         assert isinstance(start_time, float)
-        self._lock = fasteners.process_lock.InterProcessLock("%s.lock" % (data_file,))
+        self._lock = InterProcessLock("%s.lock" % (data_file,))
         self.data_file = data_file
         self.ignored = 0
         self.iteration = 0
@@ -58,14 +59,14 @@ class Status(object):
             return
         with self._lock:
             try:
-                if os.path.isfile(self.data_file):
-                    os.unlink(self.data_file)
+                if isfile(self.data_file):
+                    unlink(self.data_file)
             except OSError:  # pragma: no cover
                 LOG.warning("Failed to delete %r", self.data_file)
             lock_file = "%s.lock" % (self.data_file,)
             self.data_file = None
         try:
-            os.unlink(lock_file)
+            unlink(lock_file)
         except OSError:  # pragma: no cover
             pass
 
@@ -93,7 +94,7 @@ class Status(object):
         """
         data = None
         lock_file = "%s.lock" % (data_file,)
-        lock = fasteners.process_lock.InterProcessLock(lock_file)
+        lock = InterProcessLock(lock_file)
         # there is race between looking up status files and loading them
         # if a status item is removed before it can be loaded a lock file
         # would be left behind from this load attempt
@@ -109,7 +110,7 @@ class Status(object):
         if cleanup:
             # the lock file should be removed if it was created here
             try:
-                os.unlink(lock_file)
+                unlink(lock_file)
             except OSError:  # pragma: no cover
                 pass
         if data is None:
@@ -132,12 +133,12 @@ class Status(object):
         Returns:
             Generator: Status objects stored in cls.PATH.
         """
-        if not os.path.isdir(cls.PATH):
+        if not isdir(cls.PATH):
             return
-        for data_file in os.listdir(cls.PATH):
+        for data_file in listdir(cls.PATH):
             if not data_file.endswith(".json"):
                 continue
-            status = cls.load(os.path.join(cls.PATH, data_file))
+            status = cls.load(pathjoin(cls.PATH, data_file))
             if status is None:
                 continue
             yield status
@@ -195,14 +196,14 @@ class Status(object):
         Returns:
             Status: Ready to be used to report Grizzly status
         """
-        if not os.path.isdir(cls.PATH):
+        if not isdir(cls.PATH):
             try:
-                os.mkdir(cls.PATH)
+                mkdir(cls.PATH)
             except OSError:  # pragma: no cover
-                if not os.path.isdir(cls.PATH):
+                if not isdir(cls.PATH):
                     raise
         tfd, filepath = mkstemp(dir=cls.PATH, prefix="grzstatus_", suffix=".json")
-        os.close(tfd)
+        close(tfd)
         status = cls(filepath, time())
         status.report(force=True)
         return status
@@ -217,14 +218,14 @@ class ReducerStats(object):
     __slots__ = ("_file", "_lock", "error", "failed", "passed")
 
     def __init__(self):
-        self._file = os.path.join(self.PATH, self.FILE)
+        self._file = pathjoin(self.PATH, self.FILE)
         self._lock = None
         self.error = 0
         self.failed = 0
         self.passed = 0
 
     def __enter__(self):
-        self._lock = fasteners.process_lock.InterProcessLock("%s.lock" % (self._file,))
+        self._lock = InterProcessLock("%s.lock" % (self._file,))
         self._lock.acquire()
         try:
             with open(self._file, "r") as in_fp:
