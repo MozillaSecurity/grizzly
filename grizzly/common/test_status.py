@@ -15,11 +15,10 @@ from .status import ReducerStats, Status
 
 def test_status_01(tmp_path):
     """test Status.start()"""
-    working_path = tmp_path / "grzstatus"
-    Status.PATH = str(working_path)
+    Status.PATH = str(tmp_path)
     status = Status.start()
     assert status is not None
-    assert working_path.is_dir()
+    assert status.data_file is not None
     assert isfile(status.data_file)
     assert stat(status.data_file).st_size > 0
     assert status.start_time > 0
@@ -33,7 +32,7 @@ def test_status_01(tmp_path):
 
 def test_status_02(tmp_path):
     """test Status.cleanup()"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    Status.PATH = str(tmp_path)
     status = Status.start()
     dfile = status.data_file
     status.cleanup()
@@ -48,7 +47,7 @@ def test_status_02(tmp_path):
 
 def test_status_03(tmp_path):
     """test Status.report()"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    Status.PATH = str(tmp_path)
     status = Status.start()
     # try to report before REPORT_FREQ elapses
     assert not status.report()
@@ -61,16 +60,15 @@ def test_status_03(tmp_path):
     status.timestamp = future
     assert status.report(force=True)
     assert status.timestamp < future
+    status.cleanup()
 
 def test_status_04(tmp_path):
     """test Status.load() failure paths"""
-    working_path = tmp_path / "grzstatus"
-    working_path.mkdir()
-    Status.PATH = str(working_path)
+    Status.PATH = str(tmp_path)
     # load no db
-    assert Status.load(str(tmp_path / "missing")) is None
+    assert Status.load(str(tmp_path / "missing.json")) is None
     # load empty
-    bad = (working_path / "bad.json")
+    bad = (tmp_path / "bad.json")
     bad.touch()
     assert Status.load(str(bad)) is None
     # load invalid/incomplete json
@@ -79,11 +77,11 @@ def test_status_04(tmp_path):
 
 def test_status_05(tmp_path):
     """test Status.load()"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    Status.PATH = str(tmp_path)
     # create simple entry
     status = Status.start()
     loaded = Status.load(status.data_file)
-    assert loaded is not None
+    assert loaded.data_file is None
     assert status.start_time == loaded.start_time
     assert status.timestamp == loaded.timestamp
     assert status.duration == loaded.duration
@@ -91,10 +89,15 @@ def test_status_05(tmp_path):
     assert status.iteration == loaded.iteration
     assert status.log_size == loaded.log_size
     assert status.results == loaded.results
+    loaded.cleanup()
+    assert isfile(status.data_file)
+    data_file = status.data_file
+    status.cleanup()
+    assert not isfile(data_file)
 
 def test_status_06(tmp_path):
     """test Status.loadall()"""
-    working_path = tmp_path / "grzstatus"
+    working_path = (tmp_path / "status")
     Status.PATH = str(working_path)
     # missing path
     assert not any(Status.loadall())
@@ -109,7 +112,7 @@ def test_status_06(tmp_path):
 
 def test_status_07(tmp_path):
     """test Status.duration and Status.rate calculations"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    Status.PATH = str(tmp_path)
     status = Status.start()
     status.start_time = 1
     status.timestamp = 2
@@ -136,7 +139,7 @@ def _client_writer(done, working_path):
 
 def test_status_08(tmp_path):
     """test Status.loadall() with multiple active reporters"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    Status.PATH = str(tmp_path)
     best_rate = 0
     done = Event()
     procs = list()

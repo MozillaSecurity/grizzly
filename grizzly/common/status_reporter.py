@@ -75,7 +75,7 @@ class StatusReporter(object):
             StatusReporter: Contains status reports and traceback reports that were found
         """
         if tb_path is not None and not os.path.isdir(tb_path):
-            raise IOError("%r is not a directory" % (tb_path,))
+            raise OSError("%r is not a directory" % (tb_path,))
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
         return cls(list(Status.loadall()), reducer=reducer, tracebacks=tracebacks)
 
@@ -343,7 +343,7 @@ class TracebackReport(object):
                 # seek back 2KB to collect preceding lines
                 in_fp.seek(max(pos - 2048, 0))
                 data = in_fp.read(cls.READ_LIMIT)
-        except IOError:  # pragma: no cover
+        except OSError:  # pragma: no cover
             # in case the file goes away
             return None
 
