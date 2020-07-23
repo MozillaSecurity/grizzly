@@ -20,14 +20,12 @@ def test_status_reporter_01(tmp_path):
     """test basic StatusReporter"""
     st_rpt = StatusReporter(list())
     st_rpt._sys_info = _fake_sys_info
-    out = st_rpt._specific()
-    assert "No status reports available" in out
+    assert "No status reports available" in st_rpt._specific()
     report = tmp_path / "output.txt"
     st_rpt.dump_specific(str(report))
     assert report.is_file()
     st_rpt.print_specific()
-    out = st_rpt._summary()
-    assert "No status reports available" in out
+    assert "No status reports available" in st_rpt._summary()
     report.unlink()
     st_rpt.dump_summary(str(report))
     assert report.is_file()
@@ -35,9 +33,15 @@ def test_status_reporter_01(tmp_path):
 
 def test_status_reporter_02(tmp_path):
     """test StatusReporter.load()"""
-    Status.PATH = str(tmp_path / "grzstatus")
-    with pytest.raises(IOError):
+    Status.PATH = str(tmp_path / "missing")
+    # missing reports path
+    st_rpt = StatusReporter.load()
+    assert not st_rpt.reports
+    # missing tb path
+    Status.PATH = str(tmp_path)
+    with pytest.raises(OSError):
         StatusReporter.load(tb_path="no_dir")
+    # empty reports and tb paths
     st_rpt = StatusReporter.load(tb_path=str(tmp_path))
     assert isinstance(st_rpt.reports, list)
     assert not st_rpt.reports
@@ -83,7 +87,7 @@ def test_status_reporter_04(tmp_path):
 
 def test_status_reporter_05(tmp_path):
     """test StatusReporter._summary()"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    Status.PATH = str(tmp_path)
     # single report
     status = Status.start()
     status.ignored = 0
@@ -91,7 +95,7 @@ def test_status_reporter_05(tmp_path):
     status.log_size = 0
     status.results = 0
     status.report(force=True)
-    rptr = StatusReporter.load(tb_path=str(tmp_path))
+    rptr = StatusReporter.load()
     rptr._sys_info = _fake_sys_info
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
@@ -112,7 +116,7 @@ def test_status_reporter_05(tmp_path):
     status.log_size = 86900000
     status.results = 0
     status.report(force=True)
-    rptr = StatusReporter.load(tb_path=str(tmp_path))
+    rptr = StatusReporter.load()
     rptr._sys_info = _fake_sys_info
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
@@ -130,9 +134,9 @@ def test_status_reporter_05(tmp_path):
     for line in lines:
         assert re.match(r"\S\s:\s\S", line[position - 2:])
 
-def test_status_reporter_06(tmp_path):
+def test_status_reporter_06(mocker, tmp_path):
     """test StatusReporter._specific()"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    Status.PATH = str(tmp_path)
     # single report
     status = Status.start()
     status.ignored = 0
@@ -141,7 +145,6 @@ def test_status_reporter_06(tmp_path):
     status.results = 0
     status.report(force=True)
     rptr = StatusReporter.load()
-    rptr._sys_info = _fake_sys_info
     assert rptr.reports is not None
     output = rptr._specific()
     assert len(output.split("\n")[:-1]) == 2
@@ -157,7 +160,6 @@ def test_status_reporter_06(tmp_path):
     status.results = 123
     status.report(force=True)
     rptr = StatusReporter.load()
-    rptr._sys_info = _fake_sys_info
     assert len(rptr.reports) == 2
     output = rptr._specific()
     assert len(output.split("\n")[:-1]) == 4
@@ -165,10 +167,24 @@ def test_status_reporter_06(tmp_path):
     assert "Iteration" in output
     assert "Rate" in output
     assert "Results" in output
+    assert "EXPIRED" not in output
+    # expired report
+    mocker.patch("grizzly.common.status.time", return_value=1.0)
+    status = Status.start()
+    status.ignored = 1
+    status.iteration = 1
+    status.results = 0
+    status.report(force=True)
+    rptr = StatusReporter.load()
+    assert len(rptr.reports) == 3
+    output = rptr._specific()
+    assert len(output.split("\n")[:-1]) == 5
+    assert "EXPIRED" in output
 
 def test_status_reporter_07(tmp_path):
     """test StatusReporter.load() with traceback"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    (tmp_path / "status").mkdir()
+    Status.PATH = str(tmp_path / "status")
     status = Status.start()
     status.ignored = 0
     status.iteration = 1
@@ -208,7 +224,8 @@ def test_status_reporter_07(tmp_path):
 
 def test_status_reporter_08(tmp_path):
     """test StatusReporter.load() no reports with traceback"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    (tmp_path / "status").mkdir()
+    Status.PATH = str(tmp_path / "status")
     # create screenlog with tb
     with (tmp_path / "screenlog.1").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
@@ -224,7 +241,8 @@ def test_status_reporter_08(tmp_path):
 
 def test_status_reporter_09(tmp_path):
     """test StatusReporter.summary() limit with traceback"""
-    Status.PATH = str(tmp_path / "grzstatus")
+    (tmp_path / "status").mkdir()
+    Status.PATH = str(tmp_path / "status")
     # create reports
     status = Status.start()
     status.ignored = 100
@@ -254,8 +272,8 @@ def test_status_reporter_09(tmp_path):
 
 def test_reduce_status_reporter_01(tmp_path):
     """test empty StatusReporter in reducer mode"""
-    Status.PATH = str(tmp_path / "grzstatus")
-    ReducerStats.PATH = str(tmp_path)
+    Status.PATH = str(tmp_path)
+    ReducerStats.PATH = Status.PATH
     rptr = StatusReporter.load(reducer=True)
     assert rptr is not None
     assert not rptr.reports
@@ -266,15 +284,14 @@ def test_reduce_status_reporter_01(tmp_path):
 
 def test_reduce_status_reporter_02(tmp_path):
     """test StatusReporter._specific() in reducer mode"""
-    Status.PATH = str(tmp_path / "grzstatus")
-    ReducerStats.PATH = str(tmp_path)
+    Status.PATH = str(tmp_path)
+    ReducerStats.PATH = Status.PATH
     status = Status.start()
     status.ignored = 12
     status.iteration = 432422
     status.results = 123
     status.report(force=True)
     rptr = StatusReporter.load(reducer=True)
-    rptr._sys_info = _fake_sys_info
     assert rptr.reports
     output = rptr._specific()
     assert len(output.split("\n")[:-1]) == 2
@@ -285,8 +302,8 @@ def test_reduce_status_reporter_02(tmp_path):
 
 def test_reduce_status_reporter_03(tmp_path):
     """test StatusReporter._summary() in reducer mode"""
-    Status.PATH = str(tmp_path / "grzstatus")
-    ReducerStats.PATH = str(tmp_path)
+    Status.PATH = str(tmp_path)
+    ReducerStats.PATH = Status.PATH
     status = Status.start()
     status.iteration = 1
     status.report(force=True)

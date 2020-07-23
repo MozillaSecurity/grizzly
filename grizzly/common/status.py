@@ -5,7 +5,7 @@
 """Manage Grizzly status reports."""
 from json import dump, load
 from logging import getLogger
-from os import close, listdir, mkdir, unlink
+from os import close, listdir, unlink
 from os.path import isdir, isfile, join as pathjoin
 from tempfile import mkstemp
 from time import time
@@ -25,7 +25,6 @@ class Status(object):
     """Status holds status information for the Grizzly session.
     There can be multiple readers of the data but only a single writer.
     """
-    AGE_LIMIT = 3600  # 1 hour
     PATH = grz_tmp("status")
     REPORT_FREQ = 60
 
@@ -33,10 +32,11 @@ class Status(object):
         "_lock", "data_file", "ignored", "iteration", "log_size", "results",
         "start_time", "test_name", "timestamp")
 
-    def __init__(self, data_file, start_time):
+    def __init__(self, data_file, start_time=None):
         assert ".json" in data_file
-        assert isinstance(start_time, float)
+        assert start_time is None or isinstance(start_time, float)
         self._lock = InterProcessLock("%s.lock" % (data_file,))
+        # if data_file is None the status report is read only (no reporting)
         self.data_file = data_file
         self.ignored = 0
         self.iteration = 0
@@ -47,7 +47,7 @@ class Status(object):
         self.timestamp = start_time
 
     def cleanup(self):
-        """Remove data file.
+        """Remove data and lock files from disk.
 
         Args:
             None
@@ -59,16 +59,14 @@ class Status(object):
             return
         with self._lock:
             try:
-                if isfile(self.data_file):
-                    unlink(self.data_file)
+                unlink(self.data_file)
             except OSError:  # pragma: no cover
                 LOG.warning("Failed to delete %r", self.data_file)
-            lock_file = "%s.lock" % (self.data_file,)
-            self.data_file = None
         try:
-            unlink(lock_file)
+            unlink("%s.lock" % (self.data_file,))
         except OSError:  # pragma: no cover
             pass
+        self.data_file = None
 
     @property
     def duration(self):
@@ -84,7 +82,8 @@ class Status(object):
 
     @classmethod
     def load(cls, data_file):
-        """Read Grizzly status report.
+        """Load status report. Loading a status report from disk will create a
+        read only status report.
 
         Args:
             data_file (str): JSON file that contains status data.
@@ -92,40 +91,39 @@ class Status(object):
         Returns:
             Status: Loaded status object or None
         """
+        status = cls(data_file)
         data = None
-        lock_file = "%s.lock" % (data_file,)
-        lock = InterProcessLock(lock_file)
-        # there is race between looking up status files and loading them
-        # if a status item is removed before it can be loaded a lock file
-        # would be left behind from this load attempt
-        cleanup = not lock.exists()
-        with lock:
-            try:
+        try:
+            with status._lock:  # pylint: disable=protected-access
                 with open(data_file, "r") as out_fp:
                     data = load(out_fp)
-            except IOError:
-                LOG.debug("%r does not exist", data_file)
-            except ValueError:
-                LOG.debug("failed to load json")
-        if cleanup:
-            # the lock file should be removed if it was created here
-            try:
-                unlink(lock_file)
-            except OSError:  # pragma: no cover
-                pass
+        except OSError:
+            LOG.debug("failed to open %r", data_file)
+            # if data_file exists the lock will be removed by the active session
+            if not isfile(data_file):
+                # attempt to remove potentially leaked lock file
+                try:
+                    unlink("%s.lock" % (data_file,))
+                except OSError:  # pragma: no cover
+                    pass
+        except ValueError:
+            LOG.debug("failed to load json data from %r", data_file)
+        else:
+            LOG.debug("no such file %r", data_file)
         if data is None:
             return None
         if "start_time" not in data:
             LOG.debug("invalid status json file")
             return None
-        status = cls(data_file, data["start_time"])
         for attr, value in data.items():
             setattr(status, attr, value)
+        # set read only
+        status.data_file = None
         return status
 
     @classmethod
     def loadall(cls):
-        """Read all Grizzly status reports found in cls.PATH.
+        """Load all status reports found in cls.PATH.
 
         Args:
             None
@@ -133,15 +131,14 @@ class Status(object):
         Returns:
             Generator: Status objects stored in cls.PATH.
         """
-        if not isdir(cls.PATH):
-            return
-        for data_file in listdir(cls.PATH):
-            if not data_file.endswith(".json"):
-                continue
-            status = cls.load(pathjoin(cls.PATH, data_file))
-            if status is None:
-                continue
-            yield status
+        if isdir(cls.PATH):
+            for data_file in listdir(cls.PATH):
+                if not data_file.endswith(".json"):
+                    continue
+                status = cls.load(pathjoin(cls.PATH, data_file))
+                if status is None:
+                    continue
+                yield status
 
     @property
     def rate(self):
@@ -167,8 +164,8 @@ class Status(object):
             "timestamp": self.timestamp}
 
     def report(self, force=False, report_freq=REPORT_FREQ):
-        """Write Grizzly status report. Reports are only written when the duration
-        of time since the previous report was created exceeds `report_freq` seconds
+        """Write status report. Reports are only written when the time since the
+        previous report was created exceeds `report_freq` seconds.
 
         Args:
             force (bool): Ignore report frequently limiting.
@@ -177,6 +174,7 @@ class Status(object):
         Returns:
             bool: Returns true if the report was successful otherwise false
         """
+        assert self.data_file is not None
         now = time()
         if not force and now < (self.timestamp + report_freq):
             return False
@@ -194,17 +192,11 @@ class Status(object):
             None
 
         Returns:
-            Status: Ready to be used to report Grizzly status
+            Status: Active status report.
         """
-        if not isdir(cls.PATH):
-            try:
-                mkdir(cls.PATH)
-            except OSError:  # pragma: no cover
-                if not isdir(cls.PATH):
-                    raise
         tfd, filepath = mkstemp(dir=cls.PATH, prefix="grzstatus_", suffix=".json")
         close(tfd)
-        status = cls(filepath, time())
+        status = cls(filepath, start_time=time())
         status.report(force=True)
         return status
 
@@ -235,7 +227,7 @@ class ReducerStats(object):
             self.passed = data["passed"]
         except KeyError:
             LOG.debug("invalid status data in %r", self._file)
-        except IOError:
+        except OSError:
             LOG.debug("%r does not exist", self._file)
         except ValueError:
             LOG.debug("failed to load stats from %r", self._file)
