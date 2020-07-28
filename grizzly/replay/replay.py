@@ -205,7 +205,7 @@ class ReplayManager(object):
                     LOG.info("Result: No crash detected")
                     crash_hash = None
                 elif self._any_crash or self._signature.matches(crash_info):
-                    self.status.results += 1
+                    self.status.count_result(short_sig)
                     LOG.info("Result: %s (%s:%s)",
                              short_sig, report.major[:8], report.minor[:8])
                     crash_hash = report.crash_hash(crash_info)

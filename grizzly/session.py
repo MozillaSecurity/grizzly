@@ -118,6 +118,7 @@ class Session(object):
         self.reporter.submit(self.iomanager.tests, report=report)
         if isdir(result_logs):
             rmtree(result_logs)
+        self.status.count_result(short_sig)
 
     def run(self, ignore, iteration_limit=None, display_mode=DISPLAY_NORMAL):
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
@@ -160,7 +161,6 @@ class Session(object):
                     runner.launch(location, max_retries=3, retry_delay=0)
                 except TargetLaunchError:
                     # this result likely has nothing to do with Grizzly
-                    self.status.results += 1
                     log.error("Target launch error. Check browser logs for details.")
                     self.report_result()
                     raise
@@ -191,7 +191,6 @@ class Session(object):
                     current_test.purge_optional(runner.served)
             # process results
             if runner.result == runner.FAILED:
-                self.status.results += 1
                 log.debug("result detected")
                 self.report_result()
             elif runner.result == runner.IGNORED:

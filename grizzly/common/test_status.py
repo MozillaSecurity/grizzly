@@ -49,6 +49,7 @@ def test_status_03(tmp_path):
     """test Status.report()"""
     Status.PATH = str(tmp_path)
     status = Status.start()
+    status.count_result("sig1")
     # try to report before REPORT_FREQ elapses
     assert not status.report()
     # REPORT_FREQ elapses
@@ -80,6 +81,11 @@ def test_status_05(tmp_path):
     Status.PATH = str(tmp_path)
     # create simple entry
     status = Status.start()
+    status.count_result("sig1")
+    status.count_result("sig2")
+    status.count_result("sig1")
+    status.report(force=True)
+    assert status.results == 3
     loaded = Status.load(status.data_file)
     assert loaded.data_file is None
     assert status.start_time == loaded.start_time

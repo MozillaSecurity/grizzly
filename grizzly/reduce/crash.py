@@ -149,7 +149,7 @@ class CrashReductionJob(ReductionJob):
             os.unlink(self._testcase_path)
 
     @classmethod
-    def from_args(cls, args, target, status):
+    def from_args(cls, args, target):
         LOG.info("Trying crash %d", args.input)
 
         try:
@@ -165,7 +165,7 @@ class CrashReductionJob(ReductionJob):
             # reduce.main expects input to be a path to testcase
             args.input = testcase
 
-            job = super(CrashReductionJob, cls).from_args(args, target, status)
+            job = super(CrashReductionJob, cls).from_args(args, target)
             job._fm_reporter = args.fuzzmanager
             job._crash_id = crash_id
             job._tool_override = tool_override

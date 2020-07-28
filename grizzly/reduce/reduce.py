@@ -257,7 +257,7 @@ class ReductionJob(object):
     ]
 
     def __init__(self, ignore, target, iter_timeout, no_harness, any_crash, skip, min_crashes,
-                 repeat, idle_threshold, idle_timeout, status, testcase_cache=True, skip_analysis=False):
+                 repeat, idle_threshold, idle_timeout, testcase_cache=True, skip_analysis=False):
         """Use lithium to reduce a testcase.
 
         Args:
@@ -292,7 +292,7 @@ class ReductionJob(object):
         self._skip = skip
         self._skip_analysis = skip_analysis
         self._skipped = None
-        self._status = status  # ReduceStatus to track progress
+        self._status = Status.start()
         self._target = target  # a Puppet to run with
         self._testcase = None
         # testcase cache remembers if we have seen this reduce_file before and if so return the same
@@ -954,6 +954,7 @@ class ReductionJob(object):
                 self._tmpdir = None
         if self._target is not None:
             self._target.cleanup()
+        self._status.cleanup()
 
     def _report_result(self, testcase, temp_prefix, quality_value, force=False):
         self._reporter.quality = quality_value
@@ -976,13 +977,14 @@ class ReductionJob(object):
             Report.from_path(temp_prefix + "_logs"),
             self._target.binary)
         crash_hash = Report.crash_hash(crash_info)
+        short_sig = crash_info.createShortSignature()
         if crash_hash in self._other_crashes:
-            LOG.info("Found alternate crash (newer): %s", crash_info.createShortSignature())
+            LOG.info("Found alternate crash (newer): %s", short_sig)
             # already counted when initially found
             self._status.ignored += 1
         else:
-            LOG.info("Found alternate crash: %s", crash_info.createShortSignature())
-            self._status.results += 1
+            LOG.info("Found alternate crash: %s", short_sig)
+            self._status.count_result(short_sig)
         self._other_crashes[crash_hash] = {"tc": testcase, "prefix": temp_prefix}
 
     def _report_other_crashes(self):
@@ -1113,7 +1115,7 @@ class ReductionJob(object):
         self._reporter = reporter
 
     @classmethod
-    def from_args(cls, args, target, status):
+    def from_args(cls, args, target):
         job = cls(
             args.ignore,
             target,
@@ -1125,7 +1127,6 @@ class ReductionJob(object):
             args.repeat,
             args.idle_threshold,
             args.idle_timeout,
-            status,
             not args.no_cache,
             args.no_analysis)
 
@@ -1177,7 +1178,6 @@ class ReductionJob(object):
         target = None
         job = None
 
-        status = Status.start()
         job_cancelled = False
         try:
             LOG.debug("initializing the Target")
@@ -1192,8 +1192,7 @@ class ReductionJob(object):
                 args.relaunch,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb)
-
-            job = cls.from_args(args, target, status)
+            job = cls.from_args(args, target)
 
             result = job.run(strategies=args.strategies)
 
@@ -1242,5 +1241,3 @@ class ReductionJob(object):
             elif target is not None:
                 # job handles calling cleanup if it was created
                 target.cleanup()
-            # call cleanup if we are unlikely to be using status again
-            status.cleanup()
