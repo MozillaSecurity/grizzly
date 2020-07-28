@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
 from __future__ import unicode_literals
 import re
 import zipfile
@@ -125,7 +126,7 @@ def test_main_prefs(mocker, tmp_path):
         def run(self, *args, **kwds):
             result = super(MyReductionJob, self).run(*args, **kwds)
             with open(self.target.prefs) as prefs_fp:
-                assert "main prefs" == prefs_fp.read()
+                assert prefs_fp.read() == "main prefs"
             run_called[0] += 1
             return result
 
@@ -199,10 +200,9 @@ def test_bucket_main(monkeypatch, tmp_path):  # noqa pylint: disable=redefined-o
                             "next": None,
                             "count": 2,
                         }
-                    else:
-                        return {
-                            "signature": '{"symptoms": []}',
-                        }
+                    return {
+                        "signature": '{"symptoms": []}',
+                    }
             return response
 
     class FakeCrashReductionJob(object):
