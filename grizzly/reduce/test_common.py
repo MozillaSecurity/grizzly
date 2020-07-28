@@ -6,8 +6,8 @@ from __future__ import unicode_literals
 import os
 from grizzly.target.target import Target
 from grizzly.common import Reporter
-from grizzly.reduce import crash, reduce
-
+from grizzly.reduce import crash
+from grizzly.reduce.reduce import ReductionJob
 
 class BaseFakeReporter(Reporter):
     def _process_report(self, _):
@@ -18,39 +18,6 @@ class BaseFakeReporter(Reporter):
 
     def _submit_report(self, *_args, **_kwds):
         pass
-
-
-class FakeReduceStatus(object):
-    "Stub to fake parts of ReduceStatus"
-
-    def __init__(self):
-        self.uid = 0
-        self.duration = 0
-        self.ignored = 0
-        self.iteration = 0
-        self.rate = 0
-        self.results = 0
-        self.reduce_error = 0
-        self.reduce_fail = 0
-        self.reduce_pass = 0
-        self.start_time = 1558051385
-        self.timestamp = 1558051385
-
-    def cleanup(self):
-        pass
-
-    @classmethod
-    def load(cls, uid):
-        return cls.start(uid=uid) if uid > 0 else None
-
-    def report(self, force=False):
-        pass
-
-    @classmethod
-    def start(cls, uid=None):
-        status = FakeReduceStatus()
-        status.uid = 123 if uid is None else uid
-        return status
 
 
 class FakeTarget(object):
@@ -132,13 +99,12 @@ def create_target_binary(target, tmp_path):
     target.binary = str(tmp_path / "firefox")
 
 
-class TestReductionJob(reduce.ReductionJob):
+class TestReductionJob(ReductionJob):
     """Stub to fake parts of grizzly.reduce.ReductionJob needed for testing the reduce loop"""
     __slots__ = []
 
     def __init__(self, tmp_path, create_binary=True, testcase_cache=False, skip_analysis=True):
         super(TestReductionJob, self).__init__([], FakeTarget(), 60, False, False, 0, 1, 1, 3, 25,
-                                               FakeReduceStatus(),
                                                testcase_cache=testcase_cache,
                                                skip_analysis=skip_analysis)
         if create_binary:

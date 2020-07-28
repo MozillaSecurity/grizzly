@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
+from collections import defaultdict
 from json import dump, load
 from logging import getLogger
 from os import close, listdir, unlink
@@ -29,19 +30,19 @@ class Status(object):
     REPORT_FREQ = 60
 
     __slots__ = (
-        "_lock", "data_file", "ignored", "iteration", "log_size", "results",
-        "start_time", "test_name", "timestamp")
+        "_lock", "_results", "data_file", "ignored", "iteration",
+        "log_size", "start_time", "test_name", "timestamp")
 
     def __init__(self, data_file, start_time=None):
         assert ".json" in data_file
         assert start_time is None or isinstance(start_time, float)
         self._lock = InterProcessLock("%s.lock" % (data_file,))
+        self._results = defaultdict(int)
         # if data_file is None the status report is read only (no reporting)
         self.data_file = data_file
         self.ignored = 0
         self.iteration = 0
         self.log_size = 0
-        self.results = 0
         self.start_time = start_time
         self.test_name = None
         self.timestamp = start_time
@@ -68,9 +69,31 @@ class Status(object):
             pass
         self.data_file = None
 
+    def count_result(self, signature):
+        """Increment counter that matches `signature`.
+
+        Args:
+            signature (str):
+
+        Returns:
+            None
+        """
+        self._results[signature] += 1
+
+    @property
+    def _data(self):
+        return {
+            "_results": self._results,
+            "ignored": self.ignored,
+            "iteration": self.iteration,
+            "log_size": self.log_size,
+            "start_time": self.start_time,
+            "test_name": self.test_name,
+            "timestamp": self.timestamp}
+
     @property
     def duration(self):
-        """Calculate the number of second since start() was called
+        """Calculate the number of seconds since start() was called.
 
         Args:
             None
@@ -142,26 +165,16 @@ class Status(object):
 
     @property
     def rate(self):
-        """Calculate the number of iterations performed per second since start() was called
+        """Calculate the number of iterations performed per second since start()
+        was called.
 
         Args:
             None
 
         Returns:
-            float: Number of iterations performed per second
+            float: Number of iterations performed per second.
         """
         return self.iteration / float(self.duration) if self.duration > 0 else 0
-
-    @property
-    def _data(self):
-        return {
-            "ignored": self.ignored,
-            "iteration": self.iteration,
-            "log_size": self.log_size,
-            "results": self.results,
-            "start_time": self.start_time,
-            "test_name": self.test_name,
-            "timestamp": self.timestamp}
 
     def report(self, force=False, report_freq=REPORT_FREQ):
         """Write status report. Reports are only written when the time since the
@@ -172,7 +185,7 @@ class Status(object):
             report_freq (int): Minimum number of seconds between writes.
 
         Returns:
-            bool: Returns true if the report was successful otherwise false
+            bool: Returns true if the report was successful otherwise false.
         """
         assert self.data_file is not None
         now = time()
@@ -183,6 +196,18 @@ class Status(object):
             with open(self.data_file, "w") as out_fp:
                 dump(self._data, out_fp)
         return True
+
+    @property
+    def results(self):
+        """Calculate the total number of results.
+
+        Args:
+            None
+
+        Returns:
+            int: Total number of results.
+        """
+        return sum(self._results.values())
 
     @classmethod
     def start(cls):

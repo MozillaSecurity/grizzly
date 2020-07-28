@@ -10,7 +10,7 @@ import pytest
 import sapphire
 from ..reduce.reduce import ReductionJob
 from ..target.target import Target, TargetLaunchError, TargetLaunchTimeout
-from .test_common import FakeTarget, FakeReduceStatus, create_target_binary
+from .test_common import FakeTarget, create_target_binary
 
 
 class FakeServer(object):
@@ -56,7 +56,7 @@ pytestmark = pytest.mark.usefixtures("fake_sapphire")
 
 def test_interesting(tmp_path):
     "simple case where the test is interesting"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
@@ -82,7 +82,7 @@ def test_not_interesting(tmp_path):
             FakeTarget.detect_failure(self, *args, **kwds)
             return Target.RESULT_NONE
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0)
     create_target_binary(obj.target, tmp_path)
     obj.target._is_healthy = True
     (tmp_path / "test.html").touch()
@@ -107,7 +107,7 @@ def test_ignored(tmp_path):
             assert ignored == ["foo", "bar"]
             return Target.RESULT_IGNORED
 
-    obj = ReductionJob(["foo", "bar"], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, FakeReduceStatus())
+    obj = ReductionJob(["foo", "bar"], MyTarget(), 30, False, False, 0, 1, 1, 0, 0)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
@@ -130,7 +130,7 @@ def test_target_relaunch_error(tmp_path):
             FakeTarget.launch(self, *args, **kwds)
             raise TargetLaunchError()
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0)
     create_target_binary(obj.target, tmp_path)
     prefix = tmp_path / "lithium"
     prefix.mkdir()
@@ -155,7 +155,7 @@ def test_target_relaunch_timeout(mocker, tmp_path):
             FakeTarget.launch(self, *args, **kwds)
             raise TargetLaunchTimeout()
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0)
     create_target_binary(obj.target, tmp_path)
     prefix = tmp_path / "lithium"
     prefix.mkdir()
@@ -172,7 +172,7 @@ def test_target_relaunch_timeout(mocker, tmp_path):
 
 def test_no_harness(tmp_path):
     "simple case where harness is not used"
-    obj = ReductionJob([], FakeTarget(), 30, True, False, 0, 1, 1, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], FakeTarget(), 30, True, False, 0, 1, 1, 0, 0)
     create_target_binary(obj.target, tmp_path)
     prefix = tmp_path / "lithium"
     prefix.mkdir()
@@ -193,7 +193,7 @@ def test_no_harness(tmp_path):
 
 def test_skip(tmp_path):
     "skip should assume interesting for the first n calls, without launching the target"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 7, 1, 1, 0, 0, FakeReduceStatus(),
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 7, 1, 1, 0, 0,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
@@ -230,7 +230,7 @@ def test_any_crash_false(tmp_path):
             with open(os.path.join(dest, "log_stderr.txt"), "w") as log_fp:
                 log_fp.write(stderr)
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0, FakeReduceStatus(),
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
@@ -265,7 +265,7 @@ def test_any_crash_true(tmp_path):
             with open(os.path.join(dest, "log_stderr.txt"), "w") as log_fp:
                 log_fp.write(stderr)
 
-    obj = ReductionJob([], MyTarget(), 30, False, True, 0, 1, 1, 0, 0, FakeReduceStatus(),
+    obj = ReductionJob([], MyTarget(), 30, False, True, 0, 1, 1, 0, 0,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
@@ -291,7 +291,7 @@ def test_any_crash_true(tmp_path):
 
 def test_min_crashes_repro(tmp_path):
     "min_crashes will force n iterations if crash repros"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 1, 0, 0, FakeReduceStatus(),
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 1, 0, 0,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
@@ -322,7 +322,7 @@ def test_min_crashes_norepro(tmp_path):
             self.repros += 1
             return Target.RESULT_FAILURE
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 1, 0, 0, FakeReduceStatus(),
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 1, 0, 0,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
@@ -342,7 +342,7 @@ def test_min_crashes_norepro(tmp_path):
 
 def test_repeat_repro(tmp_path):
     "repeat will stop at min_crashes if crash repros"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 17, 0, 0, FakeReduceStatus(),
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 4, 17, 0, 0,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
@@ -367,7 +367,7 @@ def test_repeat_norepro(tmp_path):
             FakeTarget.detect_failure(self, *args, **kwds)
             return Target.RESULT_NONE
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 17, 0, 0, FakeReduceStatus(),
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 4, 17, 0, 0,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     reduce_file = tmp_path / "test.html"
@@ -385,7 +385,7 @@ def test_repeat_norepro(tmp_path):
 
 def test_cache(tmp_path):
     "cache will be hit if same file is given twice"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, FakeReduceStatus())
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
     obj.reduce_file = str(tmp_path / "test.html")
@@ -400,7 +400,7 @@ def test_cache(tmp_path):
 
 def test_no_cache(tmp_path):
     "testcase_cache=False will disable cache"
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0, FakeReduceStatus(),
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 0, 0,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
@@ -425,7 +425,7 @@ def test_timeout_update(monkeypatch, tmp_path):
             FakeTarget.detect_failure(self, *args, **kwds)
             return failure_result
 
-    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 30, FakeReduceStatus(),
+    obj = ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 30,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
@@ -470,7 +470,7 @@ def test_timeout_update(monkeypatch, tmp_path):
 def test_idle_timeout(mocker, tmp_path):
     "idle is not polled until idle_timeout has passed, and idle_poll results in timeout"
     fake_ichk = mocker.patch("grizzly.common.runner._IdleChecker", autospec=True)
-    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 25, 30, FakeReduceStatus(),
+    obj = ReductionJob([], FakeTarget(), 30, False, False, 0, 1, 1, 25, 30,
                        testcase_cache=False)
     create_target_binary(obj.target, tmp_path)
     (tmp_path / "test.html").touch()
