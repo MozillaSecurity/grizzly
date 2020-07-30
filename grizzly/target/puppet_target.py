@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
 from os import close, getenv, kill, makedirs, unlink
-from os.path import isdir, isfile
+from os.path import abspath, isdir, isfile
 from platform import system
 import signal
 from time import localtime, sleep, strftime, time
@@ -28,37 +28,22 @@ LOG = getLogger("puppet_target")
 
 
 class PuppetTarget(Target):
-    __slots__ = ("use_rr", "use_valgrind", "_browser_logs", "_puppet", "_tmp_prefs")
+    __slots__ = ("use_rr", "use_valgrind", "_browser_logs", "_puppet", "_remove_prefs")
 
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch, **kwds):
-        super(PuppetTarget, self).__init__(binary, extension, launch_timeout, log_limit,
-                                           memory_limit, prefs, relaunch)
+    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, relaunch, **kwds):
+        super(PuppetTarget, self).__init__(binary, extension, launch_timeout,
+                                           log_limit, memory_limit, relaunch)
         self.use_rr = kwds.pop("rr", False)
         self.use_valgrind = kwds.pop("valgrind", False)
-        use_xvfb = kwds.pop("xvfb", False)
-        if kwds:
-            LOG.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
         self._browser_logs = None
-        # generate prefs.js file if needed
-        if self.prefs is None:
-            for prefs_template in PrefPicker.templates():
-                if prefs_template.endswith("browser-fuzzing.yml"):
-                    LOG.debug("using prefpicker template %r", prefs_template)
-                    tmp_fd, self.prefs = mkstemp(prefix="prefs_", suffix=".js", dir=grz_tmp())
-                    close(tmp_fd)
-                    PrefPicker.load_template(prefs_template).create_prefsjs(self.prefs)
-                    LOG.debug("generated prefs.js %r", self.prefs)
-                    break
-            else:  # pragma: no cover
-                raise TargetError("Failed to generate prefs.js")
-            self._tmp_prefs = True
-        else:
-            self._tmp_prefs = False
+        self._remove_prefs = False
         # create Puppet object
         self._puppet = FFPuppet(
             use_rr=self.use_rr,
             use_valgrind=self.use_valgrind,
-            use_xvfb=use_xvfb)
+            use_xvfb=kwds.pop("xvfb", False))
+        if kwds:
+            LOG.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
 
     def _abort_hung_proc(self):
         # send SIGABRT to the busiest process
@@ -78,8 +63,8 @@ class PuppetTarget(Target):
             self.close()
         with self._lock:
             self._puppet.clean_up()
-        if self._tmp_prefs and isfile(self.prefs):
-            unlink(self.prefs)
+        if self._remove_prefs and self._prefs and isfile(self._prefs):
+            unlink(self._prefs)
 
     def close(self):
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
@@ -230,6 +215,7 @@ class PuppetTarget(Target):
         if self._browser_logs and not isdir(self._browser_logs):
             makedirs(self._browser_logs)
         self.rl_countdown = self.rl_reset
+        # setup environment
         env_mod = dict(env_mod or [])
         # do not allow network connections to non local endpoints
         env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
@@ -253,6 +239,36 @@ class PuppetTarget(Target):
 
     def log_size(self):
         return self._puppet.log_length("stderr") + self._puppet.log_length("stdout")
+
+    @property
+    def prefs(self):
+        if self._prefs is None:
+            # generate temporary prefs.js
+            for prefs_template in PrefPicker.templates():
+                if prefs_template.endswith("browser-fuzzing.yml"):
+                    LOG.debug("using prefpicker template %r", prefs_template)
+                    tmp_fd, self._prefs = mkstemp(prefix="prefs_", suffix=".js", dir=grz_tmp())
+                    close(tmp_fd)
+                    PrefPicker.load_template(prefs_template).create_prefsjs(self._prefs)
+                    LOG.debug("generated prefs.js %r", self._prefs)
+                    self._remove_prefs = True
+                    break
+            else:  # pragma: no cover
+                raise TargetError("Failed to generate prefs.js")
+        return self._prefs
+
+    @prefs.setter
+    def prefs(self, prefs_file):
+        if self._remove_prefs and self._prefs and isfile(self._prefs):
+            unlink(self._prefs)
+        if prefs_file is None:
+            self._prefs = None
+            self._remove_prefs = True
+        elif isfile(prefs_file):
+            self._prefs = abspath(prefs_file)
+            self._remove_prefs = False
+        else:
+            raise TargetError("Missing prefs.js file %r" % (prefs_file,))
 
     def save_logs(self, *args, **kwargs):
         self._puppet.save_logs(*args, **kwargs)

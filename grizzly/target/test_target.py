@@ -2,9 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-import pytest
 
-from .target import sanitizer_opts, Target, TargetError
+from .target import sanitizer_opts, Target
 from .target_monitor import TargetMonitor
 
 class SimpleTarget(Target):
@@ -22,6 +21,9 @@ class SimpleTarget(Target):
     @property
     def monitor(self):
         return self._monitor
+    @property
+    def prefs(self):
+        pass
     def save_logs(self, *args, **kwargs):
         pass
 
@@ -29,9 +31,7 @@ def test_target_01(tmp_path):
     """test creating a simple Target"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with pytest.raises(TargetError):
-        SimpleTarget(str(fake_file), None, 321, 2, 3, "no_prefs", 25)
-    target = SimpleTarget(str(fake_file), str(fake_file), 321, 2, 3, str(fake_file), 25)
+    target = SimpleTarget(str(fake_file), str(fake_file), 321, 2, 3, 25)
     assert target.binary == str(fake_file)
     assert target.extension == str(fake_file)
     assert target.forced_close
@@ -42,7 +42,6 @@ def test_target_01(tmp_path):
     assert target.memory_limit == 3
     assert target.rl_countdown == 0
     assert target.rl_reset == 25
-    assert target.prefs == str(fake_file)
     assert not target.expect_close
     # test stubs
     target.add_abort_token("none!")
@@ -54,10 +53,9 @@ def test_target_02(mocker, tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     getenv = mocker.patch("grizzly.target.target.getenv", autospec=True, return_value="0")
-    with SimpleTarget(str(fake_file), None, 300, 25, 5000, None, 25) as target:
+    with SimpleTarget(str(fake_file), None, 300, 25, 5000, 25) as target:
         assert not target.forced_close
         assert target.extension is None
-        assert target.prefs is None
         target.rl_countdown = 1
         assert not target.expect_close
         target.rl_countdown = 0
@@ -68,7 +66,7 @@ def test_target_03(mocker, tmp_path):
     """test Target.check_relaunch() and Target.step()"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with SimpleTarget(str(fake_file), None, 300, 25, 5000, None, 1) as target:
+    with SimpleTarget(str(fake_file), None, 300, 25, 5000, 1) as target:
         target._monitor = mocker.Mock(spec=TargetMonitor)
         target._monitor.is_healthy.return_value = True
         # test skipping relaunch
