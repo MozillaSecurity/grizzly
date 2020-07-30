@@ -5,7 +5,7 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from logging import getLogger
 from os import getenv
-from os.path import abspath, isfile
+from os.path import isfile
 from re import split as resplit
 from threading import Lock
 from time import sleep, time
@@ -56,29 +56,25 @@ class Target(metaclass=ABCMeta):
     RESULT_IGNORED = 2
 
     __slots__ = (
-        "_lock", "_monitor", "binary", "extension", "forced_close", "launch_timeout",
-        "log_limit", "memory_limit", "prefs", "rl_countdown", "rl_reset")
+        "_lock", "_monitor", "_prefs", "binary", "extension", "forced_close",
+        "launch_timeout", "log_limit", "memory_limit", "rl_countdown", "rl_reset")
 
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch):
+    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, relaunch):
         assert log_limit >= 0
         assert memory_limit >= 0
         assert relaunch >= 1
+        assert binary is not None and isfile(binary)
         self._lock = Lock()
         self._monitor = None
+        self._prefs = None
         self.binary = binary
         self.extension = extension
         self.forced_close = getenv("GRZ_FORCED_CLOSE") != "0"
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit
         self.memory_limit = memory_limit
-        self.prefs = abspath(prefs) if prefs else None
         self.rl_countdown = 0
         self.rl_reset = relaunch
-        assert self.binary is not None and isfile(self.binary)
-        if self.prefs is not None:
-            if not isfile(self.prefs):
-                raise TargetError("Prefs file does not exist %r" % (self.prefs,))
-            LOG.info("Using prefs %r", self.prefs)
 
     def __enter__(self):
         return self
@@ -141,6 +137,10 @@ class Target(metaclass=ABCMeta):
 
     @abstractproperty
     def monitor(self):
+        pass
+
+    @abstractproperty
+    def prefs(self):
         pass
 
     def reverse(self, remote, local):

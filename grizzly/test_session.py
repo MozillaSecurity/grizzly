@@ -8,7 +8,7 @@ unit tests for grizzly.Session
 """
 from collections import deque
 
-import pytest
+from pytest import raises
 
 from sapphire import Sapphire, ServerMap, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
 from .common import Adapter, IOManager, Reporter, Status, TestCase
@@ -30,7 +30,9 @@ def test_session_01(tmp_path, mocker):
     adapter = PlaybackAdapter()
     adapter.setup(None, None)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, prefs=None)
+    prefs = tmp_path / "prefs.js"
+    prefs.touch()
+    fake_target = mocker.Mock(spec=Target, prefs=str(prefs))
     # set target.log_size to test warning code path
     fake_target.log_size.return_value = Session.TARGET_LOG_SIZE_WARN + 1
     with IOManager() as iomgr:
@@ -55,7 +57,9 @@ def test_session_02(tmp_path, mocker):
     adapter.setup(None, None)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_serv.serve_testcase.side_effect = lambda tc, **_: (SERVED_ALL, [tc.landing_page])
-    fake_target = mocker.Mock(spec=Target, prefs=None, rl_reset=10)
+    prefs = tmp_path / "prefs.js"
+    prefs.touch()
+    fake_target = mocker.Mock(spec=Target, prefs=str(prefs), rl_reset=10)
     fake_target.log_size.return_value = 1000
     fake_target.monitor.launches = 1
     with IOManager() as iomgr:
@@ -100,7 +104,7 @@ def test_session_04(tmp_path, mocker):
         fake_serv.serve_testcase.return_value = (SERVED_NONE, [])
         # test error on first iteration
         with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
-            with pytest.raises(SessionError, match="Please check Adapter and Target"):
+            with raises(SessionError, match="Please check Adapter and Target"):
                 session.run([], iteration_limit=10)
         # test that we continue if error happens later on
         fake_serv.serve_testcase.return_value = (SERVED_REQUEST, ["x"])
@@ -249,7 +253,7 @@ def test_session_09(tmp_path, mocker):
     fake_target = mocker.Mock(spec=Target)
     fake_target.monitor.launches = 1
     with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
-        with pytest.raises(TargetLaunchError):
+        with raises(TargetLaunchError, match=""):
             session.run([], iteration_limit=1)
         assert session.status.iteration == 1
         assert session.status.results == 1

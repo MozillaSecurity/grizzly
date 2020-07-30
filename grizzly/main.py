@@ -71,11 +71,13 @@ def main(args):
             args.launch_timeout,
             args.log_limit,
             args.memory,
-            args.prefs,
             relaunch,
             rr=args.rr,
             valgrind=args.valgrind,
             xvfb=args.xvfb)
+        if args.prefs:
+            target.prefs = args.prefs
+            log.info("Using prefs %r", args.prefs)
         adapter.monitor = target.monitor
 
         if args.coverage and relaunch == 1 and target.forced_close:

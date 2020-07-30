@@ -58,6 +58,7 @@ def test_main_01(tmp_path, mocker):
     args.coverage = True
     args.input = "fake"
     args.ignore = ["fake", "fake"]
+    args.prefs = "fake"
     args.rr = True
     args.valgrind = True
     args.xvfb = True

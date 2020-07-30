@@ -10,7 +10,7 @@ from pytest import mark, raises
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, FFPuppet
 
 from .puppet_target import PuppetTarget
-from .target import Target, TargetLaunchError, TargetLaunchTimeout
+from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
 
 def test_puppet_target_01(mocker, tmp_path):
     """test creating a PuppetTarget"""
@@ -19,12 +19,13 @@ def test_puppet_target_01(mocker, tmp_path):
     fake_ffp.return_value.log_length.return_value = 562
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, None, 25) as target:
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 25) as target:
         assert target.closed
         assert target._browser_logs is None
-        assert isfile(target.prefs)
+        assert not target._remove_prefs
         prefs_file = target.prefs
-        assert target._tmp_prefs
+        assert isfile(prefs_file)
+        assert target._remove_prefs
         assert target.detect_failure([], False) == Target.RESULT_NONE
         assert target.log_size() == 1124
         fake_ffp.return_value.log_length.assert_any_call("stderr")
@@ -37,7 +38,7 @@ def test_puppet_target_01(mocker, tmp_path):
     assert fake_ffp.return_value.clean_up.call_count == 1
     assert not isfile(prefs_file)
     # with extra args
-    with PuppetTarget(str(fake_file), None, 1, 1, 1, None, 1, rr=True, fake=1) as target:
+    with PuppetTarget(str(fake_file), None, 1, 1, 1, 1, rr=True, fake=1) as target:
         pass
 
 def test_puppet_target_02(mocker, tmp_path):
@@ -46,9 +47,9 @@ def test_puppet_target_02(mocker, tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     # test providing prefs.js
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 35) as target:
-        assert target.prefs == str(fake_file)
-        assert not target._tmp_prefs
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 35) as target:
+        target.prefs = str(fake_file)
+        assert not target._remove_prefs
         target.launch("launch_target_page")
         assert target._browser_logs is None
         assert fake_ffp.return_value.launch.call_count == 1
@@ -71,7 +72,7 @@ def test_puppet_target_03(mocker, tmp_path):
     fake_ffp.RC_WORKER = FFPuppet.RC_WORKER
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 25)
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, 25)
     # no failures
     fake_ffp.return_value.is_healthy.return_value = True
     fake_ffp.return_value.reason = None
@@ -175,7 +176,7 @@ def test_puppet_target_04(mocker, tmp_path):
     fake_time = mocker.patch("grizzly.target.puppet_target.time", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 10)
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, 10)
     fake_kill = mocker.patch("grizzly.target.puppet_target.kill", autospec=True)
     # not running
     target.rl_countdown = 1
@@ -249,7 +250,7 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 10) as target:
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 10) as target:
         assert not target.is_idle(0)
         assert not target.is_idle(25)
         assert target.is_idle(50)
@@ -259,7 +260,7 @@ def test_puppet_target_06(mocker, tmp_path):
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 25) as target:
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 25) as target:
         fake_ffp.return_value.is_running.return_value = False
         fake_ffp.return_value.is_healthy.return_value = False
         assert target.monitor is not None
@@ -284,10 +285,37 @@ def test_puppet_target_07(mocker, tmp_path):
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, str(fake_file), 35) as target:
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 35) as target:
         target.launch("launch_target_page")
         assert target._browser_logs == str(browser_logs)
         assert browser_logs.is_dir()
         target.cleanup()
         assert target._browser_logs is None
     assert fake_ffp.return_value.save_logs.call_count == 1
+
+def test_puppet_target_08(mocker, tmp_path):
+    """test PuppetTarget.prefs"""
+    mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 25) as target:
+        # default temp prefs
+        assert not target._remove_prefs
+        prefs_file = target.prefs
+        assert isfile(prefs_file)
+        assert target._remove_prefs
+        # set prefs, remove temp
+        target.prefs = str(fake_file)
+        assert not isfile(prefs_file)
+        assert not target._remove_prefs
+        prefs_file = target.prefs
+        assert isfile(prefs_file)
+        # unset prefs (revert to temp), don't remove previously specified file
+        target.prefs = None
+        assert target._remove_prefs
+        assert isfile(prefs_file)
+        prefs_file = target.prefs
+        # set missing file
+        with raises(TargetError, match="Missing prefs.js file 'missing'"):
+            target.prefs = "missing"
+        assert not isfile(prefs_file)

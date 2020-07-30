@@ -316,11 +316,13 @@ class ReplayManager(object):
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
-                prefs,
                 relaunch,
                 rr=args.rr,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb)
+            if prefs is not None:
+                target.prefs = prefs
+                LOG.info("Using prefs %r", args.prefs)
             if testcase.env_vars.get("GRZ_FORCED_CLOSE") == "0":
                 LOG.debug("setting target.forced_close=False")
                 target.forced_close = False
