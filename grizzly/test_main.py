@@ -14,7 +14,7 @@ from .target import TargetLaunchError
 
 
 class FakeArgs(object):
-    def __init__(self, working_path):
+    def __init__(self):
         self.binary = None
         self.input = None
         self.adapter = None
@@ -36,12 +36,11 @@ class FakeArgs(object):
         self.tool = None
         self.valgrind = False
         self.verbose = False
-        self.working_path = working_path
         self.xvfb = False
 
 # TODO: these could use call_count checks
 
-def test_main_01(tmp_path, mocker):
+def test_main_01(mocker):
     """test main()"""
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.NAME = "fake"
@@ -53,7 +52,7 @@ def test_main_01(tmp_path, mocker):
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec=Sapphire)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
-    args = FakeArgs(str(tmp_path))
+    args = FakeArgs()
     args.adapter = "fake"
     args.coverage = True
     args.input = "fake"
@@ -78,19 +77,19 @@ def test_main_01(tmp_path, mocker):
     args.s3_fuzzmanager = True
     assert main(args) == Session.EXIT_SUCCESS
 
-def test_main_02(tmp_path, mocker):
+def test_main_02(mocker):
     """test main()"""
     fake_adapter = mocker.Mock(spec=Adapter)
     mocker.patch("grizzly.main.get_adapter", return_value=lambda: fake_adapter)
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
-    args = FakeArgs(str(tmp_path))
+    args = FakeArgs()
     args.adapter = "fake"
     fake_adapter.TEST_DURATION = args.timeout + 10
     with raises(RuntimeError, match=r"Test duration \([0-9]+s\) should be less than browser timeout \([0-9]+s\)"):
         main(args)
 
-def test_main_03(tmp_path, mocker):
+def test_main_03(mocker):
     """test main() exit codes"""
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 10
@@ -103,7 +102,7 @@ def test_main_03(tmp_path, mocker):
     fake_session.EXIT_ABORT = Session.EXIT_ABORT
     fake_session.EXIT_LAUNCH_FAILURE = Session.EXIT_LAUNCH_FAILURE
     fake_session.return_value.server = mocker.Mock(spec=Sapphire)
-    args = FakeArgs(str(tmp_path))
+    args = FakeArgs()
     args.adapter = "fake"
     args.input = "fake"
     fake_session.return_value.run.side_effect = KeyboardInterrupt
