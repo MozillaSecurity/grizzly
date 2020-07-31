@@ -124,7 +124,6 @@ def test_session_05(tmp_path, mocker):
     fake_iomgr.create_testcase.return_value = fake_testcase
     fake_iomgr.harness = None
     fake_iomgr.tests = mocker.Mock(spec=deque)
-    fake_iomgr.working_path = str(tmp_path)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     # return SERVED_TIMEOUT to test IGNORE_UNSERVED code path
     fake_serv.serve_testcase.return_value = (SERVED_TIMEOUT, [fake_testcase.landing_page])
@@ -179,7 +178,6 @@ def test_session_07(tmp_path, mocker):
     fake_iomgr.harness = None
     fake_iomgr.server_map = ServerMap()
     fake_iomgr.tests = deque()
-    fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
@@ -247,7 +245,6 @@ def test_session_09(tmp_path, mocker):
     fake_iomgr.input_files = []
     fake_iomgr.server_map = ServerMap()
     fake_iomgr.tests = deque()
-    fake_iomgr.working_path = str(tmp_path)
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target)
@@ -274,9 +271,7 @@ def test_session_10(tmp_path, mocker):
     fake_report = mocker.patch("grizzly.session.Report", autospec=True)
     mocker.patch("grizzly.session.mkdtemp", autospec=True, return_value=str(tmpd))
     Status.PATH = str(tmp_path)
-    fake_iomgr = mocker.Mock(spec=IOManager)
-    fake_iomgr.tests = deque()
-    fake_iomgr.working_path = str(tmp_path)
+    fake_iomgr = mocker.Mock(spec=IOManager, tests=deque())
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_target = mocker.Mock(spec=Target, binary="bin")
     with Session(None, fake_iomgr, fake_reporter, None, fake_target) as session:
