@@ -1188,7 +1188,6 @@ class ReductionJob(object):
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
-                None,  # prefs
                 args.relaunch,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb)
