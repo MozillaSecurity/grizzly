@@ -5,8 +5,6 @@
 """
 Sapphire HTTP server worker
 """
-
-import mimetypes
 from logging import getLogger
 import os
 import re
@@ -41,6 +39,7 @@ class SapphireWorker(object):
 
     @staticmethod
     def _200_header(c_length, c_type, encoding="ascii"):
+        assert c_type is not None
         data = "HTTP/1.1 200 OK\r\n" \
                "Cache-Control: max-age=0, no-cache\r\n" \
                "Content-Length: %d\r\n" \
@@ -161,13 +160,11 @@ class SapphireWorker(object):
                 raise SapphireWorkerError("Unknown resource type %r" % (resource.type,))
 
             # at this point we know "resource.target" maps to a file on disk
-            # default to "application/octet-stream"
-            c_type = mimetypes.guess_type(resource.target)[0] or "application/octet-stream"
             # serve the file
             data_size = os.stat(resource.target).st_size
-            LOG.debug("sending file: %s bytes", format(data_size, ","))
+            LOG.debug("sending: %s bytes, mime: %r", format(data_size, ","), resource.mime)
             with open(resource.target, "rb") as in_fp:
-                conn.sendall(cls._200_header(data_size, c_type))
+                conn.sendall(cls._200_header(data_size, resource.mime))
                 offset = 0
                 while offset < data_size:
                     conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
