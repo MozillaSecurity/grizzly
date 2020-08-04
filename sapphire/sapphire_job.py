@@ -5,7 +5,7 @@
 """
 Sapphire HTTP server job
 """
-
+from mimetypes import guess_type
 from collections import defaultdict, namedtuple
 from logging import getLogger
 import os
@@ -25,6 +25,16 @@ Tracker = namedtuple("Tracker", "files lock")
 
 
 class SapphireJob(object):
+    # MIME_MAP is used to support new or uncommon mime types.
+    # Definitions in here take priority over mimetypes.guess_type().
+    MIME_MAP = {
+        ".avif": "image/avif",
+        ".bmp": "image/bmp",
+        ".ico": "image/x-icon",
+        ".wave": "audio/x-wav",
+        ".webp": "image/webp"
+    }
+
     __slots__ = (
         "_complete", "_pending", "_served", "auto_close", "accepting", "base_path",
         "exceptions", "forever", "initial_queue_size", "server_map", "worker_complete")
@@ -74,12 +84,20 @@ class SapphireJob(object):
         self.initial_queue_size = len(self._pending.files)
         LOG.debug("%d files required to serve", self.initial_queue_size)
 
+    @classmethod
+    def lookup_mime(cls, url):
+        mime = cls.MIME_MAP.get(os.path.splitext(url)[-1].lower())
+        if mime is None:
+            # default to "application/octet-stream"
+            mime = guess_type(url)[0] or "application/octet-stream"
+        return mime
+
     def check_request(self, request):
         if "?" in request:
             request = request.split("?", 1)[0]
         to_serve = os.path.normpath(os.path.join(self.base_path, request))
         if "\x00" not in to_serve and os.path.isfile(to_serve):
-            res = Resource(Resource.URL_FILE, to_serve)
+            res = Resource(Resource.URL_FILE, to_serve, mime=self.lookup_mime(to_serve))
             with self._pending.lock:
                 res.required = to_serve in self._pending.files
             return res
@@ -105,10 +123,13 @@ class SapphireJob(object):
                                 location)
                             # if the mapping url is empty check the file exists
                             if url or os.path.isfile(target):
+                                mime = self.server_map.include[url].mime
+                                if mime is None:
+                                    mime = self.lookup_mime(to_serve)
                                 return Resource(
                                     Resource.URL_INCLUDE,
                                     os.path.normpath(target),
-                                    mime=self.server_map.include[url].mime,
+                                    mime=mime,
                                     required=self.server_map.include[url].required)
                     if "/" in url:
                         url = url.rsplit("/", 1)[0]

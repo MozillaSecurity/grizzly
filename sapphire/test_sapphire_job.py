@@ -239,3 +239,12 @@ def test_sapphire_job_10(tmp_path):
     assert "file.bin" in job.served
     job.increment_served("/some/include/path/inc.bin")
     assert "/some/include/path/inc.bin" in job.served
+
+def test_sapphire_job_11():
+    """test SapphireJob.lookup_mime()"""
+    assert SapphireJob.lookup_mime("unknown") == "application/octet-stream"
+    # look up from SapphireJob.MIME_MAP
+    assert ".avif" in SapphireJob.MIME_MAP, "test is broken"
+    assert SapphireJob.lookup_mime("test.avif") == "image/avif"
+    # look up known ext
+    assert SapphireJob.lookup_mime("test.html") == "text/html"
