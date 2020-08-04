@@ -268,8 +268,6 @@ def test_testcase_11(tmp_path):
 
 def test_testfile_01():
     """test simple TestFile"""
-    with pytest.raises(TypeError, match="TestFile requires a name"):
-        TestFile("")
     with TestFile("test_file.txt") as tfile:
         assert tfile.file_name == "test_file.txt"
         assert not tfile._fp.closed
@@ -277,7 +275,37 @@ def test_testfile_01():
         tfile.close()
         assert tfile._fp.closed
 
-def test_testfile_02(tmp_path):
+def test_testfile_02():
+    """test TestFile file names"""
+    # empty file name
+    with pytest.raises(TypeError, match="file_name is invalid"):
+        TestFile("")
+    # path (root) with missing file name
+    with pytest.raises(TypeError, match="file_name is invalid"):
+        TestFile("/")
+    # path (root) with missing file name
+    with pytest.raises(TypeError, match="file_name is invalid"):
+        TestFile("/.")
+    # path with missing file name
+    with pytest.raises(TypeError, match="file_name is invalid"):
+        TestFile("path/")
+    # invalid use of '..'
+    with pytest.raises(TypeError, match="file_name is invalid"):
+        TestFile("../test")
+    # path (root) with file
+    with TestFile("/valid.txt") as tfile:
+        assert tfile.file_name == "valid.txt"
+    # path with file
+    with TestFile("path\\file") as tfile:
+        assert os.path.split(tfile.file_name) == ("path", "file")
+    # with valid use of '.' and '..'
+    with TestFile("./a/./b/../c") as tfile:
+        assert os.path.split(tfile.file_name) == ("a", "c")
+    # filename starting with '.'
+    with TestFile(".file") as tfile:
+        assert tfile.file_name == ".file"
+
+def test_testfile_03(tmp_path):
     """test TestFile.write() and TestFile.dump()"""
     out_file = tmp_path / "test_file.txt"
     with TestFile(out_file.name) as tfile:
@@ -290,7 +318,7 @@ def test_testfile_02(tmp_path):
         tfile.dump(str(tmp_path))
         assert out_file.read_text() == "foobar"
 
-def test_testfile_03(tmp_path):
+def test_testfile_04(tmp_path):
     """test TestFile.dump() file with nested path"""
     file_path = "test/dir/path/file.txt"
     with TestFile(file_path) as tfile:
@@ -300,7 +328,7 @@ def test_testfile_03(tmp_path):
         tfile.dump(str(tmp_path))
         assert out_file.is_file()
 
-def test_testfile_04(tmp_path):
+def test_testfile_05(tmp_path):
     """test TestFile.from_data()"""
     # TODO: different encodings
     with TestFile.from_data("foo", "test_file.txt") as tfile:
@@ -309,7 +337,7 @@ def test_testfile_04(tmp_path):
         assert out_file.is_file()
         assert out_file.read_text() == "foo"
 
-def test_testfile_05(tmp_path):
+def test_testfile_06(tmp_path):
     """test TestFile.from_file()"""
     in_file = tmp_path / "infile.txt"
     in_file.write_bytes(b"foobar")
@@ -324,7 +352,7 @@ def test_testfile_05(tmp_path):
         assert out_file.is_file()
         assert out_file.read_text() == "foobar"
 
-def test_testfile_06(tmp_path):
+def test_testfile_07(tmp_path):
     """test TestFile.clone()"""
     out_file = tmp_path / "test_file.txt"
     with TestFile(out_file.name) as tf1:
@@ -343,7 +371,7 @@ def test_testfile_06(tmp_path):
         assert out_file.is_file()
         assert out_file.read_text() == "foobar"
 
-def test_testfile_07(tmp_path):
+def test_testfile_08(tmp_path):
     """test TestFile.data()"""
     in_file = tmp_path / "infile.txt"
     in_file.write_bytes(b"foobar")

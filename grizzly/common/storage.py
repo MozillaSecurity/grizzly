@@ -369,19 +369,25 @@ class TestFile(object):
     CACHE_LIMIT = 0x80000  # data cache limit per file: 512KB
     XFER_BUF = 0x10000  # transfer buffer size: 64KB
 
-    __slots__ = ("_fp", "file_name")
+    __slots__ = ("_file_name", "_fp")
 
     def __init__(self, file_name):
-        if not file_name:
-            raise TypeError("TestFile requires a name")
-        self._fp = SpooledTemporaryFile(max_size=self.CACHE_LIMIT, dir=grz_tmp(), prefix="grz_tf_")
-        # TODO: Add file_name sanitation since it is used when the file is written to the fs
-        # XXX: This is a naive fix for a larger path issue
+        # This is a naive fix for a larger path issue. This is a simple sanity
+        # check and does not check if invalid characters are used. If an invalid
+        # file name is used an exception will be raised when trying to write
+        # that file to the file system.
         if "\\" in file_name:
             file_name = file_name.replace("\\", "/")
         if file_name.startswith("/"):
             file_name = file_name.lstrip("/")
-        self.file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
+        if file_name.endswith("."):
+            file_name = file_name.rstrip(".")
+        if not file_name \
+                or ("/" in file_name and not file_name.rsplit("/", 1)[-1]) \
+                or file_name.startswith("../"):
+            raise TypeError("file_name is invalid %r" % (file_name,))
+        self._file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
+        self._fp = SpooledTemporaryFile(max_size=self.CACHE_LIMIT, dir=grz_tmp(), prefix="grz_tf_")
 
     def __enter__(self):
         return self
@@ -398,7 +404,7 @@ class TestFile(object):
         Returns:
             TestFile: A copy of the TestFile instance
         """
-        cloned = TestFile(self.file_name)
+        cloned = TestFile(self._file_name)
         self._fp.seek(0)
         shutil.copyfileobj(self._fp, cloned._fp, self.XFER_BUF)  # pylint: disable=protected-access
         return cloned
@@ -439,12 +445,16 @@ class TestFile(object):
         Returns:
             None
         """
-        target_path = os.path.join(path, os.path.dirname(self.file_name))
+        target_path = os.path.join(path, os.path.dirname(self._file_name))
         if not os.path.isdir(target_path):
             os.makedirs(target_path)
         self._fp.seek(0)
-        with open(os.path.join(path, self.file_name), "wb") as dst_fp:
+        with open(os.path.join(path, self._file_name), "wb") as dst_fp:
             shutil.copyfileobj(self._fp, dst_fp, self.XFER_BUF)
+
+    @property
+    def file_name(self):
+        return self._file_name
 
     @classmethod
     def from_data(cls, data, file_name, encoding="UTF-8"):
