@@ -295,10 +295,10 @@ class ReplayManager(object):
             if args.prefs is not None:
                 prefs = args.prefs
                 testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
-                LOG.debug("using specified prefs.js")
+                LOG.info("Using specified prefs.js")
             elif testcase.contains("prefs.js"):
                 prefs = pathjoin(args.input, "prefs.js")
-                LOG.debug("using included prefs.js")
+                LOG.info("Using prefs.js from testcase")
             else:
                 prefs = None
         except TestCaseLoadFailure as exc:
@@ -322,7 +322,6 @@ class ReplayManager(object):
                 xvfb=args.xvfb)
             if prefs is not None:
                 target.prefs = prefs
-                LOG.info("Using prefs %r", args.prefs)
             if testcase.env_vars.get("GRZ_FORCED_CLOSE") == "0":
                 LOG.debug("setting target.forced_close=False")
                 target.forced_close = False
