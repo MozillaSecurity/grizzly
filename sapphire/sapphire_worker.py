@@ -113,6 +113,9 @@ class SapphireWorker(object):
                 finish_job = serv_job.remove_pending(resource.target)
             elif resource.type == Resource.URL_REDIRECT:
                 finish_job = serv_job.remove_pending(request)
+            elif resource.type != Resource.URL_DYNAMIC:  # pragma: no cover
+                # this should never happen
+                raise SapphireWorkerError("Unknown resource type %r" % (resource.type,))
 
             if finish_job and serv_job.forever:
                 LOG.debug("serv_job.forever is set, resetting finish_job")
@@ -129,7 +132,8 @@ class SapphireWorker(object):
                 return
             if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                 LOG.debug("target %r", resource.target)
-                if not isfile(resource.target):
+                # isfile() check for Resource.URL_FILE happens in serv_job.check_request()
+                if resource.type == Resource.URL_INCLUDE and not isfile(resource.target):
                     conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
                     LOG.debug("404 %r (%d to go)", request, serv_job.pending)
                     return
@@ -142,11 +146,7 @@ class SapphireWorker(object):
                     return
             elif resource.type == Resource.URL_REDIRECT:
                 conn.sendall(cls._307_redirect(resource.target))
-                LOG.debug(
-                    "307 %r -> %r (%d to go)",
-                    request,
-                    resource.target,
-                    serv_job.pending)
+                LOG.debug("307 %r -> %r (%d to go)", request, resource.target, serv_job.pending)
                 return
             elif resource.type == Resource.URL_DYNAMIC:
                 data = resource.target()
@@ -157,8 +157,6 @@ class SapphireWorker(object):
                 conn.sendall(data)
                 LOG.debug("200 %r (dynamic request)", request)
                 return
-            else:
-                raise SapphireWorkerError("Unknown resource type %r" % (resource.type,))
 
             # at this point we know "resource.target" maps to a file on disk
             # serve the file
