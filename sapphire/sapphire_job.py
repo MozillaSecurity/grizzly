@@ -8,9 +8,10 @@ Sapphire HTTP server job
 from mimetypes import guess_type
 from collections import defaultdict, namedtuple
 from logging import getLogger
-import os
+from os import walk
+from os.path import abspath, isdir, isfile, join as pathjoin, normpath, relpath, splitext
 from queue import Queue
-import threading
+from threading import Event, Lock
 
 from .server_map import Resource
 from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST
@@ -40,37 +41,37 @@ class SapphireJob(object):
         "exceptions", "forever", "initial_queue_size", "server_map", "worker_complete")
 
     def __init__(self, base_path, auto_close=-1, forever=False, optional_files=None, server_map=None):
-        self._complete = threading.Event()
-        self._pending = Tracker(files=set(), lock=threading.Lock())
-        self._served = Tracker(files=defaultdict(int), lock=threading.Lock())
-        self.accepting = threading.Event()
+        self._complete = Event()
+        self._pending = Tracker(files=set(), lock=Lock())
+        self._served = Tracker(files=defaultdict(int), lock=Lock())
+        self.accepting = Event()
         self.accepting.set()
         self.auto_close = auto_close
-        self.base_path = os.path.abspath(base_path)  # wwwroot
+        self.base_path = abspath(base_path)  # wwwroot
         self.exceptions = Queue()
         self.forever = forever
         self.initial_queue_size = 0
         self.server_map = server_map
-        self.worker_complete = threading.Event()
+        self.worker_complete = Event()
         self._build_queue(optional_files)
 
     def _build_queue(self, optional_files):
         # build file list to track files that must be served
         # this is intended to only be called once by __init__()
-        for d_name, _, filenames in os.walk(self.base_path, followlinks=False):
+        for d_name, _, filenames in walk(self.base_path, followlinks=False):
             for f_name in filenames:
                 # do not add optional files to queue of required files
                 if optional_files and f_name in optional_files:
                     LOG.debug("optional: %r", f_name)
                     continue
-                file_path = os.path.abspath(os.path.join(d_name, f_name))
+                file_path = abspath(pathjoin(d_name, f_name))
                 if "?" in file_path:
                     LOG.warning("Cannot add files with '?' in path. Skipping %r", file_path)
                     continue
                 self._pending.files.add(file_path)
                 LOG.debug("required: %r", f_name)
         # if nothing was found check if the path exists
-        if not self._pending.files and not os.path.isdir(self.base_path):
+        if not self._pending.files and not isdir(self.base_path):
             raise OSError("%r does not exist" % (self.base_path),)
         if self.server_map:
             for redirect, resource in self.server_map.redirect.items():
@@ -86,7 +87,7 @@ class SapphireJob(object):
 
     @classmethod
     def lookup_mime(cls, url):
-        mime = cls.MIME_MAP.get(os.path.splitext(url)[-1].lower())
+        mime = cls.MIME_MAP.get(splitext(url)[-1].lower())
         if mime is None:
             # default to "application/octet-stream"
             mime = guess_type(url)[0] or "application/octet-stream"
@@ -95,8 +96,8 @@ class SapphireJob(object):
     def check_request(self, request):
         if "?" in request:
             request = request.split("?", 1)[0]
-        to_serve = os.path.normpath(os.path.join(self.base_path, request))
-        if "\x00" not in to_serve and os.path.isfile(to_serve):
+        to_serve = normpath(pathjoin(self.base_path, request))
+        if "\x00" not in to_serve and isfile(to_serve):
             res = Resource(Resource.URL_FILE, to_serve, mime=self.lookup_mime(to_serve))
             with self._pending.lock:
                 res.required = to_serve in self._pending.files
@@ -118,17 +119,17 @@ class SapphireJob(object):
                         location = request.split(url, 1)[-1].lstrip("/") if url else request
                         # check location points to something
                         if location:
-                            target = os.path.join(
+                            target = pathjoin(
                                 self.server_map.include[url].target,
                                 location)
                             # if the mapping url is empty check the file exists
-                            if url or os.path.isfile(target):
+                            if url or isfile(target):
                                 mime = self.server_map.include[url].mime
                                 if mime is None:
                                     mime = self.lookup_mime(to_serve)
                                 return Resource(
                                     Resource.URL_INCLUDE,
-                                    os.path.normpath(target),
+                                    normpath(target),
                                     mime=mime,
                                     required=self.server_map.include[url].required)
                     if "/" in url:
@@ -155,7 +156,7 @@ class SapphireJob(object):
         return self._complete.is_set()
 
     def is_forbidden(self, target_file):
-        target_file = os.path.abspath(target_file)
+        target_file = abspath(target_file)
         # check if target_file lives somewhere in wwwroot
         if not target_file.startswith(self.base_path):
             if self.server_map:
@@ -189,7 +190,7 @@ class SapphireJob(object):
         for fname in served:
             if fname.startswith(self.base_path):
                 # file is in www root
-                yield os.path.relpath(fname, self.base_path)
+                yield relpath(fname, self.base_path)
             else:
                 # include file
                 yield fname

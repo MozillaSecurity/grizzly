@@ -47,8 +47,8 @@ def test_sapphire_worker_03(mocker):
     """test SapphireWorker.launch() fail cases"""
     serv_con = mocker.Mock(spec=socket.socket)
     serv_job = mocker.Mock(spec=SapphireJob)
-    fake_thread = mocker.patch("sapphire.sapphire_worker.threading.Thread", autospec=True)
-    mocker.patch("sapphire.sapphire_worker.time.sleep", autospec=True)
+    fake_thread = mocker.patch("sapphire.sapphire_worker.Thread", autospec=True)
+    mocker.patch("sapphire.sapphire_worker.sleep", autospec=True)
 
     serv_con.accept.side_effect = socket.timeout
     assert SapphireWorker.launch(serv_con, serv_job) is None

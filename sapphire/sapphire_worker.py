@@ -6,12 +6,13 @@
 Sapphire HTTP server worker
 """
 from logging import getLogger
-import os
-import re
-import socket
-import sys
-import threading
-import time
+from os import stat
+from os.path import isfile
+from re import compile as re_compile
+from socket import error as sock_error, timeout as sock_timeout
+from sys import exc_info
+from threading import active_count, Thread, ThreadError
+from time import sleep
 from urllib.parse import unquote_plus
 
 from .server_map import Resource
@@ -29,7 +30,7 @@ class SapphireWorkerError(Exception):
 class SapphireWorker(object):
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
-    REQ_PATTERN = re.compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
+    REQ_PATTERN = re_compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
 
     __slots__ = ("_conn", "_thread")
 
@@ -128,7 +129,7 @@ class SapphireWorker(object):
                 return
             if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                 LOG.debug("target %r", resource.target)
-                if not os.path.isfile(resource.target):
+                if not isfile(resource.target):
                     conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
                     LOG.debug("404 %r (%d to go)", request, serv_job.pending)
                     return
@@ -161,7 +162,7 @@ class SapphireWorker(object):
 
             # at this point we know "resource.target" maps to a file on disk
             # serve the file
-            data_size = os.stat(resource.target).st_size
+            data_size = stat(resource.target).st_size
             LOG.debug("sending: %s bytes, mime: %r", format(data_size, ","), resource.mime)
             with open(resource.target, "rb") as in_fp:
                 conn.sendall(cls._200_header(data_size, resource.mime))
@@ -172,8 +173,8 @@ class SapphireWorker(object):
             LOG.debug("200 %r (%d to go)", resource.target, serv_job.pending)
             serv_job.increment_served(resource.target)
 
-        except (socket.timeout, socket.error):
-            exc_type, exc_obj, exc_tb = sys.exc_info()
+        except (sock_error, sock_timeout):
+            exc_type, exc_obj, exc_tb = exc_info()
             LOG.debug("%s: %r (line %d)", exc_type.__name__, exc_obj, exc_tb.tb_lineno)
             if not finish_job:
                 serv_job.accepting.set()
@@ -182,7 +183,7 @@ class SapphireWorker(object):
             # set finish_job to abort immediately
             finish_job = True
             if serv_job.exceptions.empty():
-                serv_job.exceptions.put(sys.exc_info())
+                serv_job.exceptions.put(exc_info())
 
         finally:
             conn.close()
@@ -204,19 +205,19 @@ class SapphireWorker(object):
             conn, _ = listen_sock.accept()
             conn.settimeout(None)
             # create a worker thread to handle client request
-            w_thread = threading.Thread(target=cls.handle_request, args=(conn, job))
+            w_thread = Thread(target=cls.handle_request, args=(conn, job))
             job.accepting.clear()
             w_thread.start()
             return cls(conn, w_thread)
-        except (socket.error, socket.timeout):
+        except (sock_error, sock_timeout):
             if conn is not None:  # pragma: no cover
                 conn.close()
-        except threading.ThreadError:
+        except ThreadError:
             if conn is not None:  # pragma: no cover
                 conn.close()
             # reset accepting status
             job.accepting.set()
-            LOG.warning("ThreadError (worker), threads: %d", threading.active_count())
+            LOG.warning("ThreadError (worker), threads: %d", active_count())
             # wait for system resources to free up
-            time.sleep(0.1)
+            sleep(0.1)
         return None
