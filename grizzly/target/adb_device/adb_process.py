@@ -6,7 +6,8 @@ import shutil
 import tempfile
 import time
 
-from ffpuppet.helpers import append_prefs, Bootstrapper, create_profile
+from ffpuppet.bootstrapper import Bootstrapper
+from ffpuppet.helpers import append_prefs, create_profile
 from ffpuppet.minidump_parser import process_minidumps
 from ffpuppet.puppet_logger import PuppetLogger
 

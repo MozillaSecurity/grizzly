@@ -24,7 +24,7 @@ def test_adb_target_01(mocker, tmp_path):
     fake_session.get_package_name.return_value = "the_name"
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    target = ADBTarget(str(fake_apk), None, 300, 25, 5000, None, 25)
+    target = ADBTarget(str(fake_apk), None, 300, 25, 5000, 25)
     try:
         assert target.closed
         assert target.forced_close
@@ -50,7 +50,7 @@ def test_adb_target_02(mocker, tmp_path):
     mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    target = ADBTarget(str(fake_apk), None, 300, 25, 5000, None, 25)
+    target = ADBTarget(str(fake_apk), None, 300, 25, 5000, 25)
     target.launch("fake.url")
     assert fake_process.return_value.launch.call_count == 1
     assert target.monitor.is_running()
@@ -62,7 +62,7 @@ def test_adb_target_03(mocker, tmp_path):
     mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    target = ADBTarget(str(fake_apk), None, 300, 25, 5000, None, 25)
+    target = ADBTarget(str(fake_apk), None, 300, 25, 5000, 25)
     # test everything is running
     fake_process.return_value.is_healthy.return_value = True
     fake_process.return_value.is_running.return_value = True
