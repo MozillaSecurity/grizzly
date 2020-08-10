@@ -54,7 +54,7 @@ class ADBTarget(Target):
             if self._session.connected:
                 self._session.reverse_remove()
             self._session.disconnect()
-        if self._remove_prefs and self._prefs and isfile(self._prefs):
+        if self._remove_prefs and self._prefs and os.path.isfile(self._prefs):
             os.remove(self._prefs)
 
     def close(self):
@@ -170,9 +170,6 @@ class ADBTarget(Target):
             self._remove_prefs = False
         else:
             raise TargetError("Missing prefs.js file %r" % (prefs_file,))
-
-    def save_logs(self, *args, **kwargs):
-        self._puppet.save_logs(*args, **kwargs)
 
     def reverse(self, remote, local):
         # remote->device, local->desktop
