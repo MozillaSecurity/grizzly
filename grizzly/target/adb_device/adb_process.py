@@ -166,7 +166,7 @@ class ADBProcess(object):
                 shutil.rmtree(profile, True)
             cmd = [
                 "shell", "am", "start", "-W", "-n",
-                "/".join([self._package, "org.mozilla.gecko.BrowserApp"]),
+                "/".join([self._package, "org.mozilla.geckoview_example.GeckoViewActivity"]),
                 "-a", "android.intent.action.VIEW", "-d", bootstrapper.location,
                 "--es", "args", "-profile\\ %s" % self.profile]
             # add environment variables to launch command
