@@ -4,12 +4,16 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
+from tempfile import mkstemp
 
 from ffpuppet import LaunchError
+from prefpicker import PrefPicker
 
 from .adb_device import ADBProcess, ADBSession
 from .target import Target
 from .target_monitor import TargetMonitor
+from ..common.utils import grz_tmp
+
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
@@ -18,9 +22,9 @@ log = logging.getLogger("adb_target")  # pylint: disable=invalid-name
 
 
 class ADBTarget(Target):
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, prefs, relaunch, **kwds):
+    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, relaunch, **kwds):
         super(ADBTarget, self).__init__(binary, extension, launch_timeout, log_limit,
-                                        memory_limit, prefs, relaunch)
+                                        memory_limit, relaunch)
         self.forced_close = True  # app will not close itself on Android
         self.use_rr = False
 
@@ -38,7 +42,9 @@ class ADBTarget(Target):
         if self._session is None:
             raise RuntimeError("Could not create ADB Session!")
         self._package = ADBSession.get_package_name(self.binary)
+        self._prefs = None
         self._proc = ADBProcess(self._package, self._session)
+        self._remove_prefs = False
         self._session.symbols[self._package] = os.path.join(os.path.dirname(self.binary), "symbols")
 
     def cleanup(self):
@@ -48,6 +54,8 @@ class ADBTarget(Target):
             if self._session.connected:
                 self._session.reverse_remove()
             self._session.disconnect()
+        if self._remove_prefs and self._prefs and isfile(self._prefs):
+            os.remove(self._prefs)
 
     def close(self):
         with self._lock:
@@ -131,6 +139,40 @@ class ADBTarget(Target):
                     return 0
             self._monitor = _ADBMonitor()
         return self._monitor
+
+    # TODO: prefs is identical to puppet_target.py should be cleaned up.
+    @property
+    def prefs(self):
+        if self._prefs is None:
+            # generate temporary prefs.js
+            for prefs_template in PrefPicker.templates():
+                if prefs_template.endswith("browser-fuzzing.yml"):
+                    log.debug("using prefpicker template %r", prefs_template)
+                    tmp_fd, self._prefs = mkstemp(prefix="prefs_", suffix=".js", dir=grz_tmp())
+                    os.close(tmp_fd)
+                    PrefPicker.load_template(prefs_template).create_prefsjs(self._prefs)
+                    log.debug("generated prefs.js %r", self._prefs)
+                    self._remove_prefs = True
+                    break
+            else:  # pragma: no cover
+                raise TargetError("Failed to generate prefs.js")
+        return self._prefs
+
+    @prefs.setter
+    def prefs(self, prefs_file):
+        if self._remove_prefs and self._prefs and os.path.isfile(self._prefs):
+            os.unlink(self._prefs)
+        if prefs_file is None:
+            self._prefs = None
+            self._remove_prefs = True
+        elif os.path.isfile(prefs_file):
+            self._prefs = os.path.abspath(prefs_file)
+            self._remove_prefs = False
+        else:
+            raise TargetError("Missing prefs.js file %r" % (prefs_file,))
+
+    def save_logs(self, *args, **kwargs):
+        self._puppet.save_logs(*args, **kwargs)
 
     def reverse(self, remote, local):
         # remote->device, local->desktop
