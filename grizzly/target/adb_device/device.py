@@ -29,8 +29,6 @@ def main(argv=None):  # pylint: disable=missing-docstring
     parser.add_argument(
         "--install", help="Path to APK to install")
     parser.add_argument(
-        "--install-asan", help="Path to NDK")
-    parser.add_argument(
         "--launch", help="Path to APK to launch")
     parser.add_argument(
         "--logs", help="Location to save logs")
@@ -45,7 +43,7 @@ def main(argv=None):  # pylint: disable=missing-docstring
     parser.add_argument(
         "--prep", help="Prepare the device for fuzzing. Path to APK")
     args = parser.parse_args(argv)
-    if not any((args.airplane_mode is not None, args.install, args.install_asan, args.launch, args.prep)):
+    if not any((args.airplane_mode is not None, args.install, args.launch, args.prep)):
         parser.error("No options selected")
         return 1
 
@@ -72,9 +70,6 @@ def main(argv=None):  # pylint: disable=missing-docstring
                 log.info("Disabling airplane mode...")
             session.airplane_mode = bool(args.airplane_mode)
             log.info("Done.")
-        if args.install_asan is not None:
-            log.info("Installing ASan from %r ...", args.install_asan)
-            session.install_asan(args.install_asan)
         if args.install is not None:
             pkg_name = ADBSession.get_package_name(args.install)
             if pkg_name is None:
