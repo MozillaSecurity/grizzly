@@ -741,15 +741,15 @@ class ADBSession(object):
         """
         prefix = prefix.lower()
         assert prefix == "asan", "only ASan is supported atm"
-        tfd, optfile = tempfile.mkstemp(prefix="sanopts_")
-        os.close(tfd)
+        working_path = tempfile.mkdtemp(prefix="sanopts_")
         try:
+            optfile = os.path.join(working_path, "%s.options.gecko" % prefix)
             with open(optfile, "w+") as ofp:
                 for opt, value in options.items():
                     ofp.write("%s=%s\n" % (opt, value))
-            self.install_file(optfile, "/data/local/tmp/%s.options.gecko" % prefix, mode="666")
+            self.install_file(optfile, "/data/local/tmp/", mode="666")
         finally:
-            os.unlink(optfile)
+            shutil.rmtree(working_path, ignore_errors=True)
 
     def set_enforce(self, value):
         """Set SELinux mode.
