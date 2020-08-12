@@ -48,6 +48,12 @@ class ADBProcess(object):
         self.profile = None  # profile path on device
         self.reason = self.RC_CLOSED
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
+
     def cleanup(self):
         if self._launches < 0:
             log.debug("clean_up() call ignored")
@@ -132,6 +138,10 @@ class ADBProcess(object):
         assert self._pid is None, "Process is already running"
         assert self.reason is not None, "Process is already running"
 
+        # check app is not previously running
+        if self._session.get_pid(self._package) is not None:
+            raise ADBLaunchError("%r is already running" % self._package)
+
         self._session.clear_logs()
         self._remove_logs()
         sanitizer_logs = os.path.dirname(self._session.SANITIZER_LOG_PREFIX)
@@ -139,6 +149,7 @@ class ADBProcess(object):
         self._session.call(["shell", "mkdir", "-p", sanitizer_logs])
         self._session.call(["shell", "chmod", "666", sanitizer_logs])
         self.reason = None
+
         # setup bootstrapper and reverse port
         # reverse does fail occasionally so use a retry loop
         for _ in range(10):
@@ -157,13 +168,15 @@ class ADBProcess(object):
                 prefs = {
                     "capability.policy.policynames": "'localfilelinks'",
                     "capability.policy.localfilelinks.sites": "'%s'" % bootstrapper.location,
-                    "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'"}
+                    "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'",
+                    "network.http.speculative-parallel-limit": "0"}
                 append_prefs(profile, prefs)
                 self.profile = "/".join([self._working_path, os.path.basename(profile)])
                 if not self._session.push(profile, self.profile):
                     raise ADBLaunchError("Could not upload profile %r" % profile)
             finally:
                 shutil.rmtree(profile, True)
+            #"/".join([self._package, "org.mozilla.fenix.IntentReceiverActivity"]),
             cmd = [
                 "shell", "am", "start", "-W", "-n",
                 "/".join([self._package, "org.mozilla.geckoview_example.GeckoViewActivity"]),
@@ -314,9 +327,11 @@ class ADBProcess(object):
                     o_fp.write(line.split(b": ", 1)[-1])
 
     def save_logs(self, log_path, meta=False):
-        assert self.logs is not None
         assert self.reason is not None, "Call close() first!"
         assert self._launches > -1, "clean_up() has been called"
+        if self.logs is None:
+            log.warning("No logs available to save.")
+            return
         # copy logs to location specified by log_file
         if not os.path.isdir(log_path):
             os.makedirs(log_path)
