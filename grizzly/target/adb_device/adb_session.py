@@ -729,6 +729,28 @@ class ADBSession(object):
             cmd.append("--remove-all")
         return self.call(cmd)[0] == 0
 
+    def sanitizer_options(self, prefix, options):
+        """Set sanitizer options.
+
+        Args:
+            prefix (str): Prefix to use when setting "<prefix>_OPTIONS".
+            options (dict): Option/values to set.
+
+        Returns:
+            None
+        """
+        prefix = prefix.lower()
+        assert prefix == "asan", "only ASan is supported atm"
+        tfd, optfile = tempfile.mkstemp(prefix="sanopts_")
+        os.close(tfd)
+        try:
+            with open(optfile, "w+") as ofp:
+                for opt, value in options.items():
+                    ofp.write("%s=%s\n" % (opt, value))
+            self.install_file(optfile, "/data/local/tmp/%s.options.gecko" % prefix, mode="666")
+        finally:
+            os.unlink(optfile)
+
     def set_enforce(self, value):
         """Set SELinux mode.
 

@@ -1094,3 +1094,13 @@ def test_adb_session_39():
     assert pinfo.name == "name"
     assert pinfo.pid == 1
     assert pinfo.ppid == 2
+
+def test_adb_session_40(mocker):
+    """test ADBSession.sanitizer_options()"""
+    def fake_install_file(src, dst, **_):
+        with open(src, "r") as ofp:
+            assert ofp.read() == "test=1\n"
+        assert dst == "/data/local/tmp/asan.options.gecko"
+    mocker.patch("grizzly.target.adb_device.ADBSession.install_file", side_effect=fake_install_file)
+    session = ADBSession()
+    session.sanitizer_options("asan", {"test":"1"})
