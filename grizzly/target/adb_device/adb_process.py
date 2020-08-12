@@ -104,13 +104,16 @@ class ADBProcess(object):
 
     def find_crashreports(self):
         reports = list()
-        # TODO: scan for ASan logs once ASAN_OPTIONS=log_path is working
-        if self.profile:
+        # look for logs from sanitizers
+        san_path = os.path.dirname(self._session.SANITIZER_LOG_PREFIX)
+        for fname in self._session.listdir(san_path):
+            reports.append(os.path.join(san_path, fname))
+
+        if not reports and self.profile:
             # check for minidumps
             md_path = os.path.join(self.profile, "minidumps")
             try:
-                contents = self._session.listdir(md_path)
-                for fname in contents:
+                for fname in self._session.listdir(md_path):
                     if ".dmp" in fname or ".extra" in fname:
                         reports.append(os.path.join(md_path, fname))
             except IOError:
@@ -144,10 +147,6 @@ class ADBProcess(object):
 
         self._session.clear_logs()
         self._remove_logs()
-        sanitizer_logs = os.path.dirname(self._session.SANITIZER_LOG_PREFIX)
-        self._session.call(["shell", "rm", "-r", sanitizer_logs])
-        self._session.call(["shell", "mkdir", "-p", sanitizer_logs])
-        self._session.call(["shell", "chmod", "666", sanitizer_logs])
         self.reason = None
 
         # setup bootstrapper and reverse port
@@ -168,8 +167,7 @@ class ADBProcess(object):
                 prefs = {
                     "capability.policy.policynames": "'localfilelinks'",
                     "capability.policy.localfilelinks.sites": "'%s'" % bootstrapper.location,
-                    "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'",
-                    "network.http.speculative-parallel-limit": "0"}
+                    "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'"}
                 append_prefs(profile, prefs)
                 self.profile = "/".join([self._working_path, os.path.basename(profile)])
                 if not self._session.push(profile, self.profile):
@@ -243,6 +241,10 @@ class ADBProcess(object):
             logger.clean_up()
 
     def _remove_logs(self):
+        sanitizer_logs = os.path.dirname(self._session.SANITIZER_LOG_PREFIX)
+        self._session.call(["shell", "rm", "-r", sanitizer_logs])
+        self._session.call(["shell", "mkdir", "-p", sanitizer_logs])
+        self._session.call(["shell", "chmod", "666", sanitizer_logs])
         if self.logs is not None and os.path.isdir(self.logs):
             shutil.rmtree(self.logs)
             self.logs = None

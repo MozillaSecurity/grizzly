@@ -10,7 +10,7 @@ from .adb_session import ADBSession, ADBSessionError
 def test_adb_process_01(mocker):
     """test creating a simple device"""
     test_pkg = "org.test.preinstalled"
-    fake_session = mocker.Mock(spec=ADBSession)
+    fake_session = mocker.Mock(spec=ADBSession, SANITIZER_LOG_PREFIX="/fake/log.txt")
     with ADBProcess(test_pkg, fake_session) as proc:
         assert isinstance(proc._session, ADBSession)
         assert proc._package == test_pkg
@@ -31,6 +31,7 @@ def test_adb_process_02(mocker):
 def test_adb_process_03(mocker):
     """test ADBProcess.launch() package is running (bad state)"""
     fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.get_pid.return_value = 1337
     with ADBProcess("org.some.app", fake_session) as proc:
         assert not proc.is_running()
@@ -118,22 +119,27 @@ def test_adb_process_08(mocker):
     """test ADBProcess.find_crashreports()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
         proc.profile = "profile_path"
-        # no dump files
-        fake_session.listdir.return_value = ("somefile.txt")
+        # no log or minidump files
+        fake_session.listdir.return_value = []
         assert not proc.find_crashreports()
-        # contains dump file
-        fake_session.listdir.return_value = ("somefile.txt", "test.dmp")
-        assert proc.find_crashreports()
+        # sanitizer logs
+        fake_session.listdir.side_effect = (["asan.log"], AssertionError())
+        assert any(x.endswith("asan.log") for x in proc.find_crashreports())
+        # contains minidump file
+        fake_session.listdir.side_effect = ([], ["somefile.txt", "test.dmp"])
+        assert any(x.endswith("test.dmp") for x in proc.find_crashreports())
         # contains missing path
-        fake_session.listdir.side_effect = IOError("test")
+        fake_session.listdir.side_effect = ([], IOError("test"))
         assert not proc.find_crashreports()
 
 def test_adb_process_09(mocker, tmp_path):
     """test ADBProcess.save_logs()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     log_path = tmp_path / "src"
     log_path.mkdir()
     (log_path / "nested").mkdir()
@@ -154,6 +160,7 @@ def test_adb_process_10(mocker):
     mocker.patch("grizzly.target.adb_device.adb_process.PuppetLogger", autospec=True)
     fake_proc_md = mocker.patch("grizzly.target.adb_device.adb_process.process_minidumps", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.collect_logs.return_value = b"fake logcat data"
     with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
         # no extra logs
