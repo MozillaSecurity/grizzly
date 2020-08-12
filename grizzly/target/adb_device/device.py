@@ -63,6 +63,7 @@ def main(argv=None):  # pylint: disable=missing-docstring
             log.info("Preparing device...")
             args.airplane_mode = 1
             args.install = args.prep
+            session.sanitizer_options("asan", {"abort_on_error":"0"})
         if args.airplane_mode is not None:
             if args.airplane_mode > 0:
                 log.info("Enabling airplane mode...")
