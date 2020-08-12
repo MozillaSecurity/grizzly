@@ -500,6 +500,9 @@ class ADBSession(object):
             raise ADBSessionError("Could not find APK package name")
         if self.call(["install", "-g", "-r", apk_path], timeout=120)[0] != 0:
             raise ADBSessionError("Failed to install %r" % (apk_path,))
+        # set permissions
+        self.call(["shell", "pm", "grant", pkg_name, "android.permission.READ_EXTERNAL_STORAGE"])
+        self.call(["shell", "pm", "grant", pkg_name, "android.permission.WRITE_EXTERNAL_STORAGE"])
         log.debug("installed package %r (%r)", pkg_name, apk_path)
         return pkg_name
 
@@ -745,8 +748,7 @@ class ADBSession(object):
         try:
             optfile = os.path.join(working_path, "%s.options.gecko" % prefix)
             with open(optfile, "w+") as ofp:
-                for opt, value in options.items():
-                    ofp.write("%s=%s\n" % (opt, value))
+                ofp.write(":".join(["%s=%s" % opt for opt in options.items()]))
             self.install_file(optfile, "/data/local/tmp/", mode="666")
         finally:
             shutil.rmtree(working_path, ignore_errors=True)
