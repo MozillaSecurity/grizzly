@@ -11,8 +11,7 @@ def test_adb_process_01(mocker):
     """test creating a simple device"""
     test_pkg = "org.test.preinstalled"
     fake_session = mocker.Mock(spec=ADBSession)
-    proc = ADBProcess(test_pkg, fake_session)
-    try:
+    with ADBProcess(test_pkg, fake_session) as proc:
         assert isinstance(proc._session, ADBSession)
         assert proc._package == test_pkg
         assert proc.logs is None
@@ -21,8 +20,6 @@ def test_adb_process_01(mocker):
         assert proc._pid is None
         proc.close()
         assert not proc.logs  # should not have logs
-    finally:
-        proc.cleanup()
 
 def test_adb_process_02(mocker):
     """test creating device with unknown package"""
@@ -32,6 +29,15 @@ def test_adb_process_02(mocker):
         ADBProcess("org.test.unknown", fake_session)
 
 def test_adb_process_03(mocker):
+    """test ADBProcess.launch() package is running (bad state)"""
+    fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.get_pid.return_value = 1337
+    with ADBProcess("org.some.app", fake_session) as proc:
+        assert not proc.is_running()
+        with pytest.raises(ADBLaunchError, match="'org.some.app' is already running"):
+            proc.launch("fake.url")
+
+def test_adb_process_04(mocker):
     """test failed ADBProcess.launch() and ADBProcess.is_running()"""
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
@@ -39,18 +45,15 @@ def test_adb_process_03(mocker):
     fake_session.collect_logs.return_value = b""
     fake_session.listdir.return_value = ()
     fake_session.process_exists.return_value = False
-    proc = ADBProcess("org.test.unknown", fake_session)
-    try:
+    with ADBProcess("org.test.unknown", fake_session) as proc:
         assert not proc.is_running()
         with pytest.raises(ADBLaunchError):
             proc.launch("fake.url")
         assert not proc.is_running()
         proc.cleanup()
         assert proc.logs is None
-    finally:
-        proc.cleanup()
 
-def test_adb_process_04(mocker):
+def test_adb_process_05(mocker):
     """test ADBProcess.launch(), ADBProcess.is_running() and ADBProcess.is_healthy()"""
     fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_bs.return_value.location.return_value = "http://localhost"
@@ -59,11 +62,10 @@ def test_adb_process_04(mocker):
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = b""
-    fake_session.get_pid.return_value = 1337
+    fake_session.get_pid.side_effect = (None, 1337)
     fake_session.listdir.return_value = ()
     #fake_session.process_exists.return_value = False
-    proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
-    try:
+    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
         assert not proc.is_running()
         assert proc.launches == 0
         assert proc.launch("fake.url")
@@ -73,12 +75,10 @@ def test_adb_process_04(mocker):
         proc.close()
         assert proc._pid is None
         assert proc.logs
-    finally:
-        proc.cleanup()
     assert fake_bs.return_value.wait.call_count == 1
     assert fake_bs.return_value.close.call_count == 1
 
-def test_adb_process_05(mocker):
+def test_adb_process_06(mocker):
     """test ADBProcess.launch() with environment variables"""
     fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_bs.return_value.location.return_value = "http://localhost"
@@ -87,44 +87,38 @@ def test_adb_process_05(mocker):
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = b""
-    fake_session.get_pid.return_value = 1337
+    fake_session.get_pid.side_effect = (None, 1337)
     fake_session.listdir.return_value = ()
     env = {"test1":"1", "test2": "2"}
-    proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
-    try:
+    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
         assert proc.launch("fake.url", env_mod=env)
         assert proc.is_running()
         proc.close()
-    finally:
-        proc.cleanup()
 
-def test_adb_process_06(mocker):
+def test_adb_process_07(mocker):
     """test ADBProcess.wait_on_files()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = b""
+    fake_session.get_pid.side_effect = (None, 1337)
     fake_session.open_files.return_value = ((1, "some_file"),)
     fake_session.listdir.return_value = ()
     fake_session.realpath.side_effect = str.strip
-    proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
-    try:
+    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
         proc.wait_on_files(["not_running"])
         assert proc.launch("fake.url")
         assert proc.wait_on_files([])
         fake_session.open_files.return_value = ((1, "some_file"), (1, "/existing/file.txt"))
         assert not proc.wait_on_files(["/existing/file.txt"], poll_rate=0.1, timeout=0.3)
         proc.close()
-    finally:
-        proc.cleanup()
 
-def test_adb_process_07(mocker):
+def test_adb_process_08(mocker):
     """test ADBProcess.find_crashreports()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
-    proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
-    try:
+    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
         proc.profile = "profile_path"
         # no dump files
         fake_session.listdir.return_value = ("somefile.txt")
@@ -135,10 +129,8 @@ def test_adb_process_07(mocker):
         # contains missing path
         fake_session.listdir.side_effect = IOError("test")
         assert not proc.find_crashreports()
-    finally:
-        proc.cleanup()
 
-def test_adb_process_08(mocker, tmp_path):
+def test_adb_process_09(mocker, tmp_path):
     """test ADBProcess.save_logs()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
@@ -148,23 +140,22 @@ def test_adb_process_08(mocker, tmp_path):
     fake_log = log_path / "fake.txt"
     fake_log.touch()
     dmp_path = tmp_path / "dst"
-    proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
-    proc.logs = str(log_path)
-    try:
+    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
+        # without proc.logs set
         proc.save_logs(str(dmp_path))
-    finally:
-        proc.cleanup()
+        # with proc.logs set
+        proc.logs = str(log_path)
+        proc.save_logs(str(dmp_path))
     assert "fake.txt" in os.listdir(str(dmp_path))
 
-def test_adb_process_09(mocker):
+def test_adb_process_10(mocker):
     """test ADBProcess._process_logs()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     mocker.patch("grizzly.target.adb_device.adb_process.PuppetLogger", autospec=True)
     fake_proc_md = mocker.patch("grizzly.target.adb_device.adb_process.process_minidumps", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.collect_logs.return_value = b"fake logcat data"
-    proc = ADBProcess("org.mozilla.fennec_aurora", fake_session)
-    try:
+    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
         # no extra logs
         proc._process_logs([])
         assert os.path.isdir(proc.logs)
@@ -184,10 +175,8 @@ def test_adb_process_09(mocker):
             shutil.rmtree(proc.logs)
         assert fake_proc_md.call_count == 1
         assert fake_session.pull.call_count == 2
-    finally:
-        proc.cleanup()
 
-def test_adb_process_10(tmp_path):
+def test_adb_process_11(tmp_path):
     """test ADBProcess._split_logcat()"""
     log_path = tmp_path / "logs"
     log_path.mkdir()
