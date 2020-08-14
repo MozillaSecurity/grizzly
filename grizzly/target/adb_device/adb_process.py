@@ -2,15 +2,17 @@ import logging
 import os
 import random
 import re
-import shutil
-import tempfile
-import time
+from shutil import copy, rmtree
+from time import sleep, time
+from tempfile import mkdtemp
+from yaml import safe_dump
 
 from ffpuppet.bootstrapper import Bootstrapper
 from ffpuppet.helpers import append_prefs, create_profile
 from ffpuppet.minidump_parser import process_minidumps
 from ffpuppet.puppet_logger import PuppetLogger
 
+from grizzly.common.utils import grz_tmp
 from .adb_session import ADBSession, ADBSessionError
 
 log = logging.getLogger("adb_process")  # pylint: disable=invalid-name
@@ -37,13 +39,13 @@ class ADBProcess(object):
     def __init__(self, package_name, session, use_profile=None):
         assert isinstance(session, ADBSession), "Expecting ADBSession"
         if not session.is_installed(package_name):
-            raise ADBSessionError("Package %r not installed" % package_name)
+            raise ADBSessionError("Package %r is not installed" % (package_name,))
         self._launches = 0  # number of successful browser launches
         self._package = package_name  # package to use as target process
         self._pid = None  # pid of current target process
         self._profile_template = use_profile  # profile that is used as a template
         self._session = session  # ADB session with device
-        self._working_path = "/sdcard/ADBProc_%08X" % random.getrandbits(32)
+        self._working_path = "/sdcard/ADBProc_%08X" % (random.getrandbits(32),)
         self.logs = None
         self.profile = None  # profile path on device
         self.reason = self.RC_CLOSED
@@ -141,9 +143,16 @@ class ADBProcess(object):
         assert self._pid is None, "Process is already running"
         assert self.reason is not None, "Process is already running"
 
+        if ".fenix" in self._package:
+            app = "/".join([self._package, "org.mozilla.fenix.IntentReceiverActivity"])
+        elif ".geckoview_example" in self._package:
+            app = "/".join([self._package, "org.mozilla.geckoview_example.GeckoViewActivity"])
+        else:
+            raise ADBLaunchError("Unsupported package %r" % (self._package,))
+
         # check app is not previously running
         if self._session.get_pid(self._package) is not None:
-            raise ADBLaunchError("%r is already running" % self._package)
+            raise ADBLaunchError("%r is already running" % (self._package,))
 
         self._session.clear_logs()
         self._remove_logs()
@@ -156,45 +165,50 @@ class ADBProcess(object):
             if not self._session.reverse(bootstrapper.port, bootstrapper.port):
                 bootstrapper.close()
                 log.debug("failed to reverse port, retrying...")
-                time.sleep(0.25)
+                sleep(0.25)
                 continue
             break
         else:
             raise ADBLaunchError("Could not reverse port")
+        profile = None
         try:
             profile = create_profile(extension=extension, prefs_js=prefs_js, template=self._profile_template)
-            try:
-                prefs = {
-                    "capability.policy.policynames": "'localfilelinks'",
-                    "capability.policy.localfilelinks.sites": "'%s'" % bootstrapper.location,
-                    "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'"}
-                append_prefs(profile, prefs)
-                self.profile = "/".join([self._working_path, os.path.basename(profile)])
-                if not self._session.push(profile, self.profile):
-                    raise ADBLaunchError("Could not upload profile %r" % profile)
-            finally:
-                shutil.rmtree(profile, True)
-            #"/".join([self._package, "org.mozilla.fenix.IntentReceiverActivity"]),
-            cmd = [
-                "shell", "am", "start", "-W", "-n",
-                "/".join([self._package, "org.mozilla.geckoview_example.GeckoViewActivity"]),
-                "-a", "android.intent.action.VIEW", "-d", bootstrapper.location,
-                "--es", "args", "-profile\\ %s" % self.profile]
-            # add environment variables to launch command
+            self.profile = "/".join([self._working_path, os.path.basename(profile)])
+            # add environment variables
             env_mod = dict(env_mod or {})
             env_mod.setdefault("MOZ_SKIA_DISABLE_ASSERTS", "1")
-            for var_num, (var_name, var_val) in enumerate(env_mod.items()):
-                if var_val is None:
-                    continue
-                cmd.append("--es")
-                cmd.append("env%d" % var_num)
-                cmd.append("%s=%s" % (var_name, var_val))
-
+            # build *-geckoview-config.yaml (https://firefox-source-docs.mozilla.org/ ...
+            #   mobile/android/geckoview/consumer/automation.html#configuration-file-format)
+            cfg_file = "%s-geckoview-config.yaml" % (self._package,)
+            local_cfg = os.path.join(profile, cfg_file)
+            with open(local_cfg, "w") as cfp:
+                cfp.write(safe_dump({
+                    "args": [
+                        "--profile",
+                        self.profile
+                    ],
+                    "env": env_mod
+                }))
+            if not self._session.push(local_cfg, "/data/local/tmp/%s" % (cfg_file,)):
+                raise ADBLaunchError("Could not upload %r" % (cfg_file,))
+            # add additional prefs
+            prefs = {
+                "capability.policy.policynames": "'localfilelinks'",
+                "capability.policy.localfilelinks.sites": "'%s'" % (bootstrapper.location,),
+                "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'"}
+            append_prefs(profile, prefs)
+            if not self._session.push(profile, self.profile):
+                raise ADBLaunchError("Could not upload profile %r" % (profile,))
+            cmd = [
+                "shell", "am", "start", "-W", "-n", app,
+                "-a", "android.intent.action.VIEW", "-d", bootstrapper.location]
             if "Status: ok" not in self._session.call(cmd, timeout=launch_timeout)[1].splitlines():
-                raise ADBLaunchError("Could not launch %r" % self._package)
+                raise ADBLaunchError("Could not launch %r" % (self._package,))
             self._pid = self._session.get_pid(self._package)
             bootstrapper.wait(self.is_healthy, url=url)
         finally:
+            if profile is not None:
+                rmtree(profile, ignore_errors=True)
             self._session.reverse_remove(bootstrapper.port)
             bootstrapper.close()
         self._launches += 1
@@ -215,7 +229,7 @@ class ADBProcess(object):
 
     def _process_logs(self, crash_reports):
         assert self.logs is None
-        self.logs = tempfile.mkdtemp(prefix="adb_logs_")
+        self.logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
         unprocessed = os.path.join(self.logs, "unprocessed")
         os.mkdir(unprocessed)
 
@@ -246,7 +260,7 @@ class ADBProcess(object):
         self._session.call(["shell", "mkdir", "-p", sanitizer_logs])
         self._session.call(["shell", "chmod", "666", sanitizer_logs])
         if self.logs is not None and os.path.isdir(self.logs):
-            shutil.rmtree(self.logs)
+            rmtree(self.logs)
             self.logs = None
 
     @staticmethod
@@ -344,13 +358,13 @@ class ADBProcess(object):
             # skip directories
             if not os.path.isfile(full_name):
                 continue
-            shutil.copy(full_name, log_path)
+            copy(full_name, log_path)
 
     def wait_on_files(self, wait_files, poll_rate=0.5, timeout=60):
         assert poll_rate >= 0, "Invalid poll_rate %d, must be greater than or equal to 0" % poll_rate
         assert timeout >= 0, "Invalid timeout %d, must be greater than or equal to 0" % timeout
         assert poll_rate <= timeout, "poll_rate must be less then or equal to timeout"
-        wait_end = time.time() + timeout
+        wait_end = time() + timeout
         wait_files = set(self._session.realpath(x) for x in wait_files)
 
         while wait_files:
@@ -358,10 +372,10 @@ class ADBProcess(object):
             # check if any open files are in the wait file list
             if not wait_files.intersection(open_files):
                 break
-            elif wait_end <= time.time():
+            if wait_end <= time():
                 log.debug("Timeout waiting for: %s", ", ".join(x for x in open_files if x in wait_files))
                 return False
-            time.sleep(poll_rate)
+            sleep(poll_rate)
         return True
 
     def _terminate(self):
@@ -372,4 +386,4 @@ class ADBProcess(object):
 
     def wait(self):
         while self.is_running():
-            time.sleep(0.25)
+            sleep(0.25)
