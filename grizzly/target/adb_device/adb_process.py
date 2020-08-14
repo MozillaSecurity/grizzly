@@ -36,6 +36,10 @@ class ADBProcess(object):
     #  def clone_log(self, log_id, offset=0):
     #  def log_data(self, log_id, offset=0):
     #  def log_length(self, log_id):... likely not going to happen because of overhead
+
+    __slots__ = ("_launches", "_package", "_pid", "_profile_template", "_session",
+                 "_working_path", "logs", "profile", "reason")
+
     def __init__(self, package_name, session, use_profile=None):
         assert isinstance(session, ADBSession), "Expecting ADBSession"
         if not session.is_installed(package_name):

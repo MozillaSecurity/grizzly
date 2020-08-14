@@ -186,7 +186,9 @@ def test_adb_session_07(mocker):
     test_ip = "localhost"
     test_port = 5555
     test_version = "9"
+    test_enforcing = True
     def fake_adb_call(obj, cmd, timeout=None):
+        nonlocal test_enforcing
         assert cmd and cmd[0].endswith("adb")
         if cmd[1] == "connect":
             if obj.connected:
@@ -207,7 +209,7 @@ def test_adb_session_07(mocker):
             obj.connected = False
             return 0, "restarting adbd as root"
         if cmd[1] == "shell" and cmd[2] == "getenforce":
-            if getattr(obj, "enforcing", True):
+            if test_enforcing:
                 return 0, "Enforcing"
             return 0, "Permissive"
         if cmd[1] == "shell" and cmd[2] == "getprop":
@@ -220,7 +222,7 @@ def test_adb_session_07(mocker):
             if cmd[3] == "sys.boot_completed":
                 return 0, "1"
         if cmd[1] == "shell" and cmd[2] == "setenforce":
-            setattr(obj, "enforcing", False)
+            test_enforcing = False
             return 0, ""
         if cmd[1] == "shell" and cmd[2] in ("start", "stop"):
             return 0, ""
@@ -1023,16 +1025,20 @@ def test_adb_session_36(mocker):
     assert fake_sleep.call_count == 0
     fake_sleep.reset_mock()
     # test boot in progress
+    anim_done = False
+    boot_done = False
     def fake_adb_03(obj, cmd, timeout=None):
+        nonlocal anim_done
+        nonlocal boot_done
         if cmd[1] == "shell" and cmd[2] == "getprop":
             if cmd[3] == "init.svc.bootanim":
-                if not getattr(obj, "anim_done", False):
-                    setattr(obj, "anim_done", True)
+                if not anim_done:
+                    anim_done = True
                     return 0, ""
                 return 0, "stopped"
             if cmd[3] == "sys.boot_completed":
-                if not getattr(obj, "boot_done", False):
-                    setattr(obj, "boot_done", True)
+                if not boot_done:
+                    boot_done = True
                     return 0, "0"
                 return 0, "1"
         raise AssertionError("unexpected command %r" % (cmd,))
