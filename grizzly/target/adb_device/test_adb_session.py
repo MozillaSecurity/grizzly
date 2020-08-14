@@ -1,6 +1,6 @@
 # pylint: disable=protected-access
 import os
-import subprocess
+from subprocess import CalledProcessError
 import zipfile
 
 import pytest
@@ -14,7 +14,7 @@ def test_adb_session_01(mocker):
         stderr.write(b"")
         stdout.write(b"blah_out")
         return 0
-    mocker.patch("subprocess.call", side_effect=fake_call)
+    mocker.patch("grizzly.target.adb_device.adb_session.call", side_effect=fake_call)
     ret, output = ADBSession._call_adb(["test"])
     assert ret == 0
     assert "blah_out" in output
@@ -35,7 +35,9 @@ def test_adb_session_01(mocker):
             self.stdout.write(b"terminate\n")
         def poll(self):
             self.stdout.write(b"poll\n")
-    mocker.patch("subprocess.Popen", new=FakeProc)
+    mocker.patch("grizzly.target.adb_device.adb_session.Popen", new=FakeProc)
+    mocker.patch("grizzly.target.adb_device.adb_session.sleep")
+    mocker.patch("grizzly.target.adb_device.adb_session.time", side_effect=(1, 1, 2))
     ret, output = ADBSession._call_adb(["test"], timeout=0.5)
     assert ret == 1
     assert "init" in output
@@ -52,11 +54,13 @@ def test_adb_session_02(mocker):
         session.call(["test"])
     # successful call
     session.connected = True
+    session._debug_adb = True
     mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", return_value=(0, "pass"))
     ret_code, output = session.call(["test"])
     assert ret_code == 0
     assert output == "pass"
     # invalid command
+    session._debug_adb = False
     mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", return_value=(1, "Android Debug Bridge version"))
     with pytest.raises(ADBCommandError, match="Invalid ADB command 'test'"):
         session.call(["test"])
@@ -290,7 +294,7 @@ def test_adb_session_08(mocker):
 
 def test_adb_session_09(mocker):
     """test ADBSession.connect() no devices available"""
-    mocker.patch("time.sleep")  # skip delay after warning message
+    mocker.patch("grizzly.target.adb_device.adb_session.sleep")  # skip delay after warning message
     mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
@@ -307,7 +311,7 @@ def test_adb_session_09(mocker):
 
 def test_adb_session_10(mocker):
     """test ADBSession.connect() device in a bad state"""
-    mocker.patch("time.sleep")  # skip delays
+    mocker.patch("grizzly.target.adb_device.adb_session.sleep")  # skip delays
     mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
@@ -599,6 +603,9 @@ def test_adb_session_19(mocker):
         raise AssertionError("unexpected command %r" % (cmd,))
     mocker.patch("grizzly.target.adb_device.ADBSession._call_adb", side_effect=fake_adb_call)
     session = ADBSession("127.0.0.1")
+    # test not connected
+    assert session.collect_logs() == ""
+    # test connected
     session.connected = True
     assert len(session.collect_logs().splitlines()) == 11
     assert len(session.collect_logs(9990).splitlines()) == 7
@@ -789,43 +796,43 @@ def test_adb_session_27(mocker, tmp_path):
     """test ADBSession._aapt_check()"""
     # use system aapt
     mocker.patch("os.path.expanduser", return_value=b"/missing/aapt")
-    mocker.patch("subprocess.check_output", return_value=b"/fake_system/aapt")
+    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"/fake_system/aapt")
     assert ADBSession._aapt_check() == "/fake_system/aapt"
     fake_aapt = tmp_path / "aapt"
     fake_aapt.touch()
     # use recommended aapt
     mocker.patch("os.path.expanduser", return_value=str(fake_aapt))
-    mocker.patch("subprocess.check_output", return_value=b"/fake_system/aapt")
+    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"/fake_system/aapt")
     assert ADBSession._aapt_check() == str(fake_aapt)
     # aapt not installed
     mocker.patch("os.path.expanduser", return_value=b"/missing/aapt")
-    mocker.patch("subprocess.check_output", side_effect=subprocess.CalledProcessError(1, "test", "test"))
+    mocker.patch("grizzly.target.adb_device.adb_session.check_output", side_effect=CalledProcessError(1, "test", "test"))
     with pytest.raises(EnvironmentError, match=r"Please install AAPT"):
         assert ADBSession._aapt_check()
 
 def test_adb_session_28(mocker, tmp_path):
     """test ADBSession._adb_check()"""
-    mocker.patch("time.sleep")  # skip delay after warning message
+    mocker.patch("grizzly.target.adb_device.adb_session.sleep")  # skip delay after warning message
     # use system adb
     mocker.patch("os.path.expanduser", return_value=b"/missing/adb")
-    mocker.patch("subprocess.check_output", return_value=b"/fake_system/adb")
+    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"/fake_system/adb")
     assert ADBSession._adb_check() == "/fake_system/adb"
     fake_adb = tmp_path / "adb"
     fake_adb.touch()
     # use recommended adb
     mocker.patch("os.path.expanduser", return_value=str(fake_adb))
-    mocker.patch("subprocess.check_output", return_value=b"/fake_system/adb")
+    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"/fake_system/adb")
     assert ADBSession._adb_check() == str(fake_adb)
     # adb not installed
     mocker.patch("os.path.expanduser", return_value=b"/missing/adb")
-    mocker.patch("subprocess.check_output", side_effect=subprocess.CalledProcessError(1, "test", "test"))
+    mocker.patch("grizzly.target.adb_device.adb_session.check_output", side_effect=CalledProcessError(1, "test", "test"))
     with pytest.raises(EnvironmentError, match=r"Please install ADB"):
         assert ADBSession._adb_check()
 
 def test_adb_session_29(mocker, tmp_path):
     """test ADBSession.get_package_name()"""
     mocker.patch("grizzly.target.adb_device.ADBSession._aapt_check", return_value="/fake/aapt")
-    mocker.patch("subprocess.check_output", return_value=b"")
+    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"")
     with pytest.raises(IOError):
         ADBSession.get_package_name("/fake/path")
     fake_apk = tmp_path / "fake.apk"
@@ -862,7 +869,7 @@ def test_adb_session_29(mocker, tmp_path):
         b"locales: '--_--' 'ca' ' 'en-GB' 'zh-HK' 'zh-CN' 'en-IN' 'pt-BR' 'es-US' 'pt-PT' 'en-AU' 'zh-TW'",
         b"densities: '120' '160' '240' '320' '480' '640' '65534' '65535'",
         b"native-code: 'x86'")
-    mocker.patch("subprocess.check_output", return_value=b"\n".join(output))
+    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"\n".join(output))
     assert ADBSession.get_package_name(str(fake_apk)) == "org.mozilla.fennec_aurora"
 
 def test_adb_session_30(mocker):
@@ -987,7 +994,7 @@ def test_adb_session_36(mocker):
     """test ADBSession.wait_for_boot()"""
     mocker.patch("grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb")
     mocker.patch("grizzly.target.adb_device.ADBSession._call_adb")
-    fake_sleep = mocker.patch("time.sleep")
+    fake_sleep = mocker.patch("grizzly.target.adb_device.adb_session.sleep")
     # test timeout
     def fake_adb_01(_, cmd, timeout=None):
         if cmd[1] == "shell" and cmd[2] == "getprop":
@@ -1101,7 +1108,7 @@ def test_adb_session_40(mocker):
     def fake_install_file(src, dst, **_):
         assert os.path.basename(src) == "asan.options.gecko"
         with open(src, "r") as ofp:
-            assert ofp.read() == "a=1:b=2"
+            assert ofp.read() in ("a=1:b=2", "b=2:a=1")
         assert dst == "/data/local/tmp/"
     mocker.patch("grizzly.target.adb_device.ADBSession.install_file", side_effect=fake_install_file)
     session = ADBSession()

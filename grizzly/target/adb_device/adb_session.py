@@ -5,11 +5,13 @@
 from collections import namedtuple
 import logging
 import os
-import shutil
+from shutil import rmtree
 import socket
-import subprocess
-import tempfile
-import time
+from subprocess import call, CalledProcessError, check_output, Popen
+from tempfile import mkdtemp, TemporaryFile
+from time import sleep, time
+
+from grizzly.common.utils import grz_tmp
 
 log = logging.getLogger("adb_session")  # pylint: disable=invalid-name
 
@@ -73,8 +75,8 @@ class ADBSession(object):
             log.debug("using recommended aapt from %r", aapt_bin)
             return aapt_bin
         try:
-            aapt_bin = subprocess.check_output(("which", "aapt"))
-        except subprocess.CalledProcessError:
+            aapt_bin = check_output(("which", "aapt"))
+        except CalledProcessError:
             raise EnvironmentError("Please install AAPT")
         aapt_bin = aapt_bin.strip().decode("utf-8", errors="ignore")
         # TODO: update this to check aapt version
@@ -97,15 +99,15 @@ class ADBSession(object):
             log.debug("using recommended adb from %r", adb_bin)
             return adb_bin
         try:
-            adb_bin = subprocess.check_output(("which", "adb"))
-        except subprocess.CalledProcessError:
+            adb_bin = check_output(("which", "adb"))
+        except CalledProcessError:
             raise EnvironmentError("Please install ADB")
         adb_bin = adb_bin.strip().decode("utf-8", errors="ignore")
         # TODO: update this to check adb version
         log.warning("Using adb from %r", adb_bin)
         log.warning("You are not using the recommended ADB install!")
         log.warning("Either run the setup script or proceed with caution.")
-        time.sleep(5)
+        sleep(5)
         return adb_bin
 
     @staticmethod
@@ -121,20 +123,20 @@ class ADBSession(object):
         Returns:
             tuple: Exit code and stderr, stdout of ADB call.
         """
-        with tempfile.TemporaryFile() as out_fp:
+        with TemporaryFile() as out_fp:
             if timeout is not None:
                 assert timeout > 0
-                end_time = time.time() + timeout
-                adb_proc = subprocess.Popen(cmd, stderr=out_fp, stdout=out_fp)
+                end_time = time() + timeout
+                adb_proc = Popen(cmd, stderr=out_fp, stdout=out_fp)
                 while adb_proc.poll() is None:
-                    time.sleep(0.05)
-                    if time.time() > end_time:
+                    sleep(0.05)
+                    if time() > end_time:
                         log.warning("adb call timeout!")
                         adb_proc.terminate()
                         break
                 ret_code = adb_proc.wait()
             else:
-                ret_code = subprocess.call(cmd, stderr=out_fp, stdout=out_fp)
+                ret_code = call(cmd, stderr=out_fp, stdout=out_fp)
             out_fp.seek(0)
             return ret_code, out_fp.read().decode("utf-8", "ignore").strip()
 
@@ -261,6 +263,7 @@ class ADBSession(object):
         log.debug("collect_logs()")
         if not self.connected:
             log.debug("device not connected cannot collect logs")
+            # TODO: return None if disconnected?
             return ""
         cmd = ["logcat", "-d", "*:I"]
         if pid is not None:
@@ -295,11 +298,11 @@ class ADBSession(object):
                     log.debug("connecting to %s", addr)
                     if self.call(["connect", addr])[0] != 0:
                         log.warning("connection attempt #%d failed", attempt)
-                        time.sleep(retry_delay)
+                        sleep(retry_delay)
                         continue
                 elif not self.devices():
                     log.warning("No device detected (attempt %d/%d)", attempt, max_attempts)
-                    time.sleep(retry_delay)
+                    sleep(retry_delay)
                     continue
                 self.connected = True
             # verify we are connected
@@ -452,7 +455,7 @@ class ADBSession(object):
         if not os.path.isfile(apk_path):
             raise IOError("APK path must point to a file")
         aapt = cls._aapt_check()
-        apk_info = subprocess.check_output((aapt, "dump", "badging", apk_path))
+        apk_info = check_output((aapt, "dump", "badging", apk_path))
         for line in apk_info.splitlines():
             if line.startswith(b"package: name="):
                 return line.split()[1][5:].strip(b"'").decode("utf-8", errors="ignore")
@@ -743,14 +746,15 @@ class ADBSession(object):
         """
         prefix = prefix.lower()
         assert prefix == "asan", "only ASan is supported atm"
-        working_path = tempfile.mkdtemp(prefix="sanopts_")
+        working_path = mkdtemp(prefix="sanopts_", dir=grz_tmp())
         try:
             optfile = os.path.join(working_path, "%s.options.gecko" % prefix)
             with open(optfile, "w+") as ofp:
                 ofp.write(":".join(["%s=%s" % opt for opt in options.items()]))
+            # TODO: use push() instead?
             self.install_file(optfile, "/data/local/tmp/", mode="666")
         finally:
-            shutil.rmtree(working_path, ignore_errors=True)
+            rmtree(working_path, ignore_errors=True)
 
     def set_enforce(self, value):
         """Set SELinux mode.
@@ -802,7 +806,7 @@ class ADBSession(object):
         """
         if timeout is not None:
             assert isinstance(timeout, (int, float)) and timeout > 0
-            deadline = time.time() + timeout
+            deadline = time() + timeout
         else:
             deadline = None
         # first wait for the boot to complete then wait for the boot animation to complete
@@ -821,11 +825,11 @@ class ADBSession(object):
                 if attempts > 1:
                     # the device was booting so give it additional time
                     log.debug("device was boot was detected")
-                    time.sleep(5)
+                    sleep(5)
                 return True
-            if deadline and time.time() >= deadline:
+            if deadline and time() >= deadline:
                 log.debug("wait_for_boot() timeout %r exceeded", timeout)
                 break
             log.debug("waiting for device to boot")
-            time.sleep(0.5)
+            sleep(0.5)
         return False
