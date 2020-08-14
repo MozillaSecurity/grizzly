@@ -86,6 +86,7 @@ def main(argv=None):  # pylint: disable=missing-docstring
             if not package:
                 log.error("Could not install %s", args.install)
                 return 1
+            session.call(["shell", "am", "set-debug-app", "--persistent", package])
             log.info("Installed %s.", package)
         if args.launch:
             pkg_name = ADBSession.get_package_name(args.launch)

@@ -1,6 +1,7 @@
 # pylint: disable=protected-access
 import os
 import shutil
+from yaml import safe_load
 
 import pytest
 
@@ -24,37 +25,72 @@ def test_adb_process_01(mocker):
 def test_adb_process_02(mocker):
     """test creating device with unknown package"""
     fake_session = mocker.Mock(spec=ADBSession)
-    fake_session.is_installed.side_effect = ADBSessionError("blah")
-    with pytest.raises(ADBSessionError):
+    fake_session.is_installed.return_value = False
+    with pytest.raises(ADBSessionError, match="Package 'org.test.unknown' is not installed"):
         ADBProcess("org.test.unknown", fake_session)
 
 def test_adb_process_03(mocker):
-    """test ADBProcess.launch() package is running (bad state)"""
+    """test ADBProcess.launch() unsupported app"""
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
-    fake_session.get_pid.return_value = 1337
     with ADBProcess("org.some.app", fake_session) as proc:
-        assert not proc.is_running()
-        with pytest.raises(ADBLaunchError, match="'org.some.app' is already running"):
+        with pytest.raises(ADBLaunchError, match="Unsupported package 'org.some.app'"):
             proc.launch("fake.url")
 
 def test_adb_process_04(mocker):
-    """test failed ADBProcess.launch() and ADBProcess.is_running()"""
+    """test ADBProcess.launch() failed bootstrap setup"""
+    mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
+    mocker.patch("grizzly.target.adb_device.adb_process.sleep", autospec=True)
+    fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
+    fake_session.collect_logs.return_value = b""
+    fake_session.listdir.return_value = ()
+    fake_session.get_pid.return_value = None
+    fake_session.reverse.return_value = False
+    with ADBProcess("org.mozilla.fenix", fake_session) as proc:
+        with pytest.raises(ADBLaunchError, match="Could not reverse port"):
+            proc.launch("fake.url")
+
+def test_adb_process_05(mocker):
+    """test ADBProcess.launch() package is running (bad state)"""
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (1, "")
     fake_session.collect_logs.return_value = b""
     fake_session.listdir.return_value = ()
     fake_session.process_exists.return_value = False
-    with ADBProcess("org.test.unknown", fake_session) as proc:
-        assert not proc.is_running()
-        with pytest.raises(ADBLaunchError):
+    with ADBProcess("org.mozilla.fenix", fake_session) as proc:
+        with pytest.raises(ADBLaunchError, match="'org.mozilla.fenix' is already running"):
             proc.launch("fake.url")
         assert not proc.is_running()
         proc.cleanup()
         assert proc.logs is None
 
-def test_adb_process_05(mocker):
+def test_adb_process_06(mocker, tmp_path):
+    """test ADBProcess.launch() check *-geckoview-config.yaml"""
+    mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
+    mocker.patch("grizzly.target.adb_device.adb_process.ADBProcess._remove_logs", autospec=True)
+    mocker.patch("grizzly.target.adb_device.adb_process.create_profile", return_value=str(tmp_path))
+    mocker.patch("grizzly.target.adb_device.adb_process.rmtree", autospec=True)
+    fake_session = mocker.Mock(spec=ADBSession)
+    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
+    fake_session.call.return_value = (0, "Status: ok")
+    fake_session.collect_logs.return_value = b""
+    fake_session.get_pid.return_value = None
+    fake_session.listdir.return_value = ()
+    with ADBProcess("org.mozilla.fenix", fake_session) as proc:
+        proc.launch("fake.url", env_mod={"TEST_ENV": "123"})
+        cfg_file = tuple(tmp_path.glob("*-geckoview-config.yaml"))[0]
+        assert cfg_file
+        assert cfg_file.name == "%s-geckoview-config.yaml" % (proc._package,)
+        cfg_data = safe_load(cfg_file.read_text())
+        assert "args" in cfg_data
+        assert cfg_data["args"][0] == "--profile"
+        assert cfg_data["args"][1] == "%s/%s" % (proc._working_path, tmp_path.name)
+        assert "env" in cfg_data
+        assert cfg_data["env"]["TEST_ENV"] == "123"
+
+def test_adb_process_07(mocker):
     """test ADBProcess.launch(), ADBProcess.is_running() and ADBProcess.is_healthy()"""
     fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_bs.return_value.location.return_value = "http://localhost"
@@ -66,7 +102,7 @@ def test_adb_process_05(mocker):
     fake_session.get_pid.side_effect = (None, 1337)
     fake_session.listdir.return_value = ()
     #fake_session.process_exists.return_value = False
-    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
+    with ADBProcess("org.mozilla.geckoview_example", fake_session) as proc:
         assert not proc.is_running()
         assert proc.launches == 0
         assert proc.launch("fake.url")
@@ -79,7 +115,7 @@ def test_adb_process_05(mocker):
     assert fake_bs.return_value.wait.call_count == 1
     assert fake_bs.return_value.close.call_count == 1
 
-def test_adb_process_06(mocker):
+def test_adb_process_08(mocker):
     """test ADBProcess.launch() with environment variables"""
     fake_bs = mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_bs.return_value.location.return_value = "http://localhost"
@@ -91,12 +127,12 @@ def test_adb_process_06(mocker):
     fake_session.get_pid.side_effect = (None, 1337)
     fake_session.listdir.return_value = ()
     env = {"test1":"1", "test2": "2"}
-    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
+    with ADBProcess("org.mozilla.geckoview_example", fake_session) as proc:
         assert proc.launch("fake.url", env_mod=env)
         assert proc.is_running()
         proc.close()
 
-def test_adb_process_07(mocker):
+def test_adb_process_09(mocker):
     """test ADBProcess.wait_on_files()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
@@ -107,20 +143,22 @@ def test_adb_process_07(mocker):
     fake_session.open_files.return_value = ((1, "some_file"),)
     fake_session.listdir.return_value = ()
     fake_session.realpath.side_effect = str.strip
-    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
+    with ADBProcess("org.mozilla.geckoview_example", fake_session) as proc:
         proc.wait_on_files(["not_running"])
         assert proc.launch("fake.url")
         assert proc.wait_on_files([])
+        mocker.patch("grizzly.target.adb_device.adb_process.sleep", autospec=True)
+        mocker.patch("grizzly.target.adb_device.adb_process.time", side_effect=(1, 1, 2))
         fake_session.open_files.return_value = ((1, "some_file"), (1, "/existing/file.txt"))
         assert not proc.wait_on_files(["/existing/file.txt"], poll_rate=0.1, timeout=0.3)
         proc.close()
 
-def test_adb_process_08(mocker):
+def test_adb_process_10(mocker):
     """test ADBProcess.find_crashreports()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
-    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
+    with ADBProcess("org.some.app", fake_session) as proc:
         proc.profile = "profile_path"
         # no log or minidump files
         fake_session.listdir.return_value = []
@@ -135,7 +173,7 @@ def test_adb_process_08(mocker):
         fake_session.listdir.side_effect = ([], IOError("test"))
         assert not proc.find_crashreports()
 
-def test_adb_process_09(mocker, tmp_path):
+def test_adb_process_11(mocker, tmp_path):
     """test ADBProcess.save_logs()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec=ADBSession)
@@ -146,7 +184,7 @@ def test_adb_process_09(mocker, tmp_path):
     fake_log = log_path / "fake.txt"
     fake_log.touch()
     dmp_path = tmp_path / "dst"
-    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
+    with ADBProcess("org.some.app", fake_session) as proc:
         # without proc.logs set
         proc.save_logs(str(dmp_path))
         # with proc.logs set
@@ -154,7 +192,7 @@ def test_adb_process_09(mocker, tmp_path):
         proc.save_logs(str(dmp_path))
     assert "fake.txt" in os.listdir(str(dmp_path))
 
-def test_adb_process_10(mocker):
+def test_adb_process_12(mocker):
     """test ADBProcess._process_logs()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     mocker.patch("grizzly.target.adb_device.adb_process.PuppetLogger", autospec=True)
@@ -162,7 +200,7 @@ def test_adb_process_10(mocker):
     fake_session = mocker.Mock(spec=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.collect_logs.return_value = b"fake logcat data"
-    with ADBProcess("org.mozilla.fennec_aurora", fake_session) as proc:
+    with ADBProcess("org.some.app", fake_session) as proc:
         # no extra logs
         proc._process_logs([])
         assert os.path.isdir(proc.logs)
@@ -183,7 +221,7 @@ def test_adb_process_10(mocker):
         assert fake_proc_md.call_count == 1
         assert fake_session.pull.call_count == 2
 
-def test_adb_process_11(tmp_path):
+def test_adb_process_13(tmp_path):
     """test ADBProcess._split_logcat()"""
     log_path = tmp_path / "logs"
     log_path.mkdir()
