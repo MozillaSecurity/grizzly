@@ -36,6 +36,9 @@ class ADBSessionError(Exception):
 class ADBSession(object):
     SANITIZER_LOG_PREFIX = "/sdcard/sanitizer_logs/report.log"
 
+    __slots__ = ("_adb_bin", "_cpu_arch", "_debug_adb", "_ip_addr", "_os_version",
+                 "_os_version", "_port", "_root", "connected", "symbols")
+
     def __init__(self, ip_addr=None, port=5555):
         self._adb_bin = self._adb_check()
         self._cpu_arch = None  # Android CPU architecture string
