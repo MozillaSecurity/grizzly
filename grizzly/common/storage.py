@@ -8,7 +8,9 @@ from itertools import chain
 import json
 import os
 import shutil
-from tempfile import SpooledTemporaryFile
+from tempfile import mkdtemp, SpooledTemporaryFile
+from zipfile import BadZipfile, ZipFile
+from zlib import error as zlib_error
 
 from ..target import sanitizer_opts
 from .utils import grz_tmp
@@ -235,6 +237,37 @@ class TestCase(object):
             # save meta files
             for meta_file in self._files.meta:
                 meta_file.dump(out_path)
+
+    @classmethod
+    def load_archive(cls, archive, working_path=None):
+        """Unpack and load TestCases from an archive.
+
+        Args:
+            archive (str): Path to archive file containing testcase data.
+            working_path (str): Location to unpack testcase data files.
+
+        Yields:
+            TestCase: A TestCase.
+        """
+        if archive.lower().endswith(".zip"):
+            unpacked = mkdtemp(prefix="test_unpack_", dir=working_path)
+            try:
+                with ZipFile(archive) as zip_fp:
+                    zip_fp.extractall(path=unpacked)
+            except (BadZipfile, zlib_error):
+                raise TestCaseLoadFailure("Testcase archive is corrupted")
+        else:
+            raise TestCaseLoadFailure("Unsupported archive type")
+        try:
+            for entry in os.listdir(unpacked):
+                tc_path = os.path.join(unpacked, entry)
+                if os.path.isdir(tc_path):
+                    try:
+                        yield cls.load_path(tc_path)
+                    except TestCaseLoadFailure:
+                        pass
+        finally:
+            shutil.rmtree(unpacked, ignore_errors=True)
 
     def load_environ(self, path, env_data):
         # sanity check environment variable data
