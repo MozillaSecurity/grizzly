@@ -26,6 +26,7 @@ def test_testcase_01(tmp_path):
         assert tcase.duration is None
         assert tcase.data_size == 0
         assert tcase.input_fname is None
+        assert tcase.timestamp > 0
         assert not tcase.env_vars
         assert not tcase._existing_paths
         assert not tcase._files.meta
@@ -188,6 +189,7 @@ def test_testcase_08(tmp_path):
         assert "x.bin" in (x.file_name for x in dst._files.optional)
         assert os.path.join("nested", "x.bin") in (x.file_name for x in dst._files.optional)
         assert dst.env_vars["TEST_ENV_VAR"] == "100"
+        assert dst.timestamp > 0
 
 def test_testcase_09(tmp_path):
     """test TestCase.load_path() using a file"""
@@ -207,6 +209,7 @@ def test_testcase_09(tmp_path):
         assert "prefs.js" not in (x.file_name for x in tcase._files.meta)
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
+        assert tcase.timestamp == 0
     # load full test case
     with TestCase.load_path(str(entry_point), full_scan=True, prefs=True) as tcase:
         assert tcase.landing_page == "target.bin"

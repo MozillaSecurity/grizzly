@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 from tempfile import mkdtemp, SpooledTemporaryFile
+from time import time
 from zipfile import BadZipfile, ZipFile
 from zlib import error as zlib_error
 
@@ -35,15 +36,16 @@ TestFileMap = namedtuple("TestFileMap", "meta optional required")
 class TestCase(object):
     __slots__ = (
         "adapter_name", "duration", "env_vars", "input_fname", "landing_page",
-        "redirect_page", "_existing_paths", "_files")
+        "redirect_page", "timestamp", "_existing_paths", "_files")
 
-    def __init__(self, landing_page, redirect_page, adapter_name, input_fname=None):
+    def __init__(self, landing_page, redirect_page, adapter_name, input_fname=None, timestamp=None):
         self.adapter_name = adapter_name
         self.duration = None
         self.env_vars = dict()  # environment variables
         self.input_fname = input_fname  # file that was used to create the test case
         self.landing_page = landing_page
         self.redirect_page = redirect_page
+        self.timestamp = time() if timestamp is None else timestamp
         self._existing_paths = list()  # file paths in use
         self._files = TestFileMap(
             meta=list(),  # environment files such as prefs.js, etc...
@@ -231,7 +233,8 @@ class TestCase(object):
                 "duration": self.duration,
                 "env": self.env_vars,
                 "input": os.path.basename(self.input_fname) if self.input_fname else None,
-                "target": self.landing_page}
+                "target": self.landing_page,
+                "timestamp": self.timestamp}
             with open(os.path.join(out_path, "test_info.json"), "w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
             # save meta files
@@ -316,16 +319,14 @@ class TestCase(object):
             entry_point = os.path.basename(info["target"])
             if not os.path.isfile(os.path.join(path, entry_point)):
                 raise TestCaseLoadFailure("entry_point '%s' not found in '%s'" % (entry_point, path))
-            adapter = info.get("adapter", None)
             full_scan = True
         elif os.path.isfile(path):
-            adapter = None
+            info = dict()
             entry_point = os.path.basename(path)
             path = os.path.dirname(path)
-            info = None
         else:
             raise TestCaseLoadFailure("Cannot find %r" % (path,))
-        test = cls(None, None, adapter)
+        test = cls(None, None, info.get("adapter", None), timestamp=info.get("timestamp", 0))
         if full_scan:
             # load all files from directory as test
             for dpath, _, files in os.walk(path):
