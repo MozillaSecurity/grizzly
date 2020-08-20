@@ -6,12 +6,14 @@
 """
 unit tests for grizzly.replay
 """
-from os.path import join as pathjoin
+from os import walk
+from os.path import isfile, join as pathjoin, relpath
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from pytest import raises
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_REQUEST
-from .replay import ReplayManager
+from .replay import ReplayManager, TestCaseLoadFailure
 from ..common import Report, Status, TestCase
 from ..target import Target, TargetLaunchError
 
@@ -30,7 +32,7 @@ def _fake_save_logs_result(result_logs, meta=False):  # pylint: disable=unused-a
 
 def test_replay_01(mocker):
     """test ReplayManager.cleanup()"""
-    replay = ReplayManager([], mocker.Mock(spec=Sapphire), mocker.Mock(spec=Target), mocker.Mock())
+    replay = ReplayManager([], mocker.Mock(spec=Sapphire), mocker.Mock(spec=Target), [mocker.Mock()])
     replay._reports_expected = {"A":  mocker.Mock(spec=Report)}
     replay._reports_other = {"B":  mocker.Mock(spec=Report)}
     replay.status = mocker.Mock(spec=Status)
@@ -51,8 +53,8 @@ def test_replay_02(mocker):
     target.detect_failure.return_value = Target.RESULT_NONE
     target.forced_close = True
     target.rl_reset = 1
-    testcase = mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")
-    with ReplayManager([], server, target, testcase, use_harness=True) as replay:
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    with ReplayManager([], server, target, testcases, use_harness=True) as replay:
         assert not replay.run()
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
@@ -68,8 +70,8 @@ def test_replay_03(mocker):
     target.binary = "C:\\fake_bin"
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.save_logs = _fake_save_logs_result
-    testcase = mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")
-    with ReplayManager([], server, target, testcase, use_harness=False) as replay:
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    with ReplayManager([], server, target, testcases, use_harness=False) as replay:
         assert replay.run()
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
@@ -84,8 +86,8 @@ def test_replay_04(mocker):
     target = mocker.Mock(spec=Target)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
-    testcase = mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")
-    with ReplayManager([], server, target, testcase, use_harness=False) as replay:
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    with ReplayManager([], server, target, testcases, use_harness=False) as replay:
         assert not replay.run(repeat=2)
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
@@ -101,8 +103,8 @@ def test_replay_05(mocker):
     target = mocker.Mock(spec=Target)
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.detect_failure.return_value = Target.RESULT_IGNORED
-    testcase = mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")
-    with ReplayManager([], server, target, testcase, use_harness=False) as replay:
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    with ReplayManager([], server, target, testcases, use_harness=False) as replay:
         assert not replay.run()
         assert replay.status.ignored == 1
         assert replay.status.iteration == 1
@@ -120,10 +122,10 @@ def test_replay_06(mocker):
     target.RESULT_NONE = Target.RESULT_NONE
     target.binary = "path/fake_bin"
     target.save_logs = _fake_save_logs_result
-    testcase = mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
     # early failure
     target.detect_failure.side_effect = [Target.RESULT_FAILURE, Target.RESULT_IGNORED, Target.RESULT_NONE]
-    with ReplayManager([], server, target, testcase, use_harness=False) as replay:
+    with ReplayManager([], server, target, testcases, use_harness=False) as replay:
         assert not replay.run(repeat=4, min_results=3)
         assert replay.status.iteration == 3
         assert replay.status.results == 1
@@ -131,7 +133,7 @@ def test_replay_06(mocker):
         assert len(replay.reports) == 1
     # early success
     target.detect_failure.side_effect = [Target.RESULT_FAILURE, Target.RESULT_IGNORED, Target.RESULT_FAILURE]
-    with ReplayManager([], server, target, testcase, use_harness=False) as replay:
+    with ReplayManager([], server, target, testcases, use_harness=False) as replay:
         assert replay.run(repeat=4, min_results=2)
         assert replay.status.iteration == 3
         assert replay.status.results == 2
@@ -164,8 +166,8 @@ def test_replay_07(mocker, tmp_path):
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.binary = "fake_bin"
-    testcase = mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")
-    with ReplayManager([], server, target, testcase, signature=signature, use_harness=False) as replay:
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    with ReplayManager([], server, target, testcases, signature=signature, use_harness=False) as replay:
         assert not replay.run(repeat=3, min_results=2)
         assert replay._signature == signature
         assert report.from_path.call_count == 3
@@ -202,8 +204,8 @@ def test_replay_08(mocker, tmp_path):
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.binary = "fake_bin"
-    testcase = mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")
-    with ReplayManager([], server, target, testcase, any_crash=True, use_harness=False) as replay:
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    with ReplayManager([], server, target, testcases, any_crash=True, use_harness=False) as replay:
         assert replay.run(repeat=3, min_results=2)
         assert replay._signature is None
         assert report.from_path.call_count == 3
@@ -240,7 +242,7 @@ def test_replay_09(mocker, tmp_path):
     reports_other[-1].path = str(tmp_path / "report_other2")
     test = mocker.Mock(spec=TestCase)
     path = tmp_path / "dest"
-    ReplayManager.report_to_filesystem(str(path), reports_expected, reports_other, test=test)
+    ReplayManager.report_to_filesystem(str(path), reports_expected, reports_other, tests=[test])
     assert test.dump.call_count == 3  # called once per report
     assert not (tmp_path / "report_expected").is_dir()
     assert not (tmp_path / "report_other1").is_dir()
@@ -260,10 +262,125 @@ def test_replay_10(mocker, tmp_path):
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     target = mocker.Mock(spec=Target)
     target.launch.side_effect = TargetLaunchError
-    testcase = mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")
-    with ReplayManager([], server, target, testcase, use_harness=False) as replay:
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    with ReplayManager([], server, target, testcases, use_harness=False) as replay:
         with raises(TargetLaunchError):
             replay.run()
         assert not any(replay.reports)
         assert any(replay.other_reports)
         assert "STARTUP" in replay._reports_other
+
+def test_replay_11(mocker):
+    """test ReplayManager.run() - multiple TestCases - no repro"""
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    target = mocker.Mock(spec=Target)
+    target.RESULT_NONE = Target.RESULT_NONE
+    target.closed = True
+    target.detect_failure.return_value = Target.RESULT_NONE
+    target.forced_close = True
+    target.rl_reset = 1
+    testcases = [
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html"),
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html"),
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    with ReplayManager([], server, target, testcases, use_harness=True) as replay:
+        assert not replay.run()
+        assert replay.status.ignored == 0
+        assert replay.status.iteration == 1
+        assert replay.status.results == 0
+        assert not replay.reports
+
+def test_replay_12(mocker):
+    """test ReplayManager.run() - multiple TestCases - successful repro"""
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    target = mocker.Mock(spec=Target, binary="fake_bin", rl_reset=1)
+    target.RESULT_FAILURE = Target.RESULT_FAILURE
+    target.RESULT_NONE = Target.RESULT_NONE
+    target.detect_failure.side_effect = (
+        Target.RESULT_NONE,
+        Target.RESULT_NONE,
+        Target.RESULT_FAILURE)
+    target.save_logs = _fake_save_logs_result
+    testcases = [
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html"),
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html"),
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    with ReplayManager([], server, target, testcases, use_harness=True) as replay:
+        assert replay.run()
+        assert replay.status.ignored == 0
+        assert replay.status.iteration == 1
+        assert replay.status.results == 1
+        assert len(replay.reports) == 1
+        assert not replay.other_reports
+
+def test_replay_13(tmp_path):
+    """test ReplayManager.load_testcases() - error cases"""
+    # test missing
+    with raises(TestCaseLoadFailure, match="Cannot find"):
+        ReplayManager.load_testcases("missing", False)
+    # test empty path
+    with raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
+        ReplayManager.load_testcases(str(tmp_path), False)
+    # test broken archive
+    archive = (tmp_path / "fake.zip")
+    archive.write_bytes(b"x")
+    with raises(TestCaseLoadFailure, match="Testcase archive is corrupted"):
+        ReplayManager.load_testcases(str(archive), False)
+
+def test_replay_14(tmp_path):
+    """test ReplayManager.load_testcases() - single file"""
+    tfile = (tmp_path / "testcase.html")
+    tfile.touch()
+    testcases, unpacked = ReplayManager.load_testcases(str(tfile), False)
+    try:
+        assert unpacked is None
+        assert len(tuple(testcases)) == 1
+    finally:
+        map(lambda x: x.cleanup, testcases)
+
+def test_replay_15(tmp_path):
+    """test ReplayManager.load_testcases() - single directory"""
+    with TestCase("target.bin", None, "test-adapter") as src:
+        src.add_from_data("test", "target.bin")
+        src.dump(str(tmp_path), include_details=True)
+    testcases, unpacked = ReplayManager.load_testcases(str(tmp_path), False)
+    try:
+        assert unpacked is None
+        assert len(tuple(testcases)) == 1
+    finally:
+        map(lambda x: x.cleanup, testcases)
+
+def test_replay_16(tmp_path):
+    """test ReplayManager.load_testcases() - archive"""
+    # build archive containing multiple testcases
+    with TestCase("target.bin", None, "test-adapter") as src:
+        src.add_from_data("test", "target.bin")
+        src.dump(str(tmp_path / "src-0"), include_details=True)
+        src.dump(str(tmp_path / "src-1"), include_details=True)
+        src.dump(str(tmp_path / "src-2"), include_details=True)
+    (tmp_path / "src-1" / "prefs.js").write_bytes(b"fake_prefs")
+    (tmp_path / "log_dummy.txt").touch()
+    (tmp_path / "not_a_tc").mkdir()
+    (tmp_path / "not_a_tc" / "file.txt").touch()
+    archive = str(tmp_path / "testcase.zip")
+    with ZipFile(archive, mode="w", compression=ZIP_DEFLATED) as zfp:
+        for dir_name, _, dir_files in walk(str(tmp_path)):
+            arc_path = relpath(dir_name, str(tmp_path))
+            for file_name in dir_files:
+                zfp.write(
+                    pathjoin(dir_name, file_name),
+                    arcname=pathjoin(arc_path, file_name))
+    testcases, unpacked = ReplayManager.load_testcases(str(archive), True)
+    try:
+        assert unpacked is not None
+        assert isfile(pathjoin(unpacked, "prefs.js"))
+        assert len(tuple(testcases)) == 3
+    finally:
+        map(lambda x: x.cleanup, testcases)
+    # empty archive
+    with ZipFile(archive, mode="w", compression=ZIP_DEFLATED) as zfp:
+        zfp.write(str(tmp_path / "not_a_tc"), arcname="not_a_tc")
+    with raises(TestCaseLoadFailure, match="Failed to load TestCases"):
+        ReplayManager.load_testcases(str(archive), True)

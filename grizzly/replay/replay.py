@@ -4,9 +4,12 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from logging import getLogger
-from os.path import dirname, join as pathjoin
+from os.path import dirname, isfile, join as pathjoin
+from shutil import copyfile, rmtree
 from tempfile import mkdtemp
 from time import sleep
+from zipfile import BadZipfile, ZipFile
+from zlib import error as zlib_error
 
 from FTB.Signatures.CrashInfo import CrashSignature
 from sapphire import Sapphire, ServerMap
@@ -28,21 +31,22 @@ LOG = getLogger("replay")
 class ReplayManager(object):
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
 
-    __slots__ = ("ignore", "server", "status", "target", "testcase", "_any_crash",
+    __slots__ = ("ignore", "server", "status", "target", "testcases", "_any_crash",
                  "_harness", "_reports_expected", "_reports_other", "_runner",
                  "_signature")
 
-    def __init__(self, ignore, server, target, testcase, any_crash=False, signature=None, use_harness=True):
+    def __init__(self, ignore, server, target, testcases, any_crash=False, signature=None, use_harness=True):
         self.ignore = ignore
         self.server = server
         self.status = None
         self.target = target
-        self.testcase = testcase
+        self.testcases = testcases
         self._any_crash = any_crash
         self._harness = None
         self._reports_expected = dict()
         self._reports_other = dict()
         self._runner = Runner(self.server, self.target)
+        # TODO: make signature a property
         self._signature = signature
 
         if use_harness:
@@ -73,6 +77,55 @@ class ReplayManager(object):
         if self.status is not None:
             self.status.cleanup()
 
+    @staticmethod
+    def load_testcases(path, load_prefs):
+        """Load TestCases from disk.
+
+        Args:
+            path (str): Path to a file, directory or zip archive containing
+                        testcase data.
+            load_prefs (bool): Load prefs.js file if available.
+
+        Returns:
+            tuple: TestCases (list) and path to unpacked testcase data (str).
+        """
+        unpacked = None
+        try:
+            if path.lower().endswith(".zip"):
+                unpacked = mkdtemp(prefix="unpack_", dir=grz_tmp("replay"))
+                try:
+                    with ZipFile(path) as zip_fp:
+                        zip_fp.extractall(path=unpacked)
+                except (BadZipfile, zlib_error):
+                    raise TestCaseLoadFailure("Testcase archive is corrupted")
+                tc_paths = tuple(TestCase.scan_path(unpacked))
+                testcases = list()
+                for tc_path in tc_paths:
+                    try:
+                        testcases.append(TestCase.load_path(tc_path, load_prefs=load_prefs))
+                    except TestCaseLoadFailure:  # pragma: no cover
+                        pass
+                testcases.sort(key=lambda tc: tc.timestamp)
+                if load_prefs:
+                    # attempt to unpack prefs.js
+                    for tc_path in tc_paths:
+                        try:
+                            copyfile(
+                                pathjoin(tc_path, "prefs.js"),
+                                pathjoin(unpacked, "prefs.js"))
+                        except IOError:  # pragma: no cover
+                            continue
+                        break
+            else:
+                testcases = [TestCase.load_path(path, load_prefs=load_prefs)]
+            if not testcases:
+                raise TestCaseLoadFailure("Failed to load TestCases")
+        except TestCaseLoadFailure:
+            if unpacked is not None:
+                rmtree(unpacked, ignore_errors=True)
+            raise
+        return testcases, unpacked
+
     @property
     def other_reports(self):
         """Reports from results that do not match:
@@ -100,7 +153,7 @@ class ReplayManager(object):
         return self._reports_expected.values()
 
     @staticmethod
-    def report_to_filesystem(path, reports, other_reports=None, test=None):
+    def report_to_filesystem(path, reports, other_reports=None, tests=None):
         """Use FilesystemReporter to write reports and testcase to disk in a
         known location.
 
@@ -108,13 +161,11 @@ class ReplayManager(object):
             path (str): Location to write data.
             reports (iterable): Reports to output.
             other_reports (iterable): Reports to output.
-            test (TestCase): Testcase to output.
+            tests (iterable): Testcases to output.
 
         Returns:
             None
         """
-        assert test is None or isinstance(test, TestCase)
-        tests = [test] if test else tuple()
         if reports:
             reporter = FilesystemReporter(
                 report_path=pathjoin(path, "reports"),
@@ -154,10 +205,9 @@ class ReplayManager(object):
                 return b"<h1>Close Browser</h1>"
             server_map.set_dynamic_response("grz_close_browser", _dyn_close, mime_type="text/html")
             server_map.set_dynamic_response("grz_harness", lambda: self._harness, mime_type="text/html")
-            server_map.set_redirect("grz_next_test", self.testcase.landing_page, required=True)
-        server_map.set_redirect("grz_current_test", self.testcase.landing_page, required=False)
 
         success = False
+        test_count = len(self.testcases)
         for _ in range(repeat):
             self.status.iteration += 1
             if self.target.closed:
@@ -170,10 +220,15 @@ class ReplayManager(object):
                     location = self._runner.location(
                         "/grz_harness",
                         self.server.port,
-                        close_after=self.target.rl_reset,
+                        close_after=self.target.rl_reset * test_count,
                         forced_close=self.target.forced_close)
                 try:
-                    self._runner.launch(location, env_mod=self.testcase.env_vars)
+                    # The environment from the initial testcase is used because
+                    # a sequence of testcases is expected to be run without
+                    # relaunching the Target to match the functionality of
+                    # Grizzly. If this is not the case each TestCase should
+                    # be run individually.
+                    self._runner.launch(location, env_mod=self.testcases[0].env_vars)
                 except TargetLaunchError:
                     LOG.error("Target launch error. Check browser logs for details.")
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
@@ -182,12 +237,20 @@ class ReplayManager(object):
                     raise
             self.target.step()
             LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
-            # run test case
-            self._runner.run(
-                self.ignore,
-                server_map,
-                self.testcase,
-                wait_for_callback=self._harness is None)
+            # run test cases
+            for test_idx in range(test_count):
+                LOG.debug("running test: %d of %d", test_idx + 1, test_count)
+                if self._harness is not None:
+                    next_idx = (test_idx + 1) % test_count
+                    server_map.set_redirect("grz_next_test", self.testcases[next_idx].landing_page, required=True)
+                server_map.set_redirect("grz_current_test", self.testcases[test_idx].landing_page, required=False)
+                self._runner.run(
+                    self.ignore,
+                    server_map,
+                    self.testcases[test_idx],
+                    wait_for_callback=self._harness is None)
+                if self._runner.result != self._runner.COMPLETE:
+                    break
             # process results
             if self._runner.result == self._runner.FAILED:
                 log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
@@ -288,22 +351,26 @@ class ReplayManager(object):
         else:
             signature = None
 
+        LOG.debug("loading the TestCases")
         try:
-            LOG.debug("loading the TestCase")
-            testcase = TestCase.load_path(args.input, prefs=args.prefs is None)
-            # prioritize specified prefs.js file over included file
-            if args.prefs is not None:
-                prefs = args.prefs
-                testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
-                LOG.info("Using specified prefs.js")
-            elif testcase.contains("prefs.js"):
-                prefs = pathjoin(args.input, "prefs.js")
-                LOG.info("Using prefs.js from testcase")
-            else:
-                prefs = None
+            testcases, unpacked = cls.load_testcases(args.input, args.prefs is None)
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return 1
+        # prioritize specified prefs.js file over included file
+        if args.prefs is not None:
+            prefs = args.prefs
+            for testcase in testcases:
+                testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
+            LOG.info("Using specified prefs.js")
+        elif unpacked and isfile(pathjoin(unpacked, "prefs.js")):
+            prefs = pathjoin(unpacked, "prefs.js")
+            LOG.info("Using prefs.js from testcase")
+        elif isfile(pathjoin(args.input, "prefs.js")):
+            prefs = pathjoin(args.input, "prefs.js")
+            LOG.info("Using prefs.js from testcase")
+        else:
+            prefs = None
 
         replay = None
         target = None
@@ -322,7 +389,7 @@ class ReplayManager(object):
                 xvfb=args.xvfb)
             if prefs is not None:
                 target.prefs = prefs
-            if testcase.env_vars.get("GRZ_FORCED_CLOSE") == "0":
+            if testcases[0].env_vars.get("GRZ_FORCED_CLOSE") == "0":
                 LOG.debug("setting target.forced_close=False")
                 target.forced_close = False
 
@@ -340,7 +407,7 @@ class ReplayManager(object):
                     args.ignore,
                     server,
                     target,
-                    testcase,
+                    testcases,
                     any_crash=args.any_crash,
                     signature=signature,
                     use_harness=not args.no_harness)
@@ -350,7 +417,7 @@ class ReplayManager(object):
                     args.logs,
                     replay.reports,
                     replay.other_reports,
-                    replay.testcase if args.include_test else None)
+                    replay.testcases if args.include_test else None)
             # TODO: add fuzzmanager reporting
             return 0 if success else 1
 
@@ -371,6 +438,8 @@ class ReplayManager(object):
                 replay.cleanup()
             if target is not None:
                 target.cleanup()
-            if testcase is not None:
+            for testcase in testcases:
                 testcase.cleanup()
+            if unpacked is not None:
+                rmtree(unpacked, ignore_errors=True)
             LOG.info("Done.")
