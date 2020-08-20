@@ -2,8 +2,9 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from logging import basicConfig, DEBUG, getLogger
+from logging import DEBUG, getLogger
 
+from coloredlogs import install as install_logger
 from sapphire import Sapphire
 
 from .adapters import get as get_adapter
@@ -23,7 +24,7 @@ def configure_logging(log_level):
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
     else:
         log_fmt = "[%(asctime)s] %(message)s"
-    basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+    install_logger(fmt=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
 def main(args):
     configure_logging(args.log_level)

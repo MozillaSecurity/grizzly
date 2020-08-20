@@ -13,9 +13,11 @@ crash id (1st hash) and a bug id (2nd hash). This is not perfect but works very
 well in most cases.
 """
 from hashlib import sha1
-from logging import basicConfig, getLogger, INFO, DEBUG
+from logging import getLogger, INFO, DEBUG
 from os.path import basename
 from re import compile as re_compile, match as re_match
+
+from coloredlogs import install as install_logger
 
 __all__ = ("Stack", "StackFrame")
 __author__ = "Tyson Smith"
@@ -368,7 +370,7 @@ if __name__ == "__main__":
     else:
         log_level = INFO
         log_fmt = "%(message)s"
-    basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+    install_logger(fmt=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
     with open(args.input, "rb") as fp:
         stack = Stack.from_text(fp.read().decode("utf-8", errors="ignore"))

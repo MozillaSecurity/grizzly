@@ -44,6 +44,7 @@ if __name__ == '__main__':
         },
         extras_require=EXTRAS,
         install_requires=[
+            'coloredlogs',
             'fasteners',
             'ffpuppet',
             'FuzzManager',

@@ -15,6 +15,7 @@ import sys
 import time
 
 import psutil
+import coloredlogs
 
 from .status import ReducerStats, Status
 
@@ -408,7 +409,7 @@ def main(args=None):
     if bool(os.getenv("DEBUG")):  # pragma: no cover
         log_level = logging.DEBUG
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
-    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+    coloredlogs.install(fmt=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
     modes = ("reduce-status", "status")
     parser = argparse.ArgumentParser(description="Grizzly status report generator")

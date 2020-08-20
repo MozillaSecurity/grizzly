@@ -2,9 +2,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from logging import basicConfig, DEBUG
+from logging import DEBUG
 from os import getenv
 from sys import exit as sysexit
+
+from coloredlogs import install as install_logger
 
 from .adapters import load
 from .args import GrizzlyArgs
@@ -19,8 +21,8 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 # load() because it is called before parse arguments (which
 # is where basicConfig should be called).
 if getenv("DEBUG"):
-    basicConfig(
-        format="%(levelname).1s %(name)s [%(asctime)s] %(message)s",
+    install_logger(
+        fmt="%(levelname).1s %(name)s [%(asctime)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         level=DEBUG)
 # load Adapters

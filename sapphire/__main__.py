@@ -3,8 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser
-from logging import basicConfig, DEBUG, INFO
+from logging import DEBUG, INFO
 from os.path import isdir
+
+from coloredlogs import install as install_logger
 
 from .core import Sapphire
 
@@ -14,7 +16,7 @@ def configure_logging(log_level):
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
     else:
         log_fmt = "[%(asctime)s] %(message)s"
-    basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+    install_logger(fmt=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
 def parse_args(argv=None):
     # log levels for console logging
