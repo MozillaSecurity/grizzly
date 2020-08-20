@@ -262,3 +262,26 @@ def test_main_04(mocker, tmp_path):
     assert log_path.is_dir()
     prefs = tuple(log_path.glob('**/prefs.js'))
     assert prefs[0].read_bytes() == b"specified"
+
+def test_main_05(mocker, tmp_path):
+    """test ReplayManager.main() - unpacked test case - prefs and cleanup """
+    unpacked = (tmp_path / "unpacked")
+    unpacked.mkdir()
+    # prefs.js from unpacked path
+    (unpacked / "prefs.js").touch()
+    fake_load_testcases = mocker.patch("grizzly.replay.replay.ReplayManager.load_testcases")
+    fake_load_testcases.return_value = ([mocker.Mock(env_vars=dict())], str(unpacked))
+    mocker.patch("grizzly.replay.replay.ReplayManager.run")
+    mocker.patch("grizzly.replay.replay.load_target")
+    mocker.patch("grizzly.replay.replay.Sapphire")
+    args = mocker.Mock(
+        fuzzmanager=False,
+        ignore=None,
+        min_crashes=1,
+        relaunch=1,
+        repeat=1,
+        prefs=None,
+        sig=None,
+        timeout=1)
+    assert ReplayManager.main(args) == 0
+    assert not unpacked.is_dir()

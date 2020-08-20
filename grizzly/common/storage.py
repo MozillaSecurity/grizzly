@@ -8,10 +8,8 @@ from itertools import chain
 import json
 import os
 import shutil
-from tempfile import mkdtemp, SpooledTemporaryFile
+from tempfile import SpooledTemporaryFile
 from time import time
-from zipfile import BadZipfile, ZipFile
-from zlib import error as zlib_error
 
 from ..target import sanitizer_opts
 from .utils import grz_tmp
@@ -241,37 +239,6 @@ class TestCase(object):
             for meta_file in self._files.meta:
                 meta_file.dump(out_path)
 
-    @classmethod
-    def load_archive(cls, archive, working_path=None):
-        """Unpack and load TestCases from an archive.
-
-        Args:
-            archive (str): Path to archive file containing testcase data.
-            working_path (str): Location to unpack testcase data files.
-
-        Yields:
-            TestCase: A TestCase.
-        """
-        if archive.lower().endswith(".zip"):
-            unpacked = mkdtemp(prefix="test_unpack_", dir=working_path)
-            try:
-                with ZipFile(archive) as zip_fp:
-                    zip_fp.extractall(path=unpacked)
-            except (BadZipfile, zlib_error):
-                raise TestCaseLoadFailure("Testcase archive is corrupted")
-        else:
-            raise TestCaseLoadFailure("Unsupported archive type")
-        try:
-            for entry in os.listdir(unpacked):
-                tc_path = os.path.join(unpacked, entry)
-                if os.path.isdir(tc_path):
-                    try:
-                        yield cls.load_path(tc_path)
-                    except TestCaseLoadFailure:
-                        pass
-        finally:
-            shutil.rmtree(unpacked, ignore_errors=True)
-
     def load_environ(self, path, env_data):
         # sanity check environment variable data
         for name, value in env_data.items():
@@ -288,7 +255,7 @@ class TestCase(object):
                 self.env_vars[opt_key] = ":".join("=".join((k, v)) for k, v in opts.items())
 
     @classmethod
-    def load_path(cls, path, full_scan=False, prefs=True):
+    def load_path(cls, path, full_scan=False, load_prefs=True):
         """Load contents of a TestCase from disk. If `path` is a directory it must
         contain a valid test_info.json file.
 
@@ -299,7 +266,7 @@ class TestCase(object):
                               subdirectories. This is always the case when
                               loading a directory.
                               WARNING: This should be used with caution!
-            prefs (bool): Include prefs.js file in the test case.
+            load_prefs (bool): Include prefs.js file in the test case.
 
         Returns:
             TestCase: A TestCase.
@@ -335,7 +302,7 @@ class TestCase(object):
                         continue
                     if dpath == path:
                         if fname == "prefs.js":
-                            if prefs:
+                            if load_prefs:
                                 test.add_meta(TestFile.from_file(os.path.join(dpath, fname)))
                             continue
                         if fname == entry_point:
@@ -397,6 +364,25 @@ class TestCase(object):
                 to_remove.append(idx)
         for idx in reversed(to_remove):
             self._files.optional.pop(idx).close()
+
+    @staticmethod
+    def scan_path(path):
+        """Check path and subdirectories for potential test cases.
+
+        Args:
+            path (str): Path to scan.
+
+        Yields:
+            str: Path to what appears to be a valid testcase.
+        """
+        contents = os.listdir(path)
+        if "test_info.json" in contents:
+            yield path
+        else:
+            for entry in contents:
+                tc_path = os.path.join(path, entry)
+                if os.path.isfile(os.path.join(tc_path, "test_info.json")):
+                    yield tc_path
 
 
 class TestFile(object):

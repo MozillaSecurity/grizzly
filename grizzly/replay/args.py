@@ -13,7 +13,10 @@ class ReplayArgs(CommonArgs):
         super(ReplayArgs, self).__init__()
         self.parser.add_argument(
             "input",
-            help="Directory containing test case data or file to use as a test case." \
+            help="Accepted input includes: " \
+                "1) A directory containing testcase data. " \
+                "2) A file to use as a testcase. " \
+                "3) A zip archive containing testcases. " \
                 "When using a directory it must contain a 'test_info.json' file.")
 
         replay_args = self.parser.add_argument_group("Replay Arguments")

@@ -7,7 +7,6 @@
 import json
 import re
 import os
-import zipfile
 
 import pytest
 
@@ -211,7 +210,7 @@ def test_testcase_09(tmp_path):
         assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
         assert tcase.timestamp == 0
     # load full test case
-    with TestCase.load_path(str(entry_point), full_scan=True, prefs=True) as tcase:
+    with TestCase.load_path(str(entry_point), full_scan=True, load_prefs=True) as tcase:
         assert tcase.landing_page == "target.bin"
         assert "prefs.js" in (x.file_name for x in tcase._files.meta)
         assert "target.bin" in (x.file_name for x in tcase._files.required)
@@ -271,40 +270,21 @@ def test_testcase_11(tmp_path):
             tcase.add_batch(str(include), [str(inc_1)])
 
 def test_testcase_12(tmp_path):
-    """test TestCase.load_archive()"""
-    # build archive containing multiple testcases
+    """test TestCase.scan_path()"""
+    # empty path
+    (tmp_path / "not-test").mkdir()
+    assert not tuple(TestCase.scan_path(str(tmp_path)))
+    # multiple test case directories
+    paths = [str(tmp_path / ("test-%d" % i)) for i in range(3)]
     with TestCase("target.bin", None, "test-adapter") as src:
-        src.add_from_data("test", "target.bin")
-        src.dump(str(tmp_path / "src-0"), include_details=True)
-        src.dump(str(tmp_path / "src-1"), include_details=True)
-        src.dump(str(tmp_path / "src-2"), include_details=True)
-    (tmp_path / "log_dummy.txt").touch()
-    (tmp_path / "not_a_tc").mkdir()
-    (tmp_path / "not_a_tc" / "file.txt").touch()
-    archive = str(tmp_path / "testcase.zip")
-    with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_DEFLATED) as zfp:
-        for dir_name, _, dir_files in os.walk(str(tmp_path)):
-            arc_path = os.path.relpath(dir_name, str(tmp_path))
-            for file_name in dir_files:
-                zfp.write(
-                    os.path.join(dir_name, file_name),
-                    arcname=os.path.join(arc_path, file_name))
-    # load archive
-    tests = tuple(TestCase.load_archive(archive, working_path=str(tmp_path)))
-    try:
-        assert len(tests) == 3
-    finally:
-        for test in tests:
-            test.cleanup()
-    # load unsupported archive
-    with pytest.raises(TestCaseLoadFailure, match="Unsupported archive type"):
-        any(TestCase.load_archive("somefile.test"))
-    # load broken archive
-    archive = (tmp_path / "fake.zip")
-    archive.write_bytes(b"x")
-    with pytest.raises(TestCaseLoadFailure, match="Testcase archive is corrupted"):
-        any(TestCase.load_archive(str(archive)))
-
+        src.add_from_data("test", "test.htm")
+        for path in paths:
+            src.dump(path, include_details=True)
+    tc_paths = list(TestCase.scan_path(str(tmp_path)))
+    assert len(tc_paths) == 3
+    # single test case directory
+    tc_paths = list(TestCase.scan_path(str(paths[0])))
+    assert len(tc_paths) == 1
 
 def test_testfile_01():
     """test simple TestFile"""
