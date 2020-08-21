@@ -53,9 +53,6 @@ class ReplayArgs(CommonArgs):
             "--include-test", action="store_true",
             help="Include the testcase when reporting results.")
 
-        self.parser.epilog = "For addition help check out the wiki:" \
-            " https://github.com/MozillaSecurity/grizzly/wiki"
-
     def sanity_check(self, args):
         super(ReplayArgs, self).sanity_check(args)
 
