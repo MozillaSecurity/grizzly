@@ -22,45 +22,33 @@ def test_args_01(capsys, tmp_path):
     # missing args tests
     with raises(SystemExit):
         ReplayArgs().parse_args([])
-
-    # test case directory missing test_info.json
+    # specified prefs.js missing
     exe = tmp_path / "binary"
     exe.touch()
     inp = tmp_path / "input"
     inp.mkdir()
     (inp / "somefile").touch()
-    with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp)])
-    assert "error: Test case folder must contain 'test_info.json'" in capsys.readouterr()[-1]
-
     (inp / "test_info.json").touch()
-    # specified prefs.js missing
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp / "somefile"), "--prefs", "missing"])
     assert "error: -p/--prefs not found 'missing'" in capsys.readouterr()[-1]
-
     # test case directory
     (inp / "prefs.js").touch()
     ReplayArgs().parse_args([str(exe), str(inp)])
-
     # test case file
     ReplayArgs().parse_args([str(exe), str(inp / "somefile"), "--prefs", str(inp / "prefs.js")])
-
     # test negative min-crashes value
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--min-crashes", "-1"])
     assert "error: '--min-crashes' value must be positive" in capsys.readouterr()[-1]
-
     # test negative repeat value
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--repeat", "-1"])
     assert "error: '--repeat' value must be positive" in capsys.readouterr()[-1]
-
     # test missing signature file
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--sig", "missing"])
     assert "error: signature file not found" in capsys.readouterr()[-1]
-
     # test any crash and signature
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--any-crash", "--sig", "x"])
@@ -133,14 +121,14 @@ def test_main_02(mocker):
     mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
     mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
     # setup args
-    args = mocker.Mock()
-    args.ignore = None
-    args.input = "test"
-    args.min_crashes = 1
-    args.prefs = None
-    args.relaunch = 1
-    args.repeat = 1
-    args.sig = None
+    args = mocker.Mock(
+        ignore=None,
+        input="test",
+        min_crashes=1,
+        prefs=None,
+        relaunch=1,
+        repeat=1,
+        sig=None)
 
     mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchError)
     assert ReplayManager.main(args) == 1
@@ -151,7 +139,10 @@ def test_main_02(mocker):
     mocker.patch("grizzly.replay.replay.load_target", side_effect=KeyboardInterrupt)
     assert ReplayManager.main(args) == 1
 
-    mocker.patch("grizzly.replay.replay.TestCase.load_path", side_effect=TestCaseLoadFailure)
+    mocker.patch("grizzly.replay.replay.TestCase.load", side_effect=TestCaseLoadFailure)
+    assert ReplayManager.main(args) == 1
+
+    mocker.patch("grizzly.replay.replay.TestCase.load", return_value=list())
     assert ReplayManager.main(args) == 1
 
 def test_main_03(mocker):
@@ -164,20 +155,18 @@ def test_main_03(mocker):
         spec=TestCase,
         env_vars={"GRZ_FORCED_CLOSE": "0"},
         landing_page="x.html")
-    mocker.patch("grizzly.replay.replay.TestCase.load_path", return_value=testcase)
+    mocker.patch("grizzly.replay.replay.TestCase.load", return_value=[testcase])
     # setup args
-    args = mocker.Mock()
-    args.fuzzmanager = False
-    args.ignore = None
-    args.input = "test"
-    args.logs = None
-    args.min_crashes = 1
-    args.prefs = None
-    args.relaunch = 1
-    args.repeat = 1
-    args.sig = None
-    args.timeout = 1
-
+    args = mocker.Mock(
+        fuzzmanager=False,
+        ignore=None,
+        input="test",
+        min_crashes=1,
+        prefs=None,
+        relaunch=1,
+        repeat=1,
+        sig=None,
+        timeout=1)
     ReplayManager.main(args)
     assert testcase.cleanup.call_count == 1
     assert target.cleanup.call_count == 1
@@ -262,26 +251,3 @@ def test_main_04(mocker, tmp_path):
     assert log_path.is_dir()
     prefs = tuple(log_path.glob('**/prefs.js'))
     assert prefs[0].read_bytes() == b"specified"
-
-def test_main_05(mocker, tmp_path):
-    """test ReplayManager.main() - unpacked test case - prefs and cleanup """
-    unpacked = (tmp_path / "unpacked")
-    unpacked.mkdir()
-    # prefs.js from unpacked path
-    (unpacked / "prefs.js").touch()
-    fake_load_testcases = mocker.patch("grizzly.replay.replay.ReplayManager.load_testcases")
-    fake_load_testcases.return_value = ([mocker.Mock(env_vars=dict())], str(unpacked))
-    mocker.patch("grizzly.replay.replay.ReplayManager.run")
-    mocker.patch("grizzly.replay.replay.load_target")
-    mocker.patch("grizzly.replay.replay.Sapphire")
-    args = mocker.Mock(
-        fuzzmanager=False,
-        ignore=None,
-        min_crashes=1,
-        relaunch=1,
-        repeat=1,
-        prefs=None,
-        sig=None,
-        timeout=1)
-    assert ReplayManager.main(args) == 0
-    assert not unpacked.is_dir()

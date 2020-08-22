@@ -8,8 +8,10 @@ from itertools import chain
 import json
 import os
 import shutil
-from tempfile import SpooledTemporaryFile
+from tempfile import mkdtemp, SpooledTemporaryFile
 from time import time
+from zipfile import BadZipfile, ZipFile
+from zlib import error as zlib_error
 
 from ..target import sanitizer_opts
 from .utils import grz_tmp
@@ -239,6 +241,67 @@ class TestCase(object):
             for meta_file in self._files.meta:
                 meta_file.dump(out_path)
 
+    def get_file(self, file_name):
+        """Look up and return the TestFile with the specified file name.
+
+        Args:
+            file_name (str): Name of file to retrieve.
+
+        Returns:
+            TestFile: TestFile with matching file name otherwise None.
+        """
+        for tfile in chain(self._files.meta, self._files.optional, self._files.required):
+            if tfile.file_name == file_name:
+                return tfile
+        return None
+
+    @classmethod
+    def load(cls, path, load_prefs, adjacent=False):
+        """Load TestCases from disk.
+
+        Args:
+            path (str): Path can be:
+                        1) A directory containing `test_info.json` and data.
+                        2) A directory with one or more subdirectories of 1.
+                        3) A zip archive containing testcase data or
+                           subdirectories containing testcase data.
+                        4) A single file to be used as a test case.
+            load_prefs (bool): Load prefs.js file if available.
+            adjacent (str): Load adjacent files as part of the test case.
+                            This is always the case when loading a directory.
+                            WARNING: This should be used with caution!
+
+        Returns:
+            list: TestCases successfully loaded from path.
+        """
+        # unpack archive if needed
+        if path.lower().endswith(".zip"):
+            unpacked = mkdtemp(prefix="unpack_", dir=grz_tmp("storage"))
+            try:
+                with ZipFile(path) as zip_fp:
+                    zip_fp.extractall(path=unpacked)
+            except (BadZipfile, zlib_error):
+                shutil.rmtree(unpacked, ignore_errors=True)
+                raise TestCaseLoadFailure("Testcase archive is corrupted")
+            path = unpacked
+        else:
+            unpacked = None
+        # load testcase data from disk
+        try:
+            if os.path.isfile(path):
+                tests = [cls.load_single(path, load_prefs, adjacent=adjacent)]
+            elif os.path.isdir(path):
+                tests = list()
+                for tc_path in TestCase.scan_path(path):
+                    tests.append(cls.load_single(tc_path, load_prefs))
+                tests.sort(key=lambda tc: tc.timestamp)
+            else:
+                raise TestCaseLoadFailure("Invalid TestCase path")
+        finally:
+            if unpacked is not None:
+                shutil.rmtree(unpacked, ignore_errors=True)
+        return tests
+
     def load_environ(self, path, env_data):
         # sanity check environment variable data
         for name, value in env_data.items():
@@ -255,25 +318,23 @@ class TestCase(object):
                 self.env_vars[opt_key] = ":".join("=".join((k, v)) for k, v in opts.items())
 
     @classmethod
-    def load_path(cls, path, full_scan=False, load_prefs=True):
+    def load_single(cls, path, load_prefs, adjacent=False):
         """Load contents of a TestCase from disk. If `path` is a directory it must
-        contain a valid test_info.json file.
+        contain a valid 'test_info.json' file.
 
         Args:
             path (str): Path to the directory or file to load.
-            full_scan (bool): Include all files in the directory containing the
-                              test case entry point as well as the contents of
-                              subdirectories. This is always the case when
-                              loading a directory.
-                              WARNING: This should be used with caution!
-            load_prefs (bool): Include prefs.js file in the test case.
+            load_prefs (bool): Load prefs.js file if available.
+            adjacent (str): Load adjacent files as part of the test case.
+                            This is always the case when loading a directory.
+                            WARNING: This should be used with caution!
 
         Returns:
             TestCase: A TestCase.
         """
         path = os.path.abspath(path)
         if os.path.isdir(path):
-            # load a directory using test_info.json
+            # load using test_info.json
             try:
                 with open(os.path.join(path, "test_info.json"), "r") as in_fp:
                     info = json.load(in_fp)
@@ -281,51 +342,25 @@ class TestCase(object):
                 raise TestCaseLoadFailure("Missing 'test_info.json'")
             except ValueError:
                 raise TestCaseLoadFailure("Invalid 'test_info.json'")
-            if "target" not in info:
-                raise TestCaseLoadFailure("'test_info.json' missing 'target' entry")
+            if not isinstance(info.get("target"), str):
+                raise TestCaseLoadFailure("'test_info.json' has invalid 'target' entry")
             entry_point = os.path.basename(info["target"])
             if not os.path.isfile(os.path.join(path, entry_point)):
-                raise TestCaseLoadFailure("entry_point '%s' not found in '%s'" % (entry_point, path))
-            full_scan = True
+                raise TestCaseLoadFailure("Entry point %r not found in '%s'" % (entry_point, path))
+            # always load all contents of a directory if a 'test_info.json' is loaded
+            adjacent = True
         elif os.path.isfile(path):
-            info = dict()
             entry_point = os.path.basename(path)
+            info = dict()
             path = os.path.dirname(path)
         else:
-            raise TestCaseLoadFailure("Cannot find %r" % (path,))
+            raise TestCaseLoadFailure("Missing or invalid TestCase %r" % (path,))
+        # create testcase and add data
         test = cls(None, None, info.get("adapter", None), timestamp=info.get("timestamp", 0))
-        if full_scan:
-            # load all files from directory as test
-            for dpath, _, files in os.walk(path):
-                for fname in files:
-                    if fname == "test_info.json":
-                        continue
-                    if dpath == path:
-                        if fname == "prefs.js":
-                            if load_prefs:
-                                test.add_meta(TestFile.from_file(os.path.join(dpath, fname)))
-                            continue
-                        if fname == entry_point:
-                            test.add_from_file(os.path.join(dpath, fname))
-                            # set entry point
-                            test.landing_page = fname
-                            continue
-                        location = None
-                    else:
-                        # handle nested directories
-                        location = "/".join((dpath.split(path, 1)[-1], fname))
-                    test.add_from_file(
-                        os.path.join(dpath, fname),
-                        file_name=location,
-                        required=False)
-        else:
-            # load single file as test
-            test.add_from_file(os.path.join(path, entry_point))
-            test.landing_page = entry_point
-        if test.landing_page is None:  # pragma: no cover
-            # this should not be possible
-            test.cleanup()
-            raise AssertionError("Scanning for test case 'entry point' failed")
+        if load_prefs and os.path.isfile(os.path.join(path, "prefs.js")):
+            test.add_meta(TestFile.from_file(os.path.join(path, "prefs.js")))
+        test.add_from_file(os.path.join(path, entry_point))
+        test.landing_page = entry_point
         # load environment variables
         if info:
             try:
@@ -333,6 +368,18 @@ class TestCase(object):
             except TestCaseLoadFailure:
                 test.cleanup()
                 raise
+        # load all adjacent data from directory
+        if adjacent:
+            for dpath, _, files in os.walk(path):
+                for fname in files:
+                    # ignore files that have been previously loaded
+                    if fname in (entry_point, "prefs.js", "test_info.json"):
+                        continue
+                    location = "/".join((dpath.split(path, 1)[-1], fname))
+                    test.add_from_file(
+                        os.path.join(dpath, fname),
+                        file_name=location,
+                        required=False)
         return test
 
     @property
@@ -407,7 +454,10 @@ class TestFile(object):
                 or file_name.startswith("../"):
             raise TypeError("file_name is invalid %r" % (file_name,))
         self._file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
-        self._fp = SpooledTemporaryFile(max_size=self.CACHE_LIMIT, dir=grz_tmp(), prefix="grz_tf_")
+        self._fp = SpooledTemporaryFile(
+            dir=grz_tmp("storage"),
+            max_size=self.CACHE_LIMIT,
+            prefix="testfile_")
 
     def __enter__(self):
         return self

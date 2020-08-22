@@ -6,14 +6,12 @@
 """
 unit tests for grizzly.replay
 """
-from os import walk
-from os.path import isfile, join as pathjoin, relpath
-from zipfile import ZIP_DEFLATED, ZipFile
+from os.path import join as pathjoin
 
 from pytest import raises
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_REQUEST
-from .replay import ReplayManager, TestCaseLoadFailure
+from .replay import ReplayManager
 from ..common import Report, Status, TestCase
 from ..target import Target, TargetLaunchError
 
@@ -314,73 +312,3 @@ def test_replay_12(mocker):
         assert replay.status.results == 1
         assert len(replay.reports) == 1
         assert not replay.other_reports
-
-def test_replay_13(tmp_path):
-    """test ReplayManager.load_testcases() - error cases"""
-    # test missing
-    with raises(TestCaseLoadFailure, match="Cannot find"):
-        ReplayManager.load_testcases("missing", False)
-    # test empty path
-    with raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
-        ReplayManager.load_testcases(str(tmp_path), False)
-    # test broken archive
-    archive = (tmp_path / "fake.zip")
-    archive.write_bytes(b"x")
-    with raises(TestCaseLoadFailure, match="Testcase archive is corrupted"):
-        ReplayManager.load_testcases(str(archive), False)
-
-def test_replay_14(tmp_path):
-    """test ReplayManager.load_testcases() - single file"""
-    tfile = (tmp_path / "testcase.html")
-    tfile.touch()
-    testcases, unpacked = ReplayManager.load_testcases(str(tfile), False)
-    try:
-        assert unpacked is None
-        assert len(tuple(testcases)) == 1
-    finally:
-        map(lambda x: x.cleanup, testcases)
-
-def test_replay_15(tmp_path):
-    """test ReplayManager.load_testcases() - single directory"""
-    with TestCase("target.bin", None, "test-adapter") as src:
-        src.add_from_data("test", "target.bin")
-        src.dump(str(tmp_path), include_details=True)
-    testcases, unpacked = ReplayManager.load_testcases(str(tmp_path), False)
-    try:
-        assert unpacked is None
-        assert len(tuple(testcases)) == 1
-    finally:
-        map(lambda x: x.cleanup, testcases)
-
-def test_replay_16(tmp_path):
-    """test ReplayManager.load_testcases() - archive"""
-    # build archive containing multiple testcases
-    with TestCase("target.bin", None, "test-adapter") as src:
-        src.add_from_data("test", "target.bin")
-        src.dump(str(tmp_path / "src-0"), include_details=True)
-        src.dump(str(tmp_path / "src-1"), include_details=True)
-        src.dump(str(tmp_path / "src-2"), include_details=True)
-    (tmp_path / "src-1" / "prefs.js").write_bytes(b"fake_prefs")
-    (tmp_path / "log_dummy.txt").touch()
-    (tmp_path / "not_a_tc").mkdir()
-    (tmp_path / "not_a_tc" / "file.txt").touch()
-    archive = str(tmp_path / "testcase.zip")
-    with ZipFile(archive, mode="w", compression=ZIP_DEFLATED) as zfp:
-        for dir_name, _, dir_files in walk(str(tmp_path)):
-            arc_path = relpath(dir_name, str(tmp_path))
-            for file_name in dir_files:
-                zfp.write(
-                    pathjoin(dir_name, file_name),
-                    arcname=pathjoin(arc_path, file_name))
-    testcases, unpacked = ReplayManager.load_testcases(str(archive), True)
-    try:
-        assert unpacked is not None
-        assert isfile(pathjoin(unpacked, "prefs.js"))
-        assert len(tuple(testcases)) == 3
-    finally:
-        map(lambda x: x.cleanup, testcases)
-    # empty archive
-    with ZipFile(archive, mode="w", compression=ZIP_DEFLATED) as zfp:
-        zfp.write(str(tmp_path / "not_a_tc"), arcname="not_a_tc")
-    with raises(TestCaseLoadFailure, match="Failed to load TestCases"):
-        ReplayManager.load_testcases(str(archive), True)
