@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from os.path import isfile, isdir, join as pathjoin
+from os.path import isfile
 
 from ..args import CommonArgs
 
@@ -15,8 +15,9 @@ class ReplayArgs(CommonArgs):
             "input",
             help="Accepted input includes: " \
                 "1) A directory containing testcase data. " \
-                "2) A file to use as a testcase. " \
-                "3) A zip archive containing testcases. " \
+                "2) A directory with one or more subdirectories containing testcase data. " \
+                "3) A zip archive containing testcase data or subdirectories containing testcase data. " \
+                "4) A single file to be used as a testcase. " \
                 "When using a directory it must contain a 'test_info.json' file.")
 
         replay_args = self.parser.add_argument_group("Replay Arguments")
@@ -58,10 +59,6 @@ class ReplayArgs(CommonArgs):
 
     def sanity_check(self, args):
         super(ReplayArgs, self).sanity_check(args)
-
-        if "input" not in self._sanity_skip and isdir(args.input):
-            if not isfile(pathjoin(args.input, "test_info.json")):
-                self.parser.error("Test case folder must contain 'test_info.json'")
 
         if args.any_crash and args.sig is not None:
             self.parser.error("signature is ignored when running with '--any-crash'")

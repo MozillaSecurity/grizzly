@@ -4,12 +4,10 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from logging import getLogger
-from os.path import dirname, isfile, join as pathjoin
-from shutil import copyfile, rmtree
+from os.path import dirname, join as pathjoin
 from tempfile import mkdtemp
 from time import sleep
-from zipfile import BadZipfile, ZipFile
-from zlib import error as zlib_error
+from shutil import rmtree
 
 from FTB.Signatures.CrashInfo import CrashSignature
 from sapphire import Sapphire, ServerMap
@@ -76,55 +74,6 @@ class ReplayManager(object):
         self._reports_other.clear()
         if self.status is not None:
             self.status.cleanup()
-
-    @staticmethod
-    def load_testcases(path, load_prefs):
-        """Load TestCases from disk.
-
-        Args:
-            path (str): Path to a file, directory or zip archive containing
-                        testcase data.
-            load_prefs (bool): Load prefs.js file if available.
-
-        Returns:
-            tuple: TestCases (list) and path to unpacked testcase data (str).
-        """
-        unpacked = None
-        try:
-            if path.lower().endswith(".zip"):
-                unpacked = mkdtemp(prefix="unpack_", dir=grz_tmp("replay"))
-                try:
-                    with ZipFile(path) as zip_fp:
-                        zip_fp.extractall(path=unpacked)
-                except (BadZipfile, zlib_error):
-                    raise TestCaseLoadFailure("Testcase archive is corrupted")
-                tc_paths = tuple(TestCase.scan_path(unpacked))
-                testcases = list()
-                for tc_path in tc_paths:
-                    try:
-                        testcases.append(TestCase.load_path(tc_path, load_prefs=load_prefs))
-                    except TestCaseLoadFailure:  # pragma: no cover
-                        pass
-                testcases.sort(key=lambda tc: tc.timestamp)
-                if load_prefs:
-                    # attempt to unpack prefs.js
-                    for tc_path in tc_paths:
-                        try:
-                            copyfile(
-                                pathjoin(tc_path, "prefs.js"),
-                                pathjoin(unpacked, "prefs.js"))
-                        except IOError:  # pragma: no cover
-                            continue
-                        break
-            else:
-                testcases = [TestCase.load_path(path, load_prefs=load_prefs)]
-            if not testcases:
-                raise TestCaseLoadFailure("Failed to load TestCases")
-        except TestCaseLoadFailure:
-            if unpacked is not None:
-                rmtree(unpacked, ignore_errors=True)
-            raise
-        return testcases, unpacked
 
     @property
     def other_reports(self):
@@ -353,27 +302,16 @@ class ReplayManager(object):
 
         LOG.debug("loading the TestCases")
         try:
-            testcases, unpacked = cls.load_testcases(args.input, args.prefs is None)
+            testcases = TestCase.load(args.input, args.prefs is None)
+            if not testcases:
+                raise TestCaseLoadFailure("Failed to load TestCases")
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return 1
-        # prioritize specified prefs.js file over included file
-        if args.prefs is not None:
-            prefs = args.prefs
-            for testcase in testcases:
-                testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
-            LOG.info("Using specified prefs.js")
-        elif unpacked and isfile(pathjoin(unpacked, "prefs.js")):
-            prefs = pathjoin(unpacked, "prefs.js")
-            LOG.info("Using prefs.js from testcase")
-        elif isfile(pathjoin(args.input, "prefs.js")):
-            prefs = pathjoin(args.input, "prefs.js")
-            LOG.info("Using prefs.js from testcase")
-        else:
-            prefs = None
 
         replay = None
         target = None
+        tmp_prefs = None
         try:
             relaunch = min(args.relaunch, args.repeat)
             LOG.debug("initializing the Target")
@@ -387,12 +325,24 @@ class ReplayManager(object):
                 rr=args.rr,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb)
-            if prefs is not None:
-                target.prefs = prefs
+            # prioritize specified prefs.js file over included file
+            if args.prefs is not None:
+                for testcase in testcases:
+                    testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
+                LOG.info("Using specified prefs.js")
+                target.prefs = args.prefs
+            else:
+                for testcase in testcases:
+                    prefs_tf = testcase.get_file("prefs.js")
+                    if prefs_tf:
+                        tmp_prefs = mkdtemp(prefix="prefs_", dir=grz_tmp("replay"))
+                        prefs_tf.dump(tmp_prefs)
+                        LOG.info("Using prefs.js from testcase")
+                        target.prefs = pathjoin(tmp_prefs, "prefs.js")
+                        break
             if testcases[0].env_vars.get("GRZ_FORCED_CLOSE") == "0":
                 LOG.debug("setting target.forced_close=False")
                 target.forced_close = False
-
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=args.timeout) as server:
@@ -440,6 +390,6 @@ class ReplayManager(object):
                 target.cleanup()
             for testcase in testcases:
                 testcase.cleanup()
-            if unpacked is not None:
-                rmtree(unpacked, ignore_errors=True)
+            if tmp_prefs is not None:
+                rmtree(tmp_prefs, ignore_errors=True)
             LOG.info("Done.")

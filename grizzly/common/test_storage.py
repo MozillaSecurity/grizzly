@@ -7,6 +7,7 @@
 import json
 import re
 import os
+import zipfile
 
 import pytest
 
@@ -127,18 +128,18 @@ def test_testcase_06():
         assert tcase.data_size == 6
 
 def test_testcase_07(tmp_path):
-    """test TestCase.load_path() using a directory fail cases"""
+    """test TestCase.load_single() using a directory fail cases"""
     # missing test_info.json
     with pytest.raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
-        TestCase.load_path(str(tmp_path))
+        TestCase.load_single(str(tmp_path), True)
     # invalid test_info.json
     (tmp_path / "test_info.json").write_bytes(b"X")
     with pytest.raises(TestCaseLoadFailure, match="Invalid 'test_info.json'"):
-        TestCase.load_path(str(tmp_path))
+        TestCase.load_single(str(tmp_path), True)
     # test_info.json missing 'target' entry
     (tmp_path / "test_info.json").write_bytes(b"{}")
-    with pytest.raises(TestCaseLoadFailure, match="'test_info.json' missing 'target' entry"):
-        TestCase.load_path(str(tmp_path))
+    with pytest.raises(TestCaseLoadFailure, match="'test_info.json' has invalid 'target' entry"):
+        TestCase.load_single(str(tmp_path), True)
     # build a test case
     src_dir = (tmp_path / "src")
     src_dir.mkdir()
@@ -148,20 +149,20 @@ def test_testcase_07(tmp_path):
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_from_file(str(entry_point))
         src.dump(str(src_dir), include_details=True)
-    # bad test_info.json 'target' entry
+    # bad 'target' entry in test_info.json
     entry_point.unlink()
-    with pytest.raises(TestCaseLoadFailure, match="entry_point 'target.bin' not found in"):
-        TestCase.load_path(str(src_dir))
-    # bad test_info.json 'env' entry
+    with pytest.raises(TestCaseLoadFailure, match="Entry point 'target.bin' not found in"):
+        TestCase.load_single(str(src_dir), True)
+    # bad 'env' entry in test_info.json
     entry_point.touch()
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_environ_var("TEST_ENV_VAR", 100)
         src.dump(str(src_dir), include_details=True)
     with pytest.raises(TestCaseLoadFailure, match="'env_data' contains invalid 'env' entries"):
-        TestCase.load_path(str(src_dir))
+        TestCase.load_single(str(src_dir), True)
 
 def test_testcase_08(tmp_path):
-    """test TestCase.load_path() using a directory"""
+    """test TestCase.load_single() using a directory"""
     # build a valid test case
     src_dir = (tmp_path / "src")
     src_dir.mkdir()
@@ -180,7 +181,7 @@ def test_testcase_08(tmp_path):
         src.add_from_file(str(entry_point))
         src.dump(str(src_dir), include_details=True)
     # load test case from test_info.json
-    with TestCase.load_path(str(src_dir)) as dst:
+    with TestCase.load_single(str(src_dir), True) as dst:
         assert dst.landing_page == "target.bin"
         assert "prefs.js" in (x.file_name for x in dst._files.meta)
         assert "target.bin" in (x.file_name for x in dst._files.required)
@@ -191,10 +192,10 @@ def test_testcase_08(tmp_path):
         assert dst.timestamp > 0
 
 def test_testcase_09(tmp_path):
-    """test TestCase.load_path() using a file"""
+    """test TestCase.load_single() using a file"""
     # invalid entry_point specified
-    with pytest.raises(TestCaseLoadFailure, match="Cannot find"):
-        TestCase.load_path(str(tmp_path / "missing_file"))
+    with pytest.raises(TestCaseLoadFailure, match="Missing or invalid TestCase"):
+        TestCase.load_single(str(tmp_path / "missing_file"), False)
     # valid test case
     src_dir = (tmp_path / "src")
     src_dir.mkdir()
@@ -203,20 +204,96 @@ def test_testcase_09(tmp_path):
     entry_point.touch()
     (src_dir / "optional.bin").touch()
     # load single file test case
-    with TestCase.load_path(str(entry_point)) as tcase:
+    with TestCase.load_single(str(entry_point), False) as tcase:
         assert tcase.landing_page == "target.bin"
         assert "prefs.js" not in (x.file_name for x in tcase._files.meta)
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
         assert tcase.timestamp == 0
     # load full test case
-    with TestCase.load_path(str(entry_point), full_scan=True, load_prefs=True) as tcase:
+    with TestCase.load_single(str(entry_point), True, adjacent=True) as tcase:
         assert tcase.landing_page == "target.bin"
         assert "prefs.js" in (x.file_name for x in tcase._files.meta)
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
 
 def test_testcase_10(tmp_path):
+    """test TestCase.load() - missing file and empty directory"""
+    # missing file
+    with pytest.raises(TestCaseLoadFailure, match="Invalid TestCase path"):
+        TestCase.load("missing", False)
+    # empty path
+    assert not TestCase.load(str(tmp_path), True)
+
+def test_testcase_11(tmp_path):
+    """test TestCase.load() - single file"""
+    tfile = (tmp_path / "testcase.html")
+    tfile.touch()
+    testcases = TestCase.load(str(tfile), False)
+    try:
+        assert len(testcases) == 1
+    finally:
+        map(lambda x: x.cleanup, testcases)
+
+def test_testcase_12(tmp_path):
+    """test TestCase.load() - single directory"""
+    with TestCase("target.bin", None, "test-adapter") as src:
+        src.add_from_data("test", "target.bin")
+        src.dump(str(tmp_path), include_details=True)
+    testcases = TestCase.load(str(tmp_path), False)
+    try:
+        assert len(testcases) == 1
+    finally:
+        map(lambda x: x.cleanup, testcases)
+
+def test_testcase_13(tmp_path):
+    """test TestCase.load() - multiple directories"""
+    nested = (tmp_path / "nested")
+    nested.mkdir()
+    with TestCase("target.bin", None, "test-adapter") as src:
+        src.add_from_data("test", "target.bin")
+        src.dump(str(nested / "test-1"), include_details=True)
+        src.dump(str(nested / "test-2"), include_details=True)
+        src.dump(str(nested / "test-3"), include_details=True)
+    testcases = TestCase.load(str(nested), False)
+    try:
+        assert len(testcases) == 3
+    finally:
+        map(lambda x: x.cleanup, testcases)
+    # try loading testcases that are nested too deep
+    assert not TestCase.load(str(tmp_path), False)
+
+def test_testcase_14(tmp_path):
+    """test TestCase.load() - archive"""
+    archive = tmp_path / "testcase.zip"
+    # bad archive
+    archive.write_bytes(b"x")
+    with pytest.raises(TestCaseLoadFailure, match="Testcase archive is corrupted"):
+        TestCase.load(str(archive), True)
+    # build archive containing multiple testcases
+    with TestCase("target.bin", None, "test-adapter") as src:
+        src.add_from_data("test", "target.bin")
+        src.dump(str(tmp_path / "test-0"), include_details=True)
+        src.dump(str(tmp_path / "test-1"), include_details=True)
+        src.dump(str(tmp_path / "test-2"), include_details=True)
+    (tmp_path / "test-1" / "prefs.js").write_bytes(b"fake_prefs")
+    (tmp_path / "log_dummy.txt").touch()
+    (tmp_path / "not_a_tc").mkdir()
+    (tmp_path / "not_a_tc" / "file.txt").touch()
+    with zipfile.ZipFile(str(archive), mode="w", compression=zipfile.ZIP_DEFLATED) as zfp:
+        for dir_name, _, dir_files in os.walk(str(tmp_path)):
+            arc_path = os.path.relpath(dir_name, str(tmp_path))
+            for file_name in dir_files:
+                zfp.write(
+                    os.path.join(dir_name, file_name),
+                    arcname=os.path.join(arc_path, file_name))
+    testcases = TestCase.load(str(archive), True)
+    try:
+        assert len(tuple(testcases)) == 3
+    finally:
+        map(lambda x: x.cleanup, testcases)
+
+def test_testcase_15(tmp_path):
     """test TestCase.load_environ()"""
     (tmp_path / "ubsan.supp").touch()
     (tmp_path / "other_file").touch()
@@ -233,7 +310,7 @@ def test_testcase_10(tmp_path):
         assert "b=2" in opts
         assert len(opts) == 3
 
-def test_testcase_11(tmp_path):
+def test_testcase_16(tmp_path):
     """test TestCase.add_batch()"""
     include = (tmp_path / "inc_path")
     include.mkdir()
@@ -269,14 +346,14 @@ def test_testcase_11(tmp_path):
         with pytest.raises(TestFileExists, match="'file.bin' exists in test"):
             tcase.add_batch(str(include), [str(inc_1)])
 
-def test_testcase_12(tmp_path):
+def test_testcase_17(tmp_path):
     """test TestCase.scan_path()"""
     # empty path
     (tmp_path / "not-test").mkdir()
     assert not tuple(TestCase.scan_path(str(tmp_path)))
     # multiple test case directories
     paths = [str(tmp_path / ("test-%d" % i)) for i in range(3)]
-    with TestCase("target.bin", None, "test-adapter") as src:
+    with TestCase("test.htm", None, "test-adapter") as src:
         src.add_from_data("test", "test.htm")
         for path in paths:
             src.dump(path, include_details=True)
@@ -285,6 +362,13 @@ def test_testcase_12(tmp_path):
     # single test case directory
     tc_paths = list(TestCase.scan_path(str(paths[0])))
     assert len(tc_paths) == 1
+
+def test_testcase_18():
+    """test TestCase.get_file()"""
+    with TestCase("test.htm", None, "test-adapter") as src:
+        src.add_from_data("test", "test.htm")
+        assert src.get_file("missing") is None
+        assert src.get_file("test.htm").data == b"test"
 
 def test_testfile_01():
     """test simple TestFile"""
