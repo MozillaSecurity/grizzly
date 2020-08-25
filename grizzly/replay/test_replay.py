@@ -33,6 +33,7 @@ def test_replay_01(mocker):
     replay = ReplayManager([], mocker.Mock(spec=Sapphire), mocker.Mock(spec=Target), [mocker.Mock()])
     replay._reports_expected = {"A":  mocker.Mock(spec=Report)}
     replay._reports_other = {"B":  mocker.Mock(spec=Report)}
+    assert not replay._unpacked
     replay.status = mocker.Mock(spec=Status)
     ereport = tuple(replay.reports)[0]
     oreport = tuple(replay.other_reports)[0]
@@ -53,7 +54,9 @@ def test_replay_02(mocker):
     target.rl_reset = 1
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, testcases, use_harness=True) as replay:
+        assert not replay._unpacked
         assert not replay.run()
+        assert replay._unpacked
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
         assert replay.status.results == 0
@@ -312,3 +315,15 @@ def test_replay_12(mocker):
         assert replay.status.results == 1
         assert len(replay.reports) == 1
         assert not replay.other_reports
+
+def test_replay_13(mocker, tmp_path):
+    """test ReplayManager._unpacked()"""
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    testcase = mocker.Mock(spec=TestCase, env_vars=[], optional=[])
+    mocker.patch("grizzly.replay.replay.mkdtemp", autospec=True, return_value=str(tmp_path))
+    with ReplayManager([], server, mocker.Mock(spec=Target), [testcase]) as replay:
+        assert not replay._unpacked
+        replay._unpack_tests()
+        assert replay._unpacked
+        assert replay._unpacked[0] == str(tmp_path)
+    assert testcase.dump.call_count == 1

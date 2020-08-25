@@ -31,7 +31,7 @@ class ReplayManager(object):
 
     __slots__ = ("ignore", "server", "status", "target", "testcases", "_any_crash",
                  "_harness", "_reports_expected", "_reports_other", "_runner",
-                 "_signature")
+                 "_signature", "_unpacked")
 
     def __init__(self, ignore, server, target, testcases, any_crash=False, signature=None, use_harness=True):
         self.ignore = ignore
@@ -46,7 +46,7 @@ class ReplayManager(object):
         self._runner = Runner(self.server, self.target)
         # TODO: make signature a property
         self._signature = signature
-
+        self._unpacked = list()
         if use_harness:
             with open(self.HARNESS_FILE, "rb") as in_fp:
                 self._harness = in_fp.read()
@@ -56,6 +56,21 @@ class ReplayManager(object):
 
     def __exit__(self, *exc):
         self.cleanup()
+
+    def _unpack_tests(self):
+        """Unpack testcase data to known locations.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        assert not self._unpacked
+        for test in self.testcases:
+            dst_path = mkdtemp(prefix="tc_", dir=grz_tmp("serve"))
+            test.dump(dst_path)
+            self._unpacked.append(dst_path)
 
     def cleanup(self):
         """Remove temporary files from disk.
@@ -72,6 +87,8 @@ class ReplayManager(object):
         for report in self._reports_other.values():
             report.cleanup()
         self._reports_other.clear()
+        for tc_path in self._unpacked:
+            rmtree(tc_path)
         if self.status is not None:
             self.status.cleanup()
 
@@ -144,6 +161,8 @@ class ReplayManager(object):
         assert min_results <= repeat
         self.status = Status.start()
 
+        self._unpack_tests()
+
         server_map = ServerMap()
         if self._harness is not None:
             def _dyn_close():  # pragma: no cover
@@ -197,6 +216,7 @@ class ReplayManager(object):
                     self.ignore,
                     server_map,
                     self.testcases[test_idx],
+                    test_path=self._unpacked[test_idx],
                     wait_for_callback=self._harness is None)
                 if self._runner.result != self._runner.COMPLETE:
                     break
