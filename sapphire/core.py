@@ -9,9 +9,7 @@ import errno
 import logging
 import os
 import random
-import shutil
 import socket
-import tempfile
 import time
 
 from .sapphire_job import SapphireJob
@@ -115,34 +113,6 @@ class Sapphire(object):
             was_timeout = not loadmgr.wait(self.timeout, continue_cb=continue_cb)
         LOG.debug("status: %r, timeout: %r", job.status, was_timeout)
         return (SERVED_TIMEOUT if was_timeout else job.status, tuple(job.served))
-
-    def serve_testcase(self, testcase, continue_cb=None, forever=False, working_path=None, server_map=None):
-        """
-        serve_testcase() -> tuple
-        testcase is the Grizzly TestCase to serve. The callback continue_cb should
-        be a function that returns True or False. If continue_cb is specified and returns False
-        the server serve loop will exit. working_path is where the testcase will be unpacked
-        temporary.
-
-        returns a tuple (server status, files served)
-        see serve_path() for more info
-        """
-        LOG.debug("serve_testcase() called")
-        wwwdir = tempfile.mkdtemp(prefix="sphr_test_", dir=working_path)
-        try:
-            testcase.dump(wwwdir)
-            serve_start = time.time()
-            result = self.serve_path(
-                wwwdir,
-                continue_cb=continue_cb,
-                forever=forever,
-                optional_files=tuple(testcase.optional),
-                server_map=server_map)
-            testcase.duration = time.time() - serve_start
-        finally:
-            # remove test case working directory
-            shutil.rmtree(wwwdir, ignore_errors=True)
-        return result
 
     @property
     def timeout(self):

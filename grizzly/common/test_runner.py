@@ -13,7 +13,7 @@ from .runner import _IdleChecker, Runner
 from .storage import TestCase
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 
-def test_runner_01(mocker):
+def test_runner_01(mocker, tmp_path):
     """test Runner()"""
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
@@ -24,33 +24,43 @@ def test_runner_01(mocker):
     assert runner.served is None
     assert not runner.timeout
     serv_files = ["a.bin", "/another/file.bin"]
-    testcase = mocker.Mock(spec=TestCase)
-    testcase.landing_page = serv_files[0]
+    testcase = mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[])
     # all files served
-    server.serve_testcase.return_value = (SERVED_ALL, serv_files)
+    server.serve_path.return_value = (SERVED_ALL, serv_files)
     runner.run([], ServerMap(), testcase)
     assert runner.result == runner.COMPLETE
     assert runner.served == serv_files
     assert not runner.timeout
     assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 0
+    assert testcase.dump.call_count == 1
     # some files served
-    server.serve_testcase.return_value = (SERVED_REQUEST, serv_files)
+    server.serve_path.return_value = (SERVED_REQUEST, serv_files)
     runner.run([], ServerMap(), testcase, coverage=True)
     assert runner.result == runner.COMPLETE
     assert runner.served == serv_files
     assert not runner.timeout
     assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 1
+    # existing test path
+    testcase.reset_mock()
+    tc_path = (tmp_path / "tc")
+    tc_path.mkdir()
+    server.serve_path.return_value = (SERVED_ALL, serv_files)
+    runner.run([], ServerMap(), testcase, test_path=str(tc_path))
+    assert runner.result == runner.COMPLETE
+    assert target.close.call_count == 0
+    assert testcase.dump.call_count == 0
+    tc_path.is_dir()
 
 def test_runner_02(mocker):
     """test Runner() errors"""
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
-    testcase = mocker.Mock(spec=TestCase, landing_page="x")
+    testcase = mocker.Mock(spec=TestCase, landing_page="x", optional=[])
     runner = Runner(server, target)
     # no files served
-    server.serve_testcase.return_value = (SERVED_NONE, [])
+    server.serve_path.return_value = (SERVED_NONE, [])
     target.detect_failure.return_value = target.RESULT_NONE
     runner.run([], ServerMap(), testcase)
     assert runner.result == runner.ERROR
@@ -59,7 +69,7 @@ def test_runner_02(mocker):
     assert target.close.call_count == 1
     target.reset_mock()
     # landing page not served
-    server.serve_testcase.return_value = (SERVED_REQUEST, ["harness"])
+    server.serve_path.return_value = (SERVED_REQUEST, ["harness"])
     runner.run([], ServerMap(), testcase)
     assert runner.result == runner.ERROR
     assert runner.served
@@ -70,10 +80,10 @@ def test_runner_03(mocker):
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
     serv_files = ["a.bin", "/another/file.bin"]
-    server.serve_testcase.return_value = (SERVED_TIMEOUT, serv_files)
+    server.serve_path.return_value = (SERVED_TIMEOUT, serv_files)
     runner = Runner(server, target)
     target.detect_failure.return_value = target.RESULT_FAILURE
-    runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page="x"))
+    runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page="x", optional=[]))
     assert runner.result == runner.FAILED
     assert runner.served == serv_files
     assert runner.timeout
@@ -83,8 +93,8 @@ def test_runner_04(mocker):
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
     serv_files = ["file.bin"]
-    server.serve_testcase.return_value = (SERVED_REQUEST, serv_files)
-    testcase = mocker.Mock(spec=TestCase, landing_page=serv_files[0])
+    server.serve_path.return_value = (SERVED_REQUEST, serv_files)
+    testcase = mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[])
     runner = Runner(server, target)
     # test FAILURE
     target.detect_failure.return_value = target.RESULT_FAILURE
@@ -99,7 +109,7 @@ def test_runner_04(mocker):
     assert runner.served == serv_files
     assert not runner.timeout
     # failure before serving landing page
-    server.serve_testcase.return_value = (SERVED_REQUEST, ["harness"])
+    server.serve_path.return_value = (SERVED_REQUEST, ["harness"])
     target.detect_failure.return_value = target.RESULT_FAILURE
     runner.run([], ServerMap(), testcase)
     assert runner.result == runner.FAILED
@@ -112,10 +122,10 @@ def test_runner_05(mocker):
     target = mocker.Mock(spec=Target)
     target.detect_failure.return_value = target.RESULT_NONE
     serv_files = ["/fake/file", "/another/file.bin"]
-    server.serve_testcase.return_value = (SERVED_REQUEST, serv_files)
+    server.serve_path.return_value = (SERVED_REQUEST, serv_files)
     runner = Runner(server, target, idle_threshold=0.01, idle_delay=0.01)
     assert runner._idle is not None
-    runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page=serv_files[0]))
+    runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[]))
     assert runner.result == runner.COMPLETE
     assert target.close.call_count == 0
 
@@ -203,7 +213,7 @@ def test_runner_09(mocker, tmp_path):
     smap.set_include("/", str(inc_path1))
     smap.set_include("/test", str(inc_path2))
     serv_files = ["a.b", str(inc1), str(inc2), str(inc3)]
-    server.serve_testcase.return_value = (SERVED_ALL, serv_files)
+    server.serve_path.return_value = (SERVED_ALL, serv_files)
     with TestCase("a.b", "x", "x") as tcase:
         runner.run([], smap, tcase)
         assert runner.result == runner.COMPLETE

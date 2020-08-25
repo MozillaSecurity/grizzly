@@ -59,9 +59,9 @@ def test_main_01(mocker, tmp_path):
     # This is a typical scenario - a test that reproduces results ~50% of the time.
     # Of the four attempts only the first and third will 'reproduce' the result
     # and the forth attempt should be skipped.
-    # mock Sapphire.serve_testcase only
-    serve_testcase = mocker.patch("grizzly.replay.replay.Sapphire.serve_testcase", autospec=True)
-    serve_testcase.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
+    # mock Sapphire.serve_path only
+    serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
+    serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_target")
     target = mocker.Mock(spec=Target, binary="bin", forced_close=True)
@@ -104,7 +104,7 @@ def test_main_01(mocker, tmp_path):
     assert target.launch.call_count == 3
     assert target.step.call_count == 3
     assert target.detect_failure.call_count == 3
-    assert serve_testcase.call_count == 3
+    assert serve_path.call_count == 3
     assert load_target.call_count == 1
     assert target.close.call_count == 1
     assert target.cleanup.call_count == 1
@@ -147,14 +147,15 @@ def test_main_02(mocker):
 
 def test_main_03(mocker):
     """test ReplayManager.main() loading GRZ_FORCED_CLOSE from test case"""
-    mocker.patch("grizzly.replay.replay.Sapphire.serve_testcase", return_value=(None, ["x.html"]))
+    mocker.patch("grizzly.replay.replay.Sapphire.serve_path", return_value=(None, ["x.html"]))
     target = mocker.Mock(spec=Target, forced_close=True)
     load_target = mocker.patch("grizzly.replay.replay.load_target", autospec=True)
     load_target.return_value.return_value = target
     testcase = mocker.Mock(
         spec=TestCase,
         env_vars={"GRZ_FORCED_CLOSE": "0"},
-        landing_page="x.html")
+        landing_page="x.html",
+        optional=[])
     mocker.patch("grizzly.replay.replay.TestCase.load", return_value=[testcase])
     # setup args
     args = mocker.Mock(
@@ -174,8 +175,8 @@ def test_main_03(mocker):
 
 def test_main_04(mocker, tmp_path):
     """test ReplayManager.main() loading/generating prefs.js"""
-    serve_testcase = mocker.patch("grizzly.replay.replay.Sapphire.serve_testcase", autospec=True)
-    serve_testcase.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
+    serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
+    serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
     target = mocker.Mock(spec=Target, binary="bin", forced_close=True)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
@@ -219,12 +220,12 @@ def test_main_04(mocker, tmp_path):
     assert ReplayManager.main(args) == 0
     assert target.launch.call_count == 1
     assert target.detect_failure.call_count == 1
-    assert serve_testcase.call_count == 1
+    assert serve_path.call_count == 1
     assert log_path.is_dir()
     assert not any(log_path.glob('**/prefs.js'))
 
     target.reset_mock()
-    serve_testcase.reset_mock()
+    serve_path.reset_mock()
     rmtree(str(log_path), ignore_errors=True)
 
     # test included prefs.js
@@ -232,13 +233,13 @@ def test_main_04(mocker, tmp_path):
     assert ReplayManager.main(args) == 0
     assert target.launch.call_count == 1
     assert target.detect_failure.call_count == 1
-    assert serve_testcase.call_count == 1
+    assert serve_path.call_count == 1
     assert log_path.is_dir()
     prefs = tuple(log_path.glob('**/prefs.js'))
     assert prefs[0].read_bytes() == b"included"
 
     target.reset_mock()
-    serve_testcase.reset_mock()
+    serve_path.reset_mock()
     rmtree(str(log_path), ignore_errors=True)
 
     # test specified prefs.js
@@ -247,7 +248,7 @@ def test_main_04(mocker, tmp_path):
     assert ReplayManager.main(args) == 0
     assert target.launch.call_count == 1
     assert target.detect_failure.call_count == 1
-    assert serve_testcase.call_count == 1
+    assert serve_path.call_count == 1
     assert log_path.is_dir()
     prefs = tuple(log_path.glob('**/prefs.js'))
     assert prefs[0].read_bytes() == b"specified"

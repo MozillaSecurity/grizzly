@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
+from shutil import rmtree
+from tempfile import mkdtemp
 from time import sleep, time
 
 from sapphire import SERVED_TIMEOUT
@@ -149,13 +151,14 @@ class Runner(object):
             return "?".join([location, "&".join(args)])
         return location
 
-    def run(self, ignore, server_map, testcase, coverage=False, wait_for_callback=False):
+    def run(self, ignore, server_map, testcase, test_path=None, coverage=False, wait_for_callback=False):
         """Serve a testcase and monitor the target for results.
 
         Args:
             ignore (list): List of failure types to ignore.
             server_map (sapphire.ServerMap): A ServerMap.
             testcase (grizzly.TestCase): The test case that will be served.
+            test_path (str): Location of test case data on the filesystem.
             coverage (bool): Trigger coverage dump.
             wait_for_callback: (bool): Use `_keep_waiting()` to indicate when
                                        framework should move on.
@@ -169,13 +172,27 @@ class Runner(object):
         self.timeout = False
         if self._idle is not None:
             self._idle.schedule_poll(initial=True)
-        # serve the test case
-        server_status, self.served = self._server.serve_testcase(
-            testcase,
-            continue_cb=self._keep_waiting,
-            forever=wait_for_callback,
-            server_map=server_map,
-            working_path=grz_tmp("serve"))
+        try:
+            # unpack test case
+            if test_path is None:
+                wwwdir = mkdtemp(prefix="test_", dir=grz_tmp("serve"))
+                testcase.dump(wwwdir)
+            else:
+                wwwdir = test_path
+            # serve the test case
+            serve_start = time()
+            server_status, self.served = self._server.serve_path(
+                wwwdir,
+                continue_cb=self._keep_waiting,
+                forever=wait_for_callback,
+                optional_files=tuple(testcase.optional),
+                server_map=server_map)
+            testcase.duration = time() - serve_start
+        finally:
+            # remove temporary files
+            if test_path is None:
+                rmtree(wwwdir)
+        # TODO: fix calling TestCase.add_batch() for multi-test replay
         # add all include files that were served
         for url, resource in server_map.include.items():
             testcase.add_batch(resource.target, self.served, prefix=url)
