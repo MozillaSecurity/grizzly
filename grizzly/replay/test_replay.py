@@ -44,14 +44,14 @@ def test_replay_01(mocker):
 def test_replay_02(mocker):
     """test ReplayManager.run() - no repro"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_NONE = Target.RESULT_NONE
     target.closed = True
     target.detect_failure.return_value = Target.RESULT_NONE
     target.forced_close = True
     target.rl_reset = 1
-    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, testcases, use_harness=True) as replay:
         assert not replay.run()
         assert replay.status.ignored == 0
@@ -62,13 +62,13 @@ def test_replay_02(mocker):
 def test_replay_03(mocker):
     """test ReplayManager.run() - successful repro"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.binary = "C:\\fake_bin"
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.save_logs = _fake_save_logs_result
-    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, testcases, use_harness=False) as replay:
         assert replay.run()
         assert replay.status.ignored == 0
@@ -80,11 +80,11 @@ def test_replay_03(mocker):
 def test_replay_04(mocker):
     """test ReplayManager.run() - Error (landing page not requested/served)"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    server.serve_testcase.return_value = (SERVED_REQUEST, ["x"])
+    server.serve_path.return_value = (SERVED_REQUEST, ["x"])
     target = mocker.Mock(spec=Target)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
-    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, testcases, use_harness=False) as replay:
         assert not replay.run(repeat=2)
         assert replay.status.ignored == 0
@@ -97,11 +97,11 @@ def test_replay_04(mocker):
 def test_replay_05(mocker):
     """test ReplayManager.run() - ignored"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.detect_failure.return_value = Target.RESULT_IGNORED
-    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, testcases, use_harness=False) as replay:
         assert not replay.run()
         assert replay.status.ignored == 1
@@ -113,14 +113,14 @@ def test_replay_05(mocker):
 def test_replay_06(mocker):
     """test ReplayManager.run() - early exit"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.RESULT_NONE = Target.RESULT_NONE
     target.binary = "path/fake_bin"
     target.save_logs = _fake_save_logs_result
-    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     # early failure
     target.detect_failure.side_effect = [Target.RESULT_FAILURE, Target.RESULT_IGNORED, Target.RESULT_NONE]
     with ReplayManager([], server, target, testcases, use_harness=False) as replay:
@@ -157,14 +157,14 @@ def test_replay_07(mocker, tmp_path):
     report.from_path.side_effect = (report_0, report_1, report_2)
     server = mocker.Mock(spec=Sapphire)
     server.port = 0x1337
-    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     signature = mocker.Mock()
     signature.matches.side_effect = (True, False)
     target = mocker.Mock(spec=Target)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.binary = "fake_bin"
-    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, testcases, signature=signature, use_harness=False) as replay:
         assert not replay.run(repeat=3, min_results=2)
         assert replay._signature == signature
@@ -197,12 +197,12 @@ def test_replay_08(mocker, tmp_path):
     report_2.minor = "abcd9876"
     report.from_path.side_effect = (report_0, report_1, report_2)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.binary = "fake_bin"
-    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+    testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, testcases, any_crash=True, use_harness=False) as replay:
         assert replay.run(repeat=3, min_results=2)
         assert replay._signature is None
@@ -271,7 +271,7 @@ def test_replay_10(mocker, tmp_path):
 def test_replay_11(mocker):
     """test ReplayManager.run() - multiple TestCases - no repro"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target)
     target.RESULT_NONE = Target.RESULT_NONE
     target.closed = True
@@ -279,9 +279,9 @@ def test_replay_11(mocker):
     target.forced_close = True
     target.rl_reset = 1
     testcases = [
-        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html"),
-        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html"),
-        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[]),
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[]),
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, testcases, use_harness=True) as replay:
         assert not replay.run()
         assert replay.status.ignored == 0
@@ -292,7 +292,7 @@ def test_replay_11(mocker):
 def test_replay_12(mocker):
     """test ReplayManager.run() - multiple TestCases - successful repro"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    server.serve_testcase.return_value = (SERVED_ALL, ["index.html"])
+    server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target, binary="fake_bin", rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
@@ -302,9 +302,9 @@ def test_replay_12(mocker):
         Target.RESULT_FAILURE)
     target.save_logs = _fake_save_logs_result
     testcases = [
-        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html"),
-        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html"),
-        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html")]
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[]),
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[]),
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, testcases, use_harness=True) as replay:
         assert replay.run()
         assert replay.status.ignored == 0

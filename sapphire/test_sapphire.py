@@ -550,20 +550,7 @@ def test_sapphire_27(client, tmp_path):
     assert status == SERVED_TIMEOUT
     assert len(files_served) < len(files_to_serve)
 
-def test_sapphire_28(client, tmp_path):
-    """test Sapphire.serve_testcase()"""
-    with TestCase("test.html", "none.test", "foo") as test:
-        test.add_from_data(b"test", "test.html")
-        t_file = _create_test(test.landing_page, tmp_path)
-        with Sapphire(timeout=10) as serv:
-            client.launch("127.0.0.1", serv.port, [t_file])
-            assert test.duration is None
-            status, files_served = serv.serve_testcase(test)
-    assert status == SERVED_ALL
-    assert files_served
-    assert test.duration >= 0
-
-def test_sapphire_29(client_factory, tmp_path):
+def test_sapphire_28(client_factory, tmp_path):
     """test Sapphire.serve_path() with forever=True"""
     clients = list()
     with Sapphire(timeout=10) as serv:
@@ -584,7 +571,7 @@ def test_sapphire_29(client_factory, tmp_path):
     assert test.code == 200
     assert test.len_srv == test.len_org
 
-def test_sapphire_30(client, tmp_path):
+def test_sapphire_29(client, tmp_path):
     """test interesting file names"""
     to_serve = [
         # space in file name
@@ -595,10 +582,9 @@ def test_sapphire_30(client, tmp_path):
         client.launch("127.0.0.1", serv.port, to_serve)
         assert serv.serve_path(str(tmp_path))[0] == SERVED_ALL
     assert client.wait(timeout=10)
-    for t_file in to_serve:
-        assert t_file.code == 200
+    assert all(t_file.code == 200 for t_file in to_serve)
 
-def test_sapphire_31(client, tmp_path):
+def test_sapphire_30(client, tmp_path):
     """test interesting path string"""
     all_bytes = "".join(chr(i) for i in range(256))
     to_serve = [
@@ -610,10 +596,9 @@ def test_sapphire_31(client, tmp_path):
         client.launch("127.0.0.1", serv.port, to_serve, in_order=True)
         assert serv.serve_path(str(tmp_path), optional_files=[all_bytes])[0] == SERVED_ALL
     assert client.wait(timeout=10)
-    for t_file in to_serve:
-        assert t_file.code is not None
+    assert all(t_file.code is not None for t_file in to_serve)
 
-def test_sapphire_32(mocker):
+def test_sapphire_31(mocker):
     """test Sapphire._create_listening_socket()"""
     fake_sleep = mocker.patch("sapphire.core.time.sleep", autospec=True)
     fake_sock = mocker.patch("sapphire.core.socket.socket", autospec=True)
@@ -648,4 +633,10 @@ def test_main_01(mocker, tmp_path):
         port=4536,
         remote=False,
         timeout=None)
+    fake_srv = mocker.patch("sapphire.core.Sapphire.serve_path", autospec=True)
+    fake_srv.return_value = (SERVED_ALL, None)
+    Sapphire.main(args)
+    fake_srv.return_value = (SERVED_NONE, None)
+    Sapphire.main(args)
+    fake_srv.side_effect = KeyboardInterrupt
     Sapphire.main(args)
