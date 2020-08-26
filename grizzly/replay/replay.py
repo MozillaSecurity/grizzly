@@ -38,6 +38,7 @@ class ReplayManager(object):
         self.server = server
         self.status = None
         self.target = target
+        # TODO: make testcases getter and setter
         self.testcases = testcases
         self._any_crash = any_crash
         self._harness = None
@@ -161,6 +162,7 @@ class ReplayManager(object):
         assert min_results <= repeat
         self.status = Status.start()
 
+        # TODO: should only be called if needed
         self._unpack_tests()
 
         server_map = ServerMap()
@@ -333,7 +335,14 @@ class ReplayManager(object):
         target = None
         tmp_prefs = None
         try:
-            relaunch = min(args.relaunch, args.repeat)
+            if args.no_harness and len(testcases) > 1:
+                LOG.error("'--no-harness' cannot be used with multiple testcases")
+                return 1
+            repeat = max(args.min_crashes, args.repeat)
+            relaunch = min(args.relaunch, repeat)
+            assert not args.no_harness or (args.no_harness and relaunch == 1)
+            LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
+                     repeat, args.min_crashes, relaunch)
             LOG.debug("initializing the Target")
             target = load_target(args.platform)(
                 args.binary,
@@ -367,12 +376,6 @@ class ReplayManager(object):
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=args.timeout) as server:
                 target.reverse(server.port, server.port)
-                if args.no_harness:
-                    LOG.debug("--no-harness specified relaunch set to 1")
-                    args.relaunch = 1
-                args.repeat = max(args.min_crashes, args.repeat)
-                LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
-                         args.repeat, args.min_crashes, relaunch)
                 replay = ReplayManager(
                     args.ignore,
                     server,
@@ -381,7 +384,7 @@ class ReplayManager(object):
                     any_crash=args.any_crash,
                     signature=signature,
                     use_harness=not args.no_harness)
-                success = replay.run(repeat=args.repeat, min_results=args.min_crashes)
+                success = replay.run(repeat=repeat, min_results=args.min_crashes)
             if args.logs:
                 replay.report_to_filesystem(
                     args.logs,
@@ -395,7 +398,7 @@ class ReplayManager(object):
             return 1
 
         except (TargetLaunchError, TargetLaunchTimeout):
-            if args.logs:
+            if args.logs and replay is not None:
                 replay.report_to_filesystem(
                     args.logs,
                     replay.reports,
