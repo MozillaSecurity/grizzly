@@ -40,7 +40,7 @@ class ReplayArgs(CommonArgs):
                 " Helpful for intermittent testcases (default: %(default)sx)")
         replay_args.add_argument(
             "--no-harness", action="store_true",
-            help="Don't use the harness for redirection")
+            help="Don't use the harness for redirection. Implies '--relaunch=1'.")
         replay_args.add_argument(
             "--repeat", type=int, default=1,
             help="Run the testcase n times." \
@@ -65,6 +65,9 @@ class ReplayArgs(CommonArgs):
 
         if args.min_crashes < 1:
             self.parser.error("'--min-crashes' value must be positive")
+
+        if args.no_harness:
+            args.relaunch = 1
 
         if args.repeat < 1:
             self.parser.error("'--repeat' value must be positive")

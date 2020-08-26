@@ -53,6 +53,10 @@ def test_args_01(capsys, tmp_path):
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--any-crash", "--sig", "x"])
     assert "error: signature is ignored when running with '--any-crash'" in capsys.readouterr()[-1]
+    # force relaunch == 1 with --no-harness
+    args = ReplayArgs().parse_args([str(exe), str(inp), "--no-harness"])
+    assert args.relaunch == 1
+
 
 def test_main_01(mocker, tmp_path):
     """test ReplayManager.main()"""
@@ -117,33 +121,43 @@ def test_main_01(mocker, tmp_path):
 def test_main_02(mocker):
     """test ReplayManager.main() failure cases"""
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
-    mocker.patch("grizzly.replay.replay.load_target", autospec=True)
+    fake_load_target = mocker.patch("grizzly.replay.replay.load_target", autospec=True)
     mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
-    mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
+    fake_tc = mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
     # setup args
     args = mocker.Mock(
         ignore=None,
         input="test",
         min_crashes=1,
+        no_harenss=True,
         prefs=None,
         relaunch=1,
         repeat=1,
         sig=None)
-
+    # target launch error
     mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchError)
     assert ReplayManager.main(args) == 1
-
+    # target launch timeout
     mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchTimeout)
     assert ReplayManager.main(args) == 1
-
-    mocker.patch("grizzly.replay.replay.load_target", side_effect=KeyboardInterrupt)
+    # user abort
+    fake_load_target.side_effect = KeyboardInterrupt
     assert ReplayManager.main(args) == 1
-
-    mocker.patch("grizzly.replay.replay.TestCase.load", side_effect=TestCaseLoadFailure)
+    # invalid test case
+    fake_load_target.reset_mock()
+    fake_tc.load.side_effect = TestCaseLoadFailure
     assert ReplayManager.main(args) == 1
-
-    mocker.patch("grizzly.replay.replay.TestCase.load", return_value=list())
+    assert fake_load_target.call_count == 0
+    # no test cases
+    fake_tc.load.side_effect = None
+    fake_tc.load.return_value = list()
     assert ReplayManager.main(args) == 1
+    assert fake_load_target.call_count == 0
+    # multiple test cases with --no-harness
+    fake_load_target.reset_mock()
+    fake_tc.load.return_value = [mocker.Mock(), mocker.Mock()]
+    assert ReplayManager.main(args) == 1
+    assert fake_load_target.call_count == 0
 
 def test_main_03(mocker):
     """test ReplayManager.main() loading GRZ_FORCED_CLOSE from test case"""
