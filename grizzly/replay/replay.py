@@ -29,17 +29,15 @@ LOG = getLogger("replay")
 class ReplayManager(object):
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
 
-    __slots__ = ("ignore", "server", "status", "target", "testcases", "_any_crash",
+    __slots__ = ("ignore", "server", "status", "target", "_any_crash",
                  "_harness", "_reports_expected", "_reports_other", "_runner",
                  "_signature", "_unpacked")
 
-    def __init__(self, ignore, server, target, testcases, any_crash=False, signature=None, use_harness=True):
+    def __init__(self, ignore, server, target, any_crash=False, signature=None, use_harness=True):
         self.ignore = ignore
         self.server = server
         self.status = None
         self.target = target
-        # TODO: make testcases getter and setter
-        self.testcases = testcases
         self._any_crash = any_crash
         self._harness = None
         self._reports_expected = dict()
@@ -47,7 +45,6 @@ class ReplayManager(object):
         self._runner = Runner(self.server, self.target)
         # TODO: make signature a property
         self._signature = signature
-        self._unpacked = list()
         if use_harness:
             with open(self.HARNESS_FILE, "rb") as in_fp:
                 self._harness = in_fp.read()
@@ -57,21 +54,6 @@ class ReplayManager(object):
 
     def __exit__(self, *exc):
         self.cleanup()
-
-    def _unpack_tests(self):
-        """Unpack testcase data to known locations.
-
-        Args:
-            None
-
-        Returns:
-            None
-        """
-        assert not self._unpacked
-        for test in self.testcases:
-            dst_path = mkdtemp(prefix="tc_", dir=grz_tmp("serve"))
-            test.dump(dst_path)
-            self._unpacked.append(dst_path)
 
     def cleanup(self):
         """Remove temporary files from disk.
@@ -88,8 +70,6 @@ class ReplayManager(object):
         for report in self._reports_other.values():
             report.cleanup()
         self._reports_other.clear()
-        for tc_path in self._unpacked:
-            rmtree(tc_path)
         if self.status is not None:
             self.status.cleanup()
 
@@ -146,11 +126,12 @@ class ReplayManager(object):
             for report in other_reports:
                 reporter.submit(tests, report=report)
 
-    def run(self, repeat=1, min_results=1):
+    def run(self, testcases, repeat=1, min_results=1):
         """Run testcase replay.
 
         Args:
-            repeat (int): Maximum number of times to run the test case.
+            testcases (list): One or more TestCases to run.
+            repeat (int): Maximum number of times to run the TestCase.
             min_results (int): Minimum number of results needed before run can
                                be considered successful.
 
@@ -160,10 +141,10 @@ class ReplayManager(object):
         assert repeat > 0
         assert min_results > 0
         assert min_results <= repeat
-        self.status = Status.start()
 
-        # TODO: should only be called if needed
-        self._unpack_tests()
+        self.status = Status.start()
+        test_count = len(testcases)
+        assert test_count > 0
 
         server_map = ServerMap()
         if self._harness is not None:
@@ -177,122 +158,139 @@ class ReplayManager(object):
             server_map.set_dynamic_response("grz_harness", lambda: self._harness, mime_type="text/html")
 
         success = False
-        test_count = len(self.testcases)
-        for _ in range(repeat):
-            self.status.iteration += 1
-            if self.target.closed:
-                LOG.info("Launching target...")
-                if self._harness is None:
-                    location = self._runner.location(
-                        "/grz_current_test",
-                        self.server.port)
-                else:
-                    location = self._runner.location(
-                        "/grz_harness",
-                        self.server.port,
-                        close_after=self.target.rl_reset * test_count,
-                        forced_close=self.target.forced_close)
-                try:
-                    # The environment from the initial testcase is used because
-                    # a sequence of testcases is expected to be run without
-                    # relaunching the Target to match the functionality of
-                    # Grizzly. If this is not the case each TestCase should
-                    # be run individually.
-                    self._runner.launch(location, env_mod=self.testcases[0].env_vars)
-                except TargetLaunchError:
-                    LOG.error("Target launch error. Check browser logs for details.")
+        unpacked = list()
+        try:
+            LOG.debug("unpacking testcases (%d)...", test_count)
+            for test in testcases:
+                dst_path = mkdtemp(prefix="tc_", dir=grz_tmp("serve"))
+                test.dump(dst_path)
+                unpacked.append(dst_path)
+            # perform iterations
+            for _ in range(repeat):
+                self.status.iteration += 1
+                if self.target.closed:
+                    LOG.info("Launching target...")
+                    if self._harness is None:
+                        location = self._runner.location(
+                            "/grz_current_test",
+                            self.server.port)
+                    else:
+                        location = self._runner.location(
+                            "/grz_harness",
+                            self.server.port,
+                            close_after=self.target.rl_reset * test_count,
+                            forced_close=self.target.forced_close)
+                    try:
+                        # The environment from the initial testcase is used because
+                        # a sequence of testcases is expected to be run without
+                        # relaunching the Target to match the functionality of
+                        # Grizzly. If this is not the case each TestCase should
+                        # be run individually.
+                        self._runner.launch(location, env_mod=testcases[0].env_vars)
+                    except TargetLaunchError:
+                        LOG.error("Target launch error. Check browser logs for details.")
+                        log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
+                        self.target.save_logs(log_path)
+                        self._reports_other["STARTUP"] = Report.from_path(log_path)
+                        raise
+                self.target.step()
+                LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
+                # run tests
+                for test_idx in range(test_count):
+                    LOG.debug("running test: %d of %d", test_idx + 1, test_count)
+                    # update redirects
+                    if self._harness is not None:
+                        next_idx = (test_idx + 1) % test_count
+                        server_map.set_redirect(
+                            "grz_next_test",
+                            testcases[next_idx].landing_page,
+                            required=True)
+                    server_map.set_redirect(
+                        "grz_current_test",
+                        testcases[test_idx].landing_page,
+                        required=False)
+                    # run testcase
+                    self._runner.run(
+                        self.ignore,
+                        server_map,
+                        testcases[test_idx],
+                        test_path=unpacked[test_idx],
+                        wait_for_callback=self._harness is None)
+                    if self._runner.result != self._runner.COMPLETE:
+                        break
+                # process results
+                if self._runner.result == self._runner.FAILED:
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
-                    self._reports_other["STARTUP"] = Report.from_path(log_path)
-                    raise
-            self.target.step()
-            LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
-            # run test cases
-            for test_idx in range(test_count):
-                LOG.debug("running test: %d of %d", test_idx + 1, test_count)
-                if self._harness is not None:
-                    next_idx = (test_idx + 1) % test_count
-                    server_map.set_redirect("grz_next_test", self.testcases[next_idx].landing_page, required=True)
-                server_map.set_redirect("grz_current_test", self.testcases[test_idx].landing_page, required=False)
-                self._runner.run(
-                    self.ignore,
-                    server_map,
-                    self.testcases[test_idx],
-                    test_path=self._unpacked[test_idx],
-                    wait_for_callback=self._harness is None)
-                if self._runner.result != self._runner.COMPLETE:
-                    break
-            # process results
-            if self._runner.result == self._runner.FAILED:
-                log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
-                self.target.save_logs(log_path)
-                report = Report.from_path(log_path)
-                # check signatures
-                crash_info = report.crash_info(self.target.binary)
-                short_sig = crash_info.createShortSignature()
-                if not self._any_crash and self._signature is None and short_sig != "No crash detected":
-                    # signature has not been specified use the first one created
-                    self._signature = report.crash_signature(crash_info)
-                if short_sig == "No crash detected":
-                    # TODO: verify report.major == "NO_STACK" otherwise FM failed to parse the logs
-                    # TODO: change this to support hangs/timeouts, etc
-                    LOG.info("Result: No crash detected")
-                    crash_hash = None
-                elif self._any_crash or self._signature.matches(crash_info):
-                    self.status.count_result(short_sig)
-                    LOG.info("Result: %s (%s:%s)",
-                             short_sig, report.major[:8], report.minor[:8])
-                    crash_hash = report.crash_hash(crash_info)
-                    if crash_hash not in self._reports_expected:
-                        LOG.debug("now tracking %s", crash_hash)
-                        self._reports_expected[crash_hash] = report
-                        report = None  # don't remove report
-                    assert self._any_crash or len(self._reports_expected) == 1
-                else:
-                    LOG.info("Result: Different signature: %s (%s:%s)",
-                             short_sig, report.major[:8], report.minor[:8])
+                    report = Report.from_path(log_path)
+                    # check signatures
+                    crash_info = report.crash_info(self.target.binary)
+                    short_sig = crash_info.createShortSignature()
+                    if not self._any_crash and self._signature is None and short_sig != "No crash detected":
+                        # signature has not been specified use the first one created
+                        self._signature = report.crash_signature(crash_info)
+                    if short_sig == "No crash detected":
+                        # TODO: verify report.major == "NO_STACK" otherwise FM failed to parse the logs
+                        # TODO: change this to support hangs/timeouts, etc
+                        LOG.info("Result: No crash detected")
+                        crash_hash = None
+                    elif self._any_crash or self._signature.matches(crash_info):
+                        self.status.count_result(short_sig)
+                        LOG.info("Result: %s (%s:%s)",
+                                 short_sig, report.major[:8], report.minor[:8])
+                        crash_hash = report.crash_hash(crash_info)
+                        if crash_hash not in self._reports_expected:
+                            LOG.debug("now tracking %s", crash_hash)
+                            self._reports_expected[crash_hash] = report
+                            report = None  # don't remove report
+                        assert self._any_crash or len(self._reports_expected) == 1
+                    else:
+                        LOG.info("Result: Different signature: %s (%s:%s)",
+                                 short_sig, report.major[:8], report.minor[:8])
+                        self.status.ignored += 1
+                        crash_hash = report.crash_hash(crash_info)
+                        if crash_hash not in self._reports_other:
+                            LOG.debug("now tracking %s", crash_hash)
+                            self._reports_other[crash_hash] = report
+                            report = None  # don't remove report
+                    # purge untracked report
+                    if report is not None:
+                        if crash_hash is not None:
+                            LOG.debug("already tracking %s", crash_hash)
+                        report.cleanup()
+                        report = None
+                elif self._runner.result == self._runner.IGNORED:
                     self.status.ignored += 1
-                    crash_hash = report.crash_hash(crash_info)
-                    if crash_hash not in self._reports_other:
-                        LOG.debug("now tracking %s", crash_hash)
-                        self._reports_other[crash_hash] = report
-                        report = None  # don't remove report
-                # purge untracked report
-                if report is not None:
-                    if crash_hash is not None:
-                        LOG.debug("already tracking %s", crash_hash)
-                    report.cleanup()
-                    report = None
-            elif self._runner.result == self._runner.IGNORED:
-                self.status.ignored += 1
-                LOG.info("Result: Ignored (%d)", self.status.ignored)
-            elif self._runner.result == self._runner.ERROR:
-                LOG.error("ERROR: Replay malfunction, test case was not served")
-                break
+                    LOG.info("Result: Ignored (%d)", self.status.ignored)
+                elif self._runner.result == self._runner.ERROR:
+                    LOG.error("ERROR: Replay malfunction, test case was not served")
+                    break
 
-            # check status and exit early if possible
-            if repeat - self.status.iteration + self.status.results < min_results:
-                if self.status.iteration < repeat:
-                    LOG.debug("skipping remaining attempts")
-                # failed to reproduce issue
-                LOG.debug("results (%d) < expected (%s) after %d attempts",
-                          self.status.results, min_results, self.status.iteration)
-                break
-            if self.status.results >= min_results:
-                assert self.status.results == min_results
-                success = True
-                LOG.debug("results == expected (%s) after %d attempts",
-                          min_results, self.status.iteration)
-                break
+                # check status and exit early if possible
+                if repeat - self.status.iteration + self.status.results < min_results:
+                    if self.status.iteration < repeat:
+                        LOG.debug("skipping remaining attempts")
+                    # failed to reproduce issue
+                    LOG.debug("results (%d) < expected (%s) after %d attempts",
+                              self.status.results, min_results, self.status.iteration)
+                    break
+                if self.status.results >= min_results:
+                    assert self.status.results == min_results
+                    success = True
+                    LOG.debug("results == expected (%s) after %d attempts",
+                              min_results, self.status.iteration)
+                    break
 
-            # warn about large browser logs
-            #self.status.log_size = self.target.log_size()
-            #if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
-            #    LOG.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
+                # warn about large browser logs
+                #self.status.log_size = self.target.log_size()
+                #if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
+                #    LOG.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
 
-            # trigger relaunch by closing the browser if needed
-            self.target.check_relaunch()
-
+                # trigger relaunch by closing the browser if needed
+                self.target.check_relaunch()
+        finally:
+            for tc_path in unpacked:
+                rmtree(tc_path)
         if success:
             LOG.info("Result successfully reproduced")
         else:
@@ -380,17 +378,16 @@ class ReplayManager(object):
                     args.ignore,
                     server,
                     target,
-                    testcases,
                     any_crash=args.any_crash,
                     signature=signature,
                     use_harness=not args.no_harness)
-                success = replay.run(repeat=repeat, min_results=args.min_crashes)
+                success = replay.run(testcases, repeat=repeat, min_results=args.min_crashes)
             if args.logs:
                 replay.report_to_filesystem(
                     args.logs,
                     replay.reports,
                     replay.other_reports,
-                    replay.testcases if args.include_test else None)
+                    testcases if args.include_test else None)
             # TODO: add fuzzmanager reporting
             return 0 if success else 1
 
