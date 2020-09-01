@@ -118,13 +118,13 @@ class ReplayManager(object):
                 report_path=pathjoin(path, "reports"),
                 major_bucket=False)
             for report in reports:
-                reporter.submit(tests, report=report)
+                reporter.submit(tests or [], report=report)
         if other_reports:
             reporter = FilesystemReporter(
                 report_path=pathjoin(path, "other_reports"),
                 major_bucket=False)
             for report in other_reports:
-                reporter.submit(tests, report=report)
+                reporter.submit(tests or [], report=report)
 
     def run(self, testcases, repeat=1, min_results=1):
         """Run testcase replay.
