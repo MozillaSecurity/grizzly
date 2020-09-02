@@ -215,24 +215,27 @@ def test_replay_09(mocker, tmp_path):
     # no reports
     ReplayManager.report_to_filesystem(str(tmp_path), [])
     assert not any(tmp_path.glob("*"))
-    # with reports
-    reports_expected = list()
-    reports_expected.append(mocker.Mock(spec=Report))
-    reports_expected[-1].prefix = "expected"
+    # with reports and tests
     (tmp_path / "report_expected").mkdir()
-    reports_expected[-1].path = str(tmp_path / "report_expected")
-    reports_other = list()
-    reports_other.append(mocker.Mock(spec=Report))
-    reports_other[-1].prefix = "other1"
+    expected = [
+        mocker.Mock(
+            spec=Report,
+            path=str(tmp_path / "report_expected"),
+            prefix="expected")]
     (tmp_path / "report_other1").mkdir()
-    reports_other[-1].path = str(tmp_path / "report_other1")
-    reports_other.append(mocker.Mock(spec=Report))
-    reports_other[-1].prefix = "other2"
     (tmp_path / "report_other2").mkdir()
-    reports_other[-1].path = str(tmp_path / "report_other2")
+    other = [
+        mocker.Mock(
+            spec=Report,
+            path=str(tmp_path / "report_other1"),
+            prefix="other1"),
+        mocker.Mock(
+            spec=Report,
+            path=str(tmp_path / "report_other2"),
+            prefix="other2")]
     test = mocker.Mock(spec=TestCase)
     path = tmp_path / "dest"
-    ReplayManager.report_to_filesystem(str(path), reports_expected, reports_other, tests=[test])
+    ReplayManager.report_to_filesystem(str(path), expected, other, tests=[test])
     assert test.dump.call_count == 3  # called once per report
     assert not (tmp_path / "report_expected").is_dir()
     assert not (tmp_path / "report_other1").is_dir()
@@ -243,6 +246,18 @@ def test_replay_09(mocker, tmp_path):
     assert (path / "other_reports").is_dir()
     assert (path / "other_reports" / "other1_logs").is_dir()
     assert (path / "other_reports" / "other2_logs").is_dir()
+    # with reports and not tests
+    (tmp_path / "report_expected").mkdir()
+    expected = [
+        mocker.Mock(
+            spec=Report,
+            path=str(tmp_path / "report_expected"),
+            prefix="expected")]
+    path = tmp_path / "dest2"
+    ReplayManager.report_to_filesystem(str(path), expected)
+    assert not (tmp_path / "report_expected").is_dir()
+    assert path.is_dir()
+    assert (path / "reports" / "expected_logs").is_dir()
 
 def test_replay_10(mocker, tmp_path):
     """test ReplayManager.run() - TargetLaunchError"""
