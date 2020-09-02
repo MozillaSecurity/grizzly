@@ -163,8 +163,8 @@ class ReplayManager(object):
             LOG.debug("unpacking testcases (%d)...", test_count)
             for test in testcases:
                 dst_path = mkdtemp(prefix="tc_", dir=grz_tmp("serve"))
-                test.dump(dst_path)
                 unpacked.append(dst_path)
+                test.dump(dst_path)
             # perform iterations
             for _ in range(repeat):
                 self.status.iteration += 1
