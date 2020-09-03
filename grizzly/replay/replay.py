@@ -13,7 +13,7 @@ from FTB.Signatures.CrashInfo import CrashSignature
 from sapphire import Sapphire, ServerMap
 
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
-from ..common.runner import Runner
+from ..common.runner import Runner, RunResult
 from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
 from ..common.utils import grz_tmp
@@ -210,16 +210,16 @@ class ReplayManager(object):
                         testcases[test_idx].landing_page,
                         required=False)
                     # run testcase
-                    self._runner.run(
+                    result = self._runner.run(
                         self.ignore,
                         server_map,
                         testcases[test_idx],
                         test_path=unpacked[test_idx],
                         wait_for_callback=self._harness is None)
-                    if self._runner.result != self._runner.COMPLETE:
+                    if result.status != RunResult.COMPLETE:
                         break
                 # process results
-                if self._runner.result == self._runner.FAILED:
+                if result.status == RunResult.FAILED:
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
                     report = Report.from_path(log_path)
@@ -259,10 +259,10 @@ class ReplayManager(object):
                             LOG.debug("already tracking %s", crash_hash)
                         report.cleanup()
                         report = None
-                elif self._runner.result == self._runner.IGNORED:
+                elif result.status == RunResult.IGNORED:
                     self.status.ignored += 1
                     LOG.info("Result: Ignored (%d)", self.status.ignored)
-                elif self._runner.result == self._runner.ERROR:
+                elif result.status == RunResult.ERROR:
                     LOG.error("ERROR: Replay malfunction, test case was not served")
                     break
 
