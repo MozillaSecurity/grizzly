@@ -11,7 +11,7 @@ from collections import deque
 from pytest import raises
 
 from sapphire import Sapphire, ServerMap, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
-from .common import Adapter, IOManager, Reporter, Status, TestCase
+from .common import Adapter, IOManager, Reporter, RunResult, Status, TestCase
 from .session import LogOutputLimiter, Session, SessionError
 from .target import Target, TargetLaunchError
 
@@ -113,14 +113,12 @@ def test_session_04(tmp_path, mocker):
 def test_session_05(tmp_path, mocker):
     """test basic Session functions"""
     Status.PATH = str(tmp_path)
-    fake_adapter = mocker.Mock(spec=Adapter)
+    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_adapter.TEST_DURATION = 10
-    fake_adapter.remaining = None
     fake_testcase = mocker.Mock(spec=TestCase, landing_page="page.htm", optional=[])
     fake_iomgr = mocker.Mock(spec=IOManager)
-    fake_iomgr.server_map = ServerMap()
+    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
     fake_iomgr.create_testcase.return_value = fake_testcase
-    fake_iomgr.harness = None
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     # return SERVED_TIMEOUT to test IGNORE_UNSERVED code path
@@ -148,8 +146,7 @@ def test_session_06(tmp_path, mocker):
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.NAME = "fake_adapter"
-    fake_iomgr = mocker.Mock(spec=IOManager)
-    fake_iomgr.server_map = ServerMap()
+    fake_iomgr = mocker.Mock(spec=IOManager, server_map=ServerMap())
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_target = mocker.Mock(spec=Target, prefs="fake")
     with Session(fake_adapter, fake_iomgr, None, None, fake_target) as session:
@@ -166,25 +163,20 @@ def test_session_07(tmp_path, mocker):
     Status.PATH = str(tmp_path)
     mocker.patch("grizzly.session.Report", autospec=True)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
+    fake_runner.return_value.run.return_value = RunResult(["/fake/file"], status=RunResult.FAILED)
     mocker.patch("grizzly.session.TestFile", autospec=True)
-    fake_adapter = mocker.Mock(spec=Adapter)
+    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_adapter.IGNORE_UNSERVED = True
     fake_adapter.TEST_DURATION = 10
-    fake_adapter.remaining = None
-    fake_iomgr = mocker.Mock(spec=IOManager)
+    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap(), tests=deque())
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
-    fake_iomgr.harness = None
-    fake_iomgr.server_map = ServerMap()
-    fake_iomgr.tests = deque()
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
     fake_target.monitor.launches = 1
     with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
-        fake_runner.return_value.result = fake_runner.return_value.FAILED
-        fake_runner.return_value.served = ["/fake/file"]
-        fake_runner.return_value.timeout = False
         session.run([], iteration_limit=1)
+        assert fake_runner.return_value.run.call_count == 1
         assert fake_adapter.on_served.call_count == 1
         assert fake_adapter.on_timeout.call_count == 0
         assert fake_iomgr.purge_tests.call_count == 1
@@ -198,15 +190,13 @@ def test_session_08(tmp_path, mocker):
     """test Session.run() ignoring failures"""
     Status.PATH = str(tmp_path)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
+    fake_runner.return_value.run.return_value = RunResult([], status=RunResult.IGNORED)
     mocker.patch("grizzly.session.TestFile", autospec=True)
-    fake_adapter = mocker.Mock(spec=Adapter)
+    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_adapter.IGNORE_UNSERVED = True
     fake_adapter.TEST_DURATION = 10
-    fake_adapter.remaining = None
-    fake_iomgr = mocker.Mock(spec=IOManager)
+    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
-    fake_iomgr.harness = None
-    fake_iomgr.server_map = ServerMap()
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
@@ -215,10 +205,8 @@ def test_session_08(tmp_path, mocker):
     # ignored results should not be reported so raise AssertionError if report_result is called
     mocker.patch.object(Session, 'report_result', side_effect=AssertionError)
     with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target) as session:
-        fake_runner.return_value.result = fake_runner.return_value.IGNORED
-        fake_runner.return_value.served = []
-        fake_runner.return_value.timeout = False
         session.run([], iteration_limit=1)
+        assert fake_runner.return_value.run.call_count == 1
         assert fake_adapter.on_served.call_count == 1
         assert fake_adapter.on_timeout.call_count == 0
         assert fake_iomgr.purge_tests.call_count == 1
@@ -236,11 +224,12 @@ def test_session_09(tmp_path, mocker):
     fake_runner.return_value.launch.side_effect = TargetLaunchError
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
-    fake_iomgr = mocker.Mock(spec=IOManager)
-    fake_iomgr.harness = None
-    fake_iomgr.input_files = []
-    fake_iomgr.server_map = ServerMap()
-    fake_iomgr.tests = deque()
+    fake_iomgr = mocker.Mock(
+        spec=IOManager,
+        harness=None,
+        input_files=[],
+        server_map=ServerMap(),
+        tests=deque())
     fake_reporter = mocker.Mock(spec=Reporter)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target)

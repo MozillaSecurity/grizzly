@@ -26,7 +26,7 @@ from FTB.Signatures.CrashInfo import CrashSignature
 from . import strategies as strategies_module, testcase_contents
 from .exceptions import CorruptTestcaseError, NoTestcaseError, ReducerError
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
-from ..common.runner import Runner
+from ..common.runner import Runner, RunResult
 from ..common.status import ReducerStats, Status
 from ..common.storage import TestCase, TestFile
 from ..common.utils import grz_tmp
@@ -599,7 +599,7 @@ class ReductionJob(object):
         Returns:
             bool: True if reduced testcase is still interesting.
         """
-        result = False
+        interesting = False
 
         # if target is closed and server is alive, we should restart it or else the first request
         #   against /first_test will 404
@@ -656,12 +656,12 @@ class ReductionJob(object):
             self._server_map.set_redirect("grz_next_test", str(self.landing_page), required=True)
 
         # run test case
-        runner.run(self._ignore, self._server_map, testcase, wait_for_callback=self._no_harness)
+        result = runner.run(self._ignore, self._server_map, testcase, wait_for_callback=self._no_harness)
 
         # handle failure if detected
-        if runner.result == Runner.FAILED:
+        if result.status == RunResult.FAILED:
             self._target.close()
-            testcase.purge_optional(runner.served)
+            testcase.purge_optional(result.served)
 
             # save logs
             result_logs = temp_prefix + "_logs"
@@ -679,7 +679,7 @@ class ReductionJob(object):
                 # XXX: need to change this to support reducing timeouts?
                 LOG.info("Uninteresting: no crash detected")
             elif self._orig_sig is None or self._orig_sig.matches(crash):
-                result = True
+                interesting = True
                 LOG.info("Interesting: %s", short_sig)
                 if self._orig_sig is None and not self._any_crash:
                     self._orig_sig = Report.crash_signature(crash)
@@ -687,7 +687,7 @@ class ReductionJob(object):
                 LOG.info("Uninteresting: different signature: %s", short_sig)
                 self.on_other_crash_found(testcase, temp_prefix)
 
-        elif runner.result == Runner.IGNORED:
+        elif result.status == RunResult.IGNORED:
             LOG.info("Uninteresting: ignored")
             self._target.close()
 
@@ -697,7 +697,7 @@ class ReductionJob(object):
         # trigger relaunch by closing the browser if needed
         self._target.check_relaunch()
 
-        return result
+        return interesting
 
     def _stop_log_capture(self):
         """Stop handling reduce logs.

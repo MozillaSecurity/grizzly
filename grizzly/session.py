@@ -9,7 +9,7 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from time import sleep, time
 
-from .common import grz_tmp, Report, Runner, Status, TestFile
+from .common import grz_tmp, Report, Runner, RunResult, Status, TestFile
 from .target import TargetLaunchError
 
 
@@ -172,31 +172,31 @@ class Session(object):
             self.display_status(log_limiter=log_limiter)
 
             # run test case
-            runner.run(ignore, self.iomanager.server_map, current_test, coverage=self.coverage)
+            result = runner.run(ignore, self.iomanager.server_map, current_test, coverage=self.coverage)
             # adapter callbacks
-            if runner.timeout:
+            if result.timeout:
                 log.debug("calling self.adapter.on_timeout()")
-                self.adapter.on_timeout(current_test, runner.served)
+                self.adapter.on_timeout(current_test, result.served)
             else:
                 log.debug("calling self.adapter.on_served()")
-                self.adapter.on_served(current_test, runner.served)
+                self.adapter.on_served(current_test, result.served)
             # update test case
-            if runner.result != runner.ERROR:
-                if not runner.served:
+            if result.status != RunResult.ERROR:
+                if not result.served:
                     # this can happen if the target crashes between serving test cases
                     log.info("Ignoring test case since nothing was served")
                     self.iomanager.tests.pop().cleanup()
                 elif self.adapter.IGNORE_UNSERVED:
                     log.debug("removing unserved files from the test case")
-                    current_test.purge_optional(runner.served)
+                    current_test.purge_optional(result.served)
             # process results
-            if runner.result == runner.FAILED:
+            if result.status == RunResult.FAILED:
                 log.debug("result detected")
                 self.report_result()
-            elif runner.result == runner.IGNORED:
+            elif result.status == RunResult.IGNORED:
                 self.status.ignored += 1
                 log.info("Ignored (%d)", self.status.ignored)
-            elif runner.result == runner.ERROR:
+            elif result.status == RunResult.ERROR:
                 log.error("Test case was not served")
                 if not current_test.contains(current_test.landing_page):
                     log.warning("Test case is missing landing page")

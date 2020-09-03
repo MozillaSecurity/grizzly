@@ -11,7 +11,7 @@ from sapphire import SERVED_TIMEOUT
 from ..target import TargetLaunchTimeout
 from .utils import grz_tmp
 
-__all__ = ("Runner",)
+__all__ = ("Runner", "RunResult")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -74,12 +74,7 @@ class _IdleChecker(object):
 
 
 class Runner(object):
-    COMPLETE = 1
-    ERROR = 2
-    FAILED = 3
-    IGNORED = 4
-
-    __slots__ = ("_idle", "_server", "_target", "result", "served", "timeout")
+    __slots__ = ("_idle", "_server", "_target")
 
     def __init__(self, server, target, idle_threshold=0, idle_delay=60):
         if idle_threshold > 0:
@@ -88,9 +83,6 @@ class Runner(object):
             self._idle = None
         self._server = server  # a sapphire instance to serve the test case
         self._target = target  # target to run test case
-        self.result = None
-        self.served = None
-        self.timeout = False
 
     def launch(self, location, env_mod=None, max_retries=3, retry_delay=0):
         """Launch a target and open `location`.
@@ -164,12 +156,8 @@ class Runner(object):
                                        framework should move on.
 
         Returns:
-            None
+            RunResult: Files served, status and timeout flag from the run.
         """
-        # set initial state
-        self.served = None
-        self.result = None
-        self.timeout = False
         if self._idle is not None:
             self._idle.schedule_poll(initial=True)
         try:
@@ -181,7 +169,7 @@ class Runner(object):
                 wwwdir = test_path
             # serve the test case
             serve_start = time()
-            server_status, self.served = self._server.serve_path(
+            server_status, served = self._server.serve_path(
                 wwwdir,
                 continue_cb=self._keep_waiting,
                 forever=wait_for_callback,
@@ -192,31 +180,32 @@ class Runner(object):
             # remove temporary files
             if test_path is None:
                 rmtree(wwwdir)
+        result = RunResult(served, timeout=server_status == SERVED_TIMEOUT)
         # TODO: fix calling TestCase.add_batch() for multi-test replay
         # add all include files that were served
         for url, resource in server_map.include.items():
-            testcase.add_batch(resource.target, self.served, prefix=url)
-        self.timeout = server_status == SERVED_TIMEOUT
-        served_lpage = testcase.landing_page in self.served
+            testcase.add_batch(resource.target, result.served, prefix=url)
+        served_lpage = testcase.landing_page in result.served
         if not served_lpage:
             LOG.debug("%r not served!", testcase.landing_page)
-        elif coverage and not self.timeout:
+        elif coverage and not result.timeout:
             # dump_coverage() should be called before detect_failure()
             # to help catch any coverage related issues.
             self._target.dump_coverage()
         # detect failure
-        failure_detected = self._target.detect_failure(ignore, self.timeout)
+        failure_detected = self._target.detect_failure(ignore, result.timeout)
         if failure_detected == self._target.RESULT_FAILURE:
-            self.result = self.FAILED
+            result.status = RunResult.FAILED
         elif not served_lpage:
             # something is wrong so close the target
             # previous iteration put target in a bad state?
             self._target.close()
-            self.result = self.ERROR
+            result.status = RunResult.ERROR
         elif failure_detected == self._target.RESULT_IGNORED:
-            self.result = self.IGNORED
+            result.status = RunResult.IGNORED
         else:
-            self.result = self.COMPLETE
+            result.status = RunResult.COMPLETE
+        return result
 
     def _keep_waiting(self):
         """Callback used by the server to determine if should continue to wait
@@ -226,9 +215,23 @@ class Runner(object):
             None
 
         Returns:
-            bool: Continue to serve test test case
+            bool: Continue to serve the test case.
         """
         if self._idle is not None and self._idle.is_idle():
             LOG.debug("idle target detected")
             return False
         return self._target.monitor.is_healthy()
+
+
+class RunResult(object):
+    COMPLETE = 1
+    ERROR = 2
+    FAILED = 3
+    IGNORED = 4
+
+    __slots__ = ("served", "status", "timeout")
+
+    def __init__(self, served, status=None, timeout=False):
+        self.served = served
+        self.status = status
+        self.timeout = timeout
