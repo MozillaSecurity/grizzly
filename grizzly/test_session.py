@@ -11,10 +11,26 @@ from collections import deque
 from pytest import raises
 
 from sapphire import Sapphire, ServerMap, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
-from .common import Adapter, IOManager, Reporter, RunResult, Status, TestCase
+from .common import Adapter, IOManager, Report, Reporter, RunResult, Status, TestCase
 from .session import LogOutputLimiter, Session, SessionError
 from .target import Target, TargetLaunchError
 
+
+class NullReporter(Reporter):
+    def __init__(self):
+        self.submit_calls = 0
+
+    def _post_submit(self):
+        pass
+
+    def _pre_submit(self, report):
+        pass
+
+    def _submit_report(self, report, test_cases):
+        assert isinstance(report, Report)
+        for test in test_cases:
+            assert isinstance(test, TestCase)
+        self.submit_calls += 1
 
 def test_session_01(tmp_path, mocker):
     """test Session with playback Adapter"""
@@ -170,11 +186,11 @@ def test_session_07(tmp_path, mocker):
     fake_adapter.TEST_DURATION = 10
     fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap(), tests=deque())
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
-    fake_reporter = mocker.Mock(spec=Reporter)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
     fake_target.monitor.launches = 1
-    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
+    reporter = NullReporter()
+    with Session(fake_adapter, fake_iomgr, reporter, fake_serv, fake_target) as session:
         session.run([], iteration_limit=1)
         assert fake_runner.return_value.run.call_count == 1
         assert fake_adapter.on_served.call_count == 1
@@ -184,7 +200,7 @@ def test_session_07(tmp_path, mocker):
         assert session.status.iteration == 1
         assert session.status.results == 1
         assert session.status.ignored == 0
-        assert fake_reporter.submit.call_count == 1
+        assert reporter.submit_calls == 1
 
 def test_session_08(tmp_path, mocker):
     """test Session.run() ignoring failures"""
@@ -230,17 +246,17 @@ def test_session_09(tmp_path, mocker):
         input_files=[],
         server_map=ServerMap(),
         tests=deque())
-    fake_reporter = mocker.Mock(spec=Reporter)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target)
     fake_target.monitor.launches = 1
-    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
+    reporter = NullReporter()
+    with Session(fake_adapter, fake_iomgr, reporter, fake_serv, fake_target) as session:
         with raises(TargetLaunchError, match=""):
             session.run([], iteration_limit=1)
         assert session.status.iteration == 1
         assert session.status.results == 1
         assert session.status.ignored == 0
-    assert fake_reporter.submit.call_count == 1
+    assert reporter.submit_calls == 1
 
 def test_session_10(tmp_path, mocker):
     """test Session.report_result()"""
@@ -253,19 +269,16 @@ def test_session_10(tmp_path, mocker):
         log_fp.write(b"SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
         log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19\n")
-    fake_report = mocker.patch("grizzly.session.Report", autospec=True)
     mocker.patch("grizzly.session.mkdtemp", autospec=True, return_value=str(tmpd))
     Status.PATH = str(tmp_path)
     fake_iomgr = mocker.Mock(spec=IOManager, tests=deque())
-    fake_reporter = mocker.Mock(spec=Reporter)
     fake_target = mocker.Mock(spec=Target, binary="bin")
-    with Session(None, fake_iomgr, fake_reporter, None, fake_target) as session:
+    reporter = NullReporter()
+    with Session(None, fake_iomgr, reporter, None, fake_target) as session:
         session.report_result()
     assert fake_target.save_logs.call_count == 1
     fake_target.save_logs.assert_called_with(str(tmpd))
-    assert fake_report.from_path.return_value.crash_info.call_count == 1
-    fake_report.from_path.return_value.crash_info.assert_called_with("bin")
-    assert fake_reporter.submit.call_count == 1
+    assert reporter.submit_calls == 1
     assert not tmpd.is_dir()
 
 def test_log_output_limiter_01(mocker):

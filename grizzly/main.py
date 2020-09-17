@@ -94,10 +94,10 @@ def main(args):
         log.debug("initializing the Reporter")
         if args.fuzzmanager:
             log.info("Results will be reported via FuzzManager")
-            reporter = FuzzManagerReporter(args.binary, tool=args.tool)
+            reporter = FuzzManagerReporter(tool=args.tool)
         elif args.s3_fuzzmanager:
             log.info("Results will be reported via FuzzManager w/ large attachments in S3")
-            reporter = S3FuzzManagerReporter(args.binary, tool=args.tool)
+            reporter = S3FuzzManagerReporter(tool=args.tool)
         else:
             reporter = FilesystemReporter()
             log.info("Results will be stored in %r", reporter.report_path)

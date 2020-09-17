@@ -141,6 +141,7 @@ class ReplayManager(object):
         assert repeat > 0
         assert min_results > 0
         assert min_results <= repeat
+        assert self.status is None
 
         self.status = Status.start()
         test_count = len(testcases)
@@ -191,7 +192,7 @@ class ReplayManager(object):
                         LOG.error("Target launch error. Check browser logs for details.")
                         log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                         self.target.save_logs(log_path)
-                        self._reports_other["STARTUP"] = Report.from_path(log_path)
+                        self._reports_other["STARTUP"] = Report(log_path, self.target.binary)
                         raise
                 self.target.step()
                 LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
@@ -222,41 +223,39 @@ class ReplayManager(object):
                 if result.status == RunResult.FAILED:
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
-                    report = Report.from_path(log_path)
+                    report = Report(log_path, self.target.binary)
                     # check signatures
-                    crash_info = report.crash_info(self.target.binary)
-                    short_sig = crash_info.createShortSignature()
+                    short_sig = report.crash_info.createShortSignature()
                     if not self._any_crash and self._signature is None and short_sig != "No crash detected":
                         # signature has not been specified use the first one created
-                        self._signature = report.crash_signature(crash_info)
+                        self._signature = report.crash_signature
                     if short_sig == "No crash detected":
                         # TODO: verify report.major == "NO_STACK" otherwise FM failed to parse the logs
                         # TODO: change this to support hangs/timeouts, etc
                         LOG.info("Result: No crash detected")
-                        crash_hash = None
-                    elif self._any_crash or self._signature.matches(crash_info):
+                    elif self._any_crash or self._signature.matches(report.crash_info):
                         self.status.count_result(short_sig)
                         LOG.info("Result: %s (%s:%s)",
                                  short_sig, report.major[:8], report.minor[:8])
-                        crash_hash = report.crash_hash(crash_info)
-                        if crash_hash not in self._reports_expected:
-                            LOG.debug("now tracking %s", crash_hash)
-                            self._reports_expected[crash_hash] = report
+                        if report.crash_hash not in self._reports_expected:
+                            LOG.debug("now tracking %s", report.crash_hash)
+                            self._reports_expected[report.crash_hash] = report
                             report = None  # don't remove report
+                        else:
+                            LOG.debug("already tracking %s", report.crash_hash)
                         assert self._any_crash or len(self._reports_expected) == 1
                     else:
                         LOG.info("Result: Different signature: %s (%s:%s)",
                                  short_sig, report.major[:8], report.minor[:8])
                         self.status.ignored += 1
-                        crash_hash = report.crash_hash(crash_info)
-                        if crash_hash not in self._reports_other:
-                            LOG.debug("now tracking %s", crash_hash)
-                            self._reports_other[crash_hash] = report
+                        if report.crash_hash not in self._reports_other:
+                            LOG.debug("now tracking %s", report.crash_hash)
+                            self._reports_other[report.crash_hash] = report
                             report = None  # don't remove report
+                        else:
+                            LOG.debug("already tracking %s", report.crash_hash)
                     # purge untracked report
                     if report is not None:
-                        if crash_hash is not None:
-                            LOG.debug("already tracking %s", crash_hash)
                         report.cleanup()
                         report = None
                 elif result.status == RunResult.IGNORED:

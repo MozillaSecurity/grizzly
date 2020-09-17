@@ -2,18 +2,19 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
 from __future__ import unicode_literals
 import os
 from grizzly.target.target import Target
-from grizzly.common import Reporter
+from grizzly.common import Report, Reporter
 from grizzly.reduce import crash
 from grizzly.reduce.reduce import ReductionJob
 
 class BaseFakeReporter(Reporter):
-    def _process_report(self, _):
+    def _post_submit(self):
         pass
 
-    def _reset(self):
+    def _pre_submit(self, _):
         pass
 
     def _submit_report(self, *_args, **_kwds):
@@ -98,6 +99,11 @@ def create_target_binary(target, tmp_path):
     )
     target.binary = str(tmp_path / "firefox")
 
+def write_fail_log(path):
+    with open(os.path.join(path, "log_stderr.txt"), "wb") as log_fp:
+        log_fp.write(b"==1==ERROR: AddressSanitizer: SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
+        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
 
 class TestReductionJob(ReductionJob):
     """Stub to fake parts of grizzly.reduce.ReductionJob needed for testing the reduce loop"""
@@ -122,7 +128,13 @@ class TestReductionJob(ReductionJob):
         self.target.save_logs(result_logs)
         testcase.duration = 0.1
         with open(self.reduce_file) as fp:
-            return "required" in fp.read()
+            if "required" in fp.read():
+                write_fail_log(result_logs)
+                report = Report(result_logs, self.target.binary)
+            else:
+                report = None
+        return report
+
 
     def lithium_cleanup(self):
         pass
@@ -155,11 +167,14 @@ class TestReductionJobAlt(TestReductionJob):
         testcase.duration = 0.1
         with open(self.reduce_file) as fp:
             if "required" in fp.read():
-                self.on_other_crash_found(testcase, temp_prefix)
+                write_fail_log(result_logs)
+                report = Report(result_logs, self.target.binary)
+                self.on_other_crash_found(testcase, report)
+            else:
+                report = None
         if self.__first_run:
             self.__first_run = False
-            return True
-        return False
+        return report
 
 
 class TestReductionJobKeepHarness(TestReductionJob):
@@ -179,10 +194,15 @@ class TestReductionJobKeepHarness(TestReductionJob):
         testcase.duration = 0.1
         if self.__init_data is not None:
             with open(self.reduce_file) as fp:
-                return self.__init_data == fp.read()
+                if self.__init_data == fp.read():
+                    write_fail_log(result_logs)
+                    return Report(result_logs, self.target.binary)
         else:
             with open(self.reduce_file) as fp:
-                return "required" in fp.read()
+                if "required" in fp.read():
+                    write_fail_log(result_logs)
+                    return Report(result_logs, self.target.binary)
+        return None
 
 
 class TestReductionJobSemiReliable(TestReductionJob):
@@ -206,6 +226,9 @@ class TestReductionJobSemiReliable(TestReductionJob):
         self.target.save_logs(result_logs)
         testcase.duration = 0.1
         if self.__require_no_harness and not self._no_harness:
-            return False
+            return None
         self.__interesting_count += 1
-        return self.__interesting_count <= self.__interesting_times
+        if self.__interesting_count <= self.__interesting_times:
+            write_fail_log(result_logs)
+            return Report(result_logs, self.target.binary)
+        return None
