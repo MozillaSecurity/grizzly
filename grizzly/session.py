@@ -109,13 +109,12 @@ class Session(object):
         # create working directory for target logs
         result_logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
         self.target.save_logs(result_logs)
-        report = Report.from_path(result_logs)
-        crash_info = report.crash_info(self.target.binary)
-        short_sig = crash_info.createShortSignature()
+        report = Report(result_logs, self.target.binary)
+        short_sig = report.crash_info.createShortSignature()
         log.info("Result: %s (%s:%s)", short_sig, report.major[:8], report.minor[:8])
         # order test cases newest to oldest
         self.iomanager.tests.reverse()
-        self.reporter.submit(self.iomanager.tests, report=report)
+        self.reporter.submit(self.iomanager.tests, report)
         if isdir(result_logs):
             rmtree(result_logs)
         self.status.count_result(short_sig)

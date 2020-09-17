@@ -145,15 +145,15 @@ def test_replay_06(mocker):
 
 def test_replay_07(mocker, tmp_path):
     """test ReplayManager.run() - test signatures"""
-    report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     mocker.patch("grizzly.replay.replay.mkdtemp", autospec=True, return_value=str(tmp_path))
     report_0 = mocker.Mock(spec=Report)
-    report_0.crash_info.return_value.createShortSignature.return_value = "No crash detected"
+    report_0.crash_info.createShortSignature.return_value = "No crash detected"
     report_1 = mocker.Mock(spec=Report, major="0123abcd", minor="01239999")
-    report_1.crash_info.return_value.createShortSignature.return_value = "[@ test1]"
+    report_1.crash_info.createShortSignature.return_value = "[@ test1]"
     report_2 = mocker.Mock(spec=Report, major="0123abcd", minor="abcd9876")
-    report_2.crash_info.return_value.createShortSignature.return_value = "[@ test2]"
-    report.from_path.side_effect = (report_0, report_1, report_2)
+    report_2.crash_info.createShortSignature.return_value = "[@ test2]"
+    fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
+    fake_report.side_effect = (report_0, report_1, report_2)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     signature = mocker.Mock()
@@ -165,7 +165,7 @@ def test_replay_07(mocker, tmp_path):
     with ReplayManager([], server, target, signature=signature, use_harness=False) as replay:
         assert not replay.run(testcases, repeat=3, min_results=2)
         assert replay._signature == signature
-        assert report.from_path.call_count == 3
+        assert fake_report.call_count == 3
         assert replay.status.iteration == 3
         assert replay.status.results == 1
         assert replay.status.ignored == 1
@@ -178,17 +178,17 @@ def test_replay_07(mocker, tmp_path):
 
 def test_replay_08(mocker, tmp_path):
     """test ReplayManager.run() - any crash"""
-    report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     mocker.patch("grizzly.replay.replay.mkdtemp", autospec=True, return_value=str(tmp_path))
     report_0 = mocker.Mock(spec=Report)
-    report_0.crash_info.return_value.createShortSignature.return_value = "No crash detected"
+    report_0.crash_info.createShortSignature.return_value = "No crash detected"
     report_1 = mocker.Mock(spec=Report, major="0123abcd", minor="01239999")
-    report_1.crash_info.return_value.createShortSignature.return_value = "[@ test1]"
-    report_1.crash_hash.return_value = "hash1"
+    report_1.crash_info.createShortSignature.return_value = "[@ test1]"
+    report_1.crash_hash = "hash1"
     report_2 = mocker.Mock(spec=Report, major="0123abcd", minor="abcd9876")
-    report_2.crash_info.return_value.createShortSignature.return_value = "[@ test2]"
-    report_2.crash_hash.return_value = "hash2"
-    report.from_path.side_effect = (report_0, report_1, report_2)
+    report_2.crash_info.createShortSignature.return_value = "[@ test2]"
+    report_2.crash_hash = "hash2"
+    fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
+    fake_report.side_effect = (report_0, report_1, report_2)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target, binary="fake_bin")
@@ -198,12 +198,10 @@ def test_replay_08(mocker, tmp_path):
     with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
         assert replay.run(testcases, repeat=3, min_results=2)
         assert replay._signature is None
-        assert report.from_path.call_count == 3
+        assert fake_report.call_count == 3
         assert replay.status.iteration == 3
         assert replay.status.results == 2
         assert replay.status.ignored == 0
-        assert report_1.crash_hash.call_count == 1
-        assert report_2.crash_hash.call_count == 1
         assert len(replay.reports) == 2
         assert not replay.other_reports
         assert report_0.cleanup.call_count == 1
@@ -261,9 +259,9 @@ def test_replay_09(mocker, tmp_path):
 
 def test_replay_10(mocker, tmp_path):
     """test ReplayManager.run() - TargetLaunchError"""
-    report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     mocker.patch("grizzly.replay.replay.mkdtemp", autospec=True, return_value=str(tmp_path))
-    report.from_path.side_effect = (mocker.Mock(spec=Report),)
+    fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
+    fake_report.side_effect = (mocker.Mock(spec=Report),)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     target = mocker.Mock(spec=Target)
     target.launch.side_effect = TargetLaunchError

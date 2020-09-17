@@ -6,7 +6,6 @@
 Given a build and testcase, try to reproduce it using a set of strategies.
 """
 from __future__ import absolute_import
-import glob
 import hashlib
 import io
 import json
@@ -249,7 +248,7 @@ class ReductionJob(object):
     __slots__ = [
         '_any_crash', '_best_testcase', '_cache_iter_harness_created', '_env_mod',
         '_fixed_timeout', '_force_no_harness', '_idle_threshold', '_idle_timeout', '_ignore',
-        '_input_fname', '_interesting_prefix', '_iter_timeout', '_landing_page', '_log_handler',
+        '_input_fname', '_interesting_report', '_iter_timeout', '_landing_page', '_log_handler',
         '_min_crashes', '_no_harness', '_orig_sig', '_original_relaunch', '_other_crashes',
         '_reduce_file', '_repeat', '_reporter', '_result_cache', '_result_code', '_server', '_server_map',
         '_signature', '_skip', '_skip_analysis', '_skipped', '_status', '_target', '_tcroot', '_testcase',
@@ -273,7 +272,7 @@ class ReductionJob(object):
         self._idle_timeout = idle_timeout
         self._ignore = ignore  # things to ignore
         self._input_fname = None
-        self._interesting_prefix = None
+        self._interesting_report = None
         self._iter_timeout = iter_timeout
         self._landing_page = None  # the file to point the target at
         self._min_crashes = min_crashes
@@ -448,16 +447,6 @@ class ReductionJob(object):
                 result = self._result_cache[cache_key]['result']
                 if result:
                     LOG.info("Interesting (cached)")
-                    cached_prefix = self._result_cache[cache_key]['prefix']
-                    for filename in glob.glob(r"%s_*" % cached_prefix):
-                        suffix = os.path.basename(filename).split("_", 1)
-                        if os.path.isfile(filename):
-                            shutil.copy(filename, "%s_%s" % (temp_prefix, suffix[1]))
-                        elif os.path.isdir(filename):
-                            shutil.copytree(filename, "%s_%s" % (temp_prefix, suffix[1]))
-                        else:
-                            raise RuntimeError("Cannot copy non-file/non-directory: %s"
-                                               % (filename,))
                 else:
                     LOG.info("Uninteresting (cached)")
                 return result
@@ -487,16 +476,17 @@ class ReductionJob(object):
             self._status.report()
             self._status.iteration += 1
             run_prefix = "%s(%d)" % (temp_prefix, try_num)
-            if self._run(testcase, run_prefix):
+            interesting_report = self._run(testcase, run_prefix)
+            if interesting_report:
                 # track the maximum duration of the successful reduction attempts
                 if testcase.duration > max_duration:
                     max_duration = testcase.duration
                 n_crashes += 1
                 if n_crashes >= self._min_crashes:
-                    self.on_interesting_crash(run_prefix)
+                    self.on_interesting_crash(interesting_report)
                     if self._use_result_cache:
                         self._result_cache[cache_key] = {
-                            'result': True,
+                            'result': interesting_report,
                             'prefix': run_prefix
                         }
                     self._best_testcase = testcase
@@ -509,7 +499,7 @@ class ReductionJob(object):
             # No need to save the temp_prefix on uninteresting testcases
             # But let's do it anyway to stay consistent
             self._result_cache[cache_key] = {
-                'result': False,
+                'result': None,
                 'prefix': run_prefix
             }
         return False
@@ -597,9 +587,9 @@ class ReductionJob(object):
             temp_prefix (str): A unique prefix for any files written during this iteration.
 
         Returns:
-            bool: True if reduced testcase is still interesting.
+            Report: Report from reduced testcase if still interesting else None.
         """
-        interesting = False
+        interesting = None
 
         # if target is closed and server is alive, we should restart it or else the first request
         #   against /first_test will 404
@@ -669,23 +659,21 @@ class ReductionJob(object):
                 os.mkdir(result_logs)
             self._target.save_logs(result_logs)
 
-            # create a CrashInfo
-            crash = FuzzManagerReporter.create_crash_info(
-                Report.from_path(result_logs),
-                self._target.binary)
+            # create report
+            report = Report(result_logs, self._target.binary)
 
-            short_sig = crash.createShortSignature()
+            short_sig = report.crash_info.createShortSignature()
             if short_sig == "No crash detected":
                 # XXX: need to change this to support reducing timeouts?
                 LOG.info("Uninteresting: no crash detected")
-            elif self._orig_sig is None or self._orig_sig.matches(crash):
-                interesting = True
+            elif self._orig_sig is None or self._orig_sig.matches(report.crash_info):
+                interesting = report
                 LOG.info("Interesting: %s", short_sig)
                 if self._orig_sig is None and not self._any_crash:
-                    self._orig_sig = Report.crash_signature(crash)
+                    self._orig_sig = report.crash_signature
             else:
                 LOG.info("Uninteresting: different signature: %s", short_sig)
-                self.on_other_crash_found(testcase, temp_prefix)
+                self.on_other_crash_found(testcase, report)
 
         elif result.status == RunResult.IGNORED:
             LOG.info("Uninteresting: ignored")
@@ -956,43 +944,39 @@ class ReductionJob(object):
             self._target.cleanup()
         self._status.cleanup()
 
-    def _report_result(self, testcase, temp_prefix, quality_value, force=False):
+    def _report_result(self, testcase, report, quality_value, force=False):
         self._reporter.quality = quality_value
         self._reporter.force_report = force
-        self._reporter.submit([testcase], log_path=temp_prefix + "_logs")
+        self._reporter.submit([testcase], report)
 
-    def on_interesting_crash(self, temp_prefix):
+    def on_interesting_crash(self, report):
         # called for any interesting crash
-        self._interesting_prefix = temp_prefix
+        self._interesting_report = report
 
     def on_result(self, result_code):
         pass
 
-    def on_other_crash_found(self, testcase, temp_prefix):
+    def on_other_crash_found(self, testcase, report):
         """
         If we hit an alternate crash, store the testcase in a tmp folder.
         If the same crash is encountered again, only keep the newest one.
         """
-        crash_info = FuzzManagerReporter.create_crash_info(
-            Report.from_path(temp_prefix + "_logs"),
-            self._target.binary)
-        crash_hash = Report.crash_hash(crash_info)
-        short_sig = crash_info.createShortSignature()
-        if crash_hash in self._other_crashes:
+        short_sig = report.crash_info.createShortSignature()
+        if report.crash_hash in self._other_crashes:
             LOG.info("Found alternate crash (newer): %s", short_sig)
             # already counted when initially found
             self._status.ignored += 1
         else:
             LOG.info("Found alternate crash: %s", short_sig)
             self._status.count_result(short_sig)
-        self._other_crashes[crash_hash] = {"tc": testcase, "prefix": temp_prefix}
+        self._other_crashes[report.crash_hash] = {"tc": testcase, "report": report}
 
     def _report_other_crashes(self):
         """
         After reduce is finished, report any alternate results (if they don't match the collector cache).
         """
         for entry in self._other_crashes.values():
-            self._report_result(entry["tc"], entry["prefix"], FuzzManagerReporter.QUAL_UNREDUCED)
+            self._report_result(entry["tc"], entry["report"], FuzzManagerReporter.QUAL_UNREDUCED)
 
     def run(self, strategies=None):
         """Run reduction.
@@ -1090,7 +1074,7 @@ class ReductionJob(object):
                 raise ReducerError("Reducer succeeded but nothing was reduced!")
 
             self._report_result(self._best_testcase,
-                                self._interesting_prefix,
+                                self._interesting_report,
                                 FuzzManagerReporter.QUAL_REDUCED_RESULT,
                                 force=True)
 
@@ -1147,7 +1131,7 @@ class ReductionJob(object):
         LOG.debug("initializing the Reporter")
         if args.fuzzmanager:
             LOG.info("Reporting issues via FuzzManager")
-            job.set_reporter(FuzzManagerReporter(args.binary, tool=args.tool))
+            job.set_reporter(FuzzManagerReporter(tool=args.tool))
         else:
             reporter = FilesystemReporter()
             job.set_reporter(reporter)
