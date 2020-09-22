@@ -237,7 +237,7 @@ def test_session_09(tmp_path, mocker):
     Status.PATH = str(tmp_path)
     mocker.patch("grizzly.session.Report", autospec=True)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_runner.return_value.launch.side_effect = TargetLaunchError
+    fake_runner.return_value.launch.side_effect = TargetLaunchError("test", mocker.Mock(spec=Report))
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_iomgr = mocker.Mock(
@@ -249,14 +249,12 @@ def test_session_09(tmp_path, mocker):
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target)
     fake_target.monitor.launches = 1
-    reporter = NullReporter()
-    with Session(fake_adapter, fake_iomgr, reporter, fake_serv, fake_target) as session:
-        with raises(TargetLaunchError, match=""):
+    with Session(fake_adapter, fake_iomgr, mocker.Mock(), fake_serv, fake_target) as session:
+        with raises(TargetLaunchError, match="test"):
             session.run([], iteration_limit=1)
         assert session.status.iteration == 1
-        assert session.status.results == 1
+        assert session.status.results == 0
         assert session.status.ignored == 0
-    assert reporter.submit_calls == 1
 
 def test_session_10(tmp_path, mocker):
     """test Session.report_result()"""

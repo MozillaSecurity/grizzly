@@ -152,8 +152,8 @@ def test_main_strategies(mocker, monkeypatch, tmp_path):  # noqa pylint: disable
 
     class FakeReporter(BaseFakeReporter):
 
-        def __init__(self, *args, **kwds):
-            super(FakeReporter, self).__init__(*args, **kwds)
+        def __init__(self, _):
+            super(FakeReporter, self).__init__()
             self.report_path = "foo"
 
         def _submit_report(self, _report, test_cases):

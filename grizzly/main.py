@@ -3,11 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import basicConfig, DEBUG, getLogger
+from os.path import join as pathjoin
+from os import getcwd
 
 from sapphire import Sapphire
 
 from .adapters import get as get_adapter
-from .common import FilesystemReporter, FuzzManagerReporter, IOManager, S3FuzzManagerReporter
+from .common.iomanager import IOManager
+from .common.reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
+from .common.utils import grz_tmp
 from .session import Session
 from .target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
@@ -99,7 +103,7 @@ def main(args):
             log.info("Results will be reported via FuzzManager w/ large attachments in S3")
             reporter = S3FuzzManagerReporter(tool=args.tool)
         else:
-            reporter = FilesystemReporter()
+            reporter = FilesystemReporter(pathjoin(getcwd(), "results"))
             log.info("Results will be stored in %r", reporter.report_path)
 
         # set 'auto_close=1' so the client error pages (code 4XX) will
@@ -126,7 +130,13 @@ def main(args):
         log.info("Ctrl+C detected.")
         return Session.EXIT_ABORT
 
-    except (TargetLaunchError, TargetLaunchTimeout):
+    except (TargetLaunchError, TargetLaunchTimeout) as exc:
+        log.error(str(exc))
+        if isinstance(exc, TargetLaunchError) and exc.report:
+            path = grz_tmp("launch_failures")
+            log.error("Logs can be found here %r", path)
+            reporter = FilesystemReporter(path, major_bucket=False)
+            reporter.submit([], exc.report)
         return Session.EXIT_LAUNCH_FAILURE
 
     finally:

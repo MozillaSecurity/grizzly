@@ -3,11 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
-from os import close, getenv, kill, makedirs, unlink
-from os.path import abspath, isdir, isfile
+from os import close, kill, unlink
+from os.path import abspath, isfile
 from platform import system
 import signal
-from time import localtime, sleep, strftime, time
+from time import sleep, time
 from tempfile import mkdtemp, mkstemp
 
 from psutil import AccessDenied, NoSuchProcess, Process, process_iter
@@ -17,6 +17,7 @@ from prefpicker import PrefPicker
 
 from .target_monitor import TargetMonitor
 from .target import Target, TargetLaunchError, TargetLaunchTimeout, TargetError
+from ..common.reporter import Report
 from ..common.utils import grz_tmp
 
 
@@ -28,14 +29,13 @@ LOG = getLogger("puppet_target")
 
 
 class PuppetTarget(Target):
-    __slots__ = ("use_rr", "use_valgrind", "_browser_logs", "_puppet", "_remove_prefs")
+    __slots__ = ("use_rr", "use_valgrind", "_puppet", "_remove_prefs")
 
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, relaunch, **kwds):
         super(PuppetTarget, self).__init__(binary, extension, launch_timeout,
                                            log_limit, memory_limit, relaunch)
         self.use_rr = kwds.pop("rr", False)
         self.use_valgrind = kwds.pop("valgrind", False)
-        self._browser_logs = None
         self._remove_prefs = False
         # create Puppet object
         self._puppet = FFPuppet(
@@ -59,8 +59,6 @@ class PuppetTarget(Target):
 
     def cleanup(self):
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
-        if self._browser_logs:
-            self.close()
         with self._lock:
             self._puppet.clean_up()
         if self._remove_prefs and self._prefs and isfile(self._prefs):
@@ -70,16 +68,6 @@ class PuppetTarget(Target):
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
         with self._lock:
             self._puppet.close()
-            # save logs in lock to avoid a parallel clean_up() removing them
-            if self._browser_logs:
-                log_path = mkdtemp(
-                    prefix=strftime("%Y%m%d-%H%M%S_", localtime()),
-                    suffix="_browser_logs",
-                    dir=self._browser_logs)
-                LOG.debug("saving browser logs to %r", log_path)
-                self._puppet.save_logs(log_path)
-                # only save logs once per launch
-                self._browser_logs = None
 
     @property
     def closed(self):
@@ -208,12 +196,6 @@ class PuppetTarget(Target):
             sleep(delay)
 
     def launch(self, location, env_mod=None):
-        # GRZ_BROWSER_LOGS is intended to be used to aid in debugging.
-        # when close() is called a copy of the browser logs will be saved
-        # to the directory specified by GRZ_BROWSER_LOGS
-        self._browser_logs = getenv("GRZ_BROWSER_LOGS")
-        if self._browser_logs and not isdir(self._browser_logs):
-            makedirs(self._browser_logs)
         self.rl_countdown = self.rl_reset
         # setup environment
         env_mod = dict(env_mod or [])
@@ -235,7 +217,9 @@ class PuppetTarget(Target):
             self.close()
             if isinstance(exc, BrowserTimeoutError):
                 raise TargetLaunchTimeout(str(exc))
-            raise TargetLaunchError(str(exc))
+            log_path = mkdtemp(prefix="launch_fail_", dir=grz_tmp("logs"))
+            self.save_logs(log_path)
+            raise TargetLaunchError(str(exc), Report(log_path, self.binary))
 
     def log_size(self):
         return self._puppet.log_length("stderr") + self._puppet.log_length("stdout")

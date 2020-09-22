@@ -44,6 +44,9 @@ class TargetError(Exception):
 
 class TargetLaunchError(TargetError):
     """Raised if a failure during launch occurs"""
+    def __init__(self, message, report):
+        super().__init__(message)
+        self.report = report
 
 
 class TargetLaunchTimeout(TargetError):
@@ -110,6 +113,8 @@ class Target(metaclass=ABCMeta):
     @abstractproperty
     def closed(self):
         pass
+
+    # TODO: add collect_report()?
 
     @abstractmethod
     def detect_failure(self, ignored, was_timeout):

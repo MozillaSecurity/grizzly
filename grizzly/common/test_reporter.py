@@ -17,6 +17,12 @@ from FTB.Signatures.CrashInfo import CrashInfo
 from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
 from .storage import TestCase
 
+def _create_crash_log(log_path):
+    with log_path.open("w") as log_fp:
+        log_fp.write("==1==ERROR: AddressSanitizer: SEGV on unknown address 0x0")
+        log_fp.write(" (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+        log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+        log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
 
 def test_report_01(tmp_path):
     """test Report() with boring logs (no stack)"""
@@ -41,9 +47,7 @@ def test_report_02(tmp_path):
     """test Report() with crash logs"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    with (tmp_path / "log_asan_blah.txt").open("wb") as log_fp:
-        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
-        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
+    _create_crash_log(tmp_path / "log_asan_blah.txt")
     report = Report(str(tmp_path), "bin")
     assert report.path == str(tmp_path)
     assert report._logs.aux.endswith("log_asan_blah.txt")
@@ -74,6 +78,7 @@ def test_report_04(tmp_path):
     """test Report.select_logs() uninteresting data"""
     # test with empty path
     assert Report.select_logs(str(tmp_path)) is None
+    # empty file
     (tmp_path / "not_a_log.txt").touch()
     assert not any(Report.select_logs(str(tmp_path)))
 
@@ -227,9 +232,7 @@ def test_report_12(tmp_path):
     """test Report.crash_info"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    with (tmp_path / "log_asan_blah.txt").open("wb") as log_fp:
-        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
-        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
+    _create_crash_log(tmp_path / "log_asan_blah.txt")
     # no binary.fuzzmanagerconf
     report = Report(str(tmp_path), target_binary="fake_bin")
     assert report._crash_info is None
@@ -251,10 +254,7 @@ def test_report_13(mocker, tmp_path):
     mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    with (tmp_path / "log_asan_blah.txt").open("wb") as log_fp:
-        log_fp.write(b"==1==ERROR: AddressSanitizer: SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
-        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
-        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
+    _create_crash_log(tmp_path / "log_asan_blah.txt")
     report = Report(str(tmp_path), "bin")
     assert report._signature is None
     assert report.crash_signature
@@ -287,12 +287,10 @@ def test_filesystem_reporter_01(tmp_path):
     log_path.mkdir()
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    with (log_path / "log_asan_blah.txt").open("wb") as log_fp:
-        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
-        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
+    _create_crash_log(tmp_path / "log_asan_blah.txt")
     report_path = tmp_path / "reports"
     report_path.mkdir()
-    reporter = FilesystemReporter(report_path=str(report_path))
+    reporter = FilesystemReporter(str(report_path))
     reporter.submit([], Report(str(log_path), "fake_bin"))
     buckets = tuple(report_path.iterdir())
     # check major bucket
@@ -310,31 +308,23 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     log_path.mkdir()
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    with (log_path / "log_asan_blah.txt").open("wb") as log_fp:
-        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
-        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19")
-    testcases = list()
-    for _ in range(10):
-        testcases.append(mocker.Mock(spec=TestCase))
+    _create_crash_log(log_path / "log_asan_blah.txt")
+    tests = list(mocker.Mock(spec=TestCase) for _ in range(10))
     report_path = tmp_path / "reports"
     assert not report_path.exists()
-    reporter = FilesystemReporter(report_path=str(report_path))
-    reporter.submit(testcases, Report(str(log_path), "fake_bin"))
+    reporter = FilesystemReporter(str(report_path))
+    reporter.submit(tests, Report(str(log_path), "fake_bin"))
     assert not log_path.exists()
     assert report_path.exists()
     assert len(tuple(report_path.glob("*"))) == 1
-    for tstc in testcases:
-        assert tstc.dump.call_count == 1
+    assert all(x.dump.call_count == 1 for x in tests)
     # call report a 2nd time
     log_path.mkdir()
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    testcases = list()
-    for _ in range(2):
-        testcases.append(mocker.Mock(spec=TestCase))
-    reporter.submit(testcases, Report(str(log_path), "fake_bin"))
-    for tstc in testcases:
-        assert tstc.dump.call_count == 1
+    tests = list(mocker.Mock(spec=TestCase) for _ in range(2))
+    reporter.submit(tests, Report(str(log_path), "fake_bin"))
+    assert all(x.dump.call_count == 1 for x in tests)
     assert len(tuple(report_path.glob("*"))) == 2
     assert len(tuple(report_path.glob("NO_STACK"))) == 1
 
@@ -344,26 +334,24 @@ def test_filesystem_reporter_03(tmp_path):
     log_path.mkdir()
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    report_path = tmp_path / "reports"
-    report_path.mkdir()
-    reporter = FilesystemReporter(report_path=str(report_path))
+    reporter = FilesystemReporter(str(tmp_path / "reports"))
     reporter.DISK_SPACE_ABORT = 2 ** 50
-    with pytest.raises(RuntimeError) as exc:
+    with pytest.raises(RuntimeError, match="Running low on disk space"):
         reporter.submit([], Report(str(log_path), "fake_bin"))
-    assert "Running low on disk space" in str(exc.value)
 
 def test_filesystem_reporter_04(mocker, tmp_path):
     """test FilesystemReporter w/o major bucket"""
-    report_path = (tmp_path / "report")
-    report_path.mkdir()
+    fake_report = (tmp_path / "fake_report")
+    fake_report.mkdir()
     report = mocker.Mock(
         spec=Report,
-        path=str(report_path),
-        prefix="0000_2020_01_01")
-    reporter = FilesystemReporter(report_path=str(tmp_path), major_bucket=False)
+        path=str(fake_report),
+        prefix="test_prefix")
+    reporter = FilesystemReporter(str(tmp_path / "dst"), major_bucket=False)
     reporter.submit([], report)
-    assert not report_path.is_dir()
+    assert not fake_report.is_dir()
     assert not report.major.call_count
+    assert any((tmp_path / "dst").glob("test_prefix_logs"))
 
 def test_fuzzmanager_reporter_01(mocker, tmp_path):
     """test FuzzManagerReporter.sanity_check()"""
@@ -479,9 +467,8 @@ def test_fuzzmanager_reporter_06(mocker, tmp_path):
     (log_path / "log_stderr.txt").touch()
     (log_path / "log_stdout.txt").touch()
     reporter = FuzzManagerReporter("fake_bin")
-    with pytest.raises(RuntimeError) as exc:
+    with pytest.raises(RuntimeError, match="Failed to create FM signature"):
         reporter.submit([], Report(str(log_path), "fake_bin"))
-    assert "Failed to create FM signature" in str(exc.value)
 
 def test_fuzzmanager_reporter_07(mocker, tmp_path):
     """test FuzzManagerReporter.submit() unsymbolized crash"""
@@ -521,9 +508,8 @@ def test_s3fuzzmanager_reporter_01(mocker, tmp_path):
     mocker.patch("grizzly.common.reporter.FuzzManagerReporter", autospec=True)
     fake_bin = tmp_path / "bin"
     # test GRZ_S3_BUCKET missing
-    with pytest.raises(EnvironmentError) as exc:
+    with pytest.raises(EnvironmentError, match="'GRZ_S3_BUCKET' is not set in environment"):
         S3FuzzManagerReporter.sanity_check(str(fake_bin))
-    assert "'GRZ_S3_BUCKET' is not set in environment" in str(exc.value)
     # test GRZ_S3_BUCKET set
     pytest.importorskip("boto3")
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="test")
@@ -549,7 +535,7 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     fake_report.minor = "1234abcd"
     fake_report.path = str(tmp_path)
     reporter._pre_submit(fake_report)
-    assert not tuple(tmp_path.glob("*"))
+    assert not any(tmp_path.glob("*"))
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
     fake_resource.return_value.meta.client.upload_file.assert_not_called()
@@ -565,7 +551,7 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     mocker.patch("grizzly.common.reporter.ClientError", new=FakeClientError)
     fake_resource.return_value.Object.side_effect = FakeClientError("test", {"Error": {"Code": "404"}})
     reporter._pre_submit(fake_report)
-    assert not tuple(tmp_path.glob("*"))
+    assert not any(tmp_path.glob("*"))
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
     assert fake_resource.return_value.meta.client.upload_file.call_count == 1

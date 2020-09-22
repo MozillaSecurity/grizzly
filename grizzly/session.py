@@ -10,7 +10,6 @@ from tempfile import mkdtemp
 from time import sleep, time
 
 from .common import grz_tmp, Report, Runner, RunResult, Status, TestFile
-from .target import TargetLaunchError
 
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
@@ -156,13 +155,7 @@ class Session(object):
                         forced_close=self.target.forced_close,
                         timeout=self.adapter.TEST_DURATION)
                 log.info("Launching target")
-                try:
-                    runner.launch(location, max_retries=3, retry_delay=0)
-                except TargetLaunchError:
-                    # this result likely has nothing to do with Grizzly
-                    log.error("Target launch error. Check browser logs for details.")
-                    self.report_result()
-                    raise
+                runner.launch(location, max_retries=3, retry_delay=0)
             self.target.step()
 
             # create and populate a test case
