@@ -404,6 +404,7 @@ class TestCase(object):
         Returns:
             None
         """
+        # TODO: should we limit or warn on multiple calls to prevent issues?
         keep = set(keep)
         to_remove = []
         for idx, tfile in enumerate(self._files.optional):

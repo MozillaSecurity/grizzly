@@ -26,12 +26,21 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger("replay")
 
 
+class ReplayResult(object):
+    __slots__ = ("count", "expected", "report", "served")
+
+    def __init__(self, report, served, expected):
+        self.count = 1
+        self.expected = expected
+        self.report = report
+        self.served = served
+
+
 class ReplayManager(object):
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
 
     __slots__ = ("ignore", "server", "status", "target", "_any_crash",
-                 "_harness", "_reports_expected", "_reports_other", "_runner",
-                 "_signature", "_unpacked")
+                 "_harness", "_runner", "_signature", "_unpacked")
 
     def __init__(self, ignore, server, target, any_crash=False, signature=None, use_harness=True):
         self.ignore = ignore
@@ -40,8 +49,6 @@ class ReplayManager(object):
         self.target = target
         self._any_crash = any_crash
         self._harness = None
-        self._reports_expected = dict()
-        self._reports_other = dict()
         self._runner = Runner(self.server, self.target)
         # TODO: make signature a property
         self._signature = signature
@@ -64,67 +71,38 @@ class ReplayManager(object):
         Returns:
             None
         """
-        for report in self._reports_expected.values():
-            report.cleanup()
-        self._reports_expected.clear()
-        for report in self._reports_other.values():
-            report.cleanup()
-        self._reports_other.clear()
         if self.status is not None:
             self.status.cleanup()
 
-    @property
-    def other_reports(self):
-        """Reports from results that do not match:
-            - the given signature
-            - the initial result (if any-crash is not specified)
-
-        Args:
-            None
-
-        Returns:
-            iterable: Reports.
-        """
-        return self._reports_other.values()
-
-    @property
-    def reports(self):
-        """Reports from results.
-
-        Args:
-            None
-
-        Returns:
-            iterable: Reports.
-        """
-        return self._reports_expected.values()
-
     @staticmethod
-    def report_to_filesystem(path, reports, other_reports=None, tests=None):
+    def report_to_filesystem(path, results, tests=None):
         """Use FilesystemReporter to write reports and testcase to disk in a
         known location.
 
         Args:
             path (str): Location to write data.
-            reports (iterable): Reports to output.
-            other_reports (iterable): Reports to output.
+            results (iterable): ReplayResult to output.
             tests (iterable): Testcases to output.
 
         Returns:
             None
         """
-        if reports:
-            reporter = FilesystemReporter(
-                report_path=pathjoin(path, "reports"),
-                major_bucket=False)
-            for report in reports:
+        others = list(x.report for x in results if not x.expected)
+        if others:
+            reporter = FilesystemReporter(pathjoin(path, "other_reports"), major_bucket=False)
+            for report in others:
                 reporter.submit(tests or [], report=report)
-        if other_reports:
-            reporter = FilesystemReporter(
-                report_path=pathjoin(path, "other_reports"),
-                major_bucket=False)
-            for report in other_reports:
-                reporter.submit(tests or [], report=report)
+        expected = list(x for x in results if x.expected)
+        if expected:
+            if tests and len(expected) == 1:
+                # only purge optional is reporting a single testcase
+                assert len(tests) >= len(expected[0].served)
+                for test, served in zip(tests, expected[0].served):
+                    LOG.debug("calling test.purge_optional() with %r", served)
+                    test.purge_optional(served)
+            reporter = FilesystemReporter(pathjoin(path, "reports"), major_bucket=False)
+            for result in expected:
+                reporter.submit(tests or [], report=result.report)
 
     def run(self, testcases, repeat=1, min_results=1):
         """Run testcase replay.
@@ -136,16 +114,15 @@ class ReplayManager(object):
                                be considered successful.
 
         Returns:
-            bool: True if results were reproduced otherwise False.
+            list: List of ReplayResults that were found running testcases.
         """
         assert repeat > 0
         assert min_results > 0
         assert min_results <= repeat
+        assert testcases
         assert self.status is None
 
         self.status = Status.start()
-        test_count = len(testcases)
-        assert test_count > 0
 
         server_map = ServerMap()
         if self._harness is not None:
@@ -158,9 +135,13 @@ class ReplayManager(object):
             server_map.set_dynamic_response("grz_close_browser", _dyn_close, mime_type="text/html")
             server_map.set_dynamic_response("grz_harness", lambda: self._harness, mime_type="text/html")
 
-        success = False
+        # track unprocessed results
+        reports = dict()
+        # track unpacked testcases
         unpacked = list()
         try:
+            sig_hash = Report.calc_hash(self._signature) if self._signature else None
+            test_count = len(testcases)
             LOG.debug("unpacking testcases (%d)...", test_count)
             for test in testcases:
                 dst_path = mkdtemp(prefix="tc_", dir=grz_tmp("serve"))
@@ -181,22 +162,16 @@ class ReplayManager(object):
                             self.server.port,
                             close_after=self.target.rl_reset * test_count,
                             forced_close=self.target.forced_close)
-                    try:
-                        # The environment from the initial testcase is used because
-                        # a sequence of testcases is expected to be run without
-                        # relaunching the Target to match the functionality of
-                        # Grizzly. If this is not the case each TestCase should
-                        # be run individually.
-                        self._runner.launch(location, env_mod=testcases[0].env_vars)
-                    except TargetLaunchError:
-                        LOG.error("Target launch error. Check browser logs for details.")
-                        log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
-                        self.target.save_logs(log_path)
-                        self._reports_other["STARTUP"] = Report(log_path, self.target.binary)
-                        raise
+                    # The environment from the initial testcase is used because
+                    # a sequence of testcases is expected to be run without
+                    # relaunching the Target to match the functionality of
+                    # Grizzly. If this is not the case each TestCase should
+                    # be run individually.
+                    self._runner.launch(location, env_mod=testcases[0].env_vars)
                 self.target.step()
                 LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
                 # run tests
+                served = list()
                 for test_idx in range(test_count):
                     LOG.debug("running test: %d of %d", test_idx + 1, test_count)
                     # update redirects
@@ -211,23 +186,24 @@ class ReplayManager(object):
                         testcases[test_idx].landing_page,
                         required=False)
                     # run testcase
-                    result = self._runner.run(
+                    run_result = self._runner.run(
                         self.ignore,
                         server_map,
                         testcases[test_idx],
                         test_path=unpacked[test_idx],
                         wait_for_callback=self._harness is None)
-                    if result.status != RunResult.COMPLETE:
+                    served.append(run_result.served)
+                    if run_result.status != RunResult.COMPLETE:
                         break
-                # process results
-                if result.status == RunResult.FAILED:
+                # process run results
+                if run_result.status == RunResult.FAILED:
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
                     report = Report(log_path, self.target.binary)
                     # check signatures
                     short_sig = report.crash_info.createShortSignature()
                     if not self._any_crash and self._signature is None and short_sig != "No crash detected":
-                        # signature has not been specified use the first one created
+                        LOG.debug("no signature given, using %r", short_sig)
                         self._signature = report.crash_signature
                     if short_sig == "No crash detected":
                         # TODO: verify report.major == "NO_STACK" otherwise FM failed to parse the logs
@@ -237,31 +213,37 @@ class ReplayManager(object):
                         self.status.count_result(short_sig)
                         LOG.info("Result: %s (%s:%s)",
                                  short_sig, report.major[:8], report.minor[:8])
-                        if report.crash_hash not in self._reports_expected:
-                            LOG.debug("now tracking %s", report.crash_hash)
-                            self._reports_expected[report.crash_hash] = report
+                        if sig_hash:
+                            LOG.debug("using provided signature (hash) to bucket")
+                            bucket_hash = sig_hash
+                        else:
+                            bucket_hash = report.crash_hash
+                        if bucket_hash not in reports:
+                            reports[bucket_hash] = ReplayResult(report, served, True)
+                            LOG.debug("now tracking %s", bucket_hash)
                             report = None  # don't remove report
                         else:
-                            LOG.debug("already tracking %s", report.crash_hash)
-                        assert self._any_crash or len(self._reports_expected) == 1
+                            reports[bucket_hash].count += 1
+                            LOG.debug("already tracking %s", bucket_hash)
                     else:
                         LOG.info("Result: Different signature: %s (%s:%s)",
                                  short_sig, report.major[:8], report.minor[:8])
                         self.status.ignored += 1
-                        if report.crash_hash not in self._reports_other:
+                        if report.crash_hash not in reports:
+                            reports[report.crash_hash] = ReplayResult(report, served, False)
                             LOG.debug("now tracking %s", report.crash_hash)
-                            self._reports_other[report.crash_hash] = report
                             report = None  # don't remove report
                         else:
+                            reports[report.crash_hash].count += 1
                             LOG.debug("already tracking %s", report.crash_hash)
                     # purge untracked report
                     if report is not None:
                         report.cleanup()
                         report = None
-                elif result.status == RunResult.IGNORED:
+                elif run_result.status == RunResult.IGNORED:
                     self.status.ignored += 1
                     LOG.info("Result: Ignored (%d)", self.status.ignored)
-                elif result.status == RunResult.ERROR:
+                elif run_result.status == RunResult.ERROR:
                     LOG.error("ERROR: Replay malfunction, test case was not served")
                     break
 
@@ -270,13 +252,14 @@ class ReplayManager(object):
                     if self.status.iteration < repeat:
                         LOG.debug("skipping remaining attempts")
                     # failed to reproduce issue
-                    LOG.debug("results (%d) < expected (%s) after %d attempts",
+                    LOG.debug("results (%d) < expected, %s after %d attempts",
                               self.status.results, min_results, self.status.iteration)
                     break
+                # check if complete (results found)
                 if self.status.results >= min_results:
                     assert self.status.results == min_results
-                    success = True
-                    LOG.debug("results == expected (%s) after %d attempts",
+                    assert sum(x.count for x in reports.values() if x.expected) >= min_results
+                    LOG.debug("results == expected, %s after %d attempts",
                               min_results, self.status.iteration)
                     break
 
@@ -287,15 +270,40 @@ class ReplayManager(object):
 
                 # trigger relaunch by closing the browser if needed
                 self.target.check_relaunch()
+
+            # process results
+            results = list()
+            if self._any_crash:
+                assert all(x.expected for x in reports.values())
+                if sum(x.count for x in reports.values()) >= min_results:
+                    results = list(reports.values())
+                else:
+                    LOG.debug("%d (any_crash) less than minimum %d", self.status.results, min_results)
+                    for report in reports.values():
+                        report.report.cleanup()
+            else:
+                assert sum(x.expected for x in reports.values()) <= 1
+                # filter out unreliable expected results
+                for crash_hash, report in reports.items():
+                    if report.expected and report.count < min_results:
+                        LOG.debug("%r less than minimum (%d/%d)", crash_hash, report.count, min_results)
+                        report.report.cleanup()
+                        continue
+                    results.append(report)
+            # active reports have been moved to results
+            # clear reports to avoid cleanup of active reports
+            reports.clear()
+            return results
+
         finally:
+            # remove unpacked testcase data
             for tc_path in unpacked:
                 rmtree(tc_path)
-        if success:
-            LOG.info("Result successfully reproduced")
-        else:
-            LOG.info("Failed to reproduce results")
-        self.target.close()
-        return success
+            self.target.close()
+            # remove unprocessed reports
+            for report in reports.values():
+                report.report.cleanup()
+
 
     @classmethod
     def main(cls, args):
@@ -329,6 +337,7 @@ class ReplayManager(object):
             return 1
 
         replay = None
+        results = None
         target = None
         tmp_prefs = None
         try:
@@ -380,12 +389,17 @@ class ReplayManager(object):
                     any_crash=args.any_crash,
                     signature=signature,
                     use_harness=not args.no_harness)
-                success = replay.run(testcases, repeat=repeat, min_results=args.min_crashes)
-            if args.logs:
+                results = replay.run(testcases, repeat=repeat, min_results=args.min_crashes)
+            # handle results
+            success = any(x.expected for x in results)
+            if success:
+                LOG.info("Result successfully reproduced")
+            else:
+                LOG.info("Failed to reproduce results")
+            if args.logs and results:
                 replay.report_to_filesystem(
                     args.logs,
-                    replay.reports,
-                    replay.other_reports,
+                    results,
                     testcases if args.include_test else None)
             # TODO: add fuzzmanager reporting
             return 0 if success else 1
@@ -393,18 +407,23 @@ class ReplayManager(object):
         except KeyboardInterrupt:
             return 1
 
-        except (TargetLaunchError, TargetLaunchTimeout):
-            if args.logs and replay is not None:
-                replay.report_to_filesystem(
-                    args.logs,
-                    replay.reports,
-                    replay.other_reports)
+        except (TargetLaunchError, TargetLaunchTimeout) as exc:
+            LOG.error(str(exc))
+            if isinstance(exc, TargetLaunchError) and exc.report:
+                path = grz_tmp("launch_failures")
+                LOG.error("Logs can be found here %r", path)
+                reporter = FilesystemReporter(path, major_bucket=False)
+                reporter.submit([], exc.report)
             return 1
 
         finally:
             LOG.warning("Shutting down...")
             if replay is not None:
                 replay.cleanup()
+            if results:
+                # cleanup unreported results
+                for result in results:
+                    result.report.cleanup()
             if target is not None:
                 target.cleanup()
             for testcase in testcases:

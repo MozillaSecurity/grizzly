@@ -8,6 +8,7 @@ import os
 import time
 import pytest
 import sapphire
+from ..common import Report
 from ..reduce.reduce import ReductionJob
 from ..target.target import Target, TargetLaunchError, TargetLaunchTimeout
 from .test_common import FakeTarget, create_target_binary
@@ -120,14 +121,14 @@ def test_ignored(tmp_path):
         assert obj.target._calls["detect_failure"] == 1
 
 
-def test_target_relaunch_error(tmp_path):
+def test_target_relaunch_error(mocker, tmp_path):
     "target should be launched only once on TargetLaunchError"
 
     class MyTarget(FakeTarget):
 
         def launch(self, *args, **kwds):
             FakeTarget.launch(self, *args, **kwds)
-            raise TargetLaunchError()
+            raise TargetLaunchError("test", mocker.Mock(spec=Report))
 
     with ReductionJob([], MyTarget(), 30, False, False, 0, 1, 1, 0, 0) as obj:
         create_target_binary(obj.target, tmp_path)
@@ -136,7 +137,7 @@ def test_target_relaunch_error(tmp_path):
         (tmp_path / "test.html").touch()
         obj.reduce_file = str(tmp_path / "test.html")
         obj.lithium_init()
-        with pytest.raises(TargetLaunchError):
+        with pytest.raises(TargetLaunchError, match="test"):
             obj.lithium_interesting(str(prefix))
         assert obj.server is not None
         assert obj.target._calls["launch"] == 1

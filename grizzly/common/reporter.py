@@ -86,6 +86,18 @@ class Report(object):
             self.prefix = "%s_%s" % (self.DEFAULT_MINOR, strftime("%Y-%m-%d_%H-%M-%S"))
             self.stack = None
 
+    @staticmethod
+    def calc_hash(signature):
+        """Create unique hash from a signature.
+
+        Args:
+            None
+
+        Returns:
+            str: Hash of the raw signature.
+        """
+        return sha1(signature.rawSignature.encode("utf-8")).hexdigest()[:16]
+
     def cleanup(self):
         """Remove Report data from filesystem.
 
@@ -101,7 +113,7 @@ class Report(object):
 
     @property
     def crash_hash(self):
-        """Create SHA1 hash from signature.
+        """Create unique hash from a signature.
 
         Args:
             None
@@ -109,7 +121,7 @@ class Report(object):
         Returns:
             str: Hash of the raw signature of the crash.
         """
-        return sha1(self.crash_signature.rawSignature.encode("utf-8")).hexdigest()[:16]
+        return self.calc_hash(self.crash_signature)
 
     @property
     def crash_info(self):
@@ -387,9 +399,12 @@ class Reporter(metaclass=ABCMeta):
 class FilesystemReporter(Reporter):
     DISK_SPACE_ABORT = 512 * 1024 * 1024  # 512 MB
 
-    def __init__(self, report_path=None, major_bucket=True):
+    __slots__ = ("major_bucket", "report_path")
+
+    def __init__(self, report_path, major_bucket=True):
         self.major_bucket = major_bucket
-        self.report_path = report_path or pathjoin(getcwd(), "results")
+        assert report_path
+        self.report_path = report_path
 
     def _pre_submit(self, report):
         pass

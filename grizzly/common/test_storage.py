@@ -89,7 +89,7 @@ def test_testcase_04(tmp_path):
     """test TestCase.add_environ_var() and TestCase.env_vars"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         tcase.add_environ_var("TEST_ENV_VAR", "1")
-        assert len(list(tcase.env_vars)) == 1
+        assert len(tcase.env_vars) == 1
         tcase.add_environ_var("TEST_NONE", None)
         assert len(tcase.env_vars) == 2
         dmp_path = tmp_path / "dmp_test"

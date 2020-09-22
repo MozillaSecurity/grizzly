@@ -9,6 +9,7 @@ from pytest import raises
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT, ServerMap
 
+from .reporter import Report
 from .runner import _IdleChecker, Runner, RunResult
 from .storage import TestCase
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
@@ -176,8 +177,8 @@ def test_runner_08(mocker):
     assert target.launch.call_count == 1
     target.reset_mock()
 
-    target.launch.side_effect = TargetLaunchError
-    with raises(TargetLaunchError):
+    target.launch.side_effect = TargetLaunchError("test", mocker.Mock(spec=Report))
+    with raises(TargetLaunchError, match="test"):
         runner.launch("http://a/")
     assert target.launch.call_count == 1
     target.reset_mock()

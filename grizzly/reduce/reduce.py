@@ -1133,7 +1133,7 @@ class ReductionJob(object):
             LOG.info("Reporting issues via FuzzManager")
             job.set_reporter(FuzzManagerReporter(tool=args.tool))
         else:
-            reporter = FilesystemReporter()
+            reporter = FilesystemReporter(os.path.join(os.getcwd(), "results"))
             job.set_reporter(reporter)
             LOG.info("Results will be stored in %r", reporter.report_path)
 

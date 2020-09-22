@@ -7,7 +7,7 @@
 from pytest import raises
 
 from sapphire import Sapphire
-from .common import Adapter
+from .common import Adapter, Report
 from .main import main
 from .session import Session
 from .target import TargetLaunchError
@@ -89,7 +89,7 @@ def test_main_02(mocker):
     with raises(RuntimeError, match=r"Test duration \([0-9]+s\) should be less than browser timeout \([0-9]+s\)"):
         main(args)
 
-def test_main_03(mocker):
+def test_main_03(mocker, tmp_path):
     """test main() exit codes"""
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 10
@@ -107,5 +107,14 @@ def test_main_03(mocker):
     args.input = "fake"
     fake_session.return_value.run.side_effect = KeyboardInterrupt
     assert main(args) == Session.EXIT_ABORT
-    fake_session.return_value.run.side_effect = TargetLaunchError("test")
+    # test TargetLaunchError
+    fake_tmp = (tmp_path / "grz_tmp")
+    fake_tmp.mkdir()
+    mocker.patch("grizzly.main.grz_tmp", return_value=str(fake_tmp))
+    fake_logs = (tmp_path / "report")
+    report = mocker.Mock(spec=Report, prefix="fake_report", path=str(fake_logs))
+    fake_logs.mkdir()
+    fake_session.return_value.run.side_effect = TargetLaunchError("test", report)
     assert main(args) == Session.EXIT_LAUNCH_FAILURE
+    assert any(fake_tmp.glob("fake_report_logs"))
+    assert not fake_logs.is_dir()
