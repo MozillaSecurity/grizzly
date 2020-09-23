@@ -151,7 +151,7 @@ def test_main_03(mocker, tmp_path):
     mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
     fake_tmp = (tmp_path / "grz_tmp")
     fake_tmp.mkdir()
-    mocker.patch("grizzly.replay.replay.grz_tmp", autospec=True, return_value=fake_tmp)
+    mocker.patch("grizzly.replay.replay.grz_tmp", autospec=True, return_value=str(fake_tmp))
     # setup args
     args = mocker.Mock(
         ignore=None,

@@ -403,7 +403,7 @@ class FilesystemReporter(Reporter):
 
     def __init__(self, report_path, major_bucket=True):
         self.major_bucket = major_bucket
-        assert report_path
+        assert isinstance(report_path, str) and report_path
         self.report_path = report_path
 
     def _pre_submit(self, report):
