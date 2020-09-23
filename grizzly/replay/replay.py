@@ -120,8 +120,10 @@ class ReplayManager(object):
         assert min_results > 0
         assert min_results <= repeat
         assert testcases
-        assert self.status is None
 
+        if self.status is not None:
+            LOG.debug("clearing previous status data")
+            self.status.cleanup()
         self.status = Status.start()
 
         server_map = ServerMap()
