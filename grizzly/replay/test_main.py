@@ -6,7 +6,6 @@
 """
 unit tests for grizzly.replay.main
 """
-from os.path import join as pathjoin
 from shutil import rmtree
 
 from pytest import raises
@@ -15,6 +14,8 @@ from ..common import Report, TestCase, TestCaseLoadFailure
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from ..replay import ReplayManager
 from ..replay.args import ReplayArgs
+
+from .test_replay import _fake_save_logs
 
 
 def test_args_01(capsys, tmp_path):
@@ -73,17 +74,6 @@ def test_main_01(mocker, tmp_path):
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.side_effect = (Target.RESULT_FAILURE, Target.RESULT_NONE, Target.RESULT_FAILURE)
-    def _fake_save_logs(result_logs):
-        """write fake log data to disk"""
-        with open(pathjoin(result_logs, "log_stderr.txt"), "w") as log_fp:
-            log_fp.write("STDERR log\n")
-        with open(pathjoin(result_logs, "log_stdout.txt"), "w") as log_fp:
-            log_fp.write("STDOUT log\n")
-        with open(pathjoin(result_logs, "log_asan_blah.txt"), "w") as log_fp:
-            log_fp.write("==1==ERROR: AddressSanitizer: ")
-            log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
-            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
-            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19\n")
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
     # setup args
@@ -220,16 +210,6 @@ def test_main_05(mocker, tmp_path):
     target = mocker.Mock(spec=Target, binary="bin", forced_close=True)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
-    def _fake_save_logs(result_logs):
-        """write fake log data to disk"""
-        with open(pathjoin(result_logs, "log_stderr.txt"), "w") as log_fp:
-            pass
-        with open(pathjoin(result_logs, "log_stdout.txt"), "w") as log_fp:
-            pass
-        with open(pathjoin(result_logs, "log_asan_blah.txt"), "w") as log_fp:
-            log_fp.write("==1==ERROR: AddressSanitizer: ")
-            log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
-            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
     target.save_logs = _fake_save_logs
     load_target = mocker.patch("grizzly.replay.replay.load_target")
     load_target.return_value.return_value = target
@@ -247,9 +227,9 @@ def test_main_05(mocker, tmp_path):
     input_path = (tmp_path / "input")
     input_path.mkdir()
     # build a test case
-    entry_point = (input_path / "target.bin")
+    entry_point = (input_path / "test.html")
     entry_point.touch()
-    with TestCase("target.bin", None, "test-adapter") as src:
+    with TestCase("test.html", None, "test-adapter") as src:
         src.add_from_file(str(entry_point))
         src.dump(str(input_path), include_details=True)
     args.input = str(input_path)
