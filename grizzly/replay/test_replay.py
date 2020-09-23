@@ -430,6 +430,24 @@ def test_replay_16(mocker, tmp_path):
     assert all(x.dump.call_count == 1 for x in testcases)
 
 def test_replay_17(mocker, tmp_path):
+    """test ReplayManager.run() - multiple calls"""
+    mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server.serve_path.return_value = (SERVED_ALL, ["index.html"])
+    target = mocker.Mock(spec=Target, closed=True, forced_close=True, rl_reset=1)
+    target.RESULT_NONE = Target.RESULT_NONE
+    target.detect_failure.return_value = Target.RESULT_NONE
+    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+        with ReplayManager([], server, target, use_harness=True) as replay:
+            assert not replay.run([testcase])
+            assert replay.status.iteration == 1
+            assert not replay.run([testcase])
+            assert replay.status.iteration == 1
+            assert not replay.run([testcase])
+            assert replay.status.iteration == 1
+    assert server.serve_path.call_count == 3
+
+def test_replay_18(mocker, tmp_path):
     """test ReplayManager.report_to_filesystem()"""
     # no reports
     ReplayManager.report_to_filesystem(str(tmp_path), [])
