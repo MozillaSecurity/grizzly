@@ -384,13 +384,13 @@ class TestCase(object):
 
     @property
     def optional(self):
-        """Get file names of optional TestFiles
+        """Get file names of optional TestFiles.
 
         Args:
             None
 
-        Returns:
-            generator: file names (str) of optional files
+        Yields:
+            str: File names of optional files.
         """
         for test in self._files.optional:
             yield test.file_name
@@ -404,14 +404,26 @@ class TestCase(object):
         Returns:
             None
         """
-        # TODO: should we limit or warn on multiple calls to prevent issues?
-        keep = set(keep)
-        to_remove = []
-        for idx, tfile in enumerate(self._files.optional):
-            if tfile.file_name not in keep:
+        # filter required files from opt_files files to keep
+        keep_opt = list()
+        for fname in set(keep):
+            if fname not in (x.file_name for x in self._files.required):
+                keep_opt.append(fname)
+        opt_files = tuple(x.file_name for x in self._files.optional)
+        if not opt_files:
+            assert not keep_opt
+            # nothing to purge
+            return None
+        # sanity check keep (cannot remove file that does not exist)
+        assert all(fname in opt_files for fname in keep_opt)
+        # purge
+        to_remove = list()
+        for idx, fname in enumerate(opt_files):
+            if fname not in keep_opt:
                 to_remove.append(idx)
         for idx in reversed(to_remove):
             self._files.optional.pop(idx).close()
+        return None
 
     @staticmethod
     def scan_path(path):

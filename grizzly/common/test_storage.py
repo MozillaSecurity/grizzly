@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 
+from itertools import chain
 import json
 import re
 import os
@@ -100,7 +101,7 @@ def test_testcase_04(tmp_path):
         assert data["env"]["TEST_ENV_VAR"] == "1"
         assert data["env"]["TEST_NONE"] is None
 
-def test_testcase_05(tmp_path):
+def test_testcase_05():
     """test TestCase.purge_optional()"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         tcase.add_from_data("foo", "testfile1.bin")
@@ -108,13 +109,21 @@ def test_testcase_05(tmp_path):
         tcase.add_from_data("foo", "testfile3.bin", required=False)
         tcase.add_from_data("foo", "not_served.bin", required=False)
         assert len(tuple(tcase.optional)) == 3
+        # nothing to remove - with required
+        tcase.purge_optional(chain(["testfile1.bin"], tcase.optional))
+        assert len(tuple(tcase.optional)) == 3
+        # nothing to remove - without required
         tcase.purge_optional(tcase.optional)
         assert len(tuple(tcase.optional)) == 3
+        # remove not_served.bin
         tcase.purge_optional(["testfile2.bin", "testfile3.bin"])
         assert len(tuple(tcase.optional)) == 2
-        tcase.dump(str(tmp_path))
-        assert tmp_path.glob("testfile1.bin")
-        assert not any(tmp_path.glob("not_served.bin"))
+        assert "testfile2.bin" in tcase.optional
+        assert "testfile3.bin" in tcase.optional
+        assert "not_served.bin" not in tcase.optional
+        # remove remaining optional
+        tcase.purge_optional(["testfile1.bin"])
+        assert not any(tcase.optional)
 
 def test_testcase_06():
     """test TestCase.data_size"""

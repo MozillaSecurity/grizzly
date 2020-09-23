@@ -41,6 +41,7 @@ def test_session_01(tmp_path, mocker):
         def generate(self, testcase, server_map):
             assert testcase.adapter_name == self.NAME
             testcase.input_fname = "file.bin"
+            testcase.add_from_data("test", testcase.landing_page)
             self.remaining -= 1
     Status.PATH = str(tmp_path)
     adapter = PlaybackAdapter()
@@ -66,6 +67,7 @@ def test_session_02(tmp_path, mocker):
             self.enable_harness()
         def generate(self, testcase, server_map):
             assert testcase.adapter_name == self.NAME
+            testcase.add_from_data("test", testcase.landing_page)
     Status.PATH = str(tmp_path)
     adapter = FuzzAdapter()
     adapter.setup(None, None)
@@ -85,8 +87,16 @@ def test_session_02(tmp_path, mocker):
 
 def test_session_03(tmp_path, mocker):
     """test Session.dump_coverage()"""
+    class FuzzAdapter(Adapter):
+        NAME = "fuzz"
+        def setup(self, input_path, server_map):
+            self.enable_harness()
+        def generate(self, testcase, server_map):
+            assert testcase.adapter_name == self.NAME
+            testcase.add_from_data("test", testcase.landing_page)
     Status.PATH = str(tmp_path)
-    adapter = mocker.Mock(spec=Adapter, remaining=None)
+    adapter = FuzzAdapter()
+    adapter.setup(None, None)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target, prefs=None, rl_reset=2)
     fake_target.log_size.return_value = 1000

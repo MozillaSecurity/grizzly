@@ -16,7 +16,7 @@ from ..common import Report, Status, TestCase
 from ..target import Target
 
 
-def _fake_save_logs_result(result_logs, meta=False):  # pylint: disable=unused-argument
+def _fake_save_logs(result_logs, meta=False):  # pylint: disable=unused-argument
     """write fake log data to disk"""
     with open(pathjoin(result_logs, "log_stderr.txt"), "w") as log_fp:
         log_fp.write("STDERR log\n")
@@ -80,7 +80,7 @@ def test_replay_04(mocker, tmp_path):
     target = mocker.Mock(spec=Target, binary="C:\\fake_bin")
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
-    target.save_logs = _fake_save_logs_result
+    target.save_logs = _fake_save_logs
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, use_harness=False) as replay:
             results = replay.run([testcase])
@@ -142,7 +142,7 @@ def test_replay_07(mocker, tmp_path):
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.RESULT_NONE = Target.RESULT_NONE
-    target.save_logs = _fake_save_logs_result
+    target.save_logs = _fake_save_logs
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     # early failure
     target.detect_failure.side_effect = (Target.RESULT_FAILURE, Target.RESULT_IGNORED, Target.RESULT_NONE)
@@ -411,7 +411,7 @@ def test_replay_16(mocker, tmp_path):
         Target.RESULT_NONE,
         Target.RESULT_NONE,
         Target.RESULT_FAILURE)
-    target.save_logs = _fake_save_logs_result
+    target.save_logs = _fake_save_logs
     testcases = [
         mocker.Mock(spec=TestCase, env_vars=[], landing_page="a.html", optional=[]),
         mocker.Mock(spec=TestCase, env_vars=[], landing_page="b.html", optional=[]),
