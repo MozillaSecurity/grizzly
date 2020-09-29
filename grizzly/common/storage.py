@@ -282,7 +282,7 @@ class TestCase(object):
                     zip_fp.extractall(path=unpacked)
             except (BadZipfile, zlib_error):
                 shutil.rmtree(unpacked, ignore_errors=True)
-                raise TestCaseLoadFailure("Testcase archive is corrupted")
+                raise TestCaseLoadFailure("Testcase archive is corrupted") from None
             path = unpacked
         else:
             unpacked = None
@@ -339,9 +339,9 @@ class TestCase(object):
                 with open(os.path.join(path, "test_info.json"), "r") as in_fp:
                     info = json.load(in_fp)
             except IOError:
-                raise TestCaseLoadFailure("Missing 'test_info.json'")
+                raise TestCaseLoadFailure("Missing 'test_info.json'") from None
             except ValueError:
-                raise TestCaseLoadFailure("Invalid 'test_info.json'")
+                raise TestCaseLoadFailure("Invalid 'test_info.json'") from None
             if not isinstance(info.get("target"), str):
                 raise TestCaseLoadFailure("'test_info.json' has invalid 'target' entry")
             entry_point = os.path.basename(info["target"])

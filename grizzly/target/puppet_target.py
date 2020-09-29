@@ -216,10 +216,10 @@ class PuppetTarget(Target):
             LOG.error("FFPuppet LaunchError: %s", str(exc))
             self.close()
             if isinstance(exc, BrowserTimeoutError):
-                raise TargetLaunchTimeout(str(exc))
+                raise TargetLaunchTimeout(str(exc)) from None
             log_path = mkdtemp(prefix="launch_fail_", dir=grz_tmp("logs"))
             self.save_logs(log_path)
-            raise TargetLaunchError(str(exc), Report(log_path, self.binary))
+            raise TargetLaunchError(str(exc), Report(log_path, self.binary)) from None
 
     def log_size(self):
         return self._puppet.log_length("stderr") + self._puppet.log_length("stdout")
