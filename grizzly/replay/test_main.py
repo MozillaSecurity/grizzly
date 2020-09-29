@@ -54,6 +54,10 @@ def test_args_01(capsys, tmp_path):
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--any-crash", "--sig", "x"])
     assert "error: signature is ignored when running with '--any-crash'" in capsys.readouterr()[-1]
+    # multiple debuggers
+    with raises(SystemExit):
+        ReplayArgs().parse_args([str(exe), str(inp), "--rr", "--valgrind"])
+    assert "'--rr' and '--valgrind' cannot be used together" in capsys.readouterr()[-1]
     # force relaunch == 1 with --no-harness
     args = ReplayArgs().parse_args([str(exe), str(inp), "--no-harness"])
     assert args.relaunch == 1
@@ -90,8 +94,10 @@ def test_main_01(mocker, tmp_path):
         prefs=str(tmp_path / "prefs.js"),
         relaunch=1,
         repeat=4,
+        rr=False,
         sig=str(tmp_path / "sig.json"),
-        timeout=10)
+        timeout=10,
+        valgrind=False)
     assert ReplayManager.main(args) == 0
     assert target.forced_close
     assert target.reverse.call_count == 1
@@ -126,13 +132,20 @@ def test_main_02(mocker):
         sig=None)
     # user abort
     fake_load_target.side_effect = KeyboardInterrupt
+    # coverage
+    args.rr = True
+    args.valgrind = False
     assert ReplayManager.main(args) == 1
     # invalid test case
     fake_load_target.reset_mock()
     fake_tc.load.side_effect = TestCaseLoadFailure
+    # coverage
+    args.rr = False
+    args.valgrind = True
     assert ReplayManager.main(args) == 1
     assert fake_load_target.call_count == 0
     # no test cases
+    args.valgrind = False
     fake_tc.load.side_effect = None
     fake_tc.load.return_value = list()
     assert ReplayManager.main(args) == 1

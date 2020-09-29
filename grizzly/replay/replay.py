@@ -312,6 +312,7 @@ class ReplayManager(object):
         configure_logging(args.log_level)
         if args.fuzzmanager:
             FuzzManagerReporter.sanity_check(args.binary)
+            # TODO: add fuzzmanager support
 
         LOG.info("Starting Grizzly Replay")
 
@@ -319,10 +320,10 @@ class ReplayManager(object):
             LOG.info("Ignoring: %s", ", ".join(args.ignore))
         if args.xvfb:
             LOG.info("Running with Xvfb")
-        if args.valgrind:
-            LOG.info("Running with Valgrind. This will be SLOW!")
         if args.rr:
             LOG.info("Running with RR")
+        elif args.valgrind:
+            LOG.info("Running with Valgrind. This will be SLOW!")
 
         if args.sig:
             signature = CrashSignature.fromFile(args.sig)
