@@ -72,5 +72,8 @@ class ReplayArgs(CommonArgs):
         if args.repeat < 1:
             self.parser.error("'--repeat' value must be positive")
 
+        if args.rr and args.valgrind:
+            self.parser.error("'--rr' and '--valgrind' cannot be used together")
+
         if args.sig is not None and not isfile(args.sig):
             self.parser.error("signature file not found: %r" % (args.sig,))

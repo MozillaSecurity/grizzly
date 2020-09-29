@@ -212,3 +212,6 @@ class GrizzlyArgs(CommonArgs):
 
         if args.tool is not None and not (args.fuzzmanager or args.s3_fuzzmanager):
             self.parser.error("--tool can only be given with --fuzzmanager/--s3-fuzzmanager")
+
+        if args.rr and args.valgrind:
+            self.parser.error("'--rr' and '--valgrind' cannot be used together")

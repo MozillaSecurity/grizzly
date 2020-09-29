@@ -41,10 +41,10 @@ def main(args):
         log.info("Ignoring: %s", ", ".join(args.ignore))
     if args.xvfb:
         log.info("Running with Xvfb")
-    if args.valgrind:
-        log.info("Running with Valgrind. This will be SLOW!")
     if args.rr:
         log.info("Running with RR")
+    elif args.valgrind:
+        log.info("Running with Valgrind. This will be SLOW!")
 
     adapter = None
     iomanager = None
