@@ -25,11 +25,11 @@ class ReplayArgs(CommonArgs):
             "--any-crash", action="store_true",
             help="Any crash is interesting, not only crashes which match the original signature.")
         replay_args.add_argument(
-            "--idle-threshold", type=int, default=25,
-            help="CPU usage threshold to mark the process as idle (default: %(default)s)")
+            "--idle-delay", type=int, default=30,
+            help="Number of seconds to wait before polling for idle (default: %(default)s)")
         replay_args.add_argument(
-            "--idle-timeout", type=int, default=60,
-            help="Number of seconds to wait before polling testcase for idle (default: %(default)s)")
+            "--idle-threshold", type=int, default=0,
+            help="CPU usage threshold to mark the process as idle (default: disabled)")
         replay_args.add_argument(
             "-l", "--logs",
             help="Location to save logs. If the path exists it must be empty, if it " \
@@ -62,6 +62,9 @@ class ReplayArgs(CommonArgs):
 
         if args.any_crash and args.sig is not None:
             self.parser.error("signature is ignored when running with '--any-crash'")
+
+        if args.idle_threshold and args.idle_delay <= 0:
+            self.parser.error("'--idle-delay' value must be positive")
 
         if args.min_crashes < 1:
             self.parser.error("'--min-crashes' value must be positive")

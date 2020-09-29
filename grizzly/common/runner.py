@@ -76,8 +76,9 @@ class _IdleChecker(object):
 class Runner(object):
     __slots__ = ("_idle", "_server", "_target")
 
-    def __init__(self, server, target, idle_threshold=0, idle_delay=60):
+    def __init__(self, server, target, idle_threshold=0, idle_delay=0):
         if idle_threshold > 0:
+            assert idle_delay > 0
             self._idle = _IdleChecker(target.is_idle, idle_threshold, idle_delay)
         else:
             self._idle = None
