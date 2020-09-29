@@ -189,7 +189,7 @@ def test_session_07(tmp_path, mocker):
     Status.PATH = str(tmp_path)
     mocker.patch("grizzly.session.Report", autospec=True)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_runner.return_value.run.return_value = RunResult(["/fake/file"], status=RunResult.FAILED)
+    fake_runner.return_value.run.return_value = RunResult(["/fake/file"], 1, status=RunResult.FAILED)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_adapter.IGNORE_UNSERVED = True
@@ -216,7 +216,7 @@ def test_session_08(tmp_path, mocker):
     """test Session.run() ignoring failures"""
     Status.PATH = str(tmp_path)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_runner.return_value.run.return_value = RunResult([], status=RunResult.IGNORED)
+    fake_runner.return_value.run.return_value = RunResult([], 0.1, status=RunResult.IGNORED)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_adapter.IGNORE_UNSERVED = True

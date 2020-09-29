@@ -165,6 +165,7 @@ class Session(object):
 
             # run test case
             result = runner.run(ignore, self.iomanager.server_map, current_test, coverage=self.coverage)
+            current_test.duration = result.duration
             # adapter callbacks
             if result.timeout:
                 log.debug("calling self.adapter.on_timeout()")
