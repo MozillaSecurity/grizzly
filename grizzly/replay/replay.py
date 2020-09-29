@@ -41,7 +41,7 @@ class ReplayManager(object):
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
 
     __slots__ = ("ignore", "server", "status", "target", "_any_crash",
-                 "_harness", "_runner", "_signature", "_unpacked")
+                 "_harness", "_signature", "_unpacked")
 
     def __init__(self, ignore, server, target, any_crash=False, signature=None, use_harness=True):
         self.ignore = ignore
@@ -50,7 +50,6 @@ class ReplayManager(object):
         self.target = target
         self._any_crash = any_crash
         self._harness = None
-        self._runner = Runner(self.server, self.target)
         # TODO: make signature a property
         self._signature = signature
         if use_harness:
@@ -105,7 +104,7 @@ class ReplayManager(object):
             for result in expected:
                 reporter.submit(tests or [], report=result.report)
 
-    def run(self, testcases, repeat=1, min_results=1):
+    def run(self, testcases, repeat=1, min_results=1, idle_delay=0, idle_threshold=0):
         """Run testcase replay.
 
         Args:
@@ -113,13 +112,17 @@ class ReplayManager(object):
             repeat (int): Maximum number of times to run the TestCase.
             min_results (int): Minimum number of results needed before run can
                                be considered successful.
+            idle_delay (int): Number of seconds to wait before polling for idle.
+            idle_threshold (int): CPU usage threshold to mark the process as idle.
 
         Returns:
-            list: List of ReplayResults that were found running testcases.
+            list: ReplayResults that were found running testcases.
         """
-        assert repeat > 0
+        assert idle_delay >= 0
+        assert idle_threshold >= 0
         assert min_results > 0
-        assert min_results <= repeat
+        assert repeat > 0
+        assert repeat >= min_results
         assert testcases
 
         if self.status is not None:
@@ -138,6 +141,7 @@ class ReplayManager(object):
             server_map.set_dynamic_response("grz_close_browser", _dyn_close, mime_type="text/html")
             server_map.set_dynamic_response("grz_harness", lambda: self._harness, mime_type="text/html")
 
+        runner = Runner(self.server, self.target, idle_threshold=idle_threshold, idle_delay=idle_delay)
         # track unprocessed results
         reports = dict()
         # track unpacked testcases
@@ -156,11 +160,11 @@ class ReplayManager(object):
                 if self.target.closed:
                     LOG.info("Launching target...")
                     if self._harness is None:
-                        location = self._runner.location(
+                        location = runner.location(
                             "/grz_current_test",
                             self.server.port)
                     else:
-                        location = self._runner.location(
+                        location = runner.location(
                             "/grz_harness",
                             self.server.port,
                             close_after=self.target.rl_reset * test_count,
@@ -170,7 +174,7 @@ class ReplayManager(object):
                     # relaunching the Target to match the functionality of
                     # Grizzly. If this is not the case each TestCase should
                     # be run individually.
-                    self._runner.launch(location, env_mod=testcases[0].env_vars)
+                    runner.launch(location, env_mod=testcases[0].env_vars)
                 self.target.step()
                 LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
                 # run tests
@@ -190,7 +194,7 @@ class ReplayManager(object):
                         testcases[test_idx].landing_page,
                         required=False)
                     # run testcase
-                    run_result = self._runner.run(
+                    run_result = runner.run(
                         self.ignore,
                         server_map,
                         testcases[test_idx],
@@ -342,7 +346,6 @@ class ReplayManager(object):
             LOG.error("Error: %s", str(exc))
             return 1
 
-        replay = None
         results = None
         target = None
         tmp_prefs = None
@@ -388,14 +391,20 @@ class ReplayManager(object):
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=args.timeout) as server:
                 target.reverse(server.port, server.port)
-                replay = ReplayManager(
+                with cls(
                     args.ignore,
                     server,
                     target,
                     any_crash=args.any_crash,
                     signature=signature,
-                    use_harness=not args.no_harness)
-                results = replay.run(testcases, repeat=repeat, min_results=args.min_crashes)
+                    use_harness=not args.no_harness
+                ) as replay:
+                    results = replay.run(
+                        testcases,
+                        idle_delay=args.idle_delay,
+                        idle_threshold=args.idle_threshold,
+                        min_results=args.min_crashes,
+                        repeat=repeat)
             # handle results
             success = any(x.expected for x in results)
             if success:
@@ -403,7 +412,7 @@ class ReplayManager(object):
             else:
                 LOG.info("Failed to reproduce results")
             if args.logs and results:
-                replay.report_to_filesystem(
+                cls.report_to_filesystem(
                     args.logs,
                     results,
                     testcases if args.include_test else None)
@@ -424,8 +433,6 @@ class ReplayManager(object):
 
         finally:
             LOG.warning("Shutting down...")
-            if replay is not None:
-                replay.cleanup()
             if results:
                 # cleanup unreported results
                 for result in results:

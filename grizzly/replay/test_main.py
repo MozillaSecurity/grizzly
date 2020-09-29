@@ -54,10 +54,14 @@ def test_args_01(capsys, tmp_path):
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--any-crash", "--sig", "x"])
     assert "error: signature is ignored when running with '--any-crash'" in capsys.readouterr()[-1]
-    # multiple debuggers
+    # test multiple debuggers
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--rr", "--valgrind"])
     assert "'--rr' and '--valgrind' cannot be used together" in capsys.readouterr()[-1]
+    # test idle args
+    with raises(SystemExit):
+        ReplayArgs().parse_args([str(exe), str(inp), "--idle-threshold", "1", "--idle-delay", "0"])
+    assert "'--idle-delay' value must be positive" in capsys.readouterr()[-1]
     # force relaunch == 1 with --no-harness
     args = ReplayArgs().parse_args([str(exe), str(inp), "--no-harness"])
     assert args.relaunch == 1
@@ -87,6 +91,8 @@ def test_main_01(mocker, tmp_path):
     (tmp_path / "sig.json").write_bytes(b"{\"symptoms\": [{\"type\": \"crashAddress\", \"address\": \"0\"}]}")
     args = mocker.Mock(
         fuzzmanager=False,
+        idle_delay=0,
+        idle_threshold=0,
         ignore=["fake", "timeout"],
         input=str(tmp_path / "test.html"),
         logs=str(log_path),
@@ -202,6 +208,8 @@ def test_main_04(mocker):
     # setup args
     args = mocker.Mock(
         fuzzmanager=False,
+        idle_delay=0,
+        idle_threshold=0,
         ignore=None,
         input="test",
         min_crashes=1,
@@ -229,6 +237,8 @@ def test_main_05(mocker, tmp_path):
     # setup args
     args = mocker.Mock(
         fuzzmanager=False,
+        idle_delay=0,
+        idle_threshold=0,
         ignore=None,
         min_crashes=1,
         relaunch=1,
