@@ -96,6 +96,7 @@ def test_replay_04(mocker, tmp_path):
         assert results[0].report
         assert len(results[0].served) == 1
         assert results[0].served[0] == served
+        assert len(results[0].durations) == 1
         results[0].report.cleanup()
         assert not any(tmp_path.glob("*"))
 
@@ -427,6 +428,7 @@ def test_replay_16(mocker, tmp_path):
     assert results[0].served[0][0] == "a.html"
     assert results[0].served[1][0] == "b.html"
     assert results[0].served[2][0] == "c.html"
+    assert len(results[0].durations) == len(testcases)
     assert all(x.dump.call_count == 1 for x in testcases)
 
 def test_replay_17(mocker, tmp_path):
@@ -454,19 +456,19 @@ def test_replay_18(mocker, tmp_path):
     assert not any(tmp_path.glob("*"))
     # with reports and tests
     (tmp_path / "report_expected").mkdir()
-    result0 = mocker.Mock(ReplayResult, count=1, expected=True, served=[])
+    result0 = mocker.Mock(ReplayResult, count=1, durations=[1], expected=True, served=[])
     result0.report = mocker.Mock(
         spec=Report,
         path=str(tmp_path / "report_expected"),
         prefix="expected")
     (tmp_path / "report_other1").mkdir()
-    result1 = mocker.Mock(ReplayResult, count=1, expected=False, served=None)
+    result1 = mocker.Mock(ReplayResult, count=1, durations=[1], expected=False, served=None)
     result1.report = mocker.Mock(
         spec=Report,
         path=str(tmp_path / "report_other1"),
         prefix="other1")
     (tmp_path / "report_other2").mkdir()
-    result2 = mocker.Mock(ReplayResult, count=1, expected=False, served=None)
+    result2 = mocker.Mock(ReplayResult, count=1, durations=[1], expected=False, served=None)
     result2.report = mocker.Mock(
         spec=Report,
         path=str(tmp_path / "report_other2"),

@@ -27,10 +27,11 @@ LOG = getLogger("replay")
 
 
 class ReplayResult(object):
-    __slots__ = ("count", "expected", "report", "served")
+    __slots__ = ("count", "durations", "expected", "report", "served")
 
-    def __init__(self, report, served, expected):
+    def __init__(self, report, served, durations, expected):
         self.count = 1
+        self.durations = durations
         self.expected = expected
         self.report = report
         self.served = served
@@ -173,6 +174,7 @@ class ReplayManager(object):
                 self.target.step()
                 LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
                 # run tests
+                durations = list()
                 served = list()
                 for test_idx in range(test_count):
                     LOG.debug("running test: %d of %d", test_idx + 1, test_count)
@@ -194,6 +196,7 @@ class ReplayManager(object):
                         testcases[test_idx],
                         test_path=unpacked[test_idx],
                         wait_for_callback=self._harness is None)
+                    durations.append(run_result.duration)
                     served.append(run_result.served)
                     if run_result.status != RunResult.COMPLETE:
                         break
@@ -221,7 +224,7 @@ class ReplayManager(object):
                         else:
                             bucket_hash = report.crash_hash
                         if bucket_hash not in reports:
-                            reports[bucket_hash] = ReplayResult(report, served, True)
+                            reports[bucket_hash] = ReplayResult(report, served, durations, True)
                             LOG.debug("now tracking %s", bucket_hash)
                             report = None  # don't remove report
                         else:
@@ -232,7 +235,7 @@ class ReplayManager(object):
                                  short_sig, report.major[:8], report.minor[:8])
                         self.status.ignored += 1
                         if report.crash_hash not in reports:
-                            reports[report.crash_hash] = ReplayResult(report, served, False)
+                            reports[report.crash_hash] = ReplayResult(report, served, durations, False)
                             LOG.debug("now tracking %s", report.crash_hash)
                             report = None  # don't remove report
                         else:

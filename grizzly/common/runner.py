@@ -175,12 +175,12 @@ class Runner(object):
                 forever=wait_for_callback,
                 optional_files=tuple(testcase.optional),
                 server_map=server_map)
-            testcase.duration = time() - serve_start
+            duration = time() - serve_start
         finally:
             # remove temporary files
             if test_path is None:
                 rmtree(wwwdir)
-        result = RunResult(served, timeout=server_status == SERVED_TIMEOUT)
+        result = RunResult(served, duration, timeout=server_status == SERVED_TIMEOUT)
         # TODO: fix calling TestCase.add_batch() for multi-test replay
         # add all include files that were served
         for url, resource in server_map.include.items():
@@ -208,8 +208,8 @@ class Runner(object):
         return result
 
     def _keep_waiting(self):
-        """Callback used by the server to determine if should continue to wait
-        for the requests from the target.
+        """Callback used by the server to determine if it should continue to
+        wait for the requests from the target.
 
         Args:
             None
@@ -229,9 +229,10 @@ class RunResult(object):
     FAILED = 3
     IGNORED = 4
 
-    __slots__ = ("served", "status", "timeout")
+    __slots__ = ("duration", "served", "status", "timeout")
 
-    def __init__(self, served, status=None, timeout=False):
+    def __init__(self, served, duration, status=None, timeout=False):
+        self.duration = duration
         self.served = served
         self.status = status
         self.timeout = timeout

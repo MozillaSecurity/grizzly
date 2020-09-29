@@ -647,6 +647,7 @@ class ReductionJob(object):
 
         # run test case
         result = runner.run(self._ignore, self._server_map, testcase, wait_for_callback=self._no_harness)
+        testcase.duration = result.duration
 
         # handle failure if detected
         if result.status == RunResult.FAILED:

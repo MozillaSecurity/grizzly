@@ -16,6 +16,7 @@ from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 
 def test_runner_01(mocker, tmp_path):
     """test Runner()"""
+    fake_time = mocker.patch("grizzly.common.runner.time", autospec=True)
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
     target.detect_failure.return_value = target.RESULT_NONE
@@ -24,8 +25,10 @@ def test_runner_01(mocker, tmp_path):
     serv_files = ["a.bin", "/another/file.bin"]
     testcase = mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[])
     # all files served
+    fake_time.side_effect = (1, 2)
     server.serve_path.return_value = (SERVED_ALL, serv_files)
     result = runner.run([], ServerMap(), testcase)
+    assert result.duration == 1
     assert result.status == RunResult.COMPLETE
     assert result.served == serv_files
     assert not result.timeout
@@ -33,6 +36,7 @@ def test_runner_01(mocker, tmp_path):
     assert target.dump_coverage.call_count == 0
     assert testcase.dump.call_count == 1
     # some files served
+    fake_time.side_effect = (1, 2)
     server.serve_path.return_value = (SERVED_REQUEST, serv_files)
     result = runner.run([], ServerMap(), testcase, coverage=True)
     assert result.status == RunResult.COMPLETE
@@ -41,6 +45,7 @@ def test_runner_01(mocker, tmp_path):
     assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 1
     # existing test path
+    fake_time.side_effect = (1, 2)
     testcase.reset_mock()
     tc_path = (tmp_path / "tc")
     tc_path.mkdir()
