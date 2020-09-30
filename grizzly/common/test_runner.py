@@ -227,8 +227,8 @@ def test_runner_09(mocker, tmp_path):
 def test_idle_check_01(mocker):
     """test simple _IdleChecker"""
     fake_time = mocker.patch("grizzly.common.runner.time", autospec=True)
-    ichk = _IdleChecker(mocker.Mock(), 100, 10, poll_delay=1)
-    assert ichk._threshold == 100
+    ichk = _IdleChecker(mocker.Mock(), 95, 10, poll_delay=1)
+    assert ichk._threshold == 95
     assert ichk._init_delay == 10
     assert ichk._poll_delay == 1
     assert ichk._next_poll is None
@@ -243,8 +243,7 @@ def test_idle_check_02(mocker):
     fake_time = mocker.patch("grizzly.common.runner.time", autospec=True)
     callbk = mocker.Mock()
     callbk.return_value = False
-    #check_cb, delay, duration, threshold
-    ichk = _IdleChecker(callbk, 100, 10, poll_delay=1)
+    ichk = _IdleChecker(callbk, 99, 10, poll_delay=1)
     fake_time.return_value = 0
     ichk.schedule_poll()
     # early check
