@@ -385,15 +385,16 @@ class Reporter(metaclass=ABCMeta):
             report (Report): Report to submit.
 
         Returns:
-            None
+            *: implementation specific result indicating where the report was created
         """
         assert isinstance(report, Report)
         assert report.path is not None
         self._pre_submit(report)
-        self._submit_report(report, test_cases)
+        result = self._submit_report(report, test_cases)
         if report is not None:
             report.cleanup()
         self._post_submit()
+        return result
 
 
 class FilesystemReporter(Reporter):
@@ -435,6 +436,7 @@ class FilesystemReporter(Reporter):
         free_space = disk_usage(log_path).free
         if free_space < self.DISK_SPACE_ABORT:
             raise RuntimeError("Running low on disk space (%0.1fMB)" % (free_space / 1048576.0,))
+        return dest_path
 
 
 class FuzzManagerReporter(Reporter):
@@ -610,6 +612,8 @@ class FuzzManagerReporter(Reporter):
         # remove zipfile
         if isfile(zip_name):
             unlink(zip_name)
+
+        return new_entry["id"]
 
 
 class S3FuzzManagerReporter(FuzzManagerReporter):

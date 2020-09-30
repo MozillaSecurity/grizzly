@@ -10,7 +10,7 @@ from setuptools import setup
 
 
 EXTRAS = {
-    'reduce': ['cssbeautifier', 'lithium-reducer<0.4', 'jsbeautifier'],
+    'reduce': ['cssbeautifier', 'lithium-reducer>=0.4', 'jsbeautifier'],
     's3': ['boto3'],
 }
 EXTRAS['all'] = list(set(chain.from_iterable(EXTRAS.values())))
@@ -40,6 +40,11 @@ if __name__ == '__main__':
             ],
             'grizzly_targets': [
                 'ffpuppet = grizzly.target.puppet_target:PuppetTarget',
+            ],
+            'grizzly_reduce_strategies': [
+                'check = grizzly.reduce.strategies:Check',
+                'lines = grizzly.reduce.strategies:MinimizeLines',
+                'list = grizzly.reduce.strategies:MinimizeTestcaseList',
             ],
         },
         extras_require=EXTRAS,

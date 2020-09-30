@@ -85,6 +85,15 @@ class Target(metaclass=ABCMeta):
     def __exit__(self, *exc):
         self.cleanup()
 
+    @property
+    def relaunch(self):
+        return self.rl_reset
+
+    @relaunch.setter
+    def relaunch(self, value):
+        self.rl_reset = value
+        self.rl_countdown = 0
+
     def add_abort_token(self, token):  # pylint: disable=no-self-use,unused-argument
         LOG.warning("add_abort_token() not implemented!")
 
