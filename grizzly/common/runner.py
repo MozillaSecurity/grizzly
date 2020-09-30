@@ -30,7 +30,7 @@ class _IdleChecker(object):
         assert callable(check_cb)
         assert initial_delay >= 0
         assert poll_delay >= 0
-        assert threshold >= 0
+        assert 100 > threshold >= 0
         self._check_cb = check_cb  # callback used to check if target is idle
         self._init_delay = initial_delay  # time to wait before the initial idle poll
         self._poll_delay = poll_delay  # time to wait between subsequent polls
@@ -79,6 +79,7 @@ class Runner(object):
     def __init__(self, server, target, idle_threshold=0, idle_delay=0):
         if idle_threshold > 0:
             assert idle_delay > 0
+            LOG.debug("using idle check, th %d, delay %ds", idle_threshold, idle_delay)
             self._idle = _IdleChecker(target.is_idle, idle_threshold, idle_delay)
         else:
             self._idle = None
