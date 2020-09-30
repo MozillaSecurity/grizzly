@@ -43,6 +43,7 @@ if __name__ == '__main__':
             ],
             'grizzly_reduce_strategies': [
                 'check = grizzly.reduce.strategies:Check',
+                'chars = grizzly.reduce.strategies:MinimizeChars',
                 'lines = grizzly.reduce.strategies:MinimizeLines',
                 'list = grizzly.reduce.strategies:MinimizeTestcaseList',
             ],
