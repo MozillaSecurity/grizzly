@@ -50,7 +50,6 @@ class ReplayManager(object):
         self.target = target
         self._any_crash = any_crash
         self._harness = None
-        # TODO: make signature a property
         self._signature = signature
         if use_harness:
             with open(self.HARNESS_FILE, "rb") as in_fp:
@@ -64,6 +63,10 @@ class ReplayManager(object):
 
     def __exit__(self, *exc):
         self.cleanup()
+
+    @property
+    def signature(self):
+        return self._signature
 
     def cleanup(self):
         """Remove temporary files from disk.

@@ -2,409 +2,202 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import abc
-import logging
-import math
-import os
-import re
+"""
+Grizzly Reducer strategy definitions
+"""
+from abc import ABC, abstractmethod
+import json
+from logging import getLogger
+from pathlib import Path
+from shutil import rmtree
+from tempfile import mkdtemp
+from types import MappingProxyType
 
-try:
-    import cssbeautifier
-    HAVE_CSSBEAUTIFIER = True
-except ImportError:
-    HAVE_CSSBEAUTIFIER = False
-try:
-    import jsbeautifier
-    HAVE_JSBEAUTIFIER = True
-except ImportError:
-    HAVE_JSBEAUTIFIER = False
-import lithium
+from lithium.strategies import CheckOnly, Minimize
+from lithium.testcases import TestcaseLine
+from pkg_resources import iter_entry_points
 
-from . import testcase_contents
+from ..common.utils import grz_tmp
+from ..common.storage import TestCase
 
 
-LOG = logging.getLogger(__name__)
+LOG = getLogger(__name__)
 
 
-class ReduceStage(metaclass=abc.ABCMeta):
-    strategy_type = None
-    testcase_type = None
-
-    def __init__(self, job, run_state, reducer):
-        if getattr(self, "USES_ANALYSIS_MODE", False):
-            self._analysis_mode = job.analysis_mode
-        else:
-            self._analysis_mode = None
-
-        if getattr(self, "ALTERS_JOB_TESTCASE", False):
-            self.job_testcase = job.testcase_proxy(run_state)
-
-        if getattr(self, "ALTERS_JOB_TIMEOUTS", False):
-            self.job_timeouts = job.timeouts_proxy()
-
-        self.lithium = reducer
-
-    def read_testcase(self, testcase_path):
-        if self._analysis_mode is not None:
-            self.lithium.strategy = self.strategy_type(self._analysis_mode)  # pylint: disable=not-callable
-        else:
-            self.lithium.strategy = self.strategy_type()  # pylint: disable=not-callable
-        self.lithium.testcase = self.testcase_type()  # pylint: disable=not-callable
-        LOG.info("Reducing %s with %s on %ss",
-                 testcase_path, self.strategy_type.name, self.testcase_type.atom)
-        self.lithium.testcase.readTestcase(testcase_path)
-
-    def should_skip(self):  # pylint: disable=no-self-use
-        return False
-
-    def on_success(self):
-        LOG.info("%s succeeded", type(self).__name__)
-
-    def on_failure(self):  # pylint: disable=no-self-use
-        raise StopIteration()
+DEFAULT_STRATEGIES = (
+    "list",
+    "lines",
+)
 
 
-class MinimizeLines(ReduceStage):
-    name = "line"
-    strategy_type = lithium.Minimize
-    testcase_type = lithium.TestcaseLine
+def _load_strategies():
+    """STRATEGIES is created at the end of this file.
+    """
+    strategies = {}
+    for entry_point in iter_entry_points("grizzly_reduce_strategies"):
+        try:
+            strategy_cls = entry_point.load()
+            assert (
+                strategy_cls.name == entry_point.name
+            ), "entry_point name mismatch, check setup.py and %s.name" % (
+                strategy_cls.__name__,
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            LOG.debug("error loading strategy type %s: %s", entry_point.name, exc)
+            continue
+        strategies[entry_point.name] = strategy_cls
+    for strategy in DEFAULT_STRATEGIES:
+        assert (
+            strategy in strategies
+        ), "Unknown entry in DEFAULT_STRATEGIES: %s (STRATEGIES: [%s])" % (
+            strategy, ",".join(strategies)
+        )
+    return MappingProxyType(strategies)
 
 
-class _AnalyzeReliability(lithium.Strategy):
-    name = "reliability-analysis"
-    ITERATIONS = 11  # number of iterations to analyze
-    MIN_CRASHES = 2  # --min-crashes value when analysis is used
-    TARGET_PROBABILITY = 0.95  # probability that successful reduction will observe the crash
-    # to see the worst case, run the `self.repeat` calculation below using
-    # crashes_percent = 1.0/ITERATIONS
+class Strategy(ABC):
+    def __init__(self, testcases):
+        self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
+        for idx, testcase in enumerate(testcases):
+            LOG.debug("Extracting testcase %d/%d", idx + 1, len(testcases))
+            testpath = self._testcase_root / ("%03d" % (idx,))
+            testcase.dump(str(testpath), include_details=True)
 
-    def __init__(self, analysis_mode_cb):
-        super(_AnalyzeReliability, self).__init__()
-        self.analysis_mode_cb = analysis_mode_cb
-
-    def main(self, testcase, interesting, _temp_filename):
-
-        assert self.ITERATIONS > 0
-
-        harness_crashes = 0
-        non_harness_crashes = 0
-
-        # Reset parameters.
-        # Use repeat=1 & relaunch=ITERATIONS because this is closer to how we will run post-analysis.
-        # We're only using repeat=1 instead of repeat=ITERATIONS so we can get feedback on every
-        #   call to interesting.
-        with self.analysis_mode_cb(min_crashes=1, relaunch=self.ITERATIONS, repeat=1) as iter_params:
-
-            iter_params.commit()
-
-            if not iter_params.force_no_harness:
-                LOG.info("Running for %d iterations to assess reliability using harness.", self.ITERATIONS)
-                for _ in range(self.ITERATIONS):
-                    result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
-                    LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
-                    if result:
-                        harness_crashes += 1
-                LOG.info("Testcase was interesting %0.1f%% of %d attempts using harness for iteration.",
-                         100.0 * harness_crashes / self.ITERATIONS, self.ITERATIONS)
-
-                # close target so new parameters take effect
-                iter_params.commit()
-
-            if harness_crashes != self.ITERATIONS:
-                # try without harness
-                iter_params.no_harness = True
-
-                LOG.info("Running for %d iterations to assess reliability without harness.",
-                         self.ITERATIONS)
-                for _ in range(self.ITERATIONS):
-                    result = interesting(testcase, writeIt=False)  # pylint: disable=invalid-name
-                    LOG.info("Lithium result: %s", "interesting." if result else "not interesting.")
-                    if result:
-                        non_harness_crashes += 1
-                LOG.info("Testcase was interesting %0.1f%% of %d attempts without harness.",
-                         100.0 * non_harness_crashes / self.ITERATIONS, self.ITERATIONS)
-
-                # close target so new parameters take effect
-                iter_params.commit()
-
-        if harness_crashes == 0 and non_harness_crashes == 0:
-            return 1  # no crashes ever?
-
-        # should we use the harness? go with whichever crashed more
-        iter_params.no_harness = non_harness_crashes > harness_crashes
-
-        # this is max 99% to avoid domain errors in the calculation below
-        crashes_percent = min(1.0 * max(non_harness_crashes, harness_crashes) / self.ITERATIONS, 0.99)
-
-        # adjust repeat/min-crashes depending on how reliable the testcase was
-        iter_params.min_crashes = self.MIN_CRASHES
-        iter_params.repeat = \
-            int(math.ceil(math.log(1 - self.TARGET_PROBABILITY, 1 - crashes_percent)) * self.MIN_CRASHES)
-        iter_params.relaunch = iter_params.repeat  # actual value used will respect relaunch requested by user
-
-        LOG.info("Analysis results:")
-        if harness_crashes == self.ITERATIONS:
-            LOG.info("* testcase was perfectly reliable with the harness (--no-harness not assessed)")
-        elif harness_crashes == non_harness_crashes:
-            LOG.info("* testcase was equally reliable with/without the harness")
-        elif iter_params.force_no_harness:
-            LOG.info("* --no-harness was already set")
-        else:
-            LOG.info("* testcase was %s reliable with the harness",
-                     "less" if iter_params.no_harness else "more")
-        LOG.info("* adjusted parameters: --min-crashes=%d --repeat=%d --relaunch=%d",
-                 iter_params.min_crashes, iter_params.repeat,
-                 iter_params.relaunch)
-
-        return 0
-
-
-class AnalyzeTestcase(ReduceStage):
-    name = "analyze"
-    USES_ANALYSIS_MODE = True
-    strategy_type = _AnalyzeReliability
-    testcase_type = lithium.TestcaseLine
-
-    def on_success(self):
-        super(AnalyzeTestcase, self).on_success()
-        # only run this strategy once, not once per reducible file in the testcase
-        raise StopIteration()
-
-
-class MinimizeCacheIterHarness(MinimizeLines):
-    name = "minimize-cache"
-    ALTERS_JOB_TESTCASE = True
-    ALTERS_JOB_TIMEOUTS = True
-
-    # job attributes:
-    # write: files_to_reduce (clear, append), tcroot, testcase, landing_page
-    # read: cache_iter_harness_created
-
-    def should_skip(self):
-        return not self.job_testcase.cache_iter_harness_created
-
-    def read_testcase(self, testcase_path):
-        if self.should_skip():
-            return
-
-        super(MinimizeCacheIterHarness, self).read_testcase(testcase_path)
-
-        # we are running multiple testcases in a single "iteration", so we need to
-        #   fix the timeout values
-
-        # start polling for idle after n-1 testcases have finished
-        self.job_timeouts.idle += \
-            self.job_timeouts.idle * (len(self.lithium.testcase) - 1)
-
-        # iteration timeout is * n testcases, but add 10 seconds for overhead from the
-        #   outer harness
-        self.job_timeouts.iteration = \
-            (self.job_timeouts.iteration + 10) * len(self.lithium.testcase)
-
-    def on_success(self):
-        # XXX: when py27 is dropped, this can be files_to_reduce.clear()
-        while self.job_testcase.files_to_reduce:
-            self.job_testcase.files_to_reduce.pop()
-        lines = lithium.TestcaseLine()
-        lines.readTestcase(self.job_testcase.entry)
-        if len(lines) == 1:
-            # we reduced this down to a single testcase, remove the harness
-            testcase_rel = lines.parts[0].strip().decode("utf-8")
-            assert testcase_rel.startswith("'/")
-            assert testcase_rel.endswith("',")
-            testcase_rel = testcase_rel[2:-2]  # trim chars asserted above
-            testcase_path = testcase_rel.split('/')
-            assert len(testcase_path) == 2
-            self.job_testcase.root = os.path.join(self.job_testcase.root, testcase_path[0])
-            self.job_testcase.entry = os.path.join(self.job_testcase.root, testcase_path[1])
-            self.job_testcase.landing_page = self.job_testcase.entry
-            self.job_testcase.files_to_reduce.append(self.job_testcase.entry)
-            LOG.info("Reduced history to a single file: %s", testcase_path[1])
-        else:
-            # don't bother trying to reduce the harness further,
-            #   leave harness out of files_to_reduce
-            LOG.info("Reduced history down to %d testcases", len(self.lithium.testcase))
-
-
-class ScanFilesToReduce(ReduceStage):
-    name = "scan-files"
-    ALTERS_JOB_TESTCASE = True
-
-    # job attributes:
-    # read: tcroot, testcase, files_to_reduce (len, iter)
-    # modify: files_to_reduce (append, sort)
-    # write: original_size
-
-    def __init__(self, *args, **kwds):
-        super(ScanFilesToReduce, self).__init__(*args, **kwds)
-        # find all files for reduction
-        for file_name in testcase_contents(self.job_testcase.root):
-            file_name = os.path.join(self.job_testcase.root, file_name)
-            if file_name == self.job_testcase.entry:
-                continue
-            with open(file_name, "rb") as tc_fp:
-                for line in tc_fp:
-                    if b"DDBEGIN" in line:
-                        self.job_testcase.files_to_reduce.append(file_name)
-                        break
-        if len(self.job_testcase.files_to_reduce) > 1:
-            # sort by descending size
-            self.job_testcase.files_to_reduce.sort(key=lambda fn: os.stat(fn).st_size, reverse=True)
-        self.job_testcase.original_size = self.job_testcase.total_size()
-
-    def read_testcase(self, testcase_path):
+    @abstractmethod
+    def __iter__(self):
         pass
 
-    def should_skip(self):  # pylint: disable=no-self-argument
-        # no real reduce strategy, just used to scan for files
-        return True
+    @abstractmethod
+    def update(self, success):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args, **kwds):
+        self.cleanup()
+
+    def cleanup(self):
+        rmtree(str(self._testcase_root))
 
 
-class CSSBeautify(ReduceStage):
-    name = "cssbeautify"
-    strategy_type = lithium.CheckOnly
-    testcase_type = lithium.TestcaseLine
+class _LithiumStrategy(Strategy, ABC):
+    """Must define name, testcase_cls (lithium.testcases.Testcase), and
+    strategy_cls (lithium.strategies.Strategy).
+    """
+    def __init__(self, *args, **kwds):
+        super().__init__(*args, **kwds)
+        self._current_reducer = None
+        self._files_to_reduce = []
+        for path in self._testcase_root.glob("**/*"):
+            if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
+                self._files_to_reduce.append(path)
+
+    def update(self, success):
+        assert self._current_reducer is not None
+        self._current_reducer.feedback(success)
+
+    def __iter__(self):
+        LOG.info("Reducing %d files", len(self._files_to_reduce))
+        for file_no, file in enumerate(self._files_to_reduce):
+            LOG.info("Reducing %s (file %d/%d)", file, file_no + 1, len(self._files_to_reduce))
+            lithium_testcase = self.testcase_cls()  # pylint: disable=no-member
+            lithium_testcase.load(file)
+            # pylint: disable=no-member
+            self._current_reducer = self.strategy_cls().reduce(lithium_testcase)
+            for reduction in self._current_reducer:
+                reduction.dump()
+                yield TestCase.load(str(self._testcase_root), False)
+            # write out the best found testcase
+            self._current_reducer.testcase.dump()
+            self._current_reducer = None
+
+
+class MinimizeTestcaseList(Strategy):
+    """Try removing testcases from a list of sequential testcases (eg. Grizzly result
+    cache). The strategy favours testcases at the tail of the list, so for a list of
+    five testcases:
+                        testcases
+                0       1 2 3 4 5
+    iteration   1         2 3 4 5
+                2       1   3 4 5
+                3       1 2   4 5
+                4       1 2 3   5
+                5       1 2 3 4
+    """
+    name = "list"
 
     def __init__(self, *args, **kwds):
-        super(CSSBeautify, self).__init__(*args, **kwds)
-        self.testcase_path = None
-        self.original_testcase = None
-        self._ext = None
-        self._force_skip = False
+        super().__init__(*args, **kwds)
+        self._current_feedback = None
 
-    def read_testcase(self, testcase_path):
-        self.testcase_path = testcase_path
-        self._ext = testcase_path.rsplit(".", 1)[-1]
+    def update(self, success):
+        assert self._current_feedback is None
+        self._current_feedback = success
 
-        if self.should_skip():
-            return
-
-        # Beautify testcase
-        opts = (
-            ('end_with_newline', False),
-            ('indent_size', 2),
-            ('newline_between_rules', False),
-            ('preserve_newlines', False),
-        )
-        with open(testcase_path) as testcase_fp:
-            self.original_testcase = testcase_fp.read()
-        if self._ext == "css":
-            # DDBEGIN and DDEND are ignored here atm
-            LOG.info("Attempting to cssbeautify %s", testcase_path)
-            with open(testcase_path, "w") as testcase_fp:
-                testcase_fp.write(cssbeautifier.beautify(self.original_testcase, opts))
-        else:
-            # handle html files
-            begin = max(self.original_testcase.find("DDBEGIN"), 0)
-            end = self.original_testcase.find("DDEND")
-            if end == -1:
-                end = len(self.original_testcase)
-            re_tag = re.compile(r"(<style.*?>)(.*?)(</style>)", flags=re.DOTALL|re.IGNORECASE)
-            if not re_tag.search(self.original_testcase, begin, end):
-                LOG.debug("<style> tags not found in %r", testcase_path)
-                self._force_skip = True
-                self.original_testcase = None
-                return
-            pos = 0
-            with open(testcase_path, "w") as testcase_fp:
-                for match in re_tag.finditer(self.original_testcase, begin, end):
-                    testcase_fp.write(self.original_testcase[pos:match.start(2)])
-                    css = cssbeautifier.beautify(match.group(2), opts)
-                    if css:
-                        testcase_fp.write("\n")
-                        testcase_fp.write(css)
-                        testcase_fp.write("\n")
-                    pos = match.end(2)
-                testcase_fp.write(self.original_testcase[pos:])
-            LOG.info("Ran cssbeautify on %s", testcase_path)
-
-        self.lithium.strategy = self.strategy_type()  # pylint: disable=not-callable
-        self.lithium.testcase = self.testcase_type()  # pylint: disable=not-callable
-        self.lithium.testcase.readTestcase(testcase_path)
-
-    def should_skip(self):
-        if HAVE_CSSBEAUTIFIER and not self._force_skip:
-            if self._ext in ("css", "htm", "html"):
-                return False
-        return True
-
-    def on_failure(self):
-        LOG.warning("CSSBeautification failed (reverting)")
-        with open(self.testcase_path, "w") as testcase_fp:
-            testcase_fp.write(self.original_testcase)
+    def __iter__(self):
+        assert self._current_feedback is None
+        idx = 0
+        testcases = None
+        try:
+            testcases = TestCase.load(str(self._testcase_root), False)
+            n_testcases = len(testcases)
+            while True:
+                if n_testcases <= 1:
+                    LOG.info("Testcase list has length %d, not enough to reduce!", n_testcases)
+                    break
+                if idx >= n_testcases:
+                    LOG.info("Attempted to remove every single testcase")
+                    break
+                # try removing the testcase at idx
+                if testcases is None:
+                    testcases = TestCase.load(str(self._testcase_root), False)
+                    assert n_testcases == len(testcases)
+                removed_ts = testcases[idx].timestamp
+                testcases.pop(idx).cleanup()
+                yield testcases
+                testcases = None  # caller owns testcases now
+                assert self._current_feedback is not None, "no feedback received!"
+                if self._current_feedback:
+                    # removal was success! find the testcase that matches timestamp,
+                    # and remove it
+                    LOG.info("Removing testcase %d/%d was successful!", idx, n_testcases)
+                    removed_path = None
+                    for test_info in self._testcase_root.glob("*/test_info.json"):
+                        info = json.loads(test_info.read_text())
+                        if removed_ts == info["timestamp"]:
+                            assert (
+                                removed_path is None
+                            ), "Duplicate testcases found with timestamp %s" % (
+                                removed_ts,
+                            )
+                            removed_path = test_info
+                    assert (
+                        removed_path is not None
+                    ), "No testcase found with timestamp %s" % (removed_ts,)
+                    rmtree(str(removed_path.parent))
+                    n_testcases -= 1
+                else:
+                    LOG.info("No result without testcase %d/%d", idx, n_testcases)
+                    idx += 1
+                # reset
+                self._current_feedback = None
+        finally:
+            if testcases is not None:
+                for testcase in testcases:
+                    testcase.cleanup()
 
 
-class JSBeautify(ReduceStage):
-    name = "jsbeautify"
-    strategy_type = lithium.CheckOnly
-    testcase_type = lithium.TestcaseLine
-
-    def __init__(self, *args, **kwds):
-        super(JSBeautify, self).__init__(*args, **kwds)
-        self.testcase_path = None
-        self.original_testcase = None
-
-    def read_testcase(self, testcase_path):
-        self.testcase_path = testcase_path
-
-        if self.should_skip():
-            return
-
-        LOG.info("Attempting to jsbeautify %s", testcase_path)
-
-        self.lithium.strategy = self.strategy_type()  # pylint: disable=not-callable
-        self.lithium.testcase = self.testcase_type()  # pylint: disable=not-callable
-
-        # Beautify testcase
-        with open(testcase_path) as testcase_fp:
-            self.original_testcase = testcase_fp.read()
-
-        beautified_testcase = jsbeautifier.beautify(self.original_testcase)
-        # All try/catch pairs will be expanded on their own lines
-        # Collapse these pairs when only a single instruction is contained
-        #   within
-        regex = r"(\s*try {)\n\s*(.*)\n\s*(}\s*catch.*)"
-        beautified_testcase = re.sub(regex, r"\1 \2 \3", beautified_testcase)
-        with open(testcase_path, 'w') as testcase_fp:
-            testcase_fp.write(beautified_testcase)
-
-        self.lithium.testcase.readTestcase(testcase_path)
-
-    def should_skip(self):
-        if HAVE_JSBEAUTIFIER and self.testcase_path.endswith(".js"):
-            # jsbeautifier is only effective with JS files
-            return False
-        return True
-
-    def on_failure(self):
-        LOG.warning("JSBeautification failed (reverting)")
-        with open(self.testcase_path, 'w') as testcase_fp:
-            testcase_fp.write(self.original_testcase)
+class Check(_LithiumStrategy):
+    name = "check"
+    strategy_cls = CheckOnly
+    testcase_cls = TestcaseLine
 
 
-class CollapseEmptyBraces(ReduceStage):
-    name = "collapsebraces"
-    strategy_type = lithium.CollapseEmptyBraces
-    testcase_type = lithium.TestcaseLine
+class MinimizeLines(_LithiumStrategy):
+    name = "lines"
+    strategy_cls = Minimize
+    testcase_cls = TestcaseLine
 
 
-class MinimizeChars(ReduceStage):
-    name = "char"
-    strategy_type = lithium.Minimize
-    testcase_type = lithium.TestcaseChar
-
-
-class MinimizeJSChars(ReduceStage):
-    name = "jschar"
-    strategy_type = lithium.Minimize
-    testcase_type = lithium.TestcaseJsStr
-
-
-def strategies_by_name():
-    result = {}
-    for cls in globals().values():
-        if isinstance(cls, type) and issubclass(cls, ReduceStage) and cls is not ReduceStage:
-            if cls.name in result:
-                raise RuntimeError("Duplicate strategy name: %s" % (cls.name,))
-            result[cls.name] = cls
-    return result
+STRATEGIES = _load_strategies()
