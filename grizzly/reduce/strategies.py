@@ -14,7 +14,7 @@ from tempfile import mkdtemp
 from types import MappingProxyType
 
 from lithium.strategies import CheckOnly, Minimize
-from lithium.testcases import TestcaseLine
+from lithium.testcases import TestcaseChar, TestcaseLine
 from pkg_resources import iter_entry_points
 
 from ..common.utils import grz_tmp
@@ -198,6 +198,12 @@ class MinimizeLines(_LithiumStrategy):
     name = "lines"
     strategy_cls = Minimize
     testcase_cls = TestcaseLine
+
+
+class MinimizeChars(_LithiumStrategy):
+    name = "chars"
+    strategy_cls = Minimize
+    testcase_cls = TestcaseChar
 
 
 STRATEGIES = _load_strategies()

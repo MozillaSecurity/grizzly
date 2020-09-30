@@ -107,7 +107,7 @@ class ReduceManager(object):
                         results = replay.run(self.testcases, repeat=1, min_results=1)
                     except (TargetLaunchError, TargetLaunchTimeout) as exc:
                         if isinstance(exc, TargetLaunchError) and exc.report:
-                            self.report([ReplayResult(exc.report, None, False)], self.testcases)
+                            self.report([ReplayResult(exc.report, None, [], False)], self.testcases)
                             exc.report.cleanup()
                         raise
                     try:
@@ -116,7 +116,7 @@ class ReduceManager(object):
                         self.report([result for result in results if not result.expected], self.testcases)
                     finally:
                         for result in results:
-                            result.cleanup()
+                            result.report.cleanup()
                     if success and use_harness:
                         harness_crashes += 1
                     elif success:
@@ -155,6 +155,7 @@ class ReduceManager(object):
         return (repeat, min_crashes)
 
     def run(self, repeat=1, min_results=1):
+        any_success = False
         last_reports = None
         for strategy_no, strategy in enumerate(self.strategies):
             LOG.info("Using strategy %s (%d/%d)", strategy, strategy_no + 1, len(self.strategies))
@@ -181,11 +182,15 @@ class ReduceManager(object):
                                 results = replay.run(reduction, repeat=repeat, min_results=min_results)
                             except (TargetLaunchError, TargetLaunchTimeout) as exc:
                                 if isinstance(exc, TargetLaunchError) and exc.report:
-                                    self.report([ReplayResult(exc.report, None, False)], reduction)
+                                    self.report([ReplayResult(exc.report, None, [], False)], reduction)
                                     exc.report.cleanup()
                                 raise
                             success = any(report.expected for report in results)
                             strategy.update(success)
+                            if strategy.name == "check":
+                                if any_success and not success:
+                                    raise RuntimeError("Reduction broke")
+                            any_success = any_success or success
                             # if the reduction reproduced, update self.testcases (new best)
                             if success:
                                 LOG.info("Interesting")
@@ -195,7 +200,7 @@ class ReduceManager(object):
                                 keep_reduction = True
                                 # cleanup old best results
                                 for result in best_results:
-                                    result.cleanup()
+                                    result.report.cleanup()
                                 # filter expected results out into `best_results`
                                 best_results = [result for result in results if result.expected]
                                 results = [result for result in results if not result.expected]
@@ -208,11 +213,11 @@ class ReduceManager(object):
                                 for testcase in reduction:
                                     testcase.cleanup()
                             for result in results:
-                                result.cleanup()
+                                result.report.cleanup()
                     last_reports = self.report(best_results, self.testcases)
                 finally:
                     for result in best_results:
-                        result.cleanup()
+                        result.report.cleanup()
                 # if self._signature was already set, this will do nothing
                 # otherwise, ensure the first found signature is used throughout
                 self._signature = replay.signature
@@ -220,7 +225,7 @@ class ReduceManager(object):
         if self._report_to_fuzzmanager and last_reports:
             for crash_id in last_reports:
                 change_quality(crash_id, FuzzManagerReporter.QUAL_REDUCED_RESULT)
-        return bool(last_reports)  # true if anything expected was reported in the last round
+        return any_success
 
     def report(self, results, tests):
         """Report results, either to fuzzmanager or to filesystem.
@@ -228,7 +233,7 @@ class ReduceManager(object):
         ret_values = []
         for result in results:
             if self._report_to_fuzzmanager:
-                reporter = FuzzManagerReporter(self.target.binary, self._report_tool)
+                reporter = FuzzManagerReporter(self._report_tool)
                 if result.expected:
                     reporter.force_report = True
             else:
