@@ -20,7 +20,7 @@ from .server_map import Resource
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = getLogger("sphr_worker")
+LOG = getLogger(__name__)
 
 
 class SapphireWorkerError(Exception):

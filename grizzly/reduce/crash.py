@@ -15,7 +15,7 @@ from .reduce import ReductionJob
 from ..common import FuzzManagerReporter
 
 
-LOG = logging.getLogger("grizzly.reduce.crash")
+LOG = logging.getLogger(__name__)
 
 
 def crashentry_data(crash_id, raw=False):

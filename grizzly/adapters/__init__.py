@@ -6,7 +6,7 @@ import traceback
 
 from grizzly.common import Adapter
 
-log = logging.getLogger("grizzly")  # pylint: disable=invalid-name
+log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 __all__ = ("get", "load", "names")
 __adapters__ = dict()

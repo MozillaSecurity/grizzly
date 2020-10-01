@@ -15,7 +15,7 @@ __all__ = ("Runner", "RunResult")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = getLogger("grz_runner")
+LOG = getLogger(__name__)
 
 # _IdleChecker is used to help determine if the target is hung (actively using CPU)
 # or if it has not made expected the HTTP requests for other reasons (idle).

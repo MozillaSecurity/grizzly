@@ -39,7 +39,7 @@ __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber", "Jason Kratzer"]
 
 
-LOG = logging.getLogger("grizzly.reduce")
+LOG = logging.getLogger(__name__)
 
 
 class LithiumInterestingProxy(object):

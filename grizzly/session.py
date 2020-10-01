@@ -17,7 +17,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
-log = getLogger("grizzly")  # pylint: disable=invalid-name
+log = getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class SessionError(Exception):

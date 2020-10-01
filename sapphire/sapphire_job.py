@@ -19,7 +19,7 @@ from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = getLogger("sphr_job")
+LOG = getLogger(__name__)
 
 
 Tracker = namedtuple("Tracker", "files lock")

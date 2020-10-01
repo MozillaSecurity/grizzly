@@ -25,7 +25,7 @@ __all__ = ("PuppetTarget",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-LOG = getLogger("puppet_target")
+LOG = getLogger(__name__)
 
 
 class PuppetTarget(Target):

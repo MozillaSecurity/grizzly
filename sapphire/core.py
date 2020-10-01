@@ -21,7 +21,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
-LOG = logging.getLogger("sapphire")
+LOG = logging.getLogger(__name__)
 
 
 class Sapphire(object):
