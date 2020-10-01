@@ -82,7 +82,9 @@ class CommonArgs(object):
             help="Number of iterations performed before relaunching the browser (default: %(default)s)")
         self.launcher_grp.add_argument(
             "-t", "--timeout", type=int, default=60,
-            help="Iteration timeout in seconds (default: %(default)s)")
+            help="Iteration or test case timeout in seconds (default: %(default)s)."
+                 " Browser build types and debuggers can affect the amount of time"
+                 " required to run a test case.")
         self.launcher_grp.add_argument(
             "--valgrind", action="store_true",
             help="Use Valgrind (Linux only)")
