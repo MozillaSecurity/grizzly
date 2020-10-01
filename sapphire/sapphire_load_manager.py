@@ -3,10 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
-import sys
-import threading
-import time
-import traceback
+from sys import exc_info
+from threading import active_count, Thread, ThreadError
+from time import sleep, time
+from traceback import format_exception
 
 from .sapphire_worker import SapphireWorker
 
@@ -44,14 +44,14 @@ class SapphireLoadManager(object):
             exc_type, exc_obj, exc_tb = self._job.exceptions.get()
             LOG.error(
                 "Unexpected exception:\n%s",
-                "".join(traceback.format_exception(exc_type, exc_obj, exc_tb)))
+                "".join(format_exception(exc_type, exc_obj, exc_tb)))
             # re-raise exception from worker once all workers are closed
             raise exc_obj
 
     def start(self):
         assert self._job.pending
         # create the listener thread to handle incoming requests
-        listener = threading.Thread(
+        listener = Thread(
             target=self.listener,
             args=(self._socket, self._job, self._workers),
             kwargs={"shutdown_delay": self.SHUTDOWN_DELAY})
@@ -59,12 +59,12 @@ class SapphireLoadManager(object):
         for retry in reversed(range(10)):
             try:
                 listener.start()
-            except threading.ThreadError:
+            except ThreadError:
                 # thread errors can be due to low system resources while fuzzing
-                LOG.warning("ThreadError (listener), threads: %d", threading.active_count())
+                LOG.warning("ThreadError (listener), threads: %d", active_count())
                 if retry < 1:
                     raise
-                time.sleep(1)
+                sleep(1)
                 continue
             self._listener = listener
             break
@@ -72,7 +72,7 @@ class SapphireLoadManager(object):
     def wait(self, timeout, continue_cb=None, poll=0.5):
         assert self._listener is not None
         if timeout > 0:
-            deadline = time.time() + timeout
+            deadline = time() + timeout
         else:
             deadline = None
         if continue_cb is not None and not callable(continue_cb):
@@ -81,7 +81,7 @@ class SapphireLoadManager(object):
         # the total iteration rate of Grizzly
         while not self._job.is_complete(wait=poll):
             # check for a timeout
-            if deadline and deadline <= time.time():
+            if deadline and deadline <= time():
                 return False
             # check if callback returns False
             if continue_cb is not None and not continue_cb():
@@ -118,25 +118,25 @@ class SapphireLoadManager(object):
                         pool_size = len(worker_pool)
                         if pool_size < max_workers:
                             break
-                        time.sleep(0.5)  # pragma: no cover
+                        sleep(0.5)  # pragma: no cover
                     else:  # pragma: no cover
                         # this should never happen
                         raise RuntimeError("Failed to trim worker pool!")
                     LOG.debug("trimmed worker pool (size: %d)", pool_size)
         except Exception:  # pylint: disable=broad-except
             if serv_job.exceptions.empty():
-                serv_job.exceptions.put(sys.exc_info())
+                serv_job.exceptions.put(exc_info())
             serv_job.finish()
         finally:
             LOG.debug("listener cleaning up workers")
-            deadline = time.time() + shutdown_delay
-            while time.time() < deadline:
+            deadline = time() + shutdown_delay
+            while time() < deadline:
                 worker_pool = list(w for w in worker_pool if not w.done)
                 if not worker_pool:
                     break
                 # avoid cutting off connections
                 LOG.debug("waiting for %d worker(s)...", len(worker_pool))
-                time.sleep(0.1)
+                sleep(0.1)
             else:  # pragma: no cover
                 LOG.debug("closing remaining workers")
                 for worker in (w for w in worker_pool if not w.done):
