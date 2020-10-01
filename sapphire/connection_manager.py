@@ -8,7 +8,7 @@ from threading import active_count, Thread, ThreadError
 from time import sleep, time
 from traceback import format_exception
 
-from .sapphire_worker import SapphireWorker
+from .worker import Worker
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -16,7 +16,7 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-class SapphireLoadManager(object):
+class ConnectionManager(object):
     SHUTDOWN_DELAY = 0.5  # allow extra time before closing socket if needed
 
     __slots__ = ("_job", "_listener", "_socket", "_workers")
@@ -100,7 +100,7 @@ class SapphireLoadManager(object):
             while not serv_job.is_complete():
                 if not serv_job.accepting.wait(0.05):
                     continue
-                worker = SapphireWorker.launch(serv_sock, serv_job)
+                worker = Worker.launch(serv_sock, serv_job)
                 if worker is not None:
                     worker_pool.append(worker)
                     pool_size += 1
