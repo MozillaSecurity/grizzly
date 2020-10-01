@@ -14,12 +14,18 @@ from queue import Queue
 from threading import Event, Lock
 
 from .server_map import Resource
-from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 LOG = getLogger(__name__)
+
+
+# job status codes
+SERVED_ALL = 0      # all expected requests for required files have been received
+SERVED_NONE = 1     # no requests for required files have been received
+SERVED_REQUEST = 2  # some requests for required files have been received
+SERVED_TIMEOUT = 3  # timeout occurred
 
 
 Tracker = namedtuple("Tracker", "files lock")
