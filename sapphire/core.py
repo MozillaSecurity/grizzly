@@ -13,9 +13,8 @@ from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 from socket import error as sock_error, gethostname, socket
 from time import sleep
 
-from .job import Job
+from .job import Job, SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
 from .connection_manager import ConnectionManager
-from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
 
 
 __author__ = "Tyson Smith"

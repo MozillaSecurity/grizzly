@@ -12,9 +12,9 @@ import threading
 import pytest
 
 from .core import Sapphire
+from .job import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
 from .worker import Worker
 from .server_map import ServerMap
-from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
 
 
 class _TestFile(object):

@@ -8,9 +8,8 @@ import platform
 
 import pytest
 
-from .job import Job
+from .job import Job, SERVED_ALL, SERVED_NONE, SERVED_REQUEST
 from .server_map import Resource, ServerMap
-from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST
 
 
 def test_job_01(tmp_path):
