@@ -23,7 +23,7 @@ from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = getLogger("replay")
+LOG = getLogger(__name__)
 
 
 class ReplayResult(object):

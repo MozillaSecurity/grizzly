@@ -13,7 +13,7 @@ from .sapphire_worker import SapphireWorker
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = getLogger("sphr_loadmgr")
+LOG = getLogger(__name__)
 
 
 class SapphireLoadManager(object):

@@ -15,7 +15,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 TARGETS = None
-LOG = getLogger("grizzly")
+LOG = getLogger(__name__)
 
 
 def _load_targets():

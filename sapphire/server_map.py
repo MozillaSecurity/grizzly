@@ -12,7 +12,7 @@ __all__ = ("Resource", "ServerMap")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = logging.getLogger("sphr_map")  # pylint: disable=invalid-name
+LOG = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class InvalidURLError(Exception):

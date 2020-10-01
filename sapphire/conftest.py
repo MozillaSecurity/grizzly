@@ -18,7 +18,7 @@ from urllib.request import urlopen
 import pytest
 
 
-LOG = logging.getLogger("sphr_test")
+LOG = logging.getLogger(__name__)
 
 
 @pytest.fixture

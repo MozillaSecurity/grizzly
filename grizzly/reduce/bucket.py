@@ -15,7 +15,7 @@ from .args import ReducerFuzzManagerIDQualityArgs
 from .crash import CrashReductionJob
 
 
-LOG = logging.getLogger("grizzly.reduce.bucket")
+LOG = logging.getLogger(__name__)
 
 
 def bucket_crashes(bucket_id, quality_filter):

@@ -44,7 +44,7 @@ __all__ = ("FilesystemReporter", "FuzzManagerReporter", "Report", "S3FuzzManager
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = getLogger("grizzly")
+LOG = getLogger(__name__)
 
 # NOTE: order matters, aux -> stderr -> stdout
 LogMap = namedtuple("LogMap", "aux stderr stdout")

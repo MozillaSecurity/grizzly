@@ -15,7 +15,7 @@ __all__ = ("Target", "sanitizer_opts")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-LOG = getLogger("grizzly")
+LOG = getLogger(__name__)
 
 
 def sanitizer_opts(env_data):

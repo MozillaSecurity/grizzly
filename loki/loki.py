@@ -15,7 +15,7 @@ import time
 
 
 __author__ = "Tyson Smith"
-LOG = logging.getLogger("loki")
+LOG = logging.getLogger(__name__)
 
 
 class Loki(object):

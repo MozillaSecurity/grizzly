@@ -21,7 +21,7 @@ __all__ = ("Stack", "StackFrame")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = getLogger("stack_hasher")
+LOG = getLogger(__name__)
 
 MAJOR_DEPTH = 5
 MAJOR_DEPTH_RUST = 10

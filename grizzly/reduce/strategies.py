@@ -23,7 +23,7 @@ import lithium
 from . import testcase_contents
 
 
-LOG = logging.getLogger("grizzly.reduce.strategies")
+LOG = logging.getLogger(__name__)
 
 
 class ReduceStage(metaclass=abc.ABCMeta):
