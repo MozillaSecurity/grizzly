@@ -12,7 +12,7 @@ import threading
 import pytest
 
 from .core import Sapphire
-from .sapphire_worker import SapphireWorker
+from .worker import Worker
 from .server_map import ServerMap
 from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
 
@@ -186,10 +186,10 @@ def test_sapphire_08(client, tmp_path):
 def test_sapphire_09(client, tmp_path):
     """test serving interesting sized files"""
     tests = [
-        {"size": SapphireWorker.DEFAULT_TX_SIZE, "name": "even.html"},
-        {"size": SapphireWorker.DEFAULT_TX_SIZE - 1, "name": "minus_one.html"},
-        {"size": SapphireWorker.DEFAULT_TX_SIZE + 1, "name": "plus_one.html"},
-        {"size": SapphireWorker.DEFAULT_TX_SIZE * 2, "name": "double.html"},
+        {"size": Worker.DEFAULT_TX_SIZE, "name": "even.html"},
+        {"size": Worker.DEFAULT_TX_SIZE - 1, "name": "minus_one.html"},
+        {"size": Worker.DEFAULT_TX_SIZE + 1, "name": "plus_one.html"},
+        {"size": Worker.DEFAULT_TX_SIZE * 2, "name": "double.html"},
         {"size": 1, "name": "one.html"},
         {"size": 0, "name": "zero.html"},
     ]

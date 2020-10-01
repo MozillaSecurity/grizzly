@@ -23,11 +23,11 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-class SapphireWorkerError(Exception):
-    """Raised by SapphireWorker"""
+class WorkerError(Exception):
+    """Raised by Worker"""
 
 
-class SapphireWorker(object):
+class Worker(object):
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
     REQ_PATTERN = re_compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
@@ -77,7 +77,7 @@ class SapphireWorker(object):
         self.join(timeout=60)
         if self._thread is not None and self._thread.is_alive():
             # this is here to catch unexpected hangs
-            raise SapphireWorkerError("Worker thread failed to join!")
+            raise WorkerError("Worker thread failed to join!")
 
     @property
     def done(self):
@@ -115,7 +115,7 @@ class SapphireWorker(object):
                 finish_job = serv_job.remove_pending(request)
             elif resource.type != Resource.URL_DYNAMIC:  # pragma: no cover
                 # this should never happen
-                raise SapphireWorkerError("Unknown resource type %r" % (resource.type,))
+                raise WorkerError("Unknown resource type %r" % (resource.type,))
 
             if finish_job and serv_job.forever:
                 LOG.debug("serv_job.forever is set, resetting finish_job")

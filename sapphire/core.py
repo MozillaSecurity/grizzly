@@ -13,8 +13,8 @@ from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 from socket import error as sock_error, gethostname, socket
 from time import sleep
 
-from .sapphire_job import SapphireJob
-from .sapphire_load_manager import SapphireLoadManager
+from .job import Job
+from .connection_manager import ConnectionManager
 from .status_codes import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
 
 
@@ -100,7 +100,7 @@ class Sapphire(object):
         files served is a list of the files that were served
         """
         LOG.debug("serving %r (forever=%r)", path, forever)
-        job = SapphireJob(
+        job = Job(
             path,
             auto_close=self._auto_close,
             forever=forever,
@@ -110,7 +110,7 @@ class Sapphire(object):
             job.finish()
             LOG.debug("nothing to serve")
             return (SERVED_NONE, tuple())
-        with SapphireLoadManager(job, self._socket, self._max_workers) as loadmgr:
+        with ConnectionManager(job, self._socket, self._max_workers) as loadmgr:
             was_timeout = not loadmgr.wait(self.timeout, continue_cb=continue_cb)
         LOG.debug("status: %r, timeout: %r", job.status, was_timeout)
         return (SERVED_TIMEOUT if was_timeout else job.status, tuple(job.served))

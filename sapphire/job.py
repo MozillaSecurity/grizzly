@@ -25,7 +25,7 @@ LOG = getLogger(__name__)
 Tracker = namedtuple("Tracker", "files lock")
 
 
-class SapphireJob(object):
+class Job(object):
     # MIME_MAP is used to support new or uncommon mime types.
     # Definitions in here take priority over mimetypes.guess_type().
     MIME_MAP = {
