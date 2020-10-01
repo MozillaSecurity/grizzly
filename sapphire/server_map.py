@@ -3,16 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import logging
-import os
-import re
-
+from logging import getLogger
+from os.path import abspath, isdir, relpath
+from re import search as re_search
 
 __all__ = ("Resource", "ServerMap")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = logging.getLogger(__name__)  # pylint: disable=invalid-name
+LOG = getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class InvalidURLError(Exception):
@@ -50,7 +49,7 @@ class ServerMap(object):
     def _check_url(url):
         # check and sanitize URL
         url = url.strip("/")
-        if re.search(r"\W", url) is not None:
+        if re_search(r"\W", url) is not None:
             raise InvalidURLError("Only alpha-numeric characters accepted in URL.")
         return url
 
@@ -70,11 +69,11 @@ class ServerMap(object):
 
     def set_include(self, url, target_path):
         url = self._check_url(url)
-        if not os.path.isdir(target_path):
+        if not isdir(target_path):
             raise IOError("Include path not found: %s" % (target_path,))
         if url in self.dynamic or url in self.redirect:
             raise MapCollisionError("URL collision on %r" % (url,))
-        target_path = os.path.abspath(target_path)
+        target_path = abspath(target_path)
         # sanity check to prevent mapping overlapping paths
         # Note: This was added to help map file served via includes back to
         # the files on disk. This is a temporary workaround until mapping of
@@ -83,10 +82,10 @@ class ServerMap(object):
             if url == existing_url:
                 # allow overwriting entry
                 continue
-            if not os.path.relpath(target_path, resource.target).startswith(".."):
+            if not relpath(target_path, resource.target).startswith(".."):
                 LOG.error("%r mapping includes path %r", existing_url, target_path)
                 raise MapCollisionError("%r and %r include %r" % (url, existing_url, target_path))
-            if not os.path.relpath(resource.target, target_path).startswith(".."):
+            if not relpath(resource.target, target_path).startswith(".."):
                 LOG.error("%r mapping includes path %r", url, resource.target)
                 raise MapCollisionError("%r and %r include %r" % (url, existing_url, resource.target))
         LOG.debug("mapping include %r -> %r", url, target_path)

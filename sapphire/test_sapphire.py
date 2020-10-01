@@ -11,8 +11,6 @@ import threading
 
 import pytest
 
-from grizzly.common import TestCase
-
 from .core import Sapphire
 from .sapphire_worker import SapphireWorker
 from .server_map import ServerMap
@@ -600,8 +598,8 @@ def test_sapphire_30(client, tmp_path):
 
 def test_sapphire_31(mocker):
     """test Sapphire._create_listening_socket()"""
-    fake_sleep = mocker.patch("sapphire.core.time.sleep", autospec=True)
-    fake_sock = mocker.patch("sapphire.core.socket.socket", autospec=True)
+    fake_sleep = mocker.patch("sapphire.core.sleep", autospec=True)
+    fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
     assert Sapphire._create_listening_socket(False, None)
     assert fake_sock.return_value.close.call_count == 0
     assert fake_sock.return_value.setsockopt.call_count == 1

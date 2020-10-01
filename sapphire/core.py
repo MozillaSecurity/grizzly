@@ -1,16 +1,17 @@
 # coding=utf-8
-"""
-Sapphire HTTP server
-"""
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import errno
-import logging
-import os
-import random
-import socket
-import time
+"""
+Sapphire HTTP server
+"""
+from errno import EADDRINUSE
+from logging import getLogger
+from os.path import abspath
+from random import randint
+from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
+from socket import error as sock_error, gethostname, socket
+from time import sleep
 
 from .sapphire_job import SapphireJob
 from .sapphire_load_manager import SapphireLoadManager
@@ -21,7 +22,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
-LOG = logging.getLogger(__name__)
+LOG = getLogger(__name__)
 
 
 class Sapphire(object):
@@ -46,19 +47,19 @@ class Sapphire(object):
         for retry in reversed(range(retries)):
             sock = None
             try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock = socket(AF_INET, SOCK_STREAM)
+                sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
                 sock.settimeout(0.25)
                 # find an unused port and avoid blocked ports
                 # see: dxr.mozilla.org/mozilla-central/source/netwerk/base/nsIOService.cpp
-                port = random.randint(0x2000, 0xFFFF) if requested_port is None else requested_port
+                port = requested_port or randint(0x2000, 0xFFFF)
                 sock.bind(("0.0.0.0" if allow_remote else "127.0.0.1", port))
                 sock.listen(5)
-            except (OSError, socket.error) as soc_e:
+            except (OSError, sock_error) as soc_e:
                 if sock is not None:
                     sock.close()
-                if retry > 1 and soc_e.errno in (errno.EADDRINUSE, 10013):
-                    time.sleep(0.1)
+                if retry > 1 and soc_e.errno in (EADDRINUSE, 10013):
+                    sleep(0.1)
                     continue
                 raise
             break
@@ -131,8 +132,8 @@ class Sapphire(object):
             with cls(allow_remote=args.remote, port=args.port, timeout=args.timeout) as serv:
                 LOG.info(
                     "Serving %r @ http://%s:%d/",
-                    os.path.abspath(args.path),
-                    socket.gethostname() if args.remote else "127.0.0.1",
+                    abspath(args.path),
+                    gethostname() if args.remote else "127.0.0.1",
                     serv.port)
                 status = serv.serve_path(args.path)[0]
             if status == SERVED_ALL:
