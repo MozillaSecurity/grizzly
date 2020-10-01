@@ -172,8 +172,8 @@ class Worker(object):
             serv_job.increment_served(resource.target)
 
         except (sock_error, sock_timeout):
-            exc_type, exc_obj, exc_tb = exc_info()
-            LOG.debug("%s: %r (line %d)", exc_type.__name__, exc_obj, exc_tb.tb_lineno)
+            _, exc_obj, exc_tb = exc_info()
+            LOG.debug("%r - line %d", exc_obj, exc_tb.tb_lineno)
             if not finish_job:
                 serv_job.accepting.set()
 
