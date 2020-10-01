@@ -253,7 +253,7 @@ class ReplayManager(object):
                     self.status.ignored += 1
                     LOG.info("Result: Ignored (%d)", self.status.ignored)
                 elif run_result.status == RunResult.ERROR:
-                    LOG.error("ERROR: Replay malfunction, test case was not served")
+                    LOG.error("ERROR: Test case was not served. Timeout too short?")
                     break
 
                 # check status and exit early if possible
