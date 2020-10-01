@@ -11,10 +11,12 @@ from .core import Sapphire
 
 def configure_logging(log_level):
     if log_level == DEBUG:
-        log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
+        date_fmt = None
+        log_fmt = "%(asctime)s %(levelname).1s %(name)s | %(message)s"
     else:
+        date_fmt = "%Y-%m-%d %H:%M:%S"
         log_fmt = "[%(asctime)s] %(message)s"
-    basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+    basicConfig(format=log_fmt, datefmt=date_fmt, level=log_level)
 
 def parse_args(argv=None):
     # log levels for console logging

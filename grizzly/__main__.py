@@ -20,8 +20,7 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 # is where basicConfig should be called).
 if getenv("DEBUG"):
     basicConfig(
-        format="%(levelname).1s %(name)s [%(asctime)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+        format="%(asctime)s %(levelname).1s %(name)s | %(message)s",
         level=DEBUG)
 # load Adapters
 load()
