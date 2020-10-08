@@ -47,7 +47,7 @@ def change_quality(crash_id, quality):
     url = "%s://%s:%d/crashmanager/rest/crashes/%d/" \
         % (coll.serverProtocol, coll.serverHost, coll.serverPort, crash_id)
     try:
-        Collector().patch(url, data={"testcase_quality": quality})
+        coll.patch(url, data={"testcase_quality": quality})
     except RuntimeError as exc:
         # let 404's go .. evidently the crash was deleted
         if str(exc) == "Unexpected HTTP response: 404":
@@ -93,15 +93,15 @@ class ReduceManager(object):
         self.target.relaunch = self.ANALYSIS_ITERATIONS
 
         for use_harness in [True, False]:
-            if use_harness and self._original_use_harness:
+            if use_harness and not self._original_use_harness:
                 continue
-            if not use_harness and harness_crashes != self.ANALYSIS_ITERATIONS:
+            if not use_harness and harness_crashes == self.ANALYSIS_ITERATIONS:
                 continue
 
             with ReplayManager(self.ignore, self.server, self.target, any_crash=self._any_crash,
                                signature=self._signature, use_harness=use_harness) as replay:
                 LOG.info("Running for %d iterations to assess reliability %s harness.",
-                         "using" if use_harness else "without", self.ANALYSIS_ITERATIONS)
+                         self.ANALYSIS_ITERATIONS, "using" if use_harness else "without")
                 for _ in range(self.ANALYSIS_ITERATIONS):
                     try:
                         results = replay.run(self.testcases, repeat=1, min_results=1)
@@ -128,7 +128,7 @@ class ReduceManager(object):
                 self._signature = replay.signature
 
         if harness_crashes == 0 and non_harness_crashes == 0:
-            raise RuntimeError("TODO: Did not reproduce during analysis")
+            raise RuntimeError("Did not reproduce during analysis")
 
         # should we use the harness? go with whichever crashed more
         self._use_harness = non_harness_crashes <= harness_crashes

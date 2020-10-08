@@ -161,7 +161,7 @@ class MinimizeTestcaseList(Strategy):
                 if self._current_feedback:
                     # removal was success! find the testcase that matches timestamp,
                     # and remove it
-                    LOG.info("Removing testcase %d/%d was successful!", idx, n_testcases)
+                    LOG.info("Removing testcase %d/%d was successful!", idx + 1, n_testcases)
                     removed_path = None
                     for test_info in self._testcase_root.glob("*/test_info.json"):
                         info = json.loads(test_info.read_text())
@@ -178,7 +178,7 @@ class MinimizeTestcaseList(Strategy):
                     rmtree(str(removed_path.parent))
                     n_testcases -= 1
                 else:
-                    LOG.info("No result without testcase %d/%d", idx, n_testcases)
+                    LOG.info("No result without testcase %d/%d", idx + 1, n_testcases)
                     idx += 1
                 # reset
                 self._current_feedback = None
@@ -192,6 +192,12 @@ class Check(_LithiumStrategy):
     name = "check"
     strategy_cls = CheckOnly
     testcase_cls = TestcaseLine
+
+    def __init__(self, *args, **kwds):
+        super().__init__(*args, **kwds)
+        # trim files_to_reduce, for check we don't need to run on every file
+        # just once per Grizzly TestCase set is enough.
+        self._files_to_reduce = self._files_to_reduce[:1]
 
 
 class MinimizeLines(_LithiumStrategy):
