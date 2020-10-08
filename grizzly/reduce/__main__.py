@@ -5,7 +5,7 @@
 import sys
 
 from .args import ReduceArgs
-from .reduce import ReduceManager
+from . import ReduceManager
 
 
 sys.exit(ReduceManager.main(ReduceArgs().parse_args()))

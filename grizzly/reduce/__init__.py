@@ -5,5 +5,5 @@
 
 __all__ = ("ReduceManager", "ReduceArgs")
 
-from .reduce import ReduceManager
+from .core import ReduceManager
 from .args import ReduceArgs

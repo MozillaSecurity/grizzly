@@ -8,15 +8,23 @@ common unit test fixtures for grizzly.reduce
 """
 
 import pytest
-from grizzly.common.reporter import FuzzManagerReporter
 
 
 @pytest.fixture
 def tmp_path_fm_config(tmp_path, mocker):
     """Ensure fm config is always read from tmp_path so ~/.fuzzmanagerconf
     can't be used by accident."""
-    mocker.patch.object(
-        FuzzManagerReporter,
-        "FM_CONFIG",
+    mocker.patch(
+        "grizzly.reduce.core.FuzzManagerReporter.FM_CONFIG",
         new=str(tmp_path / ".fuzzmanagerconf"),
     )
+    (tmp_path / ".fuzzmanagerconf").touch()
+
+
+@pytest.fixture
+def reporter_sequential_strftime(mocker):
+    prefix = mocker.patch("grizzly.common.reporter.strftime")
+
+    def report_prefix(_):
+        return "%04d" % (prefix.call_count,)
+    prefix.side_effect = report_prefix
