@@ -11,7 +11,7 @@ __all__ = ("Resource", "ServerMap")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-LOG = getLogger(__name__)  # pylint: disable=invalid-name
+LOG = getLogger(__name__)
 
 
 class InvalidURLError(Exception):
