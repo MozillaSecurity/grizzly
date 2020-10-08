@@ -261,14 +261,14 @@ class ReplayManager(object):
                     if self.status.iteration < repeat:
                         LOG.debug("skipping remaining attempts")
                     # failed to reproduce issue
-                    LOG.debug("results (%d) < expected, %s after %d attempts",
+                    LOG.debug("results (%d) < minimum (%d), after %d attempts",
                               self.status.results, min_results, self.status.iteration)
                     break
                 # check if complete (results found)
                 if self.status.results >= min_results:
                     assert self.status.results == min_results
                     assert sum(x.count for x in reports.values() if x.expected) >= min_results
-                    LOG.debug("results == expected, %s after %d attempts",
+                    LOG.debug("results == expected (%d), after %d attempts",
                               min_results, self.status.iteration)
                     break
 
