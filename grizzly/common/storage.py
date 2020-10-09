@@ -404,16 +404,15 @@ class TestCase(object):
         Returns:
             None
         """
+        opt_files = tuple(x.file_name for x in self._files.optional)
+        if not opt_files:
+            # nothing to purge
+            return None
         # filter required files from opt_files files to keep
         keep_opt = list()
         for fname in set(keep):
             if fname not in (x.file_name for x in self._files.required):
                 keep_opt.append(fname)
-        opt_files = tuple(x.file_name for x in self._files.optional)
-        if not opt_files:
-            assert not keep_opt
-            # nothing to purge
-            return None
         # sanity check keep (cannot remove file that does not exist)
         assert all(fname in opt_files for fname in keep_opt)
         # purge
