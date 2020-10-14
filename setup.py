@@ -10,7 +10,7 @@ from setuptools import setup
 
 
 EXTRAS = {
-    'reduce': ['lithium-reducer', 'jsbeautifier'],
+    'reduce': ['cssbeautifier', 'lithium-reducer', 'jsbeautifier'],
     's3': ['boto3'],
 }
 EXTRAS['all'] = list(set(chain.from_iterable(EXTRAS.values())))
