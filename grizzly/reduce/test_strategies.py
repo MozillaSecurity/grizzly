@@ -17,7 +17,7 @@ from sapphire import Sapphire
 from ..common import TestCase, Report
 from ..replay import ReplayResult
 from ..target import Target
-from .strategies import _load_strategies
+from .strategies import _load_strategies, HAVE_CSSBEAUTIFIER, HAVE_JSBEAUTIFIER
 from . import ReduceManager
 
 
@@ -106,7 +106,7 @@ ListStrategyParams = namedtuple(
 )
 def test_list(mocker, tmp_path, test_data, strategies, required_first, expected_run_calls, expected_results,
               expected_num_reports):
-    """test that "list" is a no-op with a single testcase"""
+    """tests for the "list" strategy"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
 
     def replay_run(testcases, **_):
@@ -145,6 +145,106 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first, expected_
     assert replayer.return_value.run.call_count == expected_run_calls
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/test.html")}
+    assert tests == expected_results
+    assert len(list((log_path / "reports").iterdir())) == expected_num_reports, \
+        list((log_path / "reports").iterdir())
+
+
+BeautifyStrategyParams = namedtuple(
+    "BeautifyStrategyParams",
+    "test_data, test_name, expected_run_calls, expected_results, expected_num_reports, strategies"
+)
+
+
+@pytest.mark.parametrize(
+    BeautifyStrategyParams._fields,
+    [
+        # test beautify a .js file
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="try{'fluff';'required'}catch(e){}\n",
+                test_name="test.js",
+                expected_run_calls=6,
+                expected_results={"'required'"},
+                expected_num_reports=2,
+                strategies=["jsbeautify", "lines"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test beautify js embedded in html
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<script>try{'fluff';'required'}catch(e){}</script>\n",
+                test_name="test.html",
+                expected_run_calls=7,
+                expected_results={"'required'"},
+                expected_num_reports=2,
+                strategies=["jsbeautify", "lines"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test beautify a .css file
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="*,#a{fluff:0;required:1}\n",
+                test_name="test.css",
+                expected_run_calls=8,
+                expected_results={"required: 1"},
+                expected_num_reports=2,
+                strategies=["cssbeautify", "lines"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"),
+        ),
+        # test beautify css embedded in html
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<style>*,#a{fluff:0;required:1}</style>\n",
+                test_name="test.html",
+                expected_run_calls=6,
+                expected_results={"required: 1"},
+                expected_num_reports=2,
+                strategies=["cssbeautify", "lines"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"),
+        ),
+    ]
+)
+def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls, expected_results,
+                    expected_num_reports, strategies):
+    """test for the "beautify" strategies"""
+    replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+
+    def replay_run(testcases, **_):
+        for test in testcases:
+            contents = test.get_file(test_name).data.decode("ascii")
+            LOG.debug("interesting if 'required' in %r", contents)
+            if "required" in contents:
+                log_path = tmp_path / ("crash%d_logs" % (replayer.return_value.run.call_count,))
+                log_path.mkdir()
+                _fake_save_logs_foo(log_path)
+                report = Report(str(log_path), "bin")
+                return [ReplayResult(report, [test_name], [], True)]
+        return []
+    replayer.return_value.run.side_effect = replay_run
+
+    test = TestCase(test_name, None, "test-adapter")
+    test.add_from_data(test_data, test_name)
+    tests = [test]
+    log_path = tmp_path / "logs"
+
+    target = mocker.Mock(spec=Target)
+    target.relaunch = 1
+    try:
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, tests, strategies, log_path,
+                            use_analysis=False)
+        assert mgr.run()
+    finally:
+        for test in tests:
+            test.cleanup()
+
+    assert replayer.return_value.run.call_count == expected_run_calls
+    assert set(log_path.iterdir()) == {log_path / "reports"}
+    tests = {test.read_text().strip() for test in log_path.glob("reports/*-*/" + test_name)}
     assert tests == expected_results
     assert len(list((log_path / "reports").iterdir())) == expected_num_reports, \
         list((log_path / "reports").iterdir())
