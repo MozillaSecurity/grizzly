@@ -14,8 +14,9 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from types import MappingProxyType
 
-from lithium.strategies import CheckOnly, CollapseEmptyBraces as LithCollapseEmptyBraces, Minimize
-from lithium.testcases import TestcaseChar, TestcaseJsStr, TestcaseLine
+from lithium.strategies import CheckOnly, CollapseEmptyBraces as LithCollapseEmptyBraces, Minimize, \
+    Strategy as LithStrategy
+from lithium.testcases import TestcaseChar, TestcaseJsStr, TestcaseLine, Testcase as LithTestcase
 from pkg_resources import iter_entry_points
 
 from ..common.utils import grz_tmp
@@ -52,6 +53,7 @@ def _load_strategies():
     for entry_point in iter_entry_points("grizzly_reduce_strategies"):
         try:
             strategy_cls = entry_point.load()
+            strategy_cls.sanity_check_impl()
             assert (
                 strategy_cls.name == entry_point.name
             ), "entry_point name mismatch, check setup.py and %s.name" % (
@@ -76,12 +78,18 @@ class Strategy(ABC):
     Attributes:
         name (str): The strategy name.
     """
+    name = None
+
     def __init__(self, testcases):
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
         for idx, testcase in enumerate(testcases):
             LOG.debug("Extracting testcase %d/%d", idx + 1, len(testcases))
             testpath = self._testcase_root / ("%03d" % (idx,))
             testcase.dump(str(testpath), include_details=True)
+
+    @classmethod
+    def sanity_check_impl(cls):
+        assert isinstance(cls.name, str)
 
     @abstractmethod
     def __iter__(self):
@@ -112,21 +120,36 @@ class _BeautifyStrategy(Strategy, ABC):
         native_extension (str): The native file extension for this type.
         tag_name (str): Tag name to search for in other (non-native) extensions.
     """
+    all_extensions = None
     blacklist_files = {"test_info.json", "prefs.js"}
+    import_available = None
+    import_name = None
+    native_extension = None
+    tag_name = None
 
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._files_to_reduce = []
         for path in self._testcase_root.glob("**/*"):
-            if (path.is_file() and path.suffix in self.all_extensions  # pylint: disable=no-member
+            if (path.is_file() and path.suffix in self.all_extensions
                     and path.name not in self.blacklist_files):
                 self._files_to_reduce.append(path)
         self._current_feedback = None
-        tag_bytes = self.tag_name.encode("ascii")  # pylint: disable=no-member
+        tag_bytes = self.tag_name.encode("ascii")
         self._re_tag = re.compile(br"(<" + tag_bytes + br".*?>)(.*?)(</\s*" + tag_bytes + br"\s*>)",
                                   flags=re.DOTALL | re.IGNORECASE)
         self._re_tag_start = re.compile(br"<" + tag_bytes + br".*?>\s*$", flags=re.DOTALL | re.IGNORECASE)
         self._re_tag_end = re.compile(br"^\s*</\s*" + tag_bytes + br"\s*>", flags=re.IGNORECASE)
+
+    @classmethod
+    def sanity_check_impl(cls):
+        super().sanity_check_impl()
+        assert isinstance(cls.all_extensions, set)
+        assert all(isinstance(ext, str) for ext in cls.all_extensions)
+        assert isinstance(cls.import_available, bool)
+        assert isinstance(cls.import_name, str)
+        assert isinstance(cls.native_extension, str)
+        assert isinstance(cls.tag_name, str)
 
     def update(self, success):
         assert self._current_feedback is None
@@ -138,8 +161,8 @@ class _BeautifyStrategy(Strategy, ABC):
         pass
 
     def __iter__(self):
-        if not self.import_available:  # pylint: disable=no-member
-            LOG.warning("%s not available, skipping strategy.", self.import_name)  # pylint: disable=no-member
+        if not self.import_available:
+            LOG.warning("%s not available, skipping strategy.", self.import_name)
             return
 
         LOG.info("Beautifying %d files", len(self._files_to_reduce))
@@ -156,7 +179,7 @@ class _BeautifyStrategy(Strategy, ABC):
             in_tag_already = (self._re_tag_start.match(lith_tc.before) is not None
                               and self._re_tag_end.match(lith_tc.after) is not None)
 
-            if file.suffix == self.native_extension or in_tag_already:  # pylint: disable=no-member
+            if file.suffix == self.native_extension or in_tag_already:
                 with file.open("wb") as testcase_fp:
                     testcase_fp.write(lith_tc.before)
                     testcase_fp.write(self.beautify_bytes(to_reduce))
@@ -179,16 +202,16 @@ class _BeautifyStrategy(Strategy, ABC):
                     testcase_fp.write(to_reduce[pos:])
                     testcase_fp.write(lith_tc.after)
                 if pos == 0:
-                    LOG.warning("<%s> tags not found, skipping", self.tag_name)  # pylint: disable=no-member
+                    LOG.warning("<%s> tags not found, skipping", self.tag_name)
                     continue
 
             yield TestCase.load(str(self._testcase_root), False)
 
             assert self._current_feedback is not None, "No feedback for last iteration"
             if self._current_feedback:
-                LOG.info("%s was successful", self.name)  # pylint: disable=no-member
+                LOG.info("%s was successful", self.name)
             else:
-                LOG.warning("%s failed (reverting)", self.name)  # pylint: disable=no-member
+                LOG.warning("%s failed (reverting)", self.name)
                 lith_tc.dump(file)
             self._current_feedback = None
 
@@ -201,6 +224,9 @@ class _LithiumStrategy(Strategy, ABC):
         strategy_cls (lithium.strategies.Strategy): Lithium strategy type.
         testcase_cls (lithium.testcases.Testcase): Lithium testcase type.
     """
+    strategy_cls = None
+    testcase_cls = None
+
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._current_reducer = None
@@ -208,6 +234,12 @@ class _LithiumStrategy(Strategy, ABC):
         for path in self._testcase_root.glob("**/*"):
             if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
                 self._files_to_reduce.append(path)
+
+    @classmethod
+    def sanity_check_impl(cls):
+        super().sanity_check_impl()
+        assert issubclass(cls.strategy_cls, LithStrategy)
+        assert issubclass(cls.testcase_cls, LithTestcase)
 
     def update(self, success):
         assert self._current_reducer is not None
@@ -217,9 +249,9 @@ class _LithiumStrategy(Strategy, ABC):
         LOG.info("Reducing %d files", len(self._files_to_reduce))
         for file_no, file in enumerate(self._files_to_reduce):
             LOG.info("Reducing %s (file %d/%d)", file, file_no + 1, len(self._files_to_reduce))
-            lithium_testcase = self.testcase_cls()  # pylint: disable=no-member
+            lithium_testcase = self.testcase_cls()  # pylint: disable=not-callable
             lithium_testcase.load(file)
-            # pylint: disable=no-member
+            # pylint: disable=not-callable
             self._current_reducer = self.strategy_cls().reduce(lithium_testcase)
             for reduction in self._current_reducer:
                 reduction.dump()

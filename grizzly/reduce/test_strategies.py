@@ -42,6 +42,10 @@ def test_strategy_load_fail(mocker):
     class _GoodStrategy(object):
         name = "good"
         @classmethod
+        def sanity_check_impl(cls):
+            pass
+
+        @classmethod
         def load(cls):
             return cls
 
