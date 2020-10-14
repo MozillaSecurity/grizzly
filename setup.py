@@ -42,8 +42,12 @@ if __name__ == '__main__':
                 'ffpuppet = grizzly.target.puppet_target:PuppetTarget',
             ],
             'grizzly_reduce_strategies': [
-                'check = grizzly.reduce.strategies:Check',
                 'chars = grizzly.reduce.strategies:MinimizeChars',
+                'check = grizzly.reduce.strategies:Check',
+                'collapsebraces = grizzly.reduce.strategies:CollapseEmptyBraces',
+                'cssbeautify = grizzly.reduce.strategies:CSSBeautify',
+                'jsbeautify = grizzly.reduce.strategies:JSBeautify',
+                'jschars = grizzly.reduce.strategies:MinimizeJSChars',
                 'lines = grizzly.reduce.strategies:MinimizeLines',
                 'list = grizzly.reduce.strategies:MinimizeTestcaseList',
             ],
