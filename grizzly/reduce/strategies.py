@@ -129,17 +129,15 @@ class _BeautifyStrategy(Strategy, ABC):
 
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
-        self._files_to_reduce = []
+        self._files_to_beautify = []
         for path in self._testcase_root.glob("**/*"):
             if (path.is_file() and path.suffix in self.all_extensions
                     and path.name not in self.blacklist_files):
-                self._files_to_reduce.append(path)
+                self._files_to_beautify.append(path)
         self._current_feedback = None
         tag_bytes = self.tag_name.encode("ascii")
-        self._re_tag = re.compile(br"(<" + tag_bytes + br".*?>)(.*?)(</\s*" + tag_bytes + br"\s*>)",
-                                  flags=re.DOTALL | re.IGNORECASE)
-        self._re_tag_start = re.compile(br"<" + tag_bytes + br".*?>\s*$", flags=re.DOTALL | re.IGNORECASE)
-        self._re_tag_end = re.compile(br"^\s*</\s*" + tag_bytes + br"\s*>", flags=re.IGNORECASE)
+        self._re_tag_start = re.compile(br"<\s*" + tag_bytes + br".*?>", flags=re.DOTALL | re.IGNORECASE)
+        self._re_tag_end = re.compile(br"</\s*" + tag_bytes + br"\s*>", flags=re.IGNORECASE)
 
     @classmethod
     def sanity_check_impl(cls):
@@ -160,48 +158,99 @@ class _BeautifyStrategy(Strategy, ABC):
     def beautify_bytes(cls, data):
         pass
 
+    def _chunks_to_beautify(self, before, to_beautify, file):
+        """Iterate over `to_beautify` and find chunks of style/script to beautify.
+
+        Arguments:
+            before (bytes): The data preceding `to_beautify`. Used to check whether `to_beautify` is
+                            already in an open <script> or <style> tag.
+            to_beautify (bytes): The data to beautify.
+            file (Path): The input file (used only to check if this is a .css/.js file)
+
+        Yields:
+            tuple (int,int): Slices of `to_beautify` that should be beautified.
+        """
+        # native extension, there's no need to search for tags
+        if file.suffix == self.native_extension:
+            yield (0, len(to_beautify))
+            return
+
+        # find the last <tag> preceding DDBEGIN
+        last_tag_start = None
+        for match in self._re_tag_start.finditer(before):
+            last_tag_start = match
+        in_tag_already = (
+            # there was an open <tag>
+            last_tag_start is not None
+            # and it isn't followed by a closing </tag>
+            and self._re_tag_end.search(before[last_tag_start.end(0):]) is None
+        )
+        if in_tag_already:
+            tag_end = self._re_tag_end.search(to_beautify)
+            if tag_end is None:
+                # similar to native case. DDBEGIN/END occurred inside the tag, so
+                # no need to look further
+                yield (0, len(to_beautify))
+                return
+            yield (0, tag_end.start(0))
+            search_start = tag_end.end(0)
+        else:
+            search_start = 0
+
+        # scan for <tag></tag> (with </tag> being optional for the last match)
+        while True:
+            tag_start = self._re_tag_start.search(to_beautify[search_start:])
+            if tag_start is None:
+                break
+            chunk_start = search_start + tag_start.end(0)
+            tag_end = self._re_tag_end.search(to_beautify[chunk_start:])
+            if tag_end is None:
+                # last </tag> was missing, stop looking
+                yield (chunk_start, len(to_beautify))
+                break
+            yield (chunk_start, chunk_start + tag_end.start(0))
+            search_start = chunk_start + tag_end.end(0)
+
     def __iter__(self):
         if not self.import_available:
             LOG.warning("%s not available, skipping strategy.", self.import_name)
             return
 
-        LOG.info("Beautifying %d files", len(self._files_to_reduce))
-        for file_no, file in enumerate(self._files_to_reduce):
+        LOG.info("Beautifying %d files", len(self._files_to_beautify))
+        for file_no, file in enumerate(self._files_to_beautify):
             LOG.info("Beautifying %s (file %d/%d)", file.relative_to(self._testcase_root), file_no + 1,
-                     len(self._files_to_reduce))
+                     len(self._files_to_beautify))
 
             # Use Lithium just to split the file at DDBEGIN/END.
             # Lithium already has the right logic for DDBEGIN/END and line endings.
             lith_tc = TestcaseLine()
             lith_tc.load(file)
-            to_reduce = b"".join(lith_tc.parts)
-            # check if the DDBEGIN/END were right inside a <script> or <style> tag
-            in_tag_already = (self._re_tag_start.match(lith_tc.before) is not None
-                              and self._re_tag_end.match(lith_tc.after) is not None)
+            raw = b"".join(lith_tc.parts)
 
-            if file.suffix == self.native_extension or in_tag_already:
-                with file.open("wb") as testcase_fp:
-                    testcase_fp.write(lith_tc.before)
-                    testcase_fp.write(self.beautify_bytes(to_reduce))
-                    testcase_fp.write(lith_tc.after)
-            else:
-                # handle html files
-                pos = 0
-                with file.open("wb") as testcase_fp:
-                    testcase_fp.write(lith_tc.before)
-                    for match in self._re_tag.finditer(to_reduce):
-                        testcase_fp.write(to_reduce[pos:match.start(2)])
-                        beautified = self.beautify_bytes(match.group(2))
-                        if beautified:
-                            if not to_reduce[pos:match.start(2)].endswith(b"\n"):
-                                testcase_fp.write(b"\n")
-                            testcase_fp.write(beautified)
-                            if not beautified.endswith(b"\n"):
-                                testcase_fp.write(b"\n")
-                        pos = match.end(2)
-                    testcase_fp.write(to_reduce[pos:])
-                    testcase_fp.write(lith_tc.after)
-                if pos == 0:
+            with file.open("wb") as testcase_fp:
+                last = 0
+                testcase_fp.write(lith_tc.before)
+                for start, end in self._chunks_to_beautify(lith_tc.before, raw, file):
+                    before = raw[last:start]
+                    testcase_fp.write(before)
+                    to_beautify = raw[start:end]
+                    beautified = self.beautify_bytes(to_beautify)
+                    if beautified:
+                        if before and not before.endswith(b"\n"):
+                            testcase_fp.write(b"\n")
+                        testcase_fp.write(beautified)
+                        if not beautified.endswith(b"\n"):
+                            testcase_fp.write(b"\n")
+                    elif to_beautify.strip():  # pragma: no cover
+                        # this should never happen, but just in case...
+                        # pragma: no cover
+                        LOG.warning("No output from beautify! Writing %s unmodified.", self.tag_name)
+                        testcase_fp.write(to_beautify)  # pragma: no cover
+                    last = end
+                testcase_fp.write(raw[last:])
+                testcase_fp.write(lith_tc.after)
+
+                if last == 0:
                     LOG.warning("<%s> tags not found, skipping", self.tag_name)
                     continue
 

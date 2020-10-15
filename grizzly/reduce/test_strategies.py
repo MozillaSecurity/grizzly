@@ -22,7 +22,8 @@ from . import ReduceManager
 
 
 LOG = getLogger(__name__)
-pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")  # pylint: disable=invalid-name
+# pylint: disable=invalid-name
+pytestmark = pytest.mark.usefixtures("tmp_path_fm_config", "reporter_sequential_strftime")
 
 
 def _fake_save_logs_foo(result_logs):
@@ -168,10 +169,10 @@ BeautifyStrategyParams = namedtuple(
             *BeautifyStrategyParams(
                 test_data="try{'fluff';'required'}catch(e){}\n",
                 test_name="test.js",
-                expected_run_calls=6,
-                expected_results={"'required'"},
+                expected_run_calls=1,
+                expected_results={"try {\n    'fluff';\n    'required'\n} catch (e) {}\n"},
                 expected_num_reports=2,
-                strategies=["jsbeautify", "lines"],
+                strategies=["jsbeautify"],
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
         ),
@@ -180,10 +181,139 @@ BeautifyStrategyParams = namedtuple(
             *BeautifyStrategyParams(
                 test_data="<script>try{'fluff';'required'}catch(e){}</script>\n",
                 test_name="test.html",
-                expected_run_calls=7,
-                expected_results={"'required'"},
+                expected_run_calls=1,
+                expected_results={"<script>\ntry {\n    'fluff';\n    'required'\n} catch (e) {}\n"
+                                  "</script>\n"},
                 expected_num_reports=2,
-                strategies=["jsbeautify", "lines"],
+                strategies=["jsbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test beautify multiple js embedded in html
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<script>try{'fluff';'required'}catch(e){}</script>"
+                "<script>'fluff';'requisite'</script>\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={"<script>\ntry {\n    'fluff';\n    'required'\n} catch (e) {}\n</script>"
+                                  "<script>\n'fluff';\n'requisite'\n</script>\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test beautify js embedded in html with no end
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<script>try{'fluff';'required'}catch(e){}\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={"<script>\ntry {\n    'fluff';\n    'required'\n} catch (e) {}\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test DDBEGIN/END respected in .js file
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="try{\n//DDBEGIN\n'fluff';'required'\n//DDEND\n}catch(e){}\n",
+                test_name="test.js",
+                expected_run_calls=1,
+                expected_results={"try{\n//DDBEGIN\n'fluff';\n'required'\n//DDEND\n}catch(e){}\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test DDBEGIN/END respected for js embedded in html, DD outside <script>
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<!--DDBEGIN-->\n<script>\ntry{'fluff';'required'}catch(e){}\n"
+                "</script><!--DDEND-->\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={"<!--DDBEGIN-->\n<script>\ntry {\n    'fluff';\n    'required'\n"
+                                  "} catch (e) {}\n</script><!--DDEND-->\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test DDBEGIN/END respected for js embedded in html, DD inside <script>
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<script>try{\n//DDBEGIN\n'fluff';'required'\n//DDEND\n}catch(e){}</script>\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={"<script>try{\n//DDBEGIN\n'fluff';\n'required'\n//DDEND\n}catch(e){}"
+                                  "</script>\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test DDBEGIN/END respected for js embedded in html, DD straddle before <script>
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<!--DDBEGIN-->\n<script>\ntry{'fluff';'required'}catch(e){}\n//DDEND\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={"<!--DDBEGIN-->\n<script>\ntry {\n    'fluff';\n    'required'\n"
+                                  "} catch (e) {}\n//DDEND\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test DDBEGIN/END respected for js embedded in html, DD straddle after <script>
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<script>\n//DDBEGIN\ntry{'fluff';'required'}catch(e){}\n//DDEND\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={"<script>\n//DDBEGIN\ntry {\n    'fluff';\n    'required'\n"
+                                  "} catch (e) {}\n//DDEND\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test DDBEGIN/END respected for js embedded in html, DD straddle after </script>
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<script>\n//DDBEGIN\ntry{'fluff';'required'}catch(e){}\n</script>\n<!--DDEND-->\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={"<script>\n//DDBEGIN\ntry {\n    'fluff';\n    'required'\n} catch (e) {}\n"
+                                  "</script>\n<!--DDEND-->\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test beautify js embedded in html (no <script>)
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="try{'fluff';'required'}catch(e){}\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={"try{'fluff';'required'}catch(e){}\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify", "check"],  # no beautify performed, add check so the run succeeds
+            ),
+            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
+        ),
+        # test beautify js where beautification breaks
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="try{'fluff';'requi'+'red'}catch(e){}\n",
+                test_name="test.js",
+                expected_run_calls=2,
+                expected_results={"try{'fluff';'requi'+'red'}catch(e){}\n"},
+                expected_num_reports=2,
+                strategies=["jsbeautify", "check"],  # no beautify performed, add check so the run succeeds
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"),
         ),
@@ -192,10 +322,10 @@ BeautifyStrategyParams = namedtuple(
             *BeautifyStrategyParams(
                 test_data="*,#a{fluff:0;required:1}\n",
                 test_name="test.css",
-                expected_run_calls=8,
-                expected_results={"required: 1"},
+                expected_run_calls=1,
+                expected_results={"*,\n#a {\n  fluff: 0;\n  required: 1\n}\n"},
                 expected_num_reports=2,
-                strategies=["cssbeautify", "lines"],
+                strategies=["cssbeautify"],
             ),
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"),
         ),
@@ -204,10 +334,22 @@ BeautifyStrategyParams = namedtuple(
             *BeautifyStrategyParams(
                 test_data="<style>*,#a{fluff:0;required:1}</style>\n",
                 test_name="test.html",
-                expected_run_calls=6,
-                expected_results={"required: 1"},
+                expected_run_calls=1,
+                expected_results={"<style>\n*,\n#a {\n  fluff: 0;\n  required: 1\n}\n</style>\n"},
                 expected_num_reports=2,
-                strategies=["cssbeautify", "lines"],
+                strategies=["cssbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"),
+        ),
+        # test beautify css embedded in html with no end
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<style>*,#a{fluff:0;required:1}\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={"<style>\n*,\n#a {\n  fluff: 0;\n  required: 1\n}\n"},
+                expected_num_reports=2,
+                strategies=["cssbeautify"],
             ),
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"),
         ),
@@ -222,7 +364,8 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls, 
         for test in testcases:
             contents = test.get_file(test_name).data.decode("ascii")
             LOG.debug("interesting if 'required' in %r", contents)
-            if "required" in contents:
+            if ("required" in contents and ("requisite" not in test_data or "requisite" in contents)) \
+                    or "'requi'+'red'" in contents:
                 log_path = tmp_path / ("crash%d_logs" % (replayer.return_value.run.call_count,))
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
@@ -248,7 +391,7 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls, 
 
     assert replayer.return_value.run.call_count == expected_run_calls
     assert set(log_path.iterdir()) == {log_path / "reports"}
-    tests = {test.read_text().strip() for test in log_path.glob("reports/*-*/" + test_name)}
+    tests = {test.read_text() for test in log_path.glob("reports/*-*/" + test_name)}
     assert tests == expected_results
     assert len(list((log_path / "reports").iterdir())) == expected_num_reports, \
         list((log_path / "reports").iterdir())
