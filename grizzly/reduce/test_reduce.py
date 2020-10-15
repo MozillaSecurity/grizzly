@@ -416,3 +416,108 @@ def test_launch_error(mocker, tmp_path, use_analysis, exc_type):
         assert report_obj.cleanup.call_count == 1
     else:
         assert report_fcn.call_count == 0
+
+
+TimeoutTestParams = namedtuple(
+    "TimeoutTestParams",
+    "durations, interesting, static_timeout, idle_input, idle_output, iter_input, iter_output, result"
+)
+
+
+@pytest.mark.parametrize(
+    TimeoutTestParams._fields,
+    [
+        # 0 duration test sets both timeouts to minimum
+        TimeoutTestParams(
+            durations=[0],
+            interesting=True,
+            static_timeout=False,
+            idle_input=30,
+            idle_output=10,
+            iter_input=60,
+            iter_output=10,
+            result=True,
+        ),
+        # max duration is used
+        TimeoutTestParams(
+            durations=[0, 30],
+            interesting=True,
+            static_timeout=False,
+            idle_input=30,
+            idle_output=30,
+            iter_input=60,
+            iter_output=60,
+            result=True,
+        ),
+        # static timeout doesn't affect timeouts
+        TimeoutTestParams(
+            durations=[0],
+            interesting=True,
+            static_timeout=True,
+            idle_input=30,
+            idle_output=30,
+            iter_input=60,
+            iter_output=60,
+            result=True,
+        ),
+        # uninteresting result doesn't affect timeouts
+        TimeoutTestParams(
+            durations=[0],
+            interesting=False,
+            static_timeout=True,
+            idle_input=30,
+            idle_output=30,
+            iter_input=60,
+            iter_output=60,
+            result=False,
+        ),
+        # test duration affects timeouts
+        TimeoutTestParams(
+            durations=[10],
+            interesting=True,
+            static_timeout=False,
+            idle_input=30,
+            idle_output=15,
+            iter_input=60,
+            iter_output=20,
+            result=True,
+        ),
+    ]
+)
+def test_timeout_update(mocker, tmp_path, durations, interesting, static_timeout, idle_input, idle_output,
+                        iter_input, iter_output, result):
+    "timeout will be updated based on time to crash"
+    replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+
+    def replay_run(_testcases, **_):
+        LOG.debug("interesting true")
+        log_path = tmp_path / ("crash%d_logs" % (replayer.return_value.run.call_count,))
+        log_path.mkdir()
+        _fake_save_logs_foo(log_path)
+        report = Report(str(log_path), "bin")
+        return [ReplayResult(report, ["test.html"], durations, interesting)]
+    replayer.return_value.run.side_effect = replay_run
+
+    test = TestCase("test.html", None, "test-adapter")
+    test.add_from_data("123\n", "test.html")
+    tests = [test]
+    log_path = tmp_path / "logs"
+
+    target = mocker.Mock(spec=Target)
+    target.relaunch = 1
+    server = mocker.Mock(spec=Sapphire)
+    server.timeout = iter_input
+    try:
+        mgr = ReduceManager([], server, target, tests, ["check"], log_path,
+                            use_analysis=False, idle_delay=idle_input, static_timeout=static_timeout)
+        mgr.IDLE_DELAY_MIN = 10
+        mgr.IDLE_DELAY_DURATION_MULTIPLIER = 1.5
+        mgr.ITER_TIMEOUT_MIN = 10
+        mgr.ITER_TIMEOUT_DURATION_MULTIPLIER = 2
+        assert mgr.run() == result
+    finally:
+        for test in tests:
+            test.cleanup()
+
+    assert server.timeout == iter_output
+    assert mgr._idle_delay == idle_output
