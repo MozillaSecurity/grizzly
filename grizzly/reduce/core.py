@@ -5,6 +5,7 @@
 """
 Given a build and testcase, try to reduce it using a set of strategies.
 """
+from itertools import chain
 from logging import getLogger
 from math import ceil, log
 from pathlib import Path
@@ -63,9 +64,20 @@ class ReduceManager(object):
     # to see the worst case, run the `repeat` calculation in run_reliability_analysis using
     # crashes_percent = 1.0/ANALYSIS_ITERATIONS
 
+    IDLE_DELAY_MIN = 10
+    IDLE_DELAY_DURATION_MULTIPLIER = 1.5
+    ITER_TIMEOUT_MIN = 10
+    ITER_TIMEOUT_DURATION_MULTIPLIER = 2
+
+    """
+    Args:
+        idle_delay (int): Number of seconds to wait before polling for idle.
+        idle_threshold (int): CPU usage threshold to mark the process as idle.
+    """
+
     def __init__(self, ignore, server, target, testcases, strategies, log_path, tool=None,
                  report_to_fuzzmanager=False, any_crash=False, signature=None, use_harness=True,
-                 use_analysis=True):
+                 use_analysis=True, static_timeout=False, idle_delay=0, idle_threshold=0):
         self.ignore = ignore
         self.server = server
         self.strategies = strategies
@@ -81,6 +93,39 @@ class ReduceManager(object):
         self._signature = signature
         self._use_analysis = use_analysis
         self._use_harness = use_harness
+        self._static_timeout = static_timeout
+        self._idle_delay = idle_delay
+        self._idle_threshold = idle_threshold
+
+    def update_timeout(self, results):
+        if self._static_timeout or self._any_crash or getattr(self.target, "use_valgrind", False):
+            # the amount of time it can take to replay a test case can vary
+            # when under Valgrind so do not update the timeout in that case
+
+            # when any_crash is given, crashes may be completely unrelated (all are expected), so
+            # lowering timeout or idle delay will only hide crashes
+            return
+
+        durations = list(chain.from_iterable(result.durations for result in results if result.expected))
+        if not durations:
+            # no expected results
+            return
+        run_time = max(durations)
+
+        # If `run_time * multiplier` is less than idle poll delay, update it
+        LOG.debug('Run time %r', run_time)
+        new_idle_delay = max(self.IDLE_DELAY_MIN, min(run_time * self.IDLE_DELAY_DURATION_MULTIPLIER,
+                                                      self._idle_delay))
+        if new_idle_delay < self._idle_delay:
+            LOG.info("Updating poll delay to: %r", new_idle_delay)
+            self._idle_delay = new_idle_delay
+        # If `run_time * multiplier` is less than iter_timeout, update it
+        # in other words, decrease the timeout if this ran in less than half the timeout
+        new_iter_timeout = max(self.ITER_TIMEOUT_MIN, min(run_time * self.ITER_TIMEOUT_DURATION_MULTIPLIER,
+                                                          self.server.timeout))
+        if new_iter_timeout < self.server.timeout:
+            LOG.info("Updating max timeout to: %r", new_iter_timeout)
+            self.server.timeout = new_iter_timeout
 
     def run_reliability_analysis(self):
         harness_crashes = 0
@@ -104,12 +149,14 @@ class ReduceManager(object):
                          self.ANALYSIS_ITERATIONS, "using" if use_harness else "without")
                 for _ in range(self.ANALYSIS_ITERATIONS):
                     try:
-                        results = replay.run(self.testcases, repeat=1, min_results=1)
+                        results = replay.run(self.testcases, repeat=1, min_results=1,
+                                             idle_delay=self._idle_delay, idle_threshold=self._idle_threshold)
                     except (TargetLaunchError, TargetLaunchTimeout) as exc:
                         if isinstance(exc, TargetLaunchError) and exc.report:
                             self.report([ReplayResult(exc.report, None, [], False)], self.testcases)
                             exc.report.cleanup()
                         raise
+                    self.update_timeout(results)
                     try:
                         success = any(result.expected for result in results)
                         LOG.info("result: %s", "interesting." if success else "not interesting.")
@@ -155,6 +202,16 @@ class ReduceManager(object):
         return (repeat, min_crashes)
 
     def run(self, repeat=1, min_results=1):
+        """Run testcase replay.
+
+        Args:
+            repeat (int): Maximum number of times to run the TestCase.
+            min_results (int): Minimum number of results needed before run can
+                               be considered successful.
+
+        Returns:
+            bool: Whether a crash was observed (whether or not reduction was successful).
+        """
         any_success = False
         last_reports = None
         for strategy_no, strategy in enumerate(self.strategies):
@@ -179,12 +236,15 @@ class ReduceManager(object):
                         try:
                             try:
                                 # reduction is a new list of testcases to be replayed
-                                results = replay.run(reduction, repeat=repeat, min_results=min_results)
+                                results = replay.run(reduction, repeat=repeat, min_results=min_results,
+                                                     idle_delay=self._idle_delay,
+                                                     idle_threshold=self._idle_threshold)
                             except (TargetLaunchError, TargetLaunchTimeout) as exc:
                                 if isinstance(exc, TargetLaunchError) and exc.report:
                                     self.report([ReplayResult(exc.report, None, [], False)], reduction)
                                     exc.report.cleanup()
                                 raise
+                            self.update_timeout(results)
                             success = any(report.expected for report in results)
                             strategy.update(success)
                             if strategy.name == "check":
@@ -329,7 +389,10 @@ class ReduceManager(object):
                     any_crash=args.any_crash,
                     signature=signature,
                     use_harness=not args.no_harness,
-                    use_analysis=not args.no_analysis)
+                    use_analysis=not args.no_analysis,
+                    static_timeout=args.static_timeout,
+                    idle_delay=args.idle_delay,
+                    idle_threshold=args.idle_threshold)
                 success = mgr.run(repeat=args.repeat, min_results=args.min_crashes)
             return 0 if success else 1
 

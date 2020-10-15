@@ -28,6 +28,9 @@ class ReduceArgs(ReplayArgs):
             "--no-analysis", action="store_true",
             help="Disable analysis to auto-set --repeat/--min-crashes.")
         reduce_args.add_argument(
+            "--static-timeout", action="store_true",
+            help="Disable automatically updating the iteration timeout.")
+        reduce_args.add_argument(
             "--strategy", nargs="+", default=DEFAULT_STRATEGIES, metavar="STRATEGY",
             dest="strategies",
             help="One or more strategies (space-separated). Available: %s (default: %s)"
