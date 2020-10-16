@@ -126,7 +126,7 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first, expected_
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
-                return [ReplayResult(report, ["test.html"], [], True)]
+                return [ReplayResult(report, [["test.html"]] * len(testcases), [], True)]
         return []
     replayer.return_value.run.side_effect = replay_run
 
@@ -370,7 +370,7 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls, 
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
-                return [ReplayResult(report, [test_name], [], True)]
+                return [ReplayResult(report, [[test_name]], [], True)]
         return []
     replayer.return_value.run.side_effect = replay_run
 
@@ -392,6 +392,142 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls, 
     assert replayer.return_value.run.call_count == expected_run_calls
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/" + test_name)}
+    assert tests == expected_results
+    assert len(list((log_path / "reports").iterdir())) == expected_num_reports, \
+        list((log_path / "reports").iterdir())
+
+
+PurgeUnservedTestParams = namedtuple(
+    "PurgeUnservedTestParams",
+    "strategies, test_data, served, expected_results, expected_run_calls, expected_num_reports, "
+    "purging_breaks"
+)
+
+
+@pytest.mark.parametrize(
+    PurgeUnservedTestParams._fields,
+    [
+        # single test, first reduction uses 2 files, second uses only target file.
+        PurgeUnservedTestParams(
+            strategies=["chars"],
+            test_data=[{"test.html": "123", "opt.html": "456"}],
+            served=[[["test.html", "opt.html"]], [["test.html"]], [["test.html"]]],
+            expected_results={"1"},
+            expected_run_calls=5,
+            expected_num_reports=2,
+            purging_breaks=False,
+        ),
+        # single test, first reduction uses target only
+        PurgeUnservedTestParams(
+            strategies=["chars"],
+            test_data=[{"test.html": "123", "opt.html": "456"}],
+            served=[[["test.html"]], [["test.html"]]],
+            expected_results={"1"},
+            expected_run_calls=3,
+            expected_num_reports=2,
+            purging_breaks=False,
+        ),
+        # single test, first reduction uses 2 files, second uses only optional file. (no results -> Assertion)
+        PurgeUnservedTestParams(
+            strategies=["chars"],
+            test_data=[{"test.html": "123", "opt.html": "456"}],
+            served=[[["test.html", "opt.html"]], [["opt.html"]]],
+            expected_results=set(),
+            expected_run_calls=4,
+            expected_num_reports=None,
+            purging_breaks=True,
+        ),
+        # double test, first reduction uses all files, second uses only target file in second test.
+        PurgeUnservedTestParams(
+            strategies=["chars"],
+            test_data=[{"test.html": "123", "opt.html": "456"}, {"test.html": "789", "opt.html": "abc"}],
+            served=[[["test.html", "opt.html"], ["test.html", "opt.html"]],
+                    [["test.html", "opt.html"], ["test.html"]],
+                    [["test.html", "opt.html"], ["test.html"]]],
+            expected_results={"1", "4", "7"},
+            expected_run_calls=6,
+            expected_num_reports=3,
+            purging_breaks=False,
+        ),
+        # double test, first reduction uses all files, second uses only optional file (first test remains)
+        PurgeUnservedTestParams(
+            strategies=["chars"],
+            test_data=[{"test.html": "123", "opt.html": "456"}, {"test.html": "789", "opt.html": "abc"}],
+            served=[[["test.html", "opt.html"], ["test.html", "opt.html"]],
+                    [["test.html", "opt.html"], ["opt.html"]],
+                    [["test.html", "opt.html"]]],
+            expected_results={"1", "4"},
+            expected_run_calls=5,
+            expected_num_reports=2,
+            purging_breaks=False,
+        ),
+        # triple test, list strategy. first test gets reduced, third gets eliminated
+        PurgeUnservedTestParams(
+            strategies=["list"],
+            test_data=[{"test.html": "123"}, {"test.html": "456"}, {"test.html": "789"}],
+            served=[[["test.html"]],
+                    [["test.html"]],
+                    [["test.html"]]],
+            expected_results={"456"},
+            expected_run_calls=2,
+            expected_num_reports=2,
+            purging_breaks=False,
+        ),
+    ]
+)
+def test_purge_unserved(mocker, tmp_path, strategies, test_data, served, expected_results, expected_run_calls,
+                        expected_num_reports, purging_breaks):
+    """test purging unserved files"""
+    replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+
+    def replay_run(testcases, **_):
+        # test.html and opt.html should always contain one line.
+        # return [] (no result) if either of them exist and are empty
+        has_any = False
+        for test in testcases:
+            for file in ("test.html", "opt.html"):
+                if test.contains(file):
+                    LOG.debug("testcase contains %s", file)
+                    has_any = True
+                    contents = test.get_file(file).data.decode("ascii")
+                    if not contents.strip():
+                        return []
+        if not has_any:
+            return []
+        log_path = tmp_path / ("crash%d_logs" % (replayer.return_value.run.call_count,))
+        log_path.mkdir()
+        _fake_save_logs_foo(log_path)
+        report = Report(str(log_path), "bin")
+        return [ReplayResult(report, served.pop(0), [], True)]
+    replayer.return_value.run.side_effect = replay_run
+
+    tests = []
+    for testcase in test_data:
+        test = TestCase("test.html", None, "test-adapter")
+        for filename, data in testcase.items():
+            test.add_from_data(data, filename)
+        tests.append(test)
+    log_path = tmp_path / "logs"
+
+    target = mocker.Mock(spec=Target)
+    target.relaunch = 1
+    try:
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, tests, strategies, log_path,
+                            use_analysis=False)
+        if purging_breaks:
+            with raises(AssertionError):
+                mgr.run()
+        else:
+            assert mgr.run()
+    finally:
+        for test in tests:
+            test.cleanup()
+
+    assert replayer.return_value.run.call_count == expected_run_calls
+    if purging_breaks:
+        return
+    assert set(log_path.iterdir()) == {log_path / "reports"}
+    tests = {test.read_text() for test in log_path.glob("reports/*-*/*.html")}
     assert tests == expected_results
     assert len(list((log_path / "reports").iterdir())) == expected_num_reports, \
         list((log_path / "reports").iterdir())

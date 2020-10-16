@@ -96,7 +96,7 @@ class Strategy(ABC):
         pass
 
     @abstractmethod
-    def update(self, success):
+    def update(self, success, served=None):
         pass
 
     def __enter__(self):
@@ -149,7 +149,9 @@ class _BeautifyStrategy(Strategy, ABC):
         assert isinstance(cls.native_extension, str)
         assert isinstance(cls.tag_name, str)
 
-    def update(self, success):
+    def update(self, success, served=None):
+        # beautify does nothing with served. it's unlikely a beautify operation alone would
+        # render a file unserved.
         assert self._current_feedback is None
         self._current_feedback = success
 
@@ -283,6 +285,8 @@ class _LithiumStrategy(Strategy, ABC):
         for path in self._testcase_root.glob("**/*"):
             if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
                 self._files_to_reduce.append(path)
+        self._current_feedback = None
+        self._current_served = None
 
     @classmethod
     def sanity_check_impl(cls):
@@ -290,24 +294,119 @@ class _LithiumStrategy(Strategy, ABC):
         assert issubclass(cls.strategy_cls, LithStrategy)
         assert issubclass(cls.testcase_cls, LithTestcase)
 
-    def update(self, success):
-        assert self._current_reducer is not None
-        self._current_reducer.feedback(success)
+    def update(self, success, served=None):
+        if self._current_reducer is not None:
+            self._current_reducer.feedback(success)
+        self._current_feedback = success
+        self._current_served = served
+
+    def _served_to_testcase_root_path(self, timestamps_in_order):
+        """The entries in `ReplayResult.served` are in the order of testcase timestamps as loaded by
+        `TestCase.load()`. We need to correlate that back to the original, which is the data on disk
+        in `self._testcase_root`.
+
+        Arguments:
+            timestamps_in_order (list[int]): `TestCase.timestamp` for each testcase as ordered by
+                                             `TestCase.load()`
+
+        Returns:
+            set{Path}: a flat set of all files served as they appear in `self._testcase_root`.
+        """
+        paths_in_order = [None] * len(timestamps_in_order)
+        for test_info in self._testcase_root.glob("*/test_info.json"):
+            info = json.loads(test_info.read_text())
+            idx = timestamps_in_order.index(info["timestamp"])
+            assert paths_in_order[idx] is None
+            paths_in_order[idx] = test_info.parent
+        assert all(path is not None for path in paths_in_order)
+        assert len(self._current_served) <= len(paths_in_order)
+        served_paths = set()
+        for root, served in zip(paths_in_order, self._current_served):
+            served_paths |= {root / path for path in served}
+        return served_paths
+
+    def _targets_by_path(self):
+        """Map testcase subfolders in `self._testcase_root` to `target` entries in their metadata.
+
+        Yields:
+            tuple(Path, str): mapping of testcase subfolders in `self._testcase_root` to `target` entries
+        """
+        for test_info in self._testcase_root.glob("*/test_info.json"):
+            info = json.loads(test_info.read_text())
+            yield (test_info.parent, info["target"])
 
     def __iter__(self):
         LOG.info("Reducing %d files", len(self._files_to_reduce))
-        for file_no, file in enumerate(self._files_to_reduce):
-            LOG.info("Reducing %s (file %d/%d)", file, file_no + 1, len(self._files_to_reduce))
+        file_no = 0
+        reduce_queue = self._files_to_reduce
+        reduce_queue.sort()  # not necessary, but helps make tests more predictable
+        reduced = set()
+        # indicates that self._testcase_root contains changes that haven't been yielded (if iteration ends,
+        # changes would be lost)
+        testcase_root_dirty = False
+        while reduce_queue:
+            LOG.debug("Reduce queue: %r", reduce_queue)
+            file = reduce_queue.pop(0)
+            reduced.add(file)
+            file_no += 1
+            LOG.info("Reducing %s (file %d/%d)", file, file_no, len(reduced) + len(reduce_queue))
             lithium_testcase = self.testcase_cls()  # pylint: disable=not-callable
             lithium_testcase.load(file)
             # pylint: disable=not-callable
             self._current_reducer = self.strategy_cls().reduce(lithium_testcase)
             for reduction in self._current_reducer:
                 reduction.dump()
-                yield TestCase.load(str(self._testcase_root), False)
-            # write out the best found testcase
-            self._current_reducer.testcase.dump()
+                testcases = TestCase.load(str(self._testcase_root), False)
+                ts_in_order = [testcase.timestamp for testcase in testcases]
+                yield testcases
+                if self._current_feedback:
+                    testcase_root_dirty = False
+                if self._current_feedback and self._current_served is not None:
+                    # check whether any files went unserved, and purge them
+                    served_paths = self._served_to_testcase_root_path(ts_in_order)
+                    files_in_play = set(reduce_queue) | reduced
+                    to_remove = files_in_play - served_paths
+                    current_reduction_invalid = False
+                    if to_remove:
+                        LOG.debug("files being reduced before: %r", list(files_in_play))
+                        for entry in to_remove:
+                            LOG.info("Testcase at %s was unserved, removing.",
+                                     entry.relative_to(self._testcase_root))
+                            files_in_play.remove(entry)
+                            current_reduction_invalid = current_reduction_invalid or file == entry
+                            entry.unlink()
+                            testcase_root_dirty = True
+                        # we've removed some files, now check if any whole folders
+                        # are unnecessary
+                        for root, target in self._targets_by_path():
+                            if root / target not in files_in_play:
+                                LOG.warning("target in %s is missing, directory will be removed",
+                                            root.relative_to(self._testcase_root))
+                                for entry in root.glob("**/*"):
+                                    LOG.debug(entry)
+                                    if not entry.is_file() or entry.name in {"test_info.json", "prefs.js"}:
+                                        continue
+                                    LOG.info("Removing unserved %s", entry.relative_to(self._testcase_root))
+                                    files_in_play.remove(entry)
+                                    current_reduction_invalid = current_reduction_invalid or file == entry
+                                rmtree(str(root))
+                                testcase_root_dirty = True
+                        LOG.debug("files being reduced after: %r", list(files_in_play))
+                        reduce_queue = list(sorted(files_in_play - reduced))
+                        reduced &= files_in_play
+                    if current_reduction_invalid:
+                        break
+            else:
+                # write out the best found testcase
+                self._current_reducer.testcase.dump()
             self._current_reducer = None
+        if testcase_root_dirty:
+            # purging unserved files enabled us to exit early from the loop.
+            # need to yield once more to set this trimmed version to the current best in ReduceManager
+            LOG.debug("purging changed the testcase root. one more iteration")
+            testcases = TestCase.load(str(self._testcase_root), False)
+            yield testcases
+            assert self._current_feedback, "Purging unserved files broke the testcase."
 
 
 class Check(_LithiumStrategy):
@@ -406,10 +505,13 @@ class MinimizeTestcaseList(Strategy):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._current_feedback = None
+        self._last_served = None
 
-    def update(self, success):
+    def update(self, success, served=None):
         assert self._current_feedback is None
+        assert self._last_served is None
         self._current_feedback = success
+        self._last_served = served
 
     def __iter__(self):
         assert self._current_feedback is None
@@ -418,6 +520,9 @@ class MinimizeTestcaseList(Strategy):
         try:
             testcases = TestCase.load(str(self._testcase_root), False)
             n_testcases = len(testcases)
+            # indicates that self._testcase_root contains changes that haven't been yielded (if iteration
+            # ends, changes would be lost)
+            testcase_root_dirty = False
             while True:
                 if n_testcases <= 1:
                     LOG.info("Testcase list has length %d, not enough to reduce!", n_testcases)
@@ -431,14 +536,17 @@ class MinimizeTestcaseList(Strategy):
                     assert n_testcases == len(testcases)
                 removed_ts = testcases[idx].timestamp
                 testcases.pop(idx).cleanup()
+                ts_in_order = [testcase.timestamp for testcase in testcases]
                 yield testcases
                 testcases = None  # caller owns testcases now
                 assert self._current_feedback is not None, "no feedback received!"
                 if self._current_feedback:
+                    testcase_root_dirty = False
                     # removal was success! find the testcase that matches timestamp,
                     # and remove it
                     LOG.info("Removing testcase %d/%d was successful!", idx + 1, n_testcases)
                     removed_path = None
+                    unserved_paths = []
                     for test_info in self._testcase_root.glob("*/test_info.json"):
                         info = json.loads(test_info.read_text())
                         if removed_ts == info["timestamp"]:
@@ -447,17 +555,37 @@ class MinimizeTestcaseList(Strategy):
                             ), "Duplicate testcases found with timestamp %s" % (
                                 removed_ts,
                             )
-                            removed_path = test_info
+                            removed_path = test_info.parent
+                        elif self._last_served is not None:
+                            test_idx = ts_in_order.index(info["timestamp"])
+                            if test_idx >= len(self._last_served) or \
+                                    info["target"] not in self._last_served[test_idx]:
+                                LOG.info("Testcase at %s was unserved, removing.",
+                                         test_info.parent.relative_to(self._testcase_root))
+                                unserved_paths.append(test_info.parent)
                     assert (
                         removed_path is not None
                     ), "No testcase found with timestamp %s" % (removed_ts,)
-                    rmtree(str(removed_path.parent))
-                    n_testcases -= 1
+                    rmtree(str(removed_path))
+                    for unserved in unserved_paths:
+                        rmtree(str(unserved))
+                        testcase_root_dirty = True
+                    n_testcases -= 1 + len(unserved_paths)
                 else:
                     LOG.info("No result without testcase %d/%d", idx + 1, n_testcases)
                     idx += 1
                 # reset
                 self._current_feedback = None
+                self._last_served = None
+            if testcase_root_dirty:
+                # purging unserved files enabled us to exit early from the loop.
+                # need to yield once more to set this trimmed version to the current best in ReduceManager
+                LOG.debug("purging changed the testcase root. one more iteration")
+                testcases = TestCase.load(str(self._testcase_root), False)
+                assert n_testcases == len(testcases)
+                yield testcases
+                testcases = None  # caller owns testcases now
+                assert self._current_feedback, "Purging unserved files broke the testcase."
         finally:
             if testcases is not None:
                 for testcase in testcases:

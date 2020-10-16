@@ -85,7 +85,7 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
             report = Report(str(log_path), "bin")
-            return [ReplayResult(report, ["test.html"], [], True)]
+            return [ReplayResult(report, [["test.html"]], [], True)]
         return []
     replayer.return_value.__enter__.return_value.run.side_effect = replay_run
 
@@ -294,7 +294,7 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
                 else:
                     _fake_save_logs_bar(log_path)
                 report = Report(str(log_path), "bin")
-                return [ReplayResult(report, ["test.html"], [], expected)]
+                return [ReplayResult(report, [["test.html"]], [], expected)]
         return []
     replayer.return_value.run.side_effect = replay_run
 
@@ -342,7 +342,7 @@ def test_quality_update(mocker, tmp_path):
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
         report = Report(str(log_path), "bin")
-        return [ReplayResult(report, ["test.html"], [], True)]
+        return [ReplayResult(report, [["test.html"]], [], True)]
     replayer.return_value.run.side_effect = replay_run
 
     (tmp_path / "test.html").touch()
@@ -495,7 +495,7 @@ def test_timeout_update(mocker, tmp_path, durations, interesting, static_timeout
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
         report = Report(str(log_path), "bin")
-        return [ReplayResult(report, ["test.html"], durations, interesting)]
+        return [ReplayResult(report, [["test.html"]], durations, interesting)]
     replayer.return_value.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
