@@ -245,8 +245,11 @@ class ReduceManager(object):
                                     exc.report.cleanup()
                                 raise
                             self.update_timeout(results)
-                            success = any(report.expected for report in results)
-                            strategy.update(success)
+                            # get the first expected result (if any), and update the strategy
+                            first_expected = next((report for report in results if report.expected), None)
+                            success = first_expected is not None
+                            served = first_expected.served if success and not self._any_crash else None
+                            strategy.update(success, served=served)
                             if strategy.name == "check":
                                 if any_success and not success:
                                     raise RuntimeError("Reduction broke")
