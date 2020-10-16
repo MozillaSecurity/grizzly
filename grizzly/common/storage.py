@@ -187,6 +187,27 @@ class TestCase(object):
             for test_file in file_group:
                 test_file.close()
 
+    def clone(self):
+        """Make a copy of the TestCase.
+
+        Args:
+            None
+
+        Returns:
+            TestCase: A copy of the TestCase instance
+        """
+        result = type(self)(self.landing_page, self.redirect_page, self.adapter_name, self.input_fname,
+                            self.timestamp)
+        result.duration = self.duration
+        result.env_vars.update(self.env_vars)
+        for entry in self._files.meta:
+            result.add_meta(entry.clone())
+        for entry in self._files.optional:
+            result.add_file(entry.clone(), required=False)
+        for entry in self._files.required:
+            result.add_file(entry.clone(), required=True)
+        return result
+
     def contains(self, file_name):
         """Check TestCase contains the TestFile with name matching `file_name`.
 
@@ -489,7 +510,7 @@ class TestFile(object):
         Returns:
             TestFile: A copy of the TestFile instance
         """
-        cloned = TestFile(self._file_name)
+        cloned = type(self)(self._file_name)
         self._fp.seek(0)
         shutil.copyfileobj(self._fp, cloned._fp, self.XFER_BUF)  # pylint: disable=protected-access
         return cloned
