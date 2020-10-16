@@ -304,7 +304,17 @@ class ReduceManager(object):
                 reporter = FilesystemReporter(
                     report_path=str(Path(self._log_path) / report_dir),
                     major_bucket=False)
-            ret_values.append(reporter.submit(tests, report=result.report))
+            # clone the tests so we can safely call purge_optional here for each report
+            # (report.served may be different for non-expected or any-crash results)
+            clones = [test.clone() for test in tests]
+            try:
+                for clone, served in zip(clones, result.served):
+                    if served is not None:
+                        clone.purge_optional(served)
+                ret_values.append(reporter.submit(clones, report=result.report))
+            finally:
+                for clone in clones:
+                    clone.cleanup()
         return ret_values
 
     @classmethod
