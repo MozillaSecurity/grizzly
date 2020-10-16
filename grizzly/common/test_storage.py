@@ -379,6 +379,29 @@ def test_testcase_18():
         assert src.get_file("missing") is None
         assert src.get_file("test.htm").data == b"test"
 
+def test_testcase_19(tmp_path):
+    """test TestCase.clone()"""
+    with TestCase("test.htm", "redirect.htm", "test-adaptor", "input.py") as src:
+        src.add_from_data("123", "test.htm")
+        src.add_from_data("456", "opt.htm", required=False)
+        src.add_meta(TestFile.from_data("pref", "prefs.js"))
+        src.add_environ_var("go", "away")
+        with src.clone() as tgt:
+            for prop in TestCase.__slots__:
+                if prop.startswith("_"):
+                    continue
+                assert getattr(src, prop) == getattr(tgt, prop)
+            assert src.data_size == tgt.data_size
+            for file, data in (("test.htm", b"123"), ("opt.htm", b"456"), ("prefs.js", b"pref")):
+                src.get_file(file).write(b"src")
+                tgt.get_file(file).write(b"tgt")
+                assert src.get_file(file).data == data + b"src"
+                assert tgt.get_file(file).data == data + b"tgt"
+            src.add_environ_var("foo", "bar")
+            tgt.add_environ_var("hello", "kitty")
+            assert src.env_vars == {"foo": "bar", "go": "away"}
+            assert tgt.env_vars == {"hello": "kitty", "go": "away"}
+
 def test_testfile_01():
     """test simple TestFile"""
     with TestFile("test_file.txt") as tfile:
