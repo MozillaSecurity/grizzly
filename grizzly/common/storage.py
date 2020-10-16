@@ -62,8 +62,8 @@ class TestCase(object):
         """Add a test file to test case and perform sanity checks.
 
         Args:
-            target (list): Specific list of Files to append target test_file to.
-            test_file (TestFile): TestFile to append
+            target (list): Specific list of files to append target test_file to.
+            test_file (TestFile): TestFile to append.
 
         Returns:
             None
@@ -76,14 +76,14 @@ class TestCase(object):
 
     def add_batch(self, path, include_files, prefix=None):
         """Iterate over files in include_files and attach the files that are
-        located in path to testcase.
+        located in path to TestCase.
 
         Args:
             path (str): Path to the root of the directory that contains files.
             include_files (iterable): Paths of the files to be added to the
-                                      test case if they exist in path.
+                                      TestCase if they exist in path.
             prefix (str): Path prefix to prepend to file when adding to
-                          test case.
+                          the TestCase.
 
         Returns:
             None
@@ -98,10 +98,10 @@ class TestCase(object):
             self.add_from_file(fname, file_name=test_path)
 
     def add_meta(self, meta_file):
-        """Add a test file to test case as a meta file.
+        """Add a TestFile to TestCase as a meta file.
 
         Args:
-            meta_file (TestFile): TestFile to add to TestCase
+            meta_file (TestFile): TestFile to add to TestCase.
 
         Returns:
             None
@@ -109,11 +109,11 @@ class TestCase(object):
         self._add(self._files.meta, meta_file)
 
     def add_environ_var(self, name, value):
-        """Add environment variable to test case.
+        """Add environment variable to TestCase.
 
         Args:
-            name (str): Environment variable name
-            value (str): Environment variable value
+            name (str): Environment variable name.
+            value (str): Environment variable value.
 
         Returns:
             None
@@ -121,11 +121,11 @@ class TestCase(object):
         self.env_vars[name] = value
 
     def add_file(self, test_file, required=True):
-        """Add a test file to test case.
+        """Add a TestFile to TestCase.
 
         Args:
-            meta_file (TestFile): TestFile to add to TestCase
-            required (bool): Indicates if test file must be served
+            meta_file (TestFile): TestFile to add to TestCase.
+            required (bool): Indicates if test file must be served.
 
         Returns:
             None
@@ -136,13 +136,14 @@ class TestCase(object):
             self._add(self._files.optional, test_file)
 
     def add_from_data(self, data, file_name, encoding="UTF-8", required=True):
-        """Create a TestFile and add it to the test case.
+        """Create a TestFile and add it to the TestCase.
 
         Args:
-            data (bytes): Data to write to file
-            file_name (str): Name for the test file
-            encoding (str): Encoding to be used
-            required (bool): Indicates if test file must be served
+            data (bytes or str): Data to write to file. If data is of type str
+                                 encoding must be given.
+            file_name (str): Name for the TestFile.
+            encoding (str): Encoding to be used.
+            required (bool): Indicates whether the TestFile must be served.
 
         Returns:
             None
@@ -155,12 +156,13 @@ class TestCase(object):
             raise
 
     def add_from_file(self, input_file, file_name=None, required=True):
-        """Create a TestFile from an existing file and add it to the test case.
+        """Create a TestFile from an existing file and add it to the TestCase.
 
         Args:
-            input_file (str): Path to existing file to use
-            file_name (str): Name for the test file
-            required (bool): Indicates if test file must be served
+            input_file (str): Path to existing file to use.
+            file_name (str): Name for the TestFile. If file_name is not given
+                             the name of the input_file will be used.
+            required (bool): Indicates whether the TestFile must be served.
 
         Returns:
             None
@@ -192,7 +194,7 @@ class TestCase(object):
             file_name (str): File name to search for in TestCase.
 
         Returns:
-            bool: True if file exists in the TestCase otherwise False
+            bool: True if file exists in the TestCase otherwise False.
         """
         return file_name in self._existing_paths
 
@@ -215,8 +217,8 @@ class TestCase(object):
         """Write all the test case data to the filesystem.
 
         Args:
-            out_path (str): Path to directory to output data
-            include_details (bool): Output "test_info.json" file
+            out_path (str): Path to directory to output data.
+            include_details (bool): Output "test_info.json" file.
 
         Returns:
             None
@@ -407,7 +409,7 @@ class TestCase(object):
         opt_files = tuple(x.file_name for x in self._files.optional)
         if not opt_files:
             # nothing to purge
-            return None
+            return
         # filter required files from opt_files files to keep
         keep_opt = list()
         for fname in set(keep):
@@ -422,7 +424,6 @@ class TestCase(object):
                 to_remove.append(idx)
         for idx in reversed(to_remove):
             self._files.optional.pop(idx).close()
-        return None
 
     @staticmethod
     def scan_path(path):
@@ -465,7 +466,8 @@ class TestFile(object):
                 or ("/" in file_name and not file_name.rsplit("/", 1)[-1]) \
                 or file_name.startswith("../"):
             raise TypeError("file_name is invalid %r" % (file_name,))
-        self._file_name = os.path.normpath(file_name)  # name including path relative to wwwroot
+        # name including path relative to wwwroot
+        self._file_name = os.path.normpath(file_name)
         self._fp = SpooledTemporaryFile(
             dir=grz_tmp("storage"),
             max_size=self.CACHE_LIMIT,
@@ -498,7 +500,7 @@ class TestFile(object):
             None
 
         Returns:
-            None TestFile instance
+            None
         """
         self._fp.close()
 
@@ -519,10 +521,10 @@ class TestFile(object):
         return data
 
     def dump(self, path):
-        """Write test file data to the filesystem.
+        """Write TestFile data to the filesystem.
 
         Args:
-            path (str): Path to output data
+            path (str): Path to output data.
 
         Returns:
             None
@@ -543,12 +545,13 @@ class TestFile(object):
         """Create a TestFile and add it to the test case.
 
         Args:
-            data (bytes): Data to write to file
-            file_name (str): Name for the test file
-            encoding (str): Encoding to be used
+            data (bytes or str): Data to write to file. If data is of type str
+                                 encoding must be given.
+            file_name (str): Name for the TestFile.
+            encoding (str): Encoding to be used.
 
         Returns:
-            TestFile: new instance
+            TestFile: A TestFile.
         """
         t_file = cls(file_name)
         if data:
@@ -563,11 +566,12 @@ class TestFile(object):
         """Create a TestFile from an existing file.
 
         Args:
-            input_file (str): Path to existing file to use
-            file_name (str): Name for the test file
+            input_file (str): Path to existing file to use.
+            file_name (str): Name for the TestFile. If file_name is not given
+                             the name of the input_file will be used.
 
         Returns:
-            TestFile: new instance
+            TestFile: A TestFile.
         """
         if file_name is None:
             file_name = os.path.basename(input_file)
@@ -596,7 +600,7 @@ class TestFile(object):
         """Add data to the TestFile.
 
         Args:
-            data (bytes): Data to add to the TestFile
+            data (bytes): Data to add to the TestFile.
 
         Returns:
             None
