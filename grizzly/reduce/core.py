@@ -256,7 +256,7 @@ class ReduceManager(object):
                             any_success = any_success or success
                             # if the reduction reproduced, update self.testcases (new best)
                             if success:
-                                LOG.info("Interesting")
+                                LOG.info("Attempt succeeded")
                                 for testcase in self.testcases:
                                     testcase.cleanup()
                                 self.testcases = reduction
@@ -268,7 +268,7 @@ class ReduceManager(object):
                                 best_results = [result for result in results if result.expected]
                                 results = [result for result in results if not result.expected]
                             else:
-                                LOG.info("Uninteresting")
+                                LOG.info("Attempt failed")
                             # if the reduction found other crashes, report those immediately
                             self.report(results, reduction)
                         finally:  # noqa pylint: disable=bare-except

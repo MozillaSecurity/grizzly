@@ -82,6 +82,9 @@ class Strategy(ABC):
 
     def __init__(self, testcases):
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
+        self.dump_testcases(testcases)
+
+    def dump_testcases(self, testcases):
         for idx, testcase in enumerate(testcases):
             LOG.debug("Extracting testcase %d/%d", idx + 1, len(testcases))
             testpath = self._testcase_root / ("%03d" % (idx,))
@@ -282,11 +285,15 @@ class _LithiumStrategy(Strategy, ABC):
         super().__init__(*args, **kwds)
         self._current_reducer = None
         self._files_to_reduce = []
+        self.rescan_files_to_reduce()
+        self._current_feedback = None
+        self._current_served = None
+
+    def rescan_files_to_reduce(self):
+        self._files_to_reduce.clear()
         for path in self._testcase_root.glob("**/*"):
             if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
                 self._files_to_reduce.append(path)
-        self._current_feedback = None
-        self._current_served = None
 
     @classmethod
     def sanity_check_impl(cls):
@@ -300,56 +307,19 @@ class _LithiumStrategy(Strategy, ABC):
         self._current_feedback = success
         self._current_served = served
 
-    def _served_to_testcase_root_path(self, timestamps_in_order):
-        """The entries in `ReplayResult.served` are in the order of testcase timestamps as loaded by
-        `TestCase.load()`. We need to correlate that back to the original, which is the data on disk
-        in `self._testcase_root`.
-
-        Arguments:
-            timestamps_in_order (list[int]): `TestCase.timestamp` for each testcase as ordered by
-                                             `TestCase.load()`
-
-        Returns:
-            set{Path}: a flat set of all files served as they appear in `self._testcase_root`.
-        """
-        paths_in_order = [None] * len(timestamps_in_order)
-        for test_info in self._testcase_root.glob("*/test_info.json"):
-            info = json.loads(test_info.read_text())
-            idx = timestamps_in_order.index(info["timestamp"])
-            assert paths_in_order[idx] is None
-            paths_in_order[idx] = test_info.parent
-        assert all(path is not None for path in paths_in_order)
-        assert len(self._current_served) <= len(paths_in_order)
-        served_paths = set()
-        for root, served in zip(paths_in_order, self._current_served):
-            served_paths |= {root / path for path in served}
-        return served_paths
-
-    def _targets_by_path(self):
-        """Map testcase subfolders in `self._testcase_root` to `target` entries in their metadata.
-
-        Yields:
-            tuple(Path, str): mapping of testcase subfolders in `self._testcase_root` to `target` entries
-        """
-        for test_info in self._testcase_root.glob("*/test_info.json"):
-            info = json.loads(test_info.read_text())
-            yield (test_info.parent, info["target"])
-
     def __iter__(self):
         LOG.info("Reducing %d files", len(self._files_to_reduce))
         file_no = 0
-        reduce_queue = self._files_to_reduce
+        reduce_queue = self._files_to_reduce.copy()
         reduce_queue.sort()  # not necessary, but helps make tests more predictable
-        reduced = set()
         # indicates that self._testcase_root contains changes that haven't been yielded (if iteration ends,
         # changes would be lost)
         testcase_root_dirty = False
         while reduce_queue:
             LOG.debug("Reduce queue: %r", reduce_queue)
             file = reduce_queue.pop(0)
-            reduced.add(file)
             file_no += 1
-            LOG.info("Reducing %s (file %d/%d)", file, file_no, len(reduced) + len(reduce_queue))
+            LOG.info("Reducing %s (file %d/%d)", file, file_no, len(self._files_to_reduce))
             lithium_testcase = self.testcase_cls()  # pylint: disable=not-callable
             lithium_testcase.load(file)
             # pylint: disable=not-callable
@@ -357,45 +327,43 @@ class _LithiumStrategy(Strategy, ABC):
             for reduction in self._current_reducer:
                 reduction.dump()
                 testcases = TestCase.load(str(self._testcase_root), False)
-                ts_in_order = [testcase.timestamp for testcase in testcases]
                 LOG.info(self._current_reducer.description)
                 yield testcases
                 if self._current_feedback:
                     testcase_root_dirty = False
                 if self._current_feedback and self._current_served is not None:
-                    # check whether any files went unserved, and purge them
-                    served_paths = self._served_to_testcase_root_path(ts_in_order)
-                    files_in_play = set(reduce_queue) | reduced
-                    to_remove = files_in_play - served_paths
-                    current_reduction_invalid = False
-                    if to_remove:
-                        LOG.debug("files being reduced before: %r", list(files_in_play))
-                        for entry in to_remove:
-                            LOG.info("Testcase at %s was unserved, removing.",
-                                     entry.relative_to(self._testcase_root))
-                            files_in_play.remove(entry)
-                            current_reduction_invalid = current_reduction_invalid or file == entry
-                            entry.unlink()
-                            testcase_root_dirty = True
-                        # we've removed some files, now check if any whole folders
-                        # are unnecessary
-                        for root, target in self._targets_by_path():
-                            if root / target not in files_in_play:
-                                LOG.warning("target in %s is missing, directory will be removed",
-                                            root.relative_to(self._testcase_root))
-                                for entry in root.glob("**/*"):
-                                    LOG.debug(entry)
-                                    if not entry.is_file() or entry.name in {"test_info.json", "prefs.js"}:
-                                        continue
-                                    LOG.info("Removing unserved %s", entry.relative_to(self._testcase_root))
-                                    files_in_play.remove(entry)
-                                    current_reduction_invalid = current_reduction_invalid or file == entry
-                                rmtree(str(root))
-                                testcase_root_dirty = True
-                        LOG.debug("files being reduced after: %r", list(files_in_play))
-                        reduce_queue = list(sorted(files_in_play - reduced))
-                        reduced &= files_in_play
-                    if current_reduction_invalid:
+                    testcases = TestCase.load(str(self._testcase_root), False)
+                    try:
+                        LOG.debug("purging from %d testcases", len(testcases))
+                        while len(self._current_served) < len(testcases):
+                            LOG.debug("not all %d testcases served (%d served), popping one", len(testcases),
+                                      len(self._current_served))
+                            testcases.pop().cleanup()
+                        remove_testcases = []
+                        for idx, (testcase, served) in enumerate(zip(testcases, self._current_served)):
+                            LOG.debug("testcase %d served %r", idx, served)
+                            if testcase.landing_page not in served:
+                                LOG.debug("landing page %r not served", testcase.landing_page)
+                                remove_testcases.append(idx)
+                            else:
+                                testcase.purge_optional(served)
+                        for idx in reversed(remove_testcases):
+                            testcases.pop(idx).cleanup()
+                        rmtree(str(self._testcase_root))
+                        self._testcase_root.mkdir()
+                        self.dump_testcases(testcases)
+                        num_files_before = len(self._files_to_reduce)
+                        LOG.debug("files being reduced before: %r", self._files_to_reduce)
+                        self.rescan_files_to_reduce()
+                        LOG.debug("files being reduced after: %r", self._files_to_reduce)
+                    finally:
+                        for testcase in testcases:
+                            testcase.cleanup()
+                    files_to_reduce = set(self._files_to_reduce)
+                    reduce_queue = list(sorted(set(reduce_queue) & files_to_reduce))
+                    testcase_root_dirty = len(self._files_to_reduce) != num_files_before
+                    if file not in files_to_reduce:
+                        # current reduction was for a purged file
                         break
             else:
                 # write out the best found testcase
