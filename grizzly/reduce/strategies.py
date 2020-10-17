@@ -358,6 +358,7 @@ class _LithiumStrategy(Strategy, ABC):
                 reduction.dump()
                 testcases = TestCase.load(str(self._testcase_root), False)
                 ts_in_order = [testcase.timestamp for testcase in testcases]
+                LOG.info(self._current_reducer.description)
                 yield testcases
                 if self._current_feedback:
                     testcase_root_dirty = False
@@ -403,8 +404,8 @@ class _LithiumStrategy(Strategy, ABC):
         if testcase_root_dirty:
             # purging unserved files enabled us to exit early from the loop.
             # need to yield once more to set this trimmed version to the current best in ReduceManager
-            LOG.debug("purging changed the testcase root. one more iteration")
             testcases = TestCase.load(str(self._testcase_root), False)
+            LOG.info("final iteration triggered by purge_optional")
             yield testcases
             assert self._current_feedback, "Purging unserved files broke the testcase."
 
@@ -580,9 +581,9 @@ class MinimizeTestcaseList(Strategy):
             if testcase_root_dirty:
                 # purging unserved files enabled us to exit early from the loop.
                 # need to yield once more to set this trimmed version to the current best in ReduceManager
-                LOG.debug("purging changed the testcase root. one more iteration")
                 testcases = TestCase.load(str(self._testcase_root), False)
                 assert n_testcases == len(testcases)
+                LOG.info("final iteration triggered by purge_optional")
                 yield testcases
                 testcases = None  # caller owns testcases now
                 assert self._current_feedback, "Purging unserved files broke the testcase."
