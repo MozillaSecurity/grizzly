@@ -9,7 +9,6 @@ unit tests for grizzly.reduce.reduce
 from collections import namedtuple
 import functools
 from logging import getLogger
-from pathlib import Path
 
 import pytest
 from pytest import raises
@@ -27,9 +26,9 @@ pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")  # pylint: disable=in
 
 def _fake_save_logs_foo(result_logs, meta=False):  # pylint: disable=unused-argument
     """write fake log data to disk"""
-    (Path(result_logs) / "log_stderr.txt").write_text("STDERR log\n")
-    (Path(result_logs) / "log_stdout.txt").write_text("STDOUT log\n")
-    (Path(result_logs) / "log_asan_blah.txt").write_text(
+    (result_logs / "log_stderr.txt").write_text("STDERR log\n")
+    (result_logs / "log_stdout.txt").write_text("STDOUT log\n")
+    (result_logs / "log_asan_blah.txt").write_text(
         "==1==ERROR: AddressSanitizer: "
         "SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n"
         "    #0 0xbad000 in foo /file1.c:123:234\n"
@@ -39,9 +38,9 @@ def _fake_save_logs_foo(result_logs, meta=False):  # pylint: disable=unused-argu
 
 def _fake_save_logs_bar(result_logs, meta=False):  # pylint: disable=unused-argument
     """write fake log data to disk"""
-    (Path(result_logs) / "log_stderr.txt").write_text("STDERR log\n")
-    (Path(result_logs) / "log_stdout.txt").write_text("STDOUT log\n")
-    (Path(result_logs) / "log_asan_blah.txt").write_text(
+    (result_logs / "log_stderr.txt").write_text("STDERR log\n")
+    (result_logs / "log_stdout.txt").write_text("STDOUT log\n")
+    (result_logs / "log_asan_blah.txt").write_text(
         "==1==ERROR: AddressSanitizer: "
         "SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n"
         "    #0 0xbad000 in bar /file1.c:123:234\n"
@@ -364,16 +363,15 @@ def test_quality_update(mocker, tmp_path):
             test.cleanup()
 
     assert reporter.return_value.submit.call_count == 1
-    report_args = reporter.return_value.submit.call_args.args
+    report_args, report_kwds = reporter.return_value.submit.call_args
     assert len(report_args) == 1
     assert isinstance(report_args[0], list)
     assert len(report_args[0]) == 1
     assert isinstance(report_args[0][0], TestCase)
-    report_kwds = reporter.return_value.submit.call_args.kwargs
     assert report_kwds.keys() == {"report"}
     assert update_coll.call_count == 1
     assert update_coll.return_value.patch.call_count == 1
-    assert update_coll.return_value.patch.call_args.kwargs == {
+    assert update_coll.return_value.patch.call_args[1] == {
         "data": {"testcase_quality": reporter.QUAL_REDUCED_RESULT},
     }
 
@@ -404,7 +402,7 @@ def test_launch_error(mocker, tmp_path, use_analysis, exc_type):
         mgr.run()
     if exc_type is TargetLaunchError:
         assert report_fcn.call_count == 1
-        _mgr, reports, reported_testcases = report_fcn.call_args.args
+        _mgr, reports, reported_testcases = report_fcn.call_args[0]
         if use_analysis:
             assert reported_testcases == testcases
         else:
