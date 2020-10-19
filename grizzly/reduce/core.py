@@ -280,6 +280,11 @@ class ReduceManager(object):
                             for result in results:
                                 result.report.cleanup()
                     last_reports = self.report(best_results, self.testcases)
+                except KeyboardInterrupt:
+                    if best_results:
+                        last_reports = self.report(best_results, self.testcases)
+                        LOG.warning("Ctrl+C detected, best reduction so far reported as %r", last_reports)
+                    raise
                 finally:
                     for result in best_results:
                         result.report.cleanup()
