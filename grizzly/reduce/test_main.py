@@ -139,5 +139,5 @@ def test_testcase_prefs(mocker, tmp_path, result):
         ReduceManager.main(args)
         assert Path(load_target.return_value.return_value.prefs).read_text() == result
     finally:
-        for call in rmtree_mock.call_args_list:
-            rmtree(*call.args, **call.kwargs)
+        for rm_args, rm_kwds in rmtree_mock.call_args_list:
+            rmtree(*rm_args, **rm_kwds)

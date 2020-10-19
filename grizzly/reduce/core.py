@@ -84,7 +84,9 @@ class ReduceManager(object):
         self.target = target
         self.testcases = testcases
         self._any_crash = any_crash
-        self._log_path = log_path
+        # only coerce `log_path` to `Path` if it's a string
+        # this caution is only necessary in python3.5 where pytest uses pathlib2 rather than pathlib
+        self._log_path = Path(log_path) if isinstance(log_path, str) else log_path
         # these parameters may be overwritten during analysis, so keep a copy of them
         self._original_relaunch = target.relaunch
         self._original_use_harness = use_harness
@@ -302,7 +304,7 @@ class ReduceManager(object):
             else:
                 report_dir = "reports" if result.expected else "other_reports"
                 reporter = FilesystemReporter(
-                    report_path=str(Path(self._log_path) / report_dir),
+                    report_path=str(self._log_path / report_dir),
                     major_bucket=False)
             # clone the tests so we can safely call purge_optional here for each report
             # (report.served may be different for non-expected or any-crash results)

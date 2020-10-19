@@ -8,7 +8,6 @@ unit tests for grizzly.reduce.strategies
 """
 from collections import namedtuple
 from logging import getLogger
-from pathlib import Path
 
 import pytest
 from pytest import raises
@@ -28,9 +27,9 @@ pytestmark = pytest.mark.usefixtures("tmp_path_fm_config", "reporter_sequential_
 
 def _fake_save_logs_foo(result_logs):
     """write fake log data to disk"""
-    (Path(result_logs) / "log_stderr.txt").write_text("STDERR log\n")
-    (Path(result_logs) / "log_stdout.txt").write_text("STDOUT log\n")
-    (Path(result_logs) / "log_asan_blah.txt").write_text(
+    (result_logs / "log_stderr.txt").write_text("STDERR log\n")
+    (result_logs / "log_stdout.txt").write_text("STDOUT log\n")
+    (result_logs / "log_asan_blah.txt").write_text(
         "==1==ERROR: AddressSanitizer: "
         "SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n"
         "    #0 0xbad000 in foo /file1.c:123:234\n"
