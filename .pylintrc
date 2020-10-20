@@ -16,3 +16,4 @@ disable=
 
 [FORMAT]
 max-line-length=110
+const-rgx=(([A-Z_][A-Z0-9_]*)|(__.*__)|pytestmark)$

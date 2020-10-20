@@ -2,6 +2,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""CLI argument parsing for Grizzly reduction.
+"""
 from logging import getLogger
 from pathlib import Path
 
@@ -13,8 +15,14 @@ LOG = getLogger(__name__)
 
 
 class ReduceArgs(ReplayArgs):
+    """Argument parser for `grizzly.reduce`.
+
+    Takes all arguments defined for `grizzly.replay`, and a few specific to reduction.
+    """
 
     def __init__(self):
+        """Initialize argument parser.
+        """
         super().__init__()
 
         # these arguments have other defaults vs how they are defined in ReplayArgs
@@ -37,6 +45,14 @@ class ReduceArgs(ReplayArgs):
             % (" ".join(sorted(STRATEGIES)), " ".join(DEFAULT_STRATEGIES)))
 
     def sanity_check(self, args):
+        """Sanity check reducer args.
+
+        Arguments:
+            args (argparse.Namespace): Result from `parse_args()`.
+
+        Raises:
+            SystemExit: on error, `ArgumentParser.error()` is called, which will exit.
+        """
         super().sanity_check(args)
 
         # if logs is specified, we need it to be a directory (whether existent or not)

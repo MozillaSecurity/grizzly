@@ -3,8 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-"""
-common unit test fixtures for grizzly.reduce
+"""Common unit test fixtures for `grizzly.reduce`.
 """
 
 import pytest
@@ -13,7 +12,8 @@ import pytest
 @pytest.fixture
 def tmp_path_fm_config(tmp_path, mocker):
     """Ensure fm config is always read from tmp_path so ~/.fuzzmanagerconf
-    can't be used by accident."""
+    can't be used by accident.
+    """
     mocker.patch(
         "grizzly.reduce.core.FuzzManagerReporter.FM_CONFIG",
         new=str(tmp_path / ".fuzzmanagerconf"),
@@ -23,6 +23,9 @@ def tmp_path_fm_config(tmp_path, mocker):
 
 @pytest.fixture
 def reporter_sequential_strftime(mocker):
+    """Make `strftime` in `FilesystemReporter` return sequential values.
+    This ensures ever report gets a unique folder and won't overwrite another.
+    """
     prefix = mocker.patch("grizzly.common.reporter.strftime")
 
     def report_prefix(_):
