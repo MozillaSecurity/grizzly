@@ -315,8 +315,8 @@ class ReduceManager(object):
             # (report.served may be different for non-expected or any-crash results)
             clones = [test.clone() for test in tests]
             try:
-                for clone, served in zip(clones, result.served):
-                    if served is not None:
+                if result.served is not None:
+                    for clone, served in zip(clones, result.served):
                         clone.purge_optional(served)
                 ret_values.append(reporter.submit(clones, report=result.report))
             finally:
