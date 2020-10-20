@@ -2,11 +2,21 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-"""
-Grizzly Reducer strategy definitions
+"""Grizzly reducer strategy definitions.
+
+Each class defined here is an iterator yielding *potential* reductions. The caller
+should evaluate each set of testcases, and keep the best one. The caller is responsible
+for cleaning up all testcases that are yielded.
+
+Constants:
+    DEFAULT_STRATEGIES (list(str)): List of strategy names run by default if none are
+                                    specified.
+    STRATEGIES (dict{str: Strategy}): Mapping of available strategy names to
+                                      implementing class.
+    HAVE_CSSBEAUTIFIER (bool): True if `cssbeautifier` module is available.
+    HAVE_JSBEAUTIFIER (bool): True if `jsbeautifier` module is available.
 """
 from abc import ABC, abstractmethod
-import json
 from logging import getLogger
 from pathlib import Path
 import re
@@ -14,9 +24,10 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from types import MappingProxyType
 
-from lithium.strategies import CheckOnly, CollapseEmptyBraces as LithCollapseEmptyBraces, Minimize, \
-    Strategy as LithStrategy
-from lithium.testcases import TestcaseChar, TestcaseJsStr, TestcaseLine, Testcase as LithTestcase
+from lithium.strategies import CheckOnly, \
+    CollapseEmptyBraces as LithCollapseEmptyBraces, Minimize, Strategy as LithStrategy
+from lithium.testcases import TestcaseChar, TestcaseJsStr, TestcaseLine, \
+    Testcase as LithTestcase
 from pkg_resources import iter_entry_points
 
 from ..common.utils import grz_tmp
@@ -48,12 +59,15 @@ DEFAULT_STRATEGIES = (
 
 def _load_strategies():
     """STRATEGIES is created at the end of this file.
+
+    Returns:
+        mapping: A mapping of strategy names to strategy class.
     """
     strategies = {}
     for entry_point in iter_entry_points("grizzly_reduce_strategies"):
         try:
             strategy_cls = entry_point.load()
-            strategy_cls.sanity_check_impl()
+            strategy_cls.sanity_check_cls_attrs()
             assert (
                 strategy_cls.name == entry_point.name
             ), "entry_point name mismatch, check setup.py and %s.name" % (
@@ -73,23 +87,34 @@ def _load_strategies():
 
 
 class Strategy(ABC):
-    """Implementors must define these class attributes:
+    """A strategy is a procedure for repeatedly running a testcase to find the smallest
+    equivalent test.
 
-    Attributes:
+    Implementors must define these class attributes:
+
+    Class Attributes:
         name (str): The strategy name.
     """
     name = None
 
     def __init__(self, testcases):
+        """Initialize strategy instance.
+
+        Arguments:
+            testcases (list(grizzly.common.storage.TestCase)):
+                List of testcases to reduce. The object does not take ownership of the
+                testcases.
+        """
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
         self.dump_testcases(testcases)
 
     def dump_testcases(self, testcases, recreate_tcroot=False):
-        """Dump a testcase list to testcase root on disk.
+        """Dump a testcase list to the testcase root on disk.
 
         Arguments:
             testcases (list(grizzly.common.storage.TestCase)): list of testcases to dump
-            recreate_tcroot (bool): if True, delete testcase root and recreate it before dumping
+            recreate_tcroot (bool): if True, delete testcase root and recreate it before
+                                    dumping
 
         Returns:
             None
@@ -103,24 +128,72 @@ class Strategy(ABC):
             testcase.dump(str(testpath), include_details=True)
 
     @classmethod
-    def sanity_check_impl(cls):
+    def sanity_check_cls_attrs(cls):
+        """Sanity check the strategy class implementation.
+
+        This should assert that any required class attributes are defined and correct.
+
+        Raises:
+            AssertionError: Any required class attributes are missing or wrong type.
+
+        Returns:
+            None
+        """
         assert isinstance(cls.name, str)
 
     @abstractmethod
     def __iter__(self):
-        pass
+        """Iterate over potential reductions of testcases according to this strategy.
+
+        The caller should evaluate each reduction yielded, and call `update` with the
+        result. The caller owns the testcases yielded, and should call `cleanup` for
+        each.
+
+        Yields:
+            list(grizzly.common.storage.TestCase): list of testcases with reduction
+                                                   applied
+        """
 
     @abstractmethod
     def update(self, success, served=None):
-        pass
+        """Inform the strategy whether or not the last reduction yielded was good.
+
+        Arguments:
+            success (bool): Whether or not the last reduction was acceptable.
+            served (list(list(str))): The list of served files for each testcase in the
+                                      last reduction.
+
+        Returns:
+            None
+        """
 
     def __enter__(self):
+        """Enter a runtime context that will automatically call `cleanup` on exit.
+
+        Returns:
+            Strategy: self
+        """
         return self
 
-    def __exit__(self, *args, **kwds):
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the runtime context. `cleanup` is called.
+
+        Arguments:
+            exc_type (type or None): Type of exception object currently raised.
+            exc_val (Exception or None): Exception object currently raised.
+            exc_tb (traceback or None): Traceback for currently raised exception.
+
+        Returns:
+            None
+        """
         self.cleanup()
 
     def cleanup(self):
+        """Destroy all resources held by the strategy.
+
+        Returns:
+            None
+        """
         rmtree(str(self._testcase_root))
 
     def purge_unserved(self, testcases, served):
@@ -137,20 +210,20 @@ class Strategy(ABC):
         LOG.debug("purging from %d testcases", len(testcases))
         anything_purged = False
         while len(served) < len(testcases):
-            LOG.debug("not all %d testcases served (%d served), popping one", len(testcases),
-                      len(served))
+            LOG.debug("not all %d testcases served (%d served), popping one",
+                      len(testcases), len(served))
             testcases.pop().cleanup()
             anything_purged = True
         remove_testcases = []
-        for idx, (testcase, served) in enumerate(zip(testcases, served)):
-            LOG.debug("testcase %d served %r", idx, served)
-            if testcase.landing_page not in served:
+        for idx, (testcase, tc_served) in enumerate(zip(testcases, served)):
+            LOG.debug("testcase %d served %r", idx, tc_served)
+            if testcase.landing_page not in tc_served:
                 LOG.debug("landing page %r not served", testcase.landing_page)
                 remove_testcases.append(idx)
                 anything_purged = True
             else:
                 size_before = testcase.data_size
-                testcase.purge_optional(served)
+                testcase.purge_optional(tc_served)
                 anything_purged = anything_purged or testcase.data_size != size_before
         for idx in reversed(remove_testcases):
             testcases.pop(idx).cleanup()
@@ -159,12 +232,15 @@ class Strategy(ABC):
 
 
 class _BeautifyStrategy(Strategy, ABC):
-    """Implementors must define these class attributes:
+    """A strategy that beautifies code in the testcase to make it more reducible.
 
-    Attributes:
+    Implementors must define these class attributes:
+
+    Class attributes:
         all_extensions (set(str)): Set of all file extensions to beautify.
         import_available (bool): Whether or not the beautify module was imported.
-        import_name (str): The name of the beautify module imported (for error reporting).
+        import_name (str): The name of the beautify module imported (for error
+                           reporting).
         name (str): The strategy name.
         native_extension (str): The native file extension for this type.
         tag_name (str): Tag name to search for in other (non-native) extensions.
@@ -176,8 +252,15 @@ class _BeautifyStrategy(Strategy, ABC):
     native_extension = None
     tag_name = None
 
-    def __init__(self, *args, **kwds):
-        super().__init__(*args, **kwds)
+    def __init__(self, testcases):
+        """Initialize beautification strategy instance.
+
+        Arguments:
+            testcases (list(grizzly.common.storage.TestCase)):
+                List of testcases to reduce. The object does not take ownership of the
+                testcases.
+        """
+        super().__init__(testcases)
         self._files_to_beautify = []
         for path in self._testcase_root.glob("**/*"):
             if (path.is_file() and path.suffix in self.all_extensions
@@ -185,12 +268,22 @@ class _BeautifyStrategy(Strategy, ABC):
                 self._files_to_beautify.append(path)
         self._current_feedback = None
         tag_bytes = self.tag_name.encode("ascii")
-        self._re_tag_start = re.compile(br"<\s*" + tag_bytes + br".*?>", flags=re.DOTALL | re.IGNORECASE)
-        self._re_tag_end = re.compile(br"</\s*" + tag_bytes + br"\s*>", flags=re.IGNORECASE)
+        self._re_tag_start = re.compile(br"<\s*" + tag_bytes + br".*?>",
+                                        flags=re.DOTALL | re.IGNORECASE)
+        self._re_tag_end = re.compile(br"</\s*" + tag_bytes + br"\s*>",
+                                      flags=re.IGNORECASE)
 
     @classmethod
-    def sanity_check_impl(cls):
-        super().sanity_check_impl()
+    def sanity_check_cls_attrs(cls):
+        """Sanity check the strategy class implementation.
+
+        Raises:
+            AssertionError: Required class attributes are missing or wrong type.
+
+        Returns:
+            None
+        """
+        super().sanity_check_cls_attrs()
         assert isinstance(cls.all_extensions, set)
         assert all(isinstance(ext, str) for ext in cls.all_extensions)
         assert isinstance(cls.import_available, bool)
@@ -199,22 +292,39 @@ class _BeautifyStrategy(Strategy, ABC):
         assert isinstance(cls.tag_name, str)
 
     def update(self, success, served=None):
-        # beautify does nothing with served. it's unlikely a beautify operation alone would
-        # render a file unserved.
+        """Inform the strategy whether or not the last beautification yielded was good.
+
+        Arguments:
+            success (bool): Whether or not the last beautification was acceptable.
+            served (list(list(str))): The list of served files for each testcase in the
+                                      last beautification.
+
+        Returns:
+            None
+        """
+        # beautify does nothing with served. it's unlikely a beautify operation alone
+        # would render a file unserved.
         assert self._current_feedback is None
         self._current_feedback = success
 
     @classmethod
     @abstractmethod
     def beautify_bytes(cls, data):
-        pass
+        """Perform beautification on a code buffer.
+
+        Arguments:
+            data (bytes): The code data to be beautified.
+
+        Returns:
+            bytes: The beautified result.
+        """
 
     def _chunks_to_beautify(self, before, to_beautify, file):
         """Iterate over `to_beautify` and find chunks of style/script to beautify.
 
         Arguments:
-            before (bytes): The data preceding `to_beautify`. Used to check whether `to_beautify` is
-                            already in an open <script> or <style> tag.
+            before (bytes): The data preceding `to_beautify`. Used to check whether
+                            `to_beautify` is already in an open <script> or <style> tag.
             to_beautify (bytes): The data to beautify.
             file (Path): The input file (used only to check if this is a .css/.js file)
 
@@ -263,13 +373,25 @@ class _BeautifyStrategy(Strategy, ABC):
             search_start = chunk_start + tag_end.end(0)
 
     def __iter__(self):
+        """Iterate over potential beautifications of testcases according to this
+        strategy.
+
+        The caller should evaluate each testcase set yielded, and call `update` with the
+        result. The caller owns the testcases yielded, and should call `cleanup` for
+        each.
+
+        Yields:
+            list(grizzly.common.storage.TestCase): list of testcases with beautification
+                                                   applied
+        """
         if not self.import_available:
             LOG.warning("%s not available, skipping strategy.", self.import_name)
             return
 
         LOG.info("Beautifying %d files", len(self._files_to_beautify))
         for file_no, file in enumerate(self._files_to_beautify):
-            LOG.info("Beautifying %s (file %d/%d)", file.relative_to(self._testcase_root), file_no + 1,
+            LOG.info("Beautifying %s (file %d/%d)",
+                     file.relative_to(self._testcase_root), file_no + 1,
                      len(self._files_to_beautify))
 
             # Use Lithium just to split the file at DDBEGIN/END.
@@ -295,7 +417,8 @@ class _BeautifyStrategy(Strategy, ABC):
                     elif to_beautify.strip():  # pragma: no cover
                         # this should never happen, but just in case...
                         # pragma: no cover
-                        LOG.warning("No output from beautify! Writing %s unmodified.", self.tag_name)
+                        LOG.warning("No output from beautify! Writing %s unmodified.",
+                                    self.tag_name)
                         testcase_fp.write(to_beautify)  # pragma: no cover
                     last = end
                 testcase_fp.write(raw[last:])
@@ -317,9 +440,12 @@ class _BeautifyStrategy(Strategy, ABC):
 
 
 class _LithiumStrategy(Strategy, ABC):
-    """Implementors must define these class attributes:
+    """Use a Lithium `Strategy`/`Testcase` pair to reduce the given Grizzly `TestCase`
+    set.
 
-    Attributes:
+    Implementors must define these class attributes:
+
+    Class attributes:
         name (str): The strategy name.
         strategy_cls (lithium.strategies.Strategy): Lithium strategy type.
         testcase_cls (lithium.testcases.Testcase): Lithium testcase type.
@@ -327,8 +453,15 @@ class _LithiumStrategy(Strategy, ABC):
     strategy_cls = None
     testcase_cls = None
 
-    def __init__(self, *args, **kwds):
-        super().__init__(*args, **kwds)
+    def __init__(self, testcases):
+        """Initialize strategy instance.
+
+        Arguments:
+            testcases (list(grizzly.common.storage.TestCase)):
+                List of testcases to reduce. The object does not take ownership of the
+                testcases.
+        """
+        super().__init__(testcases)
         self._current_reducer = None
         self._files_to_reduce = []
         self.rescan_files_to_reduce()
@@ -336,36 +469,71 @@ class _LithiumStrategy(Strategy, ABC):
         self._current_served = None
 
     def rescan_files_to_reduce(self):
+        """Repopulate the private `files_to_reduce` attribute by scanning the testcase
+        root.
+
+        Returns:
+            None
+        """
         self._files_to_reduce.clear()
         for path in self._testcase_root.glob("**/*"):
             if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
                 self._files_to_reduce.append(path)
 
     @classmethod
-    def sanity_check_impl(cls):
-        super().sanity_check_impl()
+    def sanity_check_cls_attrs(cls):
+        """Sanity check the strategy class implementation.
+
+        Raises:
+            AssertionError: Required class attributes are missing or wrong type.
+
+        Returns:
+            None
+        """
+        super().sanity_check_cls_attrs()
         assert issubclass(cls.strategy_cls, LithStrategy)
         assert issubclass(cls.testcase_cls, LithTestcase)
 
     def update(self, success, served=None):
+        """Inform the strategy whether or not the last reduction yielded was good.
+
+        Arguments:
+            success (bool): Whether or not the last reduction was acceptable.
+            served (list(list(str))): The list of served files for each testcase in the
+                                      last reduction.
+
+        Returns:
+            None
+        """
         if self._current_reducer is not None:
             self._current_reducer.feedback(success)
         self._current_feedback = success
         self._current_served = served
 
     def __iter__(self):
+        """Iterate over potential reductions of testcases according to this strategy.
+
+        The caller should evaluate each testcase set yielded, and call `update` with the
+        result. The caller owns the testcases yielded, and should call `cleanup` for
+        each.
+
+        Yields:
+            list(grizzly.common.storage.TestCase): list of testcases with reduction
+                                                   applied
+        """
         LOG.info("Reducing %d files", len(self._files_to_reduce))
         file_no = 0
         reduce_queue = self._files_to_reduce.copy()
         reduce_queue.sort()  # not necessary, but helps make tests more predictable
-        # indicates that self._testcase_root contains changes that haven't been yielded (if iteration ends,
-        # changes would be lost)
+        # indicates that self._testcase_root contains changes that haven't been yielded
+        # (if iteration ends, changes would be lost)
         testcase_root_dirty = False
         while reduce_queue:
             LOG.debug("Reduce queue: %r", reduce_queue)
             file = reduce_queue.pop(0)
             file_no += 1
-            LOG.info("Reducing %s (file %d/%d)", file, file_no, len(self._files_to_reduce))
+            LOG.info("Reducing %s (file %d/%d)", file, file_no,
+                     len(self._files_to_reduce))
             lithium_testcase = self.testcase_cls()  # pylint: disable=not-callable
             lithium_testcase.load(file)
             # pylint: disable=not-callable
@@ -400,7 +568,8 @@ class _LithiumStrategy(Strategy, ABC):
             self._current_reducer = None
         if testcase_root_dirty:
             # purging unserved files enabled us to exit early from the loop.
-            # need to yield once more to set this trimmed version to the current best in ReduceManager
+            # need to yield once more to set this trimmed version to the current best
+            # in ReduceManager
             testcases = TestCase.load(str(self._testcase_root), False)
             LOG.info("final iteration triggered by purge_optional")
             yield testcases
@@ -408,6 +577,11 @@ class _LithiumStrategy(Strategy, ABC):
 
 
 class Check(_LithiumStrategy):
+    """Check whether the testcase is reproducible.
+
+    This strategy does no reduction, and only yields once. It is intended to provide a
+    pass/fail result in a reduction pipeline.
+    """
     name = "check"
     strategy_cls = CheckOnly
     testcase_cls = TestcaseLine
@@ -420,12 +594,24 @@ class Check(_LithiumStrategy):
 
 
 class CollapseEmptyBraces(_LithiumStrategy):
+    """Minimize lines, but collapse empty curly braces between each iteration.
+
+    During reduction, the contents of a block may be reduced away entirely, but removing
+    the starting brace or ending brace alone will break the syntax of the test file.
+    This strategy tries to collapse empty braces onto the same line between each
+    iteration, so that empty blocks can be removed if otherwise possible.
+    """
     name = "collapsebraces"
     strategy_cls = LithCollapseEmptyBraces
     testcase_cls = TestcaseLine
 
 
 class CSSBeautify(_BeautifyStrategy):
+    """Run CSS beautification on all CSS files and `<style>` tags.
+
+    This should make the CSS more reducible if there are long lines with compound
+    definitions.
+    """
     all_extensions = {".css", ".htm", ".html", ".xhtml"}
     import_available = HAVE_CSSBEAUTIFIER
     import_name = "cssbeautifier"
@@ -441,12 +627,27 @@ class CSSBeautify(_BeautifyStrategy):
 
     @classmethod
     def beautify_bytes(cls, data):
+        """Perform CSS beautification on a code buffer.
+
+        Arguments:
+            data (bytes): The code data to be beautified.
+
+        Returns:
+            bytes: The beautified result.
+        """
         assert cls.import_available
         data = data.decode("utf-8", errors="surrogateescape")
-        return cssbeautifier.beautify(data, cls.opts).encode("utf-8", errors="surrogateescape")
+        return (cssbeautifier
+                .beautify(data, cls.opts)
+                .encode("utf-8", errors="surrogateescape"))
 
 
 class JSBeautify(_BeautifyStrategy):
+    """Run JS beautification on all JS files and `<script>` tags.
+
+    This should make the javascript more reducible if there are long lines with
+    compound statements.
+    """
     all_extensions = {".js", ".htm", ".html", ".xhtml"}
     import_available = HAVE_JSBEAUTIFIER
     import_name = "jsbeautifier"
@@ -458,6 +659,14 @@ class JSBeautify(_BeautifyStrategy):
 
     @classmethod
     def beautify_bytes(cls, data):
+        """Perform JS beautification on a code buffer.
+
+        Arguments:
+            data (bytes): The code data to be beautified.
+
+        Returns:
+            bytes: The beautified result.
+        """
         assert HAVE_JSBEAUTIFIER
         data = data.decode("utf-8", errors="surrogateescape")
 
@@ -469,18 +678,28 @@ class JSBeautify(_BeautifyStrategy):
 
 
 class MinimizeChars(_LithiumStrategy):
+    """Minimize all bytes in the testcase.
+    """
     name = "chars"
     strategy_cls = Minimize
     testcase_cls = TestcaseChar
 
 
 class MinimizeJSChars(_LithiumStrategy):
+    """Minimize all bytes contained in javascript strings.
+
+    This works the same as MinimizeChars, but only operates if it can identify what
+    looks like a quoted string. It also treats escaped characters as a single token
+    for reduction.
+    """
     name = "jschars"
     strategy_cls = Minimize
     testcase_cls = TestcaseJsStr
 
 
 class MinimizeLines(_LithiumStrategy):
+    """Minimize all lines in the testcase.
+    """
     name = "lines"
     strategy_cls = Minimize
     testcase_cls = TestcaseLine
@@ -490,40 +709,68 @@ class MinimizeTestcaseList(Strategy):
     """Try removing testcases from a list of sequential testcases (eg. Grizzly result
     cache). The strategy favours testcases at the tail of the list, so for a list of
     five testcases:
-                        testcases
-                0       1 2 3 4 5
-    iteration   1         2 3 4 5
-                2       1   3 4 5
-                3       1 2   4 5
-                4       1 2 3   5
-                5       1 2 3 4
+                            testcases
+                    0       1 2 3 4 5
+        iteration   1         2 3 4 5
+                    2       1   3 4 5
+                    3       1 2   4 5
+                    4       1 2 3   5
+                    5       1 2 3 4
     """
     name = "list"
 
-    def __init__(self, *args, **kwds):
-        super().__init__(*args, **kwds)
+    def __init__(self, testcases):
+        """Initialize strategy instance.
+
+        Arguments:
+            testcases (list(grizzly.common.storage.TestCase)):
+                List of testcases to reduce. The object does not take ownership of the
+                testcases.
+        """
+        super().__init__(testcases)
         self._current_feedback = None
         self._current_served = None
 
     def update(self, success, served=None):
+        """Inform the strategy whether or not the last reduction yielded was good.
+
+        Arguments:
+            success (bool): Whether or not the last reduction was acceptable.
+            served (list(list(str))): The list of served files for each testcase in the
+                                      last reduction.
+
+        Returns:
+            None
+        """
         assert self._current_feedback is None
         assert self._current_served is None
         self._current_feedback = success
         self._current_served = served
 
     def __iter__(self):
+        """Iterate over potential reductions of testcases according to this strategy.
+
+        The caller should evaluate each testcase set yielded, and call `update` with the
+        result. The caller owns the testcases yielded, and should call `cleanup` for
+        each.
+
+        Yields:
+            list(grizzly.common.storage.TestCase): list of testcases with reduction
+                                                   applied
+        """
         assert self._current_feedback is None
         idx = 0
         testcases = None
         try:
             testcases = TestCase.load(str(self._testcase_root), False)
             n_testcases = len(testcases)
-            # indicates that self._testcase_root contains changes that haven't been yielded (if iteration
-            # ends, changes would be lost)
+            # indicates that self._testcase_root contains changes that haven't been
+            # yielded (if iteration ends, changes would be lost)
             testcase_root_dirty = False
             while True:
                 if n_testcases <= 1:
-                    LOG.info("Testcase list has length %d, not enough to reduce!", n_testcases)
+                    LOG.info("Testcase list has length %d, not enough to reduce!",
+                             n_testcases)
                     break
                 if idx >= n_testcases:
                     LOG.info("Attempted to remove every single testcase")
@@ -539,13 +786,15 @@ class MinimizeTestcaseList(Strategy):
 
                 if self._current_feedback:
                     testcase_root_dirty = False
-                    LOG.info("Removing testcase %d/%d was successful!", idx + 1, n_testcases)
+                    LOG.info("Removing testcase %d/%d was successful!", idx + 1,
+                             n_testcases)
                     testcases = TestCase.load(str(self._testcase_root), False)
                     try:
                         # remove the actual testcase we were reducing
                         testcases.pop(idx).cleanup()
                         if testcases and self._current_served is not None:
-                            testcase_root_dirty = self.purge_unserved(testcases, self._current_served)
+                            testcase_root_dirty = \
+                                self.purge_unserved(testcases, self._current_served)
                         else:
                             self.dump_testcases(testcases, recreate_tcroot=True)
                     finally:
@@ -561,12 +810,14 @@ class MinimizeTestcaseList(Strategy):
                 self._current_served = None
             if testcase_root_dirty:
                 # purging unserved files enabled us to exit early from the loop.
-                # need to yield once more to set this trimmed version to the current best in ReduceManager
+                # need to yield once more to set this trimmed version to the current
+                # best in ReduceManager
                 testcases = TestCase.load(str(self._testcase_root), False)
                 LOG.info("final iteration triggered by purge_optional")
                 yield testcases
                 testcases = None  # caller owns testcases now
-                assert self._current_feedback, "Purging unserved files broke the testcase."
+                assert self._current_feedback, \
+                    "Purging unserved files broke the testcase."
         finally:
             if testcases is not None:
                 for testcase in testcases:

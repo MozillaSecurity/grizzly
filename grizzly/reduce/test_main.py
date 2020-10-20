@@ -3,8 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-"""
-unit tests for grizzly.reduce.main
+"""Unit tests for `grizzly.reduce.main`.
 """
 import json
 from logging import getLogger
@@ -21,12 +20,13 @@ from . import ReduceManager
 
 
 LOG = getLogger(__name__)
-pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")  # pylint: disable=invalid-name
+pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")
 
 
 def test_args_01(capsys, tmp_path, mocker):
     """test args in common with grizzly.replay"""
-    from ..replay.test_main import test_args_01 as real_test  # pylint: disable=import-outside-toplevel
+    # pylint: disable=import-outside-toplevel
+    from ..replay.test_main import test_args_01 as real_test
     mocker.patch("grizzly.replay.test_main.ReplayArgs", new=ReduceArgs)
     real_test(capsys, tmp_path)
 
@@ -53,7 +53,8 @@ def test_args_02(tmp_path):
     logs_dir.mkdir()
     ReduceArgs().parse_args([str(exe), str(inp), "--logs", str(logs_dir)])
     # test no-analysis
-    ReduceArgs().parse_args([str(exe), str(inp), "--no-analysis", "--repeat", "99", "--min-crashes", "99"])
+    ReduceArgs().parse_args([str(exe), str(inp), "--no-analysis", "--repeat", "99",
+                             "--min-crashes", "99"])
     # these should both log a warning that the args will be ignored due to analysis
     ReduceArgs().parse_args([str(exe), str(inp), "--repeat", "99"])
     ReduceArgs().parse_args([str(exe), str(inp), "--min-crashes", "99"])
@@ -75,10 +76,12 @@ def test_main_01(mocker):
         repeat=1,
         sig=None)
 
-    mocker.patch("grizzly.reduce.core.ReduceManager.run", side_effect=TargetLaunchError("error", None))
+    mocker.patch("grizzly.reduce.core.ReduceManager.run",
+                 side_effect=TargetLaunchError("error", None))
     assert ReduceManager.main(args) == 1
 
-    mocker.patch("grizzly.reduce.core.ReduceManager.run", side_effect=TargetLaunchTimeout)
+    mocker.patch("grizzly.reduce.core.ReduceManager.run",
+                 side_effect=TargetLaunchTimeout)
     assert ReduceManager.main(args) == 1
 
     mocker.patch("grizzly.reduce.core.load_target", side_effect=KeyboardInterrupt)
@@ -98,7 +101,11 @@ def test_force_closed(mocker, tmp_path):
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
     (tmp_path / "test.html").touch()
     (tmp_path / "test_info.json").write_text(
-        json.dumps({"timestamp": 1, "target": "test.html", "env": {"GRZ_FORCED_CLOSE": "0"}})
+        json.dumps({
+            "timestamp": 1,
+            "target": "test.html",
+            "env": {"GRZ_FORCED_CLOSE": "0"}
+        })
     )
     args = mocker.Mock(
         fuzzmanager=False,
@@ -115,7 +122,8 @@ def test_force_closed(mocker, tmp_path):
 
 @pytest.mark.parametrize("result", ["testprefs", "argprefs"])
 def test_testcase_prefs(mocker, tmp_path, result):
-    """test that prefs from testcase are used if --prefs not specified and --prefs overrides"""
+    """test that prefs from testcase are used if --prefs not specified and --prefs
+    overrides"""
     load_target = mocker.patch("grizzly.reduce.core.load_target")
     mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
