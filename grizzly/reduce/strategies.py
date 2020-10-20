@@ -84,7 +84,19 @@ class Strategy(ABC):
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
         self.dump_testcases(testcases)
 
-    def dump_testcases(self, testcases):
+    def dump_testcases(self, testcases, recreate_tcroot=False):
+        """Dump a testcase list to testcase root on disk.
+
+        Arguments:
+            testcases (list(grizzly.common.storage.TestCase)): list of testcases to dump
+            recreate_tcroot (bool): if True, delete testcase root and recreate it before dumping
+
+        Returns:
+            None
+        """
+        if recreate_tcroot:
+            rmtree(str(self._testcase_root))
+            self._testcase_root.mkdir()
         for idx, testcase in enumerate(testcases):
             LOG.debug("Extracting testcase %d/%d", idx + 1, len(testcases))
             testpath = self._testcase_root / ("%03d" % (idx,))
@@ -110,6 +122,40 @@ class Strategy(ABC):
 
     def cleanup(self):
         rmtree(str(self._testcase_root))
+
+    def purge_unserved(self, testcases, served):
+        """Given the testcase list yielded and list of what was served, purge
+        everything in testcase root to hold only what was served.
+
+        Arguments:
+            testcases (list(grizzly.common.storage.TestCase): testcases last replayed
+            served (list(list(str))): list of files served for each testcase.
+
+        Returns:
+            bool: True if anything was purged
+        """
+        LOG.debug("purging from %d testcases", len(testcases))
+        anything_purged = False
+        while len(served) < len(testcases):
+            LOG.debug("not all %d testcases served (%d served), popping one", len(testcases),
+                      len(served))
+            testcases.pop().cleanup()
+            anything_purged = True
+        remove_testcases = []
+        for idx, (testcase, served) in enumerate(zip(testcases, served)):
+            LOG.debug("testcase %d served %r", idx, served)
+            if testcase.landing_page not in served:
+                LOG.debug("landing page %r not served", testcase.landing_page)
+                remove_testcases.append(idx)
+                anything_purged = True
+            else:
+                size_before = testcase.data_size
+                testcase.purge_optional(served)
+                anything_purged = anything_purged or testcase.data_size != size_before
+        for idx in reversed(remove_testcases):
+            testcases.pop(idx).cleanup()
+        self.dump_testcases(testcases, recreate_tcroot=True)
+        return anything_purged
 
 
 class _BeautifyStrategy(Strategy, ABC):
@@ -334,31 +380,14 @@ class _LithiumStrategy(Strategy, ABC):
                 if self._current_feedback and self._current_served is not None:
                     testcases = TestCase.load(str(self._testcase_root), False)
                     try:
-                        LOG.debug("purging from %d testcases", len(testcases))
-                        while len(self._current_served) < len(testcases):
-                            LOG.debug("not all %d testcases served (%d served), popping one", len(testcases),
-                                      len(self._current_served))
-                            testcases.pop().cleanup()
-                        remove_testcases = []
-                        for idx, (testcase, served) in enumerate(zip(testcases, self._current_served)):
-                            LOG.debug("testcase %d served %r", idx, served)
-                            if testcase.landing_page not in served:
-                                LOG.debug("landing page %r not served", testcase.landing_page)
-                                remove_testcases.append(idx)
-                            else:
-                                testcase.purge_optional(served)
-                        for idx in reversed(remove_testcases):
-                            testcases.pop(idx).cleanup()
-                        rmtree(str(self._testcase_root))
-                        self._testcase_root.mkdir()
-                        self.dump_testcases(testcases)
-                        num_files_before = len(self._files_to_reduce)
-                        LOG.debug("files being reduced before: %r", self._files_to_reduce)
-                        self.rescan_files_to_reduce()
-                        LOG.debug("files being reduced after: %r", self._files_to_reduce)
+                        self.purge_unserved(testcases, self._current_served)
                     finally:
                         for testcase in testcases:
                             testcase.cleanup()
+                    num_files_before = len(self._files_to_reduce)
+                    LOG.debug("files being reduced before: %r", self._files_to_reduce)
+                    self.rescan_files_to_reduce()
+                    LOG.debug("files being reduced after: %r", self._files_to_reduce)
                     files_to_reduce = set(self._files_to_reduce)
                     reduce_queue = list(sorted(set(reduce_queue) & files_to_reduce))
                     testcase_root_dirty = len(self._files_to_reduce) != num_files_before
@@ -474,13 +503,13 @@ class MinimizeTestcaseList(Strategy):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._current_feedback = None
-        self._last_served = None
+        self._current_served = None
 
     def update(self, success, served=None):
         assert self._current_feedback is None
-        assert self._last_served is None
+        assert self._current_served is None
         self._current_feedback = success
-        self._last_served = served
+        self._current_served = served
 
     def __iter__(self):
         assert self._current_feedback is None
@@ -503,54 +532,37 @@ class MinimizeTestcaseList(Strategy):
                 if testcases is None:
                     testcases = TestCase.load(str(self._testcase_root), False)
                     assert n_testcases == len(testcases)
-                removed_ts = testcases[idx].timestamp
                 testcases.pop(idx).cleanup()
-                ts_in_order = [testcase.timestamp for testcase in testcases]
                 yield testcases
                 testcases = None  # caller owns testcases now
                 assert self._current_feedback is not None, "no feedback received!"
+
                 if self._current_feedback:
                     testcase_root_dirty = False
-                    # removal was success! find the testcase that matches timestamp,
-                    # and remove it
                     LOG.info("Removing testcase %d/%d was successful!", idx + 1, n_testcases)
-                    removed_path = None
-                    unserved_paths = []
-                    for test_info in self._testcase_root.glob("*/test_info.json"):
-                        info = json.loads(test_info.read_text())
-                        if removed_ts == info["timestamp"]:
-                            assert (
-                                removed_path is None
-                            ), "Duplicate testcases found with timestamp %s" % (
-                                removed_ts,
-                            )
-                            removed_path = test_info.parent
-                        elif self._last_served is not None:
-                            test_idx = ts_in_order.index(info["timestamp"])
-                            if test_idx >= len(self._last_served) or \
-                                    info["target"] not in self._last_served[test_idx]:
-                                LOG.info("Testcase at %s was unserved, removing.",
-                                         test_info.parent.relative_to(self._testcase_root))
-                                unserved_paths.append(test_info.parent)
-                    assert (
-                        removed_path is not None
-                    ), "No testcase found with timestamp %s" % (removed_ts,)
-                    rmtree(str(removed_path))
-                    for unserved in unserved_paths:
-                        rmtree(str(unserved))
-                        testcase_root_dirty = True
-                    n_testcases -= 1 + len(unserved_paths)
+                    testcases = TestCase.load(str(self._testcase_root), False)
+                    try:
+                        # remove the actual testcase we were reducing
+                        testcases.pop(idx).cleanup()
+                        if testcases and self._current_served is not None:
+                            testcase_root_dirty = self.purge_unserved(testcases, self._current_served)
+                        else:
+                            self.dump_testcases(testcases, recreate_tcroot=True)
+                    finally:
+                        for testcase in testcases:
+                            testcase.cleanup()
+                    testcases = TestCase.load(str(self._testcase_root), False)
+                    n_testcases = len(testcases)
                 else:
                     LOG.info("No result without testcase %d/%d", idx + 1, n_testcases)
                     idx += 1
                 # reset
                 self._current_feedback = None
-                self._last_served = None
+                self._current_served = None
             if testcase_root_dirty:
                 # purging unserved files enabled us to exit early from the loop.
                 # need to yield once more to set this trimmed version to the current best in ReduceManager
                 testcases = TestCase.load(str(self._testcase_root), False)
-                assert n_testcases == len(testcases)
                 LOG.info("final iteration triggered by purge_optional")
                 yield testcases
                 testcases = None  # caller owns testcases now

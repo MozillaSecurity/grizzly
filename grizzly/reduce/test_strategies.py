@@ -472,6 +472,16 @@ PurgeUnservedTestParams = namedtuple(
             expected_num_reports=2,
             purging_breaks=False,
         ),
+        # triple test, list strategy. None for served still eliminates first two tests
+        PurgeUnservedTestParams(
+            strategies=["list"],
+            test_data=[{"test.html": "123"}, {"test.html": "456"}, {"test.html": "789"}],
+            served=[None, None, None],
+            expected_results={"789"},
+            expected_run_calls=2,
+            expected_num_reports=2,
+            purging_breaks=False,
+        ),
     ]
 )
 def test_purge_unserved(mocker, tmp_path, strategies, test_data, served, expected_results, expected_run_calls,
