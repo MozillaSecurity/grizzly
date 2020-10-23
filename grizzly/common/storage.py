@@ -200,7 +200,8 @@ class TestCase(object):
 
     @property
     def data_size(self):
-        """The total amount of data used by the test case (bytes).
+        """The total amount of data used (bytes) by the TestFiles in the
+        TestCase.
 
         Args:
             None
@@ -244,7 +245,7 @@ class TestCase(object):
                 meta_file.dump(out_path)
 
     def get_file(self, file_name):
-        """Look up and return the TestFile with the specified file name.
+        """Lookup and return the TestFile with the specified file name.
 
         Args:
             file_name (str): Name of file to retrieve.
@@ -327,9 +328,9 @@ class TestCase(object):
         Args:
             path (str): Path to the directory or file to load.
             load_prefs (bool): Load prefs.js file if available.
-            adjacent (str): Load adjacent files as part of the test case.
-                            This is always the case when loading a directory.
-                            WARNING: This should be used with caution!
+            adjacent (bool): Load adjacent files as part of the TestCase.
+                             This is always true when loading a directory.
+                             WARNING: This should be used with caution!
 
         Returns:
             TestCase: A TestCase.
