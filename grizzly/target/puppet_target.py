@@ -6,7 +6,11 @@ from logging import getLogger
 from os import close, kill, unlink
 from os.path import abspath, isfile
 from platform import system
-import signal
+from signal import SIGABRT
+try:
+    from signal import SIGUSR1
+except ImportError:
+    SIGUSR1 = None
 from time import sleep, time
 from tempfile import mkdtemp, mkstemp
 
@@ -32,8 +36,7 @@ class PuppetTarget(Target):
     __slots__ = ("use_rr", "use_valgrind", "_puppet", "_remove_prefs")
 
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, relaunch, **kwds):
-        super(PuppetTarget, self).__init__(binary, extension, launch_timeout,
-                                           log_limit, memory_limit, relaunch)
+        super().__init__(binary, extension, launch_timeout, log_limit, memory_limit, relaunch)
         self.use_rr = kwds.pop("rr", False)
         self.use_valgrind = kwds.pop("valgrind", False)
         self._remove_prefs = False
@@ -51,7 +54,7 @@ class PuppetTarget(Target):
             proc_usage = self._puppet.cpu_usage()
         for pid, cpu in sorted(proc_usage, reverse=True, key=lambda x: x[1]):
             LOG.debug("sending SIGABRT to pid: %r, cpu: %0.2f%%", pid, cpu)
-            kill(pid, signal.SIGABRT)
+            kill(pid, SIGABRT)
             break
 
     def add_abort_token(self, token):
@@ -130,7 +133,7 @@ class PuppetTarget(Target):
                 status = self.RESULT_IGNORED
                 LOG.debug("log size limit exceeded")
             else:
-                LOG.debug("failure detected, ffpuppet return code: %r", self._puppet.reason)
+                LOG.debug("failure detected, ffpuppet reason %r", self._puppet.reason)
                 status = self.RESULT_FAILURE
         elif was_timeout:
             LOG.debug("timeout detected")
@@ -138,6 +141,7 @@ class PuppetTarget(Target):
         return status
 
     def dump_coverage(self, timeout=15):
+        assert SIGUSR1 is not None
         pid = self._puppet.get_pid()
         if pid is None or not self._puppet.is_healthy():
             LOG.debug("Skipping coverage dump (target is not in a good state)")
@@ -147,11 +151,11 @@ class PuppetTarget(Target):
         try:
             for child in Process(pid).children(recursive=True):
                 LOG.debug("Sending SIGUSR1 to %d (child)", child.pid)
-                kill(child.pid, signal.SIGUSR1)
+                kill(child.pid, SIGUSR1)
         except (AccessDenied, NoSuchProcess):  # pragma: no cover
             pass
         LOG.debug("Sending SIGUSR1 to %d (parent)", pid)
-        kill(pid, signal.SIGUSR1)
+        kill(pid, SIGUSR1)
         start_time = time()
         gcda_found = False
         delay = 0.1
@@ -179,7 +183,7 @@ class PuppetTarget(Target):
                 if elapsed >= timeout:
                     # timeout failure
                     LOG.warning("gcda file open by pid %d after %0.2fs", gcda_open, elapsed)
-                    kill(gcda_open, signal.SIGABRT)
+                    kill(gcda_open, SIGABRT)
                     sleep(1)
                     self.close()
                     break
