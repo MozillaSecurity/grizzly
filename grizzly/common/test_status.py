@@ -160,7 +160,7 @@ def test_status_08(tmp_path):
             procs[-1].start()
         # wait for processes to launch and report
         for has_reported in report_events:
-            assert has_reported.wait(60)
+            assert has_reported.wait(timeout=60)
         # collect reports
         reports = tuple(Status.loadall())
         assert len(reports) == len(procs)
@@ -212,32 +212,37 @@ def test_reducer_stats_03(tmp_path):
     with ReducerStats() as stats:
         assert stats.passed == 0
 
-def _reducer_client(working_path, limit, unrestrict):
+def _reducer_client(working_path, reported, unrestrict):
     """Used by test_reducer_stats_04"""
     # NOTE: this must be at the top level to work on Windows
     ReducerStats.PATH = working_path
-    for _ in range(50):
+    for _ in range(20):
         with ReducerStats() as stats:
             stats.passed += 1
-            if stats.passed == limit:
-                unrestrict.set()
-        unrestrict.wait(timeout=60)
+        if not reported.is_set():
+            reported.set()
+            unrestrict.wait(timeout=60)
 
 def test_reducer_stats_04(tmp_path):
     """test ReducerStats() with multiple processes"""
     ReducerStats.PATH = str(tmp_path)
+    report_events = list()
     procs = list()
     unrestrict = Event()  # used to sync client procs
     try:
-        proc_count = 5
-        for _ in range(proc_count):
+        # launch processes
+        for _ in range(5):
+            report_events.append(Event())
             procs.append(Process(
-                target=_reducer_client, args=(ReducerStats.PATH, proc_count, unrestrict)))
+                target=_reducer_client, args=(ReducerStats.PATH, report_events[-1], unrestrict)))
             procs[-1].start()
+        # wait for processes to report
+        for has_reported in report_events:
+            assert has_reported.wait(timeout=60)
     finally:
         unrestrict.set()
         for proc in procs:
             if proc.pid is not None:
                 proc.join()
     with ReducerStats() as stats:
-        assert stats.passed == 250
+        assert stats.passed == 100
