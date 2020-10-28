@@ -158,7 +158,6 @@ class ReplayManager(object):
             for _ in range(repeat):
                 self.status.iteration += 1
                 if self.target.closed:
-                    LOG.info("Launching target...")
                     if self._harness is None:
                         location = runner.location(
                             "/grz_current_test",

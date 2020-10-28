@@ -102,6 +102,7 @@ class Runner(object):
         assert self._target is not None
         assert max_retries >= 0
         assert retry_delay >= 0
+        LOG.debug("launching target (timeout %ds)", self._target.launch_timeout)
         for retries in reversed(range(max_retries)):
             try:
                 self._target.launch(location, env_mod=env_mod)
