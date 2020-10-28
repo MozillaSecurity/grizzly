@@ -104,7 +104,7 @@ class ReplayManager(object):
             for result in expected:
                 reporter.submit(tests or [], report=result.report)
 
-    def run(self, testcases, repeat=1, min_results=1, idle_delay=0, idle_threshold=0):
+    def run(self, testcases, repeat=1, min_results=1, exit_early=True, idle_delay=0, idle_threshold=0):
         """Run testcase replay.
 
         Args:
@@ -112,6 +112,11 @@ class ReplayManager(object):
             repeat (int): Maximum number of times to run the TestCase.
             min_results (int): Minimum number of results needed before run can
                                be considered successful.
+            exit_early (bool): If True the minimum required number of iterations
+                               are performed to either meet `min_results` or
+                               determine that it is not possible to do so.
+                               If False `repeat` number of iterations are
+                               performed.
             idle_delay (int): Number of seconds to wait before polling for idle.
             idle_threshold (int): CPU usage threshold to mark the process as idle.
 
@@ -255,21 +260,22 @@ class ReplayManager(object):
                     LOG.error("ERROR: Test case was not served. Timeout too short?")
                     break
 
-                # check status and exit early if possible
-                if repeat - self.status.iteration + self.status.results < min_results:
-                    if self.status.iteration < repeat:
-                        LOG.debug("skipping remaining attempts")
-                    # failed to reproduce issue
-                    LOG.debug("results (%d) < minimum (%d), after %d attempts",
-                              self.status.results, min_results, self.status.iteration)
-                    break
-                # check if complete (results found)
-                if self.status.results >= min_results:
-                    assert self.status.results == min_results
-                    assert sum(x.count for x in reports.values() if x.expected) >= min_results
-                    LOG.debug("results == expected (%d), after %d attempts",
-                              min_results, self.status.iteration)
-                    break
+                if exit_early:
+                    # failed to meet minimum number of results
+                    if repeat - self.status.iteration + self.status.results < min_results:
+                        if self.status.iteration < repeat:
+                            LOG.debug("skipping remaining attempts")
+                        # failed to reproduce issue
+                        LOG.debug("results (%d) < minimum (%d), after %d attempts",
+                                  self.status.results, min_results, self.status.iteration)
+                        break
+                    # check if complete (minimum number of results found)
+                    if self.status.results >= min_results:
+                        assert self.status.results == min_results
+                        assert sum(x.count for x in reports.values() if x.expected) >= min_results
+                        LOG.debug("results == expected (%d), after %d attempts",
+                                  min_results, self.status.iteration)
+                        break
 
                 # warn about large browser logs
                 #self.status.log_size = self.target.log_size()

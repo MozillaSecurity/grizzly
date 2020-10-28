@@ -163,6 +163,28 @@ def test_replay_07(mocker, tmp_path):
         assert replay.status.results == 2
         assert replay.status.ignored == 1
     assert len(results) == 1
+    assert sum(x.count for x in results) == 2
+    target.reset_mock()
+    # ignore early failure (perform all repeats)
+    target.detect_failure.return_value = Target.RESULT_NONE
+    target.detect_failure.side_effect = None
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        assert not replay.run(testcases, repeat=4, min_results=4, exit_early=False)
+        assert target.close.call_count == 1
+        assert replay.status.iteration == 4
+        assert replay.status.results == 0
+        assert replay.status.ignored == 0
+    target.reset_mock()
+    # ignore early success (perform all repeats)
+    target.detect_failure.return_value = Target.RESULT_FAILURE
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        results = replay.run(testcases, repeat=4, min_results=1, exit_early=False)
+        assert target.close.call_count == 1
+        assert replay.status.iteration == 4
+        assert replay.status.results == 4
+        assert replay.status.ignored == 0
+    assert len(results) == 1
+    assert sum(x.count for x in results) == 4
 
 def test_replay_08(mocker, tmp_path):
     """test ReplayManager.run() - test signatures - fail to meet minimum"""
