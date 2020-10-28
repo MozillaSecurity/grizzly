@@ -116,24 +116,24 @@ class PuppetTarget(Target):
         # if something has happened figure out what
         if not is_healthy:
             if self._puppet.reason == FFPuppet.RC_CLOSED:
-                LOG.info("target.close() was called")
+                LOG.debug("target.close() was called")
             elif self._puppet.reason == FFPuppet.RC_EXITED:
-                LOG.info("Target closed itself")
+                LOG.debug("target closed itself")
             elif (self._puppet.reason == FFPuppet.RC_WORKER
                   and "memory" in ignored
                   and "ffp_worker_memory_usage" in self._puppet.available_logs()):
                 status = self.RESULT_IGNORED
-                LOG.info("Memory limit exceeded")
+                LOG.debug("memory limit exceeded")
             elif (self._puppet.reason == FFPuppet.RC_WORKER
                   and "log-limit" in ignored
                   and "ffp_worker_log_size" in self._puppet.available_logs()):
                 status = self.RESULT_IGNORED
-                LOG.info("Log size limit exceeded")
+                LOG.debug("log size limit exceeded")
             else:
                 LOG.debug("failure detected, ffpuppet return code: %r", self._puppet.reason)
                 status = self.RESULT_FAILURE
         elif was_timeout:
-            LOG.info("Timeout detected")
+            LOG.debug("timeout detected")
             status = self.RESULT_IGNORED if "timeout" in ignored else self.RESULT_FAILURE
         return status
 

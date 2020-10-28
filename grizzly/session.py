@@ -154,7 +154,6 @@ class Session(object):
                         close_after=self.target.rl_reset,
                         forced_close=self.target.forced_close,
                         timeout=self.adapter.TEST_DURATION)
-                log.info("Launching target")
                 runner.launch(location, max_retries=3, retry_delay=0)
             self.target.step()
 

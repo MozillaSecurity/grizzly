@@ -32,6 +32,7 @@ class FakeTarget(object):
         self.closed = True
         self.binary = ""
         self.forced_close = os.getenv("GRZ_FORCED_CLOSE", "1").lower() not in ("false", "0")
+        self.launch_timeout = 300
         self.prefs = None
         self.rl_countdown = 0
         self.use_valgrind = False
