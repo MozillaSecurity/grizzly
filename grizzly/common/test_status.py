@@ -130,7 +130,7 @@ def test_status_07(tmp_path):
     status.timestamp += 1
     assert status.rate == 0.5
 
-def _client_writer(done, working_path):
+def _client_writer(done, reported, working_path):
     """Used by test_status_08"""
     # NOTE: this must be at the top level to work on Windows
     Status.PATH = working_path
@@ -139,6 +139,9 @@ def _client_writer(done, working_path):
         while not done.is_set():
             status.iteration += 1
             status.report(force=True)
+            # perform two reports before setting flag
+            if not reported.is_set() and status.iteration > 1:
+                reported.set()
             sleep(0.01)
     finally:
         status.cleanup()
@@ -146,27 +149,28 @@ def _client_writer(done, working_path):
 def test_status_08(tmp_path):
     """test Status.loadall() with multiple active reporters"""
     Status.PATH = str(tmp_path)
-    best_rate = 0
     done = Event()
     procs = list()
+    report_events = list()
     try:
+        # launch processes
         for _ in range(5):
-            procs.append(Process(target=_client_writer, args=(done, Status.PATH)))
+            report_events.append(Event())
+            procs.append(Process(target=_client_writer, args=(done, report_events[-1], Status.PATH)))
             procs[-1].start()
-        deadline = time() + 60
-        while len(tuple(Status.loadall())) < len(procs):
-            sleep(0.1)
-            assert time() < deadline, "timeout waiting for processes to launch!"
-        for _ in range(20):
-            for obj in Status.loadall():
-                if obj.rate > best_rate:
-                    best_rate = obj.rate
+        # wait for processes to launch and report
+        for has_reported in report_events:
+            assert has_reported.wait(60)
+        # collect reports
+        reports = tuple(Status.loadall())
+        assert len(reports) == len(procs)
+        assert max(x.rate for x in reports) > 0
     finally:
         done.set()
         for proc in procs:
             if proc.pid is not None:
                 proc.join()
-    assert best_rate > 0
+    # verify cleanup
     assert not any(Status.loadall())
 
 def test_reducer_stats_01(tmp_path):
