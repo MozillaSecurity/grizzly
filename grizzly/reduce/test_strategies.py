@@ -398,6 +398,22 @@ BeautifyStrategyParams = namedtuple(
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
                                      reason="cssbeautifier required"),
         ),
+        # test almost beautified css (any change breaks test, beautify only removes an extra blank line,
+        # so `lines` will have already tried it, and this will hit the cache)
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<style nochange=true>\n/*DDBEGIN*/\n\nrequisite {\n  required: 1\n}\n/*DDEND*/\n</style>\n",
+                test_name="test.html",
+                expected_run_calls=8,
+                expected_results={
+                    "<style nochange=true>\n/*DDBEGIN*/\n\nrequisite {\n  required: 1\n}\n/*DDEND*/\n</style>\n"
+                },
+                expected_num_reports=2,
+                strategies=["check", "lines", "cssbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
+                                     reason="cssbeautifier required"),
+        ),
     ]
 )
 def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
@@ -408,10 +424,16 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
     def replay_run(testcases, **_):
         for test in testcases:
             contents = test.get_file(test_name).data.decode("ascii")
-            LOG.debug("interesting if 'required' in %r", contents)
-            if (("required" in contents and
-                    ("requisite" not in test_data or "requisite" in contents))
-                    or "'requi'+'red'" in contents):
+            if "nochange" in test_data:
+                LOG.debug("interesting if test unchanged")
+                interesting = test_data == contents
+            elif "requisite" in test_data:
+                LOG.debug("interesting if ('requisite' and 'required') or 'requi'+'red' in %r", contents)
+                interesting = ("required" in contents and "requisite" in contents) or "'requi'+'red'" in contents
+            else:
+                LOG.debug("interesting if 'required' or 'requi'+'red' in %r", contents)
+                interesting = "required" in contents or "'requi'+'red'" in contents
+            if interesting:
                 log_path = tmp_path / (
                     "crash%d_logs" % (replayer.return_value.run.call_count,)
                 )

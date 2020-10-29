@@ -17,7 +17,8 @@ Constants:
     HAVE_JSBEAUTIFIER (bool): True if `jsbeautifier` module is available.
 """
 from abc import ABC, abstractmethod
-from logging import getLogger
+from hashlib import sha512
+from logging import DEBUG, getLogger
 from pathlib import Path
 import re
 from shutil import rmtree
@@ -105,8 +106,58 @@ class Strategy(ABC):
                 List of testcases to reduce. The object does not take ownership of the
                 testcases.
         """
+        self._tried = set()  # set of tuple(tuple(str(Path), SHA512))
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
         self.dump_testcases(testcases)
+
+    def _calculate_testcase_hash(self):
+        """Calculate hashes of all files in testcase root.
+
+        Returns:
+            tuple(tuple(str, str)): A tuple of 2-tuples mapping str(Path) to SHA-512 of each
+                                    file in testcase root.
+        """
+        result = []
+        for path in self._testcase_root.glob("**/*"):
+            if path.is_file():
+                tf_hash = sha512()
+                tf_hash.update(path.read_bytes())
+                result.append(
+                    (str(path.relative_to(self._testcase_root)), tf_hash.digest())
+                )
+        result = tuple(sorted(result))
+
+        if LOG.getEffectiveLevel() == DEBUG:
+            print_hash = sha512()
+            print_hash.update(repr(result).encode("utf-8", errors="surrogateescape"))
+            in_tried = result in self._tried
+            LOG.debug(
+                "Testcase hash: %s (%sin cache)",
+                print_hash.hexdigest()[:32], "" if in_tried else "not "
+            )
+
+        return result
+
+    def update_tried(self, tried):
+        """Update the list of tried testcase/hash sets. Testcases are hashed with
+        SHA-512 and digested to bytes (`hashlib.sha512(testcase).digest()`)
+
+        Arguments:
+            tried (iterable(tuple(tuple(str, str)))): Set of already tried testcase hashes.
+
+        Returns:
+            None
+        """
+        self._tried.update(frozenset(tried))
+
+    def get_tried(self):
+        """Return the set of tried testcase hashes. Testcases are hashed with SHA-512
+        and digested to bytes (`hashlib.sha512(testcase).digest()`)
+
+        Returns:
+            frozenset(tuple(tuple(str, str))): Testcase hashes.
+        """
+        return frozenset(self._tried)
 
     def dump_testcases(self, testcases, recreate_tcroot=False):
         """Dump a testcase list to the testcase root on disk.
@@ -428,6 +479,12 @@ class _BeautifyStrategy(Strategy, ABC):
                     LOG.warning("<%s> tags not found, skipping", self.tag_name)
                     continue
 
+            tc_hash = self._calculate_testcase_hash()
+            if tc_hash in self._tried:
+                LOG.info("cache hit, reverting")
+                lith_tc.dump(file)
+                continue
+
             yield TestCase.load(str(self._testcase_root), False)
 
             assert self._current_feedback is not None, "No feedback for last iteration"
@@ -436,6 +493,7 @@ class _BeautifyStrategy(Strategy, ABC):
             else:
                 LOG.warning("%s failed (reverting)", self.name)
                 lith_tc.dump(file)
+                self._tried.add(tc_hash)
             self._current_feedback = None
 
 
@@ -538,6 +596,20 @@ class _LithiumStrategy(Strategy, ABC):
             lithium_testcase.load(file)
             # pylint: disable=not-callable
             self._current_reducer = self.strategy_cls().reduce(lithium_testcase)
+
+            # populate the lithium strategy "tried" cache
+            # use all cache values where all hashes other than the current file match
+            # the current testcase_root state.
+            current_tc_hash_map = dict(self._calculate_testcase_hash())
+            del current_tc_hash_map[str(file.relative_to(self._testcase_root))]
+            this_tc_tried = set()
+            for tried in self._tried:
+                tried = dict(tried)
+                tc_tried = tried.pop(str(file.relative_to(self._testcase_root)))
+                if tried == current_tc_hash_map:
+                    this_tc_tried.add(tc_tried)
+            self._current_reducer.update_tried(this_tc_tried)
+
             for reduction in self._current_reducer:
                 reduction.dump()
                 testcases = TestCase.load(str(self._testcase_root), False)
@@ -545,6 +617,8 @@ class _LithiumStrategy(Strategy, ABC):
                 yield testcases
                 if self._current_feedback:
                     testcase_root_dirty = False
+                else:
+                    self._tried.add(self._calculate_testcase_hash())
                 if self._current_feedback and self._current_served is not None:
                     testcases = TestCase.load(str(self._testcase_root), False)
                     try:
