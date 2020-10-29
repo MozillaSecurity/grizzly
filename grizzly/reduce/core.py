@@ -4,12 +4,17 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """`ReduceManager` finds the smallest testcase(s) to reproduce an issue.
 """
-from itertools import chain
+from collections import namedtuple
+from functools import partial
+from itertools import chain, zip_longest
+from locale import LC_ALL, setlocale
 from logging import getLogger
 from math import ceil, log
 from pathlib import Path
+import re
 from shutil import rmtree
 from tempfile import mkdtemp
+from time import gmtime, strftime, time
 
 from Collector.Collector import Collector
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -60,6 +65,59 @@ def change_quality(crash_id, quality):
             LOG.warning("Failed to update (404), does the crash still exist?")
         else:
             raise
+
+
+ReductionStat = namedtuple("ReductionStat", "name, duration, iterations, size")
+
+
+class _FormatTable(object):
+    """Format tabular data in a table.
+    """
+    def __init__(self, columns, formatters, vsep=" | ", hsep="-"):
+        """Initialize a FormatTable instance.
+
+        Arguments:
+            columns (iterable(str)): List of column names for the table header.
+            formatters (iterable(callable)): List of format functions for each column.
+            vsep (str): Vertical separation between columns.
+            hsep (str): Horizontal separation between header and data.
+        """
+        assert len(columns) == len(formatters)
+        self._columns = columns
+        self._formatters = formatters
+        self._vsep = vsep
+        self._hsep = hsep
+
+    def format_rows(self, rows):
+        """Format rows as a table and return a line generator.
+
+        Arguments:
+            rows (list(list(str))): Tabular data. Each row must be the same length as
+                                    `columns` passed to `__init__`.
+
+        Yields:
+            str: Each line of formatted tabular data.
+        """
+        max_width = [len(col) for col in self._columns]
+        formatted = []
+        for row in rows:
+            assert len(row) == len(self._columns)
+            formatted.append([])
+            for idx, (data, formatter) in enumerate(zip(row, self._formatters)):
+                data = formatter(data)
+                max_width[idx] = max(max_width[idx], len(data))
+                formatted[-1].append(data)
+
+        # build a format_str to space out the columns with separators using `max_width`
+        # the first column is left-aligned, and other fields are right-aligned.
+        format_str = self._vsep.join(
+            field % (width,)
+            for field, width in zip_longest(["%%-%ds"], max_width, fillvalue="%%%ds")
+        )
+        yield format_str % self._columns
+        yield self._hsep * (len(self._vsep) * (len(self._columns) - 1) + sum(max_width))
+        for row in formatted:
+            yield format_str % tuple(row)
 
 
 class ReduceManager(object):
@@ -138,6 +196,7 @@ class ReduceManager(object):
         self._static_timeout = static_timeout
         self._idle_delay = idle_delay
         self._idle_threshold = idle_threshold
+        self._stats = []
 
     def update_timeout(self, results):
         """Tune idle/server timeout values based on actual duration of expected results.
@@ -191,14 +250,15 @@ class ReduceManager(object):
             LOG.info("Updating max timeout to: %r", new_iter_timeout)
             self.server.timeout = new_iter_timeout
 
-    def run_reliability_analysis(self):
+    def run_reliability_analysis(self, stats):
         """Run several analysis passes of the current testcase to find `run` parameters.
 
         The number of repetitions and minimum number of crashes are calculated to
         maximize the chances of observing the expected crash.
 
         Arguments:
-            None
+            stats (object): Opaque stats object. Increment the ".iters" attribute with the
+                            number of iterations performed.
 
         Returns:
             tuple(int, int): Values for `repeat` and `min_crashes` resulting from
@@ -240,6 +300,7 @@ class ReduceManager(object):
                         exc.report.cleanup()
                     raise
                 try:
+                    stats.iters += self.ANALYSIS_ITERATIONS
                     self.update_timeout(results)
                     crashes = sum(x.count for x in results if x.expected)
                     self.report(
@@ -289,6 +350,78 @@ class ReduceManager(object):
                      "more" if harness_crashes > non_harness_crashes else "less")
         return (repeat, min_crashes)
 
+    def record_stat_milestone(self, name, elapsed=None, iters=None):
+        """Record reduction stats for a given point in time:
+
+        - name of the milestone (eg. init, strategy name completed)
+        - current testcase size (bytes)
+        - elapsed time (seconds)
+        - # of iterations
+
+        Arguments:
+            name (str): name of milestone
+            elapsed (float or None): seconds elapsed for period recorded
+            iters (int or None): # of iterations performed
+
+        Returns:
+            None
+        """
+        testcase_size = sum(tc.data_size for tc in self.testcases)
+        self._stats.append(
+            ReductionStat(
+                name=name,
+                size=testcase_size,
+                duration=elapsed,
+                iterations=iters,
+            )
+        )
+
+    def time_stat_milestone(self, name):
+        """Time and record the period leading up to a reduction milestone.
+        eg. a strategy being run.
+
+        Arguments:
+            name (str): name of milestone
+
+        Returns:
+            context: Timer context for the period being recorded up to the milestone.
+
+                     Attributes:
+                        iters (int): # of iterations performed during period
+        """
+        # pylint: disable=no-self-argument
+        class _MilestoneTimer(object):
+            def __init__(sub):
+                sub._start = None
+                sub.iters = 0
+
+            def __enter__(sub):
+                sub._start = time()
+                return sub
+
+            def __exit__(sub, exc_type, exc_value, traceback):
+                elapsed = time() - sub._start
+                self.record_stat_milestone(name, elapsed=elapsed, iters=sub.iters)
+        return _MilestoneTimer()
+
+    def calculate_stat_total(self, name):
+        """Calculate a "total" by summing the time and iterations in the stats table.
+
+        Arguments:
+            name (str): name of milestone (eg. final, total)
+
+        Returns:
+            None
+        """
+        duration = 0
+        iters = 0
+        for stat in self._stats:
+            if stat.duration is not None:
+                duration += stat.duration
+            if stat.iterations is not None:
+                iters += stat.iterations
+        self.record_stat_milestone(name, elapsed=duration, iters=iters)
+
     def run(self, repeat=1, min_results=1):
         """Run testcase reduction.
 
@@ -303,14 +436,17 @@ class ReduceManager(object):
         any_success = False
         last_reports = None
         last_tried = None
+        self.record_stat_milestone("init")
+        if self._use_analysis:
+            with self.time_stat_milestone("analysis") as stats:
+                repeat, min_results = self.run_reliability_analysis(stats)
+        self.target.relaunch = min(self._original_relaunch, repeat)
+        LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
+                 repeat, min_results, self.target.relaunch)
         for strategy_no, strategy in enumerate(self.strategies):
+            LOG.info("")
             LOG.info("Using strategy %s (%d/%d)", strategy, strategy_no + 1,
                      len(self.strategies))
-            if self._use_analysis:
-                repeat, min_results = self.run_reliability_analysis()
-            self.target.relaunch = min(self._original_relaunch, repeat)
-            LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
-                     repeat, min_results, self.target.relaunch)
             replay = ReplayManager(self.ignore, self.server, self.target,
                                    any_crash=self._any_crash, signature=self._signature,
                                    use_harness=self._use_harness)
@@ -318,13 +454,11 @@ class ReduceManager(object):
             if last_tried is not None:
                 strategy.update_tried(last_tried)
                 last_tried = None
-            with replay, strategy:
+            with replay, strategy, self.time_stat_milestone(strategy.name) as stats:
                 best_results = []
-                attempt_no = 0
                 try:
                     for reduction in strategy:
-                        attempt_no += 1
-                        LOG.info("Attempt #%d", attempt_no)
+                        stats.iters += 1
                         keep_reduction = False
                         results = []
                         try:
@@ -358,7 +492,7 @@ class ReduceManager(object):
                             # if the reduction reproduced,
                             #   update self.testcases (new best)
                             if success:
-                                LOG.info("Attempt succeeded")
+                                LOG.info("Reduction succeeded")
                                 for testcase in self.testcases:
                                     testcase.cleanup()
                                 self.testcases = reduction
@@ -403,6 +537,49 @@ class ReduceManager(object):
         if self._report_to_fuzzmanager and last_reports:
             for crash_id in last_reports:
                 change_quality(crash_id, FuzzManagerReporter.QUAL_REDUCED_RESULT)
+
+        # log a summary of what was done.
+        self.calculate_stat_total("final")
+
+        def _format_duration(duration, total=0):
+            result = ""
+            if duration is not None:
+                if total == 0:
+                    percent = 0
+                else:
+                    percent = int(100 * duration / total)
+                # format H:M:S, and then remove all leading zeros with regex
+                result = re.sub("^[0:]*", "", strftime("%H:%M:%S", gmtime(duration)))
+                # if the result is all zeroes, ensure one zero is output
+                if not result:
+                    result = "0"
+                result += " (%3d%%)" % (percent,)
+            return result
+
+        def _format_number(number, total=0):
+            result = ""
+            if number is not None:
+                if total == 0:
+                    percent = 0
+                else:
+                    percent = int(100 * number / total)
+                result = "{:n} ({:3d}%)".format(number, percent)
+            return result
+
+        tabulator = _FormatTable(
+            ReductionStat._fields,
+            ReductionStat(
+                name=str,
+                # duration and iterations are % of total (last), size % of init (first)
+                duration=partial(_format_duration, total=self._stats[-1].duration),
+                iterations=partial(_format_number, total=self._stats[-1].iterations),
+                size=partial(_format_number, total=self._stats[0].size),
+            )
+        )
+        LOG.info("Reduction summary:")
+        for row in tabulator.format_rows(self._stats):
+            LOG.info(row)
+
         return any_success
 
     def report(self, results, testcases):
@@ -452,6 +629,7 @@ class ReduceManager(object):
             int: 0 for success. non-0 indicates a problem.
         """
         configure_logging(args.log_level)
+        setlocale(LC_ALL, "")
         if args.fuzzmanager:
             FuzzManagerReporter.sanity_check(args.binary)
 

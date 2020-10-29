@@ -99,10 +99,13 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
     tests = [test]
     log_path = tmp_path / "logs"
 
+    class _ReduceStats:
+        iters = 0
+
     try:
         mgr = ReduceManager(None, mocker.Mock(spec=Sapphire), mocker.Mock(spec=Target),
                             tests, None, log_path, use_harness=use_harness)
-        repeat, min_crashes = mgr.run_reliability_analysis()
+        repeat, min_crashes = mgr.run_reliability_analysis(_ReduceStats)
     finally:
         for test in tests:
             test.cleanup()
