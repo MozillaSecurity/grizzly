@@ -146,7 +146,7 @@ ReproTestParams = namedtuple(
             reports=None,
             n_other=0,
             other_reports=None,
-            result=False,
+            result=10,
         ),
         # reproduces, one strategy, no reduction works
         ReproTestParams(
@@ -160,7 +160,7 @@ ReproTestParams = namedtuple(
             reports={"1\n2\n3\n"},
             n_other=0,
             other_reports=None,
-            result=True,
+            result=0,
         ),
         # reproduces, one strategy, some reduction works
         ReproTestParams(
@@ -175,7 +175,7 @@ ReproTestParams = namedtuple(
             reports={"odd\neven\n" * 3, "odd\n" * 3},
             n_other=0,
             other_reports=None,
-            result=True,
+            result=0,
         ),
         # reproduces, one strategy, reduction only finds other
         ReproTestParams(
@@ -189,7 +189,7 @@ ReproTestParams = namedtuple(
             reports={"1\n2\n3\n"},
             n_other=5,
             other_reports={"1\n", "3\n", "1\n2\n", "1\n3\n", "2\n3\n"},
-            result=True,
+            result=0,
         ),
         # reproduces, 50% iterations work, 1 iteration produces other sig
         ReproTestParams(
@@ -203,7 +203,7 @@ ReproTestParams = namedtuple(
             reports={"1\n2\n3\n4\n5\n6\n", "1\n2\n3\n5\n"},
             n_other=1,
             other_reports={"1\n3\n5\n"},
-            result=True,
+            result=0,
         ),
         # reproduces, two strategies, 1st no reduction, 2nd 50% reduction
         ReproTestParams(
@@ -221,7 +221,7 @@ ReproTestParams = namedtuple(
             reports={"A1\nA2\nA3\nA4\nA5\nA6\n", "A1\n\nA3\n\nA5\nA"},
             n_other=0,
             other_reports=None,
-            result=True,
+            result=0,
         ),
         # reproduces, two strategies, 1st 50% reduction, 2nd no reduction
         ReproTestParams(
@@ -238,7 +238,7 @@ ReproTestParams = namedtuple(
             reports={"A1\nA2\nA3\nA4\nA5\nA6\n", "A1\nA3\nA5\n"},
             n_other=0,
             other_reports=None,
-            result=True,
+            result=0,
         ),
         # reproduces, two strategies, reduce only produces other sig
         ReproTestParams(
@@ -253,7 +253,7 @@ ReproTestParams = namedtuple(
             n_other=15,
             other_reports={"\n2\n3\n", "1\n", "1\n\n3\n", "1\n2\n", "1\n2\n\n",
                            "1\n2\n3", "1\n23\n", "1\n3\n", "12\n3\n", "2\n3\n", "3\n"},
-            result=True,
+            result=0,
         ),
         # reproduces, one strategy, testcase reduces to 0
         ReproTestParams(
@@ -267,7 +267,7 @@ ReproTestParams = namedtuple(
             reports={"1\n2\n3\n", ""},
             n_other=0,
             other_reports=None,
-            result=True,
+            result=0,
         ),
         # reproduces, two strategies, 1st no reduce, 2nd testcase reduces to 0
         ReproTestParams(
@@ -283,7 +283,7 @@ ReproTestParams = namedtuple(
             reports={"1\n2\n3\n", ""},
             n_other=0,
             other_reports=None,
-            result=True,
+            result=0,
         ),
     ]
 )
@@ -457,7 +457,7 @@ TimeoutTestParams = namedtuple(
             idle_output=10,
             iter_input=60,
             iter_output=10,
-            result=True,
+            result=0,
         ),
         # max duration is used
         TimeoutTestParams(
@@ -468,7 +468,7 @@ TimeoutTestParams = namedtuple(
             idle_output=30,
             iter_input=60,
             iter_output=60,
-            result=True,
+            result=0,
         ),
         # static timeout doesn't affect timeouts
         TimeoutTestParams(
@@ -479,7 +479,7 @@ TimeoutTestParams = namedtuple(
             idle_output=30,
             iter_input=60,
             iter_output=60,
-            result=True,
+            result=0,
         ),
         # uninteresting result doesn't affect timeouts
         TimeoutTestParams(
@@ -490,7 +490,7 @@ TimeoutTestParams = namedtuple(
             idle_output=30,
             iter_input=60,
             iter_output=60,
-            result=False,
+            result=10,
         ),
         # test duration affects timeouts
         TimeoutTestParams(
@@ -501,7 +501,7 @@ TimeoutTestParams = namedtuple(
             idle_output=15,
             iter_input=60,
             iter_output=20,
-            result=True,
+            result=0,
         ),
     ]
 )

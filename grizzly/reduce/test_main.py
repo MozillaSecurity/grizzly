@@ -60,9 +60,24 @@ def test_args_02(tmp_path):
     ReduceArgs().parse_args([str(exe), str(inp), "--min-crashes", "99"])
 
 
-def test_main_01(mocker):
+@pytest.mark.parametrize(
+    "patch_func, side_effect, return_value, result",
+    [
+        (
+            "grizzly.reduce.core.ReduceManager.run",
+            TargetLaunchError("error", None), None, 9
+        ),
+        ("grizzly.reduce.core.ReduceManager.run", TargetLaunchTimeout, None, 9),
+        ("grizzly.reduce.core.load_target", KeyboardInterrupt, None, 1),
+        ("grizzly.reduce.core.TestCase.load", TestCaseLoadFailure, None, 1),
+        ("grizzly.reduce.core.TestCase.load", None, [], 1),
+    ]
+)
+def test_main_01(mocker, patch_func, side_effect, return_value, result):
     """test ReduceManager.main() failure cases"""
-    mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
+    mocker.patch(
+        "grizzly.reduce.core.FuzzManagerReporter", autospec=True,
+        QUAL_REDUCER_ERROR=9)
     mocker.patch("grizzly.reduce.core.load_target", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
     mocker.patch("grizzly.reduce.core.TestCase", autospec=True)
@@ -76,22 +91,8 @@ def test_main_01(mocker):
         repeat=1,
         sig=None)
 
-    mocker.patch("grizzly.reduce.core.ReduceManager.run",
-                 side_effect=TargetLaunchError("error", None))
-    assert ReduceManager.main(args) == 1
-
-    mocker.patch("grizzly.reduce.core.ReduceManager.run",
-                 side_effect=TargetLaunchTimeout)
-    assert ReduceManager.main(args) == 1
-
-    mocker.patch("grizzly.reduce.core.load_target", side_effect=KeyboardInterrupt)
-    assert ReduceManager.main(args) == 1
-
-    mocker.patch("grizzly.reduce.core.TestCase.load", side_effect=TestCaseLoadFailure)
-    assert ReduceManager.main(args) == 1
-
-    mocker.patch("grizzly.reduce.core.TestCase.load", return_value=list())
-    assert ReduceManager.main(args) == 1
+    mocker.patch(patch_func, side_effect=side_effect, return_value=return_value)
+    assert ReduceManager.main(args) == result
 
 
 def test_force_closed(mocker, tmp_path):

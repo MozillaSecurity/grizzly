@@ -413,7 +413,7 @@ class ReduceManager(object):
                                be considered successful.
 
         Returns:
-            bool: Whether a crash was observed (ie. reduction was successful).
+            int: One of the `FuzzManagerReporter.QUAL_*` constants.
         """
         any_success = False
         last_reports = None
@@ -571,7 +571,9 @@ class ReduceManager(object):
         for row in tabulator.format_rows(self._stats):
             LOG.info(row)
 
-        return any_success
+        if any_success:
+            return FuzzManagerReporter.QUAL_REDUCED_RESULT
+        return FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
 
     def report(self, results, testcases):
         """Report results, either to FuzzManager or to filesystem.
@@ -708,8 +710,15 @@ class ReduceManager(object):
                     static_timeout=args.static_timeout,
                     idle_delay=args.idle_delay,
                     idle_threshold=args.idle_threshold)
-                success = mgr.run(repeat=args.repeat, min_results=args.min_crashes)
-            return 0 if success else 1
+                try:
+                    return_code = mgr.run(
+                        repeat=args.repeat,
+                        min_results=args.min_crashes
+                    )
+                except Exception:  # pylint: disable=broad-except
+                    LOG.exception("Exception during reduction!")
+                    return FuzzManagerReporter.QUAL_REDUCER_ERROR
+            return return_code
 
         except (KeyboardInterrupt, TargetLaunchError, TargetLaunchTimeout):
             return 1
