@@ -257,8 +257,8 @@ class ReduceManager(object):
         maximize the chances of observing the expected crash.
 
         Arguments:
-            stats (object): Opaque stats object. Increment the ".iters" attribute with the
-                            number of iterations performed.
+            stats (object): Opaque stats object. Increment the ".iters" attribute with
+                            the number of iterations performed.
 
         Returns:
             tuple(int, int): Values for `repeat` and `min_crashes` resulting from
@@ -404,24 +404,6 @@ class ReduceManager(object):
                 self.record_stat_milestone(name, elapsed=elapsed, iters=sub.iters)
         return _MilestoneTimer()
 
-    def calculate_stat_total(self, name):
-        """Calculate a "total" by summing the time and iterations in the stats table.
-
-        Arguments:
-            name (str): name of milestone (eg. final, total)
-
-        Returns:
-            None
-        """
-        duration = 0
-        iters = 0
-        for stat in self._stats:
-            if stat.duration is not None:
-                duration += stat.duration
-            if stat.iterations is not None:
-                iters += stat.iterations
-        self.record_stat_milestone(name, elapsed=duration, iters=iters)
-
     def run(self, repeat=1, min_results=1):
         """Run testcase reduction.
 
@@ -437,110 +419,119 @@ class ReduceManager(object):
         last_reports = None
         last_tried = None
         self.record_stat_milestone("init")
-        if self._use_analysis:
-            with self.time_stat_milestone("analysis") as stats:
-                repeat, min_results = self.run_reliability_analysis(stats)
-        self.target.relaunch = min(self._original_relaunch, repeat)
-        LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
-                 repeat, min_results, self.target.relaunch)
-        for strategy_no, strategy in enumerate(self.strategies):
-            LOG.info("")
-            LOG.info("Using strategy %s (%d/%d)", strategy, strategy_no + 1,
-                     len(self.strategies))
-            replay = ReplayManager(self.ignore, self.server, self.target,
-                                   any_crash=self._any_crash, signature=self._signature,
-                                   use_harness=self._use_harness)
-            strategy = STRATEGIES[strategy](self.testcases)
-            if last_tried is not None:
-                strategy.update_tried(last_tried)
-                last_tried = None
-            with replay, strategy, self.time_stat_milestone(strategy.name) as stats:
-                best_results = []
-                try:
-                    for reduction in strategy:
-                        stats.iters += 1
-                        keep_reduction = False
-                        results = []
-                        try:
+        # record total_stats overall so that any time missed by individual milestones
+        # will still be included in the total
+        with self.time_stat_milestone("final") as total_stats:
+            if self._use_analysis:
+                with self.time_stat_milestone("analysis") as stats:
+                    repeat, min_results = self.run_reliability_analysis(stats)
+                    total_stats.iters += stats.iters
+            self.target.relaunch = min(self._original_relaunch, repeat)
+            LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
+                     repeat, min_results, self.target.relaunch)
+            for strategy_no, strategy in enumerate(self.strategies):
+                LOG.info("")
+                LOG.info("Using strategy %s (%d/%d)", strategy, strategy_no + 1,
+                         len(self.strategies))
+                replay = ReplayManager(self.ignore, self.server, self.target,
+                                       any_crash=self._any_crash,
+                                       signature=self._signature,
+                                       use_harness=self._use_harness)
+                strategy = STRATEGIES[strategy](self.testcases)
+                if last_tried is not None:
+                    strategy.update_tried(last_tried)
+                    last_tried = None
+                with replay, strategy, self.time_stat_milestone(strategy.name) as stats:
+                    best_results = []
+                    try:
+                        for reduction in strategy:
+                            stats.iters += 1
+                            total_stats.iters += 1
+                            keep_reduction = False
+                            results = []
                             try:
-                                # reduction is a new list of testcases to be replayed
-                                results = replay.run(
-                                    reduction, repeat=repeat, min_results=min_results,
-                                    idle_delay=self._idle_delay,
-                                    idle_threshold=self._idle_threshold)
-                            except (TargetLaunchError, TargetLaunchTimeout) as exc:
-                                if isinstance(exc, TargetLaunchError) and exc.report:
-                                    self.report(
-                                        [ReplayResult(exc.report, None, [], False)],
-                                        reduction)
-                                    exc.report.cleanup()
-                                raise
-                            self.update_timeout(results)
-                            # get the first expected result (if any),
-                            #   and update the strategy
-                            first_expected = next((report for report in results
-                                                   if report.expected), None)
-                            success = first_expected is not None
-                            served = None
-                            if success and not self._any_crash:
-                                served = first_expected.served
-                            strategy.update(success, served=served)
-                            if strategy.name == "check":
-                                if any_success and not success:
-                                    raise RuntimeError("Reduction broke")
-                            any_success = any_success or success
-                            # if the reduction reproduced,
-                            #   update self.testcases (new best)
-                            if success:
-                                LOG.info("Reduction succeeded")
-                                for testcase in self.testcases:
-                                    testcase.cleanup()
-                                self.testcases = reduction
-                                keep_reduction = True
-                                # cleanup old best results
-                                for result in best_results:
+                                try:
+                                    # reduction is a new list of testcases to be
+                                    # replayed
+                                    results = replay.run(
+                                        reduction, repeat=repeat,
+                                        min_results=min_results,
+                                        idle_delay=self._idle_delay,
+                                        idle_threshold=self._idle_threshold)
+                                except (TargetLaunchError, TargetLaunchTimeout) as exc:
+                                    if (
+                                        isinstance(exc, TargetLaunchError)
+                                        and exc.report
+                                    ):
+                                        self.report(
+                                            [ReplayResult(exc.report, None, [], False)],
+                                            reduction)
+                                        exc.report.cleanup()
+                                    raise
+                                self.update_timeout(results)
+                                # get the first expected result (if any),
+                                #   and update the strategy
+                                first_expected = next((report for report in results
+                                                       if report.expected), None)
+                                success = first_expected is not None
+                                served = None
+                                if success and not self._any_crash:
+                                    served = first_expected.served
+                                strategy.update(success, served=served)
+                                if strategy.name == "check":
+                                    if any_success and not success:
+                                        raise RuntimeError("Reduction broke")
+                                any_success = any_success or success
+                                # if the reduction reproduced,
+                                #   update self.testcases (new best)
+                                if success:
+                                    LOG.info("Reduction succeeded")
+                                    for testcase in self.testcases:
+                                        testcase.cleanup()
+                                    self.testcases = reduction
+                                    keep_reduction = True
+                                    # cleanup old best results
+                                    for result in best_results:
+                                        result.report.cleanup()
+                                    # filter expected results out into `best_results`
+                                    best_results = [result for result in results
+                                                    if result.expected]
+                                    results = [result for result in results
+                                               if not result.expected]
+                                else:
+                                    LOG.info("Attempt failed")
+                                # if the reduction found other crashes,
+                                #   report those immediately
+                                self.report(results, reduction)
+                            finally:  # noqa pylint: disable=bare-except
+                                if not keep_reduction:
+                                    for testcase in reduction:
+                                        testcase.cleanup()
+                                for result in results:
                                     result.report.cleanup()
-                                # filter expected results out into `best_results`
-                                best_results = [result for result in results
-                                                if result.expected]
-                                results = [result for result in results
-                                           if not result.expected]
-                            else:
-                                LOG.info("Attempt failed")
-                            # if the reduction found other crashes,
-                            #   report those immediately
-                            self.report(results, reduction)
-                        finally:  # noqa pylint: disable=bare-except
-                            if not keep_reduction:
-                                for testcase in reduction:
-                                    testcase.cleanup()
-                            for result in results:
-                                result.report.cleanup()
-                    last_reports = self.report(best_results, self.testcases)
-                except KeyboardInterrupt:
-                    if best_results:
                         last_reports = self.report(best_results, self.testcases)
-                        LOG.warning("Ctrl+C detected, best reduction so far reported "
-                                    "as %r", last_reports)
-                    raise
-                finally:
-                    for result in best_results:
-                        result.report.cleanup()
-                # if self._signature was already set, this will do nothing
-                # otherwise, ensure the first found signature is used throughout
-                self._signature = replay.signature
+                    except KeyboardInterrupt:
+                        if best_results:
+                            last_reports = self.report(best_results, self.testcases)
+                            LOG.warning("Ctrl+C detected, best reduction so far "
+                                        "reported as %r", last_reports)
+                        raise
+                    finally:
+                        for result in best_results:
+                            result.report.cleanup()
+                    # if self._signature was already set, this will do nothing
+                    # otherwise, ensure the first found signature is used throughout
+                    self._signature = replay.signature
 
-            # store "tried" cache to pass to next strategy
-            last_tried = strategy.get_tried()
+                # store "tried" cache to pass to next strategy
+                last_tried = strategy.get_tried()
 
-        # if we complete all strategies, mark the last reported crashes as reduced
-        if self._report_to_fuzzmanager and last_reports:
-            for crash_id in last_reports:
-                change_quality(crash_id, FuzzManagerReporter.QUAL_REDUCED_RESULT)
+            # if we complete all strategies, mark the last reported crashes as reduced
+            if self._report_to_fuzzmanager and last_reports:
+                for crash_id in last_reports:
+                    change_quality(crash_id, FuzzManagerReporter.QUAL_REDUCED_RESULT)
 
         # log a summary of what was done.
-        self.calculate_stat_total("final")
-
         def _format_duration(duration, total=0):
             result = ""
             if duration is not None:
