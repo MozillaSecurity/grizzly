@@ -398,6 +398,21 @@ BeautifyStrategyParams = namedtuple(
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
                                      reason="cssbeautifier required"),
         ),
+        # test already beautified css (beautify does nothing)
+        pytest.param(
+            *BeautifyStrategyParams(
+                test_data="<style>\n*,\n#a {\n  fluff: 0;\n  required: 1\n}\n</style>\n",
+                test_name="test.html",
+                expected_run_calls=1,
+                expected_results={
+                    "<style>\n*,\n#a {\n  fluff: 0;\n  required: 1\n}\n</style>\n"
+                },
+                expected_num_reports=2,
+                strategies=["check", "cssbeautify"],
+            ),
+            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
+                                     reason="cssbeautifier required"),
+        ),
         # test almost beautified css (any change breaks test, beautify only removes an extra blank line,
         # so `lines` will have already tried it, and this will hit the cache)
         pytest.param(
