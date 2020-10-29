@@ -453,18 +453,26 @@ class _BeautifyStrategy(Strategy, ABC):
 
             with file.open("wb") as testcase_fp:
                 last = 0
+                any_beautified = False
                 testcase_fp.write(lith_tc.before)
                 for start, end in self._chunks_to_beautify(lith_tc.before, raw, file):
                     before = raw[last:start]
                     testcase_fp.write(before)
                     to_beautify = raw[start:end]
+                    LOG.debug("before: %r", to_beautify)
                     beautified = self.beautify_bytes(to_beautify)
+                    LOG.debug("after: %r", beautified)
                     if beautified:
                         if before and not before.endswith(b"\n"):
-                            testcase_fp.write(b"\n")
-                        testcase_fp.write(beautified)
+                            beautified = b"\n" + beautified
                         if not beautified.endswith(b"\n"):
-                            testcase_fp.write(b"\n")
+                            beautified = beautified + b"\n"
+
+                        testcase_fp.write(beautified)
+                        if beautified == to_beautify:
+                            LOG.warning("Beautify had no effect!")
+                        else:
+                            any_beautified = True
                     elif to_beautify.strip():  # pragma: no cover
                         # this should never happen, but just in case...
                         # pragma: no cover
@@ -477,6 +485,10 @@ class _BeautifyStrategy(Strategy, ABC):
 
                 if last == 0:
                     LOG.warning("<%s> tags not found, skipping", self.tag_name)
+                    continue
+
+                if not any_beautified:
+                    LOG.warning("Beautify had no effect on the file, skipping")
                     continue
 
             tc_hash = self._calculate_testcase_hash()
