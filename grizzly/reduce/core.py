@@ -302,6 +302,7 @@ class ReduceManager(object):
         """
         any_success = False
         last_reports = None
+        last_tried = None
         for strategy_no, strategy in enumerate(self.strategies):
             LOG.info("Using strategy %s (%d/%d)", strategy, strategy_no + 1,
                      len(self.strategies))
@@ -314,6 +315,9 @@ class ReduceManager(object):
                                    any_crash=self._any_crash, signature=self._signature,
                                    use_harness=self._use_harness)
             strategy = STRATEGIES[strategy](self.testcases)
+            if last_tried is not None:
+                strategy.update_tried(last_tried)
+                last_tried = None
             with replay, strategy:
                 best_results = []
                 attempt_no = 0
@@ -391,6 +395,10 @@ class ReduceManager(object):
                 # if self._signature was already set, this will do nothing
                 # otherwise, ensure the first found signature is used throughout
                 self._signature = replay.signature
+
+            # store "tried" cache to pass to next strategy
+            last_tried = strategy.get_tried()
+
         # if we complete all strategies, mark the last reported crashes as reduced
         if self._report_to_fuzzmanager and last_reports:
             for crash_id in last_reports:
