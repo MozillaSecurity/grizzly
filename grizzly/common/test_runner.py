@@ -175,7 +175,7 @@ def test_runner_07():
 def test_runner_08(mocker):
     """test Runner.launch()"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    target = mocker.Mock(spec=Target)
+    target = mocker.Mock(spec=Target, launch_timeout=30)
 
     runner = Runner(server, target)
     runner.launch("http://a/")
