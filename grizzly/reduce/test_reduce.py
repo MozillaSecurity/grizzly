@@ -74,19 +74,24 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
                   use_harness, result_harness):
     """test that analysis sets reasonable params"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
-    expected_iters = len(crashes)
+    expected_iters = len(crashes) / 11
 
-    def replay_run(_, **_kw):
-        LOG.debug("interesting: %r", crashes[0])
-        if crashes.pop(0):
-            log_path = tmp_path / (
-                "crash%d_logs" % (replayer.return_value.run.call_count,)
-            )
-            log_path.mkdir()
-            _fake_save_logs_foo(log_path)
-            report = Report(str(log_path), "bin")
-            return [ReplayResult(report, [["test.html"]], [], True)]
-        return []
+    def replay_run(_, **kw):
+        results = []
+        repeat = kw["repeat"]
+        assert repeat <= len(crashes)
+        assert not kw["exit_early"]
+        for _ in range(repeat):
+            LOG.debug("interesting: %r", crashes[0])
+            if crashes.pop(0):
+                log_path = tmp_path / (
+                    "crash%d_logs" % (replayer.return_value.run.call_count,)
+                )
+                log_path.mkdir(exist_ok=True)
+                _fake_save_logs_foo(log_path)
+                report = Report(str(log_path), "bin")
+                results.append(ReplayResult(report, [["test.html"]], [], True))
+        return results
     replayer.return_value.__enter__.return_value.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")

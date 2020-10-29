@@ -220,40 +220,40 @@ class ReduceManager(object):
             if not use_harness and harness_crashes == self.ANALYSIS_ITERATIONS:
                 continue
 
-            with ReplayManager(self.ignore, self.server, self.target,
-                               any_crash=self._any_crash, signature=self._signature,
-                               use_harness=use_harness) as replay:
+            with ReplayManager(
+                self.ignore, self.server, self.target, any_crash=self._any_crash,
+                signature=self._signature, use_harness=use_harness,
+            ) as replay:
                 LOG.info("Running for %d iterations to assess reliability %s harness.",
                          self.ANALYSIS_ITERATIONS,
                          "using" if use_harness else "without")
-                for _ in range(self.ANALYSIS_ITERATIONS):
-                    try:
-                        results = replay.run(self.testcases, repeat=1, min_results=1,
-                                             idle_delay=self._idle_delay,
-                                             idle_threshold=self._idle_threshold)
-                    except (TargetLaunchError, TargetLaunchTimeout) as exc:
-                        if isinstance(exc, TargetLaunchError) and exc.report:
-                            self.report([ReplayResult(exc.report, None, [], False)],
-                                        self.testcases)
-                            exc.report.cleanup()
-                        raise
+                try:
+                    results = replay.run(
+                        self.testcases, repeat=self.ANALYSIS_ITERATIONS, min_results=1,
+                        exit_early=False, idle_delay=self._idle_delay,
+                        idle_threshold=self._idle_threshold,
+                    )
+                except (TargetLaunchError, TargetLaunchTimeout) as exc:
+                    if isinstance(exc, TargetLaunchError) and exc.report:
+                        self.report([ReplayResult(exc.report, None, [], False)],
+                                    self.testcases)
+                        exc.report.cleanup()
+                    raise
+                try:
                     self.update_timeout(results)
-                    try:
-                        success = any(result.expected for result in results)
-                        LOG.info("result: %s",
-                                 "interesting." if success else "not interesting.")
-                        self.report(
-                            [result for result in results if not result.expected],
-                            self.testcases)
-                    finally:
-                        for result in results:
-                            result.report.cleanup()
-                    if success and use_harness:
-                        harness_crashes += 1
-                    elif success:
-                        non_harness_crashes += 1
+                    crashes = sum(x.count for x in results if x.expected)
+                    self.report(
+                        [result for result in results if not result.expected],
+                        self.testcases)
+                    if crashes and use_harness:
+                        harness_crashes = crashes
+                    elif crashes:
+                        non_harness_crashes = crashes
+                finally:
+                    for result in results:
+                        result.report.cleanup()
                 LOG.info("Testcase was interesting %0.1f%% of %d attempts %s harness.",
-                         100.0 * harness_crashes / self.ANALYSIS_ITERATIONS,
+                         100.0 * crashes / self.ANALYSIS_ITERATIONS,
                          self.ANALYSIS_ITERATIONS,
                          "using" if use_harness else "without")
                 # ensure same signature is always used
@@ -290,7 +290,7 @@ class ReduceManager(object):
         return (repeat, min_crashes)
 
     def run(self, repeat=1, min_results=1):
-        """Run testcase replay.
+        """Run testcase reduction.
 
         Args:
             repeat (int): Maximum number of times to run the TestCase.
