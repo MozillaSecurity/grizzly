@@ -49,7 +49,7 @@ def test_session_01(tmp_path, mocker):
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     prefs = tmp_path / "prefs.js"
     prefs.touch()
-    fake_target = mocker.Mock(spec=Target, prefs=str(prefs))
+    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs))
     # set target.log_size to test warning code path
     fake_target.log_size.return_value = Session.TARGET_LOG_SIZE_WARN + 1
     with IOManager() as iomgr:
@@ -74,7 +74,7 @@ def test_session_02(tmp_path, mocker):
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     prefs = tmp_path / "prefs.js"
     prefs.touch()
-    fake_target = mocker.Mock(spec=Target, prefs=str(prefs), rl_reset=10)
+    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs), rl_reset=10)
     fake_target.log_size.return_value = 1000
     fake_target.monitor.launches = 1
     with IOManager() as iomgr:
@@ -122,7 +122,7 @@ def test_session_04(tmp_path, mocker):
     adapter = FuzzAdapter()
     adapter.setup(None, None)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, prefs=None)
+    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
     fake_target.monitor.launches = 1
     with IOManager() as iomgr:
         fake_serv.serve_path.return_value = (SERVED_NONE, [])
@@ -149,7 +149,7 @@ def test_session_05(tmp_path, mocker):
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     # return SERVED_TIMEOUT to test IGNORE_UNSERVED code path
     fake_serv.serve_path.return_value = (SERVED_TIMEOUT, [fake_testcase.landing_page])
-    fake_target = mocker.Mock(spec=Target, prefs=None)
+    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
     fake_target.monitor.launches = 1
     with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target) as session:
         session.run([], iteration_limit=1)
