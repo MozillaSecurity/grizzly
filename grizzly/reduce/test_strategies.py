@@ -144,7 +144,7 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
     try:
         mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, tests, strategies,
                             log_path, use_analysis=False)
-        assert mgr.run()
+        assert mgr.run() == 0
     finally:
         for test in tests:
             test.cleanup()
@@ -469,7 +469,7 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
     try:
         mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, tests, strategies,
                             log_path, use_analysis=False)
-        assert mgr.run()
+        assert mgr.run() == 0
     finally:
         for test in tests:
             test.cleanup()
@@ -621,7 +621,7 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
             with raises(AssertionError):
                 mgr.run()
         else:
-            assert mgr.run()
+            assert mgr.run() == 0
     finally:
         for test in tests:
             test.cleanup()
