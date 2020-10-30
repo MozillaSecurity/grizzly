@@ -102,10 +102,14 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
     class _ReduceStats:
         iters = 0
 
+        @staticmethod
+        def _stop_early(_):
+            pass
+
     try:
         mgr = ReduceManager(None, mocker.Mock(spec=Sapphire), mocker.Mock(spec=Target),
                             tests, None, log_path, use_harness=use_harness)
-        repeat, min_crashes = mgr.run_reliability_analysis(_ReduceStats)
+        repeat, min_crashes = mgr.run_reliability_analysis([_ReduceStats])
     finally:
         for test in tests:
             test.cleanup()
@@ -114,6 +118,7 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
     assert repeat == expected_repeat
     assert min_crashes == expected_min_crashes
     assert mgr._use_harness == result_harness
+    assert _ReduceStats.iters == expected_iters * 11
 
 
 def _ignore_arg(func):
@@ -424,7 +429,7 @@ def test_launch_error(mocker, tmp_path, use_analysis, exc_type):
         mgr.run()
     if exc_type is TargetLaunchError:
         assert report_fcn.call_count == 1
-        _mgr, reports, reported_testcases = report_fcn.call_args[0]
+        _mgr, reports, reported_testcases, _stats = report_fcn.call_args[0]
         if use_analysis:
             assert reported_testcases == testcases
         else:

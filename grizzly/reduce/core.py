@@ -4,17 +4,13 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """`ReduceManager` finds the smallest testcase(s) to reproduce an issue.
 """
-from collections import namedtuple
-from functools import partial
-from itertools import chain, zip_longest
+from itertools import chain
 from locale import LC_ALL, setlocale
 from logging import getLogger
 from math import ceil, log
 from pathlib import Path
-import re
 from shutil import rmtree
 from tempfile import mkdtemp
-from time import gmtime, strftime, time
 
 from Collector.Collector import Collector
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -26,6 +22,7 @@ from ..common.utils import grz_tmp
 from ..main import configure_logging
 from ..replay import ReplayManager, ReplayResult
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
+from .stats import ReductionStats
 from .strategies import STRATEGIES
 
 
@@ -65,59 +62,6 @@ def change_quality(crash_id, quality):
             LOG.warning("Failed to update (404), does the crash still exist?")
         else:
             raise
-
-
-ReductionStat = namedtuple("ReductionStat", "name, duration, iterations, size")
-
-
-class _FormatTable(object):
-    """Format tabular data in a table.
-    """
-    def __init__(self, columns, formatters, vsep=" | ", hsep="-"):
-        """Initialize a FormatTable instance.
-
-        Arguments:
-            columns (iterable(str)): List of column names for the table header.
-            formatters (iterable(callable)): List of format functions for each column.
-            vsep (str): Vertical separation between columns.
-            hsep (str): Horizontal separation between header and data.
-        """
-        assert len(columns) == len(formatters)
-        self._columns = columns
-        self._formatters = formatters
-        self._vsep = vsep
-        self._hsep = hsep
-
-    def format_rows(self, rows):
-        """Format rows as a table and return a line generator.
-
-        Arguments:
-            rows (list(list(str))): Tabular data. Each row must be the same length as
-                                    `columns` passed to `__init__`.
-
-        Yields:
-            str: Each line of formatted tabular data.
-        """
-        max_width = [len(col) for col in self._columns]
-        formatted = []
-        for row in rows:
-            assert len(row) == len(self._columns)
-            formatted.append([])
-            for idx, (data, formatter) in enumerate(zip(row, self._formatters)):
-                data = formatter(data)
-                max_width[idx] = max(max_width[idx], len(data))
-                formatted[-1].append(data)
-
-        # build a format_str to space out the columns with separators using `max_width`
-        # the first column is left-aligned, and other fields are right-aligned.
-        format_str = self._vsep.join(
-            field % (width,)
-            for field, width in zip_longest(["%%-%ds"], max_width, fillvalue="%%%ds")
-        )
-        yield format_str % self._columns
-        yield self._hsep * (len(self._vsep) * (len(self._columns) - 1) + sum(max_width))
-        for row in formatted:
-            yield format_str % tuple(row)
 
 
 class ReduceManager(object):
@@ -196,7 +140,7 @@ class ReduceManager(object):
         self._static_timeout = static_timeout
         self._idle_delay = idle_delay
         self._idle_threshold = idle_threshold
-        self._stats = []
+        self._stats = ReductionStats()
 
     def update_timeout(self, results):
         """Tune idle/server timeout values based on actual duration of expected results.
@@ -257,8 +201,8 @@ class ReduceManager(object):
         maximize the chances of observing the expected crash.
 
         Arguments:
-            stats (object): Opaque stats object. Increment the ".iters" attribute with
-                            the number of iterations performed.
+            stats (list(object)): Opaque stats object. Increment the ".iters" attribute
+                                  with the number of iterations performed.
 
         Returns:
             tuple(int, int): Values for `repeat` and `min_crashes` resulting from
@@ -296,16 +240,17 @@ class ReduceManager(object):
                 except (TargetLaunchError, TargetLaunchTimeout) as exc:
                     if isinstance(exc, TargetLaunchError) and exc.report:
                         self.report([ReplayResult(exc.report, None, [], False)],
-                                    self.testcases)
+                                    self.testcases, self._stats.copy(stats))
                         exc.report.cleanup()
                     raise
                 try:
-                    stats.iters += self.ANALYSIS_ITERATIONS
+                    for stat in stats:
+                        stat.iters += self.ANALYSIS_ITERATIONS
                     self.update_timeout(results)
                     crashes = sum(x.count for x in results if x.expected)
                     self.report(
                         [result for result in results if not result.expected],
-                        self.testcases)
+                        self.testcases, self._stats.copy(stats))
                     if crashes and use_harness:
                         harness_crashes = crashes
                     elif crashes:
@@ -350,59 +295,13 @@ class ReduceManager(object):
                      "more" if harness_crashes > non_harness_crashes else "less")
         return (repeat, min_crashes)
 
-    def record_stat_milestone(self, name, elapsed=None, iters=None):
-        """Record reduction stats for a given point in time:
-
-        - name of the milestone (eg. init, strategy name completed)
-        - current testcase size (bytes)
-        - elapsed time (seconds)
-        - # of iterations
-
-        Arguments:
-            name (str): name of milestone
-            elapsed (float or None): seconds elapsed for period recorded
-            iters (int or None): # of iterations performed
+    def testcase_size(self):
+        """Calculate the current testcase size.
 
         Returns:
-            None
+            int: Current size of the testcase(s).
         """
-        testcase_size = sum(tc.data_size for tc in self.testcases)
-        self._stats.append(
-            ReductionStat(
-                name=name,
-                size=testcase_size,
-                duration=elapsed,
-                iterations=iters,
-            )
-        )
-
-    def time_stat_milestone(self, name):
-        """Time and record the period leading up to a reduction milestone.
-        eg. a strategy being run.
-
-        Arguments:
-            name (str): name of milestone
-
-        Returns:
-            context: Timer context for the period being recorded up to the milestone.
-
-                     Attributes:
-                        iters (int): # of iterations performed during period
-        """
-        # pylint: disable=no-self-argument
-        class _MilestoneTimer(object):
-            def __init__(sub):
-                sub._start = None
-                sub.iters = 0
-
-            def __enter__(sub):
-                sub._start = time()
-                return sub
-
-            def __exit__(sub, exc_type, exc_value, traceback):
-                elapsed = time() - sub._start
-                self.record_stat_milestone(name, elapsed=elapsed, iters=sub.iters)
-        return _MilestoneTimer()
+        return sum(tc.data_size for tc in self.testcases)
 
     def run(self, repeat=1, min_results=1):
         """Run testcase reduction.
@@ -418,14 +317,14 @@ class ReduceManager(object):
         any_success = False
         last_reports = None
         last_tried = None
-        self.record_stat_milestone("init")
-        # record total_stats overall so that any time missed by individual milestones
+        self._stats.add("init", self.testcase_size())
+        # record total stats overall so that any time missed by individual milestones
         # will still be included in the total
-        with self.time_stat_milestone("final") as total_stats:
+        with self._stats.add_timed("final", self.testcase_size) as total_stats:
             if self._use_analysis:
-                with self.time_stat_milestone("analysis") as stats:
-                    repeat, min_results = self.run_reliability_analysis(stats)
-                    total_stats.iters += stats.iters
+                with self._stats.add_timed("analysis", self.testcase_size) as stats:
+                    repeat, min_results = \
+                        self.run_reliability_analysis([stats, total_stats])
             self.target.relaunch = min(self._original_relaunch, repeat)
             LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
                      repeat, min_results, self.target.relaunch)
@@ -441,33 +340,24 @@ class ReduceManager(object):
                 if last_tried is not None:
                     strategy.update_tried(last_tried)
                     last_tried = None
-                with replay, strategy, self.time_stat_milestone(strategy.name) as stats:
-                    best_results = []
-                    try:
+                strategy_stats = self._stats.add_timed(strategy.name, self.testcase_size)
+                best_results = []
+                try:
+                    with replay, strategy, strategy_stats:
                         for reduction in strategy:
-                            stats.iters += 1
+                            strategy_stats.iters += 1
                             total_stats.iters += 1
                             keep_reduction = False
                             results = []
                             try:
-                                try:
-                                    # reduction is a new list of testcases to be
-                                    # replayed
-                                    results = replay.run(
-                                        reduction, repeat=repeat,
-                                        min_results=min_results,
-                                        idle_delay=self._idle_delay,
-                                        idle_threshold=self._idle_threshold)
-                                except (TargetLaunchError, TargetLaunchTimeout) as exc:
-                                    if (
-                                        isinstance(exc, TargetLaunchError)
-                                        and exc.report
-                                    ):
-                                        self.report(
-                                            [ReplayResult(exc.report, None, [], False)],
-                                            reduction)
-                                        exc.report.cleanup()
-                                    raise
+                                # reduction is a new list of testcases to be
+                                # replayed
+                                results = replay.run(
+                                    reduction,
+                                    repeat=repeat,
+                                    min_results=min_results,
+                                    idle_delay=self._idle_delay,
+                                    idle_threshold=self._idle_threshold)
                                 self.update_timeout(results)
                                 # get the first expected result (if any),
                                 #   and update the strategy
@@ -502,26 +392,43 @@ class ReduceManager(object):
                                     LOG.info("Attempt failed")
                                 # if the reduction found other crashes,
                                 #   report those immediately
-                                self.report(results, reduction)
-                            finally:  # noqa pylint: disable=bare-except
+                                self.report(
+                                    results, reduction,
+                                    self._stats.copy([strategy_stats, total_stats]))
+                            except TargetLaunchError as exc:
+                                if exc.report:
+                                    self.report(
+                                        [ReplayResult(exc.report, None, [], False)],
+                                        reduction,
+                                        self._stats.copy([strategy_stats, total_stats]))
+                                    exc.report.cleanup()
+                                raise
+                            finally:
                                 if not keep_reduction:
                                     for testcase in reduction:
                                         testcase.cleanup()
                                 for result in results:
                                     result.report.cleanup()
-                        last_reports = self.report(best_results, self.testcases)
-                    except KeyboardInterrupt:
-                        if best_results:
-                            last_reports = self.report(best_results, self.testcases)
-                            LOG.warning("Ctrl+C detected, best reduction so far "
-                                        "reported as %r", last_reports)
-                        raise
-                    finally:
-                        for result in best_results:
-                            result.report.cleanup()
-                    # if self._signature was already set, this will do nothing
-                    # otherwise, ensure the first found signature is used throughout
-                    self._signature = replay.signature
+
+                        # if self._signature was already set, this will do nothing
+                        # otherwise, ensure the first found signature is used throughout
+                        self._signature = replay.signature
+
+                    last_reports = self.report(
+                        best_results, self.testcases,
+                        self._stats.copy([total_stats]))
+
+                except KeyboardInterrupt:
+                    if best_results:
+                        last_reports = self.report(
+                            best_results, self.testcases,
+                            self._stats.copy([total_stats]))
+                        LOG.warning("Ctrl+C detected, best reduction so far "
+                                    "reported as %r", last_reports)
+                    raise
+                finally:
+                    for result in best_results:
+                        result.report.cleanup()
 
                 # store "tried" cache to pass to next strategy
                 last_tried = strategy.get_tried()
@@ -532,57 +439,22 @@ class ReduceManager(object):
                     change_quality(crash_id, FuzzManagerReporter.QUAL_REDUCED_RESULT)
 
         # log a summary of what was done.
-        def _format_duration(duration, total=0):
-            result = ""
-            if duration is not None:
-                if total == 0:
-                    percent = 0
-                else:
-                    percent = int(100 * duration / total)
-                # format H:M:S, and then remove all leading zeros with regex
-                result = re.sub("^[0:]*", "", strftime("%H:%M:%S", gmtime(duration)))
-                # if the result is all zeroes, ensure one zero is output
-                if not result:
-                    result = "0"
-                result += " (%3d%%)" % (percent,)
-            return result
-
-        def _format_number(number, total=0):
-            result = ""
-            if number is not None:
-                if total == 0:
-                    percent = 0
-                else:
-                    percent = int(100 * number / total)
-                result = "{:n} ({:3d}%)".format(number, percent)
-            return result
-
-        tabulator = _FormatTable(
-            ReductionStat._fields,
-            ReductionStat(
-                name=str,
-                # duration and iterations are % of total (last), size % of init (first)
-                duration=partial(_format_duration, total=self._stats[-1].duration),
-                iterations=partial(_format_number, total=self._stats[-1].iterations),
-                size=partial(_format_number, total=self._stats[0].size),
-            )
-        )
         LOG.info("Reduction summary:")
-        for row in tabulator.format_rows(self._stats):
-            LOG.info(row)
+        for line in self._stats.format_lines():
+            LOG.info(line)
 
         if any_success:
             return FuzzManagerReporter.QUAL_REDUCED_RESULT
         return FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
 
-    def report(self, results, testcases):
+    def report(self, results, testcases, stats=None):
         """Report results, either to FuzzManager or to filesystem.
 
         Arguments:
-            results (list(grizzly.replay.ReplayResult)):
-                Results observed during reduction.
-            testcases (list(grizzly.common.storage.TestCase)):
-                Testcases used to trigger results.
+            results (list(ReplayResult)): Results observed during reduction.
+            testcases (list(TestCase)): Testcases used to trigger results.
+            stats (ReductionStats): Statistics for reduction of these results.
+                                    (may be different than `self._stats`)
 
         Returns:
             list(*): List of return values from `reporter.submit()`.
@@ -598,6 +470,13 @@ class ReduceManager(object):
                 reporter = FilesystemReporter(
                     report_path=str(self._log_path / report_dir),
                     major_bucket=False)
+            # write reduction stats
+            if stats is not None:
+                report_path = Path(result.report.path)
+                with (report_path / "reduce_stats.txt").open("w") as out:
+                    for line in stats.format_lines():
+                        print(line, file=out)
+                (report_path / "reduce_stats.json").write_text(stats.json())
             # clone the tests so we can safely call purge_optional here for each report
             # (report.served may be different for non-expected or any-crash results)
             clones = [test.clone() for test in testcases]
