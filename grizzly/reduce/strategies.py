@@ -602,7 +602,8 @@ class _LithiumStrategy(Strategy, ABC):
             LOG.debug("Reduce queue: %r", reduce_queue)
             file = reduce_queue.pop(0)
             file_no += 1
-            LOG.info("Reducing %s (file %d/%d)", file, file_no,
+            LOG.info("[%s] Reducing %s (file %d/%d)", self.name,
+                     file.relative_to(self._testcase_root), file_no,
                      len(self._files_to_reduce))
             lithium_testcase = self.testcase_cls()  # pylint: disable=not-callable
             lithium_testcase.load(file)
@@ -625,7 +626,7 @@ class _LithiumStrategy(Strategy, ABC):
             for reduction in self._current_reducer:
                 reduction.dump()
                 testcases = TestCase.load(str(self._testcase_root), False)
-                LOG.info(self._current_reducer.description)
+                LOG.info("[%s] %s", self.name, self._current_reducer.description)
                 yield testcases
                 if self._current_feedback:
                     testcase_root_dirty = False
@@ -657,7 +658,7 @@ class _LithiumStrategy(Strategy, ABC):
             # need to yield once more to set this trimmed version to the current best
             # in ReduceManager
             testcases = TestCase.load(str(self._testcase_root), False)
-            LOG.info("final iteration triggered by purge_optional")
+            LOG.info("[%s] final iteration triggered by purge_optional", self.name)
             yield testcases
             assert self._current_feedback, "Purging unserved files broke the testcase."
 
@@ -899,7 +900,7 @@ class MinimizeTestcaseList(Strategy):
                 # need to yield once more to set this trimmed version to the current
                 # best in ReduceManager
                 testcases = TestCase.load(str(self._testcase_root), False)
-                LOG.info("final iteration triggered by purge_optional")
+                LOG.info("[%s] final iteration triggered by purge_optional", self.name)
                 yield testcases
                 testcases = None  # caller owns testcases now
                 assert self._current_feedback, \
