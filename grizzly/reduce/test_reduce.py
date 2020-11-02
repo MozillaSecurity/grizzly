@@ -75,6 +75,8 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
                   use_harness, result_harness):
     """test that analysis sets reasonable params"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value.__enter__.return_value
+    replayer.status.iteration = 11
     expected_iters = len(crashes) / 11
 
     def replay_run(_, **kw):
@@ -86,14 +88,14 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
             LOG.debug("interesting: %r", crashes[0])
             if crashes.pop(0):
                 log_path = tmp_path / (
-                    "crash%d_logs" % (replayer.return_value.run.call_count,)
+                    "crash%d_logs" % (replayer.run.call_count,)
                 )
                 log_path.mkdir(exist_ok=True)
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
                 results.append(ReplayResult(report, [["test.html"]], [], True))
         return results
-    replayer.return_value.__enter__.return_value.run.side_effect = replay_run
+    replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
     test.add_from_data("", "test.html")
@@ -115,7 +117,7 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
         for test in tests:
             test.cleanup()
 
-    assert replayer.return_value.__enter__.return_value.run.call_count == expected_iters
+    assert replayer.run.call_count == expected_iters
     assert repeat == expected_repeat
     assert min_crashes == expected_min_crashes
     assert mgr._use_harness == result_harness
@@ -300,6 +302,8 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
     """test ReduceManager, difference scenarios produce correct expected/other
     results"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
 
     def replay_run(testcases, **_):
         for test in testcases:
@@ -308,7 +312,7 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
             LOG.debug("interesting if " + interesting_str, contents)
             if detect_failure(contents):
                 log_path = tmp_path / (
-                    "crash%d_logs" % (replayer.return_value.run.call_count,)
+                    "crash%d_logs" % (replayer.run.call_count,)
                 )
                 log_path.mkdir()
                 expected = is_expected(contents)
@@ -319,7 +323,7 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
                 report = Report(str(log_path), "bin")
                 return [ReplayResult(report, [["test.html"]], [], expected)]
         return []
-    replayer.return_value.run.side_effect = replay_run
+    replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
     test.add_from_data(original, "test.html")
@@ -340,7 +344,7 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
         for test in tests:
             test.cleanup()
 
-    assert replayer.return_value.run.call_count == expected_run_calls
+    assert replayer.run.call_count == expected_run_calls
     expected_dirs = set()
     if n_reports:
         expected_dirs.add(log_path / "reports")
@@ -364,14 +368,16 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
 def test_quality_update(mocker, tmp_path):
     """test that the final result gets changed to Q0 with --fuzzmanager"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
 
     def replay_run(_, **_kw):
-        log_path = tmp_path / ("crash%d_logs" % (replayer.return_value.run.call_count,))
+        log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
         report = Report(str(log_path), "bin")
         return [ReplayResult(report, [["test.html"]], [], True)]
-    replayer.return_value.run.side_effect = replay_run
+    replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").touch()
     testcases = TestCase.load(str(tmp_path / "test.html"), False)
@@ -519,15 +525,17 @@ def test_timeout_update(mocker, tmp_path, durations, interesting, static_timeout
                         idle_input, idle_output, iter_input, iter_output, result):
     "timeout will be updated based on time to crash"
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
 
     def replay_run(_testcases, **_):
         LOG.debug("interesting true")
-        log_path = tmp_path / ("crash%d_logs" % (replayer.return_value.run.call_count,))
+        log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
         report = Report(str(log_path), "bin")
         return [ReplayResult(report, [["test.html"]], durations, interesting)]
-    replayer.return_value.run.side_effect = replay_run
+    replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
     test.add_from_data("123\n", "test.html")

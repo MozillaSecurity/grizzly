@@ -246,7 +246,7 @@ class ReduceManager(object):
                     raise
                 try:
                     for stat in stats:
-                        stat.iters += self.ANALYSIS_ITERATIONS
+                        stat.iters += replay.status.iteration
                     self.update_timeout(results)
                     crashes = sum(x.count for x in results if x.expected)
                     self.report(
@@ -347,8 +347,8 @@ class ReduceManager(object):
                 try:
                     with replay, strategy, strategy_stats:
                         for reduction in strategy:
-                            strategy_stats.iters += 1
-                            total_stats.iters += 1
+                            strategy_stats.iters += replay.status.iteration
+                            total_stats.iters += replay.status.iteration
                             keep_reduction = False
                             results = []
                             try:
