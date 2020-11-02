@@ -112,6 +112,8 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
               expected_run_calls, expected_results, expected_num_reports):
     """tests for the "list" strategy"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
 
     def replay_run(testcases, **_):
         required_seen = False
@@ -122,7 +124,7 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
                 required_seen = True
             elif contents == "123" and (required_seen or not required_first):
                 log_path = tmp_path / (
-                    "crash%d_logs" % (replayer.return_value.run.call_count,)
+                    "crash%d_logs" % (replayer.run.call_count,)
                 )
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
@@ -130,7 +132,7 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
                 return [ReplayResult(report, [["test.html"]] * len(testcases), [],
                                      True)]
         return []
-    replayer.return_value.run.side_effect = replay_run
+    replayer.run.side_effect = replay_run
 
     tests = []
     for data in test_data:
@@ -149,7 +151,7 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
         for test in tests:
             test.cleanup()
 
-    assert replayer.return_value.run.call_count == expected_run_calls
+    assert replayer.run.call_count == expected_run_calls
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/test.html")}
     assert tests == expected_results
@@ -435,6 +437,8 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
                     expected_results, expected_num_reports, strategies):
     """test for the "beautify" strategies"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
 
     def replay_run(testcases, **_):
         for test in testcases:
@@ -450,14 +454,14 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
                 interesting = "required" in contents or "'requi'+'red'" in contents
             if interesting:
                 log_path = tmp_path / (
-                    "crash%d_logs" % (replayer.return_value.run.call_count,)
+                    "crash%d_logs" % (replayer.run.call_count,)
                 )
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
                 return [ReplayResult(report, [[test_name]], [], True)]
         return []
-    replayer.return_value.run.side_effect = replay_run
+    replayer.run.side_effect = replay_run
 
     test = TestCase(test_name, None, "test-adapter")
     test.add_from_data(test_data, test_name)
@@ -474,7 +478,7 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
         for test in tests:
             test.cleanup()
 
-    assert replayer.return_value.run.call_count == expected_run_calls
+    assert replayer.run.call_count == expected_run_calls
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/" + test_name)}
     assert tests == expected_results
@@ -582,6 +586,8 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
                         purging_breaks):
     """test purging unserved files"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
 
     def replay_run(testcases, **_):
         # test.html and opt.html should always contain one line.
@@ -597,12 +603,12 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
                         return []
         if not has_any:
             return []
-        log_path = tmp_path / ("crash%d_logs" % (replayer.return_value.run.call_count,))
+        log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
         report = Report(str(log_path), "bin")
         return [ReplayResult(report, served.pop(0), [], True)]
-    replayer.return_value.run.side_effect = replay_run
+    replayer.run.side_effect = replay_run
 
     tests = []
     for testcase in test_data:
@@ -626,7 +632,7 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
         for test in tests:
             test.cleanup()
 
-    assert replayer.return_value.run.call_count == expected_run_calls
+    assert replayer.run.call_count == expected_run_calls
     if purging_breaks:
         return
     assert set(log_path.iterdir()) == {log_path / "reports"}
