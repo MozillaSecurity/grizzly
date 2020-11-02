@@ -4,14 +4,28 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """CLI argument parsing for Grizzly reduction.
 """
+from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
+import sys
 
+from ..args import SortingHelpFormatter
+from ..common.reporter import FuzzManagerReporter
 from ..replay.args import ReplayArgs
 from .strategies import DEFAULT_STRATEGIES, STRATEGIES
 
 
 LOG = getLogger(__name__)
+
+
+class _ArgparserExitReducerError(ArgumentParser):
+    def exit(self, status=0, message=None):
+        if message is not None:
+            print(message, file=sys.stderr)
+        if status != 0:
+            LOG.debug("overriding original argparse exit code (%d)", status)
+            status = FuzzManagerReporter.QUAL_REDUCER_ERROR
+        sys.exit(status)
 
 
 class ReduceArgs(ReplayArgs):
@@ -23,6 +37,9 @@ class ReduceArgs(ReplayArgs):
     def __init__(self):
         """Initialize argument parser.
         """
+        self.parser = _ArgparserExitReducerError(
+                formatter_class=SortingHelpFormatter,
+                conflict_handler="resolve")
         super().__init__()
 
         # these arguments have other defaults vs how they are defined in ReplayArgs

@@ -22,6 +22,7 @@ from ..common.utils import grz_tmp
 from ..main import configure_logging
 from ..replay import ReplayManager, ReplayResult
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
+from .exceptions import GrizzlyReduceBaseException, NotReproducible
 from .stats import ReductionStats
 from .strategies import STRATEGIES
 
@@ -266,7 +267,7 @@ class ReduceManager(object):
                 self._signature = replay.signature
 
         if harness_crashes == 0 and non_harness_crashes == 0:
-            raise RuntimeError("Did not reproduce during analysis")
+            raise NotReproducible("Did not reproduce during analysis")
 
         # should we use the harness? go with whichever crashed more
         self._use_harness = non_harness_crashes <= harness_crashes
@@ -325,6 +326,7 @@ class ReduceManager(object):
                 with self._stats.add_timed("analysis", self.testcase_size) as stats:
                     repeat, min_results = \
                         self.run_reliability_analysis([stats, total_stats])
+                any_success = True  # analysis ran and didn't raise
             self.target.relaunch = min(self._original_relaunch, repeat)
             LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
                      repeat, min_results, self.target.relaunch)
@@ -368,9 +370,8 @@ class ReduceManager(object):
                                 if success and not self._any_crash:
                                     served = first_expected.served
                                 strategy.update(success, served=served)
-                                if strategy.name == "check":
-                                    if any_success and not success:
-                                        raise RuntimeError("Reduction broke")
+                                if strategy.name == "check" and not success:
+                                    raise NotReproducible("Not reproducible at 'check'")
                                 any_success = any_success or success
                                 # if the reduction reproduced,
                                 #   update self.testcases (new best)
@@ -516,24 +517,29 @@ class ReduceManager(object):
         if args.rr:
             LOG.info("Running with RR")
 
-        if args.sig:
-            signature = CrashSignature.fromFile(args.sig)
-        else:
-            signature = None
-
-        LOG.debug("loading the TestCases")
-        try:
-            testcases = TestCase.load(args.input, args.prefs is None)
-            if not testcases:
-                raise TestCaseLoadFailure("Failed to load TestCases")
-        except TestCaseLoadFailure as exc:
-            LOG.error("Error: %s", str(exc))
-            return 1
-
         target = None
+        testcases = []
         tmp_prefs = None
         try:
+
+            if args.sig:
+                signature = CrashSignature.fromFile(args.sig)
+            else:
+                signature = None
+
+            LOG.debug("loading the TestCases")
+            try:
+                testcases = TestCase.load(args.input, args.prefs is None)
+                if not testcases:
+                    raise TestCaseLoadFailure("Failed to load TestCases")
+            except TestCaseLoadFailure as exc:
+                LOG.error("Error: %s", str(exc))
+                return FuzzManagerReporter.QUAL_NO_TESTCASE
+
             if args.no_harness:
+                if len(testcases) > 1:
+                    LOG.error("'--no-harness' cannot be used with multiple testcases")
+                    return FuzzManagerReporter.QUAL_REDUCER_ERROR
                 LOG.debug("--no-harness specified relaunch set to 1")
                 args.relaunch = 1
             args.repeat = max(args.min_crashes, args.repeat)
@@ -589,18 +595,19 @@ class ReduceManager(object):
                     static_timeout=args.static_timeout,
                     idle_delay=args.idle_delay,
                     idle_threshold=args.idle_threshold)
-                try:
-                    return_code = mgr.run(
-                        repeat=args.repeat,
-                        min_results=args.min_crashes
-                    )
-                except Exception:  # pylint: disable=broad-except
-                    LOG.exception("Exception during reduction!")
-                    return FuzzManagerReporter.QUAL_REDUCER_ERROR
+                return_code = mgr.run(repeat=args.repeat, min_results=args.min_crashes)
             return return_code
 
         except (KeyboardInterrupt, TargetLaunchError, TargetLaunchTimeout):
-            return 1
+            return FuzzManagerReporter.QUAL_REDUCER_ERROR
+
+        except GrizzlyReduceBaseException as exc:
+            LOG.error(exc.msg)
+            return exc.code
+
+        except Exception:  # noqa pylint: disable=broad-except
+            LOG.exception("Exception during reduction!")
+            return FuzzManagerReporter.QUAL_REDUCER_ERROR
 
         finally:
             LOG.warning("Shutting down...")

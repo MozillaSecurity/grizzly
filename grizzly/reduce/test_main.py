@@ -68,15 +68,16 @@ def test_args_02(tmp_path):
             TargetLaunchError("error", None), None, 9
         ),
         ("grizzly.reduce.core.ReduceManager.run", TargetLaunchTimeout, None, 9),
-        ("grizzly.reduce.core.load_target", KeyboardInterrupt, None, 1),
-        ("grizzly.reduce.core.TestCase.load", TestCaseLoadFailure, None, 1),
-        ("grizzly.reduce.core.TestCase.load", None, [], 1),
+        ("grizzly.reduce.core.load_target", KeyboardInterrupt, None, 9),
+        ("grizzly.reduce.core.TestCase.load", TestCaseLoadFailure, None, 7),
+        ("grizzly.reduce.core.TestCase.load", None, [], 7),
     ]
 )
 def test_main_01(mocker, patch_func, side_effect, return_value, result):
     """test ReduceManager.main() failure cases"""
     mocker.patch(
         "grizzly.reduce.core.FuzzManagerReporter", autospec=True,
+        QUAL_NO_TESTCASE=7,
         QUAL_REDUCER_ERROR=9)
     mocker.patch("grizzly.reduce.core.load_target", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)

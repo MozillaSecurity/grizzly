@@ -17,6 +17,7 @@ from ..common import TestCase, Report
 from ..replay import ReplayResult
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
+from .exceptions import NotReproducible
 
 
 LOG = getLogger(__name__)
@@ -151,7 +152,7 @@ ReproTestParams = namedtuple(
             reports=None,
             n_other=0,
             other_reports=None,
-            result=10,
+            result=NotReproducible,
         ),
         # reproduces, one strategy, no reduction works
         ReproTestParams(
@@ -330,7 +331,11 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
     try:
         mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, tests, strategies,
                             log_path, use_analysis=False)
-        assert mgr.run() == result
+        if isinstance(result, type) and issubclass(result, BaseException):
+            with raises(result):
+                mgr.run()
+        else:
+            assert mgr.run() == result
     finally:
         for test in tests:
             test.cleanup()
@@ -495,7 +500,7 @@ TimeoutTestParams = namedtuple(
             idle_output=30,
             iter_input=60,
             iter_output=60,
-            result=10,
+            result=NotReproducible,
         ),
         # test duration affects timeouts
         TimeoutTestParams(
@@ -541,7 +546,11 @@ def test_timeout_update(mocker, tmp_path, durations, interesting, static_timeout
         mgr.IDLE_DELAY_DURATION_MULTIPLIER = 1.5
         mgr.ITER_TIMEOUT_MIN = 10
         mgr.ITER_TIMEOUT_DURATION_MULTIPLIER = 2
-        assert mgr.run() == result
+        if isinstance(result, type) and issubclass(result, BaseException):
+            with raises(result):
+                mgr.run()
+        else:
+            assert mgr.run() == result
     finally:
         for test in tests:
             test.cleanup()
