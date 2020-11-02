@@ -447,7 +447,7 @@ class FuzzManagerReporter(Reporter):
     # testcase quality values
     QUAL_REDUCED_RESULT = 0  # the final reduced testcase
     QUAL_REDUCED_ORIGINAL = 1  # the original used for successful reduction
-    QUAL_REPRODUCIBLE = 4  # the testcase was reproducible
+    QUAL_REDUCING = 4  # the testcase is currently being reduced
     QUAL_UNREDUCED = 5  # haven't attempted reduction yet (1st attempt, generic reducer)
     QUAL_REQUEST_SPECIFIC = 6  # platform specific reduction requested (2nd attempt)
     QUAL_NO_TESTCASE = 7  # no testcase was detected (could be the "testcase" is not a testcase)
