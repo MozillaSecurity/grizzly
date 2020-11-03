@@ -457,41 +457,35 @@ def test_replay_17(mocker, tmp_path):
     """test ReplayManager.run() - multiple TestCases - successful repro - no harness"""
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    server.serve_path.side_effect = (
-        (SERVED_ALL, ["a.html"]),
-        (SERVED_ALL, ["b.html"]),
-        (SERVED_ALL, ["c.html"]),
-        (SERVED_ALL, ["a.html"]),
-        (SERVED_ALL, ["b.html"]),
-        (SERVED_ALL, ["c.html"]))
+    server.serve_path.return_value = (SERVED_ALL, ["a.html"])
     target = mocker.Mock(spec=Target, binary="fake_bin", launch_timeout=30, rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
+    # make the test semi-reliable and the part that repros inconsistent
     target.detect_failure.side_effect = (
         Target.RESULT_NONE,
-        Target.RESULT_NONE,
         Target.RESULT_FAILURE,
+        Target.RESULT_NONE,
+        Target.RESULT_NONE,
+        Target.RESULT_NONE,
         Target.RESULT_NONE,
         Target.RESULT_NONE,
         Target.RESULT_FAILURE)
     target.save_logs = _fake_save_logs
     testcases = [
         mocker.Mock(spec=TestCase, env_vars=[], landing_page="a.html", optional=[]),
-        mocker.Mock(spec=TestCase, env_vars=[], landing_page="b.html", optional=[]),
-        mocker.Mock(spec=TestCase, env_vars=[], landing_page="c.html", optional=[])]
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="a.html", optional=[]),
+        mocker.Mock(spec=TestCase, env_vars=[], landing_page="a.html", optional=[])]
     with ReplayManager([], server, target, use_harness=False) as replay:
         assert replay._harness is None
         results = replay.run(testcases, repeat=3, min_results=2)
         assert target.close.call_count == 1
-        assert target.launch.call_count == 6
+        assert target.launch.call_count == 8
         assert replay.status.ignored == 0
-        assert replay.status.iteration == 6
+        assert replay.status.iteration == 9
         assert replay.status.results == 2
     assert len(results) == 1
     assert len(results[0].served) == len(testcases)
-    assert results[0].served[0][0] == "a.html"
-    assert results[0].served[1][0] == "b.html"
-    assert results[0].served[2][0] == "c.html"
     assert len(results[0].durations) == len(testcases)
     assert all(x.dump.call_count == 1 for x in testcases)
 

@@ -167,12 +167,30 @@ class ReplayManager(object):
                           repeat, repeat * test_count, test_count)
                 repeat *= test_count
             durations = list()
+            reset_multi = False
             served = list()
             # perform iterations
             for _ in range(repeat):
-                # no harness mode is only supported when relaunching every iteration
-                assert self._harness is not None or self.target.closed
                 self.status.iteration += 1
+                # keep repeats in sync with tests parts (no-harness)
+                if reset_multi:
+                    if test_offset > 0:
+                        # this should only happen when a result is triggered by
+                        # a test part that is not the last in the sequence
+                        # since we have the result move back to the start of
+                        # the sequence of test parts
+                        LOG.info("Skipping test, part %d/%d (%d/%d)...",
+                                 test_offset + 1, test_count, self.status.iteration, repeat)
+                        test_offset = (test_offset + 1) % test_count
+                        continue
+                    reset_multi = False
+                # mode reset tracking (needed for no-harness)
+                if test_offset == 0:
+                    durations.clear()
+                    served.clear()
+                # no-harness mode is only supported when relaunching every iteration
+                assert self._harness is not None or self.target.closed
+                # (re)launch target
                 if self.target.closed:
                     if self._harness is None:
                         location = runner.location(
@@ -187,9 +205,6 @@ class ReplayManager(object):
                     runner.launch(location, env_mod=testcases[test_offset].env_vars)
                 self.target.step()
                 # run tests
-                if test_offset == 0:
-                    durations.clear()
-                    served.clear()
                 for test_idx in range(test_offset, test_count):
                     if test_count > 1:
                         LOG.info("Running test, part %d/%d (%d/%d)...",
@@ -238,7 +253,7 @@ class ReplayManager(object):
                     elif self._any_crash or self._signature.matches(report.crash_info):
                         self.status.count_result(short_sig)
                         if self._harness is None:
-                            test_offset = 0
+                            reset_multi = True
                         LOG.info("Result: %s (%s:%s)",
                                  short_sig, report.major[:8], report.minor[:8])
                         if sig_hash:
