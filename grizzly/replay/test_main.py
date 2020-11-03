@@ -138,14 +138,14 @@ def test_main_02(mocker):
         sig=None)
     # user abort
     fake_load_target.side_effect = KeyboardInterrupt
-    # coverage
+    # set for coverage
     args.rr = True
     args.valgrind = False
     assert ReplayManager.main(args) == 1
-    # invalid test case
     fake_load_target.reset_mock()
+    # invalid test case
     fake_tc.load.side_effect = TestCaseLoadFailure
-    # coverage
+    # set for coverage
     args.rr = False
     args.valgrind = True
     assert ReplayManager.main(args) == 1
@@ -154,11 +154,6 @@ def test_main_02(mocker):
     args.valgrind = False
     fake_tc.load.side_effect = None
     fake_tc.load.return_value = list()
-    assert ReplayManager.main(args) == 1
-    assert fake_load_target.call_count == 0
-    # multiple test cases with --no-harness
-    fake_load_target.reset_mock()
-    fake_tc.load.return_value = [mocker.Mock(), mocker.Mock()]
     assert ReplayManager.main(args) == 1
     assert fake_load_target.call_count == 0
 

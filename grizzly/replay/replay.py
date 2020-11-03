@@ -154,13 +154,24 @@ class ReplayManager(object):
         try:
             sig_hash = Report.calc_hash(self._signature) if self._signature else None
             test_count = len(testcases)
+            test_offset = 0
             LOG.debug("unpacking testcases (%d)...", test_count)
             for test in testcases:
                 dst_path = mkdtemp(prefix="tc_", dir=grz_tmp("serve"))
                 unpacked.append(dst_path)
                 test.dump(dst_path)
+            if self._harness is None and test_count > 1:
+                # multi-part test detected and no harness in-use
+                # repeat each individual test part 'repeat' times
+                LOG.debug("updating repeat (%d -> %d) for multi-part (%d) test",
+                          repeat, repeat * test_count, test_count)
+                repeat *= test_count
+            durations = list()
+            served = list()
             # perform iterations
             for _ in range(repeat):
+                # no harness mode is only supported when relaunching every iteration
+                assert self._harness is not None or self.target.closed
                 self.status.iteration += 1
                 if self.target.closed:
                     if self._harness is None:
@@ -173,19 +184,18 @@ class ReplayManager(object):
                             self.server.port,
                             close_after=self.target.rl_reset * test_count,
                             forced_close=self.target.forced_close)
-                    # The environment from the initial testcase is used because
-                    # a sequence of testcases is expected to be run without
-                    # relaunching the Target to match the functionality of
-                    # Grizzly. If this is not the case each TestCase should
-                    # be run individually.
-                    runner.launch(location, env_mod=testcases[0].env_vars)
+                    runner.launch(location, env_mod=testcases[test_offset].env_vars)
                 self.target.step()
-                LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
                 # run tests
-                durations = list()
-                served = list()
-                for test_idx in range(test_count):
-                    LOG.debug("running test: %d of %d", test_idx + 1, test_count)
+                if test_offset == 0:
+                    durations.clear()
+                    served.clear()
+                for test_idx in range(test_offset, test_count):
+                    if test_count > 1:
+                        LOG.info("Running test, part %d/%d (%d/%d)...",
+                                 test_idx + 1, test_count, self.status.iteration, repeat)
+                    else:
+                        LOG.info("Running test (%d/%d)...", self.status.iteration, repeat)
                     # update redirects
                     if self._harness is not None:
                         next_idx = (test_idx + 1) % test_count
@@ -206,6 +216,9 @@ class ReplayManager(object):
                         wait_for_callback=self._harness is None)
                     durations.append(run_result.duration)
                     served.append(run_result.served)
+                    if self._harness is None:
+                        test_offset = (test_offset + 1) % test_count
+                        break
                     if run_result.status != RunResult.COMPLETE:
                         break
                 # process run results
@@ -224,6 +237,8 @@ class ReplayManager(object):
                         LOG.info("Result: No crash detected")
                     elif self._any_crash or self._signature.matches(report.crash_info):
                         self.status.count_result(short_sig)
+                        if self._harness is None:
+                            test_offset = 0
                         LOG.info("Result: %s (%s:%s)",
                                  short_sig, report.major[:8], report.minor[:8])
                         if sig_hash:
@@ -355,9 +370,6 @@ class ReplayManager(object):
         target = None
         tmp_prefs = None
         try:
-            if args.no_harness and len(testcases) > 1:
-                LOG.error("'--no-harness' cannot be used with multiple testcases")
-                return 1
             repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, repeat)
             assert not args.no_harness or (args.no_harness and relaunch == 1)
