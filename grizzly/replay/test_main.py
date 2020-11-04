@@ -102,6 +102,7 @@ def test_main_01(mocker, tmp_path):
         repeat=4,
         rr=False,
         sig=str(tmp_path / "sig.json"),
+        test_index=None,
         timeout=10,
         valgrind=False)
     assert ReplayManager.main(args) == 0
@@ -135,15 +136,16 @@ def test_main_02(mocker):
         prefs=None,
         relaunch=1,
         repeat=1,
-        sig=None)
+        sig=None,
+        test_index=None)
     # user abort
     fake_load_target.side_effect = KeyboardInterrupt
     # coverage
     args.rr = True
     args.valgrind = False
     assert ReplayManager.main(args) == 1
-    # invalid test case
     fake_load_target.reset_mock()
+    # invalid test case
     fake_tc.load.side_effect = TestCaseLoadFailure
     # coverage
     args.rr = False
@@ -156,8 +158,14 @@ def test_main_02(mocker):
     fake_tc.load.return_value = list()
     assert ReplayManager.main(args) == 1
     assert fake_load_target.call_count == 0
-    # multiple test cases with --no-harness
     fake_load_target.reset_mock()
+    # multiple test cases with --no-harness
+    fake_tc.load.return_value = [mocker.Mock(), mocker.Mock()]
+    assert ReplayManager.main(args) == 1
+    assert fake_load_target.call_count == 0
+    fake_load_target.reset_mock()
+    # multiple test cases with invalid --test-index
+    args.test_index = 100
     fake_tc.load.return_value = [mocker.Mock(), mocker.Mock()]
     assert ReplayManager.main(args) == 1
     assert fake_load_target.call_count == 0
@@ -180,7 +188,8 @@ def test_main_03(mocker, tmp_path):
         prefs=None,
         relaunch=1,
         repeat=1,
-        sig=None)
+        sig=None,
+        test_index=None)
     # target launch error
     fake_logs = (tmp_path / "fake_report")
     fake_logs.mkdir()
@@ -194,17 +203,18 @@ def test_main_03(mocker, tmp_path):
     assert ReplayManager.main(args) == 1
 
 def test_main_04(mocker):
-    """test ReplayManager.main() loading GRZ_FORCED_CLOSE from test case"""
+    """test ReplayManager.main() loading GRZ_FORCED_CLOSE from selected test case"""
     mocker.patch("grizzly.replay.replay.Sapphire.serve_path", return_value=(None, ["x.html"]))
     target = mocker.Mock(spec=Target, forced_close=True, launch_timeout=30)
     load_target = mocker.patch("grizzly.replay.replay.load_target", autospec=True)
     load_target.return_value.return_value = target
-    testcase = mocker.Mock(
+    test0 = mocker.Mock(
         spec=TestCase,
         env_vars={"GRZ_FORCED_CLOSE": "0"},
         landing_page="x.html",
         optional=[])
-    mocker.patch("grizzly.replay.replay.TestCase.load", return_value=[testcase])
+    test1 = mocker.Mock(spec=TestCase)
+    mocker.patch("grizzly.replay.replay.TestCase.load", return_value=[test0, test1])
     # setup args
     args = mocker.Mock(
         fuzzmanager=False,
@@ -217,9 +227,13 @@ def test_main_04(mocker):
         relaunch=1,
         repeat=1,
         sig=None,
+        test_index=0,
         timeout=1)
     ReplayManager.main(args)
-    assert testcase.cleanup.call_count == 1
+    assert test0.cleanup.call_count == 1
+    assert test0.dump.call_count == 1
+    assert test1.cleanup.call_count == 1
+    assert test1.dump.call_count == 0
     assert target.cleanup.call_count == 1
     assert not target.forced_close
 
@@ -244,6 +258,7 @@ def test_main_05(mocker, tmp_path):
         relaunch=1,
         repeat=1,
         sig=None,
+        test_index=None,
         timeout=1)
     log_path = (tmp_path / "logs")
     args.logs = str(log_path)
