@@ -347,6 +347,16 @@ class ReplayManager(object):
             testcases = TestCase.load(args.input, args.prefs is None)
             if not testcases:
                 raise TestCaseLoadFailure("Failed to load TestCases")
+            if args.test_index is not None:
+                LOG.debug("using TestCase with index %d", args.test_index)
+                try:
+                    selected = testcases.pop(args.test_index)
+                except IndexError:
+                    raise TestCaseLoadFailure("Invalid '--test-index'") from None
+                finally:
+                    for test in testcases:
+                        test.cleanup()
+                testcases = [selected]
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return 1
@@ -356,7 +366,9 @@ class ReplayManager(object):
         tmp_prefs = None
         try:
             if args.no_harness and len(testcases) > 1:
-                LOG.error("'--no-harness' cannot be used with multiple testcases")
+                LOG.error(
+                    "'--no-harness' cannot be used with multiple testcases. " \
+                    "Perhaps '--test-index' can help.")
                 return 1
             repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, repeat)
