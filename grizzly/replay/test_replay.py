@@ -485,8 +485,9 @@ def test_replay_17(mocker, tmp_path):
         assert replay.status.iteration == 9
         assert replay.status.results == 2
     assert len(results) == 1
-    assert len(results[0].served) == len(testcases)
-    assert len(results[0].durations) == len(testcases)
+    # crash was found on via 2nd part
+    assert len(results[0].served) == 2
+    assert len(results[0].durations) == 2
     assert all(x.dump.call_count == 1 for x in testcases)
 
 def test_replay_18(mocker, tmp_path):

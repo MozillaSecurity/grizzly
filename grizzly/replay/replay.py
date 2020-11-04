@@ -166,30 +166,27 @@ class ReplayManager(object):
                 LOG.debug("updating repeat (%d -> %d) for multi-part (%d) test",
                           repeat, repeat * test_count, test_count)
                 repeat *= test_count
-            durations = list()
-            reset_multi = False
-            served = list()
+            # skip_forward is only used to find the beginning of a sequence of
+            # multi-part tests when no-harness mode is in use
+            skip_forward = False
             # perform iterations
             for _ in range(repeat):
                 self.status.iteration += 1
-                # keep repeats in sync with tests parts (no-harness)
-                if reset_multi:
-                    if test_offset > 0:
-                        # this should only happen when a result is triggered by
-                        # a test part that is not the last in the sequence
-                        # since we have the result move back to the start of
-                        # the sequence of test parts
-                        LOG.info("Skipping test, part %d/%d (%d/%d)...",
-                                 test_offset + 1, test_count, self.status.iteration, repeat)
-                        test_offset = (test_offset + 1) % test_count
-                        continue
-                    reset_multi = False
-                # mode reset tracking (needed for no-harness)
-                if test_offset == 0:
-                    durations.clear()
-                    served.clear()
-                # no-harness mode is only supported when relaunching every iteration
-                assert self._harness is not None or self.target.closed
+                if self._harness is None:
+                    test_offset = (self.status.iteration - 1) % test_count
+                    # skip remaining parts of test if crash was found (no-harness)
+                    if skip_forward:
+                        if test_offset > 0:
+                            # should only skip when a result is triggered by
+                            # a test part that is not the last in the sequence
+                            # since we have the result move forward to the start
+                            # of the sequence of test parts
+                            LOG.info("Skipping test, part %d/%d (%d/%d)...",
+                                     test_offset + 1, test_count, self.status.iteration, repeat)
+                            continue
+                        skip_forward = False
+                    # no-harness mode is only supported when relaunching every iteration
+                    assert self.target.closed
                 # (re)launch target
                 if self.target.closed:
                     if self._harness is None:
@@ -204,6 +201,10 @@ class ReplayManager(object):
                             forced_close=self.target.forced_close)
                     runner.launch(location, env_mod=testcases[test_offset].env_vars)
                 self.target.step()
+                # reset tracking
+                if test_offset == 0:
+                    durations = list()
+                    served = list()
                 # run tests
                 for test_idx in range(test_offset, test_count):
                     if test_count > 1:
@@ -231,10 +232,7 @@ class ReplayManager(object):
                         wait_for_callback=self._harness is None)
                     durations.append(run_result.duration)
                     served.append(run_result.served)
-                    if self._harness is None:
-                        test_offset = (test_offset + 1) % test_count
-                        break
-                    if run_result.status != RunResult.COMPLETE:
+                    if run_result.status != RunResult.COMPLETE or self._harness is None:
                         break
                 # process run results
                 if run_result.status == RunResult.FAILED:
@@ -252,8 +250,8 @@ class ReplayManager(object):
                         LOG.info("Result: No crash detected")
                     elif self._any_crash or self._signature.matches(report.crash_info):
                         self.status.count_result(short_sig)
-                        if self._harness is None:
-                            reset_multi = True
+                        if self._harness is None and test_count > 1:
+                            skip_forward = True
                         LOG.info("Result: %s (%s:%s)",
                                  short_sig, report.major[:8], report.minor[:8])
                         if sig_hash:
