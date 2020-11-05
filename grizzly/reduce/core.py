@@ -241,16 +241,21 @@ class ReduceManager(object):
                 LOG.info("Running for %d iterations to assess reliability %s harness.",
                          self.ANALYSIS_ITERATIONS,
                          "using" if use_harness else "without")
+                testcases = self.testcases
+                if not use_harness and len(testcases) > 1:
+                    LOG.warning("Only the last testcase of %d given will be used to "
+                                "assess reliability without harness.", len(testcases))
+                    testcases = [testcases[-1]]
                 try:
                     results = replay.run(
-                        self.testcases, repeat=self.ANALYSIS_ITERATIONS, min_results=1,
+                        testcases, repeat=self.ANALYSIS_ITERATIONS, min_results=1,
                         exit_early=False, idle_delay=self._idle_delay,
                         idle_threshold=self._idle_threshold,
                     )
                 except (TargetLaunchError, TargetLaunchTimeout) as exc:
                     if isinstance(exc, TargetLaunchError) and exc.report:
                         self.report([ReplayResult(exc.report, None, [], False)],
-                                    self.testcases, self._stats.copy(stats))
+                                    testcases, self._stats.copy(stats))
                         exc.report.cleanup()
                     raise
                 try:
@@ -264,7 +269,7 @@ class ReduceManager(object):
                                                 .createShortSignature())
                     self.report(
                         [result for result in results if not result.expected],
-                        self.testcases, self._stats.copy(stats))
+                        testcases, self._stats.copy(stats))
                     if crashes and use_harness:
                         harness_crashes = crashes
                     elif crashes:
@@ -290,6 +295,13 @@ class ReduceManager(object):
                 (non_harness_crashes - harness_crashes) / harness_crashes >= 0.5
             )
         )
+
+        if not self._use_harness and len(self.testcases) > 1:
+            LOG.warning("Last testcase without harness was selected, other %d "
+                        "testcases in the original will be ignored.",
+                        len(self.testcases) - 1)
+            while len(self.testcases) > 1:
+                self.testcases.pop(0).cleanup()
 
         crashes_percent = (
             harness_crashes if self._use_harness else non_harness_crashes
@@ -586,10 +598,23 @@ class ReduceManager(object):
                 LOG.error("Error: %s", str(exc))
                 return FuzzManagerReporter.QUAL_NO_TESTCASE
 
+            if args.test_index is not None or (args.no_harness and len(testcases) > 1):
+                if args.test_index is None:
+                    LOG.warning("'--no-harness' given with %d testcases and without "
+                                "'--test-index', defaulting to last testcase",
+                                len(testcases))
+                    args.test_index = -1
+                LOG.debug("using TestCase with index %d", args.test_index)
+                try:
+                    selected = testcases.pop(args.test_index)
+                except IndexError:
+                    LOG.error("Error: Invalid '--test-index'")
+                    return FuzzManagerReporter.QUAL_NO_TESTCASE
+                for test in testcases:
+                    test.cleanup()
+                testcases = [selected]
+
             if args.no_harness:
-                if len(testcases) > 1:
-                    LOG.error("'--no-harness' cannot be used with multiple testcases")
-                    return FuzzManagerReporter.QUAL_REDUCER_ERROR
                 LOG.debug("--no-harness specified relaunch set to 1")
                 args.relaunch = 1
             args.repeat = max(args.min_crashes, args.repeat)

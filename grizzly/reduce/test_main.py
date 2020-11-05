@@ -9,14 +9,17 @@ import json
 from logging import getLogger
 from pathlib import Path
 from shutil import rmtree
+from unittest.mock import Mock
 
 import pytest
 from pytest import raises
 
 from ..common import TestCaseLoadFailure
+from ..common.storage import TestCase
 from ..target import TargetLaunchError, TargetLaunchTimeout
 from .args import ReduceArgs
 from . import ReduceManager
+from .exceptions import GrizzlyReduceBaseException
 
 
 LOG = getLogger(__name__)
@@ -61,19 +64,27 @@ def test_args_02(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "patch_func, side_effect, return_value, result",
+    "patch_func, side_effect, return_value, kwargs, result",
     [
         (
             "grizzly.reduce.core.ReduceManager.run",
-            TargetLaunchError("error", None), None, 9
+            TargetLaunchError("error", None), None, {}, 9
         ),
-        ("grizzly.reduce.core.ReduceManager.run", TargetLaunchTimeout, None, 9),
-        ("grizzly.reduce.core.load_target", KeyboardInterrupt, None, 9),
-        ("grizzly.reduce.core.TestCase.load", TestCaseLoadFailure, None, 7),
-        ("grizzly.reduce.core.TestCase.load", None, [], 7),
+        ("grizzly.reduce.core.ReduceManager.run", TargetLaunchTimeout, None, {}, 9),
+        ("grizzly.reduce.core.load_target", KeyboardInterrupt, None, {}, 9),
+        (
+            "grizzly.reduce.core.load_target",
+            GrizzlyReduceBaseException(""), None, {}, 9
+        ),
+        ("grizzly.reduce.core.TestCase.load", TestCaseLoadFailure, None, {}, 7),
+        ("grizzly.reduce.core.TestCase.load", None, [], {}, 7),
+        (
+            "grizzly.reduce.core.TestCase.load", None, [Mock(), Mock()],
+            {"test_index": 100}, 7
+        ),
     ]
 )
-def test_main_01(mocker, patch_func, side_effect, return_value, result):
+def test_main_01(mocker, patch_func, side_effect, return_value, kwargs, result):
     """test ReduceManager.main() failure cases"""
     mocker.patch(
         "grizzly.reduce.core.FuzzManagerReporter", autospec=True,
@@ -90,10 +101,50 @@ def test_main_01(mocker, patch_func, side_effect, return_value, result):
         prefs=None,
         relaunch=1,
         repeat=1,
-        sig=None)
+        sig=None,
+        **kwargs)
 
     mocker.patch(patch_func, side_effect=side_effect, return_value=return_value)
     assert ReduceManager.main(args) == result
+
+
+@pytest.mark.parametrize("test_index", [0, 1, 2, -1, None])
+def test_main_02(mocker, test_index):
+    """test Reducemanager.main() testcases with --test-index"""
+    mocker.patch(
+        "grizzly.reduce.core.FuzzManagerReporter", autospec=True,
+        QUAL_NO_TESTCASE=7,
+        QUAL_REDUCER_ERROR=9)
+    mgr = mocker.patch("grizzly.reduce.core.ReduceManager", autospec=True)
+    mgr.return_value.run.return_value = 0
+    mocker.patch("grizzly.reduce.core.load_target", autospec=True)
+    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
+    mocker.patch("grizzly.reduce.core.TestCase", autospec=True)
+    # setup args
+    tests = [mocker.Mock(spec=TestCase) for _ in range(3)]
+    LOG.debug("test mocks: %r", tests)
+    args = mocker.Mock(
+        ignore=["fake"],
+        input="test",
+        min_crashes=1,
+        prefs=None,
+        relaunch=1,
+        repeat=1,
+        sig=None,
+        no_harness=True,
+        test_index=test_index)
+
+    mocker.patch("grizzly.reduce.core.TestCase.load", return_value=tests.copy())
+    assert ReduceManager.main(args) == 0
+    assert mgr.call_count == 1
+    assert mgr.return_value.run.call_count == 1
+    mgr_args, _ = mgr.call_args_list[0]
+    LOG.debug("call_args: %r", mgr_args)
+    mgr_testcases = mgr_args[3]
+    assert len(mgr_testcases) == 1
+    if test_index is None:
+        test_index = -1
+    assert mgr_testcases == [tests[test_index]]
 
 
 def test_force_closed(mocker, tmp_path):
@@ -117,6 +168,7 @@ def test_force_closed(mocker, tmp_path):
         prefs=None,
         repeat=1,
         sig=None,
+        test_index=None,
     )
     ReduceManager.main(args)
     assert load_target.return_value.return_value.forced_close is False
@@ -140,6 +192,7 @@ def test_testcase_prefs(mocker, tmp_path, result):
         prefs=None,
         repeat=1,
         sig=None,
+        test_index=None,
     )
     if result == "argprefs":
         (tmp_path / "args.js").write_text("argprefs")
