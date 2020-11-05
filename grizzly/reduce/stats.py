@@ -9,7 +9,7 @@ from functools import partial
 from itertools import zip_longest
 import json
 import re
-from time import gmtime, strftime, time
+from time import time
 
 
 ReductionStat = namedtuple(
@@ -80,7 +80,9 @@ def _format_duration(duration, total=0):
         else:
             percent = int(100 * duration / total)
         # format H:M:S, and then remove all leading zeros with regex
-        result = re.sub("^[0:]*", "", strftime("%H:%M:%S", gmtime(duration)))
+        minutes, seconds = divmod(int(duration), 60)
+        hours, minutes = divmod(minutes, 60)
+        result = re.sub("^[0:]*", "", "%d:%02d:%02d" % (hours, minutes, seconds))
         # if the result is all zeroes, ensure one zero is output
         if not result:
             result = "0"

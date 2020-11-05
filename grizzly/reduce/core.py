@@ -228,13 +228,14 @@ class ReduceManager(object):
         #   post-analysis.
         # We're only using repeat=1 instead of repeat=ITERATIONS so we can get feedback
         #   on every call to interesting.
-        self.target.relaunch = self.ANALYSIS_ITERATIONS
 
         for use_harness in [True, False]:
             if use_harness and not self._original_use_harness:
                 continue
             if not use_harness and harness_crashes >= self.ANALYSIS_ITERATIONS / 2:
                 continue
+
+            self.target.relaunch = self.ANALYSIS_ITERATIONS if use_harness else 1
 
             with ReplayManager(
                 self.ignore, self.server, self.target, any_crash=self._any_crash,
@@ -364,7 +365,10 @@ class ReduceManager(object):
                         self.run_reliability_analysis(stats)
                 self._stats.add_info("Analysis", reliability_info)
                 any_success = True  # analysis ran and didn't raise
-            self.target.relaunch = min(self._original_relaunch, repeat)
+            if self._use_harness:
+                self.target.relaunch = min(self._original_relaunch, repeat)
+            else:
+                self.target.relaunch = 1
             LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
                      repeat, min_results, self.target.relaunch)
             self._stats.add_info("Run Parameters", {
