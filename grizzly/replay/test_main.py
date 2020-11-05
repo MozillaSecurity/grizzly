@@ -77,7 +77,7 @@ def test_main_01(mocker, tmp_path):
     serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_target")
-    target = mocker.Mock(spec=Target, binary="bin", forced_close=True, launch_timeout=30)
+    target = mocker.Mock(spec=Target, binary="bin", forced_close=True, launch_timeout=30, rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.RESULT_NONE = Target.RESULT_NONE
@@ -97,6 +97,7 @@ def test_main_01(mocker, tmp_path):
         input=str(tmp_path / "test.html"),
         logs=str(log_path),
         min_crashes=2,
+        no_harness=True,
         prefs=str(tmp_path / "prefs.js"),
         relaunch=1,
         repeat=4,
@@ -173,9 +174,11 @@ def test_main_02(mocker):
 def test_main_03(mocker, tmp_path):
     """test ReplayManager.main() target exceptions"""
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
-    mocker.patch("grizzly.replay.replay.load_target", autospec=True)
     mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
     mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
+    target = mocker.Mock(spec=Target, forced_close=True, launch_timeout=30, rl_reset=1)
+    load_target = mocker.patch("grizzly.replay.replay.load_target", autospec=True)
+    load_target.return_value.return_value = target
     fake_tmp = (tmp_path / "grz_tmp")
     fake_tmp.mkdir()
     mocker.patch("grizzly.replay.replay.grz_tmp", autospec=True, return_value=str(fake_tmp))
@@ -205,7 +208,7 @@ def test_main_03(mocker, tmp_path):
 def test_main_04(mocker):
     """test ReplayManager.main() loading GRZ_FORCED_CLOSE from selected test case"""
     mocker.patch("grizzly.replay.replay.Sapphire.serve_path", return_value=(None, ["x.html"]))
-    target = mocker.Mock(spec=Target, forced_close=True, launch_timeout=30)
+    target = mocker.Mock(spec=Target, forced_close=True, launch_timeout=30, rl_reset=1)
     load_target = mocker.patch("grizzly.replay.replay.load_target", autospec=True)
     load_target.return_value.return_value = target
     test0 = mocker.Mock(
@@ -223,6 +226,7 @@ def test_main_04(mocker):
         ignore=None,
         input="test",
         min_crashes=1,
+        no_harness=True,
         prefs=None,
         relaunch=1,
         repeat=1,
@@ -242,7 +246,7 @@ def test_main_05(mocker, tmp_path):
     serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
     serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
-    target = mocker.Mock(spec=Target, binary="bin", forced_close=True, launch_timeout=30)
+    target = mocker.Mock(spec=Target, binary="bin", forced_close=True, launch_timeout=30, rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.save_logs = _fake_save_logs
@@ -255,6 +259,7 @@ def test_main_05(mocker, tmp_path):
         idle_threshold=0,
         ignore=None,
         min_crashes=1,
+        no_harness=True,
         relaunch=1,
         repeat=1,
         sig=None,

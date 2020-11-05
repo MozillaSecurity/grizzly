@@ -55,6 +55,9 @@ class ReplayManager(object):
         if use_harness:
             with open(self.HARNESS_FILE, "rb") as in_fp:
                 self._harness = in_fp.read()
+        else:
+            # target must relaunch every iteration when not using harness
+            assert target.rl_reset == 1
 
     def __enter__(self):
         return self
@@ -129,6 +132,7 @@ class ReplayManager(object):
         assert repeat > 0
         assert repeat >= min_results
         assert testcases
+        assert len(testcases) == 1 or self._harness is not None
 
         if self.status is not None:
             LOG.debug("clearing previous status data")
@@ -185,7 +189,11 @@ class ReplayManager(object):
                 durations = list()
                 served = list()
                 for test_idx in range(test_count):
-                    LOG.debug("running test: %d of %d", test_idx + 1, test_count)
+                    if test_count > 1:
+                        LOG.info("Running test, part %d/%d (%d/%d)...",
+                                 test_idx + 1, test_count, self.status.iteration, repeat)
+                    else:
+                        LOG.info("Running test (%d/%d)...", self.status.iteration, repeat)
                     # update redirects
                     if self._harness is not None:
                         next_idx = (test_idx + 1) % test_count
@@ -372,7 +380,6 @@ class ReplayManager(object):
                 return 1
             repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, repeat)
-            assert not args.no_harness or (args.no_harness and relaunch == 1)
             LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
                      repeat, args.min_crashes, relaunch)
             LOG.debug("initializing the Target")
