@@ -184,7 +184,6 @@ class ReplayManager(object):
                     # be run individually.
                     runner.launch(location, env_mod=testcases[0].env_vars)
                 self.target.step()
-                LOG.info("Performing replay (%d/%d)...", self.status.iteration, repeat)
                 # run tests
                 durations = list()
                 served = list()
