@@ -72,6 +72,17 @@ class _FormatTable(object):
             yield format_str % tuple(row)
 
 
+def format_seconds(duration):
+    # format H:M:S, and then remove all leading zeros with regex
+    minutes, seconds = divmod(int(duration), 60)
+    hours, minutes = divmod(minutes, 60)
+    result = re.sub("^[0:]*", "", "%d:%02d:%02d" % (hours, minutes, seconds))
+    # if the result is all zeroes, ensure one zero is output
+    if not result:
+        result = "0"
+    return result
+
+
 def _format_duration(duration, total=0):
     result = ""
     if duration is not None:
@@ -79,13 +90,7 @@ def _format_duration(duration, total=0):
             percent = 0
         else:
             percent = int(100 * duration / total)
-        # format H:M:S, and then remove all leading zeros with regex
-        minutes, seconds = divmod(int(duration), 60)
-        hours, minutes = divmod(minutes, 60)
-        result = re.sub("^[0:]*", "", "%d:%02d:%02d" % (hours, minutes, seconds))
-        # if the result is all zeroes, ensure one zero is output
-        if not result:
-            result = "0"
+        result = format_seconds(duration)
         result += " (%3d%%)" % (percent,)
     return result
 

@@ -11,6 +11,7 @@ from lithium.strategies import CheckOnly, \
     CollapseEmptyBraces as LithCollapseEmptyBraces, Minimize, Strategy as LithStrategy
 from lithium.testcases import TestcaseChar, TestcaseJsStr, TestcaseLine, \
     Testcase as LithTestcase
+from lithium.util import divide_rounding_up, largest_power_of_two_smaller_than
 
 from ...common.storage import TestCase
 from . import Strategy, _contains_dd
@@ -49,6 +50,46 @@ class _LithiumStrategy(Strategy, ABC):
         self.rescan_files_to_reduce()
         self._current_feedback = None
         self._current_served = None
+        self._possible_iters_remain = {}
+        for path in self._files_to_reduce:
+            test = self.testcase_cls()  # pylint: disable=not-callable
+            test.load(path)
+            self._possible_iters_remain[path] = self._possible_iters(len(test))
+        self._testcase_root_dirty = False
+
+    @classmethod
+    def _possible_iters(cls, length):
+        """Calculate iterations that might possibly be performed for this testcase.
+
+        Arguments:
+            length (int): Length of the current testcase.
+
+        Returns:
+            int: Total iterations for reducing this path.
+        """
+        chunk_size = largest_power_of_two_smaller_than(length)
+        return cls._chunk_iters(length, chunk_size * 2) - 1
+
+    @staticmethod
+    def _chunk_iters(length, chunk_size):
+        """How many iterations does this chunk represent (recursively)?
+        ie. a chunk of length 2 and chunk_size 2 actually represents 4
+            iterations (2 + 1 + 1)
+
+        Arguments:
+            length (int): actual length of the chunk
+            chunk_size (int): chunk_size
+
+        Returns:
+            int: Total iterations from this chunk.
+        """
+        if length == chunk_size:
+            return chunk_size * 3 - 1  # *3 not *2 because last chunk_size=1 repeats
+        result = 2 * length  # chunk_size = 1 (repeated)
+        while chunk_size > 1:
+            result += divide_rounding_up(length, chunk_size)
+            chunk_size /= 2
+        return result
 
     def rescan_files_to_reduce(self):
         """Repopulate the private `files_to_reduce` attribute by scanning the testcase
@@ -62,6 +103,10 @@ class _LithiumStrategy(Strategy, ABC):
             if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
                 if self._all_files or _contains_dd(path):
                     self._files_to_reduce.append(path)
+        # any files in possible_iters that don't exist anymore can be removed
+        removed = set(self._possible_iters_remain) - set(self._files_to_reduce)
+        for key in removed:
+            del self._possible_iters_remain[key]
 
     @classmethod
     def sanity_check_cls_attrs(cls):
@@ -93,6 +138,16 @@ class _LithiumStrategy(Strategy, ABC):
         self._current_feedback = success
         self._current_served = served
 
+    def __len__(self):
+        """Estimate the maximum # of attempts this strategy might take to finish.
+        ie. The number of times `__iter__` will yield.
+
+        Returns:
+            int: estimate of the # of attempts remaining.
+        """
+        return sum(self._possible_iters_remain.values()) \
+            + int(self._testcase_root_dirty)
+
     def __iter__(self):
         """Iterate over potential reductions of testcases according to this strategy.
 
@@ -110,7 +165,7 @@ class _LithiumStrategy(Strategy, ABC):
         reduce_queue.sort()  # not necessary, but helps make tests more predictable
         # indicates that self._testcase_root contains changes that haven't been yielded
         # (if iteration ends, changes would be lost)
-        testcase_root_dirty = False
+        self._testcase_root_dirty = False
         while reduce_queue:
             LOG.debug("Reduce queue: %r", reduce_queue)
             file = reduce_queue.pop(0)
@@ -122,6 +177,7 @@ class _LithiumStrategy(Strategy, ABC):
             lithium_testcase.load(file)
             # pylint: disable=not-callable
             self._current_reducer = self.strategy_cls().reduce(lithium_testcase)
+            testcase_length = len(lithium_testcase)
 
             # populate the lithium strategy "tried" cache
             # use all cache values where all hashes other than the current file match
@@ -142,9 +198,17 @@ class _LithiumStrategy(Strategy, ABC):
                 LOG.info("[%s] %s", self.name, self._current_reducer.description)
                 yield testcases
                 if self._current_feedback:
-                    testcase_root_dirty = False
+                    self._testcase_root_dirty = False
+                    # this is imperfect, but we only need an estimate anyways
+                    removed = chunk_size = max(1, testcase_length - len(reduction))
+                    if chunk_size > 1:
+                        chunk_size = largest_power_of_two_smaller_than(chunk_size) * 2
+                    self._possible_iters_remain[file] -= \
+                        self._chunk_iters(removed, chunk_size)
+                    testcase_length = len(reduction)
                 else:
                     self._tried.add(self._calculate_testcase_hash())
+                    self._possible_iters_remain[file] -= 1
                 if self._current_feedback and self._current_served is not None:
                     testcases = TestCase.load(str(self._testcase_root), True)
                     try:
@@ -158,7 +222,8 @@ class _LithiumStrategy(Strategy, ABC):
                     LOG.debug("files being reduced after: %r", self._files_to_reduce)
                     files_to_reduce = set(self._files_to_reduce)
                     reduce_queue = list(sorted(set(reduce_queue) & files_to_reduce))
-                    testcase_root_dirty = len(self._files_to_reduce) != num_files_before
+                    self._testcase_root_dirty = \
+                        len(self._files_to_reduce) != num_files_before
                     if file not in files_to_reduce:
                         # current reduction was for a purged file
                         break
@@ -166,7 +231,8 @@ class _LithiumStrategy(Strategy, ABC):
                 # write out the best found testcase
                 self._current_reducer.testcase.dump()
             self._current_reducer = None
-        if testcase_root_dirty:
+            self._possible_iters_remain.pop(file, None)
+        if self._testcase_root_dirty:
             # purging unserved files enabled us to exit early from the loop.
             # need to yield once more to set this trimmed version to the current best
             # in ReduceManager
@@ -174,6 +240,7 @@ class _LithiumStrategy(Strategy, ABC):
             LOG.info("[%s] final iteration triggered by purge_optional", self.name)
             yield testcases
             assert self._current_feedback, "Purging unserved files broke the testcase."
+        self._testcase_root_dirty = False
 
 
 class Check(_LithiumStrategy):
@@ -191,6 +258,14 @@ class Check(_LithiumStrategy):
         # trim files_to_reduce, for check we don't need to run on every file
         # just once per Grizzly TestCase set is enough.
         self._files_to_reduce = self._files_to_reduce[:1]
+        self._remain = 1
+
+    def __len__(self):
+        return self._remain
+
+    def __iter__(self):
+        self._remain = 0
+        yield from super().__iter__()
 
 
 class CollapseEmptyBraces(_LithiumStrategy):
@@ -204,6 +279,10 @@ class CollapseEmptyBraces(_LithiumStrategy):
     name = "collapsebraces"
     strategy_cls = LithCollapseEmptyBraces
     testcase_cls = TestcaseLine
+
+    @classmethod
+    def _possible_iters(cls, path):
+        return super()._possible_iters(path) * 2
 
 
 class MinimizeChars(_LithiumStrategy):

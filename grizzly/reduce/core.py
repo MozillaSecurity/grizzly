@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
+from time import time
 
 from Collector.Collector import Collector
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -25,7 +26,7 @@ from ..main import configure_logging
 from ..replay import ReplayManager, ReplayResult
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
-from .stats import ReductionStats
+from .stats import ReductionStats, format_seconds
 from .strategies import STRATEGIES
 
 
@@ -88,6 +89,8 @@ class ReduceManager(object):
     ANALYSIS_TARGET_PROBABILITY = 0.95
     # to see the worst case, run the `repeat` calculation in run_reliability_analysis
     # using `crashes_percent = 1.0/ANALYSIS_ITERATIONS`
+
+    ESTIMATE_INTERVAL = 300
 
     IDLE_DELAY_MIN = 10
     IDLE_DELAY_DURATION_MULTIPLIER = 1.5
@@ -340,6 +343,13 @@ class ReduceManager(object):
         """
         return sum(tc.data_size for tc in self.testcases)
 
+    def _estimate_remaining(self, current_strategy):
+        result = 0
+        for rem in self.strategies[current_strategy + 1:]:
+            with STRATEGIES[rem](self.testcases, self._all_files) as inst:
+                result += len(inst)
+        return result
+
     def run(self, repeat=1, min_results=1):
         """Run testcase reduction.
 
@@ -355,6 +365,7 @@ class ReduceManager(object):
         sig_given = self._signature is not None
         last_reports = None
         last_tried = None
+        last_estimate = 0
         self._stats.add("init", self.testcase_size())
         # record total stats overall so that any time missed by individual milestones
         # will still be included in the total
@@ -377,6 +388,7 @@ class ReduceManager(object):
                 "Relaunch": self.target.relaunch,
                 "Harness": self._use_harness,
             })
+
             for strategy_no, strategy in enumerate(self.strategies):
                 LOG.info("")
                 LOG.info("Using strategy %s (%d/%d)", strategy, strategy_no + 1,
@@ -389,11 +401,22 @@ class ReduceManager(object):
                 if last_tried is not None:
                     strategy.update_tried(last_tried)
                     last_tried = None
+
                 strategy_stats = total_stats.add_timed(strategy.name)
                 best_results = []
                 try:
                     with replay, strategy, strategy_stats:
                         for reduction in strategy:
+                            # show worst-case estimate
+                            now = time()
+                            if now - last_estimate > self.ESTIMATE_INTERVAL:
+                                # estimate the remaining attempts in following rounds
+                                remaining_estimate = len(strategy) \
+                                    + self._estimate_remaining(strategy_no)
+                                LOG.info("Estimate remaining time: %s", format_seconds(
+                                    remaining_estimate * self.server.timeout
+                                ))
+                                last_estimate = now
                             keep_reduction = False
                             results = []
                             try:
