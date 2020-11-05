@@ -151,7 +151,8 @@ class Strategy(ABC):
         SHA-512 and digested to bytes (`hashlib.sha512(testcase).digest()`)
 
         Arguments:
-            tried (iterable(tuple(tuple(str, str)))): Set of already tried testcase hashes.
+            tried (iterable(tuple(tuple(str, str)))): Set of already tried testcase
+                                                      hashes.
 
         Returns:
             None
@@ -508,7 +509,7 @@ class _BeautifyStrategy(Strategy, ABC):
                 lith_tc.dump(file)
                 continue
 
-            yield TestCase.load(str(self._testcase_root), False)
+            yield TestCase.load(str(self._testcase_root), True)
 
             assert self._current_feedback is not None, "No feedback for last iteration"
             if self._current_feedback:
@@ -639,7 +640,7 @@ class _LithiumStrategy(Strategy, ABC):
 
             for reduction in self._current_reducer:
                 reduction.dump()
-                testcases = TestCase.load(str(self._testcase_root), False)
+                testcases = TestCase.load(str(self._testcase_root), True)
                 LOG.info("[%s] %s", self.name, self._current_reducer.description)
                 yield testcases
                 if self._current_feedback:
@@ -647,7 +648,7 @@ class _LithiumStrategy(Strategy, ABC):
                 else:
                     self._tried.add(self._calculate_testcase_hash())
                 if self._current_feedback and self._current_served is not None:
-                    testcases = TestCase.load(str(self._testcase_root), False)
+                    testcases = TestCase.load(str(self._testcase_root), True)
                     try:
                         self.purge_unserved(testcases, self._current_served)
                     finally:
@@ -671,7 +672,7 @@ class _LithiumStrategy(Strategy, ABC):
             # purging unserved files enabled us to exit early from the loop.
             # need to yield once more to set this trimmed version to the current best
             # in ReduceManager
-            testcases = TestCase.load(str(self._testcase_root), False)
+            testcases = TestCase.load(str(self._testcase_root), True)
             LOG.info("[%s] final iteration triggered by purge_optional", self.name)
             yield testcases
             assert self._current_feedback, "Purging unserved files broke the testcase."
@@ -863,7 +864,7 @@ class MinimizeTestcaseList(Strategy):
         idx = 0
         testcases = None
         try:
-            testcases = TestCase.load(str(self._testcase_root), False)
+            testcases = TestCase.load(str(self._testcase_root), True)
             n_testcases = len(testcases)
             # indicates that self._testcase_root contains changes that haven't been
             # yielded (if iteration ends, changes would be lost)
@@ -878,7 +879,7 @@ class MinimizeTestcaseList(Strategy):
                     break
                 # try removing the testcase at idx
                 if testcases is None:
-                    testcases = TestCase.load(str(self._testcase_root), False)
+                    testcases = TestCase.load(str(self._testcase_root), True)
                     assert n_testcases == len(testcases)
                 testcases.pop(idx).cleanup()
                 yield testcases
@@ -889,7 +890,7 @@ class MinimizeTestcaseList(Strategy):
                     testcase_root_dirty = False
                     LOG.info("Removing testcase %d/%d was successful!", idx + 1,
                              n_testcases)
-                    testcases = TestCase.load(str(self._testcase_root), False)
+                    testcases = TestCase.load(str(self._testcase_root), True)
                     try:
                         # remove the actual testcase we were reducing
                         testcases.pop(idx).cleanup()
@@ -901,7 +902,7 @@ class MinimizeTestcaseList(Strategy):
                     finally:
                         for testcase in testcases:
                             testcase.cleanup()
-                    testcases = TestCase.load(str(self._testcase_root), False)
+                    testcases = TestCase.load(str(self._testcase_root), True)
                     n_testcases = len(testcases)
                 else:
                     LOG.info("No result without testcase %d/%d", idx + 1, n_testcases)
@@ -913,7 +914,7 @@ class MinimizeTestcaseList(Strategy):
                 # purging unserved files enabled us to exit early from the loop.
                 # need to yield once more to set this trimmed version to the current
                 # best in ReduceManager
-                testcases = TestCase.load(str(self._testcase_root), False)
+                testcases = TestCase.load(str(self._testcase_root), True)
                 LOG.info("[%s] final iteration triggered by purge_optional", self.name)
                 yield testcases
                 testcases = None  # caller owns testcases now

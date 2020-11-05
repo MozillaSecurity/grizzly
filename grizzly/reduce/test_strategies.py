@@ -12,7 +12,7 @@ import pytest
 from pytest import raises
 
 from sapphire import Sapphire
-from ..common import TestCase, Report
+from ..common import TestCase, TestFile, Report
 from ..replay import ReplayResult
 from ..target import Target
 from .strategies import _load_strategies, HAVE_CSSBEAUTIFIER, HAVE_JSBEAUTIFIER
@@ -155,7 +155,7 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/test.html")}
     assert tests == expected_results
-    assert len(list((log_path / "reports").iterdir())) == expected_num_reports, \
+    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, \
         list((log_path / "reports").iterdir())
 
 
@@ -403,7 +403,8 @@ BeautifyStrategyParams = namedtuple(
         # test already beautified css (beautify does nothing)
         pytest.param(
             *BeautifyStrategyParams(
-                test_data="<style>\n*,\n#a {\n  fluff: 0;\n  required: 1\n}\n</style>\n",
+                test_data=(
+                    "<style>\n*,\n#a {\n  fluff: 0;\n  required: 1\n}\n</style>\n"),
                 test_name="test.html",
                 expected_run_calls=1,
                 expected_results={
@@ -415,15 +416,19 @@ BeautifyStrategyParams = namedtuple(
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
                                      reason="cssbeautifier required"),
         ),
-        # test almost beautified css (any change breaks test, beautify only removes an extra blank line,
-        # so `lines` will have already tried it, and this will hit the cache)
+        # test almost beautified css (any change breaks test, beautify only removes an
+        # extra blank line so `lines` will have already tried it, and this will hit the
+        # cache)
         pytest.param(
             *BeautifyStrategyParams(
-                test_data="<style nochange=true>\n/*DDBEGIN*/\n\nrequisite {\n  required: 1\n}\n/*DDEND*/\n</style>\n",
+                test_data=(
+                    "<style nochange=true>\n/*DDBEGIN*/\n\nrequisite {\n"
+                    "  required: 1\n}\n/*DDEND*/\n</style>\n"),
                 test_name="test.html",
                 expected_run_calls=8,
                 expected_results={
-                    "<style nochange=true>\n/*DDBEGIN*/\n\nrequisite {\n  required: 1\n}\n/*DDEND*/\n</style>\n"
+                    "<style nochange=true>\n/*DDBEGIN*/\n\nrequisite {\n"
+                    "  required: 1\n}\n/*DDEND*/\n</style>\n"
                 },
                 expected_num_reports=2,
                 strategies=["check", "lines", "cssbeautify"],
@@ -447,8 +452,10 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
                 LOG.debug("interesting if test unchanged")
                 interesting = test_data == contents
             elif "requisite" in test_data:
-                LOG.debug("interesting if ('requisite' and 'required') or 'requi'+'red' in %r", contents)
-                interesting = ("required" in contents and "requisite" in contents) or "'requi'+'red'" in contents
+                LOG.debug("interesting if ('requisite' and 'required') or "
+                          "'requi'+'red' in %r", contents)
+                interesting = ("required" in contents and "requisite" in contents) \
+                    or "'requi'+'red'" in contents
             else:
                 LOG.debug("interesting if 'required' or 'requi'+'red' in %r", contents)
                 interesting = "required" in contents or "'requi'+'red'" in contents
@@ -482,7 +489,7 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/" + test_name)}
     assert tests == expected_results
-    assert len(list((log_path / "reports").iterdir())) == expected_num_reports, \
+    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, \
         list((log_path / "reports").iterdir())
 
 
@@ -615,6 +622,7 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
         test = TestCase("test.html", None, "test-adapter")
         for filename, data in testcase.items():
             test.add_from_data(data, filename)
+        test.add_meta(TestFile.from_data("12345", "prefs.js"))
         tests.append(test)
     log_path = tmp_path / "logs"
 
@@ -638,5 +646,14 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/*.html")}
     assert tests == expected_results
-    assert len(list((log_path / "reports").iterdir())) == expected_num_reports, \
+    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, \
         list((log_path / "reports").iterdir())
+    # each input has 2 files, so if there are more than 2 reports, the result has 2
+    # testcases
+    assert (
+        sum(1 for _ in log_path.glob("reports/*-*/prefs.js"))
+        == (expected_num_reports + 1) // 2
+    ), "prefs.js missing in %r" % [
+        str(p.relative_to(log_path)) for p in log_path.glob("reports/**/*")
+        if p.is_file()
+    ]
