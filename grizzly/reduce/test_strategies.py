@@ -15,7 +15,8 @@ from sapphire import Sapphire
 from ..common import TestCase, TestFile, Report
 from ..replay import ReplayResult
 from ..target import Target
-from .strategies import _load_strategies, HAVE_CSSBEAUTIFIER, HAVE_JSBEAUTIFIER
+from .strategies import _load_strategies
+from .strategies.beautify import HAVE_CSSBEAUTIFIER, HAVE_JSBEAUTIFIER
 from . import ReduceManager
 
 
