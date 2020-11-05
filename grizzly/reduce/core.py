@@ -81,7 +81,9 @@ class ReduceManager(object):
                                                            testcases to reduce.
     """
     ANALYSIS_ITERATIONS = 11  # number of iterations to analyze
-    ANALYSIS_MIN_CRASHES = 2  # --min-crashes value when analysis is used
+    # --min-crashes value when analysis is used and reliability is less than perfect
+    ANALYSIS_MIN_CRASHES = 1
+    ANALYSIS_PERFECT_MIN_CRASHES = 2  # --min-crashes when reliability is perfect
     # probability that successful reduction will observe the crash
     ANALYSIS_TARGET_PROBABILITY = 0.95
     # to see the worst case, run the `repeat` calculation in run_reliability_analysis
@@ -229,7 +231,7 @@ class ReduceManager(object):
         for use_harness in [True, False]:
             if use_harness and not self._original_use_harness:
                 continue
-            if not use_harness and harness_crashes == self.ANALYSIS_ITERATIONS:
+            if not use_harness and harness_crashes >= self.ANALYSIS_ITERATIONS / 2:
                 continue
 
             with ReplayManager(
@@ -281,24 +283,31 @@ class ReduceManager(object):
         if harness_crashes == 0 and non_harness_crashes == 0:
             raise NotReproducible("Did not reproduce during analysis")
 
-        # should we use the harness? go with whichever crashed more
-        self._use_harness = non_harness_crashes <= harness_crashes
+        # should we use the harness? go with harness unless no-harness crashed 50% more
+        self._use_harness = not (
+            non_harness_crashes > harness_crashes and (
+                harness_crashes == 0 or
+                (non_harness_crashes - harness_crashes) / harness_crashes >= 0.5
+            )
+        )
 
-        # this is max 99.9% to avoid domain errors in the calculation below
-        crashes_percent = min(
-            1.0 * max(non_harness_crashes, harness_crashes) / self.ANALYSIS_ITERATIONS,
-            0.999)
+        crashes_percent = (
+            harness_crashes if self._use_harness else non_harness_crashes
+        ) / self.ANALYSIS_ITERATIONS
 
         # adjust repeat/min-crashes depending on how reliable the testcase was
-        min_crashes = self.ANALYSIS_MIN_CRASHES
-        repeat = int(
-            ceil(log(1 - self.ANALYSIS_TARGET_PROBABILITY, 1 - crashes_percent))
-            * self.ANALYSIS_MIN_CRASHES)
+        if abs(crashes_percent - 1) < 0.01:
+            min_crashes = self.ANALYSIS_PERFECT_MIN_CRASHES
+        else:
+            min_crashes = self.ANALYSIS_MIN_CRASHES
+        # crashes_percent is max 99.9% to avoid domain errors
+        repeat = int(ceil(log(1 - self.ANALYSIS_TARGET_PROBABILITY,
+                              1 - min(crashes_percent, 0.9999))) * min_crashes)
 
         LOG.info("Analysis results:")
-        if harness_crashes == self.ANALYSIS_ITERATIONS:
-            LOG.info("* testcase was perfectly reliable with the harness (--no-harness "
-                     "not assessed)")
+        if harness_crashes >= self.ANALYSIS_ITERATIONS / 2:
+            LOG.info("* testcase was better than 50% reliable with the harness "
+                     "(--no-harness not assessed)")
         elif harness_crashes == non_harness_crashes:
             LOG.info("* testcase was equally reliable with/without the harness")
         elif not self._original_use_harness:
