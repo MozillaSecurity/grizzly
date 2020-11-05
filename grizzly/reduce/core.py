@@ -98,7 +98,7 @@ class ReduceManager(object):
                  tool=None, report_to_fuzzmanager=False, any_crash=False,
                  signature=None, use_harness=True, use_analysis=True,
                  static_timeout=False, idle_delay=0, idle_threshold=0,
-                 signature_desc=None):
+                 signature_desc=None, all_files=True):
         """Initialize reduction manager. Many arguments are common with `ReplayManager`.
 
         Args:
@@ -125,6 +125,7 @@ class ReduceManager(object):
                                    less time.
             idle_delay (int): Number of seconds to wait before polling for idle.
             idle_threshold (int): CPU usage threshold to mark the process as idle.
+            all_files (bool): Reduce all files, not just those with DDBEGIN/END.
         """
         self.ignore = ignore
         self.server = server
@@ -132,6 +133,7 @@ class ReduceManager(object):
         self.target = target
         self.testcases = testcases
         self._any_crash = any_crash
+        self._all_files = all_files
         # only coerce `log_path` to `Path` if it's a string
         # this caution is only necessary in python3.5 where pytest uses
         # pathlib2 rather than pathlib
@@ -379,7 +381,7 @@ class ReduceManager(object):
                                        any_crash=self._any_crash,
                                        signature=self._signature,
                                        use_harness=self._use_harness)
-                strategy = STRATEGIES[strategy](self.testcases)
+                strategy = STRATEGIES[strategy](self.testcases, self._all_files)
                 if last_tried is not None:
                     strategy.update_tried(last_tried)
                     last_tried = None
@@ -663,6 +665,7 @@ class ReduceManager(object):
                     args.logs,
                     tool=args.tool,
                     report_to_fuzzmanager=args.fuzzmanager,
+                    all_files=args.all_files,
                     any_crash=args.any_crash,
                     signature=signature,
                     signature_desc=signature_desc,

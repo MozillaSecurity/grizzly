@@ -87,6 +87,11 @@ def _load_strategies():
     return MappingProxyType(strategies)
 
 
+def _contains_DD(path):
+    data = path.read_text()
+    return "DDBEGIN" in data and "DDEND" in data
+
+
 class Strategy(ABC):
     """A strategy is a procedure for repeatedly running a testcase to find the smallest
     equivalent test.
@@ -98,24 +103,27 @@ class Strategy(ABC):
     """
     name = None
 
-    def __init__(self, testcases):
+    def __init__(self, testcases, all_files):
         """Initialize strategy instance.
 
         Arguments:
             testcases (list(grizzly.common.storage.TestCase)):
                 List of testcases to reduce. The object does not take ownership of the
                 testcases.
+            all_files (bool): Reduce all files, otherwise only files containing
+                              DDBEGIN/END
         """
         self._tried = set()  # set of tuple(tuple(str(Path), SHA512))
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
+        self._all_files = all_files
         self.dump_testcases(testcases)
 
     def _calculate_testcase_hash(self):
         """Calculate hashes of all files in testcase root.
 
         Returns:
-            tuple(tuple(str, str)): A tuple of 2-tuples mapping str(Path) to SHA-512 of each
-                                    file in testcase root.
+            tuple(tuple(str, str)): A tuple of 2-tuples mapping str(Path) to SHA-512 of
+                                    each file in testcase root.
         """
         result = []
         for path in self._testcase_root.glob("**/*"):
@@ -303,20 +311,23 @@ class _BeautifyStrategy(Strategy, ABC):
     native_extension = None
     tag_name = None
 
-    def __init__(self, testcases):
+    def __init__(self, testcases, all_files):
         """Initialize beautification strategy instance.
 
         Arguments:
             testcases (list(grizzly.common.storage.TestCase)):
                 List of testcases to reduce. The object does not take ownership of the
                 testcases.
+            all_files (bool): Reduce all files, otherwise only files containing
+                              DDBEGIN/END
         """
-        super().__init__(testcases)
+        super().__init__(testcases, all_files)
         self._files_to_beautify = []
         for path in self._testcase_root.glob("**/*"):
             if (path.is_file() and path.suffix in self.all_extensions
                     and path.name not in self.blacklist_files):
-                self._files_to_beautify.append(path)
+                if self._all_files or _contains_DD(path):
+                    self._files_to_beautify.append(path)
         self._current_feedback = None
         tag_bytes = self.tag_name.encode("ascii")
         self._re_tag_start = re.compile(br"<\s*" + tag_bytes + br".*?>",
@@ -523,15 +534,17 @@ class _LithiumStrategy(Strategy, ABC):
     strategy_cls = None
     testcase_cls = None
 
-    def __init__(self, testcases):
+    def __init__(self, testcases, all_files):
         """Initialize strategy instance.
 
         Arguments:
             testcases (list(grizzly.common.storage.TestCase)):
                 List of testcases to reduce. The object does not take ownership of the
                 testcases.
+            all_files (bool): Reduce all files, otherwise only files containing
+                              DDBEGIN/END
         """
-        super().__init__(testcases)
+        super().__init__(testcases, all_files)
         self._current_reducer = None
         self._files_to_reduce = []
         self.rescan_files_to_reduce()
@@ -548,7 +561,8 @@ class _LithiumStrategy(Strategy, ABC):
         self._files_to_reduce.clear()
         for path in self._testcase_root.glob("**/*"):
             if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
-                self._files_to_reduce.append(path)
+                if self._all_files or _contains_DD(path):
+                    self._files_to_reduce.append(path)
 
     @classmethod
     def sanity_check_cls_attrs(cls):
@@ -806,7 +820,7 @@ class MinimizeTestcaseList(Strategy):
     """
     name = "list"
 
-    def __init__(self, testcases):
+    def __init__(self, testcases, all_files):
         """Initialize strategy instance.
 
         Arguments:
@@ -814,7 +828,7 @@ class MinimizeTestcaseList(Strategy):
                 List of testcases to reduce. The object does not take ownership of the
                 testcases.
         """
-        super().__init__(testcases)
+        super().__init__(testcases, all_files)
         self._current_feedback = None
         self._current_served = None
 
