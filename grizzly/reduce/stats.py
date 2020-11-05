@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Keep statistics about reduction."""
 from collections import namedtuple
+from copy import deepcopy
 from functools import partial
 from itertools import zip_longest
 import json
@@ -11,7 +12,8 @@ import re
 from time import gmtime, strftime, time
 
 
-ReductionStat = namedtuple("ReductionStat", "name, duration, iterations, size")
+ReductionStat = namedtuple(
+    "ReductionStat", "name, duration, successes, attempts, size, iterations")
 
 
 class _FormatTable(object):
@@ -23,11 +25,13 @@ class _FormatTable(object):
         Arguments:
             columns (iterable(str)): List of column names for the table header.
             formatters (iterable(callable)): List of format functions for each column.
+                                             None will result in hiding that column.
             vsep (str): Vertical separation between columns.
             hsep (str): Horizontal separation between header and data.
         """
         assert len(columns) == len(formatters)
-        self._columns = columns
+        self._columns = tuple(column for (column, fmt) in zip(columns, formatters)
+                              if fmt is not None)
         self._formatters = formatters
         self._vsep = vsep
         self._hsep = hsep
@@ -45,11 +49,15 @@ class _FormatTable(object):
         max_width = [len(col) for col in self._columns]
         formatted = []
         for row in rows:
-            assert len(row) == len(self._columns)
+            assert len(row) == len(self._formatters)
             formatted.append([])
+            offset = 0
             for idx, (data, formatter) in enumerate(zip(row, self._formatters)):
+                if formatter is None:
+                    offset += 1
+                    continue
                 data = formatter(data)
-                max_width[idx] = max(max_width[idx], len(data))
+                max_width[idx - offset] = max(max_width[idx - offset], len(data))
                 formatted[-1].append(data)
 
         # build a format_str to space out the columns with separators using `max_width`
@@ -96,33 +104,72 @@ class ReductionStats(object):
 
     def __init__(self):
         """Initialize a ReductionStats instance."""
-        self._stats = []
+        self._data = {"stats": []}
 
-    def add(self, name, testcase_size, elapsed=None, iters=None):
+    def __deepcopy__(self, memo):
+        """Return a deep copy of this instance."""
+        result = type(self)()
+        result._data = deepcopy(self._data, memo)  # pylint: disable=protected-access
+        return result
+
+    def add(self, name, testcase_size, elapsed=None, iterations=None, attempts=None,
+            successes=None):
         """Record reduction stats for a given point in time:
 
         - name of the milestone (eg. init, strategy name completed)
         - current testcase size (bytes)
         - elapsed time (seconds)
         - # of iterations
+        - # of total attempts
+        - # of successful attempts
 
         Arguments:
             name (str): name of milestone
             testcase_size (int): size of testcase
             elapsed (float or None): seconds elapsed for period recorded
-            iters (int or None): # of iterations performed
+            iterations (int or None): # of iterations performed
+            attempts (int or None): # of attempts performed
+            successes (int or None): # of attempts successful
 
         Returns:
             None
         """
-        self._stats.append(
+        self._data["stats"].append(
             ReductionStat(
                 name=name,
                 size=testcase_size,
                 duration=elapsed,
-                iterations=iters,
+                iterations=iterations,
+                attempts=attempts,
+                successes=successes,
             )
         )
+
+    def add_info(self, name, value):
+        """Add extra information to be added to the stats report.
+
+        Arguments:
+            name (str): key to identify the information
+            value (object): Any JSON serializable value.
+
+        Returns:
+            None
+        """
+        assert not self.has_info(name)
+        self._data[name] = value
+
+    def has_info(self, name):
+        """Check whether the extra information specified by "name"
+        already exists in this instance.
+
+        Arguments:
+            name (str): key to identify the information
+
+        Returns:
+            bool: Whether the named info already exists.
+        """
+        assert isinstance(name, str)
+        return name in self._data
 
     def add_timed(self, name, testcase_size_cb):
         """Time and record the period leading up to a reduction milestone.
@@ -137,17 +184,42 @@ class ReductionStats(object):
             context: Timer context for the period being recorded up to the milestone.
 
                      Attributes:
-                        iters (int): # of iterations performed during period
+                        attempts (int): # of attempts performed during period
+                        iterations (int): # of iterations performed during period.
+                        successes (int): # of successful attempts during period
         """
         # pylint: disable=no-self-argument
         class _MilestoneTimer(object):
-            def __init__(sub):
+            def __init__(sub, sub_name, parent=None):
+                sub._name = sub_name
                 sub._start = None
-                sub.iters = 0
+                sub._attempts = 0
+                sub._iterations = 0
+                sub._successes = 0
+                sub._parent = parent
+
+            def add_attempts(sub, attempts):
+                sub._attempts += attempts
+                if sub._parent is not None:
+                    sub._parent.add_attempts(attempts)
+
+            def add_iterations(sub, iterations):
+                sub._iterations += iterations
+                if sub._parent is not None:
+                    sub._parent.add_iterations(iterations)
+
+            def add_successes(sub, successes):
+                sub._successes += successes
+                if sub._parent is not None:
+                    sub._parent.add_successes(successes)
 
             def __enter__(sub):
                 sub._start = time()
                 return sub
+
+            def add_timed(sub, sub_name):
+                """Create a new timed period linked to this one."""
+                return type(sub)(sub_name, parent=sub)
 
             def _stop_early(sub, other):
                 """Clone and stop the timer. Add as a new stat to `other`.
@@ -160,30 +232,32 @@ class ReductionStats(object):
                 """
                 elapsed = time() - sub._start
                 other.add(
-                    name, testcase_size_cb(), elapsed=elapsed, iters=sub.iters
-                )
+                    name, testcase_size_cb(), elapsed=elapsed, attempts=sub._attempts,
+                    successes=sub._successes, iterations=sub._iterations)
+                if sub._parent is not None:
+                    sub._parent._stop_early(other)  # pylint: disable=protected-access
 
             def __exit__(sub, exc_type, exc_value, traceback):
                 elapsed = time() - sub._start
-                self.add(name, testcase_size_cb(), elapsed=elapsed, iters=sub.iters)
-        return _MilestoneTimer()
+                self.add(sub._name, testcase_size_cb(), elapsed=elapsed,
+                         attempts=sub._attempts, successes=sub._successes,
+                         iterations=sub._iterations)
+        return _MilestoneTimer(name)
 
-    def copy(self, stop_timers=None):
-        """Create a shallow copy of this instance.
+    def copy(self, stop_timer=None):
+        """Create a deep copy of this instance.
 
         Arguments:
-            stop_timers (list(`add_timed` context)):
-                In-progress `add_timed` calls that should be stopped and added to the
+            stop_timer (`add_timed` context):
+                In-progress `add_timed` call that should be stopped and added to the
                 result.
 
         Returns:
             ReductionStats: Clone of self
         """
-        result = type(self)()
-        result._stats = self._stats.copy()  # pylint: disable=protected-access
-        if stop_timers is not None:
-            for timer in stop_timers:
-                timer._stop_early(result)  # pylint: disable=protected-access
+        result = deepcopy(self)
+        if stop_timer is not None:
+            stop_timer._stop_early(result)  # pylint: disable=protected-access
         return result
 
     def format_lines(self):
@@ -192,17 +266,24 @@ class ReductionStats(object):
         Yields:
             str: Formatted lines to be output.
         """
+        for key, value in self._data.items():
+            if key == "stats":
+                continue
+            yield "%s: %r" % (key, value)
+        stats = self._data["stats"]
         tabulator = _FormatTable(
             ReductionStat._fields,
             ReductionStat(
                 name=str,
-                # duration and iterations are % of total (last), size % of init (first)
-                duration=partial(_format_duration, total=self._stats[-1].duration),
-                iterations=partial(_format_number, total=self._stats[-1].iterations),
-                size=partial(_format_number, total=self._stats[0].size),
+                # duration and attempts are % of total (last), size % of init (first)
+                duration=partial(_format_duration, total=stats[-1].duration),
+                attempts=partial(_format_number, total=stats[-1].attempts),
+                successes=partial(_format_number, total=stats[-1].successes),
+                iterations=None,  # hide
+                size=partial(_format_number, total=stats[0].size),
             )
         )
-        yield from tabulator.format_rows(self._stats)
+        yield from tabulator.format_rows(stats)
 
     def json(self):
         """Serialize the stats using JSON.
@@ -210,4 +291,4 @@ class ReductionStats(object):
         Returns:
             str: Stats as JSON.
         """
-        return json.dumps(self._stats, indent=2)
+        return json.dumps(self._data, indent=2)
