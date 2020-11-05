@@ -196,6 +196,15 @@ class Strategy(ABC):
         """
 
     @abstractmethod
+    def __len__(self):
+        """Estimate the maximum # of attempts this strategy might take to finish.
+        ie. The number of times `__iter__` will yield.
+
+        Returns:
+            int: estimate of the # of attempts remaining.
+        """
+
+    @abstractmethod
     def update(self, success, served=None):
         """Inform the strategy whether or not the last reduction yielded was good.
 

@@ -76,6 +76,7 @@ class _BeautifyStrategy(Strategy, ABC):
                                         flags=re.DOTALL | re.IGNORECASE)
         self._re_tag_end = re.compile(br"</\s*" + tag_bytes + br"\s*>",
                                       flags=re.IGNORECASE)
+        self._iter_idx = 0
 
     @classmethod
     def sanity_check_cls_attrs(cls):
@@ -176,6 +177,15 @@ class _BeautifyStrategy(Strategy, ABC):
             yield (chunk_start, chunk_start + tag_end.start(0))
             search_start = chunk_start + tag_end.end(0)
 
+    def __len__(self):
+        """Estimate the maximum # of attempts this strategy might take to finish.
+        ie. The number of times `__iter__` will yield.
+
+        Returns:
+            int: estimate of the # of attempts remaining.
+        """
+        return len(self._files_to_beautify) - self._iter_idx
+
     def __iter__(self):
         """Iterate over potential beautifications of testcases according to this
         strategy.
@@ -238,19 +248,23 @@ class _BeautifyStrategy(Strategy, ABC):
 
                 if last == 0:
                     LOG.warning("<%s> tags not found, skipping", self.tag_name)
+                    self._iter_idx += 1
                     continue
 
                 if not any_beautified:
                     LOG.warning("Beautify had no effect on the file, skipping")
+                    self._iter_idx += 1
                     continue
 
             tc_hash = self._calculate_testcase_hash()
             if tc_hash in self._tried:
                 LOG.info("cache hit, reverting")
                 lith_tc.dump(file)
+                self._iter_idx += 1
                 continue
 
             yield TestCase.load(str(self._testcase_root), True)
+            self._iter_idx += 1
 
             assert self._current_feedback is not None, "No feedback for last iteration"
             if self._current_feedback:
