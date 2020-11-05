@@ -103,16 +103,21 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
     log_path = tmp_path / "logs"
 
     class _ReduceStats:
-        iters = 0
+        def __init__(self):
+            self._iters = 0
+
+        def add_iterations(self, iters):
+            self._iters += iters
 
         @staticmethod
         def _stop_early(_):
             pass
 
+    stats = _ReduceStats()
     try:
         mgr = ReduceManager(None, mocker.Mock(spec=Sapphire), mocker.Mock(spec=Target),
                             tests, None, log_path, use_harness=use_harness)
-        repeat, min_crashes = mgr.run_reliability_analysis([_ReduceStats])
+        repeat, min_crashes, _ = mgr.run_reliability_analysis(stats)
     finally:
         for test in tests:
             test.cleanup()
@@ -121,7 +126,7 @@ def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crash
     assert repeat == expected_repeat
     assert min_crashes == expected_min_crashes
     assert mgr._use_harness == result_harness
-    assert _ReduceStats.iters == expected_iters * 11
+    assert stats._iters == expected_iters * 11
 
 
 def _ignore_arg(func):
