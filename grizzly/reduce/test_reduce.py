@@ -509,13 +509,13 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
     if n_reports:
         tests = {test.read_text() for test in log_path.glob("reports/*-0/test.html")}
         assert tests == reports
-        assert len(list((log_path / "reports").iterdir())) \
+        assert sum(1 for _ in (log_path / "reports").iterdir()) \
             == n_reports * 2, list((log_path / "reports").iterdir())
     if n_other:
         other_tests = {test.read_text()
                        for test in log_path.glob("other_reports/*-0/test.html")}
         assert other_tests == other_reports
-        assert len(list((log_path / "other_reports").iterdir())) \
+        assert sum(1 for _ in (log_path / "other_reports").iterdir()) \
             == n_other * 2, list((log_path / "other_reports").iterdir())
 
 
