@@ -50,6 +50,9 @@ class ReduceArgs(ReplayArgs):
 
         reduce_args = self.parser.add_argument_group("Reduce Arguments")
         reduce_args.add_argument(
+            "--skip-dd-unmarked", action="store_false", dest="all_files",
+            help="Only reduce files containing DDBEGIN/END (default: all files)")
+        reduce_args.add_argument(
             "--no-analysis", action="store_true",
             help="Disable analysis to auto-set --repeat/--min-crashes.")
         reduce_args.add_argument(
