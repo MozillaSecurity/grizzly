@@ -50,7 +50,8 @@ def _fake_save_logs_bar(result_logs, meta=False):  # pylint: disable=unused-argu
 
 AnalysisTestParams = namedtuple(
     "AnalysisTestParams",
-    "crashes, expected_repeat, expected_min_crashes, use_harness, result_harness"
+    "harness_crashes, no_harness_crashes, expected_repeat, expected_min_crashes, "
+    "use_harness, result_harness"
 )
 
 
@@ -58,26 +59,174 @@ AnalysisTestParams = namedtuple(
     AnalysisTestParams._fields,
     [
         # perfect with harness
-        AnalysisTestParams([True] * 11, 2, 2, True, True),
-        # perfect without harness
-        AnalysisTestParams([False] * 11 + [True] * 11, 2, 2, True, False),
+        AnalysisTestParams(11, None, 2, 2, True, True),
         # perfect, use_harness=False
-        AnalysisTestParams([True] * 11, 2, 2, False, False),
-        # better without harness
-        AnalysisTestParams([True] + [False] * 19 + [True] * 2, 30, 2, True, False),
-        # better with harness
-        AnalysisTestParams([True] * 2 + [False] * 19 + [True], 30, 2, True, True),
-        # same with both, prefer harness
-        AnalysisTestParams([True] * 2 + [False] * 18 + [True] * 2, 30, 2, True, True),
+        AnalysisTestParams(11, None, 2, 2, False, False),
+        # 10/11 with harness
+        AnalysisTestParams(10, None, 2, 1, True, True),
+        # 9/11 with harness
+        AnalysisTestParams(9, None, 2, 1, True, True),
+        # 8/11 with harness
+        AnalysisTestParams(8, None, 3, 1, True, True),
+        # 7/11 with harness
+        AnalysisTestParams(7, None, 3, 1, True, True),
+        # 6/11 with harness
+        AnalysisTestParams(6, None, 4, 1, True, True),
+        # 5/11 with harness
+        AnalysisTestParams(5, 0, 5, 1, True, True),
+        # 5/11 with harness, 1/11 without
+        AnalysisTestParams(5, 1, 5, 1, True, True),
+        # 5/11 with harness, 2/11 without
+        AnalysisTestParams(5, 2, 5, 1, True, True),
+        # 5/11 with harness, 3/11 without
+        AnalysisTestParams(5, 3, 5, 1, True, True),
+        # 5/11 with harness, 4/11 without
+        AnalysisTestParams(5, 4, 5, 1, True, True),
+        # 5/11 with harness, 5/11 without
+        AnalysisTestParams(5, 5, 5, 1, True, True),
+        # 5/11 with harness, 6/11 without
+        AnalysisTestParams(5, 6, 5, 1, True, True),
+        # 5/11 with harness, 7/11 without
+        AnalysisTestParams(5, 7, 5, 1, True, True),
+        # 5/11 with harness, 8/11 without
+        AnalysisTestParams(5, 8, 3, 1, True, False),
+        # 5/11 with harness, 9/11 without
+        AnalysisTestParams(5, 9, 2, 1, True, False),
+        # 5/11 with harness, 10/11 without
+        AnalysisTestParams(5, 10, 2, 1, True, False),
+        # 5/11 with harness, perfect without
+        AnalysisTestParams(5, 11, 2, 2, True, False),
+        # 4/11 with harness
+        AnalysisTestParams(4, 0, 7, 1, True, True),
+        # 4/11 with harness, 1/11 without
+        AnalysisTestParams(4, 1, 7, 1, True, True),
+        # 4/11 with harness, 2/11 without
+        AnalysisTestParams(4, 2, 7, 1, True, True),
+        # 4/11 with harness, 3/11 without
+        AnalysisTestParams(4, 3, 7, 1, True, True),
+        # 4/11 with harness, 4/11 without
+        AnalysisTestParams(4, 4, 7, 1, True, True),
+        # 4/11 with harness, 5/11 without
+        AnalysisTestParams(4, 5, 7, 1, True, True),
+        # 4/11 with harness, 6/11 without
+        AnalysisTestParams(4, 6, 4, 1, True, False),
+        # 4/11 with harness, 7/11 without
+        AnalysisTestParams(4, 7, 3, 1, True, False),
+        # 4/11 with harness, 8/11 without
+        AnalysisTestParams(4, 8, 3, 1, True, False),
+        # 4/11 with harness, 9/11 without
+        AnalysisTestParams(4, 9, 2, 1, True, False),
+        # 4/11 with harness, 10/11 without
+        AnalysisTestParams(4, 10, 2, 1, True, False),
+        # 4/11 with harness, perfect without
+        AnalysisTestParams(4, 11, 2, 2, True, False),
+        # 3/11 with harness
+        AnalysisTestParams(3, 0, 10, 1, True, True),
+        # 3/11 with harness, 1/11 without
+        AnalysisTestParams(3, 1, 10, 1, True, True),
+        # 3/11 with harness, 2/11 without
+        AnalysisTestParams(3, 2, 10, 1, True, True),
+        # 3/11 with harness, 3/11 without
+        AnalysisTestParams(3, 3, 10, 1, True, True),
+        # 3/11 with harness, 4/11 without
+        AnalysisTestParams(3, 4, 10, 1, True, True),
+        # 3/11 with harness, 5/11 without
+        AnalysisTestParams(3, 5, 5, 1, True, False),
+        # 3/11 with harness, 6/11 without
+        AnalysisTestParams(3, 6, 4, 1, True, False),
+        # 3/11 with harness, 7/11 without
+        AnalysisTestParams(3, 7, 3, 1, True, False),
+        # 3/11 with harness, 8/11 without
+        AnalysisTestParams(3, 8, 3, 1, True, False),
+        # 3/11 with harness, 9/11 without
+        AnalysisTestParams(3, 9, 2, 1, True, False),
+        # 3/11 with harness, 10/11 without
+        AnalysisTestParams(3, 10, 2, 1, True, False),
+        # 3/11 with harness, perfect without
+        AnalysisTestParams(3, 11, 2, 2, True, False),
+        # 2/11 with harness
+        AnalysisTestParams(2, 0, 15, 1, True, True),
+        # 2/11 with harness, 1/11 without
+        AnalysisTestParams(2, 1, 15, 1, True, True),
+        # 2/11 with harness, 2/11 without
+        AnalysisTestParams(2, 2, 15, 1, True, True),
+        # 2/11 with harness, 3/11 without
+        AnalysisTestParams(2, 3, 10, 1, True, False),
+        # 2/11 with harness, 4/11 without
+        AnalysisTestParams(2, 4, 7, 1, True, False),
+        # 2/11 with harness, 5/11 without
+        AnalysisTestParams(2, 5, 5, 1, True, False),
+        # 2/11 with harness, 6/11 without
+        AnalysisTestParams(2, 6, 4, 1, True, False),
+        # 2/11 with harness, 7/11 without
+        AnalysisTestParams(2, 7, 3, 1, True, False),
+        # 2/11 with harness, 8/11 without
+        AnalysisTestParams(2, 8, 3, 1, True, False),
+        # 2/11 with harness, 9/11 without
+        AnalysisTestParams(2, 9, 2, 1, True, False),
+        # 2/11 with harness, 10/11 without
+        AnalysisTestParams(2, 10, 2, 1, True, False),
+        # 2/11 with harness, perfect without
+        AnalysisTestParams(2, 11, 2, 2, True, False),
+        # 1/11 with harness
+        AnalysisTestParams(1, 0, 32, 1, True, True),
+        # 1/11 with harness, 1/11 without
+        AnalysisTestParams(1, 1, 32, 1, True, True),
+        # 1/11 with harness, 2/11 without
+        AnalysisTestParams(1, 2, 15, 1, True, False),
+        # 1/11 with harness, 3/11 without
+        AnalysisTestParams(1, 3, 10, 1, True, False),
+        # 1/11 with harness, 4/11 without
+        AnalysisTestParams(1, 4, 7, 1, True, False),
+        # 1/11 with harness, 5/11 without
+        AnalysisTestParams(1, 5, 5, 1, True, False),
+        # 1/11 with harness, 6/11 without
+        AnalysisTestParams(1, 6, 4, 1, True, False),
+        # 1/11 with harness, 7/11 without
+        AnalysisTestParams(1, 7, 3, 1, True, False),
+        # 1/11 with harness, 8/11 without
+        AnalysisTestParams(1, 8, 3, 1, True, False),
+        # 1/11 with harness, 9/11 without
+        AnalysisTestParams(1, 9, 2, 1, True, False),
+        # 1/11 with harness, 10/11 without
+        AnalysisTestParams(1, 10, 2, 1, True, False),
+        # 1/11 with harness, perfect without
+        AnalysisTestParams(1, 11, 2, 2, True, False),
+        # perfect without harness
+        AnalysisTestParams(0, 11, 2, 2, True, False),
+        # 10/11 without harness
+        AnalysisTestParams(0, 10, 2, 1, True, False),
+        # 9/11 without harness
+        AnalysisTestParams(0, 9, 2, 1, True, False),
+        # 8/11 without harness
+        AnalysisTestParams(0, 8, 3, 1, True, False),
+        # 7/11 without harness
+        AnalysisTestParams(0, 7, 3, 1, True, False),
+        # 6/11 without harness
+        AnalysisTestParams(0, 6, 4, 1, True, False),
+        # 5/11 without harness
+        AnalysisTestParams(0, 5, 5, 1, True, False),
+        # 4/11 without harness
+        AnalysisTestParams(0, 4, 7, 1, True, False),
+        # 3/11 without harness
+        AnalysisTestParams(0, 3, 10, 1, True, False),
+        # 2/11 without harness
+        AnalysisTestParams(0, 2, 15, 1, True, False),
+        # 1/11 without harness
+        AnalysisTestParams(0, 1, 32, 1, True, False),
     ]
 )
-def test_analysis(mocker, tmp_path, crashes, expected_repeat, expected_min_crashes,
-                  use_harness, result_harness):
+def test_analysis(mocker, tmp_path, harness_crashes, no_harness_crashes,
+                  expected_repeat, expected_min_crashes, use_harness, result_harness):
     """test that analysis sets reasonable params"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value.__enter__.return_value
     replayer.status.iteration = 11
-    expected_iters = len(crashes) / 11
+    expected_iters = 1
+    crashes = [True] * harness_crashes + [False] * (11 - harness_crashes)
+    if no_harness_crashes is not None:
+        crashes += [False] * (11 - no_harness_crashes) + [True] * no_harness_crashes
+        expected_iters += 1
 
     def replay_run(_, **kw):
         results = []
