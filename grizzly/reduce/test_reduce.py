@@ -6,7 +6,8 @@
 """Unit tests for `grizzly.reduce.reduce`.
 """
 from collections import namedtuple
-import functools
+from functools import partial, wraps
+from itertools import count
 from logging import getLogger
 
 import pytest
@@ -18,10 +19,11 @@ from ..replay import ReplayResult
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
 from .exceptions import NotReproducible
+from .strategies import Strategy
 
 
 LOG = getLogger(__name__)
-pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")
+pytestmark = pytest.mark.usefixtures("tmp_path_fm_config", "reporter_sequential_strftime")
 
 
 def _fake_save_logs_foo(result_logs, meta=False):  # pylint: disable=unused-argument
@@ -281,7 +283,7 @@ def test_analysis(mocker, tmp_path, harness_crashes, no_harness_crashes,
 
 def _ignore_arg(func):
     """Function wrapper that simply ignores 1 argument"""
-    @functools.wraps(func)
+    @wraps(func)
     def wrapped(_):
         return func()
     return wrapped
@@ -437,7 +439,7 @@ ReproTestParams = namedtuple(
             original="1\n2\n3\n",
             strategies=["check", "lines", "lines"],
             detect_failure=_ignore_arg(
-                functools.partial(
+                partial(
                     [True, False, False, False, False, False, True, True].pop, 0)),
             interesting_str="%r is anything, only in second strategy",
             is_expected=lambda _: True,
@@ -520,6 +522,129 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
             == n_other * 2, list((log_path / "other_reports").iterdir())
 
 
+def test_report_01(mocker, tmp_path):
+    """test that report is called with --report-period is set"""
+    mocker.patch("grizzly.reduce.core.time", side_effect=count())
+
+    replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
+
+    def replay_run(_, **_kw):
+        if replayer.run.call_count in {20, 40}:
+            log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+            log_path.mkdir()
+            _fake_save_logs_foo(log_path)
+            report = Report(str(log_path), "bin")
+            return [ReplayResult(report, [["test.html"]], [], True)]
+        return []
+
+    replayer.run.side_effect = replay_run
+
+    (tmp_path / "test.html").touch()
+    testcases = TestCase.load(str(tmp_path / "test.html"), False)
+    assert testcases
+    log_path = tmp_path / "logs"
+
+    fake_strat = mocker.MagicMock(spec=Strategy)
+    fake_strat.return_value.name = "fake"
+
+    def fake_iter():
+        for count_ in range(1, 61):
+            LOG.debug("fake_iter() %d", count_)
+            (tmp_path / "test.html").write_text(str(count_))
+            testcases = TestCase.load(str(tmp_path / "test.html"), False)
+            assert testcases
+            yield testcases
+
+    fake_strat.return_value.__iter__.side_effect = fake_iter
+    mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
+
+    target = mocker.Mock(spec=Target)
+    target.relaunch = 1
+    try:
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target,
+                            testcases, ["fake"], log_path, use_analysis=False,
+                            report_period=30)
+        assert mgr.run() == 0
+    finally:
+        for test in testcases:
+            test.cleanup()
+
+    # should be 2 reports: one made at time=30 (for crash on 20th iter),
+    # and one at time=60 (for crash on 40th iter)
+    n_reports = 2
+    reports = {"20", "40"}
+    assert replayer.run.call_count == 60
+    expected_dirs = {log_path / "reports"}
+    assert set(log_path.iterdir()) == expected_dirs
+    tests = {test.read_text() for test in log_path.glob("reports/*-0/test.html")}
+    assert tests == reports
+    assert sum(1 for _ in (log_path / "reports").iterdir()) \
+        == n_reports * 2, list((log_path / "reports").iterdir())
+
+
+def test_report_02(mocker, tmp_path):
+    """test that report is called when KeyboardInterrupt occurs"""
+    mocker.patch("grizzly.reduce.core.time", side_effect=count())
+
+    replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
+
+    def replay_run(_, **_kw):
+        if replayer.run.call_count in {10, 20}:
+            log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+            log_path.mkdir()
+            _fake_save_logs_foo(log_path)
+            report = Report(str(log_path), "bin")
+            return [ReplayResult(report, [["test.html"]], [], True)]
+        return []
+
+    replayer.run.side_effect = replay_run
+
+    (tmp_path / "test.html").touch()
+    testcases = TestCase.load(str(tmp_path / "test.html"), False)
+    assert testcases
+    log_path = tmp_path / "logs"
+
+    fake_strat = mocker.MagicMock(spec=Strategy)
+    fake_strat.return_value.name = "fake"
+
+    def fake_iter():
+        for count_ in range(1, 31):
+            LOG.debug("fake_iter() %d", count_)
+            (tmp_path / "test.html").write_text(str(count_))
+            testcases = TestCase.load(str(tmp_path / "test.html"), False)
+            assert testcases
+            yield testcases
+        raise KeyboardInterrupt()
+
+    fake_strat.return_value.__iter__.side_effect = fake_iter
+    mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
+
+    target = mocker.Mock(spec=Target)
+    target.relaunch = 1
+    try:
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target,
+                            testcases, ["fake"], log_path, use_analysis=False)
+        with raises(KeyboardInterrupt):
+            mgr.run()
+    finally:
+        for test in testcases:
+            test.cleanup()
+
+    n_reports = 1
+    reports = {"20"}
+    assert replayer.run.call_count == 30
+    expected_dirs = {log_path / "reports"}
+    assert set(log_path.iterdir()) == expected_dirs
+    tests = {test.read_text() for test in log_path.glob("reports/*-0/test.html")}
+    assert tests == reports
+    assert sum(1 for _ in (log_path / "reports").iterdir()) \
+        == n_reports * 2, list((log_path / "reports").iterdir())
+
+
 def test_quality_update(mocker, tmp_path):
     """test that the final result gets changed to Q0 with --fuzzmanager"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
@@ -541,6 +666,7 @@ def test_quality_update(mocker, tmp_path):
 
     mocker.patch("grizzly.common.reporter.Collector")
     reporter = mocker.patch("grizzly.reduce.core.FuzzManagerReporter")
+    reporter.QUAL_REDUCED_RESULT = 0
     update_coll = mocker.patch("grizzly.reduce.core.Collector")
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
@@ -548,7 +674,7 @@ def test_quality_update(mocker, tmp_path):
         mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target,
                             testcases, ["check"], log_path, use_analysis=False,
                             report_to_fuzzmanager=True)
-        assert mgr.run()
+        assert mgr.run() == 0
     finally:
         for test in testcases:
             test.cleanup()

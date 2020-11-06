@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
+from time import time
 
 from Collector.Collector import Collector
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -25,7 +26,7 @@ from ..main import configure_logging
 from ..replay import ReplayManager, ReplayResult
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
-from .stats import ReductionStats, format_seconds
+from .stats import ReductionStats
 from .strategies import STRATEGIES
 
 
@@ -95,10 +96,10 @@ class ReduceManager(object):
     ITER_TIMEOUT_DURATION_MULTIPLIER = 2
 
     def __init__(self, ignore, server, target, testcases, strategies, log_path,
-                 tool=None, report_to_fuzzmanager=False, any_crash=False,
-                 signature=None, use_harness=True, use_analysis=True,
-                 static_timeout=False, idle_delay=0, idle_threshold=0,
-                 signature_desc=None, all_files=True):
+                 all_files=True, any_crash=False, idle_delay=0, idle_threshold=0,
+                 report_period=None, report_to_fuzzmanager=False, signature=None,
+                 signature_desc=None, static_timeout=False, tool=None,
+                 use_analysis=True, use_harness=True):
         """Initialize reduction manager. Many arguments are common with `ReplayManager`.
 
         Args:
@@ -109,31 +110,36 @@ class ReduceManager(object):
                 Value for `self.testcases` attribute.
             strategies (list(str)): Value for `self.strategies` attribute.
             log_path (Path or str): Path to save results when reporting to filesystem.
-            tool (str or None): Override tool when reporting to FuzzManager.
-            report_to_fuzzmanager (bool): Report to FuzzManager rather than filesystem.
+
+            all_files (bool): Reduce all files, not just those with DDBEGIN/END.
             any_crash (bool): Accept any crash when reducing, not just those matching
                               the specified or first observed signature.
+            idle_delay (int): Number of seconds to wait before polling for idle.
+            idle_threshold (int): CPU usage threshold to mark the process as idle.
+            report_period (int or None): Periodically report best results for
+                                         long-running strategies.
+            report_to_fuzzmanager (bool): Report to FuzzManager rather than filesystem.
             signature (FTB.Signatures.CrashInfo.CrashSignature or None):
                 Signature for accepting crashes.
             signature_desc (str): Short description of the given signature.
-            use_harness (bool): Whether to allow use of harness when navigating
-                                between testcases.
-            use_analysis (bool): Analyse reliability of testcase before running each
-                                 reduction strategy.
             static_timeout (bool): Use only specified timeouts (`--timeout` and
                                    `--idle-delay`), even if testcase appears to need
                                    less time.
-            idle_delay (int): Number of seconds to wait before polling for idle.
-            idle_threshold (int): CPU usage threshold to mark the process as idle.
-            all_files (bool): Reduce all files, not just those with DDBEGIN/END.
+            tool (str or None): Override tool when reporting to FuzzManager.
+            use_analysis (bool): Analyse reliability of testcase before running each
+                                 reduction strategy.
+            use_harness (bool): Whether to allow use of harness when navigating
+                                between testcases.
         """
         self.ignore = ignore
         self.server = server
         self.strategies = strategies
         self.target = target
         self.testcases = testcases
-        self._any_crash = any_crash
         self._all_files = all_files
+        self._any_crash = any_crash
+        self._idle_delay = idle_delay
+        self._idle_threshold = idle_threshold
         # only coerce `log_path` to `Path` if it's a string
         # this caution is only necessary in python3.5 where pytest uses
         # pathlib2 rather than pathlib
@@ -142,15 +148,14 @@ class ReduceManager(object):
         self._original_relaunch = target.relaunch
         self._original_use_harness = use_harness
         self._report_to_fuzzmanager = report_to_fuzzmanager
+        self._report_periodically = report_period
         self._report_tool = tool
         self._signature = signature
         self._signature_desc = signature_desc
+        self._static_timeout = static_timeout
+        self._stats = ReductionStats()
         self._use_analysis = use_analysis
         self._use_harness = use_harness
-        self._static_timeout = static_timeout
-        self._idle_delay = idle_delay
-        self._idle_threshold = idle_threshold
-        self._stats = ReductionStats()
 
     def update_timeout(self, results):
         """Tune idle/server timeout values based on actual duration of expected results.
@@ -406,8 +411,10 @@ class ReduceManager(object):
                     strategy.update_tried(last_tried)
                     last_tried = None
 
+                strategy_last_report = time()
                 strategy_stats = total_stats.add_timed(strategy.name)
                 best_results = []
+                best_reported = False
                 try:
                     with replay, strategy, strategy_stats:
                         for reduction in strategy:
@@ -463,6 +470,7 @@ class ReduceManager(object):
                                                     if result.expected]
                                     results = [result for result in results
                                                if not result.expected]
+                                    best_reported = False
                                 else:
                                     LOG.info("Attempt failed")
                                 # if the reduction found other crashes,
@@ -470,6 +478,17 @@ class ReduceManager(object):
                                 self.report(
                                     results, reduction,
                                     self._stats.copy(strategy_stats))
+
+                                now = time()
+                                if self._report_periodically and \
+                                        now - strategy_last_report > self._report_periodically:
+                                    last_reports = self.report(
+                                        best_results, self.testcases,
+                                        self._stats.copy(strategy_stats))
+                                    best_reported = True
+                                    strategy_last_report = now
+                                    LOG.info("Best results reported (periodic)")
+
                             except TargetLaunchError as exc:
                                 if exc.report:
                                     self.report(
@@ -489,9 +508,10 @@ class ReduceManager(object):
                         # otherwise, ensure the first found signature is used throughout
                         self._signature = replay.signature
 
-                    last_reports = self.report(
-                        best_results, self.testcases,
-                        self._stats.copy(total_stats))
+                    if not best_reported:
+                        last_reports = self.report(
+                            best_results, self.testcases,
+                            self._stats.copy(total_stats))
 
                 except KeyboardInterrupt:
                     if best_results:
@@ -684,17 +704,18 @@ class ReduceManager(object):
                     testcases,
                     args.strategies,
                     args.logs,
-                    tool=args.tool,
-                    report_to_fuzzmanager=args.fuzzmanager,
                     all_files=args.all_files,
                     any_crash=args.any_crash,
+                    idle_delay=args.idle_delay,
+                    idle_threshold=args.idle_threshold,
+                    report_period=args.report_period,
+                    report_to_fuzzmanager=args.fuzzmanager,
                     signature=signature,
                     signature_desc=signature_desc,
-                    use_harness=not args.no_harness,
-                    use_analysis=not args.no_analysis,
                     static_timeout=args.static_timeout,
-                    idle_delay=args.idle_delay,
-                    idle_threshold=args.idle_threshold)
+                    tool=args.tool,
+                    use_analysis=not args.no_analysis,
+                    use_harness=not args.no_harness)
                 return_code = mgr.run(repeat=args.repeat, min_results=args.min_crashes)
             return return_code
 

@@ -61,6 +61,11 @@ def test_args_02(tmp_path):
     # these should both log a warning that the args will be ignored due to analysis
     ReduceArgs().parse_args([str(exe), str(inp), "--repeat", "99"])
     ReduceArgs().parse_args([str(exe), str(inp), "--min-crashes", "99"])
+    ReduceArgs().parse_args([str(exe), str(inp), "--report-period", "99"])
+    with raises(SystemExit):
+        ReduceArgs().parse_args([str(exe), str(inp), "--report-period", "0"])
+    with raises(SystemExit):
+        ReduceArgs().parse_args([str(exe), str(inp), "--report-period", "15"])
 
 
 @pytest.mark.parametrize(
