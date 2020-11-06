@@ -47,10 +47,10 @@ class _LithiumStrategy(Strategy, ABC):
         super().__init__(testcases, all_files)
         self._current_reducer = None
         self._files_to_reduce = []
+        self._possible_iters_remain = {}
         self.rescan_files_to_reduce()
         self._current_feedback = None
         self._current_served = None
-        self._possible_iters_remain = {}
         for path in self._files_to_reduce:
             test = self.testcase_cls()  # pylint: disable=not-callable
             test.load(path)
