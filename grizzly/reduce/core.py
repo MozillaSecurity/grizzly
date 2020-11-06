@@ -26,7 +26,7 @@ from ..main import configure_logging
 from ..replay import ReplayManager, ReplayResult
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
-from .stats import ReductionStats, format_seconds
+from .stats import MovingAverage, ReductionStats, format_seconds
 from .strategies import STRATEGIES
 
 
@@ -365,6 +365,7 @@ class ReduceManager(object):
         last_reports = None
         last_tried = None
         last_estimate = 0
+        average = MovingAverage()
         self._stats.add("init", self.testcase_size())
         # record total stats overall so that any time missed by individual milestones
         # will still be included in the total
@@ -408,12 +409,12 @@ class ReduceManager(object):
                         for reduction in strategy:
                             # show worst-case estimate
                             now = time()
-                            if now - last_estimate > self.ESTIMATE_INTERVAL:
+                            if now - last_estimate > self.ESTIMATE_INTERVAL and average:
                                 # estimate the remaining attempts in following rounds
                                 remaining_estimate = len(strategy) \
                                     + self._estimate_remaining(strategy_no)
                                 LOG.info("Estimate remaining time: %s", format_seconds(
-                                    remaining_estimate * self.server.timeout
+                                    remaining_estimate * average.median()
                                 ))
                                 last_estimate = now
                             keep_reduction = False
@@ -421,12 +422,14 @@ class ReduceManager(object):
                             try:
                                 # reduction is a new list of testcases to be
                                 # replayed
+                                run_start = time()
                                 results = replay.run(
                                     reduction,
                                     repeat=repeat,
                                     min_results=min_results,
                                     idle_delay=self._idle_delay,
                                     idle_threshold=self._idle_threshold)
+                                average.append(time() - run_start)
                                 strategy_stats.add_iterations(replay.status.iteration)
                                 strategy_stats.add_attempts(1)
                                 self.update_timeout(results)

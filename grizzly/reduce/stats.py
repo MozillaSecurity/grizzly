@@ -106,6 +106,48 @@ def _format_number(number, total=0):
     return result
 
 
+class MovingAverage(object):
+    """Track an average over a moving window."""
+
+    def __init__(self, window=50):
+        """
+        Arguments:
+            window (int): Size of the moving average window.
+        """
+        self._data = []
+        self._window = window
+
+    def __len__(self):
+        return len(self._data)
+
+    def append(self, value):
+        """Add a value to the average.
+
+        Arguments:
+            value (float): Value to be included in moving average.
+
+        Returns:
+            None
+        """
+        self._data.append(value)
+        if len(self._data) > self._window:
+            self._data.pop(0)
+
+    def median(self):
+        """Find the moving median in the dataset.
+
+        Returns:
+            float: Median value of the dataset.
+        """
+        if not self._data:
+            raise ValueError("No data in MovingAverage")
+        middle = len(self._data) // 2
+        ordered = list(sorted(self._data))
+        if len(self._data) % 2 == 1:
+            return ordered[middle]
+        return (ordered[middle] + ordered[middle - 1]) / 2
+
+
 class ReductionStats(object):
     """Statistics about reduction"""
 

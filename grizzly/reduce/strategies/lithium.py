@@ -11,7 +11,6 @@ from lithium.strategies import CheckOnly, \
     CollapseEmptyBraces as LithCollapseEmptyBraces, Minimize, Strategy as LithStrategy
 from lithium.testcases import TestcaseChar, TestcaseJsStr, TestcaseLine, \
     Testcase as LithTestcase
-from lithium.util import divide_rounding_up, largest_power_of_two_smaller_than
 
 from ...common.storage import TestCase
 from . import Strategy, _contains_dd
@@ -54,42 +53,10 @@ class _LithiumStrategy(Strategy, ABC):
         for path in self._files_to_reduce:
             test = self.testcase_cls()  # pylint: disable=not-callable
             test.load(path)
-            self._possible_iters_remain[path] = self._possible_iters(len(test))
+            strategy = self.strategy_cls()  # pylint: disable=not-callable
+            strategy.estimate_from_testcase(test)
+            self._possible_iters_remain[path] = strategy.estimated_remaining
         self._testcase_root_dirty = False
-
-    @classmethod
-    def _possible_iters(cls, length):
-        """Calculate iterations that might possibly be performed for this testcase.
-
-        Arguments:
-            length (int): Length of the current testcase.
-
-        Returns:
-            int: Total iterations for reducing this path.
-        """
-        chunk_size = largest_power_of_two_smaller_than(length)
-        return cls._chunk_iters(length, chunk_size * 2) - 1
-
-    @staticmethod
-    def _chunk_iters(length, chunk_size):
-        """How many iterations does this chunk represent (recursively)?
-        ie. a chunk of length 2 and chunk_size 2 actually represents 4
-            iterations (2 + 1 + 1)
-
-        Arguments:
-            length (int): actual length of the chunk
-            chunk_size (int): chunk_size
-
-        Returns:
-            int: Total iterations from this chunk.
-        """
-        if length == chunk_size:
-            return chunk_size * 3 - 1  # *3 not *2 because last chunk_size=1 repeats
-        result = 2 * length  # chunk_size = 1 (repeated)
-        while chunk_size > 1:
-            result += divide_rounding_up(length, chunk_size)
-            chunk_size /= 2
-        return int(result)
 
     def rescan_files_to_reduce(self):
         """Repopulate the private `files_to_reduce` attribute by scanning the testcase
@@ -175,9 +142,9 @@ class _LithiumStrategy(Strategy, ABC):
                      len(self._files_to_reduce))
             lithium_testcase = self.testcase_cls()  # pylint: disable=not-callable
             lithium_testcase.load(file)
-            # pylint: disable=not-callable
-            self._current_reducer = self.strategy_cls().reduce(lithium_testcase)
-            testcase_length = len(lithium_testcase)
+            strategy = self.strategy_cls()  # pylint: disable=not-callable
+            self._current_reducer = strategy.reduce(lithium_testcase)
+            self._possible_iters_remain[file] = strategy.estimated_remaining
 
             # populate the lithium strategy "tried" cache
             # use all cache values where all hashes other than the current file match
@@ -196,19 +163,12 @@ class _LithiumStrategy(Strategy, ABC):
                 reduction.dump()
                 testcases = TestCase.load(str(self._testcase_root), True)
                 LOG.info("[%s] %s", self.name, self._current_reducer.description)
+                self._possible_iters_remain[file] = strategy.estimated_remaining
                 yield testcases
                 if self._current_feedback:
                     self._testcase_root_dirty = False
-                    # this is imperfect, but we only need an estimate anyways
-                    removed = chunk_size = max(1, testcase_length - len(reduction))
-                    if chunk_size > 1:
-                        chunk_size = largest_power_of_two_smaller_than(chunk_size) * 2
-                    self._possible_iters_remain[file] -= \
-                        self._chunk_iters(removed, chunk_size)
-                    testcase_length = len(reduction)
                 else:
                     self._tried.add(self._calculate_testcase_hash())
-                    self._possible_iters_remain[file] -= 1
                 if self._current_feedback and self._current_served is not None:
                     testcases = TestCase.load(str(self._testcase_root), True)
                     try:
@@ -279,10 +239,6 @@ class CollapseEmptyBraces(_LithiumStrategy):
     name = "collapsebraces"
     strategy_cls = LithCollapseEmptyBraces
     testcase_cls = TestcaseLine
-
-    @classmethod
-    def _possible_iters(cls, path):
-        return super()._possible_iters(path) * 2
 
 
 class MinimizeChars(_LithiumStrategy):
