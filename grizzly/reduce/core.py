@@ -266,7 +266,6 @@ class ReduceManager(object):
                     raise
                 try:
                     stats.add_iterations(replay.status.iteration)
-                    self.update_timeout(results)
                     crashes = sum(x.count for x in results if x.expected)
                     if crashes and not self._any_crash and self._signature_desc is None:
                         first_expected = next((report for report in results
