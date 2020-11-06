@@ -641,6 +641,11 @@ class ReduceManager(object):
                 LOG.error("Error: %s", str(exc))
                 return FuzzManagerReporter.QUAL_NO_TESTCASE
 
+            if args.tool is None and testcases[0].adapter_name is not None:
+                LOG.warning("Setting default --tool=grizzly-%s from testcase",
+                            testcases[0].adapter_name)
+                args.tool = "grizzly-%s" % (testcases[0].adapter_name,)
+
             if args.test_index is not None or (args.no_harness and len(testcases) > 1):
                 if args.test_index is None:
                     LOG.warning("'--no-harness' given with %d testcases and without "
