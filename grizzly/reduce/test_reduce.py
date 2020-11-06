@@ -264,7 +264,8 @@ def test_analysis(mocker, tmp_path, harness_crashes, no_harness_crashes,
 
     stats = _ReduceStats()
     try:
-        mgr = ReduceManager(None, mocker.Mock(spec=Sapphire), mocker.Mock(spec=Target),
+        mgr = ReduceManager(None, mocker.Mock(spec=Sapphire, timeout=30),
+                            mocker.Mock(spec=Target),
                             tests, None, log_path, use_harness=use_harness)
         repeat, min_crashes, _ = mgr.run_reliability_analysis(stats)
     finally:
@@ -487,8 +488,8 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, tests, strategies,
-                            log_path, use_analysis=False)
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
+                            strategies, log_path, use_analysis=False)
         if isinstance(result, type) and issubclass(result, BaseException):
             with raises(result):
                 mgr.run()
@@ -544,8 +545,8 @@ def test_quality_update(mocker, tmp_path):
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, testcases,
-                            ["check"], log_path, use_analysis=False,
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target,
+                            testcases, ["check"], log_path, use_analysis=False,
                             report_to_fuzzmanager=True)
         assert mgr.run()
     finally:
@@ -588,8 +589,8 @@ def test_launch_error(mocker, tmp_path, use_analysis, exc_type):
 
     target_obj = mocker.Mock(spec=Target)
     target_obj.relaunch = 1
-    mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target_obj, testcases,
-                        ["check"], None, use_analysis=use_analysis)
+    mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target_obj,
+                        testcases, ["check"], None, use_analysis=use_analysis)
     with raises(exc_type):
         mgr.run()
     if exc_type is TargetLaunchError:

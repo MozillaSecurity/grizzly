@@ -145,8 +145,8 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, tests, strategies,
-                            log_path, use_analysis=False)
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
+                            strategies, log_path, use_analysis=False)
         assert mgr.run() == 0
     finally:
         for test in tests:
@@ -479,8 +479,8 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, tests, strategies,
-                            log_path, use_analysis=False)
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
+                            strategies, log_path, use_analysis=False)
         assert mgr.run() == 0
     finally:
         for test in tests:
@@ -630,8 +630,8 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire), target, tests, strategies,
-                            log_path, use_analysis=False)
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
+                            strategies, log_path, use_analysis=False)
         if purging_breaks:
             with raises(AssertionError):
                 mgr.run()

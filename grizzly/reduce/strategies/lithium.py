@@ -89,7 +89,7 @@ class _LithiumStrategy(Strategy, ABC):
         while chunk_size > 1:
             result += divide_rounding_up(length, chunk_size)
             chunk_size /= 2
-        return result
+        return int(result)
 
     def rescan_files_to_reduce(self):
         """Repopulate the private `files_to_reduce` attribute by scanning the testcase
