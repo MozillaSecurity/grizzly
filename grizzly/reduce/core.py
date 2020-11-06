@@ -222,6 +222,7 @@ class ReduceManager(object):
             tuple(int, int, dict): Values for `repeat` and `min_crashes` resulting from
                                    analysis, and info to include in stats.
         """
+        harness_last_crashes = 0
         harness_crashes = 0
         non_harness_crashes = 0
         info = {}
@@ -232,10 +233,12 @@ class ReduceManager(object):
         # We're only using repeat=1 instead of repeat=ITERATIONS so we can get feedback
         #   on every call to interesting.
 
-        for use_harness in [True, False]:
-            if use_harness and not self._original_use_harness:
+        for (use_harness, last_test) in [(True, True), (True, False), (False, False)]:
+            if use_harness and (not self._original_use_harness or harness_last_crashes):
                 continue
             if not use_harness and harness_crashes >= self.ANALYSIS_ITERATIONS / 2:
+                continue
+            if last_test and len(self.testcases) == 1:
                 continue
 
             self.target.relaunch = self.ANALYSIS_ITERATIONS if use_harness else 1
@@ -248,6 +251,9 @@ class ReduceManager(object):
                          self.ANALYSIS_ITERATIONS,
                          "using" if use_harness else "without")
                 testcases = self.testcases
+                if last_test:
+                    LOG.warning("Checking reliability with only the last testcase.")
+                    testcases = [testcases[-1]]
                 if not use_harness and len(testcases) > 1:
                     LOG.warning("Only the last testcase of %d given will be used to "
                                 "assess reliability without harness.", len(testcases))
@@ -275,23 +281,32 @@ class ReduceManager(object):
                     self.report(
                         [result for result in results if not result.expected],
                         testcases, self._stats.copy(stats))
-                    if crashes and use_harness:
+                    if use_harness and last_test:
+                        harness_last_crashes = crashes
+                    elif use_harness:
                         harness_crashes = crashes
-                    elif crashes:
+                    else:
                         non_harness_crashes = crashes
                 finally:
                     for result in results:
                         result.report.cleanup()
                 reliability = crashes / self.ANALYSIS_ITERATIONS
                 key = ("using" if use_harness else "without") + " harness"
+                if last_test or (not use_harness and len(self.testcases) > 1):
+                    key += "/last test only"
                 LOG.info("Testcase was interesting %0.1f%% of %d attempts %s.",
                          100.0 * reliability, self.ANALYSIS_ITERATIONS, key)
                 info[key] = reliability
                 # ensure same signature is always used
                 self._signature = replay.signature
 
-        if harness_crashes == 0 and non_harness_crashes == 0:
+        if not any([harness_last_crashes, harness_crashes, non_harness_crashes]):
             raise NotReproducible("Did not reproduce during analysis")
+
+        # if harness is selected, we'll only use the last testcase
+        last_test = bool(harness_last_crashes)
+        if last_test:
+            harness_crashes = harness_last_crashes
 
         # should we use the harness? go with harness unless no-harness crashed 50% more
         self._use_harness = not (
@@ -301,9 +316,10 @@ class ReduceManager(object):
             )
         )
 
-        if not self._use_harness and len(self.testcases) > 1:
-            LOG.warning("Last testcase without harness was selected, other %d "
+        if (not self._use_harness or last_test) and len(self.testcases) > 1:
+            LOG.warning("Last testcase %s harness was selected, other %d "
                         "testcases in the original will be ignored.",
+                        "with" if self._use_harness else "without",
                         len(self.testcases) - 1)
             while len(self.testcases) > 1:
                 self.testcases.pop(0).cleanup()
