@@ -50,11 +50,15 @@ class ReduceArgs(ReplayArgs):
 
         reduce_args = self.parser.add_argument_group("Reduce Arguments")
         reduce_args.add_argument(
-            "--skip-dd-unmarked", action="store_false", dest="all_files",
-            help="Only reduce files containing DDBEGIN/END (default: all files)")
-        reduce_args.add_argument(
             "--no-analysis", action="store_true",
             help="Disable analysis to auto-set --repeat/--min-crashes.")
+        reduce_args.add_argument(
+            "--report-period", type=int,
+            help="Periodically report the best testcase for long-running strategies."
+            " (value in seconds, default: no)")
+        reduce_args.add_argument(
+            "--skip-dd-unmarked", action="store_false", dest="all_files",
+            help="Only reduce files containing DDBEGIN/END (default: all files)")
         reduce_args.add_argument(
             "--static-timeout", action="store_true",
             help="Disable automatically updating the iteration timeout.")
@@ -83,6 +87,12 @@ class ReduceArgs(ReplayArgs):
         for strategy in args.strategies:
             if strategy not in STRATEGIES:
                 self.parser.error("Unrecognized '--strategy': '%s'" % (strategy,))
+
+        if args.report_period is not None:
+            if args.report_period <= 0:
+                self.parser.error("Invalid --report-period (value is in seconds)")
+            if args.report_period < 60:
+                self.parser.error("Very short --report-period (value is in seconds)")
 
         if not args.no_analysis:
             # analysis is enabled, but repeat/min_crashes specified. doesn't make sense
