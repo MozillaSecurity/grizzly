@@ -27,7 +27,7 @@ class MinimizeTestcaseList(Strategy):
     """
     name = "list"
 
-    def __init__(self, testcases, all_files):
+    def __init__(self, testcases):
         """Initialize strategy instance.
 
         Arguments:
@@ -35,7 +35,7 @@ class MinimizeTestcaseList(Strategy):
                 List of testcases to reduce. The object does not take ownership of the
                 testcases.
         """
-        super().__init__(testcases, all_files)
+        super().__init__(testcases)
         self._current_feedback = None
         self._current_served = None
         self._current_remain = None

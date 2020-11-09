@@ -57,9 +57,6 @@ class ReduceArgs(ReplayArgs):
             help="Periodically report the best testcase for long-running strategies."
             " (value in seconds, default: no)")
         reduce_args.add_argument(
-            "--skip-dd-unmarked", action="store_false", dest="all_files",
-            help="Only reduce files containing DDBEGIN/END (default: all files)")
-        reduce_args.add_argument(
             "--static-timeout", action="store_true",
             help="Disable automatically updating the iteration timeout.")
         reduce_args.add_argument(

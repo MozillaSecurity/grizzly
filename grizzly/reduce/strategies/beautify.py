@@ -53,22 +53,20 @@ class _BeautifyStrategy(Strategy, ABC):
     native_extension = None
     tag_name = None
 
-    def __init__(self, testcases, all_files):
+    def __init__(self, testcases):
         """Initialize beautification strategy instance.
 
         Arguments:
             testcases (list(grizzly.common.storage.TestCase)):
                 List of testcases to reduce. The object does not take ownership of the
                 testcases.
-            all_files (bool): Reduce all files, otherwise only files containing
-                              DDBEGIN/END
         """
-        super().__init__(testcases, all_files)
+        super().__init__(testcases)
         self._files_to_beautify = []
         for path in self._testcase_root.glob("**/*"):
             if (path.is_file() and path.suffix in self.all_extensions
                     and path.name not in self.blacklist_files):
-                if self._all_files or _contains_dd(path):
+                if _contains_dd(path):
                     self._files_to_beautify.append(path)
         self._current_feedback = None
         tag_bytes = self.tag_name.encode("ascii")

@@ -112,6 +112,7 @@ ListStrategyParams = namedtuple(
 def test_list(mocker, tmp_path, test_data, strategies, required_first,
               expected_run_calls, expected_results, expected_num_reports):
     """tests for the "list" strategy"""
+    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
     replayer.status.iteration = 1
@@ -442,6 +443,8 @@ BeautifyStrategyParams = namedtuple(
 def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
                     expected_results, expected_num_reports, strategies):
     """test for the "beautify" strategies"""
+    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
+    mocker.patch("grizzly.reduce.strategies.beautify._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
     replayer.status.iteration = 1
@@ -593,6 +596,7 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
                         expected_results, expected_run_calls, expected_num_reports,
                         purging_breaks):
     """test purging unserved files"""
+    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
     replayer.status.iteration = 1
