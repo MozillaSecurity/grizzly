@@ -6,7 +6,7 @@
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 from hashlib import sha1
-from json import dump
+from json import dump, dumps, loads
 from logging import getLogger, WARNING
 from platform import machine, system
 from os import listdir, getcwd, getenv, makedirs, mkdir, SEEK_END, stat, unlink, walk
@@ -462,7 +462,7 @@ class FuzzManagerReporter(Reporter):
         self.tool = tool  # optional tool name
 
     def _post_submit(self):
-        self._extra_metadata = {}
+        self._extra_metadata.clear()
 
     @staticmethod
     def sanity_check(bin_file):
@@ -480,6 +480,22 @@ class FuzzManagerReporter(Reporter):
             raise IOError("Missing: %s.fuzzmanagerconf" % (bin_file,))
         ProgramConfiguration.fromBinary(bin_file)
 
+    def add_extra_metadata(self, key, value):
+        """Add extra metadata to be reported with any CrashEntrys reported.
+
+        Arguments:
+            key (str): key for this data in the metadata dict
+            value (object): JSON serializable object to be included in the FM crash metadata.
+                            The object will be deep-copied.
+
+        Returns:
+            None
+        """
+        assert isinstance(key, str)
+        assert key not in self._extra_metadata
+        # this not only does a deep copy, but also ensures that value is JSON serializable
+        self._extra_metadata[key] = loads(dumps(value))
+
     @classmethod
     def quality_name(cls, value):
         for name in dir(cls):
@@ -495,7 +511,7 @@ class FuzzManagerReporter(Reporter):
         trace_path = pathjoin(report.path, "rr-traces")
         if isdir(trace_path):
             LOG.info("Ignored rr trace")
-            self._extra_metadata["rr-trace"] = "ignored"
+            self.add_extra_metadata("rr-trace",  "ignored")
             # remove traces so they are not uploaded to FM (because they are huge)
             # use S3FuzzManagerReporter instead
             rmtree(trace_path)
@@ -655,7 +671,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
         else:
             # The object already exists.
             LOG.info("rr trace exists at %r", s3_url)
-            self._extra_metadata["rr-trace"] = s3_url
+            self.add_extra_metadata("rr-trace", s3_url)
             # remove traces so they are not reported to FM
             rmtree(trace_path)
             return s3_url
@@ -664,7 +680,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
         rr_arc = self.compress_rr_trace(trace_path, report.path)
         s3.meta.client.upload_file(rr_arc, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"})
         unlink(rr_arc)
-        self._extra_metadata["rr-trace"] = s3_url
+        self.add_extra_metadata("rr-trace", s3_url)
         return s3_url
 
     @staticmethod

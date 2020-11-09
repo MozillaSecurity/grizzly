@@ -580,6 +580,8 @@ class ReduceManager(object):
                     for line in stats.format_lines():
                         print(line, file=out)
                 (report_path / "reduce_stats.json").write_text(stats.json())
+                if self._report_to_fuzzmanager:
+                    stats.add_to_reporter(reporter)
             # clone the tests so we can safely call purge_optional here for each report
             # (report.served may be different for non-expected or any-crash results)
             clones = [test.clone() for test in testcases]

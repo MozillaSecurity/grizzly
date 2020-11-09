@@ -292,6 +292,17 @@ class ReductionStats(object):
         )
         yield from tabulator.format_rows(stats)
 
+    def add_to_reporter(self, reporter):
+        """Add the reducer stats to reported metadata for the given reporter.
+
+        Arguments:
+            reporter (FuzzManagerReporter): Reporter to update.
+
+        Returns:
+            None
+        """
+        reporter.add_extra_metadata("reducer-stats", self._data)
+
     def json(self):
         """Serialize the stats using JSON.
 
