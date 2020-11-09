@@ -10,7 +10,7 @@ from os import remove, stat
 from os.path import isfile
 from time import sleep, time
 
-from .status import ReducerStats, Status
+from .status import Status
 
 
 def test_status_01(tmp_path):
@@ -172,77 +172,3 @@ def test_status_08(tmp_path):
                 proc.join()
     # verify cleanup
     assert not any(Status.loadall())
-
-def test_reducer_stats_01(tmp_path):
-    """test ReducerStats() empty"""
-    ReducerStats.PATH = str(tmp_path)
-    with ReducerStats() as stats:
-        assert stats.error == 0
-        assert stats.failed == 0
-        assert stats.passed == 0
-        stats_file = stats._file
-        assert not isfile(stats_file)
-    assert isfile(stats_file)
-
-def test_reducer_stats_02(tmp_path):
-    """test ReducerStats() simple"""
-    ReducerStats.PATH = str(tmp_path)
-    with ReducerStats() as stats:
-        stats.error += 1
-        stats.failed += 1
-        stats.passed += 1
-    with ReducerStats() as stats:
-        assert stats.error == 1
-        assert stats.failed == 1
-        assert stats.passed == 1
-
-def test_reducer_stats_03(tmp_path):
-    """test ReducerStats() empty/incomplete/invalid data file"""
-    ReducerStats.PATH = str(tmp_path)
-    stats_file = tmp_path / ReducerStats.FILE
-    # missing file
-    with ReducerStats() as stats:
-        stats.passed += 1
-    # invalid empty file
-    stats_file.write_bytes(b"")
-    with ReducerStats() as stats:
-        assert stats.passed == 0
-    # incomplete file
-    stats_file.write_bytes(b"{}")
-    with ReducerStats() as stats:
-        assert stats.passed == 0
-
-def _reducer_client(working_path, reported, unrestrict):
-    """Used by test_reducer_stats_04"""
-    # NOTE: this must be at the top level to work on Windows
-    ReducerStats.PATH = working_path
-    for _ in range(20):
-        with ReducerStats() as stats:
-            stats.passed += 1
-        if not reported.is_set():
-            reported.set()
-            unrestrict.wait(timeout=60)
-
-def test_reducer_stats_04(tmp_path):
-    """test ReducerStats() with multiple processes"""
-    ReducerStats.PATH = str(tmp_path)
-    report_events = list()
-    procs = list()
-    unrestrict = Event()  # used to sync client procs
-    try:
-        # launch processes
-        for _ in range(5):
-            report_events.append(Event())
-            procs.append(Process(
-                target=_reducer_client, args=(ReducerStats.PATH, report_events[-1], unrestrict)))
-            procs[-1].start()
-        # wait for processes to report
-        for has_reported in report_events:
-            assert has_reported.wait(timeout=60)
-    finally:
-        unrestrict.set()
-        for proc in procs:
-            if proc.pid is not None:
-                proc.join()
-    with ReducerStats() as stats:
-        assert stats.passed == 100

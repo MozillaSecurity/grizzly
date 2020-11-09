@@ -16,7 +16,7 @@ import time
 
 import psutil
 
-from .status import ReducerStats, Status
+from .status import Status
 
 __all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"
@@ -32,8 +32,7 @@ class StatusReporter(object):
     READ_BUF_SIZE = 0x10000  # 64KB
     SUMMARY_LIMIT = 4095  # summary output must be no more than 4KB
 
-    def __init__(self, reports, reducer=False, tracebacks=None):
-        self._reducer = reducer
+    def __init__(self, reports, tracebacks=None):
         self.reports = reports
         self.tracebacks = tracebacks
 
@@ -65,7 +64,7 @@ class StatusReporter(object):
             ofp.write(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
     @classmethod
-    def load(cls, reducer=False, tb_path=None):
+    def load(cls, tb_path=None):
         """Read Grizzly status reports and create a StatusReporter object
 
         Args:
@@ -77,7 +76,7 @@ class StatusReporter(object):
         if tb_path is not None and not os.path.isdir(tb_path):
             raise OSError("%r is not a directory" % (tb_path,))
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
-        return cls(list(Status.loadall()), reducer=reducer, tracebacks=tracebacks)
+        return cls(list(Status.loadall()), tracebacks=tracebacks)
 
     def print_specific(self):
         print(self._specific())
@@ -120,9 +119,8 @@ class StatusReporter(object):
             txt.append(" Runtime %s\n" % str(timedelta(seconds=int(report.duration))))
             txt.append(" * Iterations: %03d" % report.iteration)
             txt.append(" - Rate: %0.2f" % report.rate)
-            if not self._reducer:
-                txt.append(" - Ignored: %02d" % report.ignored)
-                txt.append(" - Results: %d" % report.results)
+            txt.append(" - Ignored: %02d" % report.ignored)
+            txt.append(" - Results: %d" % report.results)
             txt.append("\n")
         return "".join(txt)
 
@@ -139,20 +137,6 @@ class StatusReporter(object):
             str: A summary of merged reports
         """
         txt = list()
-        if self._reducer:
-            # reducer stats
-            with ReducerStats() as stats:
-                r_error = stats.error
-                r_failed = stats.failed
-                r_passed = stats.passed
-            txt.append("======== Stats ========\n")
-            # Reduced successfully
-            txt.append("   Reduced : %d\n" % (r_passed,))
-            # Failed to reproduce
-            txt.append("  No Repro : %d\n" % (r_failed,))
-            # Error during reduction
-            txt.append("    Errors : %d\n" % (r_error,))
-            txt.append("======= Active ========\n")
         # Job specific status
         exp = int(time.time()) - self.EXP_LIMIT
         reports = tuple(x for x in self.reports if x.timestamp > exp)
@@ -176,27 +160,15 @@ class StatusReporter(object):
                 txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
             txt.append("\n")
             # Results / Signature mismatch
-            if self._reducer:
-                txt.append("  Mismatch : %d" % (sum(results),))
-            else:
-                txt.append("   Results : %d" % (sum(results),))
+            txt.append("   Results : %d" % (sum(results),))
             if total_ignored:
                 ignore_pct = (total_ignored / float(total_iters)) * 100
                 txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, ignore_pct))
             # Runtime
             if runtime:
                 txt.append("\n")
-                if self._reducer:
-                    durations = tuple(x.duration for x in reports)
-                    if count > 1:
-                        max_duration = str(timedelta(seconds=int(max(durations))))
-                        min_duration = str(timedelta(seconds=int(min(durations))))
-                        txt.append("   Runtime : (%s, %s)" % (max_duration, min_duration))
-                    else:
-                        txt.append("   Runtime : %s" % (str(timedelta(seconds=int(durations[0]))),))
-                else:
-                    total_runtime = sum(x.duration for x in reports)
-                    txt.append("   Runtime : %s" % (str(timedelta(seconds=int(total_runtime))),))
+                total_runtime = sum(x.duration for x in reports)
+                txt.append("   Runtime : %s" % (str(timedelta(seconds=int(total_runtime))),))
             # Log size
             log_usage = sum(log_sizes) / 1048576.0
             if log_usage > self.DISPLAY_LIMIT_LOG:
@@ -410,7 +382,7 @@ def main(args=None):
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
     logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    modes = ("reduce-status", "status")
+    modes = ("status",)
     parser = argparse.ArgumentParser(description="Grizzly status report generator")
     parser.add_argument(
         "--dump",
@@ -428,10 +400,9 @@ def main(args=None):
 
     if args.mode not in modes:
         parser.error("Invalid mode %r" % args.mode)
-    reducer_mode = args.mode == "reduce-status"
-    reporter = StatusReporter.load(tb_path=args.tracebacks, reducer=reducer_mode)
+    reporter = StatusReporter.load(tb_path=args.tracebacks)
     if args.dump:
-        reporter.dump_summary(args.dump, runtime=reducer_mode)
+        reporter.dump_summary(args.dump)
         return 0
     if not reporter.reports:
         print("No status reports to display")

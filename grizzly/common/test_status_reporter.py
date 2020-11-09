@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from .status_reporter import main, ReducerStats, Status, StatusReporter, TracebackReport
+from .status_reporter import main, Status, StatusReporter, TracebackReport
 
 def _fake_sys_info():
     return "CPU & Load : 64 @ 93.1% (85.25, 76.21, 51.06)\n" \
@@ -265,71 +265,6 @@ def test_status_reporter_09(tmp_path):
     merged_log = rptr._summary(runtime=True, sysinfo=True, timestamp=True)
     assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
 
-def test_reduce_status_reporter_01(tmp_path):
-    """test empty StatusReporter in reducer mode"""
-    Status.PATH = str(tmp_path)
-    ReducerStats.PATH = Status.PATH
-    rptr = StatusReporter.load(reducer=True)
-    assert rptr is not None
-    assert not rptr.reports
-    output = rptr._specific()
-    assert "No status reports available" in output
-    output = rptr._summary()
-    assert "No status reports available" in output
-
-def test_reduce_status_reporter_02(tmp_path):
-    """test StatusReporter._specific() in reducer mode"""
-    Status.PATH = str(tmp_path)
-    ReducerStats.PATH = Status.PATH
-    status = Status.start()
-    status.ignored = 12
-    status.iteration = 432422
-    status._results = {"sig": 123}
-    status.report(force=True)
-    rptr = StatusReporter.load(reducer=True)
-    assert rptr.reports
-    output = rptr._specific()
-    assert len(output.split("\n")[:-1]) == 2
-    assert "Iteration" in output
-    assert "Rate" in output
-    assert "Ignored" not in output
-    assert "Results" not in output
-
-def test_reduce_status_reporter_03(tmp_path):
-    """test StatusReporter._summary() in reducer mode"""
-    Status.PATH = str(tmp_path)
-    ReducerStats.PATH = Status.PATH
-    status = Status.start()
-    status.iteration = 1
-    status.report(force=True)
-    status = Status.start()
-    status.iteration = 10
-    status.report(force=True)
-    rptr = StatusReporter.load(reducer=True)
-    rptr._sys_info = _fake_sys_info
-    assert rptr.reports is not None
-    output = rptr._summary(sysinfo=True, timestamp=True)
-    assert "======== Stats ========" in output
-    assert "======= Active ========" in output
-    assert "Reduced" in output
-    assert "No Repro" in output
-    assert "Iteration" in output
-    assert "Results" not in output
-    assert "Mismatch" in output
-    assert "Rate" in output
-    assert "Runtime" in output
-    assert "ignored" not in output
-    assert "Timestamp" in output
-    lines = output.split("\n")
-    assert len(lines) == 13
-    # verify alignment
-    position = len(lines[1].split(":")[0])
-    for line in lines:
-        if line.startswith("="):
-            # skip headers
-            continue
-        assert re.match(r"\S\s:\s\S", line[position - 2:])
-
 def test_traceback_report_01():
     """test simple TracebackReport"""
     tbr = TracebackReport("log.txt", ["0", "1", "2"], prev_lines=["-2", "-1"])
@@ -520,22 +455,8 @@ def test_main_03(tmp_path):
     assert dump_file.is_file()
     assert b"Runtime" not in dump_file.read_bytes()
     #assert False, dump_file.read_bytes()
-    dump_file.unlink()
-    dump_file = tmp_path / "output.txt"
-    assert main(["--dump", str(dump_file), "--mode", "reduce-status"]) == 0
-    assert dump_file.is_file()
-    assert b"Runtime" in dump_file.read_bytes()
 
-def test_main_04(tmp_path):
-    """test main() with --mode reduce-status"""
-    Status.PATH = str(tmp_path)
-    StatusReporter.CPU_POLL_INTERVAL = 0.01
-    status = Status.start()
-    status.iteration = 1
-    status.report(force=True)
-    assert main(["--mode", "reduce-status"]) == 0
-
-def test_main_05():
+def test_main_04():
     """test main() with invalid mode"""
     with pytest.raises(SystemExit):
         main(["--mode", "invalid"])
