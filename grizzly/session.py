@@ -58,8 +58,11 @@ class Session(object):
     DISPLAY_NORMAL = 1  # quickly reduce the amount of output
     EXIT_SUCCESS = 0
     EXIT_ERROR = 1
+    EXIT_ARGS = 2
     EXIT_ABORT = 3
-    EXIT_LAUNCH_FAILURE = 7
+    EXIT_LAUNCH_FAILURE = 4
+    EXIT_FAILURE = 5
+
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
     __slots__ = ("adapter", "coverage", "iomanager", "reporter", "server", "status", "target")

@@ -18,6 +18,7 @@ from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
 from ..common.utils import grz_tmp
 from ..main import configure_logging
+from ..session import Session
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -362,14 +363,15 @@ class ReplayManager(object):
                 try:
                     selected = testcases.pop(args.test_index)
                 except IndexError:
-                    raise TestCaseLoadFailure("Invalid '--test-index'") from None
+                    LOG.error("Invalid '--test-index'")
+                    return Session.EXIT_ARGS
                 finally:
                     for test in testcases:
                         test.cleanup()
                 testcases = [selected]
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
-            return 1
+            return Session.EXIT_ERROR
 
         results = None
         target = None
@@ -379,7 +381,7 @@ class ReplayManager(object):
                 LOG.error(
                     "'--no-harness' cannot be used with multiple testcases. " \
                     "Perhaps '--test-index' can help.")
-                return 1
+                return Session.EXIT_ARGS
             repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, repeat)
             LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
@@ -443,10 +445,10 @@ class ReplayManager(object):
                     results,
                     testcases if args.include_test else None)
             # TODO: add fuzzmanager reporting
-            return 0 if success else 1
+            return Session.EXIT_SUCCESS if success else Session.EXIT_FAILURE
 
         except KeyboardInterrupt:
-            return 1
+            return Session.EXIT_ABORT
 
         except (TargetLaunchError, TargetLaunchTimeout) as exc:
             LOG.error(str(exc))
@@ -455,7 +457,7 @@ class ReplayManager(object):
                 LOG.error("Logs can be found here %r", path)
                 reporter = FilesystemReporter(path, major_bucket=False)
                 reporter.submit([], exc.report)
-            return 1
+            return Session.EXIT_LAUNCH_FAILURE
 
         finally:
             LOG.warning("Shutting down...")

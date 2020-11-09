@@ -14,6 +14,7 @@ from ..common import Report, TestCase, TestCaseLoadFailure
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from ..replay import ReplayManager
 from ..replay.args import ReplayArgs
+from ..session import Session
 
 from .test_replay import _fake_save_logs
 
@@ -106,7 +107,7 @@ def test_main_01(mocker, tmp_path):
         test_index=None,
         timeout=10,
         valgrind=False)
-    assert ReplayManager.main(args) == 0
+    assert ReplayManager.main(args) == Session.EXIT_SUCCESS
     assert target.forced_close
     assert target.reverse.call_count == 1
     assert target.launch.call_count == 3
@@ -144,31 +145,31 @@ def test_main_02(mocker):
     # coverage
     args.rr = True
     args.valgrind = False
-    assert ReplayManager.main(args) == 1
+    assert ReplayManager.main(args) == Session.EXIT_ABORT
     fake_load_target.reset_mock()
     # invalid test case
     fake_tc.load.side_effect = TestCaseLoadFailure
     # coverage
     args.rr = False
     args.valgrind = True
-    assert ReplayManager.main(args) == 1
+    assert ReplayManager.main(args) == Session.EXIT_ERROR
     assert fake_load_target.call_count == 0
     # no test cases
     args.valgrind = False
     fake_tc.load.side_effect = None
     fake_tc.load.return_value = list()
-    assert ReplayManager.main(args) == 1
+    assert ReplayManager.main(args) == Session.EXIT_ERROR
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # multiple test cases with --no-harness
     fake_tc.load.return_value = [mocker.Mock(), mocker.Mock()]
-    assert ReplayManager.main(args) == 1
+    assert ReplayManager.main(args) == Session.EXIT_ARGS
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # multiple test cases with invalid --test-index
     args.test_index = 100
     fake_tc.load.return_value = [mocker.Mock(), mocker.Mock()]
-    assert ReplayManager.main(args) == 1
+    assert ReplayManager.main(args) == Session.EXIT_ARGS
     assert fake_load_target.call_count == 0
 
 def test_main_03(mocker, tmp_path):
@@ -198,12 +199,12 @@ def test_main_03(mocker, tmp_path):
     fake_logs.mkdir()
     report = mocker.Mock(spec=Report, prefix="fake_report", path=str(fake_logs))
     mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchError("", report))
-    assert ReplayManager.main(args) == 1
+    assert ReplayManager.main(args) == Session.EXIT_LAUNCH_FAILURE
     assert not fake_logs.is_dir()
     assert any(fake_tmp.glob("fake_report_logs"))
     # target launch timeout
     mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchTimeout)
-    assert ReplayManager.main(args) == 1
+    assert ReplayManager.main(args) == Session.EXIT_LAUNCH_FAILURE
 
 def test_main_04(mocker):
     """test ReplayManager.main() loading GRZ_FORCED_CLOSE from selected test case"""
@@ -233,7 +234,7 @@ def test_main_04(mocker):
         sig=None,
         test_index=0,
         timeout=1)
-    ReplayManager.main(args)
+    assert ReplayManager.main(args) == Session.EXIT_FAILURE
     assert test0.cleanup.call_count == 1
     assert test0.dump.call_count == 1
     assert test1.cleanup.call_count == 1
@@ -279,7 +280,7 @@ def test_main_05(mocker, tmp_path):
 
     # test no specified prefs.js
     args.prefs = None
-    assert ReplayManager.main(args) == 0
+    assert ReplayManager.main(args) == Session.EXIT_SUCCESS
     assert target.launch.call_count == 1
     assert target.detect_failure.call_count == 1
     assert serve_path.call_count == 1
@@ -292,7 +293,7 @@ def test_main_05(mocker, tmp_path):
 
     # test included prefs.js
     (input_path / "prefs.js").write_bytes(b"included")
-    assert ReplayManager.main(args) == 0
+    assert ReplayManager.main(args) == Session.EXIT_SUCCESS
     assert target.launch.call_count == 1
     assert target.detect_failure.call_count == 1
     assert serve_path.call_count == 1
@@ -307,7 +308,7 @@ def test_main_05(mocker, tmp_path):
     # test specified prefs.js
     (tmp_path / "prefs.js").write_bytes(b"specified")
     args.prefs = str(tmp_path / "prefs.js")
-    assert ReplayManager.main(args) == 0
+    assert ReplayManager.main(args) == Session.EXIT_SUCCESS
     assert target.launch.call_count == 1
     assert target.detect_failure.call_count == 1
     assert serve_path.call_count == 1
