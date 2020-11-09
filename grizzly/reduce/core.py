@@ -2,8 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-"""`ReduceManager` finds the smallest testcase(s) to reproduce an issue.
-"""
+"""`ReduceManager` finds the smallest testcase(s) to reproduce an issue."""
 from itertools import chain
 import json
 from locale import LC_ALL, setlocale
@@ -24,6 +23,7 @@ from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
 from ..common.utils import grz_tmp
 from ..main import configure_logging
 from ..replay import ReplayManager, ReplayResult
+from ..session import Session
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
 from .stats import ReductionStats
@@ -369,7 +369,7 @@ class ReduceManager(object):
                                be considered successful.
 
         Returns:
-            int: One of the `FuzzManagerReporter.QUAL_*` constants.
+            int: One of the `Session.EXIT_*` constants.
         """
         any_success = False
         sig_given = self._signature is not None
@@ -547,8 +547,8 @@ class ReduceManager(object):
                  os.linesep.join(self._stats.format_lines()))
 
         if any_success:
-            return FuzzManagerReporter.QUAL_REDUCED_RESULT
-        return FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE
+            return Session.EXIT_SUCCESS
+        return Session.EXIT_FAILURE
 
     def report(self, results, testcases, stats=None):
         """Report results, either to FuzzManager or to filesystem.
@@ -641,7 +641,7 @@ class ReduceManager(object):
                     raise TestCaseLoadFailure("Failed to load TestCases")
             except TestCaseLoadFailure as exc:
                 LOG.error("Error: %s", str(exc))
-                return FuzzManagerReporter.QUAL_NO_TESTCASE
+                return Session.EXIT_ERROR
 
             if args.tool is None and testcases[0].adapter_name is not None:
                 LOG.warning("Setting default --tool=grizzly-%s from testcase",
@@ -659,7 +659,7 @@ class ReduceManager(object):
                     selected = testcases.pop(args.test_index)
                 except IndexError:
                     LOG.error("Error: Invalid '--test-index'")
-                    return FuzzManagerReporter.QUAL_NO_TESTCASE
+                    return Session.EXIT_ERROR
                 for test in testcases:
                     test.cleanup()
                 testcases = [selected]
@@ -725,8 +725,13 @@ class ReduceManager(object):
                 return_code = mgr.run(repeat=args.repeat, min_results=args.min_crashes)
             return return_code
 
-        except (KeyboardInterrupt, TargetLaunchError, TargetLaunchTimeout):
-            return FuzzManagerReporter.QUAL_REDUCER_ERROR
+        except KeyboardInterrupt as exc:
+            LOG.error("Exception: %r", exc)
+            return Session.EXIT_ABORT
+
+        except (TargetLaunchError, TargetLaunchTimeout) as exc:
+            LOG.error("Exception: %s", exc)
+            return Session.EXIT_LAUNCH_FAILURE
 
         except GrizzlyReduceBaseException as exc:
             LOG.error(exc.msg)
@@ -734,7 +739,7 @@ class ReduceManager(object):
 
         except Exception:  # noqa pylint: disable=broad-except
             LOG.exception("Exception during reduction!")
-            return FuzzManagerReporter.QUAL_REDUCER_ERROR
+            return Session.EXIT_ERROR
 
         finally:
             LOG.warning("Shutting down...")

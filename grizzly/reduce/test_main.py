@@ -73,19 +73,19 @@ def test_args_02(tmp_path):
     [
         (
             "grizzly.reduce.core.ReduceManager.run",
-            TargetLaunchError("error", None), None, {}, 9
+            TargetLaunchError("error", None), None, {}, 1
         ),
-        ("grizzly.reduce.core.ReduceManager.run", TargetLaunchTimeout, None, {}, 9),
-        ("grizzly.reduce.core.load_target", KeyboardInterrupt, None, {}, 9),
+        ("grizzly.reduce.core.ReduceManager.run", TargetLaunchTimeout, None, {}, 1),
+        ("grizzly.reduce.core.load_target", KeyboardInterrupt, None, {}, 1),
         (
             "grizzly.reduce.core.load_target",
-            GrizzlyReduceBaseException(""), None, {}, 9
+            GrizzlyReduceBaseException(""), None, {}, 1
         ),
-        ("grizzly.reduce.core.TestCase.load", TestCaseLoadFailure, None, {}, 7),
-        ("grizzly.reduce.core.TestCase.load", None, [], {}, 7),
+        ("grizzly.reduce.core.TestCase.load", TestCaseLoadFailure, None, {}, 1),
+        ("grizzly.reduce.core.TestCase.load", None, [], {}, 1),
         (
             "grizzly.reduce.core.TestCase.load", None, [Mock(), Mock()],
-            {"test_index": 100}, 7
+            {"test_index": 100}, 1
         ),
     ]
 )
