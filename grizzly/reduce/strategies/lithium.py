@@ -44,17 +44,9 @@ class _LithiumStrategy(Strategy, ABC):
         super().__init__(testcases)
         self._current_reducer = None
         self._files_to_reduce = []
-        self._possible_iters_remain = {}
         self.rescan_files_to_reduce()
         self._current_feedback = None
         self._current_served = None
-        for path in self._files_to_reduce:
-            test = self.testcase_cls()  # pylint: disable=not-callable
-            test.load(path)
-            strategy = self.strategy_cls()  # pylint: disable=not-callable
-            strategy.estimate_from_testcase(test)
-            self._possible_iters_remain[path] = strategy.estimated_remaining
-        self._testcase_root_dirty = False
 
     def rescan_files_to_reduce(self):
         """Repopulate the private `files_to_reduce` attribute by scanning the testcase
@@ -68,10 +60,6 @@ class _LithiumStrategy(Strategy, ABC):
             if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
                 if _contains_dd(path):
                     self._files_to_reduce.append(path)
-        # any files in possible_iters that don't exist anymore can be removed
-        removed = set(self._possible_iters_remain) - set(self._files_to_reduce)
-        for key in removed:
-            del self._possible_iters_remain[key]
 
     @classmethod
     def sanity_check_cls_attrs(cls):
@@ -103,16 +91,6 @@ class _LithiumStrategy(Strategy, ABC):
         self._current_feedback = success
         self._current_served = served
 
-    def __len__(self):
-        """Estimate the maximum # of attempts this strategy might take to finish.
-        ie. The number of times `__iter__` will yield.
-
-        Returns:
-            int: estimate of the # of attempts remaining.
-        """
-        return sum(self._possible_iters_remain.values()) \
-            + int(self._testcase_root_dirty)
-
     def __iter__(self):
         """Iterate over potential reductions of testcases according to this strategy.
 
@@ -130,7 +108,7 @@ class _LithiumStrategy(Strategy, ABC):
         reduce_queue.sort()  # not necessary, but helps make tests more predictable
         # indicates that self._testcase_root contains changes that haven't been yielded
         # (if iteration ends, changes would be lost)
-        self._testcase_root_dirty = False
+        testcase_root_dirty = False
         while reduce_queue:
             LOG.debug("Reduce queue: %r", reduce_queue)
             file = reduce_queue.pop(0)
@@ -142,7 +120,6 @@ class _LithiumStrategy(Strategy, ABC):
             lithium_testcase.load(file)
             strategy = self.strategy_cls()  # pylint: disable=not-callable
             self._current_reducer = strategy.reduce(lithium_testcase)
-            self._possible_iters_remain[file] = strategy.estimated_remaining
 
             # populate the lithium strategy "tried" cache
             # use all cache values where all hashes other than the current file match
@@ -161,10 +138,9 @@ class _LithiumStrategy(Strategy, ABC):
                 reduction.dump()
                 testcases = TestCase.load(str(self._testcase_root), True)
                 LOG.info("[%s] %s", self.name, self._current_reducer.description)
-                self._possible_iters_remain[file] = strategy.estimated_remaining
                 yield testcases
                 if self._current_feedback:
-                    self._testcase_root_dirty = False
+                    testcase_root_dirty = False
                 else:
                     self._tried.add(self._calculate_testcase_hash())
                 if self._current_feedback and self._current_served is not None:
@@ -180,7 +156,7 @@ class _LithiumStrategy(Strategy, ABC):
                     LOG.debug("files being reduced after: %r", self._files_to_reduce)
                     files_to_reduce = set(self._files_to_reduce)
                     reduce_queue = list(sorted(set(reduce_queue) & files_to_reduce))
-                    self._testcase_root_dirty = \
+                    testcase_root_dirty = \
                         len(self._files_to_reduce) != num_files_before
                     if file not in files_to_reduce:
                         # current reduction was for a purged file
@@ -189,8 +165,7 @@ class _LithiumStrategy(Strategy, ABC):
                 # write out the best found testcase
                 self._current_reducer.testcase.dump()
             self._current_reducer = None
-            self._possible_iters_remain.pop(file, None)
-        if self._testcase_root_dirty:
+        if testcase_root_dirty:
             # purging unserved files enabled us to exit early from the loop.
             # need to yield once more to set this trimmed version to the current best
             # in ReduceManager
@@ -198,7 +173,6 @@ class _LithiumStrategy(Strategy, ABC):
             LOG.info("[%s] final iteration triggered by purge_optional", self.name)
             yield testcases
             assert self._current_feedback, "Purging unserved files broke the testcase."
-        self._testcase_root_dirty = False
 
 
 class Check(_LithiumStrategy):
