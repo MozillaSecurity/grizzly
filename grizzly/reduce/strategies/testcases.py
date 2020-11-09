@@ -38,7 +38,6 @@ class MinimizeTestcaseList(Strategy):
         super().__init__(testcases)
         self._current_feedback = None
         self._current_served = None
-        self._current_remain = None
 
     def update(self, success, served=None):
         """Inform the strategy whether or not the last reduction yielded was good.
@@ -55,20 +54,6 @@ class MinimizeTestcaseList(Strategy):
         assert self._current_served is None
         self._current_feedback = success
         self._current_served = served
-
-    def __len__(self):
-        """Estimate the maximum # of attempts this strategy might take to finish.
-        ie. The number of times `__iter__` will yield.
-
-        Returns:
-            int: estimate of the # of attempts remaining.
-        """
-        if self._current_remain is None:
-            testcases = TestCase.load(str(self._testcase_root), True)
-            self._current_remain = len(testcases)
-            for test in testcases:
-                test.cleanup()
-        return max(self._current_remain - 1, 0)
 
     def __iter__(self):
         """Iterate over potential reductions of testcases according to this strategy.
@@ -87,7 +72,6 @@ class MinimizeTestcaseList(Strategy):
         try:
             testcases = TestCase.load(str(self._testcase_root), True)
             n_testcases = len(testcases)
-            self._current_remain = n_testcases
             # indicates that self._testcase_root contains changes that haven't been
             # yielded (if iteration ends, changes would be lost)
             testcase_root_dirty = False
@@ -132,7 +116,6 @@ class MinimizeTestcaseList(Strategy):
                 # reset
                 self._current_feedback = None
                 self._current_served = None
-                self._current_remain = n_testcases - idx + int(testcase_root_dirty)
             if testcase_root_dirty:
                 # purging unserved files enabled us to exit early from the loop.
                 # need to yield once more to set this trimmed version to the current
