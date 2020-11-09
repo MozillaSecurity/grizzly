@@ -33,17 +33,15 @@ class _LithiumStrategy(Strategy, ABC):
     strategy_cls = None
     testcase_cls = None
 
-    def __init__(self, testcases, all_files):
+    def __init__(self, testcases):
         """Initialize strategy instance.
 
         Arguments:
             testcases (list(grizzly.common.storage.TestCase)):
                 List of testcases to reduce. The object does not take ownership of the
                 testcases.
-            all_files (bool): Reduce all files, otherwise only files containing
-                              DDBEGIN/END
         """
-        super().__init__(testcases, all_files)
+        super().__init__(testcases)
         self._current_reducer = None
         self._files_to_reduce = []
         self._possible_iters_remain = {}
@@ -68,7 +66,7 @@ class _LithiumStrategy(Strategy, ABC):
         self._files_to_reduce.clear()
         for path in self._testcase_root.glob("**/*"):
             if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
-                if self._all_files or _contains_dd(path):
+                if _contains_dd(path):
                     self._files_to_reduce.append(path)
         # any files in possible_iters that don't exist anymore can be removed
         removed = set(self._possible_iters_remain) - set(self._files_to_reduce)

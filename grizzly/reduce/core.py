@@ -96,10 +96,9 @@ class ReduceManager(object):
     ITER_TIMEOUT_DURATION_MULTIPLIER = 2
 
     def __init__(self, ignore, server, target, testcases, strategies, log_path,
-                 all_files=True, any_crash=False, idle_delay=0, idle_threshold=0,
-                 report_period=None, report_to_fuzzmanager=False, signature=None,
-                 signature_desc=None, static_timeout=False, tool=None,
-                 use_analysis=True, use_harness=True):
+                 any_crash=False, idle_delay=0, idle_threshold=0, report_period=None,
+                 report_to_fuzzmanager=False, signature=None, signature_desc=None,
+                 static_timeout=False, tool=None, use_analysis=True, use_harness=True):
         """Initialize reduction manager. Many arguments are common with `ReplayManager`.
 
         Args:
@@ -111,7 +110,6 @@ class ReduceManager(object):
             strategies (list(str)): Value for `self.strategies` attribute.
             log_path (Path or str): Path to save results when reporting to filesystem.
 
-            all_files (bool): Reduce all files, not just those with DDBEGIN/END.
             any_crash (bool): Accept any crash when reducing, not just those matching
                               the specified or first observed signature.
             idle_delay (int): Number of seconds to wait before polling for idle.
@@ -136,7 +134,6 @@ class ReduceManager(object):
         self.strategies = strategies
         self.target = target
         self.testcases = testcases
-        self._all_files = all_files
         self._any_crash = any_crash
         self._idle_delay = idle_delay
         self._idle_threshold = idle_threshold
@@ -409,7 +406,7 @@ class ReduceManager(object):
                                        any_crash=self._any_crash,
                                        signature=self._signature,
                                        use_harness=self._use_harness)
-                strategy = STRATEGIES[strategy](self.testcases, self._all_files)
+                strategy = STRATEGIES[strategy](self.testcases)
                 if last_tried is not None:
                     strategy.update_tried(last_tried)
                     last_tried = None
@@ -714,7 +711,6 @@ class ReduceManager(object):
                     testcases,
                     args.strategies,
                     args.logs,
-                    all_files=args.all_files,
                     any_crash=args.any_crash,
                     idle_delay=args.idle_delay,
                     idle_threshold=args.idle_threshold,

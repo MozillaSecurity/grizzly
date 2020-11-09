@@ -478,6 +478,7 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
                other_reports, result):
     """test ReduceManager, difference scenarios produce correct expected/other
     results"""
+    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
     replayer.status.iteration = 1
@@ -521,7 +522,6 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
         for test in tests:
             test.cleanup()
 
-    assert replayer.run.call_count == expected_run_calls
     expected_dirs = set()
     if n_reports:
         expected_dirs.add(log_path / "reports")
@@ -540,6 +540,7 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
         assert other_tests == other_reports
         assert sum(1 for _ in (log_path / "other_reports").iterdir()) \
             == n_other * 2, list((log_path / "other_reports").iterdir())
+    assert replayer.run.call_count == expected_run_calls
 
 
 def test_report_01(mocker, tmp_path):
@@ -667,6 +668,7 @@ def test_report_02(mocker, tmp_path):
 
 def test_quality_update(mocker, tmp_path):
     """test that the final result gets changed to Q0 with --fuzzmanager"""
+    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
     replayer.status.iteration = 1
@@ -717,6 +719,7 @@ def test_quality_update(mocker, tmp_path):
 @pytest.mark.parametrize("exc_type", [TargetLaunchError, TargetLaunchTimeout])
 def test_launch_error(mocker, tmp_path, use_analysis, exc_type):
     """test that launch errors are reported"""
+    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     report_fcn = mocker.patch("grizzly.reduce.core.ReduceManager.report", autospec=True)
     replay_mock = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     if exc_type is TargetLaunchError:
@@ -825,6 +828,7 @@ TimeoutTestParams = namedtuple(
 def test_timeout_update(mocker, tmp_path, durations, interesting, static_timeout,
                         idle_input, idle_output, iter_input, iter_output, result):
     "timeout will be updated based on time to crash"
+    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
     replayer.status.iteration = 1

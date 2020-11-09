@@ -69,8 +69,8 @@ def _load_strategies():
 
 
 def _contains_dd(path):
-    data = path.read_text()
-    return "DDBEGIN" in data and "DDEND" in data
+    data = path.read_bytes()
+    return b"DDBEGIN" in data and b"DDEND" in data
 
 
 class Strategy(ABC):
@@ -84,19 +84,16 @@ class Strategy(ABC):
     """
     name = None
 
-    def __init__(self, testcases, all_files):
+    def __init__(self, testcases):
         """Initialize strategy instance.
 
         Arguments:
             testcases (list(grizzly.common.storage.TestCase)):
                 List of testcases to reduce. The object does not take ownership of the
                 testcases.
-            all_files (bool): Reduce all files, otherwise only files containing
-                              DDBEGIN/END
         """
         self._tried = set()  # set of tuple(tuple(str(Path), SHA512))
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
-        self._all_files = all_files
         self.dump_testcases(testcases)
 
     def _calculate_testcase_hash(self):
