@@ -236,7 +236,7 @@ class ReduceManager(object):
         #   on every call to interesting.
 
         for (use_harness, last_test) in [(True, True), (True, False), (False, False)]:
-            if use_harness and (not self._original_use_harness or harness_last_crashes):
+            if use_harness and (not self._original_use_harness or harness_crashes):
                 continue
             if not use_harness and harness_crashes >= self.ANALYSIS_ITERATIONS / 2:
                 continue
@@ -283,10 +283,13 @@ class ReduceManager(object):
                     self.report(
                         [result for result in results if not result.expected],
                         testcases, self._stats.copy(stats))
-                    if use_harness and last_test:
-                        harness_last_crashes = crashes
-                    elif use_harness:
+                    if use_harness:
+                        # set harness_crashes in both cases (last_test True/False)
+                        # we only want to iterate through all testcases if the last
+                        # testcase alone never reproduced (crashes == 0).
                         harness_crashes = crashes
+                        if last_test:
+                            harness_last_crashes = crashes
                     else:
                         non_harness_crashes = crashes
                 finally:
@@ -302,7 +305,7 @@ class ReduceManager(object):
                 # ensure same signature is always used
                 self._signature = replay.signature
 
-        if not any([harness_last_crashes, harness_crashes, non_harness_crashes]):
+        if not (harness_crashes or non_harness_crashes):
             raise NotReproducible("Did not reproduce during analysis")
 
         # if harness is selected, we'll only use the last testcase
