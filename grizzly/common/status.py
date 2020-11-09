@@ -15,7 +15,7 @@ from fasteners.process_lock import InterProcessLock
 
 from .utils import grz_tmp
 
-__all__ = ("ReducerStats", "Status")
+__all__ = ("Status",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -224,48 +224,3 @@ class Status(object):
         status = cls(filepath, start_time=time())
         status.report(force=True)
         return status
-
-
-class ReducerStats(object):
-    """ReducerStats holds stats for the Grizzly reducer.
-    """
-    FILE = "reducer-stats.json"
-    PATH = grz_tmp("status")
-
-    __slots__ = ("_file", "_lock", "error", "failed", "passed")
-
-    def __init__(self):
-        self._file = pathjoin(self.PATH, self.FILE)
-        self._lock = None
-        self.error = 0
-        self.failed = 0
-        self.passed = 0
-
-    def __enter__(self):
-        self._lock = InterProcessLock("%s.lock" % (self._file,))
-        self._lock.acquire()
-        try:
-            with open(self._file, "r") as in_fp:
-                data = load(in_fp)
-            self.error = data["error"]
-            self.failed = data["failed"]
-            self.passed = data["passed"]
-        except KeyError:
-            LOG.debug("invalid status data in %r", self._file)
-        except OSError:
-            LOG.debug("%r does not exist", self._file)
-        except ValueError:
-            LOG.debug("failed to load stats from %r", self._file)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            with open(self._file, "w") as out_fp:
-                dump({
-                    "error": self.error,
-                    "failed": self.failed,
-                    "passed": self.passed}, out_fp)
-        finally:
-            if self._lock:
-                self._lock.release()
-                self._lock = None
