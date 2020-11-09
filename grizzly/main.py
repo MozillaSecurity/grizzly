@@ -61,8 +61,9 @@ def main(args):
         adapter = get_adapter(args.adapter)()
 
         if adapter.TEST_DURATION >= args.timeout:
-            raise RuntimeError("Test duration (%ds) should be less than browser timeout (%ds)" % (
-                adapter.TEST_DURATION, args.timeout))
+            log.error("Test duration (%ds) must be less than --timeout (%ds)",
+                      adapter.TEST_DURATION, args.timeout)
+            return Session.EXIT_ARGS
 
         if adapter.RELAUNCH > 0:
             log.debug("relaunch (%d) set in Adapter", adapter.RELAUNCH)
