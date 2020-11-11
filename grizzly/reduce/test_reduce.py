@@ -694,7 +694,7 @@ def test_quality_update(mocker, tmp_path):
     mocker.patch("grizzly.common.reporter.Collector")
     reporter = mocker.patch("grizzly.reduce.core.FuzzManagerReporter")
     reporter.QUAL_REDUCED_RESULT = 0
-    update_coll = mocker.patch("grizzly.reduce.core.Collector")
+    update_coll = mocker.patch("grizzly.common.fuzzmanager.Collector")
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:

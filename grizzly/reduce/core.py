@@ -14,10 +14,10 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from time import time
 
-from Collector.Collector import Collector
 from FTB.Signatures.CrashInfo import CrashSignature
 from sapphire import Sapphire
 
+from ..common.fuzzmanager import CrashEntry
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter
 from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
 from ..common.utils import grz_tmp
@@ -35,37 +35,6 @@ __credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]
 
 
 LOG = getLogger(__name__)
-
-
-def change_quality(crash_id, quality):
-    """Update a FuzzManager crash entry quality (if the crash entry exists).
-
-    Missing crash entries are ignored with a warning.
-
-    Args:
-        crash_id (int): Crash ID on FuzzManager server
-        quality (int): Quality constant defined in FuzzManagerReporter.QUAL_*
-
-    Raises:
-        RuntimeError: Error communicating with FuzzManager server.
-
-    Returns:
-        None
-    """
-    LOG.info("Updating crash %d to quality %s", crash_id,
-             FuzzManagerReporter.quality_name(quality))
-    coll = Collector()
-
-    url = "%s://%s:%d/crashmanager/rest/crashes/%d/" \
-        % (coll.serverProtocol, coll.serverHost, coll.serverPort, crash_id)
-    try:
-        coll.patch(url, data={"testcase_quality": quality})
-    except RuntimeError as exc:
-        # let 404's go .. evidently the crash was deleted
-        if str(exc) == "Unexpected HTTP response: 404":
-            LOG.warning("Failed to update (404), does the crash still exist?")
-        else:
-            raise
 
 
 class ReduceManager(object):
@@ -532,7 +501,9 @@ class ReduceManager(object):
             # if we complete all strategies, mark the last reported crashes as reduced
             if self._report_to_fuzzmanager and last_reports:
                 for crash_id in last_reports:
-                    change_quality(crash_id, FuzzManagerReporter.QUAL_REDUCED_RESULT)
+                    LOG.info("Updating crash %d to quality %s", crash_id,
+                             FuzzManagerReporter.quality_name(FuzzManagerReporter.QUAL_REDUCED_RESULT))
+                    CrashEntry(crash_id).testcase_quality = FuzzManagerReporter.QUAL_REDUCED_RESULT
 
         # it's possible we made it this far without ever setting signature_desc.
         # this is only possible if --no-analysis is given

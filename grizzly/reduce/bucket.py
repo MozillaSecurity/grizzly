@@ -6,7 +6,8 @@ from logging import getLogger
 import sys
 
 from .args import ReduceFuzzManagerIDQualityArgs
-from .crash import CrashEntry, main as crash_main
+from .crash import main as crash_main
+from ..common.fuzzmanager import Bucket
 from ..main import configure_logging
 from ..session import Session
 
@@ -25,21 +26,20 @@ def main(args):
     """
     configure_logging(args.log_level)
     LOG.info("Trying all crashes in bucket %d until one reduces", args.input)
+
     # ensure --tool is reset for each call to grizzly.reduce.crash.main()
     orig_tool = args.tool
 
     # if no crashes in bucket, return success
     result = Session.EXIT_SUCCESS
 
-    # create a fake CrashEntry used only to download the signature once
-    crash = CrashEntry(0)
-    crash._data = {"bucket": args.input}  # pylint: disable=protected-access
+    bucket = Bucket(args.input)
     try:
         if args.sig is None:
-            args.sig = str(crash.bucket_path())
+            args.sig = str(bucket.signature_path())
 
-        for crash in CrashEntry.iter_bucket(args.input, args.quality):
-            args.input = crash.id
+        for crash in bucket.iter_crashes(args.quality):
+            args.input = crash.crash_id
             args.tool = orig_tool
 
             # call grizzly.reduce.crash
@@ -48,7 +48,7 @@ def main(args):
                 break
 
     finally:
-        crash.cleanup()
+        bucket.cleanup()
     return result
 
 
