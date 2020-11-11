@@ -414,7 +414,6 @@ class ReduceManager(object):
                 strategy_last_report = time()
                 strategy_stats = total_stats.add_timed(strategy.name)
                 best_results = []
-                best_reported = False
                 try:
                     with replay, strategy, strategy_stats:
                         for reduction in strategy:
@@ -470,7 +469,6 @@ class ReduceManager(object):
                                                     if result.expected]
                                     results = [result for result in results
                                                if not result.expected]
-                                    best_reported = False
                                 else:
                                     LOG.info("Attempt failed")
                                 # if the reduction found other crashes,
@@ -481,11 +479,14 @@ class ReduceManager(object):
 
                                 now = time()
                                 if self._report_periodically and \
+                                        best_results and \
                                         now - strategy_last_report > self._report_periodically:
                                     last_reports = self.report(
                                         best_results, self.testcases,
                                         self._stats.copy(strategy_stats))
-                                    best_reported = True
+                                    for result in best_results:
+                                        result.report.cleanup()
+                                    best_results = []
                                     strategy_last_report = now
                                     LOG.info("Best results reported (periodic)")
 
@@ -508,7 +509,7 @@ class ReduceManager(object):
                         # otherwise, ensure the first found signature is used throughout
                         self._signature = replay.signature
 
-                    if not best_reported:
+                    if best_results:
                         last_reports = self.report(
                             best_results, self.testcases,
                             self._stats.copy(total_stats))

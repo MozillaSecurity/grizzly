@@ -673,15 +673,20 @@ def test_quality_update(mocker, tmp_path):
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(_, **_kw):
-        log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
-        log_path.mkdir()
-        _fake_save_logs_foo(log_path)
-        report = Report(str(log_path), "bin")
-        return [ReplayResult(report, [["test.html"]], [], True)]
+    def replay_run(testcases, **_kw):
+        for test in testcases:
+            contents = test.get_file("test.html").data.decode("ascii")
+            if not contents.strip():
+                continue
+            log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+            log_path.mkdir()
+            _fake_save_logs_foo(log_path)
+            report = Report(str(log_path), "bin")
+            return [ReplayResult(report, [["test.html"]], [], True)]
+        return []
     replayer.run.side_effect = replay_run
 
-    (tmp_path / "test.html").touch()
+    (tmp_path / "test.html").write_text("123\n")
     testcases = TestCase.load(str(tmp_path / "test.html"), False)
     assert testcases
     log_path = tmp_path / "logs"
@@ -694,7 +699,7 @@ def test_quality_update(mocker, tmp_path):
     target.relaunch = 1
     try:
         mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target,
-                            testcases, ["check"], log_path, use_analysis=False,
+                            testcases, ["check", "lines"], log_path, use_analysis=False,
                             report_to_fuzzmanager=True)
         assert mgr.run() == 0
     finally:
