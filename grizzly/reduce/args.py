@@ -21,8 +21,7 @@ class ReduceArgs(ReplayArgs):
     """
 
     def __init__(self):
-        """Initialize argument parser.
-        """
+        """Initialize argument parser."""
         super().__init__()
 
         # these arguments have other defaults vs how they are defined in ReplayArgs
@@ -87,3 +86,49 @@ class ReduceArgs(ReplayArgs):
                     "%s specified, with analysis enabled, they will be ignored",
                     error_str
                 )
+
+
+class ReduceFuzzManagerIDArgs(ReduceArgs):
+
+    def __init__(self):
+        """Initialize argument parser."""
+        super().__init__()
+
+        # madhax alert!
+        #
+        # We need to modify the meaning of the 'input' positional to accept an int ID instead of a
+        # local testcase. This is not possible with the public argparse API.
+        #
+        # refs: https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
+        #       https://bugs.python.org/issue19462
+
+        # look up the action for the positional `input` arg
+        action = None
+        for arg in self.parser._actions:
+            if arg.dest == "input" and not arg.option_strings:
+                action = arg
+                break
+        assert action is not None
+
+        # modify it's type and help string
+        action.type = int
+        action.help = "FuzzManager ID to reduce"
+
+        # ... and Bob's your uncle
+        self._sanity_skip.add("input")
+
+
+class ReduceFuzzManagerIDQualityArgs(ReduceFuzzManagerIDArgs):
+
+    def __init__(self):
+        """Initialize argument parser."""
+        super().__init__()
+        self.parser.add_argument(
+            "--quality", type=int,
+            help="Only try crashes with a given quality value")
+
+    def sanity_check(self, args):
+        super().sanity_check(args)
+
+        if args.quality is not None and args.quality < 0:
+            self.parser.error("'--quality' value cannot be negative")

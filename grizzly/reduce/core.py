@@ -598,7 +598,7 @@ class ReduceManager(object):
 
     @classmethod
     def main(cls, args):
-        """CLI for `grizzly.replay`.
+        """CLI for `grizzly.reduce`.
 
         Arguments:
             args (argparse.Namespace): Result from `ReduceArgs.parse_args`.
