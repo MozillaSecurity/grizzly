@@ -45,18 +45,19 @@ def main(args):
         # default back to UNREDUCED
         # most errors will not be related to the testcase
         # so they should be retried later
-        quality = {
-            Session.EXIT_SUCCESS: FuzzManagerReporter.QUAL_REDUCED_ORIGINAL,
-            Session.EXIT_FAILURE: FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE,
-        }.get(
-            result, FuzzManagerReporter.QUAL_UNREDUCED
-        )
-        LOG.info(
-            "reducer finished -> exit(%d) -> Q%d",
-            result,
-            quality,
-        )
-        crash.testcase_quality = quality
+        if args.fuzzmanager:
+            quality = {
+                Session.EXIT_SUCCESS: FuzzManagerReporter.QUAL_REDUCED_ORIGINAL,
+                Session.EXIT_FAILURE: FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE,
+            }.get(
+                result, FuzzManagerReporter.QUAL_UNREDUCED
+            )
+            LOG.info(
+                "reducer finished -> exit(%d) -> Q%d",
+                result,
+                quality,
+            )
+            crash.testcase_quality = quality
     finally:
         crash.cleanup()
         if bucket is not None:

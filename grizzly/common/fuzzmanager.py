@@ -12,6 +12,8 @@ from tempfile import mkdtemp, mkstemp
 
 from Collector.Collector import Collector
 
+from .utils import grz_tmp
+
 
 LOG = getLogger(__name__)
 
@@ -143,7 +145,8 @@ class Bucket(object):
         if self._sig_filename is not None:
             return self._sig_filename
 
-        tmpd = Path(mkdtemp(prefix="grizzly-reduce-"))
+        tmpd = Path(mkdtemp(prefix="bucket-%d-" % (self._bucket_id,),
+                            dir=grz_tmp("fuzzmanager")))
         try:
             sig_basename = "%d.signature" % (self._bucket_id,)
             sig_filename = tmpd / sig_basename
@@ -248,8 +251,8 @@ class CrashEntry(object):
         if "content-disposition" not in response.headers:
             raise RuntimeError("Server sent malformed response: %r" % (response,))  # pragma: no cover
 
-        handle, filename = mkstemp(
-            prefix="grizzly-reduce-%d-" % (self.crash_id,), suffix=Path(self.testcase).suffix
+        handle, filename = mkstemp(dir=grz_tmp("fuzzmanager"),
+            prefix="crash-%d-" % (self.crash_id,), suffix=Path(self.testcase).suffix
         )
         try:
             with open(handle, "wb") as output:
