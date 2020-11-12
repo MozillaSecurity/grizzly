@@ -16,7 +16,8 @@ from ..common import TestCase, TestFile, Report
 from ..replay import ReplayResult
 from ..target import Target
 from .strategies import _load_strategies
-from .strategies.beautify import HAVE_CSSBEAUTIFIER, HAVE_JSBEAUTIFIER
+from .strategies.beautify import \
+    HAVE_CSSBEAUTIFIER, HAVE_JSBEAUTIFIER, CSSBeautify, JSBeautify
 from . import ReduceManager
 
 
@@ -164,7 +165,7 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
 BeautifyStrategyParams = namedtuple(
     "BeautifyStrategyParams",
     "test_data, test_name, expected_run_calls, expected_results, expected_num_reports,"
-    "strategies"
+    "strategies, have_beautifiers"
 )
 
 
@@ -182,6 +183,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -196,6 +198,7 @@ BeautifyStrategyParams = namedtuple(
                                   "catch (e) {}\n</script>\n"},
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -212,6 +215,7 @@ BeautifyStrategyParams = namedtuple(
                                   "requisite'\n</script>\n"},
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -227,6 +231,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -242,6 +247,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -259,6 +265,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -276,6 +283,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -294,6 +302,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -311,6 +320,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -329,6 +339,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -343,6 +354,7 @@ BeautifyStrategyParams = namedtuple(
                 expected_num_reports=2,
                 # no beautify performed, add check so the run succeeds
                 strategies=["jsbeautify", "check"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -357,6 +369,7 @@ BeautifyStrategyParams = namedtuple(
                 expected_num_reports=2,
                 # no beautify performed, add check so the run succeeds
                 strategies=["jsbeautify", "check"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
                                      reason="jsbeautifier required"),
@@ -370,6 +383,7 @@ BeautifyStrategyParams = namedtuple(
                 expected_results={"*,\n#a {\n  fluff: 0;\n  required: 1\n}\n"},
                 expected_num_reports=2,
                 strategies=["cssbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
                                      reason="cssbeautifier required"),
@@ -385,6 +399,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["cssbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
                                      reason="cssbeautifier required"),
@@ -398,6 +413,7 @@ BeautifyStrategyParams = namedtuple(
                 expected_results={"<style>\n*,\n#a {\n  fluff: 0;\n  required: 1\n}\n"},
                 expected_num_reports=2,
                 strategies=["cssbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
                                      reason="cssbeautifier required"),
@@ -414,6 +430,7 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["check", "cssbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
                                      reason="cssbeautifier required"),
@@ -434,15 +451,30 @@ BeautifyStrategyParams = namedtuple(
                 },
                 expected_num_reports=2,
                 strategies=["check", "lines", "cssbeautify"],
+                have_beautifiers=True,
             ),
             marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
                                      reason="cssbeautifier required"),
         ),
+        # test that when beautifiers are not available, the strategies have no effect
+        BeautifyStrategyParams(
+            test_data="<style>*,#a{fluff:0;required:1}\n",
+            test_name="test.html",
+            expected_run_calls=1,
+            expected_results={"<style>*,#a{fluff:0;required:1}\n"},
+            expected_num_reports=2,
+            strategies=["check", "cssbeautify"],
+            have_beautifiers=False,
+        ),
     ]
 )
 def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
-                    expected_results, expected_num_reports, strategies):
+                    expected_results, expected_num_reports, strategies,
+                    have_beautifiers):
     """test for the "beautify" strategies"""
+    if not have_beautifiers:
+        mocker.patch.object(CSSBeautify, "import_available", False)
+        mocker.patch.object(JSBeautify, "import_available", False)
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     mocker.patch("grizzly.reduce.strategies.beautify._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
@@ -662,3 +694,55 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
         str(p.relative_to(log_path)) for p in log_path.glob("reports/**/*")
         if p.is_file()
     ]
+
+
+def test_dd_only(mocker, tmp_path):
+    """test that only files containing DDBEGIN/END are reduced"""
+    replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
+
+    def replay_run(testcases, **_):
+        for test in testcases:
+            contents = test.get_file("test.html").data.decode("ascii")
+            LOG.debug("interesting if 'required' in %r", contents)
+            interesting = "required" in contents
+            if interesting:
+                log_path = tmp_path / (
+                    "crash%d_logs" % (replayer.run.call_count,)
+                )
+                log_path.mkdir()
+                _fake_save_logs_foo(log_path)
+                report = Report(str(log_path), "bin")
+                return [ReplayResult(report, [["test.html", "other.html"]], [], True)]
+        return []
+    replayer.run.side_effect = replay_run
+
+    test = TestCase("test.html", None, "test-adapter")
+    test.add_from_data("DDBEGIN\n123\nrequired\nDDEND\n", "test.html")
+    test.add_from_data("blah\n", "other.html")
+    tests = [test]
+    log_path = tmp_path / "logs"
+
+    target = mocker.Mock(spec=Target)
+    target.relaunch = 1
+    try:
+        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
+                            ["lines"], log_path, use_analysis=False)
+        assert mgr.run() == 0
+    finally:
+        for test in tests:
+            test.cleanup()
+
+    expected_run_calls = 3
+    expected_results = {"DDBEGIN\nrequired\nDDEND\n"}
+    expected_num_reports = 2
+
+    assert replayer.run.call_count == expected_run_calls
+    assert set(log_path.iterdir()) == {log_path / "reports"}
+    tests = {test.read_text() for test in log_path.glob("reports/*-*/test.html")}
+    assert tests == expected_results
+    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, \
+        list((log_path / "reports").iterdir())
+    others = {test.read_text() for test in log_path.glob("reports/*-*/other.html")}
+    assert others == {"blah\n"}

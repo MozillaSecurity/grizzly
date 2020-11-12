@@ -17,12 +17,12 @@ from lithium.testcases import TestcaseLine
 try:
     import cssbeautifier
     HAVE_CSSBEAUTIFIER = True
-except ImportError:
+except ImportError:  # pragma: no cover
     HAVE_CSSBEAUTIFIER = False
 try:
     import jsbeautifier
     HAVE_JSBEAUTIFIER = True
-except ImportError:
+except ImportError:  # pragma: no cover
     HAVE_JSBEAUTIFIER = False
 
 from ...common.storage import TestCase

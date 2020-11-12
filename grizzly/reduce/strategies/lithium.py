@@ -190,13 +190,8 @@ class Check(_LithiumStrategy):
         # trim files_to_reduce, for check we don't need to run on every file
         # just once per Grizzly TestCase set is enough.
         self._files_to_reduce = self._files_to_reduce[:1]
-        self._remain = 1
-
-    def __len__(self):
-        return self._remain
 
     def __iter__(self):
-        self._remain = 0
         yield from super().__iter__()
 
 
