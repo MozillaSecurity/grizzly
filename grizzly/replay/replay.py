@@ -81,6 +81,35 @@ class ReplayManager(object):
         if self.status is not None:
             self.status.cleanup()
 
+    @classmethod
+    def load_testcases(cls, path, load_prefs, subset=None):
+        """Load TestCases.
+
+        Args:
+            path (str): Path to load.
+            load_prefs (bool): Load prefs.js file if available.
+            subset (list(int)): Indices of tests to load when loading multiple
+                                tests.
+        Returns:
+            list(TestCase): Loaded TestCases.
+        """
+        LOG.debug("loading the TestCases")
+        testcases = TestCase.load(path, load_prefs)
+        if not testcases:
+            raise TestCaseLoadFailure("Failed to load TestCases")
+        if subset:
+            count = len(testcases)
+            # deduplicate and limit requested indices to valid range
+            reqs = {max(count + x, 0) if x < 0 else min(x, count - 1) for x in subset}
+            LOG.debug("using TestCase(s) with index %r", reqs)
+            selected = list()
+            for idx in sorted(reqs, reverse=True):
+                selected.append(testcases.pop(idx))
+            for test in testcases:
+                test.cleanup()
+            testcases = selected
+        return testcases
+
     @staticmethod
     def report_to_filesystem(path, results, tests=None):
         """Use FilesystemReporter to write reports and testcase to disk in a
@@ -353,22 +382,11 @@ class ReplayManager(object):
         else:
             signature = None
 
-        LOG.debug("loading the TestCases")
         try:
-            testcases = TestCase.load(args.input, args.prefs is None)
-            if not testcases:
-                raise TestCaseLoadFailure("Failed to load TestCases")
-            if args.test_index is not None:
-                LOG.debug("using TestCase with index %d", args.test_index)
-                try:
-                    selected = testcases.pop(args.test_index)
-                except IndexError:
-                    LOG.error("Invalid '--test-index'")
-                    return Session.EXIT_ARGS
-                finally:
-                    for test in testcases:
-                        test.cleanup()
-                testcases = [selected]
+            testcases = cls.load_testcases(
+                args.input,
+                args.prefs is None,
+                subset=args.test_index)
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return Session.EXIT_ERROR

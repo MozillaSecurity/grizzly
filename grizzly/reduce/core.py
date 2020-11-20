@@ -19,7 +19,7 @@ from sapphire import Sapphire
 
 from ..common.fuzzmanager import CrashEntry
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter
-from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
+from ..common.storage import TestCaseLoadFailure, TestFile
 from ..common.utils import grz_tmp
 from ..main import configure_logging
 from ..replay import ReplayManager, ReplayResult
@@ -606,11 +606,11 @@ class ReduceManager(object):
                     meta = json.loads(meta.read_text())
                     signature_desc = meta["shortDescription"]
 
-            LOG.debug("loading the TestCases")
             try:
-                testcases = TestCase.load(args.input, args.prefs is None)
-                if not testcases:
-                    raise TestCaseLoadFailure("Failed to load TestCases")
+                testcases = ReplayManager.load_testcases(
+                    args.input,
+                    args.prefs is None,
+                    subset=args.test_index)
             except TestCaseLoadFailure as exc:
                 LOG.error("Error: %s", str(exc))
                 return Session.EXIT_ERROR
@@ -620,23 +620,12 @@ class ReduceManager(object):
                             testcases[0].adapter_name)
                 args.tool = "grizzly-%s" % (testcases[0].adapter_name,)
 
-            if args.test_index is not None or (args.no_harness and len(testcases) > 1):
-                if args.test_index is None:
-                    LOG.warning("'--no-harness' given with %d testcases and without "
-                                "'--test-index', defaulting to last testcase",
-                                len(testcases))
-                    args.test_index = -1
-                LOG.debug("using TestCase with index %d", args.test_index)
-                try:
-                    selected = testcases.pop(args.test_index)
-                except IndexError:
-                    LOG.error("Error: Invalid '--test-index'")
-                    return Session.EXIT_ERROR
-                for test in testcases:
-                    test.cleanup()
-                testcases = [selected]
-
             if args.no_harness:
+                if len(testcases) > 1:
+                    LOG.error(
+                        "Error: '--no-harness' cannot be used with multiple " \
+                        "testcases. Perhaps '--test-index' can help.")
+                    return Session.EXIT_ARGS
                 LOG.debug("--no-harness specified relaunch set to 1")
                 args.relaunch = 1
             args.repeat = max(args.min_crashes, args.repeat)

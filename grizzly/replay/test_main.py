@@ -166,11 +166,6 @@ def test_main_02(mocker):
     assert ReplayManager.main(args) == Session.EXIT_ARGS
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
-    # multiple test cases with invalid --test-index
-    args.test_index = 100
-    fake_tc.load.return_value = [mocker.Mock(), mocker.Mock()]
-    assert ReplayManager.main(args) == Session.EXIT_ARGS
-    assert fake_load_target.call_count == 0
 
 def test_main_03(mocker, tmp_path):
     """test ReplayManager.main() target exceptions"""
@@ -232,7 +227,7 @@ def test_main_04(mocker):
         relaunch=1,
         repeat=1,
         sig=None,
-        test_index=0,
+        test_index=[0],
         timeout=1)
     assert ReplayManager.main(args) == Session.EXIT_FAILURE
     assert test0.cleanup.call_count == 1

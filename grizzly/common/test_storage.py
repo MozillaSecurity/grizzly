@@ -379,7 +379,7 @@ def test_testcase_18():
         assert src.get_file("missing") is None
         assert src.get_file("test.htm").data == b"test"
 
-def test_testcase_19(tmp_path):
+def test_testcase_19():
     """test TestCase.clone()"""
     with TestCase("test.htm", "redirect.htm", "test-adaptor", "input.py") as src:
         src.add_from_data("123", "test.htm")
