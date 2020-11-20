@@ -46,7 +46,7 @@ def test_replay_02(mocker, tmp_path):
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, use_harness=True) as replay:
             assert not replay.run([testcase])
-            assert replay._signature is None
+            assert replay.signature is None
             assert replay.status.ignored == 0
             assert replay.status.iteration == 1
             assert replay.status.results == 0
@@ -64,7 +64,7 @@ def test_replay_03(mocker):
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, use_harness=True) as replay:
             assert not replay.run([testcase], repeat=10, min_results=1)
-            assert replay._signature is None
+            assert replay.signature is None
             assert replay.status.ignored == 0
             assert replay.status.iteration == 10
             assert replay.status.results == 0
@@ -84,7 +84,7 @@ def test_replay_04(mocker, tmp_path):
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager([], server, target) as replay:
             results = replay.run([testcase])
-            assert replay._signature is not None
+            assert replay.signature is not None
             assert replay.status.ignored == 0
             assert replay.status.iteration == 1
             assert replay.status.results == 1
@@ -211,7 +211,7 @@ def test_replay_08(mocker, tmp_path):
     with ReplayManager([], server, target, signature=signature, use_harness=False) as replay:
         results = replay.run(testcases, repeat=4, min_results=2)
         assert target.close.call_count == 1
-        assert replay._signature == signature
+        assert replay.signature == signature
         assert replay.status.iteration == 4
         assert replay.status.results == 1
         assert replay.status.ignored == 2
@@ -246,7 +246,7 @@ def test_replay_09(mocker, tmp_path):
     with ReplayManager([], server, target, signature=signature, use_harness=False) as replay:
         results = replay.run(testcases, repeat=2, min_results=2)
         assert target.close.call_count == 1
-        assert replay._signature == signature
+        assert replay.signature == signature
         assert replay.status.iteration == 2
         assert replay.status.results == 2
         assert replay.status.ignored == 0
@@ -278,7 +278,7 @@ def test_replay_10(mocker, tmp_path):
     with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
         results = replay.run(testcases, repeat=3, min_results=2)
         assert target.close.call_count == 1
-        assert replay._signature is None
+        assert replay.signature is None
         assert replay.status.iteration == 3
         assert replay.status.results == 2
         assert replay.status.ignored == 0
@@ -311,7 +311,7 @@ def test_replay_11(mocker, tmp_path):
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, any_crash=True) as replay:
         assert not replay.run(testcases, repeat=4, min_results=3)
-        assert replay._signature is None
+        assert replay.signature is None
         assert replay.status.iteration == 4
         assert replay.status.results == 2
         assert replay.status.ignored == 0
@@ -344,7 +344,7 @@ def test_replay_12(mocker, tmp_path):
     with ReplayManager([], server, target, use_harness=False) as replay:
         results = replay.run(testcases, repeat=3, min_results=2)
         assert target.close.call_count == 1
-        assert replay._signature == auto_sig
+        assert replay.signature == auto_sig
         assert replay.status.iteration == 3
         assert replay.status.results == 2
         assert replay.status.ignored == 1
@@ -373,7 +373,7 @@ def test_replay_13(mocker, tmp_path):
         with raises(KeyboardInterrupt):
             replay.run(testcases, repeat=3, min_results=2)
         assert target.close.call_count == 1
-        assert replay._signature is None
+        assert replay.signature is None
         assert replay.status.iteration == 2
         assert replay.status.results == 1
         assert replay.status.ignored == 0
