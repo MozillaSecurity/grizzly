@@ -12,7 +12,7 @@ from pytest import raises
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_REQUEST
 from .replay import ReplayManager, ReplayResult
-from ..common import Report, Status, TestCase
+from ..common import Report, Status, TestCase, TestCaseLoadFailure
 from ..target import Target
 
 
@@ -516,3 +516,37 @@ def test_replay_18(mocker, tmp_path):
     assert not (tmp_path / "report_expected").is_dir()
     assert path.is_dir()
     assert (path / "reports" / "expected_logs").is_dir()
+
+def test_replay_19(mocker, tmp_path):
+    """test ReplayManager.load_testcases()"""
+    fake_load = mocker.patch("grizzly.replay.replay.TestCase.load")
+    test0 = mocker.Mock(spec=TestCase)
+    test1 = mocker.Mock(spec=TestCase, landing_page="x.html")
+    test2 = mocker.Mock(spec=TestCase)
+    # failure
+    fake_load.return_value = ()
+    with raises(TestCaseLoadFailure, match="Failed to load TestCases"):
+        ReplayManager.load_testcases(str(tmp_path), False)
+    # success
+    fake_load.return_value = [test0, test1]
+    tests = ReplayManager.load_testcases(str(tmp_path), False)
+    assert len(tests) == 2
+    assert tests[0].cleanup.call_count == 0
+    assert tests[1].cleanup.call_count == 0
+    # success select
+    fake_load.return_value = [test0, test1, test2]
+    tests = ReplayManager.load_testcases(str(tmp_path), False, subset=[1])
+    assert len(tests) == 1
+    assert tests[0].landing_page == "x.html"
+    assert test0.cleanup.call_count == 1
+    assert test1.cleanup.call_count == 0
+    assert test2.cleanup.call_count == 1
+    test0.reset_mock()
+    test2.reset_mock()
+    # select (first and last) with invalid input
+    fake_load.return_value = [test0, test1, test2]
+    tests = ReplayManager.load_testcases(str(tmp_path), False, subset=[0, 10, -10, -1])
+    assert len(tests) == 2
+    assert test0.cleanup.call_count == 0
+    assert test1.cleanup.call_count == 1
+    assert test2.cleanup.call_count == 0

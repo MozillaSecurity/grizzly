@@ -49,10 +49,10 @@ class ReplayArgs(CommonArgs):
             "--sig",
             help="Signature (JSON) file to match.")
         replay_args.add_argument(
-            "--test-index", type=int,
+            "--test-index", type=int, nargs="+",
             help="Select a testcase to run when multiple testcases are loaded. " \
                  "Testscases are ordered oldest to newest. Indexing is 0 based. " \
-                 "0 == Oldest, -1 == Newest (default: run all testcases)")
+                 "0 == Oldest, n-1 == Newest (default: run all testcases)")
 
         self.launcher_grp.add_argument(
             "--rr", action="store_true",
