@@ -105,6 +105,7 @@ class ReplayManager(object):
             selected = list()
             for idx in sorted(reqs, reverse=True):
                 selected.append(testcases.pop(idx))
+            selected.reverse()
             for test in testcases:
                 test.cleanup()
             testcases = selected
