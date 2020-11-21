@@ -534,9 +534,9 @@ def test_replay_19(mocker, tmp_path):
     assert tests[0].cleanup.call_count == 0
     assert tests[1].cleanup.call_count == 0
     # success select
-    fake_load.return_value = [test0, test1, test2]
-    tests = ReplayManager.load_testcases(str(tmp_path), False, subset=[1])
-    assert len(tests) == 1
+    fake_load.return_value = [test0, test1, test2, mocker.Mock(spec=TestCase)]
+    tests = ReplayManager.load_testcases(str(tmp_path), False, subset=[1, 3])
+    assert len(tests) == 2
     assert tests[0].landing_page == "x.html"
     assert test0.cleanup.call_count == 1
     assert test1.cleanup.call_count == 0
