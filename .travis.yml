@@ -13,10 +13,8 @@ jobs:
     - os: windows
       language: shell
       before_install:
-        - choco install python --version 3.8
-      env: PATH=/c/Python38:/c/Python38/Scripts:$PATH
-  allow_failures:
-    - python: 3.9
+        - choco install python --version 3.9
+      env: PATH=/c/Python39:/c/Python39/Scripts:$PATH
 before_install:
   - pip3 install --upgrade setuptools pip
 install:
