@@ -10,9 +10,6 @@ python:
   - 3.9
 jobs:
   include:
-    - os: osx
-      osx_image: xcode11.2
-      language: shell
     - os: windows
       language: shell
       before_install:
