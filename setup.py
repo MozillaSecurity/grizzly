@@ -30,7 +30,8 @@ if __name__ == '__main__':
             'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',
-            'Programming Language :: Python :: 3.8'
+            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.9',
         ],
         description='A framework for developing and running browser fuzzers',
         entry_points={
@@ -81,4 +82,4 @@ if __name__ == '__main__':
         ],
         package_data={"grizzly.common": ["harness.html"]},
         url='https://github.com/MozillaSecurity/grizzly',
-        version='0.9.8')
+        version='0.10.0')
