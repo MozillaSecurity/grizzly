@@ -38,6 +38,7 @@ def test_crash_main(mocker, arg_sig, arg_tool, crash_bucket, result_sig, result_
     mocker.patch("grizzly.reduce.crash.ReduceManager", autospec=True)
     crash.return_value.testcase_path.return_value = "test_path.zip"
     crash.return_value.bucket = crash_bucket
+    crash.return_value.testcase_quality = 5
     crash.return_value.tool = "test-tool"
     bucket.return_value.signature_path.return_value = "test_sig.json"
 
@@ -53,23 +54,25 @@ def test_crash_main(mocker, arg_sig, arg_tool, crash_bucket, result_sig, result_
 
 
 @pytest.mark.parametrize(
-    "mgr_exit_code, quality",
+    "mgr_exit_code, pre_quality, post_quality",
     [
-        (0, 1),
-        (1, 5),
-        (2, 5),
-        (3, 5),
-        (4, 5),
-        (5, 10),
+        (0, 5, 1),
+        (1, 5, 9),
+        (2, 6, 5),
+        (3, 4, 5),
+        (3, 0, 0),
+        (4, 6, 5),
+        (5, 5, 10),
     ]
 )
-def test_crash_main_quality(mocker, mgr_exit_code, quality):
+def test_crash_main_quality(mocker, mgr_exit_code, pre_quality, post_quality):
     """test that quality is updated"""
     mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     crash = mocker.patch("grizzly.reduce.crash.CrashEntry", autospec=True)
     mocker.patch("grizzly.reduce.crash.Bucket", autospec=True)
     mgr = mocker.patch("grizzly.reduce.crash.ReduceManager", autospec=True)
     crash.return_value.testcase_path.return_value = "test_path.zip"
+    crash.return_value.testcase_quality = pre_quality
     crash.return_value.bucket = None
     crash.return_value.tool = "test-tool"
     mgr.main.return_value = mgr_exit_code
@@ -80,7 +83,7 @@ def test_crash_main_quality(mocker, mgr_exit_code, quality):
         tool=None,
     )
     assert crash_main(args) == mgr_exit_code
-    assert crash.return_value.testcase_quality == quality
+    assert crash.return_value.testcase_quality == post_quality
 
 
 @pytest.mark.parametrize(
