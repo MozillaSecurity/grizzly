@@ -8,7 +8,7 @@ from tempfile import mkdtemp
 from time import sleep, time
 
 from sapphire import SERVED_TIMEOUT
-from ..target import TargetLaunchTimeout
+from ..target import TargetLaunchError, TargetLaunchTimeout
 from .utils import grz_tmp
 
 __all__ = ("Runner", "RunResult")
@@ -106,12 +106,20 @@ class Runner(object):
         for retries in reversed(range(max_retries)):
             try:
                 self._target.launch(location, env_mod=env_mod)
-            except TargetLaunchTimeout:
-                # likely has nothing to do with Grizzly but is seen frequently
-                # on machines under a high load. After multiple consecutive timeouts
-                # something is likely wrong so raise.
+            except TargetLaunchError as exc:
+                # This is likely due to a bad build or environment configuration.
                 if retries:
-                    LOG.warning("Launch timeout (attempts remaining %d)", retries)
+                    LOG.warning("Failure detected during launch (retries %d)", retries)
+                    exc.report.cleanup()
+                    sleep(retry_delay)
+                    continue
+                raise
+            except TargetLaunchTimeout:
+                # A TargetLaunchTimeout likely has nothing to do with Grizzly but is
+                # seen frequently on machines under a high load. After multiple
+                # consecutive timeouts something is likely wrong so raise.
+                if retries:
+                    LOG.warning("Timeout detected during launch (retries %d)", retries)
                     sleep(retry_delay)
                     continue
                 raise
