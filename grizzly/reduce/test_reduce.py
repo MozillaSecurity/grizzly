@@ -720,49 +720,6 @@ def test_quality_update(mocker, tmp_path):
     }
 
 
-@pytest.mark.parametrize("use_analysis", [True, False])
-@pytest.mark.parametrize("exc_type", [TargetLaunchError, TargetLaunchTimeout])
-def test_launch_error(mocker, tmp_path, use_analysis, exc_type):
-    """test that launch errors are reported"""
-    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
-    report_fcn = mocker.patch("grizzly.reduce.core.ReduceManager.report", autospec=True)
-    replay_mock = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
-    if exc_type is TargetLaunchError:
-        report_obj = mocker.Mock(spec=Report)
-        replay_mock.return_value.__enter__.return_value.run.side_effect = \
-            TargetLaunchError("msg", report_obj)
-        replay_mock.return_value.run.side_effect = TargetLaunchError("msg", report_obj)
-    else:
-        replay_mock.return_value.__enter__.return_value.run.side_effect = \
-            TargetLaunchTimeout("msg")
-        replay_mock.return_value.run.side_effect = TargetLaunchTimeout("msg")
-
-    (tmp_path / "test.html").touch()
-    testcases = TestCase.load(str(tmp_path / "test.html"), False)
-    assert testcases
-
-    target_obj = mocker.Mock(spec=Target)
-    target_obj.relaunch = 1
-    mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target_obj,
-                        testcases, ["check"], None, use_analysis=use_analysis)
-    with raises(exc_type):
-        mgr.run()
-    if exc_type is TargetLaunchError:
-        assert report_fcn.call_count == 1
-        _mgr, reports, reported_testcases, _stats = report_fcn.call_args[0]
-        if use_analysis:
-            assert reported_testcases == testcases
-        else:
-            # should be testcases reported, but from the strategy, not the original
-            assert reported_testcases
-            assert reported_testcases != testcases
-        assert len(reports) == 1
-        assert reports[0].report == report_obj
-        assert report_obj.cleanup.call_count == 1
-    else:
-        assert report_fcn.call_count == 0
-
-
 TimeoutTestParams = namedtuple(
     "TimeoutTestParams",
     "durations, interesting, static_timeout, idle_input, idle_output, iter_input,"

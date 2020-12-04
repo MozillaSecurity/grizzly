@@ -226,19 +226,11 @@ class ReduceManager(object):
                     LOG.warning("Only the last testcase of %d given will be used to "
                                 "assess reliability without harness.", len(testcases))
                     testcases = [testcases[-1]]
-                try:
-                    results = replay.run(
-                        testcases, repeat=self.ANALYSIS_ITERATIONS, min_results=1,
-                        exit_early=False, idle_delay=self._idle_delay,
-                        idle_threshold=self._idle_threshold,
-                    )
-                except (TargetLaunchError, TargetLaunchTimeout) as exc:
-                    if isinstance(exc, TargetLaunchError) and exc.report:
-                        path = grz_tmp("launch_failures")
-                        LOG.error("Logs can be found here %r", path)
-                        reporter = FilesystemReporter(path, major_bucket=False)
-                        reporter.submit([], exc.report)
-                    raise
+                results = replay.run(
+                    testcases, repeat=self.ANALYSIS_ITERATIONS, min_results=1,
+                    exit_early=False, idle_delay=self._idle_delay,
+                    idle_threshold=self._idle_threshold,
+                )
                 try:
                     stats.add_iterations(replay.status.iteration)
                     crashes = sum(x.count for x in results if x.expected)
@@ -460,13 +452,6 @@ class ReduceManager(object):
                                     strategy_last_report = now
                                     LOG.info("Best results reported (periodic)")
 
-                            except TargetLaunchError as exc:
-                                if exc.report:
-                                    path = grz_tmp("launch_failures")
-                                    LOG.error("Logs can be found here %r", path)
-                                    reporter = FilesystemReporter(path, major_bucket=False)
-                                    reporter.submit([], exc.report)
-                                raise
                             finally:
                                 if not keep_reduction:
                                     for testcase in reduction:
@@ -692,6 +677,11 @@ class ReduceManager(object):
 
         except (TargetLaunchError, TargetLaunchTimeout) as exc:
             LOG.error("Exception: %s", exc)
+            if isinstance(exc, TargetLaunchError) and exc.report:
+                path = grz_tmp("launch_failures")
+                LOG.error("Logs can be found here %r", path)
+                reporter = FilesystemReporter(path, major_bucket=False)
+                reporter.submit([], exc.report)
             return Session.EXIT_LAUNCH_FAILURE
 
         except GrizzlyReduceBaseException as exc:
