@@ -89,7 +89,7 @@ def test_args_02(tmp_path):
         ),
     ]
 )
-def test_main_01(mocker, patch_func, side_effect, return_value, kwargs, result):
+def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result):
     """test ReduceManager.main() failure cases"""
     mocker.patch(
         "grizzly.reduce.core.FuzzManagerReporter", autospec=True,
@@ -110,6 +110,42 @@ def test_main_01(mocker, patch_func, side_effect, return_value, kwargs, result):
 
     mocker.patch(patch_func, side_effect=side_effect, return_value=return_value)
     assert ReduceManager.main(args) == result
+
+
+@pytest.mark.parametrize(
+    "exc_type",
+    [
+        TargetLaunchError,
+        TargetLaunchTimeout,
+    ]
+)
+def test_main_launch_error(mocker, exc_type):
+    mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
+    reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
+    reporter = reporter.return_value
+    mocker.patch("grizzly.reduce.core.load_target", autospec=True)
+    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
+    # setup args
+    args = mocker.Mock(
+        ignore=["fake"],
+        input="test",
+        min_crashes=1,
+        prefs=None,
+        relaunch=1,
+        repeat=1,
+        sig=None)
+
+    exc_obj = exc_type("error", None)
+    mocker.patch("grizzly.reduce.core.ReduceManager.run", side_effect=exc_obj)
+    assert ReduceManager.main(args) == 1
+    if exc_type is TargetLaunchError:
+        assert reporter.submit.call_count == 1
+        reported_testcases, report = reporter.submit.call_args[0]
+        assert reported_testcases == []
+        assert report is exc_obj.report
+    else:
+        assert reporter.submit.call_count == 0
+
 
 def test_force_closed(mocker, tmp_path):
     """test that `forced_close` in testcase metadata is respected"""
