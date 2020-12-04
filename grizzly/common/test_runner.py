@@ -185,7 +185,7 @@ def test_runner_08(mocker):
     target.launch.side_effect = TargetLaunchError("test", mocker.Mock(spec=Report))
     with raises(TargetLaunchError, match="test"):
         runner.launch("http://a/")
-    assert target.launch.call_count == 1
+    assert target.launch.call_count == 3
     target.reset_mock()
 
     target.launch.side_effect = TargetLaunchTimeout
