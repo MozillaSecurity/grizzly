@@ -234,9 +234,10 @@ class ReduceManager(object):
                     )
                 except (TargetLaunchError, TargetLaunchTimeout) as exc:
                     if isinstance(exc, TargetLaunchError) and exc.report:
-                        self.report([ReplayResult(exc.report, None, [], False)],
-                                    testcases, self._stats.copy(stats))
-                        exc.report.cleanup()
+                        path = grz_tmp("launch_failures")
+                        LOG.error("Logs can be found here %r", path)
+                        reporter = FilesystemReporter(path, major_bucket=False)
+                        reporter.submit([], exc.report)
                     raise
                 try:
                     stats.add_iterations(replay.status.iteration)
@@ -461,11 +462,10 @@ class ReduceManager(object):
 
                             except TargetLaunchError as exc:
                                 if exc.report:
-                                    self.report(
-                                        [ReplayResult(exc.report, None, [], False)],
-                                        reduction,
-                                        self._stats.copy(strategy_stats))
-                                    exc.report.cleanup()
+                                    path = grz_tmp("launch_failures")
+                                    LOG.error("Logs can be found here %r", path)
+                                    reporter = FilesystemReporter(path, major_bucket=False)
+                                    reporter.submit([], exc.report)
                                 raise
                             finally:
                                 if not keep_reduction:
