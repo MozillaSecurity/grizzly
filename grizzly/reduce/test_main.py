@@ -122,8 +122,9 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result
 def test_main_launch_error(mocker, exc_type):
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
-    reporter = reporter.return_value
     mocker.patch("grizzly.reduce.core.load_target", autospec=True)
+    mocker.patch("grizzly.reduce.core.ReplayManager.load_testcases")
+    run = mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
     # setup args
     args = mocker.Mock(
@@ -133,18 +134,20 @@ def test_main_launch_error(mocker, exc_type):
         prefs=None,
         relaunch=1,
         repeat=1,
-        sig=None)
+        sig=None,
+    )
 
-    exc_obj = exc_type("error", None)
-    mocker.patch("grizzly.reduce.core.ReduceManager.run", side_effect=exc_obj)
-    assert ReduceManager.main(args) == 1
+    exc_obj = exc_type("error",
+                     mocker.Mock() if exc_type is TargetLaunchError else None)
+    run.side_effect = exc_obj
+    assert ReduceManager.main(args) == 4
     if exc_type is TargetLaunchError:
-        assert reporter.submit.call_count == 1
-        reported_testcases, report = reporter.submit.call_args[0]
+        assert reporter.return_value.submit.call_count == 1
+        reported_testcases, report = reporter.return_value.submit.call_args[0]
         assert reported_testcases == []
         assert report is exc_obj.report
     else:
-        assert reporter.submit.call_count == 0
+        assert reporter.return_value.submit.call_count == 0
 
 
 def test_force_closed(mocker, tmp_path):
