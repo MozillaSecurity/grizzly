@@ -22,7 +22,7 @@ from ..common.reporter import FilesystemReporter, FuzzManagerReporter
 from ..common.storage import TestCaseLoadFailure, TestFile
 from ..common.utils import grz_tmp
 from ..main import configure_logging
-from ..replay import ReplayManager, ReplayResult
+from ..replay import ReplayManager
 from ..session import Session
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
