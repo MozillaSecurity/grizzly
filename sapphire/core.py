@@ -11,7 +11,7 @@ from os.path import abspath
 from random import randint
 from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 from socket import error as sock_error, gethostname, socket
-from time import sleep
+from time import sleep, time
 
 from .job import Job, SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
 from .connection_manager import ConnectionManager
@@ -25,6 +25,8 @@ LOG = getLogger(__name__)
 
 
 class Sapphire(object):
+    LISTEN_TIMEOUT = 0.25
+
     __slots__ = ("_auto_close", "_max_workers", "_socket", "_timeout")
 
     def __init__(self, allow_remote=False, auto_close=-1, max_workers=10, port=None, timeout=60):
@@ -40,8 +42,8 @@ class Sapphire(object):
     def __exit__(self, *exc):
         self.close()
 
-    @staticmethod
-    def _create_listening_socket(remote, port=None, retries=20):
+    @classmethod
+    def _create_listening_socket(cls, remote, port=None, retries=20):
         """Create listening socket. Search for an open socket if needed and
         and configure the socket. If a specific port is unavailable or no
         available ports can be found a socket.error will be raised.
@@ -61,7 +63,7 @@ class Sapphire(object):
             try:
                 sock = socket(AF_INET, SOCK_STREAM)
                 sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-                sock.settimeout(0.25)
+                sock.settimeout(cls.LISTEN_TIMEOUT)
                 # find an unused port and avoid blocked ports
                 # see: dxr.mozilla.org/mozilla-central/source/netwerk/base/nsIOService.cpp
                 sock.bind((addr, port or randint(0x2000, 0xFFFF)))
@@ -75,6 +77,32 @@ class Sapphire(object):
                 raise
             break
         return sock
+
+    def clear_backlog(self):
+        """Remove all pending connections from backlog. This should only be
+        called when there isn't anything actively trying to connect.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        LOG.debug("clearing socket backlog")
+        self._socket.settimeout(0)
+        deadline = time() + 10
+        while True:
+            try:
+                self._socket.accept()[0].close()
+            except BlockingIOError:
+                break
+            except OSError as exc:
+                LOG.debug("Error closing socket: %r", exc)
+            else:
+                LOG.debug("pending socket closed")
+            # if this fires something is likely actively trying to connect
+            assert deadline > time()
+        self._socket.settimeout(self.LISTEN_TIMEOUT)
 
     def close(self):
         """Close listening server socket.

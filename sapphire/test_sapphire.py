@@ -7,6 +7,7 @@ Sapphire unit tests
 import hashlib
 import os
 import random
+import socket
 import threading
 
 import pytest
@@ -623,6 +624,19 @@ def test_sapphire_31(mocker):
     assert fake_sock.return_value.close.call_count == 1
     assert fake_sock.return_value.listen.call_count == 1
     assert fake_sleep.call_count == 1
+
+def test_sapphire_32(mocker):
+    """test Sapphire.clear_backlog()"""
+    mocker.patch("sapphire.core.socket", autospec=True)
+    mocker.patch("sapphire.core.time", autospec=True, return_value=1)
+    pending = mocker.Mock(spec=socket.socket)
+    with Sapphire(timeout=10) as serv:
+        serv._socket = mocker.Mock(spec=socket.socket)
+        serv._socket.accept.side_effect = ((pending, None), OSError, BlockingIOError)
+        serv.clear_backlog()
+        assert serv._socket.accept.call_count == 3
+        assert serv._socket.settimeout.call_count == 2
+    assert pending.close.call_count == 1
 
 def test_main_01(mocker, tmp_path):
     """test Sapphire.main()"""
