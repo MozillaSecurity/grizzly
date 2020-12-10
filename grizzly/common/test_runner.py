@@ -28,8 +28,10 @@ def test_runner_01(mocker, tmp_path):
     fake_time.side_effect = (1, 2)
     server.serve_path.return_value = (SERVED_ALL, serv_files)
     result = runner.run([], ServerMap(), testcase)
+    assert result.attempted
     assert result.duration == 1
-    assert result.status == RunResult.COMPLETE
+    assert result.initial
+    assert result.status is None
     assert result.served == serv_files
     assert not result.timeout
     assert target.close.call_count == 0
@@ -39,7 +41,9 @@ def test_runner_01(mocker, tmp_path):
     fake_time.side_effect = (1, 2)
     server.serve_path.return_value = (SERVED_REQUEST, serv_files)
     result = runner.run([], ServerMap(), testcase, coverage=True)
-    assert result.status == RunResult.COMPLETE
+    assert result.attempted
+    assert not result.initial
+    assert result.status is None
     assert result.served == serv_files
     assert not result.timeout
     assert target.close.call_count == 0
@@ -51,7 +55,9 @@ def test_runner_01(mocker, tmp_path):
     tc_path.mkdir()
     server.serve_path.return_value = (SERVED_ALL, serv_files)
     result = runner.run([], ServerMap(), testcase, test_path=str(tc_path))
-    assert result.status == RunResult.COMPLETE
+    assert result.attempted
+    assert not result.initial
+    assert result.status is None
     assert target.close.call_count == 0
     assert testcase.dump.call_count == 0
     tc_path.is_dir()
@@ -66,7 +72,9 @@ def test_runner_02(mocker):
     server.serve_path.return_value = (SERVED_NONE, [])
     target.detect_failure.return_value = target.RESULT_NONE
     result = runner.run([], ServerMap(), testcase)
-    assert result.status == RunResult.ERROR
+    assert result.status is None
+    assert not result.attempted
+    assert result.initial
     assert not result.served
     assert not result.timeout
     assert target.close.call_count == 1
@@ -74,7 +82,9 @@ def test_runner_02(mocker):
     # landing page not served
     server.serve_path.return_value = (SERVED_REQUEST, ["harness"])
     result = runner.run([], ServerMap(), testcase)
-    assert result.status == RunResult.ERROR
+    assert result.status is None
+    assert not result.attempted
+    assert result.initial
     assert result.served
     assert target.close.call_count == 1
 
@@ -102,12 +112,14 @@ def test_runner_04(mocker):
     # test FAILURE
     target.detect_failure.return_value = target.RESULT_FAILURE
     result = runner.run([], ServerMap(), testcase)
+    assert result.attempted
     assert result.status == RunResult.FAILED
     assert result.served == serv_files
     assert not result.timeout
     # test IGNORED
     target.detect_failure.return_value = target.RESULT_IGNORED
     result = runner.run([], ServerMap(), testcase)
+    assert result.attempted
     assert result.status == RunResult.IGNORED
     assert result.served == serv_files
     assert not result.timeout
@@ -115,6 +127,7 @@ def test_runner_04(mocker):
     server.serve_path.return_value = (SERVED_REQUEST, ["harness"])
     target.detect_failure.return_value = target.RESULT_FAILURE
     result = runner.run([], ServerMap(), testcase)
+    assert not result.attempted
     assert result.status == RunResult.FAILED
     assert result.served
     assert not result.timeout
@@ -129,7 +142,8 @@ def test_runner_05(mocker):
     runner = Runner(server, target, idle_threshold=0.01, idle_delay=0.01)
     assert runner._idle is not None
     result = runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[]))
-    assert result.status == RunResult.COMPLETE
+    assert result.status is None
+    assert result.attempted
     assert target.close.call_count == 0
 
 def test_runner_06(mocker):
@@ -178,7 +192,9 @@ def test_runner_08(mocker):
     target = mocker.Mock(spec=Target, launch_timeout=30)
 
     runner = Runner(server, target)
+    runner._tests_run = 1
     runner.launch("http://a/")
+    assert runner._tests_run == 0
     assert target.launch.call_count == 1
     target.reset_mock()
 
@@ -219,7 +235,8 @@ def test_runner_09(mocker, tmp_path):
     server.serve_path.return_value = (SERVED_ALL, serv_files)
     with TestCase("a.b", "x", "x") as tcase:
         result = runner.run([], smap, tcase)
-        assert result.status == RunResult.COMPLETE
+        assert result.attempted
+        assert result.status is None
         assert "inc_file.bin" in tcase._existing_paths
         assert pathjoin("nested", "nested_inc.bin") in tcase._existing_paths
         assert pathjoin("test", "inc_file3.txt") in tcase._existing_paths

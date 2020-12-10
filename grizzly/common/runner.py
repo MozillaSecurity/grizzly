@@ -74,7 +74,7 @@ class _IdleChecker(object):
 
 
 class Runner(object):
-    __slots__ = ("_idle", "_server", "_target")
+    __slots__ = ("_idle", "_server", "_target", "_tests_run")
 
     def __init__(self, server, target, idle_threshold=0, idle_delay=0):
         if idle_threshold > 0:
@@ -85,6 +85,7 @@ class Runner(object):
             self._idle = None
         self._server = server  # a sapphire instance to serve the test case
         self._target = target  # target to run test case
+        self._tests_run = 0  # number of tests run since target (re)launched
 
     def launch(self, location, env_mod=None, max_retries=3, retry_delay=0):
         """Launch a target and open `location`.
@@ -92,7 +93,8 @@ class Runner(object):
         Args:
             location (str): URL to open via Target.
             env_mod (dict): Environment modifications.
-            max_retries (int): Number of retries to preform before re-raising TargetLaunchTimeout.
+            max_retries (int): Number of retries to preform before re-raising
+                               TargetLaunchTimeout.
             retry_delay (int): Time in seconds to wait between retries.
 
         Returns:
@@ -124,6 +126,7 @@ class Runner(object):
                     continue
                 raise
             break
+        self._tests_run = 0
 
     @staticmethod
     def location(srv_path, srv_port, close_after=None, forced_close=True, timeout=None):
@@ -196,26 +199,25 @@ class Runner(object):
         # add all include files that were served
         for url, resource in server_map.include.items():
             testcase.add_batch(resource.target, result.served, prefix=url)
-        served_lpage = testcase.landing_page in result.served
-        if not served_lpage:
-            LOG.debug("%r not served!", testcase.landing_page)
-        elif coverage and not result.timeout:
+        result.attempted = testcase.landing_page in result.served
+        if result.attempted and coverage and not result.timeout:
             # dump_coverage() should be called before detect_failure()
             # to help catch any coverage related issues.
             self._target.dump_coverage()
         # detect failure
         failure_detected = self._target.detect_failure(ignore, result.timeout)
-        if failure_detected == self._target.RESULT_FAILURE:
-            result.status = RunResult.FAILED
-        elif not served_lpage:
+        result.initial = self._tests_run == 0
+        if not result.attempted:
             # something is wrong so close the target
             # previous iteration put target in a bad state?
+            LOG.debug("landing page %r not served!", testcase.landing_page)
             self._target.close()
-            result.status = RunResult.ERROR
+        else:
+            self._tests_run += 1
+        if failure_detected == self._target.RESULT_FAILURE:
+            result.status = RunResult.FAILED
         elif failure_detected == self._target.RESULT_IGNORED:
             result.status = RunResult.IGNORED
-        else:
-            result.status = RunResult.COMPLETE
         return result
 
     def _keep_waiting(self):
@@ -235,15 +237,15 @@ class Runner(object):
 
 
 class RunResult(object):
-    COMPLETE = 1
-    ERROR = 2
-    FAILED = 3
-    IGNORED = 4
+    FAILED = 1
+    IGNORED = 2
 
-    __slots__ = ("duration", "served", "status", "timeout")
+    __slots__ = ("attempted", "duration", "initial", "served", "status", "timeout")
 
     def __init__(self, served, duration, status=None, timeout=False):
+        self.attempted = False  # entry point/landing page was requested
         self.duration = duration
+        self.initial = False  # target was (re)launched prior to attempt
         self.served = served
         self.status = status
         self.timeout = timeout
