@@ -126,15 +126,9 @@ def test_session_04(tmp_path, mocker):
     fake_target.monitor.launches = 1
     with IOManager() as iomgr:
         fake_serv.serve_path.return_value = (SERVED_NONE, [])
-        # test error on first iteration
         with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
             with raises(SessionError, match="Please check Adapter and Target"):
                 session.run([], iteration_limit=10)
-        # test that we continue if error happens later on
-        fake_serv.serve_path.return_value = (SERVED_REQUEST, ["x"])
-        with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
-            session.status.iteration = 2
-            session.run([], iteration_limit=3)
 
 def test_session_05(tmp_path, mocker):
     """test basic Session functions"""
@@ -215,8 +209,10 @@ def test_session_07(tmp_path, mocker):
 def test_session_08(tmp_path, mocker):
     """test Session.run() ignoring failures"""
     Status.PATH = str(tmp_path)
+    result = RunResult([], 0.1, status=RunResult.IGNORED)
+    result.attempted = True
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_runner.return_value.run.return_value = RunResult([], 0.1, status=RunResult.IGNORED)
+    fake_runner.return_value.run.return_value = result
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_adapter.IGNORE_UNSERVED = True

@@ -176,7 +176,7 @@ class Session(object):
                 log.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, result.served)
             # update test case
-            if result.status != RunResult.ERROR:
+            if result.attempted:
                 if not result.served:
                     # this can happen if the target crashes between serving test cases
                     log.info("Ignoring test case since nothing was served")
@@ -184,6 +184,19 @@ class Session(object):
                 elif self.adapter.IGNORE_UNSERVED:
                     log.debug("removing unserved files from the test case")
                     current_test.purge_optional(result.served)
+            else:
+                log.error("Test case was not served")
+                if not current_test.contains(current_test.landing_page):
+                    log.warning("Test case is missing landing page")
+                if result.initial:
+                    # since this is the first iteration since the Target launched
+                    # something is likely wrong with the Target or Adapter
+                    err_logs = mkdtemp(prefix="error_", dir=grz_tmp("logs"))
+                    self.target.save_logs(err_logs)
+                    log.error("ERROR: Test case was not served. Timeout too short?")
+                    log.error("Logs can be found here %r", err_logs)
+                    raise SessionError("Please check Adapter and Target")
+
             # process results
             if result.status == RunResult.FAILED:
                 log.debug("result detected")
@@ -191,14 +204,6 @@ class Session(object):
             elif result.status == RunResult.IGNORED:
                 self.status.ignored += 1
                 log.info("Ignored (%d)", self.status.ignored)
-            elif result.status == RunResult.ERROR:
-                log.error("Test case was not served")
-                if not current_test.contains(current_test.landing_page):
-                    log.warning("Test case is missing landing page")
-                if self.status.iteration < 3:
-                    # since this is the first few iteration something is
-                    # likely wrong with the Target (caching?) or the Adapter
-                    raise SessionError("Please check Adapter and Target")
 
             # trigger relaunch by closing the browser if needed
             self.target.check_relaunch()

@@ -247,8 +247,16 @@ class ReplayManager(object):
                         wait_for_callback=self._harness is None)
                     durations.append(run_result.duration)
                     served.append(run_result.served)
-                    if run_result.status != RunResult.COMPLETE:
+                    if run_result.status is not None or not run_result.attempted:
                         break
+                if not run_result.attempted:
+                    if run_result.initial:
+                        err_logs = mkdtemp(prefix="error_", dir=grz_tmp("logs"))
+                        self.target.save_logs(err_logs)
+                        LOG.error("ERROR: Test case was not served. Timeout too short?")
+                        LOG.error("Logs can be found here %r", err_logs)
+                        break
+                    LOG.warning("Test case was not served")
                 # process run results
                 if run_result.status == RunResult.FAILED:
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
@@ -297,9 +305,6 @@ class ReplayManager(object):
                 elif run_result.status == RunResult.IGNORED:
                     self.status.ignored += 1
                     LOG.info("Result: Ignored (%d)", self.status.ignored)
-                elif run_result.status == RunResult.ERROR:
-                    LOG.error("ERROR: Test case was not served. Timeout too short?")
-                    break
 
                 if exit_early:
                     # failed to meet minimum number of results
