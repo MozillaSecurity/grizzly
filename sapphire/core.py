@@ -10,7 +10,7 @@ from logging import getLogger
 from os.path import abspath
 from random import randint
 from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
-from socket import error as sock_error, gethostname, socket
+from socket import gethostname, socket
 from time import sleep, time
 
 from .job import Job, SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
@@ -68,7 +68,7 @@ class Sapphire(object):
                 # see: dxr.mozilla.org/mozilla-central/source/netwerk/base/nsIOService.cpp
                 sock.bind((addr, port or randint(0x2000, 0xFFFF)))
                 sock.listen(5)
-            except (OSError, sock_error) as soc_e:
+            except OSError as soc_e:
                 if sock is not None:
                     sock.close()
                 if retry > 1 and soc_e.errno in (EADDRINUSE, 10013):
