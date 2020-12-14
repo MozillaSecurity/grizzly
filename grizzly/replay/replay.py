@@ -484,7 +484,7 @@ class ReplayManager(object):
             return Session.EXIT_LAUNCH_FAILURE
 
         finally:
-            LOG.warning("Shutting down...")
+            LOG.info("Shutting down...")
             if results:
                 # cleanup unreported results
                 for result in results:

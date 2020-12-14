@@ -143,7 +143,7 @@ def main(args):
         return Session.EXIT_LAUNCH_FAILURE
 
     finally:
-        log.warning("Shutting down...")
+        log.info("Shutting down...")
         if session is not None:
             log.debug("calling session.close()")
             session.close()

@@ -693,7 +693,7 @@ class ReduceManager(object):
             return Session.EXIT_ERROR
 
         finally:
-            LOG.warning("Shutting down...")
+            LOG.info("Shutting down...")
             if target is not None:
                 target.cleanup()
             for testcase in testcases:
