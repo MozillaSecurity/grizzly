@@ -138,7 +138,7 @@ def test_main_launch_error(mocker, exc_type):
     )
 
     exc_obj = exc_type("error",
-                     mocker.Mock() if exc_type is TargetLaunchError else None)
+                       mocker.Mock() if exc_type is TargetLaunchError else None)
     run.side_effect = exc_obj
     assert ReduceManager.main(args) == 4
     if exc_type is TargetLaunchError:
