@@ -47,7 +47,7 @@ class _BeautifyStrategy(Strategy, ABC):
         tag_name (str): Tag name to search for in other (non-native) extensions.
     """
     all_extensions = None
-    blacklist_files = {"test_info.json", "prefs.js"}
+    ignore_files = {"test_info.json", "prefs.js"}
     import_available = None
     import_name = None
     native_extension = None
@@ -65,7 +65,7 @@ class _BeautifyStrategy(Strategy, ABC):
         self._files_to_beautify = []
         for path in self._testcase_root.glob("**/*"):
             if (path.is_file() and path.suffix in self.all_extensions
-                    and path.name not in self.blacklist_files):
+                    and path.name not in self.ignore_files):
                 if _contains_dd(path):
                     self._files_to_beautify.append(path)
         self._current_feedback = None
