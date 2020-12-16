@@ -111,9 +111,9 @@ class Worker(object):
                 LOG.debug("resource is None")  # 404
             elif resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                 finish_job = serv_job.remove_pending(resource.target)
-            elif resource.type == Resource.URL_REDIRECT:
+            elif resource.type in (Resource.URL_DYNAMIC, Resource.URL_REDIRECT):
                 finish_job = serv_job.remove_pending(request)
-            elif resource.type != Resource.URL_DYNAMIC:  # pragma: no cover
+            else:  # pragma: no cover
                 # this should never happen
                 raise WorkerError("Unknown resource type %r" % (resource.type,))
 
@@ -155,7 +155,7 @@ class Worker(object):
                     raise TypeError("dynamic request callback must return 'bytes'")
                 conn.sendall(cls._200_header(len(data), resource.mime))
                 conn.sendall(data)
-                LOG.debug("200 %r (dynamic request)", request)
+                LOG.debug("200 %r - dynamic request (%d to go)", request, serv_job.pending)
                 return
 
             # at this point we know "resource.target" maps to a file on disk

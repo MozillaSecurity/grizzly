@@ -88,6 +88,10 @@ class Job(object):
                     "required" if resource.required else "optional",
                     redirect,
                     resource.target)
+            for dyn_resp, resource in self.server_map.dynamic.items():
+                if resource.required:
+                    self._pending.files.add(dyn_resp)
+                    LOG.debug("%s: %r -> %r", "required", dyn_resp, resource.target)
         self.initial_queue_size = len(self._pending.files)
         LOG.debug("%d files required to serve", self.initial_queue_size)
 
