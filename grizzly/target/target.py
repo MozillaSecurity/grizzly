@@ -53,6 +53,7 @@ class TargetLaunchTimeout(TargetError):
     """Raised if the target does not launch within the defined amount of time"""
 
 
+# TODO: remove forced_close, rl_countdown, rl_reset, relaunch, check_relaunch, expect_close
 class Target(metaclass=ABCMeta):
     RESULT_NONE = 0
     RESULT_FAILURE = 1

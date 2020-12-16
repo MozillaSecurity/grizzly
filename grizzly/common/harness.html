@@ -5,7 +5,6 @@
 <title>&#x1f43b; &sdot; Grizzly &sdot; &#x1f98a;</title>
 <script>
 let close_after, limit_tmr, time_limit
-let forced_close = true
 let sub = null
 
 let grzDump = (msg) => {
@@ -42,13 +41,18 @@ let main = () => {
   }
 
   if ((close_after !== undefined) && (close_after-- < 1)) {
-    grzDump('Hit close limit.')
-    if (forced_close) {
-      // use window.open() to call `/grz_close_browser` then close the harness
-      // this helps catch crashes that are triggered when the test window closes
-      window.open('/grz_close_browser')
-    }
-    setTimeout(window.close, 0)
+    grzDump('Iteration limit hit.')
+    setBanner('Iteration limit hit. Browser should close momentarily...<br>' +
+              'Warning: Any additional open tabs can block browser from closing.')
+    try { window.focus() } catch(e) { }
+    let xhr = new XMLHttpRequest()
+    // indicate test is complete by requesting `/grz_next_test`
+    try { xhr.open('GET', '/grz_next_test', true) } catch (e) {}
+    xhr.onabort = () => { window.close() }
+    xhr.onerror = () => { window.close() }
+    xhr.onload = () => { window.close() }
+    // close the harness to catch crashes that are triggered when the browser closes
+    setTimeout(() => { xhr.send() }, 100)
     return
   }
 
@@ -86,10 +90,6 @@ window.addEventListener('load', () => {
         time_limit = Number(v)
       } else if (k === 'close_after') {
         close_after = Number(v)
-      } else if (k === 'forced_close') {
-        if (v === 'false' || v === '0') {
-          forced_close = false
-        }
       } else {
         grzDump(`unknown arg '${k}'`)
       }

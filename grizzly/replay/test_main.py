@@ -74,6 +74,7 @@ def test_main_01(mocker, tmp_path):
     # Of the four attempts only the first and third will 'reproduce' the result
     # and the forth attempt should be skipped.
     # mock Sapphire.serve_path only
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
     serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
     serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
@@ -115,9 +116,8 @@ def test_main_01(mocker, tmp_path):
     assert target.detect_failure.call_count == 3
     assert serve_path.call_count == 3
     assert load_target.call_count == 1
-    assert target.close.call_count == 1
+    assert target.close.call_count == 4
     assert target.cleanup.call_count == 1
-    assert target.check_relaunch.call_count == 2
     assert log_path.is_dir()
     assert any(log_path.glob('**/log_asan_blah.txt'))
     assert any(log_path.glob('**/log_stderr.txt'))
@@ -203,6 +203,7 @@ def test_main_03(mocker, tmp_path):
 
 def test_main_04(mocker):
     """test ReplayManager.main() loading GRZ_FORCED_CLOSE from selected test case"""
+    # TODO: Remove this test when removing 'target.forced_close'
     mocker.patch("grizzly.replay.replay.Sapphire.serve_path", return_value=(None, ["x.html"]))
     target = mocker.Mock(spec=Target, forced_close=True, launch_timeout=30, rl_reset=1)
     load_target = mocker.patch("grizzly.replay.replay.load_target", autospec=True)
@@ -245,6 +246,7 @@ def test_main_05(mocker, tmp_path):
     target = mocker.Mock(spec=Target, binary="bin", forced_close=True, launch_timeout=30, rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.monitor.is_healthy.return_value = False
     target.save_logs = _fake_save_logs
     load_target = mocker.patch("grizzly.replay.replay.load_target")
     load_target.return_value.return_value = target

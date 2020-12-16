@@ -7,7 +7,7 @@ from logging import getLogger
 from os.path import isdir
 from shutil import rmtree
 from tempfile import mkdtemp
-from time import sleep, time
+from time import time
 
 from .common import grz_tmp, Report, Runner, RunResult, Status, TestFile
 
@@ -123,19 +123,7 @@ class Session(object):
 
     def run(self, ignore, iteration_limit=None, display_mode=DISPLAY_NORMAL):
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
-        runner = Runner(self.server, self.target)
-
-        def _dyn_close():  # pragma: no cover
-            if self.target.monitor.is_healthy():
-                # delay to help catch window close/shutdown related crashes
-                sleep(0.1)
-                self.target.close()
-            return b"<h1>Close Browser</h1>"
-        self.iomanager.server_map.set_dynamic_response(
-            "grz_close_browser",
-            _dyn_close,
-            mime_type="text/html")
-
+        runner = Runner(self.server, self.target, relaunch=self.target.rl_reset)
         while True:
             self.status.report()
             self.status.iteration += 1
@@ -204,9 +192,6 @@ class Session(object):
             elif result.status == RunResult.IGNORED:
                 self.status.ignored += 1
                 log.info("Ignored (%d)", self.status.ignored)
-
-            # trigger relaunch by closing the browser if needed
-            self.target.check_relaunch()
 
             if self.adapter.remaining is not None and self.adapter.remaining < 1:
                 # all test cases have been replayed
