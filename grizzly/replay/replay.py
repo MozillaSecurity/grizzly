@@ -6,7 +6,6 @@
 from logging import getLogger
 from os.path import dirname, join as pathjoin
 from tempfile import mkdtemp
-from time import sleep
 from shutil import rmtree
 
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -175,16 +174,8 @@ class ReplayManager(object):
 
         server_map = ServerMap()
         if self._harness is not None:
-            def _dyn_close():  # pragma: no cover
-                if self.target.monitor.is_healthy():
-                    # delay to help catch window close/shutdown related crashes
-                    sleep(0.1)
-                    self.target.close()
-                return b"<h1>Close Browser</h1>"
-            server_map.set_dynamic_response("grz_close_browser", _dyn_close, mime_type="text/html")
             server_map.set_dynamic_response("grz_harness", lambda: self._harness, mime_type="text/html")
 
-        runner = Runner(self.server, self.target, idle_threshold=idle_threshold, idle_delay=idle_delay)
         # track unprocessed results
         reports = dict()
         # track unpacked testcases
@@ -197,6 +188,12 @@ class ReplayManager(object):
                 dst_path = mkdtemp(prefix="tc_", dir=grz_tmp("serve"))
                 unpacked.append(dst_path)
                 test.dump(dst_path)
+            runner = Runner(
+                self.server,
+                self.target,
+                idle_threshold=idle_threshold,
+                idle_delay=idle_delay,
+                relaunch=self.target.rl_reset * test_count)
             # perform iterations
             for _ in range(repeat):
                 self.status.iteration += 1
@@ -327,9 +324,6 @@ class ReplayManager(object):
                 #self.status.log_size = self.target.log_size()
                 #if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
                 #    LOG.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
-
-                # trigger relaunch by closing the browser if needed
-                self.target.check_relaunch()
 
             # process results
             results = list()

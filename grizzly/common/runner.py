@@ -74,15 +74,19 @@ class _IdleChecker(object):
 
 
 class Runner(object):
-    __slots__ = ("_idle", "_server", "_target", "_tests_run")
+    __slots__ = ("_close_delay", "_idle", "_relaunch", "_server", "_target", "_tests_run")
 
-    def __init__(self, server, target, idle_threshold=0, idle_delay=0):
+    def __init__(self, server, target, close_delay=30, idle_threshold=0, idle_delay=0, relaunch=1):
+        self._close_delay = close_delay
         if idle_threshold > 0:
             assert idle_delay > 0
             LOG.debug("using idle check, th %d, delay %ds", idle_threshold, idle_delay)
             self._idle = _IdleChecker(target.is_idle, idle_threshold, idle_delay)
         else:
             self._idle = None
+        assert close_delay > 0
+        assert relaunch > 0
+        self._relaunch = relaunch  # tests to run before relaunching target
         self._server = server  # a sapphire instance to serve the test case
         self._target = target  # target to run test case
         self._tests_run = 0  # number of tests run since target (re)launched
@@ -175,6 +179,10 @@ class Runner(object):
         """
         if self._idle is not None:
             self._idle.schedule_poll(initial=True)
+        if self._tests_run == self._relaunch - 1:
+            # overwrite instead of replace 'grz_next_test' for consistency
+            server_map.set_redirect("grz_next_test", "grz_empty", required=True)
+            server_map.set_dynamic_response("grz_empty", lambda: b"", required=True)
         try:
             # unpack test case
             if test_path is None:
@@ -196,25 +204,47 @@ class Runner(object):
             if test_path is None:
                 rmtree(wwwdir)
         result = RunResult(served, duration, timeout=server_status == SERVED_TIMEOUT)
+        result.attempted = testcase.landing_page in result.served
+        result.initial = self._tests_run == 0
         # TODO: fix calling TestCase.add_batch() for multi-test replay
         # add all include files that were served
         for url, resource in server_map.include.items():
             testcase.add_batch(resource.target, result.served, prefix=url)
-        result.attempted = testcase.landing_page in result.served
-        if result.attempted and coverage and not result.timeout:
-            # dump_coverage() should be called before detect_failure()
-            # to help catch any coverage related issues.
-            self._target.dump_coverage()
-        # detect failure
-        failure_detected = self._target.detect_failure(ignore, result.timeout)
-        result.initial = self._tests_run == 0
-        if not result.attempted:
+        if result.attempted:
+            self._tests_run += 1
+            if coverage and not result.timeout:
+                # dump_coverage() should be called before detect_failure()
+                # to help catch any coverage related issues.
+                self._target.dump_coverage()
+            # relaunch check
+            if self._tests_run >= self._relaunch:
+                assert self._tests_run >= self._relaunch
+                server_map.dynamic.pop("grz_empty", None)
+                LOG.debug("relaunch/shutdown limit hit")
+                # ideally all browser tabs should be closed at this point
+                # and the browser should exit on its own
+                # NOTE: this will take the full duration if target.is_idle()
+                # is not implemented
+                for close_delay in range(max(int(self._close_delay / 0.5), 1)):
+                    if not self._target.monitor.is_healthy():
+                        break
+                    # wait 2 seconds (4 passes) before attempting idle exit
+                    if close_delay > 3 and self._target.is_idle(10):
+                        LOG.debug("target idle")
+                        break
+                    # delay to help catch shutdown related crashes, LSan, etc.
+                    # debugger and different builds can slow shutdown
+                    sleep(0.5)
+                else:
+                    LOG.debug("target.close() required")
+                self._target.close()
+        else:
             # something is wrong so close the target
             # previous iteration put target in a bad state?
             LOG.debug("landing page %r not served!", testcase.landing_page)
             self._target.close()
-        else:
-            self._tests_run += 1
+        # detect failure
+        failure_detected = self._target.detect_failure(ignore, result.timeout)
         if failure_detected == self._target.RESULT_FAILURE:
             result.status = RunResult.FAILED
         elif failure_detected == self._target.RESULT_IGNORED:

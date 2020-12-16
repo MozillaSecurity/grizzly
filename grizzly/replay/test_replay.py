@@ -37,6 +37,7 @@ def test_replay_01(mocker):
 
 def test_replay_02(mocker, tmp_path):
     """test ReplayManager.run() - no repro"""
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
@@ -50,8 +51,8 @@ def test_replay_02(mocker, tmp_path):
             assert replay.status.ignored == 0
             assert replay.status.iteration == 1
             assert replay.status.results == 0
-            assert target.close.call_count == 1
-            assert target.check_relaunch.call_count == 0
+            assert target.monitor.is_healthy.call_count > 0
+            assert target.close.call_count == 2
         assert not any(tmp_path.glob("*"))
 
 def test_replay_03(mocker):
@@ -69,7 +70,6 @@ def test_replay_03(mocker):
             assert replay.status.iteration == 10
             assert replay.status.results == 0
             assert target.close.call_count == 1
-            assert target.check_relaunch.call_count == 9
 
 def test_replay_04(mocker, tmp_path):
     """test ReplayManager.run() - successful repro"""
@@ -88,8 +88,8 @@ def test_replay_04(mocker, tmp_path):
             assert replay.status.ignored == 0
             assert replay.status.iteration == 1
             assert replay.status.results == 1
+            assert target.monitor.is_healthy.call_count == 0
             assert target.close.call_count == 1
-            assert target.check_relaunch.call_count == 0
         assert len(results) == 1
         assert results[0].count == 1
         assert results[0].expected
@@ -116,7 +116,6 @@ def test_replay_05(mocker, tmp_path):
         assert replay.status.results == 0
         # target.close() called once in runner and once by ReplayManager.run()
         assert target.close.call_count == 2
-    assert target.check_relaunch.call_count == 0
     assert target.save_logs.call_count == 1
 
 def test_replay_06(mocker, tmp_path):
@@ -137,7 +136,6 @@ def test_replay_06(mocker, tmp_path):
         assert replay.status.results == 1
         # target.close() called once in runner and once by ReplayManager.run()
         assert target.close.call_count == 2
-    assert target.check_relaunch.call_count == 1
 
 def test_replay_07(mocker, tmp_path):
     """test ReplayManager.run() - ignored"""
@@ -147,10 +145,12 @@ def test_replay_07(mocker, tmp_path):
     target = mocker.Mock(spec=Target, launch_timeout=30, rl_reset=1)
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.detect_failure.return_value = Target.RESULT_IGNORED
+    target.monitor.is_healthy.return_value = False
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, use_harness=False) as replay:
         assert not replay.run(testcases)
-        assert target.close.call_count == 1
+        assert target.monitor.is_healthy.call_count == 1
+        assert target.close.call_count == 2
         assert replay.status.ignored == 1
         assert replay.status.iteration == 1
         assert replay.status.results == 0
@@ -158,6 +158,7 @@ def test_replay_07(mocker, tmp_path):
 
 def test_replay_08(mocker, tmp_path):
     """test ReplayManager.run() - early exit"""
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
@@ -169,18 +170,20 @@ def test_replay_08(mocker, tmp_path):
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     # early failure
     target.detect_failure.side_effect = (Target.RESULT_FAILURE, Target.RESULT_IGNORED, Target.RESULT_NONE)
+    target.monitor.is_healthy.side_effect = (False, False, True, False)
     with ReplayManager([], server, target, use_harness=False) as replay:
         assert not replay.run(testcases, repeat=4, min_results=3)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 4
         assert replay.status.iteration == 3
         assert replay.status.results == 1
         assert replay.status.ignored == 1
     # early success
     target.reset_mock()
     target.detect_failure.side_effect = (Target.RESULT_FAILURE, Target.RESULT_IGNORED, Target.RESULT_FAILURE)
+    target.monitor.is_healthy.side_effect = (False, False, False)
     with ReplayManager([], server, target, use_harness=False) as replay:
         results = replay.run(testcases, repeat=4, min_results=2)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 4
         assert replay.status.iteration == 3
         assert replay.status.results == 2
         assert replay.status.ignored == 1
@@ -190,18 +193,21 @@ def test_replay_08(mocker, tmp_path):
     # ignore early failure (perform all repeats)
     target.detect_failure.return_value = Target.RESULT_NONE
     target.detect_failure.side_effect = None
+    target.monitor.is_healthy.side_effect = None
+    target.monitor.is_healthy.return_value = True
     with ReplayManager([], server, target, use_harness=False) as replay:
         assert not replay.run(testcases, repeat=4, min_results=4, exit_early=False)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 5
         assert replay.status.iteration == 4
         assert replay.status.results == 0
         assert replay.status.ignored == 0
     target.reset_mock()
     # ignore early success (perform all repeats)
     target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.monitor.is_healthy.return_value = False
     with ReplayManager([], server, target, use_harness=False) as replay:
         results = replay.run(testcases, repeat=4, min_results=1, exit_early=False)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 5
         assert replay.status.iteration == 4
         assert replay.status.results == 4
         assert replay.status.ignored == 0
@@ -210,6 +216,7 @@ def test_replay_08(mocker, tmp_path):
 
 def test_replay_09(mocker, tmp_path):
     """test ReplayManager.run() - test signatures - fail to meet minimum"""
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
     mocker.patch("grizzly.replay.replay.mkdtemp", autospec=True, return_value=str(tmp_path))
     report_0 = mocker.Mock(spec=Report)
     report_0.crash_info.createShortSignature.return_value = "No crash detected"
@@ -232,7 +239,7 @@ def test_replay_09(mocker, tmp_path):
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, signature=signature, use_harness=False) as replay:
         results = replay.run(testcases, repeat=4, min_results=2)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 5
         assert replay.signature == signature
         assert replay.status.iteration == 4
         assert replay.status.results == 1
@@ -264,10 +271,11 @@ def test_replay_10(mocker, tmp_path):
     target = mocker.Mock(spec=Target, binary="fake_bin", launch_timeout=30, rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.monitor.is_healthy.return_value = False
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="a.html", optional=[])]
     with ReplayManager([], server, target, signature=signature, use_harness=False) as replay:
         results = replay.run(testcases, repeat=2, min_results=2)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 3
         assert replay.signature == signature
         assert replay.status.iteration == 2
         assert replay.status.results == 2
@@ -296,10 +304,11 @@ def test_replay_11(mocker, tmp_path):
     target = mocker.Mock(spec=Target, binary="fake_bin", launch_timeout=30, rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.monitor.is_healthy.return_value = False
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
         results = replay.run(testcases, repeat=3, min_results=2)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 4
         assert replay.signature is None
         assert replay.status.iteration == 3
         assert replay.status.results == 2
@@ -330,9 +339,11 @@ def test_replay_12(mocker, tmp_path):
     target = mocker.Mock(spec=Target, binary="fake_bin", launch_timeout=30, rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.monitor.is_healthy.return_value = False
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, any_crash=True) as replay:
         assert not replay.run(testcases, repeat=4, min_results=3)
+        assert target.close.call_count == 5
         assert replay.signature is None
         assert replay.status.iteration == 4
         assert replay.status.results == 2
@@ -362,10 +373,11 @@ def test_replay_13(mocker, tmp_path):
     target = mocker.Mock(spec=Target, binary="fake_bin", launch_timeout=30, rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.monitor.is_healthy.return_value = False
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, use_harness=False) as replay:
         results = replay.run(testcases, repeat=3, min_results=2)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 4
         assert replay.signature == auto_sig
         assert replay.status.iteration == 3
         assert replay.status.results == 2
@@ -390,11 +402,12 @@ def test_replay_14(mocker, tmp_path):
     target = mocker.Mock(spec=Target, binary="fake_bin", launch_timeout=30, rl_reset=1)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.monitor.is_healthy.return_value = False
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
         with raises(KeyboardInterrupt):
             replay.run(testcases, repeat=3, min_results=2)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 2
         assert replay.signature is None
         assert replay.status.iteration == 2
         assert replay.status.results == 1
@@ -404,6 +417,7 @@ def test_replay_14(mocker, tmp_path):
 
 def test_replay_15(mocker):
     """test ReplayManager.run() - multiple TestCases - no repro"""
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target, closed=True, forced_close=True, launch_timeout=30, rl_reset=1)
@@ -415,7 +429,7 @@ def test_replay_15(mocker):
         mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     with ReplayManager([], server, target, use_harness=True) as replay:
         assert not replay.run(testcases)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 2
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
         assert replay.status.results == 0
@@ -456,6 +470,7 @@ def test_replay_17(mocker, tmp_path):
         Target.RESULT_NONE,
         Target.RESULT_NONE,
         Target.RESULT_FAILURE)
+    target.monitor.is_healthy.return_value = False
     target.save_logs = _fake_save_logs
     testcases = [
         mocker.Mock(spec=TestCase, env_vars=[], landing_page="a.html", optional=[]),
@@ -463,7 +478,7 @@ def test_replay_17(mocker, tmp_path):
         mocker.Mock(spec=TestCase, env_vars=[], landing_page="c.html", optional=[])]
     with ReplayManager([], server, target, use_harness=True) as replay:
         results = replay.run(testcases)
-        assert target.close.call_count == 1
+        assert target.close.call_count == 2
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
         assert replay.status.results == 1
@@ -477,6 +492,7 @@ def test_replay_17(mocker, tmp_path):
 
 def test_replay_18(mocker, tmp_path):
     """test ReplayManager.run() - multiple calls"""
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
