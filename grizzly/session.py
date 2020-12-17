@@ -163,16 +163,9 @@ class Session(object):
                 log.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, result.served)
             # update test case
-            if result.attempted:
-                if not result.served:
-                    # this can happen if the target crashes between serving test cases
-                    log.info("Ignoring test case since nothing was served")
-                    self.iomanager.tests.pop().cleanup()
-                elif self.adapter.IGNORE_UNSERVED:
-                    log.debug("removing unserved files from the test case")
-                    current_test.purge_optional(result.served)
-            else:
-                log.error("Test case was not served")
+            if not result.attempted:
+                log.debug("Ignoring test case since nothing was served")
+                self.iomanager.tests.pop().cleanup()
                 if not current_test.contains(current_test.landing_page):
                     log.warning("Test case is missing landing page")
                 if result.initial:
@@ -183,7 +176,10 @@ class Session(object):
                     log.error("ERROR: Test case was not served. Timeout too short?")
                     log.error("Logs can be found here %r", err_logs)
                     raise SessionError("Please check Adapter and Target")
-
+                log.warning("Test case was not served")
+            elif self.adapter.IGNORE_UNSERVED:
+                log.debug("removing unserved files from the test case")
+                current_test.purge_optional(result.served)
             # process results
             if result.status == RunResult.FAILED:
                 log.debug("result detected")
