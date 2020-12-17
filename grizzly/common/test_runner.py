@@ -246,12 +246,10 @@ def test_runner_08():
     assert result == "http://127.0.0.1:34567/a.html"
     result = Runner.location("a.html", 34567, close_after=10)
     assert result == "http://127.0.0.1:34567/a.html?close_after=10"
-    result = Runner.location("a.html", 34567, close_after=10, forced_close=False)
-    assert result == "http://127.0.0.1:34567/a.html?close_after=10&forced_close=0"
-    result = Runner.location("a.html", 34567, forced_close=False)
-    assert result == "http://127.0.0.1:34567/a.html?forced_close=0"
-    result = Runner.location("a.html", 9999, close_after=10, forced_close=False, timeout=60)
-    assert result == "http://127.0.0.1:9999/a.html?close_after=10&forced_close=0&timeout=60000"
+    result = Runner.location("a.html", 9999, timeout=60)
+    assert result == "http://127.0.0.1:9999/a.html?timeout=60000"
+    result = Runner.location("a.html", 9999, close_after=10, timeout=60)
+    assert result == "http://127.0.0.1:9999/a.html?close_after=10&timeout=60000"
 
 def test_runner_09(mocker):
     """test Runner.launch()"""

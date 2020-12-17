@@ -150,33 +150,6 @@ def test_main_launch_error(mocker, exc_type):
         assert reporter.return_value.submit.call_count == 0
 
 
-def test_force_closed(mocker, tmp_path):
-    """test that `forced_close` in testcase metadata is respected"""
-    load_target = mocker.patch("grizzly.reduce.core.load_target")
-    mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True)
-    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
-    (tmp_path / "test.html").touch()
-    (tmp_path / "test_info.json").write_text(
-        json.dumps({
-            "timestamp": 1,
-            "target": "test.html",
-            "env": {"GRZ_FORCED_CLOSE": "0"}
-        })
-    )
-    args = mocker.Mock(
-        fuzzmanager=False,
-        ignore=[],
-        input=str(tmp_path),
-        min_crashes=1,
-        prefs=None,
-        repeat=1,
-        sig=None,
-        test_index=None,
-    )
-    ReduceManager.main(args)
-    assert load_target.return_value.return_value.forced_close is False
-
-
 @pytest.mark.parametrize("result", ["testprefs", "argprefs"])
 def test_testcase_prefs(mocker, tmp_path, result):
     """test that prefs from testcase are used if --prefs not specified and --prefs

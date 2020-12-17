@@ -41,7 +41,7 @@ def test_replay_02(mocker, tmp_path):
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
-    target = mocker.Mock(spec=Target, closed=True, forced_close=True, launch_timeout=30, rl_reset=1)
+    target = mocker.Mock(spec=Target, closed=True, launch_timeout=30, rl_reset=1)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
@@ -420,7 +420,7 @@ def test_replay_15(mocker):
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
-    target = mocker.Mock(spec=Target, closed=True, forced_close=True, launch_timeout=30, rl_reset=1)
+    target = mocker.Mock(spec=Target, closed=True, launch_timeout=30, rl_reset=1)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
     testcases = [
@@ -439,7 +439,7 @@ def test_replay_16(mocker):
     """test ReplayManager.run() - multiple TestCases - no repro - with repeats"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
-    target = mocker.Mock(spec=Target, closed=True, forced_close=True, launch_timeout=30, rl_reset=100)
+    target = mocker.Mock(spec=Target, closed=True, launch_timeout=30, rl_reset=100)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
     testcases = [
@@ -496,7 +496,7 @@ def test_replay_18(mocker, tmp_path):
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
-    target = mocker.Mock(spec=Target, closed=True, forced_close=True, launch_timeout=30, rl_reset=1)
+    target = mocker.Mock(spec=Target, closed=True, launch_timeout=30, rl_reset=1)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:

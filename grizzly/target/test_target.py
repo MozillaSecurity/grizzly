@@ -34,7 +34,6 @@ def test_target_01(tmp_path):
     target = SimpleTarget(str(fake_file), str(fake_file), 321, 2, 3, 25)
     assert target.binary == str(fake_file)
     assert target.extension == str(fake_file)
-    assert target.forced_close
     assert not target.is_idle(0)
     assert target.launch_timeout == 321
     assert target.log_size() == 0
@@ -42,27 +41,12 @@ def test_target_01(tmp_path):
     assert target.memory_limit == 3
     assert target.rl_countdown == 0
     assert target.rl_reset == 25
-    assert not target.expect_close
     # test stubs
     target.add_abort_token("none!")
     target.dump_coverage()
     target.reverse(1, 2)
 
 def test_target_02(mocker, tmp_path):
-    """test setting Target.forced_close"""
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    getenv = mocker.patch("grizzly.target.target.getenv", autospec=True, return_value="0")
-    with SimpleTarget(str(fake_file), None, 300, 25, 5000, 25) as target:
-        assert not target.forced_close
-        assert target.extension is None
-        target.rl_countdown = 1
-        assert not target.expect_close
-        target.rl_countdown = 0
-        assert target.expect_close
-    getenv.assert_called_with("GRZ_FORCED_CLOSE")
-
-def test_target_03(mocker, tmp_path):
     """test Target.check_relaunch() and Target.step()"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
