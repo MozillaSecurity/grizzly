@@ -47,7 +47,7 @@ let main = () => {
     try { window.focus() } catch(e) { }
     let xhr = new XMLHttpRequest()
     // indicate test is complete by requesting `/grz_next_test`
-    try { xhr.open('GET', '/grz_next_test', true) } catch (e) {}
+    xhr.open('GET', '/grz_next_test', true)
     xhr.onabort = () => { window.close() }
     xhr.onerror = () => { window.close() }
     xhr.onload = () => { window.close() }
