@@ -135,6 +135,7 @@ def test_session_05(tmp_path, mocker):
     """test basic Session functions"""
     Status.PATH = str(tmp_path)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
+    fake_adapter.IGNORE_UNSERVED = True
     fake_adapter.TEST_DURATION = 10
     fake_testcase = mocker.Mock(spec=TestCase, landing_page="page.htm", optional=[])
     fake_iomgr = mocker.Mock(spec=IOManager)
@@ -142,7 +143,6 @@ def test_session_05(tmp_path, mocker):
     fake_iomgr.create_testcase.return_value = fake_testcase
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    # return SERVED_TIMEOUT to test IGNORE_UNSERVED code path
     fake_serv.serve_path.return_value = (SERVED_TIMEOUT, [fake_testcase.landing_page])
     fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None, rl_reset=10)
     fake_target.monitor.launches = 1
@@ -180,32 +180,36 @@ def test_session_06(tmp_path, mocker):
         assert testcase.add_meta.call_count == 1
 
 def test_session_07(tmp_path, mocker):
-    """test Session.run() reporting failures"""
+    """test Session.run() - test case was not served - between iterations"""
     Status.PATH = str(tmp_path)
     mocker.patch("grizzly.session.Report", autospec=True)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_runner.return_value.run.return_value = RunResult(["/fake/file"], 1, status=RunResult.FAILED)
+    run_result = RunResult(["/fake/file"], 1, status=RunResult.FAILED)
+    run_result.attempted = False
+    run_result.initial = False
+    fake_runner.return_value.run.return_value = run_result
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_adapter.IGNORE_UNSERVED = True
     fake_adapter.TEST_DURATION = 10
-    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap(), tests=deque())
+    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
+    fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
     fake_target.monitor.launches = 1
-    reporter = NullReporter()
-    with Session(fake_adapter, fake_iomgr, reporter, fake_serv, fake_target) as session:
+    fake_reporter = mocker.Mock(spec=Reporter)
+    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
         session.run([], iteration_limit=1)
         assert fake_runner.return_value.run.call_count == 1
         assert fake_adapter.on_served.call_count == 1
         assert fake_adapter.on_timeout.call_count == 0
         assert fake_iomgr.purge_tests.call_count == 1
-        assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
+        assert fake_runner.return_value.launch.call_count == 1
         assert session.status.iteration == 1
         assert session.status.results == 1
         assert session.status.ignored == 0
-        assert reporter.submit_calls == 1
+        assert fake_reporter.submit.call_count == 1
+        assert fake_iomgr.tests.pop.call_count == 1
 
 def test_session_08(tmp_path, mocker):
     """test Session.run() ignoring failures"""
@@ -216,12 +220,11 @@ def test_session_08(tmp_path, mocker):
     fake_runner.return_value.run.return_value = result
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_adapter.IGNORE_UNSERVED = True
+    fake_adapter.IGNORE_UNSERVED = False
     fake_adapter.TEST_DURATION = 10
     fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
-    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
-    fake_iomgr.tests = mocker.Mock(spec=deque)
-    fake_iomgr.tests.pop.return_value = mocker.Mock(spec=TestCase)
+    fake_test = mocker.Mock(spec=TestCase)
+    fake_iomgr.create_testcase.return_value = fake_test
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
     fake_target.monitor.launches = 1
@@ -233,7 +236,7 @@ def test_session_08(tmp_path, mocker):
         assert fake_adapter.on_served.call_count == 1
         assert fake_adapter.on_timeout.call_count == 0
         assert fake_iomgr.purge_tests.call_count == 1
-        assert fake_iomgr.tests.pop.call_count == 1
+        assert fake_test.purge_optional.call_count == 0
         assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
         assert session.status.iteration == 1
         assert session.status.results == 0
