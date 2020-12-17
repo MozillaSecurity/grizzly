@@ -103,9 +103,6 @@ class PuppetTarget(Target):
 
     def detect_failure(self, ignored, was_timeout):
         status = self.RESULT_NONE
-        if self.expect_close and not was_timeout:
-            # give the browser a moment to close if needed
-            self._puppet.wait(timeout=30)
         is_healthy = self._puppet.is_healthy()
         # check if there has been a crash, hang, etc...
         if not is_healthy or was_timeout:

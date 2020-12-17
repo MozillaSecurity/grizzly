@@ -206,8 +206,7 @@ class ReplayManager(object):
                         location = runner.location(
                             "/grz_harness",
                             self.server.port,
-                            close_after=self.target.rl_reset * test_count,
-                            forced_close=self.target.forced_close)
+                            close_after=self.target.rl_reset * test_count)
                     # The environment from the initial testcase is used because
                     # a sequence of testcases is expected to be run without
                     # relaunching the Target to match the functionality of
@@ -430,9 +429,6 @@ class ReplayManager(object):
                         LOG.info("Using prefs.js from testcase")
                         target.prefs = pathjoin(tmp_prefs, "prefs.js")
                         break
-            if testcases[0].env_vars.get("GRZ_FORCED_CLOSE") == "0":
-                LOG.debug("setting target.forced_close=False")
-                target.forced_close = False
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=args.timeout) as server:

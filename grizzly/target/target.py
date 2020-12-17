@@ -53,14 +53,14 @@ class TargetLaunchTimeout(TargetError):
     """Raised if the target does not launch within the defined amount of time"""
 
 
-# TODO: remove forced_close, rl_countdown, rl_reset, relaunch, check_relaunch, expect_close
+# TODO: remove rl_countdown, rl_reset, relaunch, check_relaunch
 class Target(metaclass=ABCMeta):
     RESULT_NONE = 0
     RESULT_FAILURE = 1
     RESULT_IGNORED = 2
 
     __slots__ = (
-        "_lock", "_monitor", "_prefs", "binary", "extension", "forced_close",
+        "_lock", "_monitor", "_prefs", "binary", "extension",
         "launch_timeout", "log_limit", "memory_limit", "rl_countdown", "rl_reset")
 
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, relaunch):
@@ -73,7 +73,6 @@ class Target(metaclass=ABCMeta):
         self._prefs = None
         self.binary = binary
         self.extension = extension
-        self.forced_close = getenv("GRZ_FORCED_CLOSE") != "0"
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit
         self.memory_limit = memory_limit
@@ -133,10 +132,6 @@ class Target(metaclass=ABCMeta):
     def dump_coverage(self):  # pylint: disable=no-self-use
         LOG.warning("dump_coverage() is not supported!")
 
-    @property
-    def expect_close(self):
-        # This is used to indicate if the browser will self close after the current iteration
-        return self.rl_countdown < 1 and not self.forced_close
 
     def is_idle(self, threshold):  # pylint: disable=no-self-use,unused-argument
         LOG.debug("Target.is_idle() not implemented! returning False")

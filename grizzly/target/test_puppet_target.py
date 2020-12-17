@@ -161,16 +161,6 @@ def test_puppet_target_03(mocker, tmp_path):
     fake_ffp.return_value.available_logs.return_value = " ffp_worker_log_size "
     assert target.detect_failure(["log-limit"], False) == Target.RESULT_IGNORED
     assert fake_ffp.return_value.close.call_count == 1
-    fake_ffp.reset_mock()
-    # test browser closing test case
-    fake_ffp.return_value.is_healthy.return_value = False
-    fake_ffp.return_value.is_running.return_value = False
-    fake_ffp.return_value.reason = FFPuppet.RC_EXITED
-    target.forced_close = False
-    target.rl_countdown = 0
-    assert target.detect_failure([], False) == Target.RESULT_NONE
-    assert fake_ffp.return_value.wait.call_count == 1
-    assert fake_ffp.return_value.close.call_count == 1
 
 @mark.skipif(system() == "Windows", reason="Unsupported on Windows")
 def test_puppet_target_04(mocker, tmp_path):
