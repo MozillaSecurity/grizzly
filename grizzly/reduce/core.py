@@ -212,7 +212,7 @@ class ReduceManager(object):
             if last_test and len(self.testcases) == 1:
                 continue
 
-            relaunch = self.ANALYSIS_ITERATIONS if use_harness else 1
+            relaunch = self.ANALYSIS_ITERATIONS if last_test else 1
 
             with ReplayManager(
                 self.ignore, self.server, self.target, any_crash=self._any_crash,
@@ -350,7 +350,9 @@ class ReduceManager(object):
                         self.run_reliability_analysis(stats)
                 self._stats.add_info("Analysis", reliability_info)
                 any_success = True  # analysis ran and didn't raise
-            if self._use_harness:
+            # multi part test cases should always use relaunch == 1
+            # since that usually means there is a timing component
+            if self._use_harness and len(self.testcases) == 1:
                 relaunch = min(self._original_relaunch, repeat)
             else:
                 relaunch = 1
@@ -369,6 +371,7 @@ class ReduceManager(object):
                          len(self.strategies))
                 replay = ReplayManager(self.ignore, self.server, self.target,
                                        any_crash=self._any_crash,
+                                       relaunch=relaunch,
                                        signature=self._signature,
                                        use_harness=self._use_harness)
                 strategy = STRATEGIES[strategy](self.testcases)
