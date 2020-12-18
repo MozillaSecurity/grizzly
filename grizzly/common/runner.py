@@ -215,7 +215,7 @@ class Runner(object):
                 self._target.dump_coverage()
             # relaunch check
             if self._tests_run >= self._relaunch:
-                assert self._tests_run >= self._relaunch
+                assert self._tests_run == self._relaunch
                 server_map.dynamic.pop("grz_empty", None)
                 LOG.debug("relaunch/shutdown limit hit")
                 # ideally all browser tabs should be closed at this point

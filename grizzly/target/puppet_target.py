@@ -35,8 +35,8 @@ LOG = getLogger(__name__)
 class PuppetTarget(Target):
     __slots__ = ("use_rr", "use_valgrind", "_puppet", "_remove_prefs")
 
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, relaunch, **kwds):
-        super().__init__(binary, extension, launch_timeout, log_limit, memory_limit, relaunch)
+    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, **kwds):
+        super().__init__(binary, extension, launch_timeout, log_limit, memory_limit)
         self.use_rr = kwds.pop("rr", False)
         self.use_valgrind = kwds.pop("valgrind", False)
         self._remove_prefs = False
@@ -197,7 +197,6 @@ class PuppetTarget(Target):
             sleep(delay)
 
     def launch(self, location, env_mod=None):
-        self.rl_countdown = self.rl_reset
         # setup environment
         env_mod = dict(env_mod or [])
         # do not allow network connections to non local endpoints

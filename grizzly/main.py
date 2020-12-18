@@ -66,7 +66,7 @@ def main(args):
             return Session.EXIT_ARGS
 
         if adapter.RELAUNCH > 0:
-            log.debug("relaunch (%d) set in Adapter", adapter.RELAUNCH)
+            log.info("Relaunch (%d) set in Adapter", adapter.RELAUNCH)
             relaunch = adapter.RELAUNCH
         else:
             relaunch = args.relaunch
@@ -78,7 +78,6 @@ def main(args):
             args.launch_timeout,
             args.log_limit,
             args.memory,
-            relaunch,
             rr=args.rr,
             valgrind=args.valgrind,
             xvfb=args.xvfb)
@@ -87,10 +86,9 @@ def main(args):
             log.info("Using prefs %r", args.prefs)
         adapter.monitor = target.monitor
 
-        if args.coverage and relaunch == 1 and target.forced_close:
+        if args.coverage and relaunch == 1:
             # this is a workaround to avoid not dumping coverage
-            # GRZ_FORCED_CLOSE=0 is also an option but the browser MUST
-            # close itself.
+            # TODO: this may not be needed since moving relaunch into runnner
             raise RuntimeError("Coverage must be run with --relaunch > 1")
 
         log.debug("calling adapter setup()")
@@ -122,7 +120,8 @@ def main(args):
                 reporter,
                 server,
                 target,
-                coverage=args.coverage)
+                coverage=args.coverage,
+                relaunch=relaunch)
             if args.log_level == DEBUG or args.verbose:
                 display_mode = Session.DISPLAY_VERBOSE
             else:

@@ -4,11 +4,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod, abstractproperty
 from logging import getLogger
-from os import getenv
 from os.path import isfile
 from re import split as resplit
 from threading import Lock
-from time import sleep, time
 
 
 __all__ = ("Target", "sanitizer_opts")
@@ -53,20 +51,18 @@ class TargetLaunchTimeout(TargetError):
     """Raised if the target does not launch within the defined amount of time"""
 
 
-# TODO: remove rl_countdown, rl_reset, relaunch, check_relaunch
 class Target(metaclass=ABCMeta):
     RESULT_NONE = 0
     RESULT_FAILURE = 1
     RESULT_IGNORED = 2
 
     __slots__ = (
-        "_lock", "_monitor", "_prefs", "binary", "extension",
-        "launch_timeout", "log_limit", "memory_limit", "rl_countdown", "rl_reset")
+        "_lock", "_monitor", "_prefs", "binary", "extension", "launch_timeout",
+        "log_limit", "memory_limit")
 
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, relaunch):
+    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit):
         assert log_limit >= 0
         assert memory_limit >= 0
-        assert relaunch >= 1
         assert binary is not None and isfile(binary)
         self._lock = Lock()
         self._monitor = None
@@ -76,8 +72,6 @@ class Target(metaclass=ABCMeta):
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit
         self.memory_limit = memory_limit
-        self.rl_countdown = 0
-        self.rl_reset = relaunch
 
     def __enter__(self):
         return self
@@ -85,31 +79,8 @@ class Target(metaclass=ABCMeta):
     def __exit__(self, *exc):
         self.cleanup()
 
-    @property
-    def relaunch(self):
-        return self.rl_reset
-
-    @relaunch.setter
-    def relaunch(self, value):
-        self.rl_reset = value
-        self.rl_countdown = 0
-
     def add_abort_token(self, token):  # pylint: disable=no-self-use,unused-argument
         LOG.warning("add_abort_token() not implemented!")
-
-    def check_relaunch(self, wait=60):
-        if self.rl_countdown > 0:
-            return
-        # if the adapter does not use the default harness
-        # or close the browser it will hang here for 60 seconds
-        LOG.debug("relaunch will be triggered... waiting up to %0.2f seconds", wait)
-        deadline = time() + wait
-        while self.monitor.is_healthy():
-            if time() >= deadline:
-                LOG.info("Forcing target relaunch")
-                break
-            sleep(1)
-        self.close()
 
     @abstractmethod
     def cleanup(self):
@@ -132,7 +103,7 @@ class Target(metaclass=ABCMeta):
     def dump_coverage(self):  # pylint: disable=no-self-use
         LOG.warning("dump_coverage() is not supported!")
 
-
+    # TODO: move to monitor?
     def is_idle(self, threshold):  # pylint: disable=no-self-use,unused-argument
         LOG.debug("Target.is_idle() not implemented! returning False")
         return False
@@ -149,6 +120,7 @@ class Target(metaclass=ABCMeta):
     def monitor(self):
         pass
 
+    # TODO: better meta file handling
     @abstractproperty
     def prefs(self):
         pass
@@ -160,7 +132,3 @@ class Target(metaclass=ABCMeta):
     @abstractmethod
     def save_logs(self, *args, **kwargs):
         pass
-
-    def step(self):
-        # this should be called once per iteration
-        self.rl_countdown -= 1

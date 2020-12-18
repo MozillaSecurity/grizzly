@@ -14,8 +14,8 @@ __all__ = ("Target", "TargetError", "TargetLaunchError", "TargetLaunchTimeout",
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-TARGETS = None
 LOG = getLogger(__name__)
+TARGETS = dict()
 
 
 def _load_targets():
@@ -41,12 +41,12 @@ def _load_targets():
 
 
 def available():
-    if TARGETS is None:
+    if not TARGETS:
         _load_targets()
     return TARGETS.keys()
 
 
 def load(name):
-    if TARGETS is None:
+    if not TARGETS:
         _load_targets()
     return TARGETS[name]

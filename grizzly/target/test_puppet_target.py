@@ -19,7 +19,7 @@ def test_puppet_target_01(mocker, tmp_path):
     fake_ffp.return_value.log_length.return_value = 562
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 25) as target:
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000) as target:
         assert target.closed
         assert not target._remove_prefs
         prefs_file = target.prefs
@@ -37,7 +37,7 @@ def test_puppet_target_01(mocker, tmp_path):
     assert fake_ffp.return_value.clean_up.call_count == 1
     assert not isfile(prefs_file)
     # with extra args
-    with PuppetTarget(str(fake_file), None, 1, 1, 1, 1, rr=True, fake=1) as target:
+    with PuppetTarget(str(fake_file), None, 1, 1, 1, rr=True, fake=1) as target:
         pass
 
 def test_puppet_target_02(mocker, tmp_path):
@@ -46,7 +46,7 @@ def test_puppet_target_02(mocker, tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     # test providing prefs.js
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 35) as target:
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000) as target:
         target.prefs = str(fake_file)
         assert not target._remove_prefs
         # launch success
@@ -79,7 +79,7 @@ def test_puppet_target_03(mocker, tmp_path):
     fake_ffp.RC_WORKER = FFPuppet.RC_WORKER
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, 25)
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000)
     # no failures
     fake_ffp.return_value.is_healthy.return_value = True
     fake_ffp.return_value.reason = None
@@ -173,10 +173,9 @@ def test_puppet_target_04(mocker, tmp_path):
     fake_time = mocker.patch("grizzly.target.puppet_target.time", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), None, 300, 25, 5000, 10)
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000)
     fake_kill = mocker.patch("grizzly.target.puppet_target.kill", autospec=True)
     # not running
-    target.rl_countdown = 1
     fake_ffp.return_value.get_pid.return_value = None
     target.dump_coverage()
     assert not fake_kill.call_count
@@ -247,7 +246,7 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 10) as target:
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000) as target:
         assert not target.is_idle(0)
         assert not target.is_idle(25)
         assert target.is_idle(50)
@@ -257,7 +256,7 @@ def test_puppet_target_06(mocker, tmp_path):
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 25) as target:
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000) as target:
         fake_ffp.return_value.is_running.return_value = False
         fake_ffp.return_value.is_healthy.return_value = False
         assert target.monitor is not None
@@ -279,7 +278,7 @@ def test_puppet_target_07(mocker, tmp_path):
     mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), None, 300, 25, 5000, 25) as target:
+    with PuppetTarget(str(fake_file), None, 300, 25, 5000) as target:
         # default temp prefs
         assert not target._remove_prefs
         prefs_file = target.prefs
