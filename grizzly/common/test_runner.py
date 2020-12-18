@@ -170,7 +170,7 @@ def test_runner_04(mocker):
 def test_runner_05(mocker):
     """test reporting failures"""
     server = mocker.Mock(spec=Sapphire)
-    target = mocker.Mock(spec=Target)
+    target = mocker.Mock(spec=Target, launch_timeout=10)
     target.monitor.is_healthy.return_value = False
     serv_files = ["file.bin"]
     server.serve_path.return_value = (SERVED_REQUEST, serv_files)
@@ -178,6 +178,7 @@ def test_runner_05(mocker):
     runner = Runner(server, target)
     # test FAILURE
     target.detect_failure.return_value = target.RESULT_FAILURE
+    runner.launch("http://a/")
     result = runner.run([], ServerMap(), testcase)
     assert result.attempted
     assert result.status == RunResult.FAILED
@@ -185,6 +186,7 @@ def test_runner_05(mocker):
     assert not result.timeout
     # test IGNORED
     target.detect_failure.return_value = target.RESULT_IGNORED
+    runner.launch("http://a/")
     result = runner.run([], ServerMap(), testcase)
     assert result.attempted
     assert result.status == RunResult.IGNORED
@@ -193,6 +195,7 @@ def test_runner_05(mocker):
     # failure before serving landing page
     server.serve_path.return_value = (SERVED_REQUEST, ["harness"])
     target.detect_failure.return_value = target.RESULT_FAILURE
+    runner.launch("http://a/")
     result = runner.run([], ServerMap(), testcase)
     assert not result.attempted
     assert result.status == RunResult.FAILED

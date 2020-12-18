@@ -65,9 +65,12 @@ class Session(object):
 
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    __slots__ = ("adapter", "coverage", "iomanager", "reporter", "server", "status", "target")
+    __slots__ = ("_relaunch", "adapter", "coverage", "iomanager", "reporter", "server",
+                 "status", "target")
 
-    def __init__(self, adapter, iomanager, reporter, server, target, coverage=False):
+    def __init__(self, adapter, iomanager, reporter, server, target,
+                 coverage=False, relaunch=1):
+        self._relaunch = relaunch
         self.adapter = adapter
         self.coverage = coverage
         self.iomanager = iomanager
@@ -123,7 +126,16 @@ class Session(object):
 
     def run(self, ignore, iteration_limit=None, display_mode=DISPLAY_NORMAL):
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
-        runner = Runner(self.server, self.target, relaunch=self.target.rl_reset)
+        # limit relaunch to max iterations if known
+        if iteration_limit is not None:
+            assert iteration_limit > 0
+            relaunch = min(self._relaunch, iteration_limit)
+        else:
+            relaunch = self._relaunch
+        if self.adapter.remaining is not None:
+            assert self.adapter.remaining > 0
+            relaunch = min(relaunch, self.adapter.remaining)
+        runner = Runner(self.server, self.target, relaunch=relaunch)
         while True:
             self.status.report()
             self.status.iteration += 1
@@ -142,10 +154,9 @@ class Session(object):
                     location = runner.location(
                         "/grz_harness",
                         self.server.port,
-                        close_after=self.target.rl_reset,
+                        close_after=relaunch,
                         timeout=self.adapter.TEST_DURATION)
                 runner.launch(location, max_retries=3, retry_delay=0)
-            self.target.step()
 
             # create and populate a test case
             current_test = self.generate_testcase()

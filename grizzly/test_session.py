@@ -49,12 +49,12 @@ def test_session_01(tmp_path, mocker):
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     prefs = tmp_path / "prefs.js"
     prefs.touch()
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs), rl_reset=10)
+    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs))
     # set target.log_size to test warning code path
     fake_target.log_size.return_value = Session.TARGET_LOG_SIZE_WARN + 1
     with IOManager() as iomgr:
         fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
-        with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
+        with Session(adapter, iomgr, None, fake_serv, fake_target, relaunch=10) as session:
             session.run([])
             assert session.status.iteration == 5
             assert session.status.test_name == "file.bin"
@@ -74,13 +74,13 @@ def test_session_02(tmp_path, mocker):
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     prefs = tmp_path / "prefs.js"
     prefs.touch()
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs), rl_reset=10)
+    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs))
     fake_target.log_size.return_value = 1000
     fake_target.monitor.launches = 1
     with IOManager() as iomgr:
         iomgr.harness = adapter.get_harness()
         fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
-        with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
+        with Session(adapter, iomgr, None, fake_serv, fake_target, relaunch=10) as session:
             session.run([], iteration_limit=10)
             assert session.status.iteration == 10
             assert session.status.test_name is None
@@ -99,14 +99,14 @@ def test_session_03(tmp_path, mocker):
     adapter = FuzzAdapter()
     adapter.setup(None, None)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, prefs=None, rl_reset=2)
+    fake_target = mocker.Mock(spec=Target, prefs=None, )
     fake_target.log_size.return_value = 1000
     fake_target.monitor.launches = 1
     # target.launch() call will be skipped
     fake_target.closed = False
     with IOManager() as iomgr:
         fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
-        with Session(adapter, iomgr, None, fake_serv, fake_target, coverage=True) as session:
+        with Session(adapter, iomgr, None, fake_serv, fake_target, coverage=True, relaunch=2) as session:
             session.run([], iteration_limit=2)
             assert session.status.iteration == 2
     assert fake_target.dump_coverage.call_count == 2
@@ -123,11 +123,11 @@ def test_session_04(tmp_path, mocker):
     adapter = FuzzAdapter()
     adapter.setup(None, None)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None, rl_reset=10)
+    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
     fake_target.monitor.launches = 1
     with IOManager() as iomgr:
         fake_serv.serve_path.return_value = (SERVED_NONE, [])
-        with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
+        with Session(adapter, iomgr, None, fake_serv, fake_target, relaunch=10) as session:
             with raises(SessionError, match="Please check Adapter and Target"):
                 session.run([], iteration_limit=10)
 
@@ -144,8 +144,9 @@ def test_session_05(tmp_path, mocker):
     fake_iomgr.tests = mocker.Mock(spec=deque)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_serv.serve_path.return_value = (SERVED_TIMEOUT, [fake_testcase.landing_page])
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None, rl_reset=10)
+    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
     fake_target.monitor.launches = 1
+    fake_target.monitor.is_healthy.return_value = False
     with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target) as session:
         session.run([], iteration_limit=1)
     assert fake_adapter.setup.call_count == 0
@@ -159,7 +160,7 @@ def test_session_05(tmp_path, mocker):
     assert fake_serv.serve_path.call_count == 1
     assert fake_target.launch.call_count == 1
     assert fake_target.detect_failure.call_count == 1
-    assert fake_target.step.call_count == 1
+    assert fake_target.monitor.is_healthy.call_count == 1
 
 def test_session_06(tmp_path, mocker):
     """test Session.generate_testcase()"""
@@ -249,7 +250,7 @@ def test_session_09(tmp_path, mocker):
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
     fake_runner.return_value.launch.side_effect = TargetLaunchError("test", mocker.Mock(spec=Report))
     mocker.patch("grizzly.session.TestFile", autospec=True)
-    fake_adapter = mocker.Mock(spec=Adapter)
+    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_iomgr = mocker.Mock(
         spec=IOManager,
         harness=None,

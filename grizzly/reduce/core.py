@@ -65,9 +65,10 @@ class ReduceManager(object):
     ITER_TIMEOUT_DURATION_MULTIPLIER = 2
 
     def __init__(self, ignore, server, target, testcases, strategies, log_path,
-                 any_crash=False, idle_delay=0, idle_threshold=0, report_period=None,
-                 report_to_fuzzmanager=False, signature=None, signature_desc=None,
-                 static_timeout=False, tool=None, use_analysis=True, use_harness=True):
+                 any_crash=False, idle_delay=0, idle_threshold=0, relaunch=1,
+                 report_period=None, report_to_fuzzmanager=False, signature=None,
+                 signature_desc=None, static_timeout=False, tool=None,
+                 use_analysis=True, use_harness=True):
         """Initialize reduction manager. Many arguments are common with `ReplayManager`.
 
         Args:
@@ -83,6 +84,8 @@ class ReduceManager(object):
                               the specified or first observed signature.
             idle_delay (int): Number of seconds to wait before polling for idle.
             idle_threshold (int): CPU usage threshold to mark the process as idle.
+            relaunch (int): Maximum number of iterations performed by Runner
+                            before Target should be relaunched.
             report_period (int or None): Periodically report best results for
                                          long-running strategies.
             report_to_fuzzmanager (bool): Report to FuzzManager rather than filesystem.
@@ -111,7 +114,7 @@ class ReduceManager(object):
         # pathlib2 rather than pathlib
         self._log_path = Path(log_path) if isinstance(log_path, str) else log_path
         # these parameters may be overwritten during analysis, so keep a copy of them
-        self._original_relaunch = target.relaunch
+        self._original_relaunch = relaunch
         self._original_use_harness = use_harness
         self._report_to_fuzzmanager = report_to_fuzzmanager
         self._report_periodically = report_period
@@ -209,11 +212,11 @@ class ReduceManager(object):
             if last_test and len(self.testcases) == 1:
                 continue
 
-            self.target.relaunch = self.ANALYSIS_ITERATIONS if use_harness else 1
+            relaunch = self.ANALYSIS_ITERATIONS if use_harness else 1
 
             with ReplayManager(
                 self.ignore, self.server, self.target, any_crash=self._any_crash,
-                signature=self._signature, use_harness=use_harness,
+                relaunch=relaunch, signature=self._signature, use_harness=use_harness,
             ) as replay:
                 LOG.info("Running for %d iterations to assess reliability %s harness.",
                          self.ANALYSIS_ITERATIONS,
@@ -348,15 +351,15 @@ class ReduceManager(object):
                 self._stats.add_info("Analysis", reliability_info)
                 any_success = True  # analysis ran and didn't raise
             if self._use_harness:
-                self.target.relaunch = min(self._original_relaunch, repeat)
+                relaunch = min(self._original_relaunch, repeat)
             else:
-                self.target.relaunch = 1
+                relaunch = 1
             LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
-                     repeat, min_results, self.target.relaunch)
+                     repeat, min_results, relaunch)
             self._stats.add_info("Run Parameters", {
                 "Repeat": repeat,
                 "Min Crashes": min_results,
-                "Relaunch": self.target.relaunch,
+                "Relaunch": relaunch,
                 "Harness": self._use_harness,
             })
 
@@ -622,7 +625,6 @@ class ReduceManager(object):
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
-                relaunch,
                 rr=args.rr,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb)
@@ -642,9 +644,6 @@ class ReduceManager(object):
                         LOG.info("Using prefs.js from testcase")
                         target.prefs = str(tmp_prefs / "prefs.js")
                         break
-            if testcases[0].env_vars.get("GRZ_FORCED_CLOSE") == "0":
-                LOG.debug("setting target.forced_close=False")
-                target.forced_close = False
 
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
@@ -660,6 +659,7 @@ class ReduceManager(object):
                     any_crash=args.any_crash,
                     idle_delay=args.idle_delay,
                     idle_threshold=args.idle_threshold,
+                    relaunch=relaunch,
                     report_period=args.report_period,
                     report_to_fuzzmanager=args.fuzzmanager,
                     signature=signature,

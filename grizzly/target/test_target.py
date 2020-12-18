@@ -4,7 +4,6 @@
 # pylint: disable=protected-access
 
 from .target import sanitizer_opts, Target
-from .target_monitor import TargetMonitor
 
 class SimpleTarget(Target):
     def cleanup(self):
@@ -16,7 +15,7 @@ class SimpleTarget(Target):
         pass
     def detect_failure(self, ignored, was_timeout):
         pass
-    def launch(self, location, env_mod=None):
+    def launch(self):
         pass
     @property
     def monitor(self):
@@ -31,7 +30,7 @@ def test_target_01(tmp_path):
     """test creating a simple Target"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = SimpleTarget(str(fake_file), str(fake_file), 321, 2, 3, 25)
+    target = SimpleTarget(str(fake_file), str(fake_file), 321, 2, 3)
     assert target.binary == str(fake_file)
     assert target.extension == str(fake_file)
     assert not target.is_idle(0)
@@ -39,36 +38,11 @@ def test_target_01(tmp_path):
     assert target.log_size() == 0
     assert target.log_limit == 2
     assert target.memory_limit == 3
-    assert target.rl_countdown == 0
-    assert target.rl_reset == 25
+    assert target.monitor is None
     # test stubs
     target.add_abort_token("none!")
     target.dump_coverage()
     target.reverse(1, 2)
-
-def test_target_02(mocker, tmp_path):
-    """test Target.check_relaunch() and Target.step()"""
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with SimpleTarget(str(fake_file), None, 300, 25, 5000, 1) as target:
-        target._monitor = mocker.Mock(spec=TargetMonitor)
-        target._monitor.is_healthy.return_value = True
-        # test skipping relaunch
-        target.rl_countdown = 2
-        target.step()
-        assert target.rl_countdown == 1
-        target.check_relaunch(wait=60)
-        # test triggering relaunch
-        target.rl_countdown = 1
-        target.step()
-        assert target.rl_countdown == 0
-        target.check_relaunch(wait=0)
-        # test with "crashed" process
-        target._monitor.is_healthy.side_effect = (True, False)
-        target.rl_countdown = 0
-        target.step()
-        mocker.patch("grizzly.target.target.sleep", autospec=True)
-        target.check_relaunch(wait=5)
 
 def test_sanitizer_opts_01(tmp_path):
     """test sanitizer_opts()"""

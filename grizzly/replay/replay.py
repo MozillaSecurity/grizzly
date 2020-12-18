@@ -41,22 +41,24 @@ class ReplayManager(object):
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
 
     __slots__ = ("ignore", "server", "status", "target", "_any_crash",
-                 "_harness", "_signature", "_unpacked")
+                 "_harness", "_signature", "_relaunch", "_unpacked")
 
-    def __init__(self, ignore, server, target, any_crash=False, signature=None, use_harness=True):
+    def __init__(self, ignore, server, target, any_crash=False,
+                 relaunch=1, signature=None, use_harness=True):
         self.ignore = ignore
         self.server = server
         self.status = None
         self.target = target
         self._any_crash = any_crash
         self._harness = None
+        self._relaunch = relaunch
         self._signature = signature
         if use_harness:
             with open(self.HARNESS_FILE, "rb") as in_fp:
                 self._harness = in_fp.read()
         else:
             # target must relaunch every iteration when not using harness
-            assert target.rl_reset == 1
+            assert relaunch == 1
 
     def __enter__(self):
         return self
@@ -188,12 +190,13 @@ class ReplayManager(object):
                 dst_path = mkdtemp(prefix="tc_", dir=grz_tmp("serve"))
                 unpacked.append(dst_path)
                 test.dump(dst_path)
+            relaunch = min(self._relaunch, repeat)
             runner = Runner(
                 self.server,
                 self.target,
                 idle_threshold=idle_threshold,
                 idle_delay=idle_delay,
-                relaunch=self.target.rl_reset * test_count)
+                relaunch=relaunch * test_count)
             # perform iterations
             for _ in range(repeat):
                 self.status.iteration += 1
@@ -206,14 +209,13 @@ class ReplayManager(object):
                         location = runner.location(
                             "/grz_harness",
                             self.server.port,
-                            close_after=self.target.rl_reset * test_count)
+                            close_after=relaunch * test_count)
                     # The environment from the initial testcase is used because
                     # a sequence of testcases is expected to be run without
                     # relaunching the Target to match the functionality of
                     # Grizzly. If this is not the case each TestCase should
                     # be run individually.
                     runner.launch(location, env_mod=testcases[0].env_vars)
-                self.target.step()
                 # run tests
                 durations = list()
                 served = list()
@@ -310,6 +312,9 @@ class ReplayManager(object):
                         # failed to reproduce issue
                         LOG.debug("results (%d) < minimum (%d), after %d attempts",
                                   self.status.results, min_results, self.status.iteration)
+                        # NOTE: this can be tricky if the harness is used because it can
+                        # skip the shutdown performed in the harness and runner, if this
+                        # is an issue for now use relaunch=1
                         break
                     # check if complete (minimum number of results found)
                     if self.status.results >= min_results:
@@ -343,6 +348,11 @@ class ReplayManager(object):
                         report.report.cleanup()
                         continue
                     results.append(report)
+            # this should only be displayed when both conditions are met:
+            # 1) runner does not close target (no delay was given before shutdown)
+            # 2) result has not been successfully reproduced
+            if self._relaunch > 1 and not self.target.closed and not any(x.expected for x in results):
+                LOG.info("Perhaps try with --relaunch=1")
             # active reports have been moved to results
             # clear reports to avoid cleanup of active reports
             reports.clear()
@@ -410,7 +420,6 @@ class ReplayManager(object):
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
-                relaunch,
                 rr=args.rr,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb)
@@ -438,6 +447,7 @@ class ReplayManager(object):
                     server,
                     target,
                     any_crash=args.any_crash,
+                    relaunch=relaunch,
                     signature=signature,
                     use_harness=not args.no_harness
                 ) as replay:
