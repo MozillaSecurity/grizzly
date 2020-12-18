@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
+from itertools import count
 from os.path import join as pathjoin
 
 from pytest import raises
@@ -16,7 +17,7 @@ from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 
 def test_runner_01(mocker, tmp_path):
     """test Runner()"""
-    mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=range(10))
+    mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
     target.detect_failure.return_value = target.RESULT_NONE
