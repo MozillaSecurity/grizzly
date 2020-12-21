@@ -241,7 +241,7 @@ def test_analysis(mocker, tmp_path, harness_last_crashes, harness_crashes,
         expected_iters += 1
     if harness_crashes is not None:
         crashes += [True] * harness_crashes + [False] * (11 - harness_crashes)
-        expected_iters = 1
+        expected_iters += 1
     if no_harness_crashes is not None:
         crashes += [False] * (11 - no_harness_crashes) + [True] * no_harness_crashes
         expected_iters += 1

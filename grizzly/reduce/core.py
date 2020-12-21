@@ -222,7 +222,7 @@ class ReduceManager(object):
             if last_test_only and len(self.testcases) == 1:
                 # Only set `last_test_only` if we have more than one testcase to begin with
                 continue
-            if not use_harness and len(self.testcases) > 1:
+            if not use_harness and (not last_test_only and len(self.testcases) > 1):
                 # Can't run without harness if we have more than one testcase (`last_test_only` will run)
                 continue
 
