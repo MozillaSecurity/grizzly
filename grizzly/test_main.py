@@ -3,9 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly main"""
-
-from pytest import raises
-
 from sapphire import Sapphire
 from .common import Adapter, Report
 from .main import main
@@ -44,7 +41,6 @@ def test_main_01(mocker):
     """test main()"""
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.NAME = "fake"
-    fake_adapter.RELAUNCH = 1
     fake_adapter.TEST_DURATION = 10
     mocker.patch("grizzly.main.get_adapter", return_value=lambda: fake_adapter)
     mocker.patch.dict("grizzly.target.TARGETS", values={"fake-target": mocker.Mock(spec=Target)})
@@ -53,16 +49,19 @@ def test_main_01(mocker):
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs()
     args.adapter = "fake"
-    args.coverage = True
     args.input = "fake"
     args.ignore = ["fake", "fake"]
     args.prefs = "fake"
     args.valgrind = True
     args.xvfb = True
-    with raises(RuntimeError, match="Coverage must be run with --relaunch > 1"):
-        main(args)
-    fake_session.assert_not_called()
-    # successful run
+    # successful run (with coverage)
+    fake_adapter.RELAUNCH = 10
+    args.coverage = True
+    assert main(args) == Session.EXIT_SUCCESS
+    assert fake_session.mock_calls[0][-1]["coverage"]
+    assert fake_session.mock_calls[0][-1]["relaunch"] == 10
+    fake_session.reset_mock()
+    # successful run (without coverage)
     fake_adapter.RELAUNCH = 1
     args.coverage = False
     assert main(args) == Session.EXIT_SUCCESS
