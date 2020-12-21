@@ -86,11 +86,6 @@ def main(args):
             log.info("Using prefs %r", args.prefs)
         adapter.monitor = target.monitor
 
-        if args.coverage and relaunch == 1:
-            # this is a workaround to avoid not dumping coverage
-            # TODO: this may not be needed since moving relaunch into runnner
-            raise RuntimeError("Coverage must be run with --relaunch > 1")
-
         log.debug("calling adapter setup()")
         adapter.setup(args.input, iomanager.server_map)
         log.debug("configuring harness")
