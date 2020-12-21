@@ -368,7 +368,7 @@ class ReduceManager(object):
                 self._stats.add_info("Analysis", reliability_info)
                 any_success = True  # analysis ran and didn't raise
             # multi part test cases should always use relaunch == 1
-            # since that usually means there is a timing component
+            # since that can mean a delay is required
             if self._use_harness and len(self.testcases) == 1:
                 relaunch = min(self._original_relaunch, repeat)
             else:

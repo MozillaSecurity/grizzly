@@ -227,6 +227,8 @@ class Runner(object):
                         break
                     # wait 2 seconds (4 passes) before attempting idle exit
                     if close_delay > 3 and self._target.is_idle(10):
+                        # NOTE: this will always trigger on systems where the
+                        # browser does not exit when the last window is closed
                         LOG.debug("target idle")
                         break
                     # delay to help catch shutdown related crashes, LSan, etc.
