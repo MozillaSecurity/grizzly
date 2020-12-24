@@ -6,7 +6,7 @@ import traceback
 
 from grizzly.common import Adapter
 
-log = logging.getLogger(__name__)  # pylint: disable=invalid-name
+LOG = logging.getLogger(__name__)
 
 __all__ = ("get", "load", "names")
 __adapters__ = dict()
@@ -19,12 +19,12 @@ def load(path=None, skip_failures=True):
     if path is None:
         path = os.path.dirname(__file__)
     path = os.path.abspath(path)
-    log.debug("loading adapters from %r", path)
+    LOG.debug("loading adapters from %r", path)
     sys.path.append(path)
     for sub in os.listdir(path):
         if not os.path.isfile(os.path.join(path, sub, "__init__.py")):
             continue
-        log.debug("scanning %r", sub)
+        LOG.debug("scanning %r", sub)
         try:
             lib = importlib.import_module(sub)
         except Exception:  # pylint: disable=broad-except
@@ -32,14 +32,14 @@ def load(path=None, skip_failures=True):
                 raise
             exc_type, exc_obj, exc_tb = sys.exc_info()
             tbinfo = traceback.extract_tb(exc_tb)[-1]
-            log.debug("raised %s: %s (%s:%d)", exc_type.__name__, exc_obj, tbinfo[0], tbinfo[1])
+            LOG.debug("raised %s: %s (%s:%d)", exc_type.__name__, exc_obj, tbinfo[0], tbinfo[1])
             continue
         for clsname in dir(lib):
             cls = getattr(lib, clsname)
             if isinstance(cls, type) and issubclass(cls, Adapter):
                 if clsname == "Adapter":
                     continue
-                log.debug("sanity checking %r", clsname)
+                LOG.debug("sanity checking %r", clsname)
                 if not isinstance(cls.NAME, str):
                     raise RuntimeError(
                         "%s.NAME must be 'str' not %r" % (cls.__name__, type(cls.NAME).__name__))
@@ -54,8 +54,8 @@ def load(path=None, skip_failures=True):
                             cls.__name__))
                 __adapters__[cls.NAME] = cls
         else:
-            log.debug("ignored %r", sub)
-    log.debug("%d adapters loaded", len(__adapters__))
+            LOG.debug("ignored %r", sub)
+    LOG.debug("%d adapters loaded", len(__adapters__))
 
 def names():
     return __adapters__.keys()

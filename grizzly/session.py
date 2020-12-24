@@ -17,7 +17,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
-log = getLogger(__name__)  # pylint: disable=invalid-name
+LOG = getLogger(__name__)
 
 
 class SessionError(Exception):
@@ -90,19 +90,19 @@ class Session(object):
 
     def display_status(self, log_limiter):
         if self.adapter.remaining is not None:
-            log.info(
+            LOG.info(
                 "[I%04d-L%02d-R%02d] %s",
                 self.status.iteration,
                 self.adapter.remaining,
                 self.status.results,
                 self.status.test_name)
         elif log_limiter.ready(self.status.iteration, self.target.monitor.launches):
-            log.info("I%04d-R%02d ", self.status.iteration, self.status.results)
+            LOG.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
     def generate_testcase(self):
-        log.debug("calling iomanager.create_testcase()")
+        LOG.debug("calling iomanager.create_testcase()")
         test = self.iomanager.create_testcase(self.adapter.NAME)
-        log.debug("calling self.adapter.generate()")
+        LOG.debug("calling self.adapter.generate()")
         self.adapter.generate(test, self.iomanager.server_map)
         self.status.test_name = test.input_fname
         if self.target.prefs is not None:
@@ -116,7 +116,7 @@ class Session(object):
         self.target.save_logs(result_logs)
         report = Report(result_logs, self.target.binary)
         short_sig = report.crash_info.createShortSignature()
-        log.info("Result: %s (%s:%s)", short_sig, report.major[:8], report.minor[:8])
+        LOG.info("Result: %s (%s:%s)", short_sig, report.major[:8], report.minor[:8])
         # order test cases newest to oldest
         self.iomanager.tests.reverse()
         self.reporter.submit(self.iomanager.tests, report)
@@ -168,47 +168,47 @@ class Session(object):
             current_test.duration = result.duration
             # adapter callbacks
             if result.timeout:
-                log.debug("calling self.adapter.on_timeout()")
+                LOG.debug("calling self.adapter.on_timeout()")
                 self.adapter.on_timeout(current_test, result.served)
             else:
-                log.debug("calling self.adapter.on_served()")
+                LOG.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, result.served)
             # update test case
             if not result.attempted:
-                log.debug("Ignoring test case since nothing was served")
+                LOG.debug("Ignoring test case since nothing was served")
                 self.iomanager.tests.pop().cleanup()
                 if not current_test.contains(current_test.landing_page):
-                    log.warning("Test case is missing landing page")
+                    LOG.warning("Test case is missing landing page")
                 if result.initial:
                     # since this is the first iteration since the Target launched
                     # something is likely wrong with the Target or Adapter
                     err_logs = mkdtemp(prefix="error_", dir=grz_tmp("logs"))
                     self.target.save_logs(err_logs)
-                    log.error("ERROR: Test case was not served. Timeout too short?")
-                    log.error("Logs can be found here %r", err_logs)
+                    LOG.error("ERROR: Test case was not served. Timeout too short?")
+                    LOG.error("Logs can be found here %r", err_logs)
                     raise SessionError("Please check Adapter and Target")
-                log.warning("Test case was not served")
+                LOG.warning("Test case was not served")
             elif self.adapter.IGNORE_UNSERVED:
-                log.debug("removing unserved files from the test case")
+                LOG.debug("removing unserved files from the test case")
                 current_test.purge_optional(result.served)
             # process results
             if result.status == RunResult.FAILED:
-                log.debug("result detected")
+                LOG.debug("result detected")
                 self.report_result()
             elif result.status == RunResult.IGNORED:
                 self.status.ignored += 1
-                log.info("Ignored (%d)", self.status.ignored)
+                LOG.info("Ignored (%d)", self.status.ignored)
 
             if self.adapter.remaining is not None and self.adapter.remaining < 1:
                 # all test cases have been replayed
-                log.info("Replay Complete")
+                LOG.info("Replay Complete")
                 break
 
             if iteration_limit is not None and self.status.iteration == iteration_limit:
-                log.info("Hit iteration limit")
+                LOG.info("Hit iteration limit")
                 break
 
             # warn about large browser logs
             self.status.log_size = self.target.log_size()
             if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
-                log.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
+                LOG.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
