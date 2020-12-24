@@ -1,12 +1,13 @@
-import importlib
-import logging
-import os
-import sys
-import traceback
+from importlib import import_module
+from logging import getLogger
+from os import listdir
+from os.path import abspath, dirname, isfile, join as pathjoin
+from sys import exc_info, path as syspath
+from traceback import extract_tb
 
 from grizzly.common import Adapter
 
-LOG = logging.getLogger(__name__)
+LOG = getLogger(__name__)
 
 __all__ = ("get", "load", "names")
 __adapters__ = dict()
@@ -17,21 +18,21 @@ def get(name):
 def load(path=None, skip_failures=True):
     assert not __adapters__, "adapters have already been loaded"
     if path is None:
-        path = os.path.dirname(__file__)
-    path = os.path.abspath(path)
+        path = dirname(__file__)
+    path = abspath(path)
     LOG.debug("loading adapters from %r", path)
-    sys.path.append(path)
-    for sub in os.listdir(path):
-        if not os.path.isfile(os.path.join(path, sub, "__init__.py")):
+    syspath.append(path)
+    for sub in listdir(path):
+        if not isfile(pathjoin(path, sub, "__init__.py")):
             continue
         LOG.debug("scanning %r", sub)
         try:
-            lib = importlib.import_module(sub)
+            lib = import_module(sub)
         except Exception:  # pylint: disable=broad-except
             if not skip_failures:
                 raise
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            tbinfo = traceback.extract_tb(exc_tb)[-1]
+            exc_type, exc_obj, exc_tb = exc_info()
+            tbinfo = extract_tb(exc_tb)[-1]
             LOG.debug("raised %s: %s (%s:%d)", exc_type.__name__, exc_obj, tbinfo[0], tbinfo[1])
             continue
         for clsname in dir(lib):

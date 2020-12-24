@@ -2,8 +2,9 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import abc
-import os
+from abc import ABCMeta, abstractmethod
+from os import walk
+from os.path import abspath, dirname, isdir, isfile, join as pathjoin
 
 
 __all__ = ("Adapter", "AdapterError")
@@ -15,8 +16,8 @@ class AdapterError(Exception):
     """The base class for exceptions raised by an Adapter"""
 
 
-class Adapter(metaclass=abc.ABCMeta):
-    HARNESS_FILE = os.path.join(os.path.dirname(__file__), "harness.html")
+class Adapter(metaclass=ABCMeta):
+    HARNESS_FILE = pathjoin(dirname(__file__), "harness.html")
     IGNORE_UNSERVED = True  # Only report test cases with served content
     NAME = None  # must be a unique string
     RELAUNCH = 0  # maximum iterations between Target relaunches (<1 use default)
@@ -85,24 +86,24 @@ class Adapter(metaclass=abc.ABCMeta):
         Yields:
             str: Absolute path to files.
         """
-        full_path = os.path.abspath(path)
-        if os.path.isdir(full_path):
-            for root, _, files in os.walk(full_path):
+        full_path = abspath(path)
+        if isdir(full_path):
+            for root, _, files in walk(full_path):
                 for fname in files:
                     if fname in ignore or fname.startswith("."):
                         # skip ignored and hidden system files
                         continue
-                    yield os.path.join(root, fname)
+                    yield pathjoin(root, fname)
                 if not recursive:
                     break
-        elif os.path.isfile(full_path):
+        elif isfile(full_path):
             yield full_path
 
     #############################
     # Methods to overload
     #############################
 
-    @abc.abstractmethod
+    @abstractmethod
     def generate(self, testcase, server_map):
         """Automatically called. Populate testcase here.
 

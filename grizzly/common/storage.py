@@ -6,8 +6,10 @@
 from collections import namedtuple
 from itertools import chain
 import json
-import os
-import shutil
+from os import listdir, makedirs, SEEK_END, walk
+from os.path import abspath, basename, dirname, isfile, isdir, join as pathjoin, \
+    normpath, relpath
+from shutil import copyfileobj, rmtree
 from tempfile import mkdtemp, SpooledTemporaryFile
 from time import time
 from zipfile import BadZipfile, ZipFile
@@ -88,9 +90,9 @@ class TestCase(object):
         Returns:
             None
         """
-        path = os.path.abspath(path)
+        path = abspath(path)
         for fname in (x for x in include_files if x.startswith(path)):
-            test_path = os.path.relpath(fname, path)
+            test_path = relpath(fname, path)
             if test_path.startswith(".."):
                 continue
             if prefix:
@@ -196,8 +198,8 @@ class TestCase(object):
         Returns:
             TestCase: A copy of the TestCase instance
         """
-        result = type(self)(self.landing_page, self.redirect_page, self.adapter_name, self.input_fname,
-                            self.timestamp)
+        result = type(self)(self.landing_page, self.redirect_page, self.adapter_name,
+                            self.input_fname, self.timestamp)
         result.duration = self.duration
         result.env_vars.update(self.env_vars)
         for entry in self._files.meta:
@@ -256,10 +258,10 @@ class TestCase(object):
                 "adapter": self.adapter_name,
                 "duration": self.duration,
                 "env": self.env_vars,
-                "input": os.path.basename(self.input_fname) if self.input_fname else None,
+                "input": basename(self.input_fname) if self.input_fname else None,
                 "target": self.landing_page,
                 "timestamp": self.timestamp}
-            with open(os.path.join(out_path, "test_info.json"), "w") as out_fp:
+            with open(pathjoin(out_path, "test_info.json"), "w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
             # save meta files
             for meta_file in self._files.meta:
@@ -305,16 +307,16 @@ class TestCase(object):
                 with ZipFile(path) as zip_fp:
                     zip_fp.extractall(path=unpacked)
             except (BadZipfile, zlib_error):
-                shutil.rmtree(unpacked, ignore_errors=True)
+                rmtree(unpacked, ignore_errors=True)
                 raise TestCaseLoadFailure("Testcase archive is corrupted") from None
             path = unpacked
         else:
             unpacked = None
         # load testcase data from disk
         try:
-            if os.path.isfile(path):
+            if isfile(path):
                 tests = [cls.load_single(path, load_prefs, adjacent=adjacent)]
-            elif os.path.isdir(path):
+            elif isdir(path):
                 tests = list()
                 for tc_path in TestCase.scan_path(path):
                     tests.append(cls.load_single(tc_path, load_prefs))
@@ -323,7 +325,7 @@ class TestCase(object):
                 raise TestCaseLoadFailure("Invalid TestCase path")
         finally:
             if unpacked is not None:
-                shutil.rmtree(unpacked, ignore_errors=True)
+                rmtree(unpacked, ignore_errors=True)
         return tests
 
     def load_environ(self, path, env_data):
@@ -333,12 +335,12 @@ class TestCase(object):
                 raise TestCaseLoadFailure("'env_data' contains invalid 'env' entries")
         self.env_vars = env_data
         known_suppressions = ("lsan.supp", "tsan.supp", "ubsan.supp")
-        for supp in os.listdir(path):
+        for supp in listdir(path):
             if supp.lower() in known_suppressions:
                 # Update *SAN_OPTIONS environment variable to use provided suppression files.
                 opt_key = "%s_OPTIONS" % (supp.split(".")[0].upper(),)
                 opts = sanitizer_opts(self.env_vars.get(opt_key, ""))
-                opts["suppressions"] = "'%s'" % (os.path.join(path, supp),)
+                opts["suppressions"] = "'%s'" % (pathjoin(path, supp),)
                 self.env_vars[opt_key] = ":".join("=".join((k, v)) for k, v in opts.items())
 
     @classmethod
@@ -356,11 +358,11 @@ class TestCase(object):
         Returns:
             TestCase: A TestCase.
         """
-        path = os.path.abspath(path)
-        if os.path.isdir(path):
+        path = abspath(path)
+        if isdir(path):
             # load using test_info.json
             try:
-                with open(os.path.join(path, "test_info.json"), "r") as in_fp:
+                with open(pathjoin(path, "test_info.json"), "r") as in_fp:
                     info = json.load(in_fp)
             except IOError:
                 raise TestCaseLoadFailure("Missing 'test_info.json'") from None
@@ -368,22 +370,22 @@ class TestCase(object):
                 raise TestCaseLoadFailure("Invalid 'test_info.json'") from None
             if not isinstance(info.get("target"), str):
                 raise TestCaseLoadFailure("'test_info.json' has invalid 'target' entry")
-            entry_point = os.path.basename(info["target"])
-            if not os.path.isfile(os.path.join(path, entry_point)):
+            entry_point = basename(info["target"])
+            if not isfile(pathjoin(path, entry_point)):
                 raise TestCaseLoadFailure("Entry point %r not found in '%s'" % (entry_point, path))
             # always load all contents of a directory if a 'test_info.json' is loaded
             adjacent = True
-        elif os.path.isfile(path):
-            entry_point = os.path.basename(path)
+        elif isfile(path):
+            entry_point = basename(path)
             info = dict()
-            path = os.path.dirname(path)
+            path = dirname(path)
         else:
             raise TestCaseLoadFailure("Missing or invalid TestCase %r" % (path,))
         # create testcase and add data
         test = cls(None, None, info.get("adapter", None), timestamp=info.get("timestamp", 0))
-        if load_prefs and os.path.isfile(os.path.join(path, "prefs.js")):
-            test.add_meta(TestFile.from_file(os.path.join(path, "prefs.js")))
-        test.add_from_file(os.path.join(path, entry_point))
+        if load_prefs and isfile(pathjoin(path, "prefs.js")):
+            test.add_meta(TestFile.from_file(pathjoin(path, "prefs.js")))
+        test.add_from_file(pathjoin(path, entry_point))
         test.landing_page = entry_point
         # load environment variables
         if info:
@@ -394,14 +396,14 @@ class TestCase(object):
                 raise
         # load all adjacent data from directory
         if adjacent:
-            for dpath, _, files in os.walk(path):
+            for dpath, _, files in walk(path):
                 for fname in files:
                     # ignore files that have been previously loaded
                     if fname in (entry_point, "prefs.js", "test_info.json"):
                         continue
                     location = "/".join((dpath.split(path, 1)[-1], fname))
                     test.add_from_file(
-                        os.path.join(dpath, fname),
+                        pathjoin(dpath, fname),
                         file_name=location,
                         required=False)
         return test
@@ -457,13 +459,13 @@ class TestCase(object):
         Yields:
             str: Path to what appears to be a valid testcase.
         """
-        contents = os.listdir(path)
+        contents = listdir(path)
         if "test_info.json" in contents:
             yield path
         else:
             for entry in contents:
-                tc_path = os.path.join(path, entry)
-                if os.path.isfile(os.path.join(tc_path, "test_info.json")):
+                tc_path = pathjoin(path, entry)
+                if isfile(pathjoin(tc_path, "test_info.json")):
                     yield tc_path
 
 
@@ -489,7 +491,7 @@ class TestFile(object):
                 or file_name.startswith("../"):
             raise TypeError("file_name is invalid %r" % (file_name,))
         # name including path relative to wwwroot
-        self._file_name = os.path.normpath(file_name)
+        self._file_name = normpath(file_name)
         self._fp = SpooledTemporaryFile(
             dir=grz_tmp("storage"),
             max_size=self.CACHE_LIMIT,
@@ -512,7 +514,7 @@ class TestFile(object):
         """
         cloned = type(self)(self._file_name)
         self._fp.seek(0)
-        shutil.copyfileobj(self._fp, cloned._fp, self.XFER_BUF)  # pylint: disable=protected-access
+        copyfileobj(self._fp, cloned._fp, self.XFER_BUF)  # pylint: disable=protected-access
         return cloned
 
     def close(self):
@@ -551,12 +553,12 @@ class TestFile(object):
         Returns:
             None
         """
-        target_path = os.path.join(path, os.path.dirname(self._file_name))
-        if not os.path.isdir(target_path):
-            os.makedirs(target_path)
+        target_path = pathjoin(path, dirname(self._file_name))
+        if not isdir(target_path):
+            makedirs(target_path)
         self._fp.seek(0)
-        with open(os.path.join(path, self._file_name), "wb") as dst_fp:
-            shutil.copyfileobj(self._fp, dst_fp, self.XFER_BUF)
+        with open(pathjoin(path, self._file_name), "wb") as dst_fp:
+            copyfileobj(self._fp, dst_fp, self.XFER_BUF)
 
     @property
     def file_name(self):
@@ -596,10 +598,10 @@ class TestFile(object):
             TestFile: A TestFile.
         """
         if file_name is None:
-            file_name = os.path.basename(input_file)
+            file_name = basename(input_file)
         t_file = cls(file_name)
         with open(input_file, "rb") as src_fp:
-            shutil.copyfileobj(src_fp, t_file._fp, cls.XFER_BUF)  # pylint: disable=protected-access
+            copyfileobj(src_fp, t_file._fp, cls.XFER_BUF)  # pylint: disable=protected-access
         return t_file
 
     @property
@@ -613,7 +615,7 @@ class TestFile(object):
             int: Size in bytes.
         """
         pos = self._fp.tell()
-        self._fp.seek(0, os.SEEK_END)
+        self._fp.seek(0, SEEK_END)
         size = self._fp.tell()
         self._fp.seek(pos)
         return size
