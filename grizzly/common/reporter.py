@@ -545,7 +545,7 @@ class FuzzManagerReporter(Reporter):
                     LOG.info("Frequent crash matched existing signature: %s",
                              cache_metadata["shortDescription"])
                     if not self.force_report:
-                        return
+                        return None
                 elif "bug__id" in cache_metadata:
                     LOG.info("Crash matched existing signature (bug %s): %s",
                              cache_metadata["bug__id"],
@@ -566,7 +566,7 @@ class FuzzManagerReporter(Reporter):
             if cache_sig_file is None:
                 if self._ignored(report):
                     LOG.info("Report is unsupported and is in ignore list")
-                    return
+                    return None
                 LOG.warning("Report is unsupported by FM, saved to %r", report.path)
                 # TODO: we should check if stackhasher failed too
                 raise RuntimeError("Failed to create FM signature")
