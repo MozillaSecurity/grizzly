@@ -35,6 +35,7 @@ let setTestTimeout = () => {
 
 let main = () => {
   // poll sub and wait until closed
+  // sub should be closed by either the test case or setTestTimeout
   if (sub && !sub.closed) {
     setTimeout(main, 50)
     return
@@ -48,11 +49,14 @@ let main = () => {
     let xhr = new XMLHttpRequest()
     // indicate test is complete by requesting `/grz_next_test`
     xhr.open('GET', '/grz_next_test', true)
+    // if web server goes away don't hang (sapphire times out)
+    xhr.timeout = 250
+    // close the harness to catch crashes that are triggered when the browser closes
     xhr.onabort = () => { window.close() }
     xhr.onerror = () => { window.close() }
-    xhr.onload = () => { window.close() }
-    // close the harness to catch crashes that are triggered when the browser closes
-    setTimeout(() => { xhr.send() }, 100)
+    xhr.onload = () => { setTimeout(window.close, 100) }
+    xhr.ontimeout = () => { window.close() }
+    xhr.send()
     return
   }
 
