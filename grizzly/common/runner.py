@@ -225,8 +225,8 @@ class Runner(object):
                 for close_delay in range(max(int(self._close_delay / 0.5), 1)):
                     if not self._target.monitor.is_healthy():
                         break
-                    # wait 2 seconds (4 passes) before attempting idle exit
-                    if close_delay > 3 and self._target.is_idle(10):
+                    # wait 3 seconds (6 passes) before attempting idle exit
+                    if close_delay > 5 and self._target.is_idle(10):
                         # NOTE: this will always trigger on systems where the
                         # browser does not exit when the last window is closed
                         LOG.debug("target idle")
