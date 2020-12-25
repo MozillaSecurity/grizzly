@@ -39,7 +39,7 @@ def test_replay_01(mocker):
 def test_replay_02(mocker, tmp_path):
     """test ReplayManager.run() - no repro"""
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target, closed=True, launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE
@@ -100,7 +100,7 @@ def test_replay_05(mocker, tmp_path):
     """test ReplayManager.run() - successful repro"""
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     served = ["index.html"]
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
     server.serve_path.return_value = (SERVED_ALL, served)
     target = mocker.Mock(spec=Target, binary="C:\\fake_bin", launch_timeout=30)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
@@ -147,7 +147,7 @@ def test_replay_06(mocker, tmp_path):
 def test_replay_07(mocker, tmp_path):
     """test ReplayManager.run() - delayed failure - following test landing page not requested"""
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
     type(target).closed = mocker.PropertyMock(side_effect=(True, False, True))
     target.RESULT_FAILURE = Target.RESULT_FAILURE
@@ -362,7 +362,7 @@ def test_replay_13(mocker, tmp_path):
     report_3.crash_info.createShortSignature.return_value = "No crash detected"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_0, report_1, report_2, report_3)
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target, binary="fake_bin", launch_timeout=30)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
@@ -425,7 +425,7 @@ def test_replay_15(mocker, tmp_path):
     report_0.crash_info.createShortSignature.return_value = "[@ test1]"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_0,)
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
     server.serve_path.side_effect = ((SERVED_ALL, ["index.html"]), KeyboardInterrupt)
     target = mocker.Mock(spec=Target, binary="fake_bin", launch_timeout=30)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
@@ -446,7 +446,7 @@ def test_replay_15(mocker, tmp_path):
 def test_replay_16(mocker):
     """test ReplayManager.run() - multiple TestCases - no repro"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target, closed=True, launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE
@@ -465,7 +465,7 @@ def test_replay_16(mocker):
 
 def test_replay_17(mocker):
     """test ReplayManager.run() - multiple TestCases - no repro - with repeats"""
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target, launch_timeout=30)
     # test relaunch < repeat
@@ -491,7 +491,7 @@ def test_replay_17(mocker):
 def test_replay_18(mocker, tmp_path):
     """test ReplayManager.run() - multiple TestCases - successful repro"""
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
     server.serve_path.side_effect = (
         (SERVED_ALL, ["a.html"]),
         (SERVED_ALL, ["b.html"]),
@@ -527,7 +527,7 @@ def test_replay_19(mocker, tmp_path):
     """test ReplayManager.run() - multiple calls"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
     server.serve_path.return_value = (SERVED_ALL, ["index.html"])
     target = mocker.Mock(spec=Target, closed=True, launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE

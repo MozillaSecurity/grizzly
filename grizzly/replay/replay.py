@@ -209,7 +209,8 @@ class ReplayManager(object):
                         location = runner.location(
                             "/grz_harness",
                             self.server.port,
-                            close_after=relaunch * test_count)
+                            close_after=relaunch * test_count,
+                            timeout=self.server.timeout)
                     # The environment from the initial testcase is used because
                     # a sequence of testcases is expected to be run without
                     # relaunching the Target to match the functionality of
