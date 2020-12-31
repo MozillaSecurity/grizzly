@@ -3,10 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-import os
-import random
-import struct
-import pytest
+from os import SEEK_END
+from random import getrandbits
+from struct import pack
+
+from pytest import raises
 
 from .loki import Loki
 
@@ -91,7 +92,7 @@ def test_loki_05(tmp_path):
         out_files = list(out_path.iterdir())
         assert len(out_files) == 1
         with out_files[0].open("rb") as out_fp:
-            out_fp.seek(0, os.SEEK_END)
+            out_fp.seek(0, SEEK_END)
             assert out_fp.tell() == in_size
             out_fp.seek(0)
             for out_byte in out_fp:
@@ -121,13 +122,13 @@ def test_loki_06():
 
 def test_loki_07():
     """test invalid data sizes"""
-    with pytest.raises(RuntimeError, match=r"Unsupported data size:"):
+    with raises(RuntimeError, match=r"Unsupported data size:"):
         Loki._fuzz_data(b"")
 
-    with pytest.raises(RuntimeError, match=r"Unsupported data size:"):
+    with raises(RuntimeError, match=r"Unsupported data size:"):
         Loki._fuzz_data(b"123")
 
-    with pytest.raises(RuntimeError, match=r"Unsupported data size:"):
+    with raises(RuntimeError, match=r"Unsupported data size:"):
         Loki._fuzz_data(b"12345")
 
 
@@ -135,14 +136,14 @@ def test_loki_08():
     """test endian support"""
     Loki._fuzz_data(b"1", ">")
     Loki._fuzz_data(b"1", "<")
-    with pytest.raises(RuntimeError, match=r"Unsupported byte order"):
+    with raises(RuntimeError, match=r"Unsupported byte order"):
         Loki._fuzz_data(b"1", "BAD")
 
 
 def test_loki_stress_01():
     """test with single byte"""
     for _ in range(1000):
-        in_data = struct.pack("B", random.getrandbits(8))
+        in_data = pack("B", getrandbits(8))
         assert len(Loki._fuzz_data(in_data)) == 1
 
 
