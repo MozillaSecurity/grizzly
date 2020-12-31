@@ -2,7 +2,6 @@
 """
 Loki fuzzing library
 """
-from argparse import ArgumentParser
 from logging import basicConfig, getLogger, ERROR, INFO
 from os import mkdir, SEEK_END
 from os.path import abspath, getsize, isdir, splitext, join as pathjoin
@@ -174,30 +173,12 @@ class Loki(object):
             tmp_fp.seek(0)
             return tmp_fp.read()
 
+    @classmethod
+    def main(cls, args):
+        basicConfig(format="", level=INFO if not args.quiet else ERROR)
 
-def main():
-    parser = ArgumentParser(description="Loki fuzzing library")
-    parser.add_argument(
-        "input",
-        help="Output will be generated based on this file")
-    parser.add_argument(
-        "-a", "--aggression", default=0.001, type=float,
-        help="Controls how much fuzzing is done on the output file")
-    parser.add_argument(
-        "-c", "--count", default=100, type=int,
-        help="Number test cases to generate")
-    parser.add_argument(
-        "-q", "--quiet", default=False, action="store_true",
-        help="Display limited output")
-    parser.add_argument(
-        "-o", "--output", default=None,
-        help="Output directory for fuzzed test cases")
-    args = parser.parse_args()
-
-    basicConfig(level=INFO if not args.quiet else ERROR)
-
-    loki = Loki(aggression=args.aggression)
-    try:
-        loki.fuzz_file(args.input, args.count, out_dir=args.output)
-    except KeyboardInterrupt:
-        LOG.info("Ctrl+C detected.")
+        loki = Loki(aggression=args.aggression)
+        try:
+            loki.fuzz_file(args.input, args.count, out_dir=args.output)
+        except KeyboardInterrupt:  # pragma: no cover
+            LOG.info("Ctrl+C detected.")
