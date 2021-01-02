@@ -135,19 +135,31 @@ def test_loki_08():
         Loki._fuzz_data(b"1", "BAD")
 
 def test_loki_fuzz_01(mocker):
-    """test _fuzz() paths"""
-    mocker.patch("loki.loki.randint", autospec=True, side_effect=max)
+    """test Loki._fuzz()"""
     loki = Loki(aggression=1)
-    with SpooledTemporaryFile(max_size=0x800000, mode="r+b") as tmp_fp:
-        # test empty input sample
+    # test empty input sample
+    with SpooledTemporaryFile(max_size=10, mode="r+b") as tmp_fp:
         with raises(RuntimeError):
             loki._fuzz(tmp_fp)
-        tmp_fp.write(b"123456789")
-        # try getrandbits returning 0
-        mocker.patch("loki.loki.getrandbits", autospec=True, return_value=0)
+    # test multiple mutations
+    with SpooledTemporaryFile(max_size=10, mode="r+b") as tmp_fp:
+        tmp_fp.write(b"12345678")
         loki._fuzz(tmp_fp)
-        # try getrandbits returning 1
-        mocker.patch("loki.loki.getrandbits", autospec=True, return_value=1)
+    # make remaining tests deterministic
+    mocker.patch("loki.loki.getrandbits", autospec=True, return_value=1)
+    mocker.patch("loki.loki.randint", autospec=True, side_effect=min)
+    mocker.patch("loki.loki.sample", autospec=True, return_value=[0])
+    # test multi-byte with > 3 bytes
+    with SpooledTemporaryFile(max_size=10, mode="r+b") as tmp_fp:
+        tmp_fp.write(b"1234")
+        loki._fuzz(tmp_fp)
+    # test multi-byte with > 1 byte
+    with SpooledTemporaryFile(max_size=10, mode="r+b") as tmp_fp:
+        tmp_fp.write(b"12")
+        loki._fuzz(tmp_fp)
+    # test multi-byte with 1 byte
+    with SpooledTemporaryFile(max_size=10, mode="r+b") as tmp_fp:
+        tmp_fp.write(b"1")
         loki._fuzz(tmp_fp)
 
 def test_loki_fuzz_02(mocker):
