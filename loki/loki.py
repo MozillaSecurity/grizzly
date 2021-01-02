@@ -8,7 +8,7 @@ Loki fuzzing library
 from logging import basicConfig, getLogger, ERROR, INFO
 from os import makedirs, SEEK_END
 from os.path import abspath, getsize, splitext, join as pathjoin
-from random import choice, getrandbits, randint
+from random import choice, getrandbits, randint, sample
 from struct import pack, unpack
 import shutil
 from tempfile import mkdtemp, SpooledTemporaryFile
@@ -75,26 +75,32 @@ class Loki(object):
         length = tgt_fp.tell()
         if length < 1:
             raise RuntimeError("Zero length file cannot be fuzzed.")
-
-        # minimum number of max passes should be 1
-        max_passes = max(int(round(length * self.aggr)), 1)
-        fuzz_passes = randint(1, max_passes)
+        # minimum number of mutations should be 1
+        max_mutations = max(int(round(length * self.aggr)), 1)
+        mutations = randint(1, max_mutations)
         LOG.debug(
-            "%d of a possible %d fuzz passes will be performed",
-            fuzz_passes,
-            max_passes
+            "%d of a possible %d mutations will be performed",
+            mutations,
+            max_mutations
         )
-        max_bytes = min(length, 2) if length < 4 else 4
-        for _ in range(fuzz_passes):
-            if max_bytes > 1 and not getrandbits(4):  # 6.25%
-                fuzz_size = max_bytes >> 1 if getrandbits(1) else max_bytes
+        for count, idx in enumerate(sample(range(length), k=mutations)):
+            # every few iterations randomly attempt multi-byte mutations
+            if count % 10 == 0 and getrandbits(1):
+                max_size = length - idx
+                # target multiple bytes if possible
+                if max_size > 3 and getrandbits(1):
+                    size = 4
+                elif max_size > 1:
+                    size = 2
+                else:
+                    size = 1
             else:
-                fuzz_size = 1
-            target = randint(0, length - fuzz_size)
-
-            tgt_fp.seek(target)
-            out_data = self._fuzz_data(tgt_fp.read(fuzz_size))
-            tgt_fp.seek(target)
+                # target single byte
+                size = 1
+            # perform mutation
+            tgt_fp.seek(idx)
+            out_data = self._fuzz_data(tgt_fp.read(size))
+            tgt_fp.seek(idx)
             tgt_fp.write(out_data)
 
     def fuzz_data(self, data):
