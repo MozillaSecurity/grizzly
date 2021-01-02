@@ -15,14 +15,14 @@ def parse_args(argv=None):
         help="Output will be generated based on this file")
     parser.add_argument(
         "-a", "--aggression", default=0.001, type=float,
-        help="Controls how much fuzzing is done on the output file")
+        help="Maximum fuzz rate. 1.0 == 100% (default: %(default)s)")
     parser.add_argument(
-        "-c", "--count", default=100, type=int,
-        help="Number test cases to generate")
+        "-c", "--count", default=1, type=int,
+        help="Number test cases to generate, minimum 1 (default: %(default)s)")
     parser.add_argument(
         "-q", "--quiet", default=False, action="store_true",
-        help="Display limited output")
+        help="Display limited output (default: %(default)s)")
     parser.add_argument(
         "-o", "--output", default=None,
-        help="Output directory for fuzzed test cases")
+        help="Output directory for fuzzed test cases (default: '.')")
     return parser.parse_args(argv)
