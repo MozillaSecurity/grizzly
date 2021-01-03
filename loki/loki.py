@@ -131,31 +131,6 @@ class Loki():
                 self._fuzz(out_fp)
         return True
 
-    @staticmethod
-    def splice_data(data_chunks):
-        if len(data_chunks) not in (1, 2):
-            return None  # one or two data blobs are required (one truncates)
-
-        blob_pass = 1
-        with SpooledTemporaryFile(max_size=0x800000, mode="r+b") as tmp_fp:
-            for chunk in data_chunks:
-                length = len(chunk)
-
-                if length < 1:
-                    return None  # not enough data chunks to work with
-
-                target = randint(0, length - 1)
-
-                if blob_pass == 1:
-                    tmp_fp.write(chunk[:target])
-                elif blob_pass == 2:
-                    tmp_fp.write(chunk[target:])
-
-                blob_pass += 1
-
-            tmp_fp.seek(0)
-            return tmp_fp.read()
-
     @classmethod
     def main(cls, args):
         basicConfig(format="", level=INFO if not args.quiet else ERROR)
