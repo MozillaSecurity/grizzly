@@ -15,13 +15,13 @@ from .loki import Loki
 
 
 def test_loki_01(tmp_path):
-    """test a missing file"""
+    """test Loki.fuzz_file() with a missing file"""
     fuzzer = Loki(aggression=0.1)
     assert not fuzzer.fuzz_file("nofile.test", 1, str(tmp_path))
     assert not list(tmp_path.iterdir())
 
 def test_loki_02(tmp_path):
-    """test an empty file"""
+    """test Loki.fuzz_file() with an empty file"""
     tmp_fn = tmp_path / "input"
     tmp_fn.touch()
 
@@ -33,7 +33,7 @@ def test_loki_02(tmp_path):
     assert not list(out_path.iterdir())
 
 def test_loki_03(tmp_path):
-    """test a single byte file"""
+    """test Loki.fuzz_file() with a single byte file"""
     out_path = tmp_path / "out"
     out_path.mkdir()
 
@@ -41,7 +41,7 @@ def test_loki_03(tmp_path):
     tmp_fn = tmp_path / "input"
     tmp_fn.write_bytes(in_data)
 
-    fuzzer = Loki(aggression=0.1)
+    fuzzer = Loki(aggression=0.1, byte_order=">")
     for _ in range(100):
         assert fuzzer.fuzz_file(str(tmp_fn), 1, str(out_path))
         out_files = list(out_path.iterdir())
@@ -53,7 +53,7 @@ def test_loki_03(tmp_path):
     assert out_data != in_data
 
 def test_loki_04(tmp_path):
-    """test a two byte file"""
+    """test Loki.fuzz_file() with a two byte file"""
     in_data = b"AB"
     tmp_fn = tmp_path / "input"
     tmp_fn.write_bytes(in_data)
@@ -73,13 +73,12 @@ def test_loki_04(tmp_path):
     assert out_data != in_data
 
 def test_loki_05(tmp_path):
-    """test a multi byte file"""
+    """test Loki.fuzz_file() with a multi byte file"""
     in_size = 100
     in_byte = b"A"
-    in_data = in_byte * in_size
     fuzz_found = False
     tmp_fn = tmp_path / "input"
-    tmp_fn.write_bytes(in_data)
+    tmp_fn.write_bytes(in_byte * in_size)
 
     out_path = tmp_path / "out"
     out_path.mkdir()
@@ -116,31 +115,12 @@ def test_loki_06():
             break
     assert fuzz_found
 
-def test_loki_07():
-    """test invalid data sizes"""
-    with raises(RuntimeError, match=r"Unsupported data size:"):
-        Loki._fuzz_data(b"")
-
-    with raises(RuntimeError, match=r"Unsupported data size:"):
-        Loki._fuzz_data(b"123")
-
-    with raises(RuntimeError, match=r"Unsupported data size:"):
-        Loki._fuzz_data(b"12345")
-
-def test_loki_08():
-    """test endian support"""
-    Loki._fuzz_data(b"1", ">")
-    Loki._fuzz_data(b"1", "<")
-    with raises(RuntimeError, match=r"Unsupported byte order"):
-        Loki._fuzz_data(b"1", "BAD")
-
 def test_loki_fuzz_01(mocker):
     """test Loki._fuzz()"""
     loki = Loki(aggression=1)
     # test empty input sample
     with SpooledTemporaryFile(max_size=10, mode="r+b") as tmp_fp:
-        with raises(RuntimeError):
-            loki._fuzz(tmp_fp)
+        loki._fuzz(tmp_fp)
     # test multiple mutations
     with SpooledTemporaryFile(max_size=10, mode="r+b") as tmp_fp:
         tmp_fp.write(b"12345678")
@@ -157,7 +137,8 @@ def test_loki_fuzz_01(mocker):
     with SpooledTemporaryFile(max_size=10, mode="r+b") as tmp_fp:
         tmp_fp.write(b"12")
         loki._fuzz(tmp_fp)
-    # test multi-byte with 1 byte
+    # test multi-byte with 1 byte and byte order set
+    loki.byte_order = ">"
     with SpooledTemporaryFile(max_size=10, mode="r+b") as tmp_fp:
         tmp_fp.write(b"1")
         loki._fuzz(tmp_fp)
@@ -167,28 +148,31 @@ def test_loki_fuzz_02(mocker):
     fake_randint = mocker.patch("loki.loki.randint", autospec=True)
     # fuzz op 0
     fake_randint.side_effect = (0, 1, 1)
-    Loki._fuzz_data(b"1")
+    Loki._fuzz_data(b"1", "<")
     # fuzz op 1
     fake_randint.side_effect = (1, 0)
-    Loki._fuzz_data(b"1")
+    Loki._fuzz_data(b"1", "<")
     # fuzz op 2
     fake_randint.side_effect = (2,)
-    Loki._fuzz_data(b"1")
+    Loki._fuzz_data(b"1", ">")
     # fuzz op 3
     fake_randint.side_effect = (3,)
-    Loki._fuzz_data(b"1")
+    Loki._fuzz_data(b"1", ">")
     # fuzz op 4 & test data size 1
     fake_randint.side_effect = max
-    Loki._fuzz_data(b"1")
+    Loki._fuzz_data(b"1", "<")
     # fuzz op 4 & test data size 2
-    Loki._fuzz_data(b"12")
+    Loki._fuzz_data(b"12", "<")
     # fuzz op 4 & test data size 4
     fake_randint.side_effect = (4, 1)
-    Loki._fuzz_data(b"1234")
+    Loki._fuzz_data(b"1234", ">")
+    # invalid data size
+    with raises(AssertionError, match=r"Unsupported data size:"):
+        Loki._fuzz_data(b"", ">")
 
 def test_loki_stress_01():
     """test Loki._fuzz_data() with random input"""
-    orders = ("<", ">", None)
+    orders = ("<", ">")
     sizes = (1, 2, 4)
     for _ in range(5000):
         size = choice(sizes)
@@ -198,7 +182,7 @@ def test_loki_stress_01():
             in_data = pack("H", getrandbits(16))
         elif size == 4:
             in_data = pack("I", getrandbits(32))
-        assert len(Loki._fuzz_data(in_data, byte_order=choice(orders))) == size
+        assert len(Loki._fuzz_data(in_data, choice(orders))) == size
 
 def test_main_01(mocker, tmp_path):
     """test main"""
@@ -214,6 +198,7 @@ def test_main_01(mocker, tmp_path):
     sample.write_bytes(b"test!")
     args = mocker.Mock(
         aggression=0.1,
+        byte_order=None,
         count=15,
         input=str(sample),
         output=None
@@ -221,6 +206,10 @@ def test_main_01(mocker, tmp_path):
     assert Loki.main(args) == 0
     assert fake_mkdtemp.call_count == 1
 
-def test_args_01():
+def test_args_01(capsys):
     """test parse_args()"""
     assert parse_args(argv=["sample"])
+    # invalid byte order
+    with raises(SystemExit):
+        parse_args(argv=["sample", "-b", "a"])
+    assert "Invalid byte order" in capsys.readouterr()[1]
