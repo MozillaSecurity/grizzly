@@ -9,8 +9,8 @@ from logging import basicConfig, getLogger, ERROR, INFO
 from os import makedirs, SEEK_END
 from os.path import abspath, getsize, splitext, join as pathjoin
 from random import choice, getrandbits, randint, sample
+from shutil import copy
 from struct import pack, unpack
-import shutil
 from tempfile import mkdtemp, SpooledTemporaryFile
 from time import strftime, time
 
@@ -20,34 +20,29 @@ __author__ = "Tyson Smith"
 LOG = getLogger(__name__)
 
 
-class Loki(object):
+class Loki():
+    BYTE_ORDERS = ("<", ">", "@", "!", "=")
 
-    __slots__ = ("aggr",)
+    __slots__ = ("aggr", "byte_order")
 
-    def __init__(self, aggression=0.0):
+    def __init__(self, aggression=0.0, byte_order=None):
         self.aggr = min(max(aggression, 0.0), 1.0)
+        self.byte_order = byte_order
 
     @staticmethod
-    def _fuzz_data(in_data, byte_order=None):
+    def _fuzz_data(in_data, byte_order):
         data_size = len(in_data)
         if data_size == 1:
             pack_unit = "B"
             mask = 0xFF
         elif data_size == 2:
-            pack_unit = "H"
+            pack_unit = "%sH" % (byte_order,)
             mask = 0xFFFF
         elif data_size == 4:
-            pack_unit = "I"
+            pack_unit = "%sI" % (byte_order,)
             mask = 0xFFFFFFFF
         else:
-            raise RuntimeError("Unsupported data size: %d" % data_size)
-
-        if byte_order is None:
-            # prefer little-endian
-            byte_order = "<" if getrandbits(5) else ">"
-        elif byte_order not in (">", "<"):
-            raise RuntimeError("Unsupported byte order %r" % byte_order)
-        pack_unit = "%s%s" % (byte_order, pack_unit)
+            raise AssertionError("Unsupported data size: %d" % data_size)
 
         fuzz_op = randint(0, 4)
         if fuzz_op == 0:  # boundary
@@ -58,15 +53,13 @@ class Loki(object):
             out_data = choice((0, 1, int(mask / 2), int(mask / 2) + 1, mask))
         elif fuzz_op == 3:  # random byte, short or int
             out_data = getrandbits(32)
-        elif fuzz_op == 4 and data_size == 1:  # toggle
-            out_data = unpack(pack_unit, in_data)[0] ^ (2 ** getrandbits(3))
-        elif fuzz_op == 4:  # multiple of 8
-            if data_size == 2:
+        elif fuzz_op == 4:
+            if data_size == 1:  # toggle
+                out_data = unpack(pack_unit, in_data)[0] ^ (2 ** getrandbits(3))
+            elif data_size == 2:  # multiple of 8
                 out_data = randint(1, 0x1FFF) * 8
-            elif data_size == 4:
+            elif data_size == 4:  # multiple of 8
                 out_data = randint(1, 0x1FFFFFFF) * 8
-            else:  # pragma: no cover
-                raise AssertionError("invalid data size")
 
         return pack(pack_unit, out_data & mask)
 
@@ -74,7 +67,8 @@ class Loki(object):
         tgt_fp.seek(0, SEEK_END)
         length = tgt_fp.tell()
         if length < 1:
-            raise RuntimeError("Zero length file cannot be fuzzed.")
+            LOG.debug("cannot fuzz empty file")
+            return
         # minimum number of mutations should be 1
         max_mutations = max(int(round(length * self.aggr)), 1)
         mutations = randint(1, max_mutations)
@@ -83,6 +77,11 @@ class Loki(object):
             mutations,
             max_mutations
         )
+        if self.byte_order is not None:
+            assert self.byte_order in ("<", ">", "@", "!", "=")
+            byte_order = self.byte_order
+        else:
+            LOG.debug("using random byte order")
         for count, idx in enumerate(sample(range(length), k=mutations)):
             # every few iterations randomly attempt multi-byte mutations
             if count % 10 == 0 and getrandbits(1):
@@ -97,13 +96,16 @@ class Loki(object):
             else:
                 # target single byte
                 size = 1
+            if self.byte_order is None:
+                byte_order = "<" if getrandbits(1) else ">"
             # perform mutation
             tgt_fp.seek(idx)
-            out_data = self._fuzz_data(tgt_fp.read(size))
+            out_data = self._fuzz_data(tgt_fp.read(size), byte_order)
             tgt_fp.seek(idx)
             tgt_fp.write(out_data)
 
     def fuzz_data(self, data):
+        assert data
         assert isinstance(data, bytes)
         # open a temp file in memory for fuzzing
         with SpooledTemporaryFile(max_size=0x800000, mode="r+b") as tmp_fp:
@@ -120,16 +122,13 @@ class Loki(object):
         except OSError:
             LOG.error("%r does not exists!", in_file)
             return False
-
         if ext is None:
             ext = splitext(in_file)[1]
-
         for i in range(count):
             out_file = pathjoin(out_dir, "".join(("%06d_fuzzed" % i, ext)))
-            shutil.copy(in_file, out_file)
+            copy(in_file, out_file)
             with open(out_file, "r+b") as out_fp:
                 self._fuzz(out_fp)
-
         return True
 
     @staticmethod
@@ -169,7 +168,10 @@ class Loki(object):
         LOG.info("Output directory is %r", abspath(out_dir))
         count = max(args.count, 1)
         LOG.info("Generating %d fuzzed test cases...", count)
-        loki = Loki(aggression=args.aggression)
+        loki = Loki(
+            aggression=args.aggression,
+            byte_order=args.byte_order
+        )
         try:
             start_time = time()
             success = loki.fuzz_file(args.input, count, out_dir)
