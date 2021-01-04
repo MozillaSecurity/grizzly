@@ -3,117 +3,75 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-from os import SEEK_END
 from random import choice, getrandbits
 from struct import pack
 from tempfile import SpooledTemporaryFile
 
-from pytest import raises
+from pytest import mark, raises
 
 from .args import parse_args
 from .loki import Loki
 
 
-def test_loki_01(tmp_path):
-    """test Loki.fuzz_file() with a missing file"""
-    fuzzer = Loki(aggression=0.1)
-    assert not fuzzer.fuzz_file("nofile.test", 1, str(tmp_path))
-    assert not list(tmp_path.iterdir())
-
-def test_loki_02(tmp_path):
-    """test Loki.fuzz_file() with an empty file"""
+@mark.parametrize(
+    "in_size, aggression, byte_order",
+    [
+        (1, 0.1, ">"),
+        (2, 0.1, "<"),
+        (3, 0.1, None),
+        (4, 0.1, None),
+        (5, 0.5, None),
+        (100, 0.2, None),
+    ]
+)
+def test_loki_fuzz_file(tmp_path, in_size, aggression, byte_order):
+    """test Loki.fuzz_file() with different file sizes"""
+    in_data = b"A" * in_size
     tmp_fn = tmp_path / "input"
-    tmp_fn.touch()
+    tmp_fn.write_bytes(in_data)
 
     out_path = tmp_path / "out"
     out_path.mkdir()
 
+    fuzzer = Loki(aggression=aggression, byte_order=byte_order)
+    for _ in range(100):
+        assert fuzzer.fuzz_file(str(tmp_fn), 1, str(out_path))
+        out_files = list(out_path.iterdir())
+        assert len(out_files) == 1
+        out_data = out_files[0].read_bytes()
+        assert len(out_data) == in_size
+        if out_data != in_data:
+            break
+    else:
+        raise AssertionError("failed to fuzz data")
+
+def test_loki_01(tmp_path):
+    """test Loki.fuzz_file() error cases"""
     fuzzer = Loki(aggression=0.1)
+    # test missing file
+    assert not fuzzer.fuzz_file("nofile.test", 1, str(tmp_path))
+    assert not list(tmp_path.iterdir())
+    # test empty file
+    tmp_fn = tmp_path / "input"
+    tmp_fn.touch()
+    out_path = tmp_path / "out"
+    out_path.mkdir()
     assert not fuzzer.fuzz_file(str(tmp_fn), 1, str(out_path))
     assert not list(out_path.iterdir())
 
-def test_loki_03(tmp_path):
-    """test Loki.fuzz_file() with a single byte file"""
-    out_path = tmp_path / "out"
-    out_path.mkdir()
-
-    in_data = b"A"
-    tmp_fn = tmp_path / "input"
-    tmp_fn.write_bytes(in_data)
-
-    fuzzer = Loki(aggression=0.1, byte_order=">")
-    for _ in range(100):
-        assert fuzzer.fuzz_file(str(tmp_fn), 1, str(out_path))
-        out_files = list(out_path.iterdir())
-        assert len(out_files) == 1
-        out_data = out_files[0].read_bytes()
-        assert len(out_data) == 1
-        if out_data != in_data:
-            break
-    assert out_data != in_data
-
-def test_loki_04(tmp_path):
-    """test Loki.fuzz_file() with a two byte file"""
-    in_data = b"AB"
-    tmp_fn = tmp_path / "input"
-    tmp_fn.write_bytes(in_data)
-
-    out_path = tmp_path / "out"
-    out_path.mkdir()
-
-    fuzzer = Loki(aggression=0.1)
-    for _ in range(100):
-        assert fuzzer.fuzz_file(str(tmp_fn), 1, str(out_path))
-        out_files = list(out_path.iterdir())
-        assert len(out_files) == 1
-        out_data = out_files[0].read_bytes()
-        assert len(out_data) == 2
-        if out_data != in_data:
-            break
-    assert out_data != in_data
-
-def test_loki_05(tmp_path):
-    """test Loki.fuzz_file() with a multi byte file"""
-    in_size = 100
-    in_byte = b"A"
-    fuzz_found = False
-    tmp_fn = tmp_path / "input"
-    tmp_fn.write_bytes(in_byte * in_size)
-
-    out_path = tmp_path / "out"
-    out_path.mkdir()
-
-    fuzzer = Loki(aggression=0.01)
-    for _ in range(100):
-        assert fuzzer.fuzz_file(str(tmp_fn), 1, str(out_path))
-        out_files = list(out_path.iterdir())
-        assert len(out_files) == 1
-        with out_files[0].open("rb") as out_fp:
-            out_fp.seek(0, SEEK_END)
-            assert out_fp.tell() == in_size
-            out_fp.seek(0)
-            for out_byte in out_fp:
-                if out_byte != in_byte:
-                    fuzz_found = True
-                    break
-        if fuzz_found:
-            break
-    assert fuzz_found
-
-def test_loki_06():
-    """test fuzz_data()"""
+def test_loki_02():
+    """test Loki.fuzz_data()"""
     in_data = b"This is test DATA!"
     in_size = len(in_data)
 
-    fuzz_found = False
     fuzzer = Loki(aggression=0.1)
     for _ in range(100):
         out_data = fuzzer.fuzz_data(in_data)
         assert len(out_data) == in_size
         if in_data not in out_data:
-            fuzz_found = True
             break
-    assert fuzz_found
+    else:
+        raise AssertionError("failed to fuzz data")
 
 def test_loki_fuzz_01(mocker):
     """test Loki._fuzz()"""
@@ -174,7 +132,7 @@ def test_loki_stress_01():
     """test Loki._fuzz_data() with random input"""
     orders = ("<", ">")
     sizes = (1, 2, 4)
-    for _ in range(5000):
+    for _ in range(3000):
         size = choice(sizes)
         if size == 1:
             in_data = pack("B", getrandbits(8))
@@ -185,7 +143,7 @@ def test_loki_stress_01():
         assert len(Loki._fuzz_data(in_data, choice(orders))) == size
 
 def test_main_01(mocker, tmp_path):
-    """test main"""
+    """test main()"""
     out_path = tmp_path / "out"
     out_path.mkdir()
     # no output path provided
