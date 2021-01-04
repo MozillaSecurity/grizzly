@@ -21,7 +21,7 @@ class Adapter(metaclass=ABCMeta):
     IGNORE_UNSERVED = True  # Only report test cases with served content
     NAME = None  # must be a unique string
     RELAUNCH = 0  # maximum iterations between Target relaunches (<1 use default)
-    TEST_DURATION = 30  # maximum execution time per test
+    TEST_DURATION = 30  # maximum execution time per test (used as minimum timeout)
 
     __slots__ = ("_harness", "fuzz", "monitor", "remaining")
 
@@ -53,7 +53,8 @@ class Adapter(metaclass=ABCMeta):
         """Enable use of a harness during fuzzing. By default no harness is used.
 
         Args:
-            file_path (str): Path to file to use as a harness. If None the default harness is used.
+            file_path (str): Path to file to use as a harness. If None the default
+                             harness is used.
 
         Returns:
             None

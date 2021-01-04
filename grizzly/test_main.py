@@ -54,9 +54,10 @@ def test_main_01(mocker):
     args.prefs = "fake"
     args.valgrind = True
     args.xvfb = True
-    # successful run (with coverage)
+    # successful run (with coverage, short timeout)
     fake_adapter.RELAUNCH = 10
     args.coverage = True
+    args.timeout = 1
     assert main(args) == Session.EXIT_SUCCESS
     assert fake_session.mock_calls[0][-1]["coverage"]
     assert fake_session.mock_calls[0][-1]["relaunch"] == 10
@@ -64,6 +65,7 @@ def test_main_01(mocker):
     # successful run (without coverage)
     fake_adapter.RELAUNCH = 1
     args.coverage = False
+    args.timeout = 60
     assert main(args) == Session.EXIT_SUCCESS
     assert not fake_session.mock_calls[0][-1]["coverage"]
     assert fake_session.mock_calls[0][-1]["relaunch"] == 1
@@ -117,7 +119,3 @@ def test_main_02(mocker, tmp_path):
     assert main(args) == Session.EXIT_LAUNCH_FAILURE
     assert any(fake_tmp.glob("fake_report_logs"))
     assert not fake_logs.is_dir()
-    # invalid timeout arg
-    fake_adapter.TEST_DURATION = args.timeout + 10
-    assert main(args) == Session.EXIT_ARGS
-    fake_session.EXIT_ARGS = Session.EXIT_ARGS

@@ -76,7 +76,6 @@ class IOManager(object):
         self.server_map.set_redirect("grz_current_test", self.page_name(), required=False)
         self.server_map.set_redirect("grz_next_test", self.page_name(offset=1))
         if self.harness is not None:
-            # add harness to testcase
             self.server_map.set_dynamic_response(
                 "grz_harness",
                 lambda: self.harness,

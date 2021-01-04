@@ -60,10 +60,14 @@ def main(args):
         LOG.debug("initializing Adapter %r", args.adapter)
         adapter = get_adapter(args.adapter)()
 
-        if adapter.TEST_DURATION >= args.timeout:
-            LOG.error("Test duration (%ds) must be less than --timeout (%ds)",
-                      adapter.TEST_DURATION, args.timeout)
-            return Session.EXIT_ARGS
+        if args.timeout <= adapter.TEST_DURATION:
+            LOG.info("Using minimum adapter timeout: %ds", adapter.TEST_DURATION)
+            if adapter.HARNESS_FILE:
+                LOG.info("To avoid Target relaunches due to tests failing to close"
+                         " themselves use a timeout > 'adapter.TEST_DURATION'")
+            timeout = adapter.TEST_DURATION
+        else:
+            timeout = args.timeout
 
         if adapter.RELAUNCH > 0:
             LOG.info("Relaunch (%d) set in Adapter", adapter.RELAUNCH)
@@ -106,7 +110,7 @@ def main(args):
         # call 'window.close()' after a second.
         # launch http server used to serve test cases
         LOG.debug("starting Sapphire server")
-        with Sapphire(auto_close=1, timeout=args.timeout) as server:
+        with Sapphire(auto_close=1, timeout=timeout) as server:
             target.reverse(server.port, server.port)
             LOG.debug("initializing the Session")
             session = Session(
