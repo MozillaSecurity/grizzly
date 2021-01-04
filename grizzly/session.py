@@ -146,11 +146,11 @@ class Session(object):
                 self.adapter.pre_launch()
                 if self.iomanager.harness is None:
                     # harness is not in use, open the test case
-                    location = runner.location(
-                        "/grz_current_test",
-                        self.server.port)
+                    location = runner.location("/grz_current_test", self.server.port)
                 else:
-                    # harness is in use, open it and it will open the test case
+                    # harness is in use, open it and it will open the test case.
+                    # use adapter.TEST_DURATION to allow the harness to attempt to
+                    # close test cases when server timeout is greater.
                     location = runner.location(
                         "/grz_harness",
                         self.server.port,
