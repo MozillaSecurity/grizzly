@@ -54,7 +54,10 @@ class PuppetTarget(Target):
             proc_usage = self._puppet.cpu_usage()
         for pid, cpu in sorted(proc_usage, reverse=True, key=lambda x: x[1]):
             LOG.debug("sending SIGABRT to pid: %r, cpu: %0.2f%%", pid, cpu)
-            kill(pid, SIGABRT)
+            try:
+                kill(pid, SIGABRT)
+            except OSError:
+                LOG.warning("Failed to send SIGABRT to pid %d", pid)
             break
 
     def add_abort_token(self, token):
@@ -148,11 +151,17 @@ class PuppetTarget(Target):
         try:
             for child in Process(pid).children(recursive=True):
                 LOG.debug("Sending SIGUSR1 to %d (child)", child.pid)
-                kill(child.pid, SIGUSR1)
+                try:
+                    kill(child.pid, SIGUSR1)
+                except OSError:
+                    LOG.warning("Failed to send SIGUSR1 to pid %d", child.pid)
         except (AccessDenied, NoSuchProcess):  # pragma: no cover
             pass
         LOG.debug("Sending SIGUSR1 to %d (parent)", pid)
-        kill(pid, SIGUSR1)
+        try:
+            kill(pid, SIGUSR1)
+        except OSError:
+            LOG.warning("Failed to send SIGUSR1 to pid %d", pid)
         start_time = time()
         gcda_found = False
         delay = 0.1
@@ -180,7 +189,10 @@ class PuppetTarget(Target):
                 if elapsed >= timeout:
                     # timeout failure
                     LOG.warning("gcda file open by pid %d after %0.2fs", gcda_open, elapsed)
-                    kill(gcda_open, SIGABRT)
+                    try:
+                        kill(gcda_open, SIGABRT)
+                    except OSError:
+                        pass
                     sleep(1)
                     self.close()
                     break
