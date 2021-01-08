@@ -17,7 +17,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
-class IOManager(object):
+class IOManager:
     TRACKED_ENVVARS = (
         "ASAN_OPTIONS",
         "LSAN_OPTIONS",

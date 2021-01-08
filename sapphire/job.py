@@ -31,7 +31,7 @@ SERVED_TIMEOUT = 3  # timeout occurred
 Tracker = namedtuple("Tracker", "files lock")
 
 
-class Job(object):
+class Job:
     # MIME_MAP is used to support new or uncommon mime types.
     # Definitions in here take priority over mimetypes.guess_type().
     MIME_MAP = {

@@ -20,7 +20,7 @@ __all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-class StatusReporter(object):
+class StatusReporter:
     """Read and merge Grizzly status reports, including tracebacks if found.
     Output is a single textual report, e.g. for submission to EC2SpotManager.
     """
@@ -268,7 +268,7 @@ class StatusReporter(object):
         return tracebacks
 
 
-class TracebackReport(object):
+class TracebackReport:
     """Read Python tracebacks from log files and store it in a manner that is helpful
     when generating reports.
     """

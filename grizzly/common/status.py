@@ -22,7 +22,7 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-class Status(object):
+class Status:
     """Status holds status information for the Grizzly session.
     There can be multiple readers of the data but only a single writer.
     """

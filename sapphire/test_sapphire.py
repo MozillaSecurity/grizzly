@@ -18,7 +18,7 @@ from .worker import Worker
 from .server_map import ServerMap
 
 
-class _TestFile(object):
+class _TestFile:
     def __init__(self, url):
         self.code = None
         self.content_type = None

@@ -26,7 +26,7 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-class ReplayResult(object):
+class ReplayResult:
     __slots__ = ("count", "durations", "expected", "report", "served")
 
     def __init__(self, report, served, durations, expected):
@@ -37,7 +37,7 @@ class ReplayResult(object):
         self.served = served
 
 
-class ReplayManager(object):
+class ReplayManager:
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
 
     __slots__ = ("ignore", "server", "status", "target", "_any_crash",

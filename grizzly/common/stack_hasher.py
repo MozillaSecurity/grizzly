@@ -27,7 +27,7 @@ MAJOR_DEPTH = 5
 MAJOR_DEPTH_RUST = 10
 
 
-class StackFrame(object):
+class StackFrame:
     MODE_GDB = 0
     MODE_MINIDUMP = 1
     MODE_RR = 2
@@ -250,7 +250,7 @@ class StackFrame(object):
         return sframe
 
 
-class Stack(object):
+class Stack:
     __slots__ = ("frames", "_major", "_major_depth", "_minor")
 
     def __init__(self, frames=None, major_depth=MAJOR_DEPTH):

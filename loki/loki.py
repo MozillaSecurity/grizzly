@@ -20,7 +20,7 @@ __author__ = "Tyson Smith"
 LOG = getLogger(__name__)
 
 
-class Loki():
+class Loki:
     BYTE_ORDERS = ("<", ">", "@", "!", "=")
 
     __slots__ = ("aggr", "byte_order")

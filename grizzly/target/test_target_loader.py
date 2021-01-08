@@ -30,14 +30,14 @@ def test_target_load_02(mocker):
     '''Loading targets works.'''
     mocker.patch('grizzly.target.TARGETS', None)
 
-    class _FakeEntryPoint1(object):
+    class _FakeEntryPoint1:
         name = 'test1'
 
         @staticmethod
         def load():
             return _FakeTarget1
 
-    class _FakeEntryPoint2(object):
+    class _FakeEntryPoint2:
         name = 'test2'
 
         @staticmethod
@@ -54,14 +54,14 @@ def test_target_load_03(mocker):
     '''Non-Target will be skipped.'''
     mocker.patch('grizzly.target.TARGETS', None)
 
-    class _FakeEntryPoint1(object):
+    class _FakeEntryPoint1:
         name = 'test1'
 
         @staticmethod
         def load():
             return Target
 
-    class _FakeEntryPoint2(object):
+    class _FakeEntryPoint2:
         name = 'test2'
 
         @staticmethod
@@ -77,14 +77,14 @@ def test_target_load_04(mocker):
     '''test load() with name collision'''
     mocker.patch('grizzly.target.TARGETS', None)
 
-    class _FakeEntryPoint1(object):
+    class _FakeEntryPoint1:
         name = 'test'
 
         @staticmethod
         def load():
             return _FakeTarget1
 
-    class _FakeEntryPoint2(object):
+    class _FakeEntryPoint2:
         name = 'test'
 
         @staticmethod
@@ -100,14 +100,14 @@ def test_target_load_05(mocker):
     '''test load() with broken Target'''
     mocker.patch('grizzly.target.TARGETS', None)
 
-    class _FakeEntryPoint1(object):
+    class _FakeEntryPoint1:
         name = 'test1'
 
         @staticmethod
         def load():
             return Target
 
-    class _FakeEntryPoint2(object):
+    class _FakeEntryPoint2:
         name = 'test2'
 
         @staticmethod

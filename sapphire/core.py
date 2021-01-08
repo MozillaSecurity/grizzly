@@ -24,7 +24,7 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-class Sapphire(object):
+class Sapphire:
     LISTEN_TIMEOUT = 0.25
 
     __slots__ = ("_auto_close", "_max_workers", "_socket", "_timeout")

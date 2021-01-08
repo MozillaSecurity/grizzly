@@ -18,7 +18,7 @@ from .utils import grz_tmp
 LOG = getLogger(__name__)
 
 
-class Bucket(object):
+class Bucket:
     """Get Bucket data for a specified CrashManager bucket."""
 
     def __init__(self, bucket_id):
@@ -170,7 +170,7 @@ class Bucket(object):
         return self._sig_filename
 
 
-class CrashEntry(object):
+class CrashEntry:
     """Get the CrashEntry data for the specified CrashManager crash.
 
     Attributes:

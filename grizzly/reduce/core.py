@@ -37,7 +37,7 @@ __credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-class ReduceManager(object):
+class ReduceManager:
     """Manage reduction of one or more testcases to find the smallest testcase
     that reproduces a given issue.
 

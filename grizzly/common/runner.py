@@ -23,7 +23,7 @@ LOG = getLogger(__name__)
 # long running test cases.
 # This is not perfect! It is to be used AFTER the test case timeout
 # (initial_delay) has elapsed.
-class _IdleChecker(object):
+class _IdleChecker:
     __slots__ = ("_check_cb", "_init_delay", "_poll_delay", "_threshold", "_next_poll")
 
     def __init__(self, check_cb, threshold, initial_delay, poll_delay=1):
@@ -73,7 +73,7 @@ class _IdleChecker(object):
             self._next_poll = now + self._poll_delay
 
 
-class Runner(object):
+class Runner:
     __slots__ = ("_close_delay", "_idle", "_relaunch", "_server", "_target", "_tests_run")
 
     def __init__(self, server, target, close_delay=30, idle_threshold=0, idle_delay=0, relaunch=1):
@@ -266,7 +266,7 @@ class Runner(object):
         return self._target.monitor.is_healthy()
 
 
-class RunResult(object):
+class RunResult:
     FAILED = 1
     IGNORED = 2
 
