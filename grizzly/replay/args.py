@@ -10,7 +10,7 @@ from ..args import CommonArgs
 class ReplayArgs(CommonArgs):
 
     def __init__(self):
-        super(ReplayArgs, self).__init__()
+        super().__init__()
         self.parser.add_argument(
             "input",
             help="Accepted input includes: " \
@@ -63,7 +63,7 @@ class ReplayArgs(CommonArgs):
             help="Include the testcase when reporting results.")
 
     def sanity_check(self, args):
-        super(ReplayArgs, self).sanity_check(args)
+        super().sanity_check(args)
 
         if args.any_crash and args.sig is not None:
             self.parser.error("signature is ignored when running with '--any-crash'")

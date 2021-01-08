@@ -21,11 +21,11 @@ class SortingHelpFormatter(HelpFormatter):
 
     def add_usage(self, usage, actions, groups, prefix=None):
         actions = sorted(actions, key=self.__sort_key)
-        super(SortingHelpFormatter, self).add_usage(usage, actions, groups, prefix)
+        super().add_usage(usage, actions, groups, prefix)
 
     def add_arguments(self, actions):
         actions = sorted(actions, key=self.__sort_key)
-        super(SortingHelpFormatter, self).add_arguments(actions)
+        super().add_arguments(actions)
 
 
 class CommonArgs(object):
@@ -33,7 +33,7 @@ class CommonArgs(object):
     IGNORE = ("log-limit", "timeout")
 
     def __init__(self):
-        super(CommonArgs, self).__init__()
+        super().__init__()
         # log levels for console logging
         self._level_map = {
             "CRIT": CRITICAL,
@@ -113,8 +113,8 @@ class CommonArgs(object):
         return args
 
     def sanity_check(self, args):
-        if hasattr(super(CommonArgs, self), 'sanity_check'):
-            super(CommonArgs, self).sanity_check(args)
+        if hasattr(super(), 'sanity_check'):
+            super().sanity_check(args)
 
         if "binary" not in self._sanity_skip and not isfile(args.binary):
             self.parser.error("file not found: %r" % args.binary)
@@ -168,7 +168,7 @@ class CommonArgs(object):
 
 class GrizzlyArgs(CommonArgs):
     def __init__(self):
-        super(GrizzlyArgs, self).__init__()
+        super().__init__()
         self._adapters = sorted(adapter_names())
         self._sanity_skip.add("tool")
         self.parser.add_argument(
@@ -199,7 +199,7 @@ class GrizzlyArgs(CommonArgs):
             help="Report large attachments (if any) to S3 and then the crash & S3 link to FuzzManager")
 
     def sanity_check(self, args):
-        super(GrizzlyArgs, self).sanity_check(args)
+        super().sanity_check(args)
 
         if args.adapter.lower() not in self._adapters:
             msg = ["Adapter %r does not exist." % args.adapter.lower()]
