@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
-import sys
 
 from .args import ReduceFuzzManagerIDArgs
 from .core import ReduceManager
@@ -72,4 +71,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    sys.exit(main(ReduceFuzzManagerIDArgs().parse_args()))
+    raise SystemExit(main(ReduceFuzzManagerIDArgs().parse_args()))
