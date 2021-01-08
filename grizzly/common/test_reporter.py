@@ -546,7 +546,7 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     (trace_dir / "trace-file").touch()
     class FakeClientError(Exception):
         def __init__(self, message, response):
-            super(FakeClientError, self).__init__(message)
+            super().__init__(message)
             self.response = response
     mocker.patch("grizzly.common.reporter.ClientError", new=FakeClientError)
     fake_resource.return_value.Object.side_effect = FakeClientError("test", {"Error": {"Code": "404"}})
