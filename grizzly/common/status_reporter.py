@@ -4,14 +4,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
-
 import argparse
 from datetime import timedelta
 from functools import partial
 import logging
 import os
 import re
-import sys
 import time
 
 import psutil
@@ -418,4 +416,4 @@ def main(args=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

@@ -5,8 +5,8 @@
 """
 Loki fuzzing library
 """
-from sys import exit as sysexit
 from .args import parse_args
 from .loki import Loki
 
-sysexit(Loki.main(parse_args()))
+
+raise SystemExit(Loki.main(parse_args()))

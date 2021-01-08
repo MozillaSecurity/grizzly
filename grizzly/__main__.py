@@ -4,7 +4,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import basicConfig, DEBUG
 from os import getenv
-from sys import exit as sysexit
 
 from .adapters import load
 from .args import GrizzlyArgs
@@ -24,4 +23,4 @@ if getenv("DEBUG"):
         level=DEBUG)
 # load Adapters
 load()
-sysexit(main(GrizzlyArgs().parse_args()))
+raise SystemExit(main(GrizzlyArgs().parse_args()))
