@@ -16,7 +16,7 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-class ConnectionManager(object):
+class ConnectionManager:
     SHUTDOWN_DELAY = 0.5  # allow extra time before closing socket if needed
 
     __slots__ = ("_job", "_listener", "_socket", "_workers")

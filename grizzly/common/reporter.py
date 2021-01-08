@@ -50,7 +50,7 @@ LOG = getLogger(__name__)
 LogMap = namedtuple("LogMap", "aux stderr stdout")
 
 
-class Report(object):
+class Report:
     DEFAULT_MAJOR = "NO_STACK"
     DEFAULT_MINOR = "0"
     MAX_LOG_SIZE = 1048576  # 1MB

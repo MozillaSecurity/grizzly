@@ -10,7 +10,7 @@ from .session import Session
 from .target import Target, TargetLaunchError
 
 
-class FakeArgs(object):
+class FakeArgs:
     def __init__(self):
         self.binary = None
         self.input = None

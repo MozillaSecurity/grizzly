@@ -35,7 +35,7 @@ class TestFileExists(Exception):
 TestFileMap = namedtuple("TestFileMap", "meta optional required")
 
 
-class TestCase(object):
+class TestCase:
     __slots__ = (
         "adapter_name", "duration", "env_vars", "input_fname", "landing_page",
         "redirect_page", "timestamp", "_existing_paths", "_files")
@@ -469,7 +469,7 @@ class TestCase(object):
                     yield tc_path
 
 
-class TestFile(object):
+class TestFile:
     CACHE_LIMIT = 0x80000  # data cache limit per file: 512KB
     XFER_BUF = 0x10000  # transfer buffer size: 64KB
 

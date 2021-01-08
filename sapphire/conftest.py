@@ -28,7 +28,7 @@ def client_factory():
     """
     clients = []
 
-    class _SimpleClient(object):
+    class _SimpleClient:
         # pylint: disable=missing-docstring
 
         def __init__(self, rx_size=0x10000):

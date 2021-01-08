@@ -22,7 +22,7 @@ class MapCollisionError(Exception):
     """Raised when a URL is already in use by ServerMap"""
 
 
-class Resource(object):
+class Resource:
     URL_DYNAMIC = 0
     URL_FILE = 1
     URL_INCLUDE = 2
@@ -37,7 +37,7 @@ class Resource(object):
         self.type = resource_type
 
 
-class ServerMap(object):
+class ServerMap:
     __slots__ = ("dynamic", "include", "redirect")
 
     def __init__(self):

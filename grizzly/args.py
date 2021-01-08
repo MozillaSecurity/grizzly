@@ -28,7 +28,7 @@ class SortingHelpFormatter(HelpFormatter):
         super().add_arguments(actions)
 
 
-class CommonArgs(object):
+class CommonArgs:
     IGNORABLE = ("log-limit", "memory", "timeout")
     IGNORE = ("log-limit", "timeout")
 

@@ -24,7 +24,7 @@ class SessionError(Exception):
     """The base class for exceptions raised by Session"""
 
 
-class LogOutputLimiter(object):
+class LogOutputLimiter:
     __slots__ = ("_delay", "_iterations", "_launches", "_multiplier", "_time", "_verbose")
 
     def __init__(self, delay=300, delta_multiplier=2, verbose=False):
@@ -53,7 +53,7 @@ class LogOutputLimiter(object):
         return ready
 
 
-class Session(object):
+class Session:
     DISPLAY_VERBOSE = 0  # display status every iteration
     DISPLAY_NORMAL = 1  # quickly reduce the amount of output
     EXIT_SUCCESS = 0

@@ -40,7 +40,7 @@ def _fake_save_logs_foo(result_logs):
 
 def test_strategy_load_fail(mocker):
     """test that a broken strategy doesn't block other strategies"""
-    class _GoodStrategy(object):
+    class _GoodStrategy:
         name = "good"
         @classmethod
         def sanity_check_cls_attrs(cls):
@@ -50,7 +50,7 @@ def test_strategy_load_fail(mocker):
         def load(cls):
             return cls
 
-    class _BadStrategy(object):
+    class _BadStrategy:
         name = "bad"
         @classmethod
         def load(cls):

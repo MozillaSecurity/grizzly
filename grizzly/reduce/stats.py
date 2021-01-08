@@ -16,7 +16,7 @@ ReductionStat = namedtuple(
     "ReductionStat", "name, duration, successes, attempts, size, iterations")
 
 
-class _FormatTable(object):
+class _FormatTable:
     """Format tabular data in a table.
     """
     def __init__(self, columns, formatters, vsep=" | ", hsep="-"):
@@ -106,7 +106,7 @@ def _format_number(number, total=0):
     return result
 
 
-class ReductionStats(object):
+class ReductionStats:
     """Statistics about reduction"""
 
     def __init__(self):
@@ -196,7 +196,7 @@ class ReductionStats(object):
                         successes (int): # of successful attempts during period
         """
         # pylint: disable=no-self-argument
-        class _MilestoneTimer(object):
+        class _MilestoneTimer:
             def __init__(sub, sub_name, parent=None):
                 sub._name = sub_name
                 sub._start = None

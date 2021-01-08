@@ -27,7 +27,7 @@ class WorkerError(Exception):
     """Raised by Worker"""
 
 
-class Worker(object):
+class Worker:
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
     REQ_PATTERN = re_compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
