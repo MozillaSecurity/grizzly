@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
+from itertools import count
 from os.path import isfile
 from platform import system
 
@@ -122,7 +123,11 @@ def test_puppet_target_03(mocker, tmp_path):
     fake_ffp.return_value.is_running.return_value = True
     fake_ffp.return_value.reason = None
     fake_ffp.return_value.cpu_usage.return_value = ((1234, 10), (1236, 75), (1238, 60))
-    fake_kill = mocker.patch("grizzly.target.puppet_target.kill", autospec=True)
+    # raise OSError for code coverage
+    fake_kill = mocker.patch(
+        "grizzly.target.puppet_target.kill",
+        autospec=True,
+        side_effect=OSError)
     assert target.detect_failure([], True) == Target.RESULT_FAILURE
     if system() == "Linux":
         assert fake_kill.call_count == 1
@@ -239,6 +244,20 @@ def test_puppet_target_04(mocker, tmp_path):
     target.dump_coverage()
     assert fake_proc_iter.call_count == 3
     assert fake_kill.call_count == 2
+    fake_ffp.reset_mock()
+    fake_kill.reset_mock()
+    fake_proc_iter.reset_mock()
+    # kill calls raise OSError
+    fake_kill.side_effect = OSError
+    fake_ffp.return_value.is_healthy.return_value = True
+    fake_ffp.return_value.get_pid.return_value = 100
+    fake_proc_iter.side_effect = None
+    fake_time.side_effect = count()
+    target.dump_coverage()
+    assert fake_kill.call_count == 3
+    fake_ffp.reset_mock()
+    fake_kill.reset_mock()
+    fake_proc_iter.reset_mock()
 
 def test_puppet_target_05(mocker, tmp_path):
     """test is_idle()"""
