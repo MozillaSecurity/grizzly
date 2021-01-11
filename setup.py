@@ -84,4 +84,4 @@ if __name__ == '__main__':
         ],
         package_data={"grizzly.common": ["harness.html"]},
         url='https://github.com/MozillaSecurity/grizzly',
-        version='0.10.0')
+        version='0.11.0')
