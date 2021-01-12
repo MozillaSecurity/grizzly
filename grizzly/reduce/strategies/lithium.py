@@ -10,7 +10,7 @@ from logging import getLogger
 from lithium.strategies import CheckOnly, \
     CollapseEmptyBraces as LithCollapseEmptyBraces, Minimize, Strategy as LithStrategy
 from lithium.testcases import TestcaseChar, TestcaseJsStr, TestcaseLine, \
-    Testcase as LithTestcase
+    Testcase as LithTestcase, TestcaseAttrs
 
 from ...common.storage import TestCase
 from . import Strategy, _contains_dd
@@ -234,3 +234,10 @@ class MinimizeLines(_LithiumStrategy):
     name = "lines"
     strategy_cls = Minimize
     testcase_cls = TestcaseLine
+
+
+class MinimizeAttrs(_LithiumStrategy):
+    """Remove HTML/XML attributes and their values."""
+    name = "attrs"
+    strategy_cls = Minimize
+    testcase_cls = TestcaseAttrs
