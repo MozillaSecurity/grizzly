@@ -124,14 +124,11 @@ class Session:
             rmtree(result_logs)
         self.status.count_result(short_sig)
 
-    def run(self, ignore, iteration_limit=None, display_mode=DISPLAY_NORMAL):
+    def run(self, ignore, iteration_limit=0, display_mode=DISPLAY_NORMAL):
+        assert iteration_limit >= 0
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
-        # limit relaunch to max iterations if known
-        if iteration_limit is not None:
-            assert iteration_limit > 0
-            relaunch = min(self._relaunch, iteration_limit)
-        else:
-            relaunch = self._relaunch
+        # limit relaunch to max iterations if needed
+        relaunch = min(self._relaunch, iteration_limit) or self._relaunch
         if self.adapter.remaining is not None:
             assert self.adapter.remaining > 0
             relaunch = min(relaunch, self.adapter.remaining)
@@ -204,8 +201,8 @@ class Session:
                 LOG.info("Replay Complete")
                 break
 
-            if iteration_limit is not None and self.status.iteration == iteration_limit:
-                LOG.info("Hit iteration limit")
+            if iteration_limit and self.status.iteration >= iteration_limit:
+                LOG.info("Hit iteration limit (%d)", iteration_limit)
                 break
 
             # warn about large browser logs

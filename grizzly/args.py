@@ -178,6 +178,9 @@ class GrizzlyArgs(CommonArgs):
             "-i", "--input",
             help="Test case or directory containing test cases")
         self.parser.add_argument(
+            "--limit", type=int, default=0,
+            help="Maximum number of iterations to be performed. (default: no limit)")
+        self.parser.add_argument(
             "-v", "--verbose", action="store_true",
             help="Output console updates every iteration. By default the number"
                  " of iterations between console updates doubles each update."
@@ -211,6 +214,9 @@ class GrizzlyArgs(CommonArgs):
 
         if args.fuzzmanager and args.s3_fuzzmanager:
             self.parser.error("--fuzzmanager and --s3-fuzzmanager are mutually exclusive")
+
+        if args.limit < 0:
+            self.parser.error("--limit must be >= 0 (0 = no limit)")
 
         if args.tool is not None and not (args.fuzzmanager or args.s3_fuzzmanager):
             self.parser.error("--tool can only be given with --fuzzmanager/--s3-fuzzmanager")

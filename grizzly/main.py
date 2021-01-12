@@ -106,6 +106,9 @@ def main(args):
             reporter = FilesystemReporter(pathjoin(getcwd(), "results"))
             LOG.info("Results will be stored in %r", reporter.report_path)
 
+        if args.limit > 0:
+            LOG.info("%r iteration(s) will be attempted", args.limit)
+
         # set 'auto_close=1' so the client error pages (code 4XX) will
         # call 'window.close()' after a second.
         # launch http server used to serve test cases
@@ -125,7 +128,10 @@ def main(args):
                 display_mode = Session.DISPLAY_VERBOSE
             else:
                 display_mode = Session.DISPLAY_NORMAL
-            session.run(args.ignore, display_mode=display_mode)
+            session.run(
+                args.ignore,
+                iteration_limit=args.limit,
+                display_mode=display_mode)
 
     except KeyboardInterrupt:
         LOG.info("Ctrl+C detected.")
