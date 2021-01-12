@@ -10,7 +10,7 @@ from setuptools import setup
 
 
 EXTRAS = {
-    'reduce': ['cssbeautifier', 'lithium-reducer>=0.4.3', 'jsbeautifier'],
+    'reduce': ['cssbeautifier', 'lithium-reducer>=0.5', 'jsbeautifier'],
     's3': ['boto3'],
 }
 EXTRAS['all'] = list(set(chain.from_iterable(EXTRAS.values())))
@@ -50,6 +50,7 @@ if __name__ == '__main__':
                 'jschars = grizzly.reduce.strategies.lithium:MinimizeJSChars',
                 'lines = grizzly.reduce.strategies.lithium:MinimizeLines',
                 'list = grizzly.reduce.strategies.testcases:MinimizeTestcaseList',
+                'attrs = grizzly.reduce.strategies.lithium:MinimizeAttrs',
             ],
         },
         extras_require=EXTRAS,
