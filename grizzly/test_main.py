@@ -21,6 +21,7 @@ class FakeArgs:
         self.fuzzmanager = False
         self.ignore = list()
         self.launch_timeout = 300
+        self.limit = 0
         self.log_level = 10  # 10 = DEBUG, 20 = INFO
         self.log_limit = 0
         self.memory = 0
@@ -83,10 +84,11 @@ def test_main_01(mocker):
     assert fake_session.mock_calls[0][-1]["coverage"]
     assert fake_session.mock_calls[0][-1]["relaunch"] == 1000
     fake_session.reset_mock()
-    # with S3FM
+    # with S3FM (with iteration limit)
     fake_reporter = mocker.patch("grizzly.main.S3FuzzManagerReporter", autospec=True)
     fake_reporter.sanity_check.return_value = True
     args.fuzzmanager = False
+    args.limit = 10
     args.s3_fuzzmanager = True
     assert main(args) == Session.EXIT_SUCCESS
 
