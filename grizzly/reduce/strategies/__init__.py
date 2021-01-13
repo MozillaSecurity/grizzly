@@ -36,6 +36,7 @@ DEFAULT_STRATEGIES = (
     "cssbeautify",
     "jsbeautify",
     "collapsebraces",
+    "attrs",
 )
 
 
