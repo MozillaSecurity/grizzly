@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import basicConfig, DEBUG, getLogger
 from os.path import join as pathjoin
-from os import getcwd
+from os import getcwd, getenv
 
 from sapphire import Sapphire
 
@@ -23,7 +23,7 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 LOG = getLogger(__name__)
 
 def configure_logging(log_level):
-    if log_level == DEBUG:
+    if log_level == DEBUG or getenv("DEBUG") == "1":
         date_fmt = None
         log_fmt = "%(asctime)s %(levelname).1s %(name)s | %(message)s"
     else:
