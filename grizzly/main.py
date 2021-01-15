@@ -23,7 +23,9 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 LOG = getLogger(__name__)
 
 def configure_logging(log_level):
-    if log_level == DEBUG or getenv("DEBUG") == "1":
+    if getenv("DEBUG") == "1":
+        log_level = DEBUG
+    if log_level == DEBUG:
         date_fmt = None
         log_fmt = "%(asctime)s %(levelname).1s %(name)s | %(message)s"
     else:
