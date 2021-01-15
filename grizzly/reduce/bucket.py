@@ -43,7 +43,7 @@ def main(args):
 
             # call grizzly.reduce.crash
             result = crash_main(args)
-            if result == 0:
+            if result in {Session.EXIT_SUCCESS, Session.EXIT_ABORT}:
                 break
 
     finally:

@@ -99,10 +99,12 @@ def test_crash_main_quality(mocker, mgr_exit_code, pre_quality, post_quality):
         ([(123, "test-tool")], [0], 0, "test_sig2.json", None),
         # --tool is respected
         ([(123, "test-tool")], [0], 0, None, "test-tool-arg"),
+        # abort in crash main should also abort bucket main
+        ([(123, "test-tool")], [3], 3, None, None),
     ]
 )
 def test_bucket_main(mocker, crashes, main_exit_codes, result, arg_sig, arg_tool):
-    """tests for `grizzly.reduce.crash.main`"""
+    """tests for `grizzly.reduce.bucket.main`"""
     call_args = []
 
     def copy_args(args):
@@ -122,9 +124,9 @@ def test_bucket_main(mocker, crashes, main_exit_codes, result, arg_sig, arg_tool
         sig=arg_sig,
         tool=arg_tool,
     )
-    bucket_main(args)
+    assert bucket_main(args) == result
     assert main.call_count == len(main_exit_codes)
-    for idx, (crash, tool) in enumerate(crashes[:main.call_count]):
+    for idx, (crash, _tool) in enumerate(crashes[:main.call_count]):
         assert call_args[idx].input == crash
         if arg_tool is not None:
             assert call_args[idx].tool == arg_tool
