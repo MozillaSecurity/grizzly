@@ -26,6 +26,7 @@ def main(args):
     """
     configure_logging(args.log_level)
     crash = CrashEntry(args.input)
+    LOG.info("Loaded crash %d", crash.crash_id)
     bucket = None
     try:
         # download the crash
