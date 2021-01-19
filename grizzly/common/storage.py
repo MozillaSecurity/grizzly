@@ -29,7 +29,8 @@ class TestCaseLoadFailure(Exception):
 
 
 class TestFileExists(Exception):
-    """Raised when adding a TestFile to a TestCase that has an existing TestFile with the same name"""
+    """Raised when adding a TestFile to a TestCase that has an existing
+    TestFile with the same name"""
 
 
 TestFileMap = namedtuple("TestFileMap", "meta optional required")
@@ -82,8 +83,8 @@ class TestCase:
 
         Args:
             path (str): Path to the root of the directory that contains files.
-            include_files (iterable): Paths of the files to be added to the
-                                      TestCase if they exist in path.
+            include_files (iterable(str)): Paths of the files to be added to the
+                                           TestCase if they exist in path.
             prefix (str): Path prefix to prepend to file when adding to
                           the TestCase.
 
@@ -425,7 +426,7 @@ class TestCase:
         """Remove optional files (by name) that are not in keep.
 
         Args:
-            keep (iterable): Filenames that will not be removed.
+            keep (iterable(str)): Files that will not be removed.
 
         Returns:
             None
