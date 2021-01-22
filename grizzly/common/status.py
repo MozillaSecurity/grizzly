@@ -177,8 +177,9 @@ class Status:
         return self.iteration / float(self.duration) if self.duration > 0 else 0
 
     def report(self, force=False, report_freq=REPORT_FREQ):
-        """Write status report. Reports are only written when the time since the
-        previous report was created exceeds `report_freq` seconds.
+        """Write status report to disk. Reports are only written periodically.
+        It is limited by `report_freq`. The specified number of seconds must
+        elapse before another write will be performed unless `force` is True.
 
         Args:
             force (bool): Ignore report frequently limiting.
@@ -208,6 +209,19 @@ class Status:
             int: Total number of results.
         """
         return sum(self._results.values())
+
+    def signatures(self):
+        """Provide the signature and the number of times it has been found for
+        each result.
+
+        Args:
+            None
+
+        Yields:
+            tuples: Containing signature and count.
+        """
+        for sig, count in self._results.items():
+            yield (sig, count)
 
     @classmethod
     def start(cls):

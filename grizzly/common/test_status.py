@@ -172,3 +172,22 @@ def test_status_08(tmp_path):
                 proc.join()
     # verify cleanup
     assert not any(Status.loadall())
+
+def test_status_09(tmp_path):
+    """test Status.count_result() and Status.signatures()"""
+    Status.PATH = str(tmp_path)
+    status = Status.start()
+    status.count_result("sig1")
+    status.count_result("sig2")
+    status.count_result("sig1")
+    status.count_result("sig3")
+    assert status.results == 4
+    found = dict()
+    for sig, count in status.signatures():
+        found[sig] = count
+    assert "sig1" in found
+    assert found["sig1"] == 2
+    assert "sig2" in found
+    assert found["sig2"] == 1
+    assert "sig3" in found
+    assert found["sig3"] == 1
