@@ -19,6 +19,7 @@ def _fake_sys_info():
 def test_status_reporter_01(tmp_path):
     """test basic StatusReporter"""
     st_rpt = StatusReporter(list())
+    assert not st_rpt.has_results
     st_rpt._sys_info = _fake_sys_info
     assert "No status reports available" in st_rpt._specific()
     report = tmp_path / "output.txt"
@@ -178,6 +179,41 @@ def test_status_reporter_06(mocker, tmp_path):
     assert "EXPIRED" in output
 
 def test_status_reporter_07(tmp_path):
+    """test StatusReporter._results()"""
+    Status.PATH = str(tmp_path)
+    # single report without results
+    status = Status.start()
+    status.ignored = 0
+    status.iteration = 1
+    status.log_size = 0
+    status.report(force=True)
+    rptr = StatusReporter.load()
+    assert rptr.reports is not None
+    assert len(rptr.reports) == 1
+    assert not rptr.has_results
+    assert not rptr._results()
+    # multiple reports with results
+    status = Status.start()
+    status.iteration = 1
+    status.count_result("[@ test1]")
+    status.count_result("[@ test2]")
+    status.count_result("[@ test1]")
+    status.report(force=True)
+    status = Status.start()
+    status.iteration = 1
+    status.count_result("[@ test1]")
+    status.count_result("[@ test3]")
+    status.report(force=True)
+    rptr = StatusReporter.load()
+    assert rptr.has_results
+    assert len(rptr.reports) == 3
+    output = rptr._results()
+    assert "3: [@ test1]" in output
+    assert "1: [@ test2]" in output
+    assert "1: [@ test3]" in output
+    assert len(output.split("\n")[:-1]) == 3
+
+def test_status_reporter_08(tmp_path):
     """test StatusReporter.load() with traceback"""
     (tmp_path / "status").mkdir()
     Status.PATH = str(tmp_path / "status")
@@ -217,7 +253,7 @@ def test_status_reporter_07(tmp_path):
     assert "foo.bar.error" in merged_log
     assert "screenlog.3" not in merged_log
 
-def test_status_reporter_08(tmp_path):
+def test_status_reporter_09(tmp_path):
     """test StatusReporter.load() no reports with traceback"""
     (tmp_path / "status").mkdir()
     Status.PATH = str(tmp_path / "status")
@@ -234,7 +270,7 @@ def test_status_reporter_08(tmp_path):
     assert "No status reports available" in output
     assert "IndexError" in output
 
-def test_status_reporter_09(tmp_path):
+def test_status_reporter_10(tmp_path):
     """test StatusReporter.summary() limit with traceback"""
     (tmp_path / "status").mkdir()
     Status.PATH = str(tmp_path / "status")
@@ -440,6 +476,7 @@ def test_main_02(tmp_path):
     StatusReporter.CPU_POLL_INTERVAL = 0.01
     status = Status.start()
     status.iteration = 1
+    status.count_result("[@ test]")
     status.report(force=True)
     assert main([]) == 0
 
