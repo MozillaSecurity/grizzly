@@ -5,6 +5,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
 import argparse
+from collections import defaultdict
 from datetime import timedelta
 from functools import partial
 import logging
@@ -61,6 +62,10 @@ class StatusReporter:
         with open(filename, "w") as ofp:
             ofp.write(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
+    @property
+    def has_results(self):
+        return any(x.results for x in self.reports)
+
     @classmethod
     def load(cls, tb_path=None):
         """Read Grizzly status reports and create a StatusReporter object
@@ -76,11 +81,26 @@ class StatusReporter:
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
         return cls(list(Status.loadall()), tracebacks=tracebacks)
 
+    def print_results(self):
+        print(self._results())
+
     def print_specific(self):
         print(self._specific())
 
     def print_summary(self, runtime=True, sysinfo=False, timestamp=False):
         print(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
+
+    def _results(self):
+        signatures = defaultdict(int)
+        # calculate totals
+        for result in self.reports:
+            for sig, count in result.signatures():
+                signatures[sig] += count
+        # generate output
+        txt = list()
+        for sig, count in sorted(signatures.items(), key=lambda x: x[1], reverse=True):
+            txt.append("%d: %s\n" % (count, sig))
+        return "".join(txt)
 
     @staticmethod
     def _scan(path, fname_pattern):
@@ -409,6 +429,10 @@ def main(args=None):
     print("---------------------")
     print("Status report frequency: %ds\n" % (Status.REPORT_FREQ,))
     reporter.print_specific()
+    if reporter.has_results:
+        print("Result Signatures")
+        print("-----------------")
+        reporter.print_results()
     print("Summary")
     print("-------")
     reporter.print_summary(sysinfo=args.system_report)
