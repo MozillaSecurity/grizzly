@@ -29,6 +29,7 @@ def test_status_01(tmp_path):
     assert status.log_size == 0
     assert status.rate == 0
     assert status.results == 0
+    assert not status._profile
 
 def test_status_02(tmp_path):
     """test Status.cleanup()"""
@@ -82,10 +83,9 @@ def test_status_05(tmp_path):
     # create simple entry
     status = Status.start()
     status.count_result("sig1")
-    status.count_result("sig2")
-    status.count_result("sig1")
+    status.record("test", 123.45)
     status.report(force=True)
-    assert status.results == 3
+    assert status.results == 1
     loaded = Status.load(status.data_file)
     assert loaded.data_file is None
     assert status.start_time == loaded.start_time
@@ -95,6 +95,7 @@ def test_status_05(tmp_path):
     assert status.iteration == loaded.iteration
     assert status.log_size == loaded.log_size
     assert status.results == loaded.results
+    assert "test" in loaded._profile
     loaded.cleanup()
     assert isfile(status.data_file)
     data_file = status.data_file
@@ -191,3 +192,52 @@ def test_status_09(tmp_path):
     assert found["sig2"] == 1
     assert "sig3" in found
     assert found["sig3"] == 1
+
+def test_status_10(tmp_path):
+    """test Status.measure() and Status.record() - profiling support"""
+    Status.PATH = str(tmp_path)
+    status = Status.start()
+    assert not status._profile
+    # initial entry
+    status.record("test1", 10.1)
+    assert "test1" in status._profile
+    assert status._profile["test1"]["count"] == 1
+    assert status._profile["test1"]["max"] == 10.1
+    assert status._profile["test1"]["min"] == 10.1
+    assert status._profile["test1"]["total"] == 10.1
+    # new min
+    status.record("test1", 0.4)
+    assert status._profile["test1"]["count"] == 2
+    assert status._profile["test1"]["max"] == 10.1
+    assert status._profile["test1"]["min"] == 0.4
+    assert status._profile["test1"]["total"] == 10.5
+    # entry
+    status.record("test1", 2)
+    assert status._profile["test1"]["count"] == 3
+    assert status._profile["test1"]["max"] == 10.1
+    assert status._profile["test1"]["min"] == 0.4
+    assert status._profile["test1"]["total"] == 12.5
+    # new max
+    status.record("test1", 99.12)
+    assert status._profile["test1"]["count"] == 4
+    assert status._profile["test1"]["max"] == 99.12
+    assert status._profile["test1"]["min"] == 0.4
+    assert status._profile["test1"]["total"] == 111.62
+    # new name
+    status.record("test2", 1)
+    assert "test2" in status._profile
+    assert len(status._profile) == 2
+    assert status._profile["test2"]["count"] == 1
+    assert status._profile["test2"]["max"] == 1
+    assert status._profile["test2"]["min"] == 1
+    assert status._profile["test2"]["total"] == 1
+    status.record("test2", 1)
+    assert status._profile["test2"]["count"] == 2
+    assert status._profile["test2"]["max"] == 1
+    assert status._profile["test2"]["min"] == 1
+    assert status._profile["test2"]["total"] == 2
+    # test measure
+    with status.measure("no-op"):
+        pass
+    assert len(status._profile) == 3
+    assert "no-op" in status._profile

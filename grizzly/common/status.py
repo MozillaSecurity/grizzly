@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
 from collections import defaultdict
+from contextlib import contextmanager
 from json import dump, load
 from logging import getLogger
 from os import close, listdir, unlink
@@ -30,13 +31,14 @@ class Status:
     REPORT_FREQ = 60
 
     __slots__ = (
-        "_lock", "_results", "data_file", "ignored", "iteration",
+        "_lock", "_profile", "_results", "data_file", "ignored", "iteration",
         "log_size", "start_time", "test_name", "timestamp")
 
     def __init__(self, data_file, start_time=None):
         assert ".json" in data_file
         assert start_time is None or isinstance(start_time, float)
         self._lock = InterProcessLock("%s.lock" % (data_file,))
+        self._profile = dict()
         self._results = defaultdict(int)
         # if data_file is None the status report is read only (no reporting)
         self.data_file = data_file
@@ -83,6 +85,7 @@ class Status:
     @property
     def _data(self):
         return {
+            "_profile": self._profile,
             "_results": self._results,
             "ignored": self.ignored,
             "iteration": self.iteration,
@@ -163,6 +166,20 @@ class Status:
                     continue
                 yield status
 
+    @contextmanager
+    def measure(self, name):
+        """Used to simplify collecting profiling data.
+
+        Args:
+            name (str): Used to group the entries.
+
+        Returns:
+            None
+        """
+        mark = time()
+        yield
+        self.record(name, time() - mark)
+
     @property
     def rate(self):
         """Calculate the number of iterations performed per second since start()
@@ -175,6 +192,34 @@ class Status:
             float: Number of iterations performed per second.
         """
         return self.iteration / float(self.duration) if self.duration > 0 else 0
+
+    def record(self, name, duration):
+        """Used to add profiling data. This is intended to be used to make rough
+        calculations to identify major configuration issues.
+
+        Args:
+            name (str): Used to group the entries.
+            duration (int, float): Stored to be later used for measurements.
+
+        Returns:
+            None
+        """
+        assert isinstance(duration, (float, int))
+        try:
+            self._profile[name]["count"] += 1
+            if self._profile[name]["max"] < duration:
+                self._profile[name]["max"] = duration
+            elif self._profile[name]["min"] > duration:
+                self._profile[name]["min"] = duration
+            self._profile[name]["total"] += duration
+        except KeyError:
+            # add profile entry
+            self._profile[name] = {
+                "count": 1,
+                "max": duration,
+                "min": duration,
+                "total": duration,
+            }
 
     def report(self, force=False, report_freq=REPORT_FREQ):
         """Write status report to disk. Reports are only written periodically.
