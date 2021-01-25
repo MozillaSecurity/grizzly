@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from contextlib import contextmanager
 from json import dump, load
 from logging import getLogger
@@ -22,6 +22,7 @@ __credits__ = ["Tyson Smith"]
 
 LOG = getLogger(__name__)
 
+ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
 
 class Status:
     """Status holds status information for the Grizzly session.
@@ -31,14 +32,15 @@ class Status:
     REPORT_FREQ = 60
 
     __slots__ = (
-        "_lock", "_profile", "_results", "data_file", "ignored", "iteration",
-        "log_size", "start_time", "test_name", "timestamp")
+        "_enable_profiling", "_lock", "_profiles", "_results", "data_file", "ignored",
+        "iteration", "log_size", "start_time", "test_name", "timestamp")
 
-    def __init__(self, data_file, start_time=None):
+    def __init__(self, data_file, enable_profiling=False, start_time=None):
         assert ".json" in data_file
         assert start_time is None or isinstance(start_time, float)
         self._lock = InterProcessLock("%s.lock" % (data_file,))
-        self._profile = dict()
+        self._enable_profiling = enable_profiling
+        self._profiles = dict()
         self._results = defaultdict(int)
         # if data_file is None the status report is read only (no reporting)
         self.data_file = data_file
@@ -85,7 +87,7 @@ class Status:
     @property
     def _data(self):
         return {
-            "_profile": self._profile,
+            "_profiles": self._profiles,
             "_results": self._results,
             "ignored": self.ignored,
             "iteration": self.iteration,
@@ -176,9 +178,30 @@ class Status:
         Returns:
             None
         """
-        mark = time()
-        yield
-        self.record(name, time() - mark)
+        if self._enable_profiling:
+            mark = time()
+            yield
+            self.record(name, time() - mark)
+        else:
+            yield
+
+    def profile_entries(self):
+        """
+
+        Args:
+            None
+
+        Yields:
+            ProfileEntry: Contains recoded profiling data.
+        """
+        for name, entry in self._profiles.items():
+            yield ProfileEntry(
+                entry["count"],
+                entry["max"],
+                entry["min"],
+                name,
+                entry["total"],
+            )
 
     @property
     def rate(self):
@@ -206,20 +229,21 @@ class Status:
         """
         assert isinstance(duration, (float, int))
         try:
-            self._profile[name]["count"] += 1
-            if self._profile[name]["max"] < duration:
-                self._profile[name]["max"] = duration
-            elif self._profile[name]["min"] > duration:
-                self._profile[name]["min"] = duration
-            self._profile[name]["total"] += duration
+            self._profiles[name]["count"] += 1
+            if self._profiles[name]["max"] < duration:
+                self._profiles[name]["max"] = duration
+            elif self._profiles[name]["min"] > duration:
+                self._profiles[name]["min"] = duration
+            self._profiles[name]["total"] += duration
         except KeyError:
-            # add profile entry
-            self._profile[name] = {
-                "count": 1,
-                "max": duration,
-                "min": duration,
-                "total": duration,
-            }
+            if self._enable_profiling:
+                # add profile entry
+                self._profiles[name] = {
+                    "count": 1,
+                    "max": duration,
+                    "min": duration,
+                    "total": duration,
+                }
 
     def report(self, force=False, report_freq=REPORT_FREQ):
         """Write status report to disk. Reports are only written periodically.
@@ -269,17 +293,17 @@ class Status:
             yield (sig, count)
 
     @classmethod
-    def start(cls):
+    def start(cls, enable_profiling=False):
         """Create a unique Status object.
 
         Args:
-            None
+            enable_profiling (bool): Record profiling data.
 
         Returns:
             Status: Active status report.
         """
         tfd, filepath = mkstemp(dir=cls.PATH, prefix="grzstatus_", suffix=".json")
         close(tfd)
-        status = cls(filepath, start_time=time())
+        status = cls(filepath, enable_profiling=enable_profiling, start_time=time())
         status.report(force=True)
         return status
