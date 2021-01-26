@@ -130,7 +130,7 @@ class StatusReporter:
         self.reports.sort(key=lambda x: x.timestamp < exp)
         txt = list()
         for num, report in enumerate(self.reports, start=1):
-            txt.append("#%02d" % (num,))
+            txt.append("#%02d - %d -" % (num, report.pid))
             if report.timestamp < exp:
                 txt.append(" (EXPIRED)\n")
                 continue

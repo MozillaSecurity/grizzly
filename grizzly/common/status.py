@@ -7,7 +7,7 @@ from collections import defaultdict, namedtuple
 from contextlib import contextmanager
 from json import dump, load
 from logging import getLogger
-from os import close, listdir, unlink
+from os import close, getpid, listdir, unlink
 from os.path import isdir, isfile, join as pathjoin
 from tempfile import mkstemp
 from time import time
@@ -33,7 +33,7 @@ class Status:
 
     __slots__ = (
         "_enable_profiling", "_lock", "_profiles", "_results", "data_file", "ignored",
-        "iteration", "log_size", "start_time", "test_name", "timestamp")
+        "iteration", "log_size", "pid", "start_time", "test_name", "timestamp")
 
     def __init__(self, data_file, enable_profiling=False, start_time=None):
         assert ".json" in data_file
@@ -47,6 +47,7 @@ class Status:
         self.ignored = 0
         self.iteration = 0
         self.log_size = 0
+        self.pid = None
         self.start_time = start_time
         self.test_name = None
         self.timestamp = start_time
@@ -92,6 +93,7 @@ class Status:
             "ignored": self.ignored,
             "iteration": self.iteration,
             "log_size": self.log_size,
+            "pid": self.pid,
             "start_time": self.start_time,
             "test_name": self.test_name,
             "timestamp": self.timestamp}
@@ -186,13 +188,13 @@ class Status:
             yield
 
     def profile_entries(self):
-        """
+        """Used to retrieve profiling data.
 
         Args:
             None
 
         Yields:
-            ProfileEntry: Contains recoded profiling data.
+            ProfileEntry: Containing recorded profiling data.
         """
         for name, entry in self._profiles.items():
             yield ProfileEntry(
@@ -305,5 +307,6 @@ class Status:
         tfd, filepath = mkstemp(dir=cls.PATH, prefix="grzstatus_", suffix=".json")
         close(tfd)
         status = cls(filepath, enable_profiling=enable_profiling, start_time=time())
+        status.pid = getpid()
         status.report(force=True)
         return status
