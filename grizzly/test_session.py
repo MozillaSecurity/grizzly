@@ -80,7 +80,8 @@ def test_session_02(tmp_path, mocker):
     with IOManager() as iomgr:
         iomgr.harness = adapter.get_harness()
         fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
-        with Session(adapter, iomgr, None, fake_serv, fake_target, relaunch=10) as session:
+        # enable profiling for test coverage
+        with Session(adapter, iomgr, None, fake_serv, fake_target, enable_profiling=True, relaunch=10) as session:
             session.run([], iteration_limit=10)
             assert session.status.iteration == 10
             assert session.status.test_name is None

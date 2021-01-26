@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import basicConfig, DEBUG, getLogger
 from os.path import join as pathjoin
-from os import getcwd, getenv
+from os import getcwd, getenv, getpid
 
 from sapphire import Sapphire
 
@@ -35,7 +35,7 @@ def configure_logging(log_level):
 
 def main(args):
     configure_logging(args.log_level)
-    LOG.info("Starting Grizzly")
+    LOG.info("Starting Grizzly (%d)", getpid())
     if args.fuzzmanager:
         FuzzManagerReporter.sanity_check(args.binary)
     elif args.s3_fuzzmanager:
@@ -125,6 +125,7 @@ def main(args):
                 server,
                 target,
                 coverage=args.coverage,
+                enable_profiling=args.enable_profiling,
                 relaunch=relaunch)
             if args.log_level == DEBUG or args.verbose:
                 display_mode = Session.DISPLAY_VERBOSE
