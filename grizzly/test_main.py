@@ -17,6 +17,7 @@ class FakeArgs:
         self.adapter = None
         self.cache = 0
         self.coverage = False
+        self.enable_profiling = False
         self.extension = None
         self.fuzzmanager = False
         self.ignore = list()

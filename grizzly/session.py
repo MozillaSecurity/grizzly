@@ -69,14 +69,14 @@ class Session:
                  "status", "target")
 
     def __init__(self, adapter, iomanager, reporter, server, target,
-                 coverage=False, relaunch=1):
+                 coverage=False, enable_profiling=True, relaunch=1):
         self._relaunch = relaunch
         self.adapter = adapter
         self.coverage = coverage
         self.iomanager = iomanager
         self.reporter = reporter
         self.server = server
-        self.status = Status.start()
+        self.status = Status.start(enable_profiling=enable_profiling)
         self.target = target
 
     def __enter__(self):
@@ -103,7 +103,8 @@ class Session:
         LOG.debug("calling iomanager.create_testcase()")
         test = self.iomanager.create_testcase(self.adapter.NAME)
         LOG.debug("calling self.adapter.generate()")
-        self.adapter.generate(test, self.iomanager.server_map)
+        with self.status.measure("generate"):
+            self.adapter.generate(test, self.iomanager.server_map)
         self.status.test_name = test.input_fname
         if self.target.prefs is not None:
             # TODO: this can likely be improved
@@ -153,7 +154,8 @@ class Session:
                         self.server.port,
                         close_after=relaunch,
                         timeout=self.adapter.TEST_DURATION)
-                runner.launch(location, max_retries=3, retry_delay=0)
+                with self.status.measure("launch"):
+                    runner.launch(location, max_retries=3, retry_delay=0)
 
             # create and populate a test case
             current_test = self.generate_testcase()
@@ -161,7 +163,12 @@ class Session:
             self.display_status(log_limiter=log_limiter)
 
             # run test case
-            result = runner.run(ignore, self.iomanager.server_map, current_test, coverage=self.coverage)
+            with self.status.measure("execute"):
+                result = runner.run(
+                    ignore,
+                    self.iomanager.server_map,
+                    current_test,
+                    coverage=self.coverage)
             current_test.duration = result.duration
             # adapter callbacks
             if result.timeout:

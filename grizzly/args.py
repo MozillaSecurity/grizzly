@@ -175,6 +175,10 @@ class GrizzlyArgs(CommonArgs):
             "adapter",
             help="Available adapters: %s" % ", ".join(self._adapters))
         self.parser.add_argument(
+            "--enable-profiling", action="store_true",
+            help="Record profiling data. The data can be viewed by running the"
+                 " status reporter while running Grizzly.")
+        self.parser.add_argument(
             "-i", "--input",
             help="Test case or directory containing test cases")
         self.parser.add_argument(
