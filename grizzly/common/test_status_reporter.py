@@ -5,6 +5,7 @@
 """test Grizzly status reporter"""
 # pylint: disable=protected-access
 
+from itertools import count
 import re
 
 import pytest
@@ -136,7 +137,9 @@ def test_status_reporter_05(tmp_path):
 def test_status_reporter_06(mocker, tmp_path):
     """test StatusReporter._specific()"""
     Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.common.status_reporter.time", return_value=3661.0)
     # single report
+    mocker.patch("grizzly.common.status.time", side_effect=count(start=0.0, step=3600.0))
     status = Status.start()
     status.ignored = 0
     status.iteration = 1
@@ -148,23 +151,28 @@ def test_status_reporter_06(mocker, tmp_path):
     assert len(output.split("\n")[:-1]) == 2
     assert "Ignored" in output
     assert "Iteration" in output
-    assert "Rate" in output
     assert "Results" in output
     assert "EXPIRED" not in output
     # multiple reports
-    status = Status.start()
+    mocker.patch("grizzly.common.status.time", side_effect=count(start=0.0, step=3661.0))
+    status = Status.start(enable_profiling=True)
     status.ignored = 1
     status.iteration = 432422
     status._results = {"sig": 123}
+    status.record("test1", 0.91)
+    status.record("test1", 1.0)
+    status.record("test1", 1.23456)
+    status.record("test2", 1201.1)
     status.report(force=True)
     rptr = StatusReporter.load()
     assert len(rptr.reports) == 2
     output = rptr._specific()
-    assert len(output.split("\n")[:-1]) == 4
+    assert len(output.split("\n")[:-1]) == 6
     assert "Ignored" in output
     assert "Iteration" in output
-    assert "Rate" in output
     assert "Results" in output
+    assert "Profile 'test1'" in output
+    assert "Profile 'test2'" in output
     assert "EXPIRED" not in output
     # expired report
     mocker.patch("grizzly.common.status.time", return_value=1.0)
@@ -175,7 +183,7 @@ def test_status_reporter_06(mocker, tmp_path):
     rptr = StatusReporter.load()
     assert len(rptr.reports) == 3
     output = rptr._specific()
-    assert len(output.split("\n")[:-1]) == 5
+    assert len(output.split("\n")[:-1]) == 7
     assert "EXPIRED" in output
 
 def test_status_reporter_07(tmp_path):
@@ -208,9 +216,9 @@ def test_status_reporter_07(tmp_path):
     assert rptr.has_results
     assert len(rptr.reports) == 3
     output = rptr._results()
-    assert "3: [@ test1]" in output
-    assert "1: [@ test2]" in output
-    assert "1: [@ test3]" in output
+    assert "3: '[@ test1]'" in output
+    assert "1: '[@ test2]'" in output
+    assert "1: '[@ test3]'" in output
     assert len(output.split("\n")[:-1]) == 3
 
 def test_status_reporter_08(tmp_path):
