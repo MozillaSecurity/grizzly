@@ -135,10 +135,10 @@ class StatusReporter:
                 txt.append(" (EXPIRED)\n")
                 continue
             txt.append(" Runtime %s\n" % (timedelta(seconds=int(report.duration)),))
-            txt.append(" * Iterations: %03d" % (report.iteration,))
-            txt.append(" @ %0.2f" % (round(report.rate, 2),))
-            txt.append(" - Ignored: %02d" % (report.ignored,))
-            txt.append(" - Results: %d" % (report.results,))
+            txt.append(" * Iterations: %d" % (report.iteration,))
+            txt.append(" @ %0.2f," % (round(report.rate, 2),))
+            txt.append(" Ignored: %d," % (report.ignored,))
+            txt.append(" Results: %d" % (report.results,))
             txt.append("\n")
             # add profiling data if it exists
             for entry in sorted(report.profile_entries(), key=lambda x: x.total, reverse=True):
@@ -183,23 +183,23 @@ class StatusReporter:
             # Iterations
             txt.append("Iterations : %d" % (total_iters,))
             if count > 1:
-                txt.append(" (%s, %s)" % (max(iterations), min(iterations)))
+                txt.append(" (%d, %d)" % (max(iterations), min(iterations)))
             txt.append("\n")
             # Rate
-            txt.append("      Rate : %d @ %0.2f" % (count, sum(rates)))
+            txt.append("      Rate : %d @ %0.2f" % (count, round(sum(rates), 2)))
             if count > 1:
-                txt.append(" (%0.2f, %0.2f)" % (max(rates), min(rates)))
+                txt.append(" (%0.2f, %0.2f)" % (round(max(rates), 2), round(min(rates), 2)))
             txt.append("\n")
             # Results / Signature mismatch
             txt.append("   Results : %d" % (sum(results),))
             if total_ignored:
-                ignore_pct = (total_ignored / float(total_iters)) * 100
-                txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, ignore_pct))
+                ignore_pct = total_ignored / float(total_iters) * 100
+                txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, round(ignore_pct, 2)))
             # Runtime
             if runtime:
                 txt.append("\n")
                 total_runtime = sum(x.duration for x in reports)
-                txt.append("   Runtime : %s" % (str(timedelta(seconds=int(total_runtime))),))
+                txt.append("   Runtime : %s" % (timedelta(seconds=int(total_runtime)),))
             # Log size
             log_usage = sum(log_sizes) / 1048576.0
             if log_usage > self.DISPLAY_LIMIT_LOG:
