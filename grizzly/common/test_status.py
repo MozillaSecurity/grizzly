@@ -29,6 +29,7 @@ def test_status_01(tmp_path):
     assert status.log_size == 0
     assert status.rate == 0
     assert status.results == 0
+    assert status.pid is not None
     assert not status._enable_profiling
     assert not status._profiles
 
@@ -95,6 +96,7 @@ def test_status_05(tmp_path):
     assert status.ignored == loaded.ignored
     assert status.iteration == loaded.iteration
     assert status.log_size == loaded.log_size
+    assert status.pid == loaded.pid
     assert status.results == loaded.results
     assert not loaded._enable_profiling
     assert "test" in loaded._profiles
