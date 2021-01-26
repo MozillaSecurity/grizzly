@@ -148,9 +148,11 @@ class StatusReporter:
                     txt.append(str(timedelta(seconds=int(entry.total))))
                 else:
                     txt.append("%0.3fs" % (round(entry.total, 3),))
-                txt.append(" (%0.2f%%) " % (round(entry.total / report.duration * 100.0, 2),))
-                txt.append("%d @ %0.3f avg " % (entry.count, round(avg, 3)))
-                txt.append("(%0.3f, %0.3f)" % (round(entry.max, 3), round(entry.min, 3)))
+                txt.append(" (%0.2f%%)" % (round(entry.total / report.duration * 100, 2),))
+                txt.append(" - %d" % (entry.count,))
+                txt.append(" (%0.3f avg," % (round(avg, 3),))
+                txt.append(" %0.3f max," % (round(entry.max, 3),))
+                txt.append(" %0.3f min)" % (round(entry.min, 3),))
                 txt.append("\n")
 
         return "".join(txt)
