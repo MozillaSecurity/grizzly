@@ -11,7 +11,7 @@ from functools import partial
 import logging
 import os
 import re
-import time
+from time import gmtime, strftime, time
 
 import psutil
 
@@ -99,7 +99,7 @@ class StatusReporter:
         # generate output
         txt = list()
         for sig, count in sorted(signatures.items(), key=lambda x: x[1], reverse=True):
-            txt.append("%d: %s\n" % (count, sig))
+            txt.append("%d: %r\n" % (count, sig))
         return "".join(txt)
 
     @staticmethod
@@ -125,7 +125,7 @@ class StatusReporter:
         """
         if not self.reports:
             return "No status reports available"
-        exp = int(time.time()) - self.EXP_LIMIT
+        exp = int(time()) - self.EXP_LIMIT
         self.reports.sort(key=lambda x: x.duration, reverse=True)
         self.reports.sort(key=lambda x: x.timestamp < exp)
         txt = list()
@@ -134,12 +134,25 @@ class StatusReporter:
             if report.timestamp < exp:
                 txt.append(" (EXPIRED)\n")
                 continue
-            txt.append(" Runtime %s\n" % str(timedelta(seconds=int(report.duration))))
-            txt.append(" * Iterations: %03d" % report.iteration)
-            txt.append(" - Rate: %0.2f" % report.rate)
-            txt.append(" - Ignored: %02d" % report.ignored)
-            txt.append(" - Results: %d" % report.results)
+            txt.append(" Runtime %s\n" % (timedelta(seconds=int(report.duration)),))
+            txt.append(" * Iterations: %03d" % (report.iteration,))
+            txt.append(" @ %0.2f" % (round(report.rate, 2),))
+            txt.append(" - Ignored: %02d" % (report.ignored,))
+            txt.append(" - Results: %d" % (report.results,))
             txt.append("\n")
+            # add profiling data if it exists
+            for entry in sorted(report.profile_entries(), key=lambda x: x.total, reverse=True):
+                avg = entry.total / float(entry.count)
+                txt.append(" * Profile %r: " % (entry.name,))
+                if entry.total > 300:
+                    txt.append(str(timedelta(seconds=int(entry.total))))
+                else:
+                    txt.append("%0.3fs" % (round(entry.total, 3),))
+                txt.append(" (%0.2f%%) " % (round(entry.total / report.duration * 100.0, 2),))
+                txt.append("%d @ %0.3f avg " % (entry.count, round(avg, 3)))
+                txt.append("(%0.3f, %0.3f)" % (round(entry.max, 3), round(entry.min, 3)))
+                txt.append("\n")
+
         return "".join(txt)
 
     def _summary(self, runtime=True, sysinfo=False, timestamp=False):
@@ -156,7 +169,7 @@ class StatusReporter:
         """
         txt = list()
         # Job specific status
-        exp = int(time.time()) - self.EXP_LIMIT
+        exp = int(time()) - self.EXP_LIMIT
         reports = tuple(x for x in self.reports if x.timestamp > exp)
         if reports:
             # calculate totals
@@ -203,7 +216,7 @@ class StatusReporter:
             txt.append(self._sys_info())
         if timestamp:
             txt.append("\n")
-            txt.append(time.strftime(" Timestamp : %Y/%m/%d %X %z", time.gmtime()))
+            txt.append(strftime(" Timestamp : %Y/%m/%d %X %z", gmtime()))
         msg = "".join(txt)
         if self.tracebacks:
             txt = self._merge_tracebacks(self.tracebacks, self.SUMMARY_LIMIT - len(msg))
