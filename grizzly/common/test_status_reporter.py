@@ -167,12 +167,13 @@ def test_status_reporter_06(mocker, tmp_path):
     rptr = StatusReporter.load()
     assert len(rptr.reports) == 2
     output = rptr._specific()
-    assert len(output.split("\n")[:-1]) == 6
+    assert len(output.split("\n")[:-1]) == 7
     assert "Ignored" in output
     assert "Iteration" in output
     assert "Results" in output
-    assert "Profile 'test1'" in output
-    assert "Profile 'test2'" in output
+    assert "Profiling entries" in output
+    assert "> test1:" in output
+    assert "> test2:" in output
     assert "EXPIRED" not in output
     # expired report
     mocker.patch("grizzly.common.status.time", return_value=1.0)
@@ -183,7 +184,7 @@ def test_status_reporter_06(mocker, tmp_path):
     rptr = StatusReporter.load()
     assert len(rptr.reports) == 3
     output = rptr._specific()
-    assert len(output.split("\n")[:-1]) == 7
+    assert len(output.split("\n")[:-1]) == 8
     assert "EXPIRED" in output
 
 def test_status_reporter_07(tmp_path):
@@ -210,15 +211,15 @@ def test_status_reporter_07(tmp_path):
     status = Status.start()
     status.iteration = 1
     status.count_result("[@ test1]")
-    status.count_result("[@ test3]")
+    status.count_result("[@ longsignature123]")
     status.report(force=True)
     rptr = StatusReporter.load()
     assert rptr.has_results
     assert len(rptr.reports) == 3
-    output = rptr._results()
+    output = rptr._results(max_len=16)
     assert "3: '[@ test1]'" in output
     assert "1: '[@ test2]'" in output
-    assert "1: '[@ test3]'" in output
+    assert "1: '[@ longsignature...'" in output
     assert len(output.split("\n")[:-1]) == 3
 
 def test_status_reporter_08(tmp_path):
