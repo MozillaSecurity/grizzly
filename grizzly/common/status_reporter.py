@@ -90,7 +90,7 @@ class StatusReporter:
     def print_summary(self, runtime=True, sysinfo=False, timestamp=False):
         print(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
-    def _results(self):
+    def _results(self, max_len=85):
         signatures = defaultdict(int)
         # calculate totals
         for result in self.reports:
@@ -99,7 +99,10 @@ class StatusReporter:
         # generate output
         txt = list()
         for sig, count in sorted(signatures.items(), key=lambda x: x[1], reverse=True):
-            txt.append("%d: %r\n" % (count, sig))
+            if len(sig) > max_len:
+                txt.append("%d: '%s...'\n" % (count, sig[:max_len]))
+            else:
+                txt.append("%d: %r\n" % (count, sig))
         return "".join(txt)
 
     @staticmethod
@@ -141,20 +144,20 @@ class StatusReporter:
             txt.append(" Results: %d" % (report.results,))
             txt.append("\n")
             # add profiling data if it exists
+            if any(report.profile_entries()):
+                txt.append(" * Profiling entries *\n")
             for entry in sorted(report.profile_entries(), key=lambda x: x.total, reverse=True):
                 avg = entry.total / float(entry.count)
-                txt.append(" * Profile %r: " % (entry.name,))
+                txt.append(" > %s: %dx " % (entry.name, entry.count))
                 if entry.total > 300:
                     txt.append(str(timedelta(seconds=int(entry.total))))
                 else:
                     txt.append("%0.3fs" % (round(entry.total, 3),))
-                txt.append(" (%0.2f%%)" % (round(entry.total / report.duration * 100, 2),))
-                txt.append(" - %d" % (entry.count,))
+                txt.append(" %0.2f%%" % (round(entry.total / report.duration * 100, 2),))
                 txt.append(" (%0.3f avg," % (round(avg, 3),))
                 txt.append(" %0.3f max," % (round(entry.max, 3),))
                 txt.append(" %0.3f min)" % (round(entry.min, 3),))
                 txt.append("\n")
-
         return "".join(txt)
 
     def _summary(self, runtime=True, sysinfo=False, timestamp=False):
@@ -438,18 +441,15 @@ def main(args=None):
         reporter.dump_summary(args.dump)
         return 0
     if not reporter.reports:
-        print("No status reports to display")
+        print("Grizzly Status - No status reports to display")
         return 0
-    print("Grizzly Status Report")
-    print("---------------------")
-    print("Status report frequency: %ds\n" % (Status.REPORT_FREQ,))
+    print("Grizzly Status - Instance report frequency: %ds\n" % (Status.REPORT_FREQ,))
+    print("[Reports]")
     reporter.print_specific()
     if reporter.has_results:
-        print("Result Signatures")
-        print("-----------------")
+        print("[Result Signatures]")
         reporter.print_results()
-    print("Summary")
-    print("-------")
+    print("[Summary]")
     reporter.print_summary(sysinfo=args.system_report)
     return 0
 
