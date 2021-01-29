@@ -11,7 +11,7 @@ from functools import partial
 import logging
 import os
 import re
-from time import gmtime, strftime, time
+from time import gmtime, localtime, strftime, time
 
 import psutil
 
@@ -443,7 +443,10 @@ def main(args=None):
     if not reporter.reports:
         print("Grizzly Status - No status reports to display")
         return 0
-    print("Grizzly Status - Instance report frequency: %ds\n" % (Status.REPORT_FREQ,))
+    print(
+        "Grizzly Status - %s - Instance report frequency: %ds\n" %
+        (strftime("%Y/%m/%d %X", localtime()), Status.REPORT_FREQ)
+    )
     print("[Reports]")
     reporter.print_specific()
     if reporter.has_results:
