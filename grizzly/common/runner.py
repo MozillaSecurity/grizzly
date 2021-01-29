@@ -74,9 +74,18 @@ class _IdleChecker:
 
 
 class Runner:
-    __slots__ = ("_close_delay", "_idle", "_relaunch", "_server", "_target", "_tests_run")
+    __slots__ = (
+        "_close_delay",
+        "_idle",
+        "_relaunch",
+        "_server",
+        "_target",
+        "_tests_run",
+    )
 
-    def __init__(self, server, target, close_delay=30, idle_threshold=0, idle_delay=0, relaunch=1):
+    def __init__(
+        self, server, target, close_delay=30, idle_threshold=0, idle_delay=0, relaunch=1
+    ):
         self._close_delay = close_delay
         if idle_threshold > 0:
             assert idle_delay > 0
@@ -159,7 +168,15 @@ class Runner:
             return "?".join([location, "&".join(args)])
         return location
 
-    def run(self, ignore, server_map, testcase, test_path=None, coverage=False, wait_for_callback=False):
+    def run(
+        self,
+        ignore,
+        server_map,
+        testcase,
+        test_path=None,
+        coverage=False,
+        wait_for_callback=False,
+    ):
         """Serve a testcase and monitor the target for results.
 
         Args:
@@ -194,7 +211,8 @@ class Runner:
                 continue_cb=self._keep_waiting,
                 forever=wait_for_callback,
                 optional_files=tuple(testcase.optional),
-                server_map=server_map)
+                server_map=server_map,
+            )
             duration = time() - serve_start
         finally:
             # remove temporary files
@@ -267,15 +285,26 @@ class Runner:
 
 
 class RunResult:
+    """A RunResult holds result details from a call to Runner.run().
+
+    Attributes:
+        attempted (bool): Test landing page (entry point) was requested.
+        duration (float): Time spent waiting for test contents to be served.
+        initial (bool): Target was (re)launched prior to run attempt.
+        served (tuple(str)): Files that were served.
+        status (int): Result status of test.
+        timeout (bool): A timeout occurred waiting for test to complete.
+    """
+
     FAILED = 1
     IGNORED = 2
 
     __slots__ = ("attempted", "duration", "initial", "served", "status", "timeout")
 
     def __init__(self, served, duration, status=None, timeout=False):
-        self.attempted = False  # entry point/landing page was requested
+        self.attempted = False
         self.duration = duration
-        self.initial = False  # target was (re)launched prior to attempt
+        self.initial = False
         self.served = served
         self.status = status
         self.timeout = timeout
