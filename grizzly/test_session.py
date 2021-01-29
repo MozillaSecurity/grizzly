@@ -100,7 +100,7 @@ def test_session_03(tmp_path, mocker):
     adapter = FuzzAdapter()
     adapter.setup(None, None)
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, prefs=None, )
+    fake_target = mocker.Mock(spec=Target, prefs=None)
     fake_target.log_size.return_value = 1000
     fake_target.monitor.launches = 1
     # target.launch() call will be skipped
@@ -129,7 +129,7 @@ def test_session_04(tmp_path, mocker):
     with IOManager() as iomgr:
         fake_serv.serve_path.return_value = (SERVED_NONE, [])
         with Session(adapter, iomgr, None, fake_serv, fake_target, relaunch=10) as session:
-            with raises(SessionError, match="Please check Adapter and Target"):
+            with raises(SessionError, match="Test case is missing landing page"):
                 session.run([], iteration_limit=10)
 
 def test_session_05(tmp_path, mocker):
@@ -182,14 +182,10 @@ def test_session_06(tmp_path, mocker):
         assert testcase.add_meta.call_count == 1
 
 def test_session_07(tmp_path, mocker):
-    """test Session.run() - test case was not served - between iterations"""
+    """test Session.run() - test case was not served"""
     Status.PATH = str(tmp_path)
     mocker.patch("grizzly.session.Report", autospec=True)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    run_result = RunResult(["/fake/file"], 1, status=RunResult.FAILED)
-    run_result.attempted = False
-    run_result.initial = False
-    fake_runner.return_value.run.return_value = run_result
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_adapter.TEST_DURATION = 10
@@ -200,6 +196,11 @@ def test_session_07(tmp_path, mocker):
     fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
     fake_target.monitor.launches = 1
     fake_reporter = mocker.Mock(spec=Reporter)
+    # between iterations
+    run_result = RunResult([], 1, status=RunResult.FAILED)
+    run_result.attempted = False
+    run_result.initial = False
+    fake_runner.return_value.run.return_value = run_result
     with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
         session.run([], iteration_limit=1)
         assert fake_runner.return_value.run.call_count == 1
@@ -212,6 +213,39 @@ def test_session_07(tmp_path, mocker):
         assert session.status.ignored == 0
         assert fake_reporter.submit.call_count == 1
         assert fake_iomgr.tests.pop.call_count == 1
+    fake_reporter.reset_mock()
+    fake_runner.reset_mock()
+    # delayed startup crash
+    run_result = RunResult([], 1, status=RunResult.FAILED)
+    run_result.attempted = False
+    run_result.initial = True
+    fake_runner.return_value.run.return_value = run_result
+    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
+        with raises(SessionError, match="Please check Adapter and Target"):
+            session.run([], iteration_limit=1)
+        assert fake_runner.return_value.run.call_count == 1
+        assert fake_runner.return_value.launch.call_count == 1
+        assert session.status.iteration == 1
+        assert session.status.results == 1
+        assert session.status.ignored == 0
+        assert fake_reporter.submit.call_count == 1
+    fake_reporter.reset_mock()
+    fake_runner.reset_mock()
+    # startup hang/unresponsive
+    mocker.patch("grizzly.session.grz_tmp", autospec=True, return_value=str(tmp_path))
+    run_result = RunResult([], 1)
+    run_result.attempted = False
+    run_result.initial = True
+    fake_runner.return_value.run.return_value = run_result
+    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
+        with raises(SessionError, match="Please check Adapter and Target"):
+            session.run([], iteration_limit=1)
+        assert fake_runner.return_value.run.call_count == 1
+        assert fake_runner.return_value.launch.call_count == 1
+        assert session.status.iteration == 1
+        assert session.status.results == 0
+        assert session.status.ignored == 0
+        assert fake_reporter.submit.call_count == 0
 
 def test_session_08(tmp_path, mocker):
     """test Session.run() ignoring failures"""
