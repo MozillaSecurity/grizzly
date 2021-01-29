@@ -179,19 +179,25 @@ class Session:
                 self.adapter.on_served(current_test, result.served)
             # update test case
             if not result.attempted:
-                LOG.debug("Ignoring test case since nothing was served")
+                LOG.warning("Test case was not served")
+                LOG.debug("ignoring test case since nothing was served")
                 self.iomanager.tests.pop().cleanup()
                 if not current_test.contains(current_test.landing_page):
-                    LOG.warning("Test case is missing landing page")
+                    raise SessionError("Test case is missing landing page")
                 if result.initial:
                     # since this is the first iteration since the Target launched
                     # something is likely wrong with the Target or Adapter
-                    err_logs = mkdtemp(prefix="error_", dir=grz_tmp("logs"))
-                    self.target.save_logs(err_logs)
-                    LOG.error("ERROR: Test case was not served. Timeout too short?")
-                    LOG.error("Logs can be found here %r", err_logs)
-                    raise SessionError("Please check Adapter and Target")
-                LOG.warning("Test case was not served")
+                    if result.status == RunResult.FAILED:
+                        LOG.warning("Delayed startup failure detected")
+                        self.report_result()
+                    else:
+                        LOG.warning("Timeout too short? System too busy?")
+                        err_logs = mkdtemp(prefix="error_", dir=grz_tmp("logs"))
+                        self.target.save_logs(err_logs)
+                        LOG.error("Logs can be found here %r", err_logs)
+                    # only raise if this is a potential blocker
+                    if self.status.iteration < 100:
+                        raise SessionError("Please check Adapter and Target")
             elif self.adapter.IGNORE_UNSERVED:
                 LOG.debug("removing unserved files from the test case")
                 current_test.purge_optional(result.served)
