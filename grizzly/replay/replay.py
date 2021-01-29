@@ -249,13 +249,17 @@ class ReplayManager:
                     if run_result.status is not None or not run_result.attempted:
                         break
                 if not run_result.attempted:
+                    LOG.warning("Test case was not served")
                     if run_result.initial:
+                        if run_result.status == RunResult.FAILED:
+                            # TODO: what is to best action to take in this case?
+                            LOG.warning("Delayed startup failure detected")
+                        else:
+                            LOG.warning("Timeout too short? System too busy?")
                         err_logs = mkdtemp(prefix="error_", dir=grz_tmp("logs"))
                         self.target.save_logs(err_logs)
-                        LOG.error("ERROR: Test case was not served. Timeout too short?")
                         LOG.error("Logs can be found here %r", err_logs)
                         break
-                    LOG.warning("Test case was not served")
                 # process run results
                 if run_result.status == RunResult.FAILED:
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))

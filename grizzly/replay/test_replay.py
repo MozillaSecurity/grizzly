@@ -54,7 +54,7 @@ def test_replay_02(mocker, tmp_path):
             assert replay.status.results == 0
             assert target.monitor.is_healthy.call_count == 1
             assert target.close.call_count == 2
-        assert not any(tmp_path.glob("*"))
+        assert not any(tmp_path.iterdir())
 
 def test_replay_03(mocker):
     """test ReplayManager.run() - no repro - with repeats"""
@@ -124,17 +124,30 @@ def test_replay_05(mocker, tmp_path):
         assert results[0].served[0] == served
         assert len(results[0].durations) == 1
         results[0].report.cleanup()
-        assert not any(tmp_path.glob("*"))
+        assert not any(tmp_path.iterdir())
 
 def test_replay_06(mocker, tmp_path):
-    """test ReplayManager.run() - error - landing page not requested on first iteration"""
+    """test ReplayManager.run() - error - landing page not requested"""
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     target = mocker.Mock(spec=Target, closed=True, launch_timeout=30)
+    target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
-    target.detect_failure.return_value = Target.RESULT_NONE
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
+    # test target unresponsive
+    target.detect_failure.return_value = Target.RESULT_NONE
     server.serve_path.return_value = (SERVED_REQUEST, ["x"])
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        assert not replay.run(testcases, repeat=2)
+        assert replay.status.ignored == 0
+        assert replay.status.iteration == 1
+        assert replay.status.results == 0
+        # target.close() called once in runner and once by ReplayManager.run()
+        assert target.close.call_count == 2
+    assert target.save_logs.call_count == 1
+    target.reset_mock()
+    # test target crashed
+    target.detect_failure.return_value = Target.RESULT_FAILURE
     with ReplayManager([], server, target, use_harness=False) as replay:
         assert not replay.run(testcases, repeat=2)
         assert replay.status.ignored == 0
@@ -182,7 +195,7 @@ def test_replay_08(mocker, tmp_path):
         assert replay.status.ignored == 1
         assert replay.status.iteration == 1
         assert replay.status.results == 0
-    assert not any(tmp_path.glob("*"))
+    assert not any(tmp_path.iterdir())
 
 def test_replay_09(mocker, tmp_path):
     """test ReplayManager.run() - early exit"""
@@ -546,7 +559,7 @@ def test_replay_20(mocker, tmp_path):
     """test ReplayManager.report_to_filesystem()"""
     # no reports
     ReplayManager.report_to_filesystem(str(tmp_path), [])
-    assert not any(tmp_path.glob("*"))
+    assert not any(tmp_path.iterdir())
     # with reports and tests
     (tmp_path / "report_expected").mkdir()
     result0 = mocker.Mock(ReplayResult, count=1, durations=[1], expected=True, served=[])
