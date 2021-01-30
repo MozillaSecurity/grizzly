@@ -6,6 +6,7 @@
 # pylint: disable=protected-access
 
 import os
+from pathlib import Path
 import sys
 import tarfile
 
@@ -165,37 +166,46 @@ def test_report_08(tmp_path):
     assert "worker log" in (tmp_path / log_map.aux).read_text()
 
 def test_report_09(tmp_path):
-    """test prioritizing *San logs with Report.select_logs()"""
-    # crash
-    with (tmp_path / "log_asan.txt.1").open("wb") as log_fp:
-        log_fp.write(b"GOOD LOG\n")
-        log_fp.write(b"==1942==ERROR: AddressSanitizer: heap-use-after-free on ... blah\n")  # must be 2nd line
-        # pad out to 6 lines
-        for l_no in range(4):
-            log_fp.write(b"    #%d blah...\n" % l_no)
-    # crash missing trace
+    """test prioritizing sanitizer logs with Report._find_sanitizer()"""
+    # NOTE: ordered by selection priority in order to use previously added logs
+    # test empty
+    (tmp_path / "log_asan.txt.0").touch()
+    assert Report._find_sanitizer([str(x) for x in tmp_path.iterdir()]) is None
+    # test *San log with data
+    (tmp_path / "log_asan.txt.1").write_text("test")
+    selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
+    assert selected is not None
+    assert "test" in Path(selected).read_text()
+    # test UBSan log
+    (tmp_path / "log_asan.txt.1").write_text(
+        "test.cc:3:5: runtime error: signed integer overflow: ...")
+    selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
+    assert selected is not None
+    assert "runtime error: signed integer overflow" in Path(selected).read_text()
+    # test selecting ASan report
     with (tmp_path / "log_asan.txt.2").open("wb") as log_fp:
-        log_fp.write(b"BAD LOG\n")
-        log_fp.write(b"==1984==ERROR: AddressSanitizer: SEGV on ... blah\n")  # must be 2nd line
-        log_fp.write(b"missing trace...\n")
-    # child log that should be ignored (created when parent crashes)
+        # missing stack
+        log_fp.write(b"==1184==ERROR: AddressSanitizer: BUS on ... blah\n")
     with (tmp_path / "log_asan.txt.3").open("wb") as log_fp:
-        log_fp.write(b"BAD LOG\n")
-        log_fp.write(b"==1184==ERROR: AddressSanitizer: BUS on ... blah\n")  # must be 2nd line
-        # pad out to 6 lines
+        log_fp.write(b"==9482==ERROR: AddressSanitizer: stack-overflow on ...\n")
         for l_no in range(4):
-            log_fp.write(b"    #%d blah...\n" % l_no)
+            log_fp.write(b"    #%d blah...\n" % (l_no,))
+    selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
+    assert selected is not None
+    assert "AddressSanitizer: stack-overflow" in Path(selected).read_text()
+    # test selecting prioritized
     with (tmp_path / "log_asan.txt.4").open("wb") as log_fp:
-        log_fp.write(b"BAD LOG\n")
-        log_fp.write(b"==9482==ERROR: AddressSanitizer: stack-overflow on ...\n")  # must be 2nd line
-        # pad out to 6 lines
+        log_fp.write(b"==1942==ERROR: AddressSanitizer: heap-use-after-free on ... blah\n")
         for l_no in range(4):
-            log_fp.write(b"    #%d blah...\n" % l_no)
+            log_fp.write(b"    #%d blah...\n" % (l_no,))
     with (tmp_path / "log_asan.txt.5").open("wb") as log_fp:
-        log_fp.write(b"BAD LOG\n")
-        log_fp.write(b"ERROR: Failed to mmap\n")  # must be 2nd line
-    log_map = Report.select_logs(str(tmp_path))
-    assert "GOOD LOG" in (tmp_path / log_map.aux).read_text()
+        log_fp.write(b"==1984==ERROR: AddressSanitizer: SEGV on ... blah\n")
+        log_fp.write(b"missing trace...\n")
+    with (tmp_path / "log_asan.txt.6").open("wb") as log_fp:
+        log_fp.write(b"ERROR: Failed to mmap\n")
+    selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
+    assert selected is not None
+    assert "heap-use-after-free" in Path(selected).read_text()
 
 def test_report_10(tmp_path):
     """test Report() size_limit"""
@@ -316,7 +326,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     reporter.submit(tests, Report(str(log_path), "fake_bin"))
     assert not log_path.exists()
     assert report_path.exists()
-    assert len(tuple(report_path.glob("*"))) == 1
+    assert len(tuple(report_path.iterdir())) == 1
     assert all(x.dump.call_count == 1 for x in tests)
     # call report a 2nd time
     log_path.mkdir()
@@ -325,7 +335,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     tests = list(mocker.Mock(spec=TestCase) for _ in range(2))
     reporter.submit(tests, Report(str(log_path), "fake_bin"))
     assert all(x.dump.call_count == 1 for x in tests)
-    assert len(tuple(report_path.glob("*"))) == 2
+    assert len(tuple(report_path.iterdir())) == 2
     assert len(tuple(report_path.glob("NO_STACK"))) == 1
 
 def test_filesystem_reporter_03(tmp_path):
@@ -535,7 +545,7 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     fake_report.minor = "1234abcd"
     fake_report.path = str(tmp_path)
     reporter._pre_submit(fake_report)
-    assert not any(tmp_path.glob("*"))
+    assert not any(tmp_path.iterdir())
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
     fake_resource.return_value.meta.client.upload_file.assert_not_called()
@@ -551,7 +561,7 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     mocker.patch("grizzly.common.reporter.ClientError", new=FakeClientError)
     fake_resource.return_value.Object.side_effect = FakeClientError("test", {"Error": {"Code": "404"}})
     reporter._pre_submit(fake_report)
-    assert not any(tmp_path.glob("*"))
+    assert not any(tmp_path.iterdir())
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
     assert fake_resource.return_value.meta.client.upload_file.call_count == 1
