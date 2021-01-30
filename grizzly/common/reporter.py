@@ -9,7 +9,7 @@ from hashlib import sha1
 from json import dump, dumps, loads
 from logging import getLogger, WARNING
 from platform import machine, system
-from os import listdir, getcwd, getenv, makedirs, mkdir, SEEK_END, stat, unlink, walk
+from os import getcwd, getenv, makedirs, mkdir, scandir, SEEK_END, stat, unlink, walk
 from os.path import basename, expanduser, isdir, isfile, join as pathjoin, realpath, relpath
 from re import compile as re_compile, DOTALL, VERBOSE
 from shutil import copyfile, copyfileobj, move, rmtree
@@ -70,10 +70,10 @@ class Report:
         if size_limit < 1:
             LOG.warning("No limit set on report log size!")
         else:
-            for fname in listdir(log_path):
-                log_file_path = pathjoin(log_path, fname)
-                if isfile(log_file_path):
-                    Report.tail(log_file_path, size_limit)
+            with scandir(path=log_path) as contents:
+                for log in contents:
+                    if log.is_file() and log.stat().st_size > size_limit:
+                        Report.tail(log.path, size_limit)
         # look through logs one by one until we find a stack
         for log_file in (x for x in self._logs if x is not None):
             with open(log_file, "rb") as log_fp:
@@ -241,18 +241,14 @@ class Report:
         Returns:
             LogMap: A LogMap pointing to files or None if log_path is empty.
         """
-        # scan path for files
-        to_scan = list()
-        for entry in listdir(log_path):
-            full_path = pathjoin(log_path, entry)
-            if isfile(full_path):
-                to_scan.append(full_path)
+        to_scan = None
+        with scandir(path=log_path) as contents:
+            files = (x for x in contents if x.is_file())
+            # order by date hopefully the oldest log is the cause of the issue
+            to_scan = [x.path for x in sorted(files, key=lambda x: x.stat().st_mtime)]
         if not to_scan:
             LOG.warning("No files found in %r", log_path)
             return None
-
-        # order by creation date because the oldest log is likely the cause of the issue
-        to_scan.sort(key=lambda x: stat(x).st_mtime)
 
         # pattern to identify the ASan crash triggered when the parent process goes away
         # TODO: this may no longer be required
@@ -338,7 +334,7 @@ class Report:
 
     @staticmethod
     def tail(in_file, size_limit):
-        """Tail the given file. This is destructive.
+        """Tail the given file. WARNING: This is destructive!
 
         Args:
             in_file (str): Path to file to work with.
@@ -348,11 +344,12 @@ class Report:
             None
         """
         assert size_limit > 0
-        if stat(in_file).st_size <= size_limit:
-            return
         with open(in_file, "rb") as in_fp:
             in_fp.seek(0, SEEK_END)
-            dump_pos = max((in_fp.tell() - size_limit), 0)
+            end = in_fp.tell()
+            if end <= size_limit:
+                return
+            dump_pos = max((end - size_limit), 0)
             in_fp.seek(dump_pos)
             out_fd, out_file = mkstemp(prefix="taillog_", dir=grz_tmp())
             with open(out_fd, "wb") as out_fp:
