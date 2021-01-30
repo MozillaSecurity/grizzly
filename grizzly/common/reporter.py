@@ -188,6 +188,111 @@ class Report:
             suggested_frames += 6
         return suggested_frames
 
+    @staticmethod
+    def _find_ffpuppet_worker(logs):
+        """Search through list of log files for a ffpuppet worker log.
+
+        Args:
+            logs (list(str)): List of log files to search.
+
+        Returns:
+            str: The full file path if a match is found otherwise None.
+        """
+        found = None
+        for fname in (x for x in logs if "ffp_worker" in x):
+            if found is not None:
+                # we only expect one log here...
+                LOG.warning("overwriting previously selected %r", found)
+            found = fname
+        return found
+
+    @staticmethod
+    def _find_minidump(logs):
+        """Search through list of log files for a minidump log.
+
+        Args:
+            logs (list(str)): List of log files to search.
+
+        Returns:
+            str: The full file path if a match is found otherwise None.
+        """
+        re_dump_req = re_compile(r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump")
+        for fname in (x for x in logs if "minidump" in x):
+            with open(fname, "r") as log_fp:
+                data = log_fp.read(65536)
+                # this will select log that contains "Crash|SIGSEGV|" or
+                # the desired "DUMP_REQUESTED" log
+                # TODO: review this it may be too strict
+                # see mozilla-central/source/accessible/ipc/DocAccessibleParent.cpp#452
+                if "Crash|DUMP_REQUESTED|" not in data or re_dump_req.search(data):
+                    return fname
+        return None
+
+    @staticmethod
+    def _find_sanitizer(logs):
+        """Search through list of log files for a sanitizer (ASan, UBSan, etc...) log.
+
+        Args:
+            logs (list(str)): List of log files to search.
+
+        Returns:
+            str: The full file path if a match is found otherwise None.
+        """
+        # pattern to identify the ASan crash triggered when the parent process goes away
+        # TODO: this may no longer be required
+        re_e10s_forced = re_compile(r"""
+            ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
+            #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
+            """, DOTALL | VERBOSE)
+        # this is a list of Sanitizer error reports to prioritize
+        # Sanitizer reports not included below are deprioritized
+        prioritize_tokens = (
+            "use-after-",
+            "-buffer-overflow on",
+            ": SEGV on ",
+            "access-violation on ",
+            "attempting free on ",
+            "negative-size-param",
+            "-param-overlap")
+        found = None
+        for fname in (x for x in logs if "asan" in x):
+            with open(fname, "r") as log_fp:
+                data = log_fp.read(65536)
+            # look for interesting crash info in the log
+            if "==ERROR:" in data:
+                # check for e10s forced crash
+                if re_e10s_forced.search(data) is not None:
+                    continue
+                # make sure there is something that looks like a stack frame
+                if "#0 " in data:
+                    found = fname
+                    if any(x in data for x in prioritize_tokens):
+                        # this is the likely cause of the crash
+                        break
+            if found is None:
+                # UBSan error (non-ASan builds)
+                if ": runtime error: " in data:
+                    found = fname
+                # catch all (choose the one with info for now)
+                elif data:
+                    found = fname
+        return found
+
+    @staticmethod
+    def _find_valgrind(logs):
+        """Search through list of log files for a Valgrind worker log.
+
+        Args:
+            logs (list(str)): List of log files to search.
+
+        Returns:
+            str: The full file path if a match is found otherwise None.
+        """
+        for fname in (x for x in logs if "valgrind" in x):
+            if stat(fname).st_size:
+                return fname
+        return None
+
     @property
     def major(self):
         """The inclusive bucketing hash based on the stack trace
@@ -230,8 +335,8 @@ class Report:
         """
         return self._logs.aux or self._logs.stderr
 
-    @staticmethod
-    def select_logs(log_path):
+    @classmethod
+    def select_logs(cls, log_path):
         """Scan log_path for file containing stderr, stdout and other (aux)
         data and build a LogMap.
 
@@ -249,75 +354,14 @@ class Report:
         if not to_scan:
             LOG.warning("No files found in %r", log_path)
             return None
-
-        # pattern to identify the ASan crash triggered when the parent process goes away
-        # TODO: this may no longer be required
-        re_e10s_forced = re_compile(r"""
-            ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
-            #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
-            """, DOTALL | VERBOSE)
-
-        # this is a list of *San error reports to prioritize
-        # ASan reports not included below (deprioritized):
-        # stack-overflow, BUS, failed to allocate, detected memory leaks
-        interesting_sanitizer_tokens = (
-            "use-after-", "-buffer-overflow on", ": SEGV on ", "access-violation on ",
-            "negative-size-param", "attempting free on ", "-param-overlap")
-
-        log_aux = None
-        # look for sanitizer (ASan, UBSan, etc...) logs
-        for fname in (x for x in to_scan if "asan" in x):
-            # grab first chunk of log to help triage
-            with open(fname, "r") as log_fp:
-                log_data = log_fp.read(65536)
-            # look for interesting crash info in the log
-            if "==ERROR:" in log_data:
-                # check for e10s forced crash
-                if re_e10s_forced.search(log_data) is not None:
-                    continue
-                # make sure there is something that looks like a stack frame in the log
-                if "#0 " in log_data:
-                    log_aux = fname
-                    if any(x in log_data for x in interesting_sanitizer_tokens):
-                        break  # this is the likely cause of the crash
-                    continue  # probably the most interesting but lets keep looking
-            if log_aux is None:
-                # UBSan error (non-ASan builds)
-                if ": runtime error: " in log_data:
-                    log_aux = fname
-                # catch all (choose the one with info for now)
-                elif log_data:
-                    log_aux = fname
-
-        # look for Valgrind logs
+        # look for file to use as aux log
+        log_aux = cls._find_sanitizer(to_scan)
         if log_aux is None:
-            for fname in (x for x in to_scan if "valgrind" in x):
-                if stat(fname).st_size:
-                    log_aux = fname
-                    break
-
-        # prefer ASan logs over minidump logs
+            log_aux = cls._find_valgrind(to_scan)
         if log_aux is None:
-            re_dump_req = re_compile(r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump")
-            for fname in (x for x in to_scan if "minidump" in x):
-                with open(fname, "r") as log_fp:
-                    log_data = log_fp.read(65536)
-                    # this will select log that contains "Crash|SIGSEGV|" or
-                    # the desired "DUMP_REQUESTED" log
-                    # TODO: review this it may be too strict
-                    # see https://searchfox.org/mozilla-central/source/accessible/ipc/DocAccessibleParent.cpp#452
-                    if "Crash|DUMP_REQUESTED|" not in log_data or re_dump_req.search(log_data):
-                        log_aux = fname
-                        break
-
-        # look for ffpuppet worker logs, worker logs should be used if nothing else is available
+            log_aux = cls._find_minidump(to_scan)
         if log_aux is None:
-            for fname in (x for x in to_scan if "ffp_worker" in x):
-                if log_aux is not None:
-                    # we only expect one log here...
-                    LOG.warning("aux log previously selected: %s, overwriting!", log_aux)
-                log_aux = fname
-
+            log_aux = cls._find_ffpuppet_worker(to_scan)
         # look for stderr and stdout log files
         log_err = None
         log_out = None
@@ -326,7 +370,6 @@ class Report:
                 log_err = fname
             elif "stdout" in fname:
                 log_out = fname
-
         result = LogMap(log_aux, log_err, log_out)
         if not any(result):
             LOG.warning("No logs found in %r", log_path)
