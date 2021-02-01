@@ -109,9 +109,6 @@ class ReduceManager:
         self._any_crash = any_crash
         self._idle_delay = idle_delay
         self._idle_threshold = idle_threshold
-        # only coerce `log_path` to `Path` if it's a string
-        # this caution is only necessary in python3.5 where pytest uses
-        # pathlib2 rather than pathlib
         self._log_path = Path(log_path) if isinstance(log_path, str) else log_path
         # these parameters may be overwritten during analysis, so keep a copy of them
         self._original_relaunch = relaunch
