@@ -211,6 +211,7 @@ class ReplayManager:
                             self.server.port,
                             close_after=relaunch * test_count,
                             timeout=self.server.timeout)
+                    startup_error = False
                     # The environment from the initial testcase is used because
                     # a sequence of testcases is expected to be run without
                     # relaunching the Target to match the functionality of
@@ -251,30 +252,36 @@ class ReplayManager:
                 if not run_result.attempted:
                     LOG.warning("Test case was not served")
                     if run_result.initial:
+                        startup_error = True
                         if run_result.status == RunResult.FAILED:
                             # TODO: what is to best action to take in this case?
                             LOG.warning("Delayed startup failure detected")
                         else:
                             LOG.warning("Timeout too short? System too busy?")
-                        err_logs = mkdtemp(prefix="error_", dir=grz_tmp("logs"))
-                        self.target.save_logs(err_logs)
-                        LOG.error("Logs can be found here %r", err_logs)
-                        break
                 # process run results
                 if run_result.status == RunResult.FAILED:
+                    # TODO: use self.target.create_report here
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
                     report = Report(log_path, self.target.binary)
                     # check signatures
                     short_sig = report.crash_info.createShortSignature()
-                    if not self._any_crash and self._signature is None and short_sig != "No crash detected":
+                    if (
+                        not startup_error
+                        and not self._any_crash
+                        and self._signature is None
+                        and short_sig != "No crash detected"
+                    ):
                         LOG.debug("no signature given, using %r", short_sig)
                         self._signature = report.crash_signature
                     if short_sig == "No crash detected":
                         # TODO: verify report.major == "NO_STACK" otherwise FM failed to parse the logs
                         # TODO: change this to support hangs/timeouts, etc
                         LOG.info("Result: No crash detected")
-                    elif self._any_crash or self._signature.matches(report.crash_info):
+                    elif (
+                        not startup_error
+                        and (self._any_crash or self._signature.matches(report.crash_info))
+                    ):
                         self.status.count_result(short_sig)
                         LOG.info("Result: %s (%s:%s)",
                                  short_sig, report.major[:8], report.minor[:8])
