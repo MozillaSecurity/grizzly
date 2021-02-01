@@ -2,14 +2,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 from logging import getLogger
-from os.path import isdir
-from shutil import rmtree
-from tempfile import mkdtemp
 from time import time
 
-from .common import grz_tmp, Report, Runner, RunResult, Status, TestFile
+from .common import Runner, RunResult, Status, TestFile
+from .target import TargetLaunchError
 
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
@@ -111,20 +108,6 @@ class Session:
             test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
         return test
 
-    def report_result(self):
-        # create working directory for target logs
-        result_logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
-        self.target.save_logs(result_logs)
-        report = Report(result_logs, self.target.binary)
-        short_sig = report.crash_info.createShortSignature()
-        LOG.info("Result: %s (%s:%s)", short_sig, report.major[:8], report.minor[:8])
-        # order test cases newest to oldest
-        self.iomanager.tests.reverse()
-        self.reporter.submit(self.iomanager.tests, report)
-        if isdir(result_logs):
-            rmtree(result_logs)
-        self.status.count_result(short_sig)
-
     def run(self, ignore, iteration_limit=0, display_mode=DISPLAY_NORMAL):
         assert iteration_limit >= 0
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
@@ -134,6 +117,7 @@ class Session:
             assert self.adapter.remaining > 0
             relaunch = min(relaunch, self.adapter.remaining)
         runner = Runner(self.server, self.target, relaunch=relaunch)
+        startup_error = False
         while True:
             self.status.report()
             self.status.iteration += 1
@@ -154,8 +138,19 @@ class Session:
                         self.server.port,
                         close_after=relaunch,
                         timeout=self.adapter.TEST_DURATION)
-                with self.status.measure("launch"):
-                    runner.launch(location, max_retries=3, retry_delay=0)
+                try:
+                    with self.status.measure("launch"):
+                        runner.launch(location, max_retries=3, retry_delay=0)
+                except TargetLaunchError as exc:
+                    short_sig = exc.report.crash_info.createShortSignature()
+                    LOG.info("Result: %s (%s:%s)",
+                        short_sig,
+                        exc.report.major[:8],
+                        exc.report.minor[:8])
+                    self.reporter.submit([], exc.report)
+                    exc.report.cleanup()
+                    self.status.count_result(short_sig)
+                    raise TargetLaunchError(str(exc), None) from None
 
             # create and populate a test case
             current_test = self.generate_testcase()
@@ -177,7 +172,6 @@ class Session:
             else:
                 LOG.debug("calling self.adapter.on_served()")
                 self.adapter.on_served(current_test, result.served)
-            # update test case
             if not result.attempted:
                 LOG.warning("Test case was not served")
                 LOG.debug("ignoring test case since nothing was served")
@@ -189,25 +183,35 @@ class Session:
                     # something is likely wrong with the Target or Adapter
                     if result.status == RunResult.FAILED:
                         LOG.warning("Delayed startup failure detected")
-                        self.report_result()
                     else:
                         LOG.warning("Timeout too short? System too busy?")
-                        err_logs = mkdtemp(prefix="error_", dir=grz_tmp("logs"))
-                        self.target.save_logs(err_logs)
-                        LOG.error("Logs can be found here %r", err_logs)
-                    # only raise if this is a potential blocker
+                    # ignore this if it did not happen early on
+                    # to avoid aborting a fuzzing session unnecessarily
                     if self.status.iteration < 100:
-                        raise SessionError("Please check Adapter and Target")
+                        startup_error = True
             elif self.adapter.IGNORE_UNSERVED:
                 LOG.debug("removing unserved files from the test case")
                 current_test.purge_optional(result.served)
             # process results
             if result.status == RunResult.FAILED:
                 LOG.debug("result detected")
-                self.report_result()
+                report = self.target.create_report()
+                short_sig = report.crash_info.createShortSignature()
+                LOG.info("Result: %s (%s:%s)",
+                    short_sig,
+                    report.major[:8],
+                    report.minor[:8])
+                # order test cases newest to oldest
+                self.iomanager.tests.reverse()
+                self.reporter.submit(self.iomanager.tests, report)
+                report.cleanup()
+                self.status.count_result(short_sig)
             elif result.status == RunResult.IGNORED:
                 self.status.ignored += 1
                 LOG.info("Ignored (%d)", self.status.ignored)
+
+            if startup_error:
+                raise SessionError("Please check Adapter and Target")
 
             if self.adapter.remaining is not None and self.adapter.remaining < 1:
                 # all test cases have been replayed

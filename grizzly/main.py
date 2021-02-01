@@ -11,7 +11,6 @@ from sapphire import Sapphire
 from .adapters import get as get_adapter
 from .common.iomanager import IOManager
 from .common.reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
-from .common.utils import grz_tmp
 from .session import Session
 from .target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
@@ -142,11 +141,6 @@ def main(args):
 
     except (TargetLaunchError, TargetLaunchTimeout) as exc:
         LOG.error(str(exc))
-        if isinstance(exc, TargetLaunchError) and exc.report:
-            path = grz_tmp("launch_failures")
-            LOG.error("Logs can be found here %r", path)
-            reporter = FilesystemReporter(path, major_bucket=False)
-            reporter.submit([], exc.report)
         return Session.EXIT_LAUNCH_FAILURE
 
     finally:
