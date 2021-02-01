@@ -58,7 +58,7 @@ class Report:
     __slots__ = ("_crash_info", "_logs", "_signature", "_target_binary", "path", "prefix", "stack")
 
     def __init__(self, log_path, target_binary, size_limit=MAX_LOG_SIZE):
-        assert isinstance(log_path, str) and isdir(log_path)
+        assert isinstance(log_path, str)
         assert isinstance(target_binary, str)
         self._crash_info = None
         self._logs = self.select_logs(log_path)
@@ -336,23 +336,23 @@ class Report:
         return self._logs.aux or self._logs.stderr
 
     @classmethod
-    def select_logs(cls, log_path):
-        """Scan log_path for file containing stderr, stdout and other (aux)
+    def select_logs(cls, path):
+        """Scan path for file containing stderr, stdout and other (aux)
         data and build a LogMap.
 
         Args:
-            log_path (str): Path to scan for log files.
+            path (str): Path to scan for log files.
 
         Returns:
-            LogMap: A LogMap pointing to files or None if log_path is empty.
+            LogMap: A LogMap pointing to log files or None if path is empty.
         """
         to_scan = None
-        with scandir(path=log_path) as contents:
+        with scandir(path=path) as contents:
             files = (x for x in contents if x.is_file())
             # order by date hopefully the oldest log is the cause of the issue
             to_scan = [x.path for x in sorted(files, key=lambda x: x.stat().st_mtime)]
         if not to_scan:
-            LOG.warning("No files found in %r", log_path)
+            LOG.warning("No files found in %r", path)
             return None
         # look for file to use as aux log
         log_aux = cls._find_sanitizer(to_scan)
@@ -371,9 +371,7 @@ class Report:
             elif "stdout" in fname:
                 log_out = fname
         result = LogMap(log_aux, log_err, log_out)
-        if not any(result):
-            LOG.warning("No logs found in %r", log_path)
-        return result
+        return result if any(result) else None
 
     @staticmethod
     def tail(in_file, size_limit):

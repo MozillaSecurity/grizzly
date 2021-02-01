@@ -81,7 +81,7 @@ def test_report_04(tmp_path):
     assert Report.select_logs(str(tmp_path)) is None
     # empty file
     (tmp_path / "not_a_log.txt").touch()
-    assert not any(Report.select_logs(str(tmp_path)))
+    assert Report.select_logs(str(tmp_path)) is None
 
 def test_report_05(tmp_path):
     """test Report.select_logs()"""
