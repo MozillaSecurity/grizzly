@@ -11,7 +11,7 @@ from os.path import join as pathjoin
 
 from pytest import raises
 
-from sapphire import Sapphire, SERVED_ALL, SERVED_REQUEST
+from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST
 from .replay import ReplayManager, ReplayResult
 from ..common import Report, Status, TestCase, TestCaseLoadFailure
 from ..target import Target
@@ -130,32 +130,35 @@ def test_replay_06(mocker, tmp_path):
     """test ReplayManager.run() - error - landing page not requested"""
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    target = mocker.Mock(spec=Target, closed=True, launch_timeout=30)
+    target = mocker.Mock(spec=Target, binary="bin", closed=True, launch_timeout=30)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
     testcases = [mocker.Mock(spec=TestCase, env_vars=[], landing_page="index.html", optional=[])]
     # test target unresponsive
     target.detect_failure.return_value = Target.RESULT_NONE
-    server.serve_path.return_value = (SERVED_REQUEST, ["x"])
+    server.serve_path.return_value = (SERVED_NONE, [])
     with ReplayManager([], server, target, use_harness=False) as replay:
-        assert not replay.run(testcases, repeat=2)
+        assert not replay.run(testcases, repeat=1)
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
         assert replay.status.results == 0
         # target.close() called once in runner and once by ReplayManager.run()
         assert target.close.call_count == 2
-    assert target.save_logs.call_count == 1
     target.reset_mock()
     # test target crashed
     target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.save_logs = _fake_save_logs
     with ReplayManager([], server, target, use_harness=False) as replay:
-        assert not replay.run(testcases, repeat=2)
-        assert replay.status.ignored == 0
+        results = replay.run(testcases, repeat=1)
+        assert replay.status.ignored == 1
         assert replay.status.iteration == 1
         assert replay.status.results == 0
+        assert replay._signature is None
         # target.close() called once in runner and once by ReplayManager.run()
         assert target.close.call_count == 2
-    assert target.save_logs.call_count == 1
+    assert len(results) == 1
+    assert results[0].count == 1
+    assert not results[0].expected
 
 def test_replay_07(mocker, tmp_path):
     """test ReplayManager.run() - delayed failure - following test landing page not requested"""
