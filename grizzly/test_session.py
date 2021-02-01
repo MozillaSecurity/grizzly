@@ -184,7 +184,6 @@ def test_session_06(tmp_path, mocker):
 def test_session_07(tmp_path, mocker):
     """test Session.run() - test case was not served"""
     Status.PATH = str(tmp_path)
-    mocker.patch("grizzly.session.Report", autospec=True)
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
@@ -192,9 +191,12 @@ def test_session_07(tmp_path, mocker):
     fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.tests = mocker.Mock(spec=deque)
+    fake_report = mocker.Mock(spec=Report, major="major123", minor="minor456")
+    fake_report.crash_info.createShortSignature.return_value = "[@ sig]"
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
     fake_target.monitor.launches = 1
+    fake_target.create_report.return_value = fake_report
     fake_reporter = mocker.Mock(spec=Reporter)
     # between iterations
     run_result = RunResult([], 1, status=RunResult.FAILED)
@@ -232,7 +234,6 @@ def test_session_07(tmp_path, mocker):
     fake_reporter.reset_mock()
     fake_runner.reset_mock()
     # startup hang/unresponsive
-    mocker.patch("grizzly.session.grz_tmp", autospec=True, return_value=str(tmp_path))
     run_result = RunResult([], 1)
     run_result.attempted = False
     run_result.initial = True
@@ -264,8 +265,6 @@ def test_session_08(tmp_path, mocker):
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
     fake_target.monitor.launches = 1
-    # ignored results should not be reported so raise AssertionError if report_result is called
-    mocker.patch.object(Session, 'report_result', side_effect=AssertionError)
     with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target) as session:
         session.run([], iteration_limit=1)
         assert fake_runner.return_value.run.call_count == 1
@@ -274,6 +273,7 @@ def test_session_08(tmp_path, mocker):
         assert fake_iomgr.purge_tests.call_count == 1
         assert fake_test.purge_optional.call_count == 0
         assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
+        assert fake_target.create_report.call_count == 0
         assert session.status.iteration == 1
         assert session.status.results == 0
         assert session.status.ignored == 1
@@ -281,17 +281,13 @@ def test_session_08(tmp_path, mocker):
 def test_session_09(tmp_path, mocker):
     """test Session.run() handle TargetLaunchError"""
     Status.PATH = str(tmp_path)
-    mocker.patch("grizzly.session.Report", autospec=True)
+    fake_report = mocker.Mock(spec=Report, major="major123", minor="minor456")
+    fake_report.crash_info.createShortSignature.return_value = "[@ sig]"
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_runner.return_value.launch.side_effect = TargetLaunchError("test", mocker.Mock(spec=Report))
+    fake_runner.return_value.launch.side_effect = TargetLaunchError("test", fake_report)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_iomgr = mocker.Mock(
-        spec=IOManager,
-        harness=None,
-        input_files=[],
-        server_map=ServerMap(),
-        tests=deque())
+    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
     fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
     fake_target = mocker.Mock(spec=Target)
     fake_target.monitor.launches = 1
@@ -299,31 +295,8 @@ def test_session_09(tmp_path, mocker):
         with raises(TargetLaunchError, match="test"):
             session.run([], iteration_limit=1)
         assert session.status.iteration == 1
-        assert session.status.results == 0
+        assert session.status.results == 1
         assert session.status.ignored == 0
-
-def test_session_10(tmp_path, mocker):
-    """test Session.report_result()"""
-    tmpd = tmp_path / "fake_temp_path"
-    tmpd.mkdir()
-    (tmpd / "log_stderr.txt").write_bytes(b"STDERR log\n")
-    (tmpd / "log_stdout.txt").write_bytes(b"STDOUT log\n")
-    with (tmpd / "log_asan_blah.txt").open("wb") as log_fp:
-        log_fp.write(b"==1==ERROR: AddressSanitizer: ")
-        log_fp.write(b"SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
-        log_fp.write(b"    #0 0xbad000 in foo /file1.c:123:234\n")
-        log_fp.write(b"    #1 0x1337dd in bar /file2.c:1806:19\n")
-    mocker.patch("grizzly.session.mkdtemp", autospec=True, return_value=str(tmpd))
-    Status.PATH = str(tmp_path)
-    fake_iomgr = mocker.Mock(spec=IOManager, tests=deque())
-    fake_target = mocker.Mock(spec=Target, binary="bin")
-    reporter = NullReporter()
-    with Session(None, fake_iomgr, reporter, None, fake_target) as session:
-        session.report_result()
-    assert fake_target.save_logs.call_count == 1
-    fake_target.save_logs.assert_called_with(str(tmpd))
-    assert reporter.submit_calls == 1
-    assert not tmpd.is_dir()
 
 def test_log_output_limiter_01(mocker):
     """test LogOutputLimiter.ready() not ready"""

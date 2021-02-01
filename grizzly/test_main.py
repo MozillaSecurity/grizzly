@@ -93,7 +93,7 @@ def test_main_01(mocker):
     args.s3_fuzzmanager = True
     assert main(args) == Session.EXIT_SUCCESS
 
-def test_main_02(mocker, tmp_path):
+def test_main_02(mocker):
     """test main() exit codes"""
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TEST_DURATION = 10
@@ -112,13 +112,5 @@ def test_main_02(mocker, tmp_path):
     fake_session.return_value.run.side_effect = KeyboardInterrupt
     assert main(args) == Session.EXIT_ABORT
     # test TargetLaunchError
-    fake_tmp = (tmp_path / "grz_tmp")
-    fake_tmp.mkdir()
-    mocker.patch("grizzly.main.grz_tmp", return_value=str(fake_tmp))
-    fake_logs = (tmp_path / "report")
-    report = mocker.Mock(spec=Report, prefix="fake_report", path=str(fake_logs))
-    fake_logs.mkdir()
-    fake_session.return_value.run.side_effect = TargetLaunchError("test", report)
+    fake_session.return_value.run.side_effect = TargetLaunchError("test", None)
     assert main(args) == Session.EXIT_LAUNCH_FAILURE
-    assert any(fake_tmp.glob("fake_report_logs"))
-    assert not fake_logs.is_dir()
