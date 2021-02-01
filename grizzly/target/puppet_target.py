@@ -85,6 +85,11 @@ class PuppetTarget(Target):
                 return False
         return True
 
+    def create_report(self):
+        logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
+        self.save_logs(logs)
+        return Report(logs, self.binary)
+
     @property
     def monitor(self):
         if self._monitor is None:
@@ -229,9 +234,7 @@ class PuppetTarget(Target):
             self.close()
             if isinstance(exc, BrowserTimeoutError):
                 raise TargetLaunchTimeout(str(exc)) from None
-            log_path = mkdtemp(prefix="launch_fail_", dir=grz_tmp("logs"))
-            self.save_logs(log_path)
-            raise TargetLaunchError(str(exc), Report(log_path, self.binary)) from None
+            raise TargetLaunchError(str(exc), self.create_report()) from None
 
     def log_size(self):
         return self._puppet.log_length("stderr") + self._puppet.log_length("stdout")
