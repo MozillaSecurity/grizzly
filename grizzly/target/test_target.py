@@ -13,6 +13,8 @@ class SimpleTarget(Target):
     @property
     def closed(self):
         pass
+    def create_report(self):
+        pass
     def detect_failure(self, ignored, was_timeout):
         pass
     def launch(self):

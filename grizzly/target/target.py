@@ -94,7 +94,9 @@ class Target(metaclass=ABCMeta):
     def closed(self):
         pass
 
-    # TODO: add collect_report()?
+    @abstractmethod
+    def create_report(self):
+        pass
 
     @abstractmethod
     def detect_failure(self, ignored, was_timeout):
