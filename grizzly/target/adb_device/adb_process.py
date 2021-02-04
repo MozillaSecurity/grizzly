@@ -165,7 +165,7 @@ class ADBProcess(object):
         # setup bootstrapper and reverse port
         # reverse does fail occasionally so use a retry loop
         for _ in range(10):
-            bootstrapper = Bootstrapper(poll_wait=0.5)
+            bootstrapper = Bootstrapper()
             if not self._session.reverse(bootstrapper.port, bootstrapper.port):
                 bootstrapper.close()
                 log.debug("failed to reverse port, retrying...")

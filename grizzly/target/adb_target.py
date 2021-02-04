@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
-from tempfile import mkstemp
+from tempfile import mkdtemp, mkstemp
 
 from ffpuppet import LaunchError
 from prefpicker import PrefPicker
@@ -12,6 +12,7 @@ from prefpicker import PrefPicker
 from .adb_device import ADBProcess, ADBSession
 from .target import Target
 from .target_monitor import TargetMonitor
+from ..common.reporter import Report
 from ..common.utils import grz_tmp
 
 
@@ -22,9 +23,8 @@ log = logging.getLogger("adb_target")  # pylint: disable=invalid-name
 
 
 class ADBTarget(Target):
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, relaunch, **kwds):
-        super(ADBTarget, self).__init__(binary, extension, launch_timeout, log_limit,
-                                        memory_limit, relaunch)
+    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, **kwds):
+        super().__init__(binary, extension, launch_timeout, log_limit, memory_limit)
         self.forced_close = True  # app will not close itself on Android
         self.use_rr = False
 
@@ -93,7 +93,6 @@ class ADBTarget(Target):
         return status
 
     def launch(self, location, env_mod=None):
-        self.rl_countdown = self.rl_reset
         env_mod = dict(env_mod or [])
         # This may be used to disabled network connections during testing, e.g.
         env_mod["MOZ_IN_AUTOMATION"] = "1"
@@ -170,6 +169,11 @@ class ADBTarget(Target):
             self._remove_prefs = False
         else:
             raise TargetError("Missing prefs.js file %r" % (prefs_file,))
+
+    def create_report(self):
+        logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
+        self.save_logs(logs)
+        return Report(logs, self.binary)
 
     def reverse(self, remote, local):
         # remote->device, local->desktop
