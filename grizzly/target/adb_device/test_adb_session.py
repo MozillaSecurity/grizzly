@@ -1,5 +1,6 @@
 # pylint: disable=protected-access
 import os
+from pathlib import Path
 from subprocess import CalledProcessError
 import zipfile
 
@@ -797,18 +798,18 @@ def test_adb_session_26(mocker):
 def test_adb_session_27(mocker, tmp_path):
     """test ADBSession._aapt_check()"""
     # use system aapt
-    mocker.patch("os.path.expanduser", return_value=b"/missing/aapt")
-    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"/fake_system/aapt")
+    mocker.patch("grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", Path("/missing"))
+    mocker.patch("grizzly.target.adb_device.adb_session.which", return_value="/fake_system/aapt")
     assert ADBSession._aapt_check() == "/fake_system/aapt"
-    fake_aapt = tmp_path / "aapt"
+    (tmp_path / "android-9").mkdir()
+    fake_aapt = tmp_path / "android-9" / "aapt"
     fake_aapt.touch()
     # use recommended aapt
-    mocker.patch("os.path.expanduser", return_value=str(fake_aapt))
-    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"/fake_system/aapt")
+    mocker.patch("grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", tmp_path)
     assert ADBSession._aapt_check() == str(fake_aapt)
     # aapt not installed
-    mocker.patch("os.path.expanduser", return_value=b"/missing/aapt")
-    mocker.patch("grizzly.target.adb_device.adb_session.check_output", side_effect=CalledProcessError(1, "test", "test"))
+    mocker.patch("grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", Path("/missing"))
+    mocker.patch("grizzly.target.adb_device.adb_session.which", return_value=None)
     with pytest.raises(EnvironmentError, match=r"Please install AAPT"):
         assert ADBSession._aapt_check()
 
@@ -816,18 +817,18 @@ def test_adb_session_28(mocker, tmp_path):
     """test ADBSession._adb_check()"""
     mocker.patch("grizzly.target.adb_device.adb_session.sleep")  # skip delay after warning message
     # use system adb
-    mocker.patch("os.path.expanduser", return_value=b"/missing/adb")
-    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"/fake_system/adb")
+    mocker.patch("grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", Path("/missing"))
+    mocker.patch("grizzly.target.adb_device.adb_session.which", return_value="/fake_system/adb")
     assert ADBSession._adb_check() == "/fake_system/adb"
-    fake_adb = tmp_path / "adb"
+    (tmp_path / "platform-tools").mkdir()
+    fake_adb = tmp_path / "platform-tools" / "adb"
     fake_adb.touch()
     # use recommended adb
-    mocker.patch("os.path.expanduser", return_value=str(fake_adb))
-    mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"/fake_system/adb")
+    mocker.patch("grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", tmp_path)
     assert ADBSession._adb_check() == str(fake_adb)
     # adb not installed
-    mocker.patch("os.path.expanduser", return_value=b"/missing/adb")
-    mocker.patch("grizzly.target.adb_device.adb_session.check_output", side_effect=CalledProcessError(1, "test", "test"))
+    mocker.patch("grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", Path("/missing"))
+    mocker.patch("grizzly.target.adb_device.adb_session.which", return_value=None)
     with pytest.raises(EnvironmentError, match=r"Please install ADB"):
         assert ADBSession._adb_check()
 

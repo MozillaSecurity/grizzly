@@ -5,7 +5,9 @@
 from collections import namedtuple
 import logging
 import os
-from shutil import rmtree
+from pathlib import Path
+from platform import system
+from shutil import rmtree, which
 import socket
 from subprocess import call, CalledProcessError, check_output, Popen
 from tempfile import mkdtemp, TemporaryFile
@@ -21,6 +23,21 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
 DeviceProcessInfo = namedtuple("DeviceProcessInfo", "memory name pid ppid")
+
+
+def _get_android_sdk():
+    if os.getenv("ANDROID_HOME") is not None:
+        android_home = Path(os.getenv("ANDROID_HOME"))
+        if android_home.is_dir():
+            return android_home
+    if os.getenv("ANDROID_SDK_ROOT") is not None:
+        return Path(os.getenv("ANDROID_SDK_ROOT"))
+    if system() == "Windows":
+        return Path(os.getenv("LOCALAPPDATA")) / "Android" / "sdk"
+    if system() == "Darwin":
+        return Path.home() / "Library" / "Android" / "sdk"
+    return Path.home() / "Android" / "Sdk"
+ANDROID_SDK_ROOT = _get_android_sdk()
 
 
 class ADBCommandError(Exception):
@@ -73,18 +90,17 @@ class ADBSession(object):
         Returns:
             str: Path to AAPT binary.
         """
-        aapt_bin = os.path.expanduser("~/.android/sdk/android-9/aapt")
-        if os.path.isfile(aapt_bin):
-            log.debug("using recommended aapt from %r", aapt_bin)
-            return aapt_bin
-        try:
-            aapt_bin = check_output(("which", "aapt"))
-        except CalledProcessError:
+        aapt_bin = ANDROID_SDK_ROOT / "android-9" / "aapt"
+        if aapt_bin.is_file():
+            log.debug("using recommended aapt from '%s'", aapt_bin)
+            return str(aapt_bin)
+        aapt_bin = which("aapt")
+        if aapt_bin is None:
             raise EnvironmentError("Please install AAPT")
-        aapt_bin = aapt_bin.strip().decode("utf-8", errors="ignore")
+        aapt_bin = Path(aapt_bin)
         # TODO: update this to check aapt version
-        log.warning("Using aapt_bin from %r", aapt_bin)
-        return aapt_bin
+        log.warning("Using aapt_bin from '%s'", aapt_bin)
+        return str(aapt_bin)
 
     @classmethod
     def _adb_check(cls):
@@ -97,21 +113,20 @@ class ADBSession(object):
         Returns:
             str: Path to ADB binary.
         """
-        adb_bin = os.path.expanduser("~/.android/sdk/platform-tools/adb")
-        if os.path.isfile(adb_bin):
-            log.debug("using recommended adb from %r", adb_bin)
-            return adb_bin
-        try:
-            adb_bin = check_output(("which", "adb"))
-        except CalledProcessError:
+        adb_bin = ANDROID_SDK_ROOT / "platform-tools" / "adb"
+        if adb_bin.is_file():
+            log.debug("using recommended adb from '%s'", adb_bin)
+            return str(adb_bin)
+        adb_bin = which("adb")
+        if adb_bin is None:
             raise EnvironmentError("Please install ADB")
-        adb_bin = adb_bin.strip().decode("utf-8", errors="ignore")
+        adb_bin = Path(adb_bin)
         # TODO: update this to check adb version
-        log.warning("Using adb from %r", adb_bin)
+        log.warning("Using adb from '%s'", adb_bin)
         log.warning("You are not using the recommended ADB install!")
         log.warning("Either run the setup script or proceed with caution.")
         sleep(5)
-        return adb_bin
+        return str(adb_bin)
 
     @staticmethod
     def _call_adb(cmd, timeout=None):
