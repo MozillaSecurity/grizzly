@@ -65,7 +65,7 @@ def main(argv=None):  # pylint: disable=missing-docstring
             args.install = args.prep
             asan_opts = {
                 "abort_on_error": "0",
-                "log_path": "'%s'" % session.SANITIZER_LOG_PREFIX}
+            }
             session.sanitizer_options("asan", asan_opts)
         if args.airplane_mode is not None:
             if args.airplane_mode > 0:
