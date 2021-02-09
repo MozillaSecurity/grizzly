@@ -29,7 +29,7 @@ def configure_logging(log_level):
         log_fmt = "%(asctime)s %(levelname).1s %(name)s | %(message)s"
     else:
         date_fmt = "%Y-%m-%d %H:%M:%S"
-        log_fmt = "[%(asctime)s] %(message)s"
+        log_fmt = "%(message)s"
     basicConfig(format=log_fmt, datefmt=date_fmt, level=log_level)
 
 def main(args):

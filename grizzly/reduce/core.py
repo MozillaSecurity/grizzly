@@ -355,6 +355,13 @@ class ReduceManager:
         last_reports = None
         last_tried = None
         self._stats.add("init", self.testcase_size())
+
+        tc = self.testcases[0].landing_page
+        anim_attempt = Path(grz_tmp("reduce")) / "attempt.html"
+        anim_best = Path(grz_tmp("reduce")) / "reduced.html"
+        anim_attempt.write_bytes(self.testcases[0].get_file(tc).data)
+        anim_best.write_bytes(self.testcases[0].get_file(tc).data)
+
         # record total stats overall so that any time missed by individual milestones
         # will still be included in the total
         with self._stats.add_timed("final", self.testcase_size) as total_stats:
@@ -402,6 +409,8 @@ class ReduceManager:
                             keep_reduction = False
                             results = []
                             try:
+                                anim_best.write_bytes(self.testcases[0].get_file(tc).data)
+                                anim_attempt.write_bytes(reduction[0].get_file(tc).data)
                                 # reduction is a new list of testcases to be
                                 # replayed
                                 results = replay.run(
@@ -442,6 +451,7 @@ class ReduceManager:
                                     for testcase in self.testcases:
                                         testcase.cleanup()
                                     self.testcases = reduction
+                                    anim_best.write_bytes(reduction[0].get_file(tc).data)
                                     keep_reduction = True
                                     # cleanup old best results
                                     for result in best_results:
@@ -453,6 +463,7 @@ class ReduceManager:
                                                if not result.expected]
                                 else:
                                     LOG.info("Attempt failed")
+                                    anim_attempt.write_bytes(self.testcases[0].get_file(tc).data)
                                 # if the reduction found other crashes,
                                 #   report those immediately
                                 self.report(

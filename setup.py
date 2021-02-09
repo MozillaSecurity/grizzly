@@ -39,6 +39,7 @@ if __name__ == '__main__':
             ],
             'grizzly_targets': [
                 'ffpuppet = grizzly.target.puppet_target:PuppetTarget',
+                'fake = grizzly.target.fake:FakeTarget',
             ],
             'grizzly_reduce_strategies': [
                 'chars = grizzly.reduce.strategies.lithium:MinimizeChars',

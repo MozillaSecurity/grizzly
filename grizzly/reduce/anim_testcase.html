@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<!--DDBEGIN-->
+<style>
+marquee {
+  position: fixed;
+}
+b {
+  background-color: red;
+}
+</style>
+<script>
+function setup() {
+  document.getElementById("a").crash()
+}
+</script>
+<body onload="setup()">
+<div id=a style="color:blue"></div>
+<marquee>hello world</marquee>
+</body>
+<!--DDEND-->
+</html>
