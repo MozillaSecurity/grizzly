@@ -26,7 +26,7 @@ def test_puppet_target_01(mocker, tmp_path):
         prefs_file = target.prefs
         assert isfile(prefs_file)
         assert target._remove_prefs
-        assert target.detect_failure([], False) == Target.RESULT_NONE
+        assert target.detect_failure([]) == Target.RESULT_NONE
         assert target.log_size() == 1124
         fake_ffp.return_value.log_length.assert_any_call("stderr")
         fake_ffp.return_value.log_length.assert_any_call("stdout")
@@ -84,91 +84,105 @@ def test_puppet_target_03(mocker, tmp_path):
     # no failures
     fake_ffp.return_value.is_healthy.return_value = True
     fake_ffp.return_value.reason = None
-    assert target.detect_failure([], False) == Target.RESULT_NONE
-    assert target.detect_failure(["memory"], False) == Target.RESULT_NONE
+    assert target.detect_failure([]) == Target.RESULT_NONE
+    assert fake_ffp.return_value.is_running.call_count == 0
     assert not target.closed
     fake_ffp.reset_mock()
     # test close
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_CLOSED
-    assert target.detect_failure([], False) == Target.RESULT_NONE
-    assert fake_ffp.return_value.is_running.call_count == 1
+    assert target.detect_failure([]) == Target.RESULT_NONE
     assert fake_ffp.return_value.is_healthy.call_count == 1
-    assert fake_ffp.return_value.close.call_count == 1
+    assert fake_ffp.return_value.is_running.call_count == 1
+    assert fake_ffp.return_value.close.call_count == 0
     fake_ffp.reset_mock()
     # test single process crash
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_ALERT
-    assert target.detect_failure([], False) == Target.RESULT_FAILURE
-    assert fake_ffp.return_value.close.call_count == 1
+    assert target.detect_failure([]) == Target.RESULT_FAILURE
+    assert fake_ffp.return_value.close.call_count == 0
     fake_ffp.reset_mock()
     # test multiprocess crash
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = True
     fake_ffp.return_value.reason = FFPuppet.RC_ALERT
-    assert target.detect_failure([], False) == Target.RESULT_FAILURE
+    assert target.detect_failure([]) == Target.RESULT_FAILURE
     assert fake_ffp.return_value.close.call_count == 1
     fake_ffp.reset_mock()
     # test exit with no crash logs
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_EXITED
-    assert target.detect_failure([], False) == Target.RESULT_NONE
-    assert fake_ffp.return_value.close.call_count == 1
-    fake_ffp.reset_mock()
-    # test timeout
-    fake_ffp.return_value.is_healthy.return_value = True
-    fake_ffp.return_value.is_running.return_value = True
-    fake_ffp.return_value.reason = None
-    fake_ffp.return_value.cpu_usage.return_value = ((1234, 10), (1236, 75), (1238, 60))
-    # raise OSError for code coverage
-    fake_kill = mocker.patch(
-        "grizzly.target.puppet_target.kill",
-        autospec=True,
-        side_effect=OSError)
-    assert target.detect_failure([], True) == Target.RESULT_FAILURE
-    if system() == "Linux":
-        assert fake_kill.call_count == 1
-        assert fake_ffp.return_value.wait.call_count == 1
-    else:
-        assert fake_kill.call_count == 0
-        assert fake_ffp.return_value.wait.call_count == 0
-    assert fake_ffp.return_value.close.call_count == 1
-    fake_ffp.reset_mock()
-    # test timeout ignored
-    fake_ffp.return_value.is_healthy.return_value = True
-    fake_ffp.return_value.is_running.return_value = True
-    fake_ffp.return_value.reason = None
-    assert target.detect_failure(["timeout"], True) == Target.RESULT_IGNORED
-    assert fake_ffp.return_value.close.call_count == 1
+    assert target.detect_failure([]) == Target.RESULT_NONE
+    assert fake_ffp.return_value.close.call_count == 0
     fake_ffp.reset_mock()
     # test worker
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_WORKER
-    assert target.detect_failure([], False) == Target.RESULT_FAILURE
-    assert fake_ffp.return_value.close.call_count == 1
+    assert target.detect_failure([]) == Target.RESULT_FAILURE
+    assert fake_ffp.return_value.close.call_count == 0
     fake_ffp.reset_mock()
     # test memory ignored
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_WORKER
     fake_ffp.return_value.available_logs.return_value = " ffp_worker_memory_usage "
-    assert target.detect_failure(["memory"], False) == Target.RESULT_IGNORED
-    assert fake_ffp.return_value.close.call_count == 1
+    assert target.detect_failure(["memory"]) == Target.RESULT_IGNORED
+    assert fake_ffp.return_value.close.call_count == 0
     fake_ffp.reset_mock()
     # test log-limit ignored
     fake_ffp.return_value.is_healthy.return_value = False
     fake_ffp.return_value.is_running.return_value = False
     fake_ffp.return_value.reason = FFPuppet.RC_WORKER
     fake_ffp.return_value.available_logs.return_value = " ffp_worker_log_size "
-    assert target.detect_failure(["log-limit"], False) == Target.RESULT_IGNORED
+    assert target.detect_failure(["log-limit"]) == Target.RESULT_IGNORED
+    assert fake_ffp.return_value.close.call_count == 0
+
+def test_puppet_target_04(mocker, tmp_path):
+    """test PuppetTarget.handle_hang()"""
+    fake_system = mocker.patch("grizzly.target.puppet_target.system", autospec=True)
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    target = PuppetTarget(str(fake_file), None, 300, 25, 5000)
+    # test skipping unsupported OSs
+    fake_system.return_value = "Window"
+    target.handle_hang()
+    assert fake_ffp.return_value.is_healthy.call_count == 0
+    assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
+    # test skipping closing target if it is in a bad state
+    fake_system.return_value = "Linux"
+    fake_ffp.return_value.is_healthy.return_value = False
+    target.handle_hang()
+    assert fake_ffp.return_value.close.call_count == 0
+    fake_ffp.reset_mock()
+    # test timeout
+    fake_ffp.return_value.is_healthy.return_value = True
+    fake_ffp.return_value.cpu_usage.return_value = ((1234, 10), (1236, 75), (1238, 60))
+    # raise OSError for code coverage
+    fake_kill = mocker.patch(
+        "grizzly.target.puppet_target.kill",
+        autospec=True,
+        side_effect=OSError)
+    target.handle_hang()
+    assert fake_kill.call_count == 1
+    assert fake_ffp.return_value.wait.call_count == 1
+    assert fake_ffp.return_value.close.call_count == 1
+    fake_ffp.reset_mock()
+    fake_kill.reset_mock()
+    # test ignore idle timeout (close don't abort)
+    fake_ffp.return_value.is_healthy.return_value = True
+    fake_ffp.return_value.cpu_usage.return_value = ((1234, 10),)
+    target.handle_hang(ignore_idle=True)
+    assert fake_kill.call_count == 0
     assert fake_ffp.return_value.close.call_count == 1
 
 @mark.skipif(system() == "Windows", reason="Unsupported on Windows")
-def test_puppet_target_04(mocker, tmp_path):
+def test_puppet_target_05(mocker, tmp_path):
     """test PuppetTarget.dump_coverage()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_proc = mocker.patch("grizzly.target.puppet_target.Process", autospec=True)
@@ -259,8 +273,8 @@ def test_puppet_target_04(mocker, tmp_path):
     fake_kill.reset_mock()
     fake_proc_iter.reset_mock()
 
-def test_puppet_target_05(mocker, tmp_path):
-    """test is_idle()"""
+def test_puppet_target_06(mocker, tmp_path):
+    """test PuppetTarget.is_idle()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
     fake_file = tmp_path / "fake"
@@ -270,7 +284,7 @@ def test_puppet_target_05(mocker, tmp_path):
         assert not target.is_idle(25)
         assert target.is_idle(50)
 
-def test_puppet_target_06(mocker, tmp_path):
+def test_puppet_target_07(mocker, tmp_path):
     """test PuppetTarget.monitor"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
@@ -292,7 +306,7 @@ def test_puppet_target_06(mocker, tmp_path):
         target.monitor.clone_log("somelog")
         assert fake_ffp.return_value.clone_log.call_count == 1
 
-def test_puppet_target_07(mocker, tmp_path):
+def test_puppet_target_08(mocker, tmp_path):
     """test PuppetTarget.prefs"""
     mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"

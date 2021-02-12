@@ -95,15 +95,19 @@ class Target(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def create_report(self):
+    def create_report(self, is_hang=False):
         pass
 
     @abstractmethod
-    def detect_failure(self, ignored, was_timeout):
+    def detect_failure(self, ignored):
         pass
 
     def dump_coverage(self):  # pylint: disable=no-self-use
         LOG.warning("dump_coverage() is not supported!")
+
+    @abstractmethod
+    def handle_hang(self, ignore_idle=True):
+        pass
 
     # TODO: move to monitor?
     def is_idle(self, threshold):  # pylint: disable=no-self-use,unused-argument
