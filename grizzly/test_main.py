@@ -3,12 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly main"""
+from pytest import mark
+
 from sapphire import Sapphire
-from .common import Adapter, Report
+from .common import Adapter
 from .main import main
 from .session import Session
 from .target import Target, TargetLaunchError
-
 
 class FakeArgs:
     def __init__(self):
@@ -31,7 +32,8 @@ class FakeArgs:
         self.rr = False
         self.relaunch = 1000
         self.s3_fuzzmanager = False
-        self.timeout = 60
+        self.test_duration = None
+        self.timeout = None
         self.tool = None
         self.valgrind = False
         self.verbose = False
@@ -56,10 +58,9 @@ def test_main_01(mocker):
     args.prefs = "fake"
     args.valgrind = True
     args.xvfb = True
-    # successful run (with coverage, short timeout)
+    # successful run (with coverage)
     fake_adapter.RELAUNCH = 10
     args.coverage = True
-    args.timeout = 1
     assert main(args) == Session.EXIT_SUCCESS
     assert fake_session.mock_calls[0][-1]["coverage"]
     assert fake_session.mock_calls[0][-1]["relaunch"] == 10
@@ -67,7 +68,6 @@ def test_main_01(mocker):
     # successful run (without coverage)
     fake_adapter.RELAUNCH = 1
     args.coverage = False
-    args.timeout = 60
     assert main(args) == Session.EXIT_SUCCESS
     assert not fake_session.mock_calls[0][-1]["coverage"]
     assert fake_session.mock_calls[0][-1]["relaunch"] == 1
@@ -103,7 +103,7 @@ def test_main_02(mocker):
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     fake_session.EXIT_ABORT = Session.EXIT_ABORT
-    fake_session.EXIT_ARGS = Session.EXIT_ARGS
+    fake_session.EXIT_ARGS = fake_session.EXIT_ARGS = Session.EXIT_ARGS
     fake_session.EXIT_LAUNCH_FAILURE = Session.EXIT_LAUNCH_FAILURE
     fake_session.return_value.server = mocker.Mock(spec=Sapphire)
     args = FakeArgs()
@@ -114,3 +114,36 @@ def test_main_02(mocker):
     # test TargetLaunchError
     fake_session.return_value.run.side_effect = TargetLaunchError("test", None)
     assert main(args) == Session.EXIT_LAUNCH_FAILURE
+
+@mark.parametrize(
+    "arg_duration, arg_timeout, result",
+    [
+        # use default test duration and timeout values
+        (None, None, Session.EXIT_SUCCESS),
+        # set test duration
+        (10, None, Session.EXIT_SUCCESS),
+        # set both test duration and timeout to the same value
+        (10, 10, Session.EXIT_SUCCESS),
+        # set timeout greater than test duration
+        (10, 11, Session.EXIT_SUCCESS),
+        # set test duration greater than timeout
+        (11, 10, Session.EXIT_ARGS),
+    ]
+)
+def test_main_03(mocker, arg_duration, arg_timeout, result):
+    """test main() duration and timeout"""
+    fake_adapter = mocker.Mock(spec=Adapter)
+    fake_adapter.NAME = "fake"
+    fake_adapter.RELAUNCH = 1
+    fake_adapter.TEST_DURATION = 10
+    mocker.patch("grizzly.main.get_adapter", return_value=lambda: fake_adapter)
+    mocker.patch.dict("grizzly.target.TARGETS", values={"fake-target": mocker.Mock(spec=Target)})
+    fake_session = mocker.patch("grizzly.main.Session", autospec=True)
+    fake_session.return_value.server = mocker.Mock(spec=Sapphire)
+    fake_session.EXIT_ARGS = Session.EXIT_ARGS
+    fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
+    args = FakeArgs()
+    args.adapter = "fake"
+    args.test_duration = arg_duration
+    args.timeout = arg_timeout
+    assert main(args) == result

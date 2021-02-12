@@ -61,14 +61,23 @@ def main(args):
         LOG.debug("initializing Adapter %r", args.adapter)
         adapter = get_adapter(args.adapter)()
 
-        if args.timeout <= adapter.TEST_DURATION:
-            LOG.info("Using minimum adapter timeout: %ds", adapter.TEST_DURATION)
-            if adapter.HARNESS_FILE:
-                LOG.info("To avoid Target relaunches due to tests failing to close"
-                         " themselves use a timeout > 'adapter.TEST_DURATION'")
-            timeout = adapter.TEST_DURATION
+        # test duration and timeout sanity checking
+        if args.test_duration:
+            test_duration = args.test_duration
         else:
+            assert adapter.TEST_DURATION >= 1
+            test_duration = adapter.TEST_DURATION
+        if args.timeout:
             timeout = args.timeout
+        else:
+            timeout = test_duration + 30
+        LOG.info("Using test duration: %ds, timeout: %ds", test_duration, timeout)
+        if timeout < test_duration:
+            LOG.error("timeout must be at least test duration if not greater")
+            return Session.EXIT_ARGS
+        if adapter.HARNESS_FILE and test_duration == timeout:
+            LOG.info("To avoid relaunches due to tests failing to close"
+                     " themselves use a timeout greater than test duration")
 
         if adapter.RELAUNCH > 0:
             LOG.info("Relaunch (%d) set in Adapter", adapter.RELAUNCH)
@@ -132,6 +141,7 @@ def main(args):
                 display_mode = Session.DISPLAY_NORMAL
             session.run(
                 args.ignore,
+                test_duration,
                 iteration_limit=args.limit,
                 display_mode=display_mode)
 
