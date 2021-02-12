@@ -36,7 +36,7 @@ class Status:
         "iteration", "log_size", "pid", "start_time", "test_name", "timestamp")
 
     def __init__(self, data_file, enable_profiling=False, start_time=None):
-        assert ".json" in data_file
+        assert data_file.endswith(".json")
         assert start_time is None or isinstance(start_time, float)
         self._lock = InterProcessLock("%s.lock" % (data_file,))
         self._enable_profiling = enable_profiling
@@ -63,11 +63,11 @@ class Status:
         """
         if self.data_file is None:
             return
-        with self._lock:
-            try:
+        try:
+            with self._lock:
                 unlink(self.data_file)
-            except OSError:  # pragma: no cover
-                LOG.warning("Failed to delete %r", self.data_file)
+        except OSError:  # pragma: no cover
+            LOG.warning("Failed to delete %r", self.data_file)
         try:
             unlink("%s.lock" % (self.data_file,))
         except OSError:  # pragma: no cover
