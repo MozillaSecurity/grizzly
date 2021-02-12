@@ -53,11 +53,13 @@ LogMap = namedtuple("LogMap", "aux stderr stdout")
 class Report:
     DEFAULT_MAJOR = "NO_STACK"
     DEFAULT_MINOR = "0"
+    HANG_STACK_HEIGHT = 10
     MAX_LOG_SIZE = 1048576  # 1MB
 
-    __slots__ = ("_crash_info", "_logs", "_signature", "_target_binary", "path", "prefix", "stack")
+    __slots__ = ("_crash_info", "_logs", "_signature",  "_target_binary",
+                 "is_hang", "path", "prefix", "stack")
 
-    def __init__(self, log_path, target_binary, size_limit=MAX_LOG_SIZE):
+    def __init__(self, log_path, target_binary, is_hang=False, size_limit=MAX_LOG_SIZE):
         assert isinstance(log_path, str)
         assert isinstance(target_binary, str)
         self._crash_info = None
@@ -65,6 +67,7 @@ class Report:
         assert self._logs is not None
         self._signature = None
         self._target_binary = target_binary
+        self.is_hang = is_hang
         self.path = log_path
         # tail files in log_path if needed
         if size_limit < 1:
@@ -79,6 +82,9 @@ class Report:
             with open(log_file, "rb") as log_fp:
                 stack = Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
             if stack.frames:
+                # limit the hash calculations to the first n frames if a hang
+                # was detected to attempt to help local bucketing
+                stack.height_limit = self.HANG_STACK_HEIGHT if is_hang else None
                 self.prefix = "%s_%s" % (stack.minor[:8], strftime("%Y-%m-%d_%H-%M-%S"))
                 self.stack = stack
                 break
@@ -390,7 +396,7 @@ class Report:
             end = in_fp.tell()
             if end <= size_limit:
                 return
-            dump_pos = max((end - size_limit), 0)
+            dump_pos = end - size_limit
             in_fp.seek(dump_pos)
             out_fd, out_file = mkstemp(prefix="taillog_", dir=grz_tmp())
             with open(out_fd, "wb") as out_fp:
@@ -616,6 +622,9 @@ class FuzzManagerReporter(Reporter):
             metadata_file = cache_sig_file.replace(".signature", ".metadata")
             with open(metadata_file, "w") as meta_fp:
                 dump(cache_metadata, meta_fp)
+
+        if report.is_hang:
+            self.add_extra_metadata("is_hang", True)
 
         # dump test cases and the contained files to working directory
         test_case_meta = []
