@@ -406,7 +406,7 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path):
         env_vars={"TEST": "1"},
         input_fname="input")
     reporter = FuzzManagerReporter("fake_bin")
-    reporter.submit([fake_test], Report(str(log_path), "fake_bin"))
+    reporter.submit([fake_test], Report(str(log_path), "fake_bin", is_hang=True))
     assert not log_path.is_dir()
     assert fake_test.dump.call_count == 1
     assert fake_collector.return_value.submit.call_count == 1
