@@ -217,6 +217,30 @@ def test_stack_13():
     assert stack.minor != stack.major
     assert stack.frames[0].mode == StackFrame.MODE_RUST
 
+def test_stack_14():
+    """test Stack.height_limit"""
+    frames = list()
+    for num in range(10):
+        frames.append(StackFrame(function=str(num), location="b", offset="c", stack_line=str(num)))
+    stack = Stack(frames=frames, major_depth=3)
+    assert stack.height_limit is None
+    no_lim_minor = stack.minor
+    assert no_lim_minor is not None
+    no_lim_major = stack.major
+    assert no_lim_major is not None
+    # set height limit and check hash recalculations
+    stack.height_limit = 5
+    assert stack.height_limit == 5
+    assert stack.minor is not None
+    assert no_lim_minor != stack.minor
+    assert stack.major is not None
+    assert no_lim_major != stack.major
+    # remove height limit and check hash recalculations
+    stack.height_limit = None
+    assert stack.height_limit is None
+    assert no_lim_minor == stack.minor
+    assert no_lim_major == stack.major
+
 def test_stackframe_01():
     """test creating an empty StackFrame"""
     stack = StackFrame()
