@@ -55,7 +55,7 @@ def test_session_01(tmp_path, mocker):
     with IOManager() as iomgr:
         fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
         with Session(adapter, iomgr, None, fake_serv, fake_target, relaunch=10) as session:
-            session.run([])
+            session.run([], 10)
             assert session.status.iteration == 5
             assert session.status.test_name == "file.bin"
 
@@ -82,7 +82,7 @@ def test_session_02(tmp_path, mocker):
         fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
         # enable profiling for test coverage
         with Session(adapter, iomgr, None, fake_serv, fake_target, enable_profiling=True, relaunch=10) as session:
-            session.run([], iteration_limit=10)
+            session.run([], 10, iteration_limit=10)
             assert session.status.iteration == 10
             assert session.status.test_name is None
 
@@ -108,7 +108,7 @@ def test_session_03(tmp_path, mocker):
     with IOManager() as iomgr:
         fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
         with Session(adapter, iomgr, None, fake_serv, fake_target, coverage=True, relaunch=2) as session:
-            session.run([], iteration_limit=2)
+            session.run([], 10, iteration_limit=2)
             assert session.status.iteration == 2
     assert fake_target.dump_coverage.call_count == 2
 
@@ -130,7 +130,7 @@ def test_session_04(tmp_path, mocker):
         fake_serv.serve_path.return_value = (SERVED_NONE, [])
         with Session(adapter, iomgr, None, fake_serv, fake_target, relaunch=10) as session:
             with raises(SessionError, match="Test case is missing landing page"):
-                session.run([], iteration_limit=10)
+                session.run([], 10, iteration_limit=10)
 
 def test_session_05(tmp_path, mocker):
     """test basic Session functions"""
@@ -139,7 +139,6 @@ def test_session_05(tmp_path, mocker):
     fake_adapter.IGNORE_UNSERVED = True
     fake_adapter.TEST_DURATION = 10
     fake_testcase = mocker.Mock(spec=TestCase, landing_page="page.htm", optional=[])
-    fake_iomgr = mocker.Mock(spec=IOManager)
     fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
     fake_iomgr.create_testcase.return_value = fake_testcase
     fake_iomgr.tests = mocker.Mock(spec=deque)
@@ -147,9 +146,8 @@ def test_session_05(tmp_path, mocker):
     fake_serv.serve_path.return_value = (SERVED_TIMEOUT, [fake_testcase.landing_page])
     fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
     fake_target.monitor.launches = 1
-    fake_target.monitor.is_healthy.return_value = False
     with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target) as session:
-        session.run([], iteration_limit=1)
+        session.run([], 10, iteration_limit=1)
     assert fake_adapter.setup.call_count == 0
     assert fake_adapter.pre_launch.call_count == 1
     assert fake_adapter.generate.call_count == 1
@@ -160,8 +158,9 @@ def test_session_05(tmp_path, mocker):
     assert fake_testcase.purge_optional.call_count == 1
     assert fake_serv.serve_path.call_count == 1
     assert fake_target.launch.call_count == 1
-    assert fake_target.detect_failure.call_count == 1
-    assert fake_target.monitor.is_healthy.call_count == 1
+    assert fake_target.detect_failure.call_count == 0
+    assert fake_target.handle_hang.call_count == 1
+    assert fake_target.monitor.is_healthy.call_count == 0
 
 def test_session_06(tmp_path, mocker):
     """test Session.generate_testcase()"""
@@ -204,7 +203,7 @@ def test_session_07(tmp_path, mocker):
     run_result.initial = False
     fake_runner.return_value.run.return_value = run_result
     with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
-        session.run([], iteration_limit=1)
+        session.run([], 10, iteration_limit=1)
         assert fake_runner.return_value.run.call_count == 1
         assert fake_adapter.on_served.call_count == 1
         assert fake_adapter.on_timeout.call_count == 0
@@ -224,7 +223,7 @@ def test_session_07(tmp_path, mocker):
     fake_runner.return_value.run.return_value = run_result
     with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
         with raises(SessionError, match="Please check Adapter and Target"):
-            session.run([], iteration_limit=1)
+            session.run([], 10, iteration_limit=1)
         assert fake_runner.return_value.run.call_count == 1
         assert fake_runner.return_value.launch.call_count == 1
         assert session.status.iteration == 1
@@ -240,7 +239,7 @@ def test_session_07(tmp_path, mocker):
     fake_runner.return_value.run.return_value = run_result
     with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
         with raises(SessionError, match="Please check Adapter and Target"):
-            session.run([], iteration_limit=1)
+            session.run([], 10, iteration_limit=1)
         assert fake_runner.return_value.run.call_count == 1
         assert fake_runner.return_value.launch.call_count == 1
         assert session.status.iteration == 1
@@ -266,7 +265,7 @@ def test_session_08(tmp_path, mocker):
     fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
     fake_target.monitor.launches = 1
     with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target) as session:
-        session.run([], iteration_limit=1)
+        session.run([], 10, iteration_limit=1)
         assert fake_runner.return_value.run.call_count == 1
         assert fake_adapter.on_served.call_count == 1
         assert fake_adapter.on_timeout.call_count == 0
@@ -293,7 +292,41 @@ def test_session_09(tmp_path, mocker):
     fake_target.monitor.launches = 1
     with Session(fake_adapter, fake_iomgr, mocker.Mock(), fake_serv, fake_target) as session:
         with raises(TargetLaunchError, match="test"):
-            session.run([], iteration_limit=1)
+            session.run([], 10, iteration_limit=1)
+        assert session.status.iteration == 1
+        assert session.status.results == 1
+        assert session.status.ignored == 0
+
+def test_session_10(tmp_path, mocker):
+    """test Session.run() report hang"""
+    Status.PATH = str(tmp_path)
+    result = RunResult([], 60.0, status=RunResult.FAILED, timeout=True)
+    result.attempted = True
+    fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
+    fake_runner.return_value.run.return_value = result
+    mocker.patch("grizzly.session.TestFile", autospec=True)
+    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
+    fake_adapter.TEST_DURATION = 10
+    fake_iomgr = mocker.Mock(
+        spec=IOManager,
+        harness=None,
+        server_map=ServerMap(),
+        tests=mocker.Mock(spec=deque))
+    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
+    fake_report = mocker.Mock(spec=Report, major="major123", minor="minor456")
+    fake_reporter = mocker.Mock(spec=Reporter)
+    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
+    fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
+    fake_target.monitor.launches = 1
+    fake_target.create_report.return_value = fake_report
+    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
+        session.run([], 10, iteration_limit=1)
+        assert fake_runner.return_value.run.call_count == 1
+        assert fake_adapter.on_served.call_count == 0
+        assert fake_adapter.on_timeout.call_count == 1
+        assert fake_iomgr.purge_tests.call_count == 1
+        assert fake_target.create_report.call_count == 1
+        assert fake_reporter.submit.call_count == 1
         assert session.status.iteration == 1
         assert session.status.results == 1
         assert session.status.ignored == 0

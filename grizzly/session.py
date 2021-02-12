@@ -66,7 +66,7 @@ class Session:
                  "status", "target")
 
     def __init__(self, adapter, iomanager, reporter, server, target,
-                 coverage=False, enable_profiling=True, relaunch=1):
+                 coverage=False, enable_profiling=False, relaunch=1):
         self._relaunch = relaunch
         self.adapter = adapter
         self.coverage = coverage
@@ -108,7 +108,8 @@ class Session:
             test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
         return test
 
-    def run(self, ignore, iteration_limit=0, display_mode=DISPLAY_NORMAL):
+    def run(self, ignore, test_duration, iteration_limit=0, display_mode=DISPLAY_NORMAL):
+        assert test_duration > 0
         assert iteration_limit >= 0
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         # limit relaunch to max iterations if needed
@@ -131,13 +132,11 @@ class Session:
                     location = runner.location("/grz_current_test", self.server.port)
                 else:
                     # harness is in use, open it and it will open the test case.
-                    # use adapter.TEST_DURATION to allow the harness to attempt to
-                    # close test cases when server timeout is greater.
                     location = runner.location(
                         "/grz_harness",
                         self.server.port,
                         close_after=relaunch,
-                        timeout=self.adapter.TEST_DURATION)
+                        test_duration=test_duration)
                 try:
                     with self.status.measure("launch"):
                         runner.launch(location, max_retries=3, retry_delay=0)
@@ -167,6 +166,7 @@ class Session:
             current_test.duration = result.duration
             # adapter callbacks
             if result.timeout:
+                current_test.hang = True
                 LOG.debug("calling self.adapter.on_timeout()")
                 self.adapter.on_timeout(current_test, result.served)
             else:
@@ -195,8 +195,11 @@ class Session:
             # process results
             if result.status == RunResult.FAILED:
                 LOG.debug("result detected")
-                report = self.target.create_report()
-                short_sig = report.crash_info.createShortSignature()
+                report = self.target.create_report(is_hang=result.timeout)
+                if result.timeout:
+                    short_sig = "Potential hang detected"
+                else:
+                    short_sig = report.crash_info.createShortSignature()
                 LOG.info("Result: %s (%s:%s)",
                     short_sig,
                     report.major[:8],
