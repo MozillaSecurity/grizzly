@@ -74,7 +74,7 @@ let main = () => {
     return
   }
 
-  // set the test case timeout once the test loading ends
+  // set the test case time limit
   if (time_limit > 0) {
     grzDump(`Using test case time limit of ${time_limit}`)
     sub.addEventListener('abort', setTestTimeout)
@@ -90,7 +90,7 @@ window.addEventListener('load', () => {
   if (args) {
     for (let kv of args.split('&')) {
       let [k, v] = kv.split('=')
-      if (k === 'timeout') {
+      if (k === 'time_limit') {
         time_limit = Number(v)
       } else if (k === 'close_after') {
         close_after = Number(v)

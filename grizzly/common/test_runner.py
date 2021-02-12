@@ -6,7 +6,7 @@
 from itertools import count
 from os.path import join as pathjoin
 
-from pytest import raises
+from pytest import mark, raises
 
 from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT, ServerMap
 
@@ -39,6 +39,7 @@ def test_runner_01(mocker, tmp_path):
     assert not result.timeout
     assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 0
+    assert target.handle_hang.call_count == 0
     assert testcase.dump.call_count == 1
     # some files served
     server.serve_path.return_value = (SERVED_REQUEST, serv_files)
@@ -51,6 +52,7 @@ def test_runner_01(mocker, tmp_path):
     assert not result.timeout
     assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 1
+    assert target.handle_hang.call_count == 0
     # existing test path
     testcase.reset_mock()
     tc_path = (tmp_path / "tc")
@@ -129,79 +131,89 @@ def test_runner_02(mocker):
     assert not smap.dynamic
     assert smap.redirect.get("grz_next_test").target == "grz_empty"
 
-def test_runner_03(mocker):
+@mark.parametrize(
+    "srv_result, served",
+    [
+        # no files served
+        (SERVED_NONE, []),
+        # landing page not served
+        (SERVED_REQUEST, ["harness"]),
+    ]
+)
+def test_runner_03(mocker, srv_result, served):
     """test Runner() errors"""
     server = mocker.Mock(spec=Sapphire)
+    server.serve_path.return_value = (srv_result, served)
     target = mocker.Mock(spec=Target)
+    target.detect_failure.return_value = target.RESULT_NONE
     testcase = mocker.Mock(spec=TestCase, landing_page="x", optional=[])
     runner = Runner(server, target)
-    # no files served
-    server.serve_path.return_value = (SERVED_NONE, [])
-    target.detect_failure.return_value = target.RESULT_NONE
     result = runner.run([], ServerMap(), testcase)
     assert result.status is None
     assert not result.attempted
     assert result.initial
-    assert not result.served
+    assert set(result.served) == set(served)
     assert not result.timeout
     assert target.close.call_count == 1
-    target.reset_mock()
-    # landing page not served
-    server.serve_path.return_value = (SERVED_REQUEST, ["harness"])
-    result = runner.run([], ServerMap(), testcase)
-    assert result.status is None
-    assert not result.attempted
-    assert result.initial
-    assert result.served
-    assert target.close.call_count == 1
 
-def test_runner_04(mocker):
+@mark.parametrize(
+    "ignore, status, idle, detect_failure",
+    [
+        # detect a hang
+        (["memory"], RunResult.FAILED, False, 1),
+        # ignore a hang
+        (["timeout"], RunResult.IGNORED, False, 0),
+        # ignore idle hang
+        ([], RunResult.IGNORED, True, 0),
+    ]
+)
+def test_runner_04(mocker, ignore, status, idle, detect_failure):
     """test reporting timeout"""
     server = mocker.Mock(spec=Sapphire)
     target = mocker.Mock(spec=Target)
+    testcase = mocker.Mock(spec=TestCase, landing_page="a.bin", optional=[])
     serv_files = ["a.bin", "/another/file.bin"]
     server.serve_path.return_value = (SERVED_TIMEOUT, serv_files)
-    runner = Runner(server, target)
     target.detect_failure.return_value = target.RESULT_FAILURE
-    result = runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page="x", optional=[]))
-    assert result.status == RunResult.FAILED
+    target.handle_hang.return_value = idle
+    target.monitor.is_healthy.return_value = False
+    runner = Runner(server, target)
+    result = runner.run(ignore, ServerMap(), testcase)
+    assert result.status == status
     assert result.served == serv_files
     assert result.timeout
+    assert target.detect_failure.call_count == detect_failure
+    assert target.handle_hang.call_count == 1
 
-def test_runner_05(mocker):
+@mark.parametrize(
+    "served, attempted, target_result, status",
+    [
+        # FAILURE
+        (["a.bin"], True, Target.RESULT_FAILURE, RunResult.FAILED),
+        # IGNORED
+        (["a.bin"], True, Target.RESULT_IGNORED, RunResult.IGNORED),
+        # failure before serving landing page
+        (["harness"], False, Target.RESULT_FAILURE, RunResult.FAILED),
+    ]
+)
+def test_runner_05(mocker, served, attempted, target_result, status):
     """test reporting failures"""
     server = mocker.Mock(spec=Sapphire)
+    server.serve_path.return_value = (SERVED_REQUEST, served)
     target = mocker.Mock(spec=Target, launch_timeout=10)
+    target.RESULT_FAILURE = Target.RESULT_FAILURE
+    target.RESULT_IGNORED = Target.RESULT_IGNORED
+    target.detect_failure.return_value = target_result
     target.monitor.is_healthy.return_value = False
-    serv_files = ["file.bin"]
-    server.serve_path.return_value = (SERVED_REQUEST, serv_files)
-    testcase = mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[])
+    testcase = mocker.Mock(spec=TestCase, landing_page="a.bin", optional=[])
     runner = Runner(server, target)
-    # test FAILURE
-    target.detect_failure.return_value = target.RESULT_FAILURE
     runner.launch("http://a/")
     result = runner.run([], ServerMap(), testcase)
-    assert result.attempted
-    assert result.status == RunResult.FAILED
-    assert result.served == serv_files
+    assert result.attempted == attempted
+    assert result.status == status
     assert not result.timeout
-    # test IGNORED
-    target.detect_failure.return_value = target.RESULT_IGNORED
-    runner.launch("http://a/")
-    result = runner.run([], ServerMap(), testcase)
-    assert result.attempted
-    assert result.status == RunResult.IGNORED
-    assert result.served == serv_files
-    assert not result.timeout
-    # failure before serving landing page
-    server.serve_path.return_value = (SERVED_REQUEST, ["harness"])
-    target.detect_failure.return_value = target.RESULT_FAILURE
-    runner.launch("http://a/")
-    result = runner.run([], ServerMap(), testcase)
-    assert not result.attempted
-    assert result.status == RunResult.FAILED
-    assert result.served
-    assert not result.timeout
+    assert target.handle_hang.call_count == 0
+    assert target.close.call_count == 1
 
 def test_runner_06(mocker):
     """test Runner() with idle checking"""
@@ -212,7 +224,10 @@ def test_runner_06(mocker):
     server.serve_path.return_value = (SERVED_REQUEST, serv_files)
     runner = Runner(server, target, idle_threshold=0.01, idle_delay=0.01, relaunch=10)
     assert runner._idle is not None
-    result = runner.run([], ServerMap(), mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[]))
+    result = runner.run(
+        [],
+        ServerMap(),
+        mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[]))
     assert result.status is None
     assert result.attempted
     assert target.close.call_count == 0
@@ -250,29 +265,29 @@ def test_runner_08():
     assert result == "http://127.0.0.1:34567/a.html"
     result = Runner.location("a.html", 34567, close_after=10)
     assert result == "http://127.0.0.1:34567/a.html?close_after=10"
-    result = Runner.location("a.html", 9999, timeout=60)
-    assert result == "http://127.0.0.1:9999/a.html?timeout=60000"
-    result = Runner.location("a.html", 9999, close_after=10, timeout=60)
-    assert result == "http://127.0.0.1:9999/a.html?close_after=10&timeout=60000"
+    result = Runner.location("a.html", 9999, test_duration=60)
+    assert result == "http://127.0.0.1:9999/a.html?time_limit=60000"
+    result = Runner.location("a.html", 9999, close_after=10, test_duration=60)
+    assert result == "http://127.0.0.1:9999/a.html?close_after=10&time_limit=60000"
 
 def test_runner_09(mocker):
     """test Runner.launch()"""
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     target = mocker.Mock(spec=Target, launch_timeout=30)
-
     runner = Runner(server, target)
+    # successful launch
     runner._tests_run = 1
     runner.launch("http://a/")
     assert runner._tests_run == 0
     assert target.launch.call_count == 1
     target.reset_mock()
-
+    # target launch error
     target.launch.side_effect = TargetLaunchError("test", mocker.Mock(spec=Report))
     with raises(TargetLaunchError, match="test"):
         runner.launch("http://a/")
     assert target.launch.call_count == 3
     target.reset_mock()
-
+    # target launch timeout
     target.launch.side_effect = TargetLaunchTimeout
     with raises(TargetLaunchTimeout):
         runner.launch("http://a/", max_retries=3)

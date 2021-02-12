@@ -143,14 +143,14 @@ class Runner:
         self._tests_run = 0
 
     @staticmethod
-    def location(srv_path, srv_port, close_after=None, timeout=None):
+    def location(srv_path, srv_port, close_after=None, test_duration=None):
         """Build a valid URL to pass to a browser.
 
         Args:
             srv_path (str): Path segment of the URL
             srv_port (int): Server listening port
             close_after (int): Harness argument.
-            timeout (int): Harness argument.
+            test_duration (int): Harness argument.
 
         Returns:
             str: A valid URL.
@@ -161,9 +161,9 @@ class Runner:
         if close_after is not None:
             assert close_after >= 0
             args.append("close_after=%d" % (close_after,))
-        if timeout is not None:
-            assert timeout >= 0
-            args.append("timeout=%d" % (timeout * 1000,))
+        if test_duration is not None:
+            assert test_duration >= 0
+            args.append("time_limit=%d" % (test_duration * 1000,))
         if args:
             return "?".join([location, "&".join(args)])
         return location
@@ -225,6 +225,10 @@ class Runner:
         # add all include files that were served
         for url, resource in server_map.include.items():
             testcase.add_batch(resource.target, result.served, prefix=url)
+        if result.timeout:
+            LOG.debug("timeout detected")
+            if self._target.handle_hang(ignore_idle=True) or "timeout" in ignore:
+                result.status = RunResult.IGNORED
         if result.attempted:
             self._tests_run += 1
             if coverage and not result.timeout:
@@ -232,7 +236,7 @@ class Runner:
                 # to help catch any coverage related issues.
                 self._target.dump_coverage()
             # relaunch check
-            if self._tests_run >= self._relaunch:
+            if self._tests_run >= self._relaunch and not result.timeout:
                 assert self._tests_run == self._relaunch
                 server_map.dynamic.pop("grz_empty", None)
                 LOG.debug("relaunch/shutdown limit hit")
@@ -261,11 +265,12 @@ class Runner:
             LOG.debug("landing page %r not served!", testcase.landing_page)
             self._target.close()
         # detect failure
-        failure_detected = self._target.detect_failure(ignore, result.timeout)
-        if failure_detected == self._target.RESULT_FAILURE:
-            result.status = RunResult.FAILED
-        elif failure_detected == self._target.RESULT_IGNORED:
-            result.status = RunResult.IGNORED
+        if result.status is None:
+            failure_detected = self._target.detect_failure(ignore)
+            if failure_detected == self._target.RESULT_FAILURE:
+                result.status = RunResult.FAILED
+            elif failure_detected == self._target.RESULT_IGNORED:
+                result.status = RunResult.IGNORED
         return result
 
     def _keep_waiting(self):
