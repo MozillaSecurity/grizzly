@@ -8,7 +8,7 @@ unit tests for grizzly.replay.main
 """
 from shutil import rmtree
 
-from pytest import raises
+from pytest import mark, raises
 
 from ..common import Report, TestCase, TestCaseLoadFailure
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
@@ -106,7 +106,8 @@ def test_main_01(mocker, tmp_path):
         rr=False,
         sig=str(tmp_path / "sig.json"),
         test_index=None,
-        timeout=10,
+        test_duration=10,
+        timeout=None,
         valgrind=False)
     assert ReplayManager.main(args) == Session.EXIT_SUCCESS
     assert target.reverse.call_count == 1
@@ -117,9 +118,9 @@ def test_main_01(mocker, tmp_path):
     assert target.close.call_count == 4
     assert target.cleanup.call_count == 1
     assert log_path.is_dir()
-    assert any(log_path.glob('**/log_asan_blah.txt'))
-    assert any(log_path.glob('**/log_stderr.txt'))
-    assert any(log_path.glob('**/log_stdout.txt'))
+    assert any(log_path.glob("reports/*/log_asan_blah.txt"))
+    assert any(log_path.glob("reports/*/log_stderr.txt"))
+    assert any(log_path.glob("reports/*/log_stdout.txt"))
 
 def test_main_02(mocker, tmp_path):
     """test ReplayManager.main() - no repro"""
@@ -150,7 +151,8 @@ def test_main_02(mocker, tmp_path):
         rr=False,
         sig=None,
         test_index=None,
-        timeout=10,
+        test_duration=10,
+        timeout=None,
         valgrind=False)
     assert ReplayManager.main(args) == Session.EXIT_FAILURE
     assert target.detect_failure.call_count == 1
@@ -159,13 +161,14 @@ def test_main_02(mocker, tmp_path):
 
 def test_main_03(mocker):
     """test ReplayManager.main() error cases"""
+    fake_sig = mocker.patch("grizzly.replay.replay.CrashSignature", autospec=True)
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
     fake_load_target = mocker.patch("grizzly.replay.replay.load_target", autospec=True)
     mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
     fake_tc = mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
     # setup args
     args = mocker.Mock(
-        ignore=None,
+        ignore=list(),
         input="test",
         min_crashes=1,
         no_harenss=True,
@@ -173,7 +176,9 @@ def test_main_03(mocker):
         relaunch=1,
         repeat=1,
         sig=None,
-        test_index=None)
+        test_duration=10,
+        test_index=None,
+        timeout=None)
     # user abort
     fake_load_target.side_effect = KeyboardInterrupt
     # coverage
@@ -196,8 +201,21 @@ def test_main_03(mocker):
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # multiple test cases with --no-harness
-    fake_tc.load.return_value = [mocker.Mock(), mocker.Mock()]
+    fake_tc.load.return_value = [mocker.Mock(hang=False), mocker.Mock(hang=False)]
     assert ReplayManager.main(args) == Session.EXIT_ARGS
+    assert fake_load_target.call_count == 0
+    fake_load_target.reset_mock()
+    # signature required replaying hang
+    fake_tc.load.return_value = [mocker.Mock(hang=True)]
+    assert ReplayManager.main(args) == Session.EXIT_ERROR
+    assert fake_load_target.call_count == 0
+    fake_load_target.reset_mock()
+    # can't ignore timeout replaying hang
+    args.ignore = ["timeout"]
+    args.sig = "sig"
+    fake_tc.load.return_value = [mocker.Mock(hang=True)]
+    assert ReplayManager.main(args) == Session.EXIT_ERROR
+    assert fake_sig.fromFile.call_count == 1
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
 
@@ -214,7 +232,7 @@ def test_main_04(mocker, tmp_path):
     mocker.patch("grizzly.replay.replay.grz_tmp", autospec=True, return_value=str(fake_tmp))
     # setup args
     args = mocker.Mock(
-        ignore=None,
+        ignore=list(),
         input="test",
         min_crashes=1,
         no_harenss=True,
@@ -222,7 +240,9 @@ def test_main_04(mocker, tmp_path):
         relaunch=1,
         repeat=1,
         sig=None,
-        test_index=None)
+        test_duration=10,
+        test_index=None,
+        timeout=None)
     # target launch error
     fake_logs = (tmp_path / "fake_report")
     fake_logs.mkdir()
@@ -230,7 +250,7 @@ def test_main_04(mocker, tmp_path):
     mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchError("", report))
     assert ReplayManager.main(args) == Session.EXIT_LAUNCH_FAILURE
     assert not fake_logs.is_dir()
-    assert any(fake_tmp.glob("fake_report_logs"))
+    assert "fake_report_logs" in (x.name for x in fake_tmp.iterdir())
     # target launch timeout
     mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchTimeout)
     assert ReplayManager.main(args) == Session.EXIT_LAUNCH_FAILURE
@@ -252,14 +272,15 @@ def test_main_05(mocker, tmp_path):
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
-        ignore=None,
+        ignore=list(),
         min_crashes=1,
         no_harness=True,
         relaunch=1,
         repeat=1,
         sig=None,
+        test_duration=1,
         test_index=None,
-        timeout=1)
+        timeout=None)
     log_path = (tmp_path / "logs")
     args.logs = str(log_path)
     input_path = (tmp_path / "input")
@@ -292,8 +313,8 @@ def test_main_05(mocker, tmp_path):
     assert target.detect_failure.call_count == 1
     assert serve_path.call_count == 1
     assert log_path.is_dir()
-    prefs = tuple(log_path.glob('**/prefs.js'))
-    assert prefs[0].read_bytes() == b"included"
+    prefs = next(log_path.glob('**/prefs.js'))
+    assert prefs.read_bytes() == b"included"
 
     target.reset_mock()
     serve_path.reset_mock()
@@ -307,5 +328,64 @@ def test_main_05(mocker, tmp_path):
     assert target.detect_failure.call_count == 1
     assert serve_path.call_count == 1
     assert log_path.is_dir()
-    prefs = tuple(log_path.glob('**/prefs.js'))
-    assert prefs[0].read_bytes() == b"specified"
+    prefs = next(log_path.glob('**/prefs.js'))
+    assert prefs.read_bytes() == b"specified"
+
+@mark.parametrize(
+    "arg_duration, arg_timeout, test_duration, result",
+    [
+        # use default test duration and timeout values (test missing duration)
+        (None, None, None, Session.EXIT_ARGS),
+        # use default test duration and timeout values
+        (None, None, 10, Session.EXIT_FAILURE),
+        # set test duration
+        (10, None, None, Session.EXIT_FAILURE),
+        # set both test duration and timeout to the same value
+        (10, 10, None, Session.EXIT_FAILURE),
+        # set timeout greater than test duration
+        (10, 11, None, Session.EXIT_FAILURE),
+        # set test duration greater than timeout
+        (11, 10, None, Session.EXIT_ARGS),
+    ]
+)
+def test_main_06(mocker, tmp_path, arg_duration, arg_timeout, test_duration, result):
+    """test ReplayManager.main() - test duration and timeout"""
+    # mock Sapphire.serve_path only
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
+    serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
+    serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
+    # setup Target
+    target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
+    target.RESULT_NONE = Target.RESULT_NONE
+    target.detect_failure.return_value = Target.RESULT_NONE
+    load_target = mocker.patch("grizzly.replay.replay.load_target")
+    load_target.return_value.return_value = target
+    # create test to load
+    test = TestCase("test.html", None, None)
+    test_file = tmp_path / "test.html"
+    test_file.write_text("test")
+    test.add_from_file(str(test_file))
+    replay_path = tmp_path / "test"
+    replay_path.mkdir()
+    test.duration = test_duration
+    test.dump(str(replay_path), include_details=True)
+    # setup args
+    (tmp_path / "prefs.js").touch()
+    args = mocker.Mock(
+        fuzzmanager=False,
+        idle_delay=0,
+        idle_threshold=0,
+        ignore=["timeout"],
+        input=str(replay_path),
+        min_crashes=2,
+        no_harness=True,
+        prefs=None,
+        relaunch=1,
+        repeat=1,
+        rr=False,
+        sig=None,
+        test_index=None,
+        test_duration=arg_duration,
+        timeout=arg_timeout,
+        valgrind=False)
+    assert ReplayManager.main(args) == result

@@ -142,14 +142,26 @@ class ReplayManager:
             for result in expected:
                 reporter.submit(tests or [], report=result.report)
 
-    def run(self, testcases, repeat=1, min_results=1, exit_early=True, idle_delay=0, idle_threshold=0):
+    def run(
+        self,
+        testcases,
+        test_duration,
+        repeat=1,
+        min_results=1,
+        exit_early=True,
+        expect_hang=False,
+        idle_delay=0,
+        idle_threshold=0
+    ):
         """Run testcase replay.
 
         Args:
             testcases (list): One or more TestCases to run.
+            test_duration (int): Maximum time in seconds a test should take to complete.
             repeat (int): Maximum number of times to run the TestCase.
             min_results (int): Minimum number of results needed before run can
                                be considered successful.
+            expect_hang (bool): Running testcases is expected to result in a hang.
             exit_early (bool): If True the minimum required number of iterations
                                are performed to either meet `min_results` or
                                determine that it is not possible to do so.
@@ -167,7 +179,9 @@ class ReplayManager:
         assert repeat > 0
         assert repeat >= min_results
         assert testcases
-        assert len(testcases) == 1 or self._harness is not None
+        assert test_duration > 0
+        assert self._harness is not None or len(testcases) == 1
+        assert not expect_hang or self._signature is not None
 
         if self.status is not None:
             LOG.debug("clearing previous status data")
@@ -210,7 +224,7 @@ class ReplayManager:
                             "/grz_harness",
                             self.server.port,
                             close_after=relaunch * test_count,
-                            timeout=self.server.timeout)
+                            test_duration=test_duration)
                     startup_error = False
                     # The environment from the initial testcase is used because
                     # a sequence of testcases is expected to be run without
@@ -263,24 +277,36 @@ class ReplayManager:
                     # TODO: use self.target.create_report here
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
-                    report = Report(log_path, self.target.binary)
+                    report = Report(
+                        log_path,
+                        self.target.binary,
+                        is_hang=run_result.timeout
+                    )
                     # check signatures
-                    short_sig = report.crash_info.createShortSignature()
+                    if run_result.timeout:
+                        short_sig = "Potential hang detected"
+                    else:
+                        short_sig = report.crash_info.createShortSignature()
+                    # set active signature
                     if (
                         not startup_error
                         and not self._any_crash
+                        and not run_result.timeout
                         and self._signature is None
                         and short_sig != "No crash detected"
                     ):
+                        assert not expect_hang
                         LOG.debug("no signature given, using %r", short_sig)
                         self._signature = report.crash_signature
+                    # bucket result
                     if short_sig == "No crash detected":
                         # TODO: verify report.major == "NO_STACK" otherwise FM failed to parse the logs
                         # TODO: change this to support hangs/timeouts, etc
                         LOG.info("Result: No crash detected")
                     elif (
                         not startup_error
-                        and (self._any_crash or self._signature.matches(report.crash_info))
+                        and (self._any_crash
+                            or (self._signature and self._signature.matches(report.crash_info)))
                     ):
                         self.status.count_result(short_sig)
                         LOG.info("Result: %s (%s:%s)",
@@ -412,10 +438,36 @@ class ReplayManager:
             LOG.error("Error: %s", str(exc))
             return Session.EXIT_ERROR
 
+        if args.test_duration:
+            test_duration = args.test_duration
+        else:
+            duration = tuple(int(x.duration * 2) for x in testcases if x.duration)
+            if not duration:
+                LOG.error("No test duration available, set manually")
+                return Session.EXIT_ARGS
+            test_duration = max(duration)
+            # set a minimum duration
+            if test_duration < 30:
+                test_duration = 30
+        timeout = args.timeout or test_duration + 30
+        LOG.info("Using test duration: %ds, timeout: %ds", test_duration, timeout)
+        if timeout < test_duration:
+            LOG.error("timeout must be at least test duration if not greater")
+            return Session.EXIT_ARGS
+
         results = None
         target = None
         tmp_prefs = None
         try:
+            # check if hangs are expected
+            expect_hang = any(x.hang for x in testcases)
+            if expect_hang:
+                if signature is None:
+                    LOG.error("Hangs require a signature to replay")
+                    return Session.EXIT_ERROR
+                if "timeout" in args.ignore:
+                    LOG.error("Cannot ignore 'timeout' when detecting hangs")
+                    return Session.EXIT_ERROR
             if args.no_harness and len(testcases) > 1:
                 LOG.error(
                     "'--no-harness' cannot be used with multiple testcases. " \
@@ -452,7 +504,7 @@ class ReplayManager:
                         break
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
-            with Sapphire(auto_close=1, timeout=args.timeout) as server:
+            with Sapphire(auto_close=1, timeout=timeout) as server:
                 target.reverse(server.port, server.port)
                 with cls(
                     args.ignore,
@@ -465,6 +517,8 @@ class ReplayManager:
                 ) as replay:
                     results = replay.run(
                         testcases,
+                        test_duration,
+                        expect_hang=expect_hang,
                         idle_delay=args.idle_delay,
                         idle_threshold=args.idle_threshold,
                         min_results=args.min_crashes,
