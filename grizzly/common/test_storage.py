@@ -36,7 +36,7 @@ def test_testcase_01(tmp_path):
         assert not tcase.contains("no_file")
         assert not any(tcase.optional)
         tcase.dump(str(tmp_path))
-        assert not any(tmp_path.glob("*"))
+        assert not any(tmp_path.iterdir())
         tcase.dump(str(tmp_path), include_details=True)
         assert (tmp_path / "test_info.json").is_file()
 
@@ -137,7 +137,7 @@ def test_testcase_06():
         assert tcase.data_size == 6
 
 def test_testcase_07(tmp_path):
-    """test TestCase.load_single() using a directory fail cases"""
+    """test TestCase.load_single() using a directory - fail cases"""
     # missing test_info.json
     with pytest.raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
         TestCase.load_single(str(tmp_path), True)
@@ -227,6 +227,28 @@ def test_testcase_09(tmp_path):
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
 
 def test_testcase_10(tmp_path):
+    """test TestCase - dump, load and compare"""
+    with TestCase("a.html", "b.html", "adpt") as org:
+        org.duration = 1.23
+        org.env_vars = {"en1": "1", "en2": "2"}
+        org.hang = True
+        org.input_fname = "infile"
+        org.add_from_data("a", "a.html")
+        org.dump(str(tmp_path), include_details=True)
+        loaded = TestCase.load_single(str(tmp_path), False)
+        try:
+            assert org.adapter_name == loaded.adapter_name
+            assert org.duration == loaded.duration
+            assert org.env_vars == loaded.env_vars
+            assert org.hang == loaded.hang
+            assert org.input_fname == loaded.input_fname
+            assert org.landing_page == loaded.landing_page
+            assert org.timestamp == loaded.timestamp
+            assert org._existing_paths == loaded._existing_paths
+        finally:
+            loaded.cleanup()
+
+def test_testcase_11(tmp_path):
     """test TestCase.load() - missing file and empty directory"""
     # missing file
     with pytest.raises(TestCaseLoadFailure, match="Invalid TestCase path"):
@@ -234,7 +256,7 @@ def test_testcase_10(tmp_path):
     # empty path
     assert not TestCase.load(str(tmp_path), True)
 
-def test_testcase_11(tmp_path):
+def test_testcase_12(tmp_path):
     """test TestCase.load() - single file"""
     tfile = (tmp_path / "testcase.html")
     tfile.touch()
@@ -244,7 +266,7 @@ def test_testcase_11(tmp_path):
     finally:
         map(lambda x: x.cleanup, testcases)
 
-def test_testcase_12(tmp_path):
+def test_testcase_13(tmp_path):
     """test TestCase.load() - single directory"""
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_from_data("test", "target.bin")
@@ -255,7 +277,7 @@ def test_testcase_12(tmp_path):
     finally:
         map(lambda x: x.cleanup, testcases)
 
-def test_testcase_13(tmp_path):
+def test_testcase_14(tmp_path):
     """test TestCase.load() - multiple directories"""
     nested = (tmp_path / "nested")
     nested.mkdir()
@@ -272,7 +294,7 @@ def test_testcase_13(tmp_path):
     # try loading testcases that are nested too deep
     assert not TestCase.load(str(tmp_path), False)
 
-def test_testcase_14(tmp_path):
+def test_testcase_15(tmp_path):
     """test TestCase.load() - archive"""
     archive = tmp_path / "testcase.zip"
     # bad archive
@@ -302,7 +324,7 @@ def test_testcase_14(tmp_path):
     finally:
         map(lambda x: x.cleanup, testcases)
 
-def test_testcase_15(tmp_path):
+def test_testcase_16(tmp_path):
     """test TestCase.load_environ()"""
     (tmp_path / "ubsan.supp").touch()
     (tmp_path / "other_file").touch()
@@ -319,7 +341,7 @@ def test_testcase_15(tmp_path):
         assert "b=2" in opts
         assert len(opts) == 3
 
-def test_testcase_16(tmp_path):
+def test_testcase_17(tmp_path):
     """test TestCase.add_batch()"""
     include = (tmp_path / "inc_path")
     include.mkdir()
@@ -355,11 +377,11 @@ def test_testcase_16(tmp_path):
         with pytest.raises(TestFileExists, match="'file.bin' exists in test"):
             tcase.add_batch(str(include), [str(inc_1)])
 
-def test_testcase_17(tmp_path):
+def test_testcase_18(tmp_path):
     """test TestCase.scan_path()"""
     # empty path
     (tmp_path / "not-test").mkdir()
-    assert not tuple(TestCase.scan_path(str(tmp_path)))
+    assert not any(TestCase.scan_path(str(tmp_path)))
     # multiple test case directories
     paths = [str(tmp_path / ("test-%d" % i)) for i in range(3)]
     with TestCase("test.htm", None, "test-adapter") as src:
@@ -372,14 +394,14 @@ def test_testcase_17(tmp_path):
     tc_paths = list(TestCase.scan_path(str(paths[0])))
     assert len(tc_paths) == 1
 
-def test_testcase_18():
+def test_testcase_19():
     """test TestCase.get_file()"""
     with TestCase("test.htm", None, "test-adapter") as src:
         src.add_from_data("test", "test.htm")
         assert src.get_file("missing") is None
         assert src.get_file("test.htm").data == b"test"
 
-def test_testcase_19():
+def test_testcase_20():
     """test TestCase.clone()"""
     with TestCase("test.htm", "redirect.htm", "test-adaptor", "input.py") as src:
         src.add_from_data("123", "test.htm")
