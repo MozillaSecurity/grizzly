@@ -246,7 +246,7 @@ def test_analysis(mocker, tmp_path, harness_last_crashes, harness_crashes,
         crashes += [False] * (11 - no_harness_crashes) + [True] * no_harness_crashes
         expected_iters += 1
 
-    def replay_run(_, **kw):
+    def replay_run(_tests, _test_duration, **kw):
         results = []
         repeat = kw["repeat"]
         assert repeat <= len(crashes)
@@ -483,7 +483,7 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(testcases, **_):
+    def replay_run(testcases, _test_duration, **_):
         for test in testcases:
             contents = test.get_file("test.html").data.decode("ascii")
             # pylint: disable=logging-not-lazy
@@ -551,7 +551,7 @@ def test_report_01(mocker, tmp_path):
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(_, **_kw):
+    def replay_run(_tests, _test_duration, **_kw):
         if replayer.run.call_count in {20, 40}:
             log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
             log_path.mkdir()
@@ -613,7 +613,7 @@ def test_report_02(mocker, tmp_path):
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(_, **_kw):
+    def replay_run(_tests, _test_duration, **_kw):
         if replayer.run.call_count in {10, 20}:
             log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
             log_path.mkdir()
@@ -673,7 +673,7 @@ def test_quality_update(mocker, tmp_path):
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(testcases, **_kw):
+    def replay_run(testcases, _test_duration, **_kw):
         for test in testcases:
             contents = test.get_file("test.html").data.decode("ascii")
             if not contents.strip():
@@ -795,7 +795,7 @@ def test_timeout_update(mocker, tmp_path, durations, interesting, static_timeout
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(_testcases, **_):
+    def replay_run(_testcases, _test_duration, **_):
         LOG.debug("interesting true")
         log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
         log_path.mkdir()

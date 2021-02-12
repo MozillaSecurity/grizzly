@@ -142,6 +142,7 @@ class ReduceManager:
         Returns:
             None
         """
+        # TODO: properly handle test duration and timeout
         if (self._static_timeout or self._any_crash or
                 getattr(self.target, "use_valgrind", False)):
             # the amount of time it can take to replay a test case can vary
@@ -244,8 +245,8 @@ class ReduceManager:
                                     "assess reliability without harness.", len(testcases))
                     testcases = [testcases[-1]]
                 results = replay.run(
-                    testcases, repeat=self.ANALYSIS_ITERATIONS, min_results=1,
-                    exit_early=False, idle_delay=self._idle_delay,
+                    testcases, self.server.timeout, repeat=self.ANALYSIS_ITERATIONS,
+                    min_results=1, exit_early=False, idle_delay=self._idle_delay,
                     idle_threshold=self._idle_threshold,
                 )
                 try:
@@ -406,6 +407,7 @@ class ReduceManager:
                                 # replayed
                                 results = replay.run(
                                     reduction,
+                                    self.server.timeout,
                                     repeat=repeat,
                                     min_results=min_results,
                                     idle_delay=self._idle_delay,
