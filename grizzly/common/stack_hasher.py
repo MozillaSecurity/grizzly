@@ -251,11 +251,12 @@ class StackFrame:
 
 
 class Stack:
-    __slots__ = ("frames", "_major", "_major_depth", "_minor")
+    __slots__ = ("frames", "_height_limit", "_major", "_major_depth", "_minor")
 
-    def __init__(self, frames=None, major_depth=MAJOR_DEPTH):
+    def __init__(self, frames=None, hight_limit=None, major_depth=MAJOR_DEPTH):
         assert frames is None or isinstance(frames, list)
         self.frames = list() if frames is None else frames
+        self._height_limit = hight_limit
         self._major_depth = major_depth
         self._major = None
         self._minor = None
@@ -267,16 +268,18 @@ class Stack:
         if not self.frames or (major and self._major_depth < 1):
             return None
         h = sha1()
-        current_depth = 0
-        for frame in self.frames:
-            current_depth += 1
-            if major and current_depth > self._major_depth:
+        if self._height_limit is None:
+            offset = 0
+        else:
+            offset = max(len(self.frames) - self._height_limit, 0)
+        for depth, frame in enumerate(self.frames[offset:], start=1):
+            if major and depth > self._major_depth:
                 break
             if frame.location is not None:
                 h.update(frame.location.encode("utf-8", errors="ignore"))
             if frame.function is not None:
                 h.update(frame.function.encode("utf-8", errors="ignore"))
-            if major and current_depth > 1:
+            if major and depth > 1:
                 # only add the offset from the top frame when calculating
                 # the major hash and skip the rest
                 continue
@@ -339,6 +342,20 @@ class Stack:
             major_depth = MAJOR_DEPTH_RUST
 
         return cls(frames=frames, major_depth=major_depth)
+
+    @property
+    def height_limit(self):
+        return self._height_limit
+
+    @height_limit.setter
+    def height_limit(self, value):
+        if value is not None:
+            assert isinstance(value, int)
+            assert value > 0
+        self._height_limit = value
+        # force recalculation of hashes
+        self._major = None
+        self._minor = None
 
     @property
     def major(self):
