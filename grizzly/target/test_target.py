@@ -13,9 +13,11 @@ class SimpleTarget(Target):
     @property
     def closed(self):
         pass
-    def create_report(self):
+    def create_report(self, is_hang=False):
         pass
-    def detect_failure(self, ignored, was_timeout):
+    def detect_failure(self, ignored):
+        pass
+    def handle_hang(self, ignore_idle=True):
         pass
     def launch(self):
         pass
@@ -25,7 +27,7 @@ class SimpleTarget(Target):
     @property
     def prefs(self):
         pass
-    def save_logs(self, *args, **kwargs):
+    def save_logs(self, *_args, **_kwargs):
         pass
 
 def test_target_01(tmp_path):

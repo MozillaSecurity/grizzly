@@ -48,18 +48,6 @@ class PuppetTarget(Target):
         if kwds:
             LOG.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
 
-    def _abort_hung_proc(self):
-        # send SIGABRT to the busiest process
-        with self._lock:
-            proc_usage = self._puppet.cpu_usage()
-        for pid, cpu in sorted(proc_usage, reverse=True, key=lambda x: x[1]):
-            LOG.debug("sending SIGABRT to pid: %r, cpu: %0.2f%%", pid, cpu)
-            try:
-                kill(pid, SIGABRT)
-            except OSError:
-                LOG.warning("Failed to send SIGABRT to pid %d", pid)
-            break
-
     def add_abort_token(self, token):
         self._puppet.add_abort_token(token)
 
@@ -85,10 +73,10 @@ class PuppetTarget(Target):
                 return False
         return True
 
-    def create_report(self):
+    def create_report(self, is_hang=False):
         logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
         self.save_logs(logs)
-        return Report(logs, self.binary)
+        return Report(logs, self.binary, is_hang=is_hang)
 
     @property
     def monitor(self):
@@ -109,41 +97,63 @@ class PuppetTarget(Target):
             self._monitor = _PuppetMonitor()
         return self._monitor
 
-    def detect_failure(self, ignored, was_timeout):
+    def detect_failure(self, ignored):
         status = self.RESULT_NONE
-        is_healthy = self._puppet.is_healthy()
-        # check if there has been a crash, hang, etc...
-        if not is_healthy or was_timeout:
+        # check if there has been a crash, hangs will appear as SIGABRT
+        if not self._puppet.is_healthy():
             if self._puppet.is_running():
-                LOG.debug("terminating browser...")
-                if was_timeout and "timeout" not in ignored and system() == "Linux":
-                    self._abort_hung_proc()
-                    # give the process a moment to start dump
-                    self._puppet.wait(timeout=1)
-            self.close()
-        # if something has happened figure out what
-        if not is_healthy:
+                LOG.debug("browser in bad state, closing...")
+                self.close()
+            # if something has happened figure out what
             if self._puppet.reason == FFPuppet.RC_CLOSED:
                 LOG.debug("target.close() was called")
             elif self._puppet.reason == FFPuppet.RC_EXITED:
                 LOG.debug("target closed itself")
-            elif (self._puppet.reason == FFPuppet.RC_WORKER
-                  and "memory" in ignored
-                  and "ffp_worker_memory_usage" in self._puppet.available_logs()):
+            elif (
+                self._puppet.reason == FFPuppet.RC_WORKER
+                and "memory" in ignored
+                and "ffp_worker_memory_usage" in self._puppet.available_logs()
+            ):
                 status = self.RESULT_IGNORED
                 LOG.debug("memory limit exceeded")
-            elif (self._puppet.reason == FFPuppet.RC_WORKER
-                  and "log-limit" in ignored
-                  and "ffp_worker_log_size" in self._puppet.available_logs()):
+            elif (
+                self._puppet.reason == FFPuppet.RC_WORKER
+                and "log-limit" in ignored
+                and "ffp_worker_log_size" in self._puppet.available_logs()
+            ):
                 status = self.RESULT_IGNORED
                 LOG.debug("log size limit exceeded")
             else:
+                # crash or hang (forced SIGABRT) has been detected
                 LOG.debug("failure detected, ffpuppet reason %r", self._puppet.reason)
                 status = self.RESULT_FAILURE
-        elif was_timeout:
-            LOG.debug("timeout detected")
-            status = self.RESULT_IGNORED if "timeout" in ignored else self.RESULT_FAILURE
         return status
+
+    def handle_hang(self, ignore_idle=True):
+        was_idle = False
+        if system() != "Linux":
+            # sending SIGABRT is only supported on Linux for now
+            # TODO: add/test on other OSs
+            self.close()
+        elif self._puppet.is_healthy():
+            with self._lock:
+                proc_usage = self._puppet.cpu_usage()
+            for pid, cpu in sorted(proc_usage, reverse=True, key=lambda x: x[1]):
+                if ignore_idle and cpu < 15:
+                    # don't send SIGABRT if process is idle
+                    LOG.debug("ignoring idle hang (%0.1f%%)", cpu)
+                    was_idle = True
+                    break
+                LOG.debug("sending SIGABRT to busy process: %r (%0.1f%%)", pid, cpu)
+                try:
+                    kill(pid, SIGABRT)
+                except OSError:
+                    LOG.warning("Failed to send SIGABRT to pid %d", pid)
+                self._puppet.wait(timeout=10)
+                break
+            # always close target when hung
+            self.close()
+        return was_idle
 
     def dump_coverage(self, timeout=15):
         assert SIGUSR1 is not None
