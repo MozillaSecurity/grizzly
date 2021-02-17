@@ -336,8 +336,8 @@ def test_main_05(mocker, tmp_path):
     [
         # use default test duration and timeout values (test missing duration)
         (None, None, None, Session.EXIT_ARGS),
-        # use default test duration and timeout values
-        (None, None, 10, Session.EXIT_FAILURE),
+        # use min test duration and default timeout values
+        (None, None, 1, Session.EXIT_FAILURE),
         # set test duration
         (10, None, None, Session.EXIT_FAILURE),
         # set both test duration and timeout to the same value

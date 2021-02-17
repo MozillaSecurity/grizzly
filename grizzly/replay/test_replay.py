@@ -643,7 +643,7 @@ def test_replay_21(mocker, tmp_path):
     assert test2.cleanup.call_count == 0
 
 @mark.parametrize(
-    "expected, use_sig, match_sig, ignored, results",
+    "is_hang, use_sig, match_sig, ignored, results",
     [
         # reproduce expected hang
         (True, True, True, 0, 1),
@@ -657,7 +657,7 @@ def test_replay_21(mocker, tmp_path):
         (False, False, False, 1, 0),
     ]
 )
-def test_replay_22(mocker, tmp_path, expected, use_sig, match_sig, ignored, results):
+def test_replay_22(mocker, tmp_path, is_hang, use_sig, match_sig, ignored, results):
     """test ReplayManager.run() - detect hangs"""
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     served = ["index.html"]
@@ -675,9 +675,9 @@ def test_replay_22(mocker, tmp_path, expected, use_sig, match_sig, ignored, resu
     target.handle_hang.return_value = False
     target.save_logs = _fake_save_logs
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
-        testcase.hang = expected
+        testcase.hang = is_hang
         with ReplayManager([], server, target, signature=signature, relaunch=10) as replay:
-            found = replay.run([testcase], 10, expect_hang=expected)
+            found = replay.run([testcase], 10, expect_hang=is_hang)
             assert replay.status.iteration == 1
             assert replay.status.ignored == ignored
             assert replay.status.results == results
@@ -692,6 +692,6 @@ def test_replay_22(mocker, tmp_path, expected, use_sig, match_sig, ignored, resu
         assert len(found[0].served) == 1
         assert found[0].served[0] == served
         assert len(found[0].durations) == 1
-        assert testcase.hang == expected
+        assert testcase.hang == is_hang
         found[0].report.cleanup()
         assert not any(tmp_path.iterdir())
