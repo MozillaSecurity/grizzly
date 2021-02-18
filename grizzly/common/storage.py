@@ -198,11 +198,12 @@ class TestCase:
             None
 
         Returns:
-            TestCase: A copy of the TestCase instance
+            TestCase: A copy of the TestCase instance.
         """
         result = type(self)(self.landing_page, self.redirect_page, self.adapter_name,
                             self.input_fname, self.timestamp)
         result.duration = self.duration
+        result.hang = self.hang
         result.env_vars.update(self.env_vars)
         for entry in self._files.meta:
             result.add_meta(entry.clone())

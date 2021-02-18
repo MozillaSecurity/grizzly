@@ -403,7 +403,9 @@ def test_testcase_19():
 
 def test_testcase_20():
     """test TestCase.clone()"""
-    with TestCase("test.htm", "redirect.htm", "test-adaptor", "input.py") as src:
+    with TestCase("test.htm", "redirect.htm", "test-adapter", "input.py") as src:
+        src.duration = 1.2
+        src.hang = True
         src.add_from_data("123", "test.htm")
         src.add_from_data("456", "opt.htm", required=False)
         src.add_meta(TestFile.from_data("pref", "prefs.js"))
