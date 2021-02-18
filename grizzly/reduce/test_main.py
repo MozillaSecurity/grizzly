@@ -83,7 +83,8 @@ def test_args_02(tmp_path):
         ),
         ("grizzly.reduce.core.ReplayManager.load_testcases", None, [], {}, 1),
         (
-            "grizzly.reduce.core.ReplayManager.load_testcases", None, [Mock(), Mock()],
+            "grizzly.reduce.core.ReplayManager.load_testcases", None,
+            [Mock(hang=False), Mock(hang=False)],
             {"no_harness": True}, 2
         ),
     ]
@@ -123,6 +124,9 @@ def test_main_launch_error(mocker, exc_type):
     reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
     mocker.patch("grizzly.reduce.core.load_target", autospec=True)
     mocker.patch("grizzly.reduce.core.ReplayManager.load_testcases")
+    mocker.patch(
+        "grizzly.reduce.core.ReplayManager.time_limits", return_value=(None, 10)
+    )
     run = mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
     # setup args
@@ -167,7 +171,9 @@ def test_testcase_prefs(mocker, tmp_path, result):
         prefs=None,
         repeat=1,
         sig=None,
+        test_duration=10,
         test_index=None,
+        timeout=10,
     )
     if result == "argprefs":
         (tmp_path / "args.js").write_text("argprefs")

@@ -15,7 +15,7 @@ from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner, RunResult
 from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
-from ..common.utils import grz_tmp
+from ..common.utils import ConfigError, grz_tmp, TIMEOUT_DELAY
 from ..main import configure_logging
 from ..session import Session
 from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
@@ -39,6 +39,7 @@ class ReplayResult:
 
 class ReplayManager:
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
+    MIN_TEST_DURATION = 10
 
     __slots__ = ("ignore", "server", "status", "target", "_any_crash",
                  "_harness", "_signature", "_relaunch", "_unpacked")
@@ -70,6 +71,15 @@ class ReplayManager:
     def signature(self):
         return self._signature
 
+    @staticmethod
+    def check_match(signature, report, expect_hang):
+        if signature is None:
+            return False
+        if expect_hang and not report.is_hang:
+            # avoid catching other crashes with forgiving hang signatures
+            return False
+        return signature.matches(report.crash_info)
+
     def cleanup(self):
         """Remove temporary files from disk.
 
@@ -81,6 +91,32 @@ class ReplayManager:
         """
         if self.status is not None:
             self.status.cleanup()
+
+    @staticmethod
+    def expect_hang(ignore, signature, tests):
+        """Check if any test is expected to trigger a hang. If a hang is expected
+        a sanity check is performed. A ConfigError is raised if a configuration
+        issue is detected.
+
+        Args:
+            ignore (list(str)): Failure types to ignore.
+            signature (CrashSignature): Signature to use for bucketing.
+            tests list(TestCase): Testcases to check.
+
+        Returns:
+            bool: True if a hang is expected otherwise False.
+        """
+        is_hang = any(x.hang for x in tests)
+        if is_hang:
+            if signature is None:
+                raise ConfigError(
+                    "Hangs require a signature to replay",
+                    Session.EXIT_ERROR)
+            if "timeout" in ignore:
+                raise ConfigError(
+                    "Cannot ignore 'timeout' when detecting hangs",
+                    Session.EXIT_ERROR)
+        return is_hang
 
     @classmethod
     def load_testcases(cls, path, load_prefs, subset=None):
@@ -306,7 +342,7 @@ class ReplayManager:
                     elif (
                         not startup_error
                         and (self._any_crash
-                            or (self._signature and self._signature.matches(report.crash_info)))
+                            or self.check_match(self._signature, report, expect_hang))
                     ):
                         self.status.count_result(short_sig)
                         LOG.info("Result: %s (%s:%s)",
@@ -405,6 +441,40 @@ class ReplayManager:
             for report in reports.values():
                 report.report.cleanup()
 
+    @classmethod
+    def time_limits(cls, duration, timeout, tests):
+        """Determine the test duration and timeout. A ConfigError is raised
+        if configuration errors are detected.
+
+        Args:
+            duration (int): Test duration.
+            timeout (int): Iteration timeout.
+            tests (iterable): Testcases that may contain duration values.
+
+        Returns:
+            tuple (int, int): Duration and timeout.
+        """
+        if duration is None:
+            # find longest test duration
+            durations = tuple(int(x.duration) for x in tests if x.duration)
+            if not durations:
+                raise ConfigError(
+                    "No test duration available, set manually",
+                    Session.EXIT_ARGS)
+            duration = max(durations)
+            # add extra time to help avoid closing tests early
+            if not any(x.hang for x in tests):
+                duration *= 1.5
+            # set a minimum duration when loading from a testcase.
+            if duration < cls.MIN_TEST_DURATION:
+                duration = cls.MIN_TEST_DURATION
+        if timeout is None:
+            timeout = duration + TIMEOUT_DELAY
+        if timeout < duration:
+            raise ConfigError(
+                "Timeout (%d) cannot be less than test duration (%d)" % (timeout, duration),
+                Session.EXIT_ARGS)
+        return duration, timeout
 
     @classmethod
     def main(cls, args):
@@ -438,41 +508,23 @@ class ReplayManager:
             LOG.error("Error: %s", str(exc))
             return Session.EXIT_ERROR
 
-        if args.test_duration:
-            test_duration = args.test_duration
-        else:
-            duration = tuple(int(x.duration * 2) for x in testcases if x.duration)
-            if not duration:
-                LOG.error("No test duration available, set manually")
-                return Session.EXIT_ARGS
-            test_duration = max(duration)
-            # set a minimum duration
-            if test_duration < 30:
-                test_duration = 30
-        timeout = args.timeout or test_duration + 30
-        LOG.info("Using test duration: %ds, timeout: %ds", test_duration, timeout)
-        if timeout < test_duration:
-            LOG.error("timeout must be at least test duration if not greater")
-            return Session.EXIT_ARGS
-
         results = None
         target = None
         tmp_prefs = None
         try:
-            # check if hangs are expected
-            expect_hang = any(x.hang for x in testcases)
-            if expect_hang:
-                if signature is None:
-                    LOG.error("Hangs require a signature to replay")
-                    return Session.EXIT_ERROR
-                if "timeout" in args.ignore:
-                    LOG.error("Cannot ignore 'timeout' when detecting hangs")
-                    return Session.EXIT_ERROR
             if args.no_harness and len(testcases) > 1:
                 LOG.error(
-                    "'--no-harness' cannot be used with multiple testcases. " \
+                    "'--no-harness' cannot be used with multiple testcases. "
                     "Perhaps '--test-index' can help.")
                 return Session.EXIT_ARGS
+            # check if hangs are expected
+            expect_hang = cls.expect_hang(args.ignore, signature, testcases)
+            # check test duration and timeout
+            test_duration, timeout = cls.time_limits(
+                args.test_duration,
+                args.timeout,
+                testcases)
+            LOG.info("Using test duration: %ds, timeout: %ds", test_duration, timeout)
             repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, repeat)
             LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
@@ -536,6 +588,10 @@ class ReplayManager:
                     testcases if args.include_test else None)
             # TODO: add fuzzmanager reporting
             return Session.EXIT_SUCCESS if success else Session.EXIT_FAILURE
+
+        except ConfigError as exc:
+            LOG.error(str(exc))
+            return exc.exit_code
 
         except KeyboardInterrupt:
             return Session.EXIT_ABORT

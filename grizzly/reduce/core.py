@@ -20,7 +20,7 @@ from sapphire import Sapphire
 from ..common.fuzzmanager import CrashEntry
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter
 from ..common.storage import TestCaseLoadFailure, TestFile
-from ..common.utils import grz_tmp
+from ..common.utils import ConfigError, grz_tmp
 from ..main import configure_logging
 from ..replay import ReplayManager
 from ..session import Session
@@ -65,9 +65,9 @@ class ReduceManager:
     ITER_TIMEOUT_DURATION_MULTIPLIER = 2
 
     def __init__(self, ignore, server, target, testcases, strategies, log_path,
-                 any_crash=False, idle_delay=0, idle_threshold=0, relaunch=1,
-                 report_period=None, report_to_fuzzmanager=False, signature=None,
-                 signature_desc=None, static_timeout=False, tool=None,
+                 any_crash=False, expect_hang=False, idle_delay=0, idle_threshold=0,
+                 relaunch=1, report_period=None, report_to_fuzzmanager=False,
+                 signature=None, signature_desc=None, static_timeout=False, tool=None,
                  use_analysis=True, use_harness=True):
         """Initialize reduction manager. Many arguments are common with `ReplayManager`.
 
@@ -79,9 +79,9 @@ class ReduceManager:
                 Value for `self.testcases` attribute.
             strategies (list(str)): Value for `self.strategies` attribute.
             log_path (Path or str): Path to save results when reporting to filesystem.
-
             any_crash (bool): Accept any crash when reducing, not just those matching
                               the specified or first observed signature.
+            expect_hang (bool): Attempt to reduce a test that triggers a hang.
             idle_delay (int): Number of seconds to wait before polling for idle.
             idle_threshold (int): CPU usage threshold to mark the process as idle.
             relaunch (int): Maximum number of iterations performed by Runner
@@ -107,6 +107,7 @@ class ReduceManager:
         self.target = target
         self.testcases = testcases
         self._any_crash = any_crash
+        self._expect_hang = expect_hang
         self._idle_delay = idle_delay
         self._idle_threshold = idle_threshold
         self._log_path = Path(log_path) if isinstance(log_path, str) else log_path
@@ -118,7 +119,7 @@ class ReduceManager:
         self._report_tool = tool
         self._signature = signature
         self._signature_desc = signature_desc
-        self._static_timeout = static_timeout
+        self._static_timeout = expect_hang or static_timeout
         self._stats = ReductionStats()
         self._use_analysis = use_analysis
         self._use_harness = use_harness
@@ -143,6 +144,7 @@ class ReduceManager:
             None
         """
         # TODO: properly handle test duration and timeout
+        assert self._static_timeout or not self._expect_hang
         if (self._static_timeout or self._any_crash or
                 getattr(self.target, "use_valgrind", False)):
             # the amount of time it can take to replay a test case can vary
@@ -408,10 +410,11 @@ class ReduceManager:
                                 results = replay.run(
                                     reduction,
                                     self.server.timeout,
-                                    repeat=repeat,
-                                    min_results=min_results,
+                                    expect_hang=self._expect_hang,
                                     idle_delay=self._idle_delay,
-                                    idle_threshold=self._idle_threshold)
+                                    idle_threshold=self._idle_threshold,
+                                    min_results=min_results,
+                                    repeat=repeat)
                                 strategy_stats.add_iterations(replay.status.iteration)
                                 strategy_stats.add_attempts(1)
                                 self.update_timeout(results)
@@ -627,14 +630,24 @@ class ReduceManager:
                             testcases[0].adapter_name)
                 args.tool = "grizzly-%s" % (testcases[0].adapter_name,)
 
+            expect_hang = ReplayManager.expect_hang(args.ignore, signature, testcases)
+
             if args.no_harness:
                 if len(testcases) > 1:
                     LOG.error(
-                        "Error: '--no-harness' cannot be used with multiple " \
+                        "Error: '--no-harness' cannot be used with multiple "
                         "testcases. Perhaps '--test-index' can help.")
                     return Session.EXIT_ARGS
                 LOG.debug("--no-harness specified relaunch set to 1")
                 args.relaunch = 1
+
+            # check test duration and timeout
+            # TODO: add support for test duration
+            _, timeout = ReplayManager.time_limits(
+                args.test_duration,
+                args.timeout,
+                testcases)
+
             args.repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, args.repeat)
             LOG.debug("initializing the Target")
@@ -666,7 +679,7 @@ class ReduceManager:
 
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
-            with Sapphire(auto_close=1, timeout=args.timeout) as server:
+            with Sapphire(auto_close=1, timeout=timeout) as server:
                 target.reverse(server.port, server.port)
                 mgr = ReduceManager(
                     args.ignore,
@@ -676,6 +689,7 @@ class ReduceManager:
                     args.strategies,
                     args.logs,
                     any_crash=args.any_crash,
+                    expect_hang=expect_hang,
                     idle_delay=args.idle_delay,
                     idle_threshold=args.idle_threshold,
                     relaunch=relaunch,
@@ -689,6 +703,10 @@ class ReduceManager:
                     use_harness=not args.no_harness)
                 return_code = mgr.run(repeat=args.repeat, min_results=args.min_crashes)
             return return_code
+
+        except ConfigError as exc:
+            LOG.error(str(exc))
+            return exc.exit_code
 
         except KeyboardInterrupt as exc:
             LOG.error("Exception: %r", exc)
