@@ -11,6 +11,7 @@ from sapphire import Sapphire
 from .adapters import get as get_adapter
 from .common.iomanager import IOManager
 from .common.reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
+from .common.utils import TIMEOUT_DELAY
 from .session import Session
 from .target import load as load_target, TargetLaunchError, TargetLaunchTimeout
 
@@ -70,7 +71,7 @@ def main(args):
         if args.timeout:
             timeout = args.timeout
         else:
-            timeout = test_duration + 30
+            timeout = test_duration + TIMEOUT_DELAY
         LOG.info("Using test duration: %ds, timeout: %ds", test_duration, timeout)
         if timeout < test_duration:
             LOG.error("timeout must be at least test duration if not greater")

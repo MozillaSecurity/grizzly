@@ -8,6 +8,7 @@ from os import listdir
 from os.path import exists, isfile, isdir
 
 from .adapters import names as adapter_names
+from .common.utils import TIMEOUT_DELAY
 from .target import available as available_targets
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
@@ -81,7 +82,7 @@ class CommonArgs:
             "--relaunch", type=int, default=1000,
             help="Number of iterations performed before relaunching the browser (default: %(default)s)")
         self.launcher_grp.add_argument(
-            "-t", "--test-duration", type=int, default=None,
+            "-d", "--test-duration", type=int, default=None,
             help="This is the maximum amount of time that a test is expected to take."
                  " After the time has elapsed the harness will attempt to close the test."
                  " By default `Adapter.TEST_DURATION` is used."
@@ -89,10 +90,10 @@ class CommonArgs:
                  " required to run a test case.")
         self.launcher_grp.add_argument(
             "-t", "--timeout", type=int, default=None,
-            help="Iteration timeout in seconds. By default this is `test-duration`+30s."
+            help="Iteration timeout in seconds. By default this is `test-duration`+%ds."
                  " If the timeout is reached the target is assumed to be in a bad state"
-                 " and will be closed. Typically this should be ~30s greater than"
-                 " the value used for `test-duration`.")
+                 " and will be closed. Typically this should be a few seconds greater"
+                 " than the value used for `test-duration`." % (TIMEOUT_DELAY,))
         self.launcher_grp.add_argument(
             "--valgrind", action="store_true",
             help="Use Valgrind (Linux only)")
