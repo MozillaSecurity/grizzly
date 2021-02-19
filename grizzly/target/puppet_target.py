@@ -131,28 +131,26 @@ class PuppetTarget(Target):
 
     def handle_hang(self, ignore_idle=True):
         was_idle = False
-        if system() != "Linux":
-            # sending SIGABRT is only supported on Linux for now
-            # TODO: add/test on other OSs
-            self.close()
-        elif self._puppet.is_healthy():
-            with self._lock:
-                proc_usage = self._puppet.cpu_usage()
-            for pid, cpu in sorted(proc_usage, reverse=True, key=lambda x: x[1]):
+        if self._puppet.is_healthy():
+            proc_usage = sorted(self._puppet.cpu_usage(), key=lambda x: x[1])
+            if proc_usage:
+                pid, cpu = proc_usage.pop()
                 if ignore_idle and cpu < 15:
                     # don't send SIGABRT if process is idle
                     LOG.debug("ignoring idle hang (%0.1f%%)", cpu)
                     was_idle = True
-                    break
-                LOG.debug("sending SIGABRT to busy process: %r (%0.1f%%)", pid, cpu)
-                try:
-                    kill(pid, SIGABRT)
-                except OSError:
-                    LOG.warning("Failed to send SIGABRT to pid %d", pid)
-                self._puppet.wait(timeout=10)
-                break
-            # always close target when hung
-            self.close()
+                elif system() == "Linux":
+                    # sending SIGABRT is only supported on Linux for now
+                    # TODO: add/test on other OSs
+                    LOG.debug("sending SIGABRT to %r (%0.1f%%)", pid, cpu)
+                    try:
+                        kill(pid, SIGABRT)
+                    except OSError:
+                        LOG.warning("Failed to send SIGABRT to pid %d", pid)
+                    self._puppet.wait(timeout=10)
+        # always call close() since this function should only/always
+        # be called when there has been a timeout
+        self.close()
         return was_idle
 
     def dump_coverage(self, timeout=15):
