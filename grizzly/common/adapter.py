@@ -36,10 +36,16 @@ class Adapter(metaclass=ABCMeta):
     """
 
     HARNESS_FILE = pathjoin(dirname(__file__), "harness.html")
-    IGNORE_UNSERVED = True  # Only report test cases with served content
-    NAME = None  # must be a unique string
-    RELAUNCH = 0  # maximum iterations between Target relaunches (<1 use default)
-    TEST_DURATION = 30  # maximum execution time per test (used as minimum timeout)
+    # Only report test cases with served content.
+    IGNORE_UNSERVED = True
+    # This is used as the identifier when launching Grizzly. Must be a unique string.
+    NAME = None
+    # Maximum iterations between Target relaunches (<1 use default)
+    RELAUNCH = 0
+    # Maximum execution time per test (used as minimum timeout). The iteration is
+    # expected to be complete. If the test is still open the harness will attempt to
+    # close it.
+    TIME_LIMIT = 30
 
     __slots__ = ("_harness", "fuzz", "monitor", "remaining")
 

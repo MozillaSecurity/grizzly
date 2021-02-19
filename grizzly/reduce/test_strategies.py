@@ -118,7 +118,7 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(testcases, _test_duration, **_):
+    def replay_run(testcases, _time_limit, **_):
         required_seen = False
         for test in testcases:
             contents = test.get_file("test.html").data.decode("ascii")
@@ -481,7 +481,7 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(testcases, _test_duration, **_):
+    def replay_run(testcases, _time_limit, **_):
         for test in testcases:
             contents = test.get_file(test_name).data.decode("ascii")
             if "nochange" in test_data:
@@ -633,7 +633,7 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(testcases, _test_duration, **_):
+    def replay_run(testcases, _time_limit, **_):
         # test.html and opt.html should always contain one line.
         # return [] (no result) if either of them exist and are empty
         has_any = False
@@ -702,7 +702,7 @@ def test_dd_only(mocker, tmp_path):
     replayer = replayer.return_value
     replayer.status.iteration = 1
 
-    def replay_run(testcases, _test_duration, **_):
+    def replay_run(testcases, _time_limit, **_):
         for test in testcases:
             contents = test.get_file("test.html").data.decode("ascii")
             LOG.debug("interesting if 'required' in %r", contents)

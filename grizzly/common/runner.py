@@ -143,14 +143,14 @@ class Runner:
         self._tests_run = 0
 
     @staticmethod
-    def location(srv_path, srv_port, close_after=None, test_duration=None):
+    def location(srv_path, srv_port, close_after=None, time_limit=None):
         """Build a valid URL to pass to a browser.
 
         Args:
             srv_path (str): Path segment of the URL
             srv_port (int): Server listening port
             close_after (int): Harness argument.
-            test_duration (int): Harness argument.
+            time_limit (int): Harness argument.
 
         Returns:
             str: A valid URL.
@@ -161,9 +161,9 @@ class Runner:
         if close_after is not None:
             assert close_after >= 0
             args.append("close_after=%d" % (close_after,))
-        if test_duration is not None:
-            assert test_duration >= 0
-            args.append("time_limit=%d" % (test_duration * 1000,))
+        if time_limit is not None:
+            assert time_limit >= 0
+            args.append("time_limit=%d" % (time_limit * 1000,))
         if args:
             return "?".join([location, "&".join(args)])
         return location

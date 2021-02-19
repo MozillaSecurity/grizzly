@@ -106,7 +106,7 @@ def test_main_01(mocker, tmp_path):
         rr=False,
         sig=str(tmp_path / "sig.json"),
         test_index=None,
-        test_duration=10,
+        time_limit=10,
         timeout=None,
         valgrind=False)
     assert ReplayManager.main(args) == Session.EXIT_SUCCESS
@@ -151,7 +151,7 @@ def test_main_02(mocker, tmp_path):
         rr=False,
         sig=None,
         test_index=None,
-        test_duration=10,
+        time_limit=10,
         timeout=None,
         valgrind=False)
     assert ReplayManager.main(args) == Session.EXIT_FAILURE
@@ -176,8 +176,8 @@ def test_main_03(mocker):
         relaunch=1,
         repeat=1,
         sig=None,
-        test_duration=10,
         test_index=None,
+        time_limit=10,
         timeout=None)
     # user abort
     fake_load_target.side_effect = KeyboardInterrupt
@@ -240,8 +240,8 @@ def test_main_04(mocker, tmp_path):
         relaunch=1,
         repeat=1,
         sig=None,
-        test_duration=10,
         test_index=None,
+        time_limit=10,
         timeout=None)
     # target launch error
     fake_logs = (tmp_path / "fake_report")
@@ -278,8 +278,8 @@ def test_main_05(mocker, tmp_path):
         relaunch=1,
         repeat=1,
         sig=None,
-        test_duration=1,
         test_index=None,
+        time_limit=1,
         timeout=None)
     log_path = (tmp_path / "logs")
     args.logs = str(log_path)
@@ -332,24 +332,24 @@ def test_main_05(mocker, tmp_path):
     assert prefs.read_bytes() == b"specified"
 
 @mark.parametrize(
-    "arg_duration, arg_timeout, test_duration, result",
+    "arg_timelimit, arg_timeout, test_timelimit, result",
     [
-        # use default test duration and timeout values (test missing duration)
-        (None, None, None, Session.EXIT_ARGS),
-        # use min test duration and default timeout values
+        # use default test time limit and timeout values (test missing time limit)
+        (None, None, None, Session.EXIT_FAILURE),
+        # use min test time limit and default timeout values
         (None, None, 1, Session.EXIT_FAILURE),
-        # set test duration
+        # set test time limit
         (10, None, None, Session.EXIT_FAILURE),
-        # set both test duration and timeout to the same value
+        # set both test time limit and timeout to the same value
         (10, 10, None, Session.EXIT_FAILURE),
-        # set timeout greater than test duration
+        # set timeout greater than test time limit
         (10, 11, None, Session.EXIT_FAILURE),
-        # set test duration greater than timeout
+        # set test time limit greater than timeout
         (11, 10, None, Session.EXIT_ARGS),
     ]
 )
-def test_main_06(mocker, tmp_path, arg_duration, arg_timeout, test_duration, result):
-    """test ReplayManager.main() - test duration and timeout"""
+def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, result):
+    """test ReplayManager.main() - test time limit and timeout"""
     # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
@@ -367,7 +367,7 @@ def test_main_06(mocker, tmp_path, arg_duration, arg_timeout, test_duration, res
     test.add_from_file(str(test_file))
     replay_path = tmp_path / "test"
     replay_path.mkdir()
-    test.duration = test_duration
+    test.time_limit = test_timelimit
     test.dump(str(replay_path), include_details=True)
     # setup args
     (tmp_path / "prefs.js").touch()
@@ -385,7 +385,7 @@ def test_main_06(mocker, tmp_path, arg_duration, arg_timeout, test_duration, res
         rr=False,
         sig=None,
         test_index=None,
-        test_duration=arg_duration,
+        time_limit=arg_timelimit,
         timeout=arg_timeout,
         valgrind=False)
     assert ReplayManager.main(args) == result

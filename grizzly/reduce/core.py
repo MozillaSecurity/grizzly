@@ -641,10 +641,10 @@ class ReduceManager:
                 LOG.debug("--no-harness specified relaunch set to 1")
                 args.relaunch = 1
 
-            # check test duration and timeout
-            # TODO: add support for test duration
+            # check test time limit and timeout
+            # TODO: add support for test time limit, use timeout in both cases for now
             _, timeout = ReplayManager.time_limits(
-                args.test_duration,
+                args.timeout,
                 args.timeout,
                 testcases)
 

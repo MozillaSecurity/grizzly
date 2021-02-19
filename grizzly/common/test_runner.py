@@ -265,9 +265,9 @@ def test_runner_08():
     assert result == "http://127.0.0.1:34567/a.html"
     result = Runner.location("a.html", 34567, close_after=10)
     assert result == "http://127.0.0.1:34567/a.html?close_after=10"
-    result = Runner.location("a.html", 9999, test_duration=60)
+    result = Runner.location("a.html", 9999, time_limit=60)
     assert result == "http://127.0.0.1:9999/a.html?time_limit=60000"
-    result = Runner.location("a.html", 9999, close_after=10, test_duration=60)
+    result = Runner.location("a.html", 9999, close_after=10, time_limit=60)
     assert result == "http://127.0.0.1:9999/a.html?close_after=10&time_limit=60000"
 
 def test_runner_09(mocker):

@@ -39,7 +39,7 @@ class ReplayResult:
 
 class ReplayManager:
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
-    MIN_TEST_DURATION = 10
+    DEFAULT_TIME_LIMIT = 30
 
     __slots__ = ("ignore", "server", "status", "target", "_any_crash",
                  "_harness", "_signature", "_relaunch", "_unpacked")
@@ -181,7 +181,7 @@ class ReplayManager:
     def run(
         self,
         testcases,
-        test_duration,
+        time_limit,
         repeat=1,
         min_results=1,
         exit_early=True,
@@ -193,7 +193,7 @@ class ReplayManager:
 
         Args:
             testcases (list): One or more TestCases to run.
-            test_duration (int): Maximum time in seconds a test should take to complete.
+            time_limit (int): Maximum time in seconds a test should take to complete.
             repeat (int): Maximum number of times to run the TestCase.
             min_results (int): Minimum number of results needed before run can
                                be considered successful.
@@ -215,7 +215,7 @@ class ReplayManager:
         assert repeat > 0
         assert repeat >= min_results
         assert testcases
-        assert test_duration > 0
+        assert time_limit > 0
         assert self._harness is not None or len(testcases) == 1
         assert not expect_hang or self._signature is not None
 
@@ -260,7 +260,7 @@ class ReplayManager:
                             "/grz_harness",
                             self.server.port,
                             close_after=relaunch * test_count,
-                            test_duration=test_duration)
+                            time_limit=time_limit)
                     startup_error = False
                     # The environment from the initial testcase is used because
                     # a sequence of testcases is expected to be run without
@@ -442,39 +442,31 @@ class ReplayManager:
                 report.report.cleanup()
 
     @classmethod
-    def time_limits(cls, duration, timeout, tests):
-        """Determine the test duration and timeout. A ConfigError is raised
+    def time_limits(cls, time_limit, timeout, tests):
+        """Determine the test time limit and timeout. A ConfigError is raised
         if configuration errors are detected.
 
         Args:
-            duration (int): Test duration.
+            time_limit (int): Test time limit.
             timeout (int): Iteration timeout.
-            tests (iterable): Testcases that may contain duration values.
+            tests (iterable): Testcases that may contain time limit values.
 
         Returns:
-            tuple (int, int): Duration and timeout.
+            tuple (int, int): Time limit and timeout.
         """
-        if duration is None:
-            # find longest test duration
-            durations = tuple(int(x.duration) for x in tests if x.duration)
-            if not durations:
-                raise ConfigError(
-                    "No test duration available, set manually",
-                    Session.EXIT_ARGS)
-            duration = max(durations)
-            # add extra time to help avoid closing tests early
-            if not any(x.hang for x in tests):
-                duration *= 1.5
-            # set a minimum duration when loading from a testcase.
-            if duration < cls.MIN_TEST_DURATION:
-                duration = cls.MIN_TEST_DURATION
+        if time_limit is None:
+            test_limits = tuple(int(x.time_limit) for x in tests if x.time_limit)
+            if test_limits:
+                time_limit = max(test_limits)
+            else:
+                time_limit = cls.DEFAULT_TIME_LIMIT
         if timeout is None:
-            timeout = duration + TIMEOUT_DELAY
-        if timeout < duration:
+            timeout = time_limit + TIMEOUT_DELAY
+        if timeout < time_limit:
             raise ConfigError(
-                "Timeout (%d) cannot be less than test duration (%d)" % (timeout, duration),
+                "Timeout (%d) cannot be less than time limit (%d)" % (timeout, time_limit),
                 Session.EXIT_ARGS)
-        return duration, timeout
+        return time_limit, timeout
 
     @classmethod
     def main(cls, args):
@@ -519,12 +511,12 @@ class ReplayManager:
                 return Session.EXIT_ARGS
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)
-            # check test duration and timeout
-            test_duration, timeout = cls.time_limits(
-                args.test_duration,
+            # check test time limit and timeout
+            time_limit, timeout = cls.time_limits(
+                args.time_limit,
                 args.timeout,
                 testcases)
-            LOG.info("Using test duration: %ds, timeout: %ds", test_duration, timeout)
+            LOG.info("Using time limit: %ds, timeout: %ds", time_limit, timeout)
             repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, repeat)
             LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
@@ -569,7 +561,7 @@ class ReplayManager:
                 ) as replay:
                     results = replay.run(
                         testcases,
-                        test_duration,
+                        time_limit,
                         expect_hang=expect_hang,
                         idle_delay=args.idle_delay,
                         idle_threshold=args.idle_threshold,

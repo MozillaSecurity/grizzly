@@ -82,10 +82,10 @@ class CommonArgs:
             "--relaunch", type=int, default=1000,
             help="Number of iterations performed before relaunching the browser (default: %(default)s)")
         self.launcher_grp.add_argument(
-            "-d", "--test-duration", type=int, default=None,
+            "--time-limit", type=int, default=None,
             help="This is the maximum amount of time that a test is expected to take."
                  " After the time has elapsed the harness will attempt to close the test."
-                 " By default `Adapter.TEST_DURATION` is used."
+                 " By default `Adapter.TIME_LIMIT` is used."
                  " Browser build types and debuggers can affect the amount of time"
                  " required to run a test case.")
         self.launcher_grp.add_argument(
@@ -170,8 +170,8 @@ class CommonArgs:
         if args.prefs and not isfile(args.prefs):
             self.parser.error("-p/--prefs not found %r" % args.prefs)
 
-        if args.test_duration is not None and args.test_duration < 1:
-            self.parser.error("--test-duration must be at least 1")
+        if args.time_limit is not None and args.time_limit < 1:
+            self.parser.error("--time-limit must be at least 1")
 
         if args.timeout is not None and args.timeout < 1:
             self.parser.error("--timeout must be at least 1")
