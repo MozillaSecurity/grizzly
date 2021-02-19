@@ -13,7 +13,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
-# TIMEOUT_DELAY is added to the test duration to create the default timeout
+# TIMEOUT_DELAY is added to the test time limit to create the default timeout
 TIMEOUT_DELAY = 15
 
 

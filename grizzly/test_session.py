@@ -137,8 +137,7 @@ def test_session_05(tmp_path, mocker):
     Status.PATH = str(tmp_path)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_adapter.IGNORE_UNSERVED = True
-    fake_adapter.TEST_DURATION = 10
-    fake_testcase = mocker.Mock(spec=TestCase, landing_page="page.htm", optional=[])
+    fake_testcase = mocker.Mock(spec_set=TestCase, landing_page="page.htm", optional=[], time_limit=10)
     fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
     fake_iomgr.create_testcase.return_value = fake_testcase
     fake_iomgr.tests = mocker.Mock(spec=deque)
@@ -169,13 +168,13 @@ def test_session_06(tmp_path, mocker):
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.NAME = "fake_adapter"
     fake_iomgr = mocker.Mock(spec=IOManager, server_map=ServerMap())
-    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
+    fake_iomgr.create_testcase.return_value = mocker.Mock(spec_set=TestCase, time_limit=10)
     fake_target = mocker.Mock(spec=Target, prefs="fake")
     with Session(fake_adapter, fake_iomgr, None, None, fake_target) as session:
         assert fake_adapter.generate.call_count == 0
-        testcase = session.generate_testcase()
+        testcase = session.generate_testcase(10)
         assert fake_iomgr.create_testcase.call_count == 1
-        fake_iomgr.create_testcase.assert_called_with("fake_adapter")
+        fake_iomgr.create_testcase.assert_called_with("fake_adapter", 10)
         assert fake_adapter.generate.call_count == 1
         fake_adapter.generate.assert_called_with(testcase, fake_iomgr.server_map)
         assert testcase.add_meta.call_count == 1
@@ -186,7 +185,6 @@ def test_session_07(tmp_path, mocker):
     fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_adapter.TEST_DURATION = 10
     fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
     fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
     fake_iomgr.tests = mocker.Mock(spec=deque)
@@ -257,7 +255,6 @@ def test_session_08(tmp_path, mocker):
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
     fake_adapter.IGNORE_UNSERVED = False
-    fake_adapter.TEST_DURATION = 10
     fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
     fake_test = mocker.Mock(spec=TestCase)
     fake_iomgr.create_testcase.return_value = fake_test
@@ -306,7 +303,6 @@ def test_session_10(tmp_path, mocker):
     fake_runner.return_value.run.return_value = result
     mocker.patch("grizzly.session.TestFile", autospec=True)
     fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_adapter.TEST_DURATION = 10
     fake_iomgr = mocker.Mock(
         spec=IOManager,
         harness=None,

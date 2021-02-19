@@ -229,21 +229,20 @@ def test_testcase_09(tmp_path):
 def test_testcase_10(tmp_path):
     """test TestCase - dump, load and compare"""
     with TestCase("a.html", "b.html", "adpt") as org:
+        # set non default values
         org.duration = 1.23
         org.env_vars = {"en1": "1", "en2": "2"}
         org.hang = True
         org.input_fname = "infile"
+        org.time_limit = 10
         org.add_from_data("a", "a.html")
         org.dump(str(tmp_path), include_details=True)
         loaded = TestCase.load_single(str(tmp_path), False)
         try:
-            assert org.adapter_name == loaded.adapter_name
-            assert org.duration == loaded.duration
-            assert org.env_vars == loaded.env_vars
-            assert org.hang == loaded.hang
-            assert org.input_fname == loaded.input_fname
-            assert org.landing_page == loaded.landing_page
-            assert org.timestamp == loaded.timestamp
+            for prop in TestCase.__slots__:
+                if prop.startswith("_") or "redirect_page":
+                    continue
+                assert getattr(loaded, prop) == getattr(org, prop)
             assert org._existing_paths == loaded._existing_paths
         finally:
             loaded.cleanup()
@@ -403,7 +402,7 @@ def test_testcase_19():
 
 def test_testcase_20():
     """test TestCase.clone()"""
-    with TestCase("test.htm", "redirect.htm", "test-adapter", "input.py") as src:
+    with TestCase("a.htm", "b.htm", "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
         src.hang = True
         src.add_from_data("123", "test.htm")

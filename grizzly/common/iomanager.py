@@ -59,12 +59,13 @@ class IOManager:
             e_file.close()
         self.purge_tests()
 
-    def create_testcase(self, adapter_name):
+    def create_testcase(self, adapter_name, time_limit):
         # create testcase object and landing page names
         test = TestCase(
             self.page_name(),
             self.page_name(offset=1),
-            adapter_name=adapter_name)
+            adapter_name=adapter_name,
+            time_limit=time_limit)
         # add environment variable info to the test case
         for e_name, e_value in self._tracked_env.items():
             test.add_environ_var(e_name, e_value)

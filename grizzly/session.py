@@ -96,9 +96,9 @@ class Session:
         elif log_limiter.ready(self.status.iteration, self.target.monitor.launches):
             LOG.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
-    def generate_testcase(self):
+    def generate_testcase(self, time_limit):
         LOG.debug("calling iomanager.create_testcase()")
-        test = self.iomanager.create_testcase(self.adapter.NAME)
+        test = self.iomanager.create_testcase(self.adapter.NAME, time_limit)
         LOG.debug("calling self.adapter.generate()")
         with self.status.measure("generate"):
             self.adapter.generate(test, self.iomanager.server_map)
@@ -108,8 +108,8 @@ class Session:
             test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
         return test
 
-    def run(self, ignore, test_duration, iteration_limit=0, display_mode=DISPLAY_NORMAL):
-        assert test_duration > 0
+    def run(self, ignore, time_limit, iteration_limit=0, display_mode=DISPLAY_NORMAL):
+        assert time_limit > 0
         assert iteration_limit >= 0
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         # limit relaunch to max iterations if needed
@@ -136,7 +136,7 @@ class Session:
                         "/grz_harness",
                         self.server.port,
                         close_after=relaunch,
-                        test_duration=test_duration)
+                        time_limit=time_limit)
                 try:
                     with self.status.measure("launch"):
                         runner.launch(location, max_retries=3, retry_delay=0)
@@ -152,7 +152,7 @@ class Session:
                     raise TargetLaunchError(str(exc), None) from None
 
             # create and populate a test case
-            current_test = self.generate_testcase()
+            current_test = self.generate_testcase(time_limit)
             # display status
             self.display_status(log_limiter=log_limiter)
 

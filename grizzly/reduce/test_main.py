@@ -171,8 +171,8 @@ def test_testcase_prefs(mocker, tmp_path, result):
         prefs=None,
         repeat=1,
         sig=None,
-        test_duration=10,
         test_index=None,
+        time_limit=10,
         timeout=10,
     )
     if result == "argprefs":

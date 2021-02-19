@@ -52,22 +52,25 @@ def test_iomanager_04():
         assert not iom.server_map.redirect
         iom._tracked_env = {"TEST": "1"}
         iom._environ_files = [TestFile.from_data(b"data", "e.txt")]
+        time_limit = 10
         # without a harness, no input files
-        tcase = iom.create_testcase("test-adapter")
+        tcase = iom.create_testcase("test-adapter", time_limit)
         assert tcase is not None
         assert iom._generated == 1
         assert len(iom.tests) == 1
         assert not any(tcase.optional)
+        assert tcase.time_limit == time_limit
         assert "grz_current_test" in iom.server_map.redirect
         assert iom.server_map.redirect["grz_current_test"].target == tcase.landing_page
         assert "grz_next_test" in iom.server_map.redirect
         assert "grz_harness" not in iom.server_map.dynamic
         # with a harness
         iom.harness = b"harness-data"
-        tcase = iom.create_testcase("test-adapter")
+        tcase = iom.create_testcase("test-adapter", time_limit)
         assert tcase is not None
         assert len(iom.tests) == 1
         assert iom._generated == 2
+        assert tcase.time_limit == time_limit
         assert "grz_current_test" in iom.server_map.redirect
         assert iom.server_map.redirect["grz_current_test"].target == tcase.landing_page
         assert "grz_next_test" in iom.server_map.redirect

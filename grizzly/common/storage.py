@@ -39,9 +39,10 @@ TestFileMap = namedtuple("TestFileMap", "meta optional required")
 class TestCase:
     __slots__ = (
         "adapter_name", "duration", "env_vars", "hang", "input_fname", "landing_page",
-        "redirect_page", "timestamp", "_existing_paths", "_files")
+        "redirect_page", "time_limit", "timestamp", "_existing_paths", "_files")
 
-    def __init__(self, landing_page, redirect_page, adapter_name, input_fname=None, timestamp=None):
+    def __init__(self, landing_page, redirect_page, adapter_name, input_fname=None,
+                 time_limit=None, timestamp=None):
         self.adapter_name = adapter_name
         self.duration = None
         self.env_vars = dict()  # environment variables
@@ -49,6 +50,7 @@ class TestCase:
         self.input_fname = input_fname  # file that was used to create the test case
         self.landing_page = landing_page
         self.redirect_page = redirect_page
+        self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
         self._existing_paths = list()  # file paths in use
         self._files = TestFileMap(
@@ -201,7 +203,7 @@ class TestCase:
             TestCase: A copy of the TestCase instance.
         """
         result = type(self)(self.landing_page, self.redirect_page, self.adapter_name,
-                            self.input_fname, self.timestamp)
+                            self.input_fname, self.time_limit, self.timestamp)
         result.duration = self.duration
         result.hang = self.hang
         result.env_vars.update(self.env_vars)
@@ -264,6 +266,7 @@ class TestCase:
                 "hang": self.hang,
                 "input": basename(self.input_fname) if self.input_fname else None,
                 "target": self.landing_page,
+                "time_limit": self.time_limit,
                 "timestamp": self.timestamp}
             with open(pathjoin(out_path, "test_info.json"), "w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
@@ -386,10 +389,16 @@ class TestCase:
         else:
             raise TestCaseLoadFailure("Missing or invalid TestCase %r" % (path,))
         # create testcase and add data
-        test = cls(None, None, info.get("adapter", None), timestamp=info.get("timestamp", 0))
+        test = cls(
+            None,
+            None,
+            info.get("adapter", None),
+            input_fname=info.get("input", None),
+            time_limit=info.get("time_limit", None),
+            timestamp=info.get("timestamp", 0)
+        )
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
-        test.input_fname = info.get("input", None)
         if load_prefs and isfile(pathjoin(path, "prefs.js")):
             test.add_meta(TestFile.from_file(pathjoin(path, "prefs.js")))
         test.add_from_file(pathjoin(path, entry_point))
