@@ -109,53 +109,37 @@ def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, clo
     assert target.detect_failure(ignore) == result
     assert fake_ffp.return_value.close.call_count == closes
 
-def test_puppet_target_04(mocker, tmp_path):
+@mark.parametrize(
+    "healthy, usage, os_name, killed",
+    [
+        # skip sending SIGABRT on unsupported OSs
+        (True, [(1234, 90)], "Windows", 0),
+        # skip idle check if target is in a bad state
+        (False, [], "Linux", 0),
+        # send SIGABRT to hung process
+        (True, [(234, 10), (236, 75), (238, 60)], "Linux", 1),
+        # ignore idle timeout (close don't abort)
+        (True, [(234, 10)], "Linux", 0),
+
+    ]
+)
+def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed):
     """test PuppetTarget.handle_hang()"""
-    fake_system = mocker.patch("grizzly.target.puppet_target.system", autospec=True)
+    mocker.patch("grizzly.target.puppet_target.system", autospec=True, return_value=os_name)
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_kill = mocker.patch("grizzly.target.puppet_target.kill", autospec=True)
+    # raise OSError for code coverage
+    fake_kill.side_effect = OSError
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000)
-    # test skipping unsupported OSs
-    fake_system.return_value = "Window"
-    fake_ffp.return_value.cpu_usage.return_value = ((1234, 90),)
-    fake_ffp.return_value.is_healthy.return_value = True
+    fake_ffp.return_value.cpu_usage.return_value = usage
+    fake_ffp.return_value.is_healthy.return_value = healthy
     target.handle_hang()
     assert fake_ffp.return_value.is_healthy.call_count == 1
     assert fake_ffp.return_value.close.call_count == 1
-    assert fake_ffp.return_value.cpu_usage.call_count == 1
-    assert fake_kill.call_count == 0
-    fake_ffp.reset_mock()
-    # test skipping idle check if target is in a bad state
-    fake_system.return_value = "Linux"
-    fake_ffp.return_value.is_healthy.return_value = False
-    target.handle_hang()
-    assert fake_ffp.return_value.is_healthy.call_count == 1
-    assert fake_ffp.return_value.close.call_count == 1
-    assert fake_ffp.return_value.cpu_usage.call_count == 0
-    assert fake_kill.call_count == 0
-    fake_ffp.reset_mock()
-    # test timeout
-    fake_ffp.return_value.is_healthy.return_value = True
-    fake_ffp.return_value.cpu_usage.return_value = ((1234, 10), (1236, 75), (1238, 60))
-    # raise OSError for code coverage
-    fake_kill.side_effect = OSError
-    target.handle_hang()
-    assert fake_kill.call_count == 1
-    assert fake_ffp.return_value.wait.call_count == 1
-    assert fake_ffp.return_value.close.call_count == 1
-    assert fake_kill.call_count == 1
-    fake_ffp.reset_mock()
-    fake_kill.reset_mock()
-    # test ignore idle timeout (close don't abort)
-    fake_ffp.return_value.is_healthy.return_value = True
-    fake_ffp.return_value.cpu_usage.return_value = ((1234, 10),)
-    target.handle_hang(ignore_idle=True)
-    assert fake_ffp.return_value.is_healthy.call_count == 1
-    assert fake_ffp.return_value.close.call_count == 1
-    assert fake_ffp.return_value.cpu_usage.call_count == 1
-    assert fake_kill.call_count == 0
+    assert fake_ffp.return_value.cpu_usage.call_count == (1 if usage else 0)
+    assert fake_kill.call_count == fake_ffp.return_value.wait.call_count == killed
 
 @mark.skipif(system() == "Windows", reason="Unsupported on Windows")
 def test_puppet_target_05(mocker, tmp_path):
