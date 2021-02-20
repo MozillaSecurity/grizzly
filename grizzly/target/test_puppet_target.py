@@ -71,7 +71,26 @@ def test_puppet_target_02(mocker, tmp_path):
             target.launch("launch_target_page")
         assert fake_ffp.return_value.save_logs.call_count == 1
 
-def test_puppet_target_03(mocker, tmp_path):
+@mark.parametrize(
+    "healthy, reason, ignore, result, closes",
+    [
+        # running as expected - no failures
+        (True, None, [], Target.RESULT_NONE, 0),
+        # browser process closed
+        (False, FFPuppet.RC_CLOSED, [], Target.RESULT_NONE, 1),
+        # browser process crashed
+        (False, FFPuppet.RC_ALERT, [], Target.RESULT_FAILURE, 1),
+        # browser exit with no crash logs
+        (False, FFPuppet.RC_EXITED, [], Target.RESULT_NONE, 1),
+        # ffpuppet check failed
+        (False, FFPuppet.RC_WORKER, [], Target.RESULT_FAILURE, 1),
+        # ffpuppet check ignored (memory)
+        (False, FFPuppet.RC_WORKER, ["memory"], Target.RESULT_IGNORED, 1),
+        # ffpuppet check ignored (log-limit)
+        (False, FFPuppet.RC_WORKER, ["log-limit"], Target.RESULT_IGNORED, 1),
+    ]
+)
+def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, closes):
     """test PuppetTarget.detect_failure()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_ffp.RC_ALERT = FFPuppet.RC_ALERT
@@ -81,65 +100,14 @@ def test_puppet_target_03(mocker, tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000)
-    # no failures
-    fake_ffp.return_value.is_healthy.return_value = True
-    fake_ffp.return_value.reason = None
-    assert target.detect_failure([]) == Target.RESULT_NONE
-    assert fake_ffp.return_value.is_running.call_count == 0
-    assert not target.closed
-    fake_ffp.reset_mock()
-    # test close
-    fake_ffp.return_value.is_healthy.return_value = False
-    fake_ffp.return_value.is_running.return_value = False
-    fake_ffp.return_value.reason = FFPuppet.RC_CLOSED
-    assert target.detect_failure([]) == Target.RESULT_NONE
-    assert fake_ffp.return_value.is_healthy.call_count == 1
-    assert fake_ffp.return_value.is_running.call_count == 1
-    assert fake_ffp.return_value.close.call_count == 0
-    fake_ffp.reset_mock()
-    # test single process crash
-    fake_ffp.return_value.is_healthy.return_value = False
-    fake_ffp.return_value.is_running.return_value = False
-    fake_ffp.return_value.reason = FFPuppet.RC_ALERT
-    assert target.detect_failure([]) == Target.RESULT_FAILURE
-    assert fake_ffp.return_value.close.call_count == 0
-    fake_ffp.reset_mock()
-    # test multiprocess crash
-    fake_ffp.return_value.is_healthy.return_value = False
-    fake_ffp.return_value.is_running.return_value = True
-    fake_ffp.return_value.reason = FFPuppet.RC_ALERT
-    assert target.detect_failure([]) == Target.RESULT_FAILURE
-    assert fake_ffp.return_value.close.call_count == 1
-    fake_ffp.reset_mock()
-    # test exit with no crash logs
-    fake_ffp.return_value.is_healthy.return_value = False
-    fake_ffp.return_value.is_running.return_value = False
-    fake_ffp.return_value.reason = FFPuppet.RC_EXITED
-    assert target.detect_failure([]) == Target.RESULT_NONE
-    assert fake_ffp.return_value.close.call_count == 0
-    fake_ffp.reset_mock()
-    # test worker
-    fake_ffp.return_value.is_healthy.return_value = False
-    fake_ffp.return_value.is_running.return_value = False
-    fake_ffp.return_value.reason = FFPuppet.RC_WORKER
-    assert target.detect_failure([]) == Target.RESULT_FAILURE
-    assert fake_ffp.return_value.close.call_count == 0
-    fake_ffp.reset_mock()
-    # test memory ignored
-    fake_ffp.return_value.is_healthy.return_value = False
-    fake_ffp.return_value.is_running.return_value = False
-    fake_ffp.return_value.reason = FFPuppet.RC_WORKER
-    fake_ffp.return_value.available_logs.return_value = " ffp_worker_memory_usage "
-    assert target.detect_failure(["memory"]) == Target.RESULT_IGNORED
-    assert fake_ffp.return_value.close.call_count == 0
-    fake_ffp.reset_mock()
-    # test log-limit ignored
-    fake_ffp.return_value.is_healthy.return_value = False
-    fake_ffp.return_value.is_running.return_value = False
-    fake_ffp.return_value.reason = FFPuppet.RC_WORKER
-    fake_ffp.return_value.available_logs.return_value = " ffp_worker_log_size "
-    assert target.detect_failure(["log-limit"]) == Target.RESULT_IGNORED
-    assert fake_ffp.return_value.close.call_count == 0
+    if "memory" in ignore:
+        fake_ffp.return_value.available_logs.return_value = "ffp_worker_memory_usage"
+    elif "log-limit" in ignore:
+        fake_ffp.return_value.available_logs.return_value = "ffp_worker_log_size"
+    fake_ffp.return_value.is_healthy.return_value = healthy
+    fake_ffp.return_value.reason = reason
+    assert target.detect_failure(ignore) == result
+    assert fake_ffp.return_value.close.call_count == closes
 
 def test_puppet_target_04(mocker, tmp_path):
     """test PuppetTarget.handle_hang()"""
