@@ -101,10 +101,8 @@ class PuppetTarget(Target):
         status = self.RESULT_NONE
         # check if there has been a crash, hangs will appear as SIGABRT
         if not self._puppet.is_healthy():
-            if self._puppet.is_running():
-                LOG.debug("browser in bad state, closing...")
-                self.close()
-            # if something has happened figure out what
+            self.close()
+            # something has happened figure out what
             if self._puppet.reason == FFPuppet.RC_CLOSED:
                 LOG.debug("target.close() was called")
             elif self._puppet.reason == FFPuppet.RC_EXITED:
