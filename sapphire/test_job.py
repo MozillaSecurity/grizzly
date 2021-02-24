@@ -31,19 +31,25 @@ def test_job_01(tmp_path):
     assert job.is_complete()
 
 def test_job_02(tmp_path):
-    """test Job two required files and one optional file"""
-    opt_path = tmp_path / "opt_file.txt"
-    opt_path.write_bytes(b"a")
+    """test Job proper handling of required and optional files"""
+    opt1_path = tmp_path / "opt_file_1.txt"
+    opt1_path.write_bytes(b"a")
     req1_path = tmp_path / "req_file_1.txt"
-    req1_path.write_bytes(b"a")
-    (tmp_path / "test").mkdir()
-    req2_path = tmp_path / "test" / "req_file_2.txt"
-    req2_path.write_bytes(b"a")
-    job = Job(str(tmp_path), optional_files=[opt_path.name])
+    req1_path.write_bytes(b"b")
+    (tmp_path / "nested").mkdir()
+    opt2_path = tmp_path / "nested" / "opt_file_2.txt"
+    opt2_path.write_bytes(b"c")
+    req2_path = tmp_path / "nested" / "req_file_2.txt"
+    req2_path.write_bytes(b"d")
+    job = Job(
+        str(tmp_path),
+        optional_files=[opt1_path.name, "nested/%s" % (opt2_path.name,)]
+    )
     assert job.status == SERVED_NONE
     assert not job.is_complete()
     resource = job.check_request("req_file_1.txt")
     assert resource.required
+    assert job.pending == 2
     assert resource.target == str(tmp_path / "req_file_1.txt")
     assert resource.type == Resource.URL_FILE
     assert not job.is_forbidden(str(req1_path))
@@ -56,11 +62,15 @@ def test_job_02(tmp_path):
     assert job.status == SERVED_ALL
     assert job.pending == 0
     assert job.remove_pending(str(req1_path))
-    resource = job.check_request("opt_file.txt")
+    resource = job.check_request("opt_file_1.txt")
     assert not resource.required
-    assert resource.target == str(tmp_path / "opt_file.txt")
+    assert resource.target == str(opt1_path)
     assert resource.type == Resource.URL_FILE
-    assert job.remove_pending(str(opt_path))
+    assert job.remove_pending(str(opt1_path))
+    resource = job.check_request("nested/opt_file_2.txt")
+    assert resource.target == str(opt2_path)
+    assert resource.type == Resource.URL_FILE
+    assert not resource.required
     job.finish()
     assert job.is_complete()
 

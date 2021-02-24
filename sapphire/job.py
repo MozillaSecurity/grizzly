@@ -66,16 +66,18 @@ class Job:
         # this is intended to only be called once by __init__()
         for d_name, _, filenames in walk(self.base_path, followlinks=False):
             for f_name in filenames:
+                file_path = pathjoin(d_name, f_name)
+                location = relpath(file_path, start=self.base_path).replace("\\", "/")
                 # do not add optional files to queue of required files
-                if optional_files and f_name in optional_files:
-                    LOG.debug("optional: %r", f_name)
+                if optional_files and location in optional_files:
+                    LOG.debug("optional: %r", location)
                     continue
-                file_path = abspath(pathjoin(d_name, f_name))
+                file_path = abspath(file_path)
                 if "?" in file_path:
                     LOG.warning("Cannot add files with '?' in path. Skipping %r", file_path)
                     continue
                 self._pending.files.add(file_path)
-                LOG.debug("required: %r", f_name)
+                LOG.debug("required: %r", location)
         # if nothing was found check if the path exists
         if not self._pending.files and not isdir(self.base_path):
             raise OSError("%r does not exist" % (self.base_path),)
