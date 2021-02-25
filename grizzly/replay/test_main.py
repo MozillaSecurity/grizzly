@@ -10,6 +10,8 @@ from shutil import rmtree
 
 from pytest import mark, raises
 
+from sapphire import SERVED_ALL
+
 from ..common import Report, TestCase, TestCaseLoadFailure
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from ..replay import ReplayManager
@@ -76,7 +78,7 @@ def test_main_01(mocker, tmp_path):
     # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
-    serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
+    serve_path.return_value = (SERVED_ALL, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_target")
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
@@ -127,7 +129,7 @@ def test_main_02(mocker, tmp_path):
     # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
-    serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
+    serve_path.return_value = (SERVED_ALL, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_target")
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
@@ -353,7 +355,7 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
     # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
-    serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
+    serve_path.return_value = (SERVED_ALL, ["test.html"])  # passed to mocked Target.detect_failure
     # setup Target
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE

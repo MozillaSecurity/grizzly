@@ -43,9 +43,8 @@ def test_runner_01(mocker, tmp_path):
     assert target.dump_coverage.call_count == 0
     assert target.handle_hang.call_count == 0
     assert testcase.dump.call_count == 1
-    # some files served
-    serv_map = ServerMap()
-    server.serve_path.return_value = (SERVED_REQUEST, serv_files)
+    # dump coverage
+    server.serve_path.return_value = (SERVED_ALL, serv_files)
     result = runner.run([], ServerMap(), testcase, coverage=True)
     assert result.attempted
     assert runner._tests_run == 2
@@ -228,7 +227,7 @@ def test_runner_06(mocker):
     target = mocker.Mock(spec=Target)
     target.detect_failure.return_value = target.RESULT_NONE
     serv_files = ["/fake/file", "/another/file.bin"]
-    server.serve_path.return_value = (SERVED_REQUEST, serv_files)
+    server.serve_path.return_value = (SERVED_ALL, serv_files)
     runner = Runner(server, target, idle_threshold=0.01, idle_delay=0.01, relaunch=10)
     assert runner._idle is not None
     result = runner.run(
