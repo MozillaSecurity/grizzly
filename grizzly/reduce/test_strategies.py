@@ -15,7 +15,7 @@ from sapphire import Sapphire
 from ..common import TestCase, TestFile, Report
 from ..replay import ReplayResult
 from ..target import Target
-from .strategies import _load_strategies
+from .strategies import _load_strategies, Strategy
 from .strategies.beautify import \
     HAVE_CSSBEAUTIFIER, HAVE_JSBEAUTIFIER, CSSBeautify, JSBeautify
 from . import ReduceManager
@@ -24,6 +24,29 @@ from . import ReduceManager
 LOG = getLogger(__name__)
 pytestmark = pytest.mark.usefixtures("tmp_path_fm_config",
                                      "reporter_sequential_strftime")
+
+
+@pytest.mark.parametrize("is_hang", [True, False])
+def test_strategy_tc_load(is_hang):
+    """test that strategy base class dump and load doesn't change testcase metadata"""
+    class _TestStrategy(Strategy):
+        def __iter__(self):
+            yield TestCase.load(str(self._testcase_root), False)
+
+        def update(self, success, served=None):
+            pass
+
+    # create testcase that is_hang
+    with TestCase("a.htm", None, "adpt", input_fname="fn", time_limit=2) as src:
+        src.duration = 1.2
+        src.hang = is_hang
+        src.add_from_data("123", "a.htm")
+        strat = _TestStrategy([src])
+    for attempt in strat:
+        assert len(attempt) == 1
+        assert attempt[0].hang == is_hang
+        attempt[0].cleanup()
+        strat.update(False)
 
 
 def _fake_save_logs_foo(result_logs):
