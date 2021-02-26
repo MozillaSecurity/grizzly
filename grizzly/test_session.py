@@ -6,357 +6,360 @@
 """
 unit tests for grizzly.Session
 """
-from collections import deque
+from pytest import mark, raises
 
-from pytest import raises
-
-from sapphire import Sapphire, ServerMap, SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
-from .common import Adapter, IOManager, Report, Reporter, RunResult, Status, TestCase
+from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
+from .common import Adapter, Report, Reporter, RunResult, Status
 from .session import LogOutputLimiter, Session, SessionError
 from .target import Target, TargetLaunchError
 
 
-class NullReporter(Reporter):
-    def __init__(self):
-        self.submit_calls = 0
-
-    def _post_submit(self):
-        pass
-
-    def _pre_submit(self, report):
-        pass
-
-    def _submit_report(self, report, test_cases):
-        assert isinstance(report, Report)
-        for test in test_cases:
-            assert isinstance(test, TestCase)
-        self.submit_calls += 1
-
-def test_session_01(tmp_path, mocker):
-    """test Session with playback Adapter"""
-    class PlaybackAdapter(Adapter):
-        NAME = "playback"
-        def setup(self, input_path, server_map):
-            self.remaining = 5
-        def generate(self, testcase, server_map):
-            assert testcase.adapter_name == self.NAME
-            testcase.input_fname = "file.bin"
-            testcase.add_from_data("test", testcase.landing_page)
+class SimpleAdapter(Adapter):
+    NAME = "simple"
+    def __init__(self, use_harness, remaining=None):
+        super().__init__()
+        self.remaining = remaining
+        self._use_harness = use_harness
+    def setup(self, input_path, server_map):
+        if self._use_harness:
+            self.enable_harness()
+        self.fuzz["input"] = input_path
+    def generate(self, testcase, server_map):
+        assert testcase.adapter_name == self.NAME
+        testcase.input_fname = self.fuzz["input"]
+        testcase.add_from_data("test", testcase.landing_page)
+        if self.remaining is not None:
+            assert self.remaining > 0
             self.remaining -= 1
+
+
+@mark.parametrize(
+    "harness, profiling, coverage, relaunch, iters",
+    [
+        # with harness, single iteration
+        (True, False, False, 1, 1),
+        # with harness, 10 iterations relaunch every iteration
+        (True, False, False, 1, 10),
+        # with harness, 10 iterations relaunch every other iteration
+        (True, False, False, 2, 10),
+        # with harness, 10 iterations no relaunches
+        (True, False, False, 10, 10),
+        # no harness, single iteration
+        (False, False, False, 1, 1),
+        # no harness, 10 iterations
+        (False, False, False, 1, 10),
+        # test enable profiling
+        (True, True, False, 10, 10),
+        # test Session.dump_coverage()
+        (True, True, True, 2, 2),
+    ]
+)
+def test_session_01(mocker, tmp_path, harness, profiling, coverage, relaunch, iters):
+    """test Session with typical fuzzer Adapter"""
     Status.PATH = str(tmp_path)
-    adapter = PlaybackAdapter()
-    adapter.setup(None, None)
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
     prefs = tmp_path / "prefs.js"
     prefs.touch()
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs))
+    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs))
+    target.log_size.return_value = 1000
+    target.monitor.launches = 1
+    # avoid shutdown delay
+    target.monitor.is_healthy.return_value = False
+    # calculate if the target is 'closed' based on relaunch
+    type(target).closed = mocker.PropertyMock(
+        side_effect=((x % relaunch == 0) for x in range(iters))
+    )
+    with Session(
+        SimpleAdapter(harness),
+        None,
+        server,
+        target,
+        coverage=coverage,
+        enable_profiling=profiling,
+        relaunch=relaunch,
+    ) as session:
+        server.serve_path = lambda *a, **kv: (
+            SERVED_ALL,
+            [session.iomanager.page_name(offset=-1)]
+        )
+        session.run([], 10, input_path="file.bin", iteration_limit=iters)
+        assert session.status.iteration == iters
+        assert session.status.test_name == "file.bin"
+        assert target.close.call_count == iters / relaunch
+        assert target.detect_failure.call_count == iters
+        assert target.handle_hang.call_count == 0
+        if profiling:
+            assert any(session.status.profile_entries())
+        else:
+            assert not any(session.status.profile_entries())
+        if coverage:
+            assert target.dump_coverage.call_count == iters
+        else:
+            assert target.dump_coverage.call_count == 0
+
+@mark.parametrize(
+    "harness, relaunch, remaining",
+    [
+        # no harness, 1 iteration
+        (False, 1, 1),
+        # no harness, 5 iterations, relaunch every iteration
+        (False, 1, 5),
+        # harness, 1 iteration
+        (True, 1, 1),
+        # harness, 10 iterations, relaunch every other iteration
+        (True, 2, 10),
+        # harness, 10 iterations
+        (True, 10, 10),
+    ]
+)
+def test_session_02(tmp_path, mocker, harness, relaunch, remaining):
+    """test Session with playback Adapter"""
+    Status.PATH = str(tmp_path)
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    # calculate if the target is 'closed' based on relaunch
+    type(target).closed = mocker.PropertyMock(
+        side_effect=((x % relaunch == 0) for x in range(remaining))
+    )
+    # avoid shutdown delay
+    target.monitor.is_healthy.return_value = False
     # set target.log_size to test warning code path
-    fake_target.log_size.return_value = Session.TARGET_LOG_SIZE_WARN + 1
-    with IOManager() as iomgr:
-        fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
-        with Session(adapter, iomgr, None, fake_serv, fake_target, relaunch=10) as session:
-            session.run([], 10)
-            assert session.status.iteration == 5
-            assert session.status.test_name == "file.bin"
+    target.log_size.return_value = Session.TARGET_LOG_SIZE_WARN + 1
+    with Session(
+        SimpleAdapter(harness, remaining=remaining),
+        None,
+        server,
+        target,
+        relaunch=relaunch
+    ) as session:
+        server.serve_path = lambda *a, **kv: (
+            SERVED_ALL,
+            [session.iomanager.page_name(offset=-1)]
+        )
+        session.run([], 10)
+        assert session.status.iteration == remaining
+        assert session.status.test_name is None
+        assert target.detect_failure.call_count == remaining
+        assert target.handle_hang.call_count == 0
 
-def test_session_02(tmp_path, mocker):
-    """test Session with basic fuzzer Adapter (w/harness)"""
-    class FuzzAdapter(Adapter):
-        NAME = "fuzz"
-        def setup(self, input_path, server_map):
-            self.enable_harness()
-        def generate(self, testcase, server_map):
-            assert testcase.adapter_name == self.NAME
-            testcase.add_from_data("test", testcase.landing_page)
+@mark.parametrize(
+    "harness, report_size, relaunch, iters",
+    [
+        # with harness, collect 1 test case
+        (True, 1, 1, 1),
+        # with harness, collect 2 test cases
+        (True, 2, 2, 2),
+        # with harness, collect 2 test cases,
+        (True, 2, 3, 3),
+        # with harness, collect 3 test cases, relaunch 1
+        (True, 3, 1, 3),
+        # without harness, collect 1 test case
+        (False, 1, 1, 1),
+        # without harness, collect 1 test case, 3 iterations
+        (False, 1, 1, 3),
+    ],
+)
+def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
+    """test Session - detecting failure"""
     Status.PATH = str(tmp_path)
-    adapter = FuzzAdapter()
-    adapter.setup(None, None)
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    prefs = tmp_path / "prefs.js"
-    prefs.touch()
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs))
-    fake_target.log_size.return_value = 1000
-    fake_target.monitor.launches = 1
-    with IOManager() as iomgr:
-        iomgr.harness = adapter.get_harness()
-        fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
-        # enable profiling for test coverage
-        with Session(adapter, iomgr, None, fake_serv, fake_target, enable_profiling=True, relaunch=10) as session:
-            session.run([], 10, iteration_limit=10)
-            assert session.status.iteration == 10
-            assert session.status.test_name is None
+    adapter = SimpleAdapter(harness)
+    reporter = mocker.Mock(spec=Reporter)
+    report = mocker.Mock(spec=Report, major="major123", minor="minor456")
+    report.crash_info.createShortSignature.return_value = "[@ sig]"
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    target.RESULT_FAILURE = Target.RESULT_FAILURE
+    target.RESULT_NONE = Target.RESULT_NONE
+    target.monitor.launches = 1
+    # avoid shutdown delay
+    target.monitor.is_healthy.return_value = False
+    # calculate if the target is 'closed' based on relaunch
+    type(target).closed = mocker.PropertyMock(
+        side_effect=((x % relaunch == 0) for x in range(iters))
+    )
+    # failure is on final iteration
+    target.detect_failure.side_effect = [
+        Target.RESULT_NONE for x in range(iters - 1)
+    ] + [Target.RESULT_FAILURE]
+    target.log_size.return_value = 1
+    target.create_report.return_value = report
+    with Session(
+        adapter, reporter, server, target, relaunch=relaunch, report_size=report_size
+    ) as session:
+        server.serve_path = lambda *a, **kv: (
+            SERVED_ALL,
+            [session.iomanager.page_name(offset=-1)]
+        )
+        session.run([], 10, input_path="file.bin", iteration_limit=iters)
+        assert reporter.submit.call_count == 1
+        assert len(reporter.submit.call_args[0][0]) == min(report_size, relaunch)
+        assert reporter.submit.call_args[0][1].major == "major123"
 
-def test_session_03(tmp_path, mocker):
-    """test Session.dump_coverage()"""
-    class FuzzAdapter(Adapter):
-        NAME = "fuzz"
-        def setup(self, input_path, server_map):
-            self.enable_harness()
-        def generate(self, testcase, server_map):
-            assert testcase.adapter_name == self.NAME
-            testcase.add_from_data("test", testcase.landing_page)
-    Status.PATH = str(tmp_path)
-    mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    adapter = FuzzAdapter()
-    adapter.setup(None, None)
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, prefs=None)
-    fake_target.log_size.return_value = 1000
-    fake_target.monitor.launches = 1
-    # target.launch() call will be skipped
-    fake_target.closed = False
-    with IOManager() as iomgr:
-        fake_serv.serve_path = lambda *a, **kv: (SERVED_ALL, [iomgr.page_name(offset=-1)])
-        with Session(adapter, iomgr, None, fake_serv, fake_target, coverage=True, relaunch=2) as session:
-            session.run([], 10, iteration_limit=2)
-            assert session.status.iteration == 2
-    assert fake_target.dump_coverage.call_count == 2
-
-def test_session_04(tmp_path, mocker):
+def test_session_04(mocker, tmp_path):
     """test Adapter creating invalid test case"""
     class FuzzAdapter(Adapter):
         NAME = "fuzz"
         def generate(self, testcase, server_map):
             pass
     Status.PATH = str(tmp_path)
-    adapter = FuzzAdapter()
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
-    fake_target.monitor.launches = 1
-    with IOManager() as iomgr:
-        fake_serv.serve_path.return_value = (SERVED_NONE, [])
-        with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
-            with raises(SessionError, match="Test case is missing landing page"):
-                session.run([], 10)
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server.serve_path.return_value = (SERVED_NONE, [])
+    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    target.monitor.launches = 1
+    with Session(FuzzAdapter(), None, server, target) as session:
+        with raises(SessionError, match="Test case is missing landing page"):
+            session.run([], 10)
 
-def test_session_05(tmp_path, mocker):
+def test_session_05(mocker, tmp_path):
     """test Target not requesting landing page"""
-    class FuzzAdapter(Adapter):
-        NAME = "fuzz"
-        def generate(self, testcase, server_map):
-            testcase.add_from_data("test", testcase.landing_page)
     Status.PATH = str(tmp_path)
-    adapter = FuzzAdapter()
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
-    fake_target.monitor.launches = 1
-    with IOManager() as iomgr:
-        fake_serv.serve_path.return_value = (SERVED_TIMEOUT, [])
-        with Session(adapter, iomgr, None, fake_serv, fake_target) as session:
-            with raises(SessionError, match="Please check Adapter and Target"):
-                session.run([], 10)
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    server.serve_path.return_value = (SERVED_TIMEOUT, [])
+    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    target.monitor.launches = 1
+    with Session(SimpleAdapter(False), None, server, target) as session:
+        with raises(SessionError, match="Please check Adapter and Target"):
+            session.run([], 10)
 
-def test_session_06(tmp_path, mocker):
-    """test Target delayed failure"""
-    class FuzzAdapter(Adapter):
-        NAME = "fuzz"
-        def setup(self, input_path, server_map):
-            self.enable_harness()
-        def generate(self, testcase, server_map):
-            testcase.add_from_data("test", testcase.landing_page)
+@mark.parametrize(
+    "harness, report_size",
+    [
+        # with harness, collect 1 test case
+        (True, 1),
+        # with harness, collect 2 test cases
+        (True, 2),
+        # without harness, collect 1 test case
+        (False, 1),
+    ],
+)
+def test_session_06(mocker, tmp_path, harness, report_size):
+    """test Session - handle Target delayed failures"""
     Status.PATH = str(tmp_path)
-    adapter = FuzzAdapter()
-    adapter.setup(None, None)
     reporter = mocker.Mock(spec=Reporter)
-    fake_report = mocker.Mock(spec=Report, major="major123", minor="minor456")
-    fake_report.crash_info.createShortSignature.return_value = "[@ sig]"
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
-    fake_target.RESULT_FAILURE = Target.RESULT_FAILURE
-    fake_target.RESULT_NONE = Target.RESULT_NONE
-    fake_target.monitor.launches = 1
-    type(fake_target).closed = mocker.PropertyMock(side_effect=(True, False))
-    fake_target.detect_failure.side_effect = (
-        Target.RESULT_NONE,
-        Target.RESULT_FAILURE
-    )
-    fake_target.log_size.return_value = 1
-    fake_target.create_report.return_value = fake_report
-    with IOManager() as iomgr:
-        iomgr.harness = adapter.get_harness()
-        fake_serv.serve_path.side_effect = (
-            (SERVED_ALL, [iomgr.page_name()]),
-            (SERVED_NONE, [])
+    report = mocker.Mock(spec=Report, major="major123", minor="minor456")
+    report.crash_info.createShortSignature.return_value = "[@ sig]"
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    target.RESULT_FAILURE = Target.RESULT_FAILURE
+    target.RESULT_NONE = Target.RESULT_NONE
+    target.monitor.launches = 1
+    type(target).closed = mocker.PropertyMock(side_effect=(True, False))
+    target.detect_failure.side_effect = (Target.RESULT_NONE, Target.RESULT_FAILURE)
+    target.log_size.return_value = 1
+    target.create_report.return_value = report
+    with Session(
+        SimpleAdapter(harness),
+        reporter,
+        server,
+        target,
+        relaunch=2,
+        report_size=report_size
+    ) as session:
+        server.serve_path.side_effect = (
+            (SERVED_ALL, [session.iomanager.page_name()]),
+            (SERVED_NONE, []),
         )
-        with Session(adapter, iomgr, reporter, fake_serv, fake_target, relaunch=2) as session:
-            session.run([], 10, iteration_limit=2)
-    assert reporter.submit.call_count == 1
-    assert len(reporter.submit.call_args[0][0]) == 1
-    assert reporter.submit.call_args[0][1].major == "major123"
+        session.run([], 10, iteration_limit=2)
+        assert reporter.submit.call_count == 1
+        assert len(reporter.submit.call_args[0][0]) == 1
+        assert reporter.submit.call_args[0][1].major == "major123"
 
-def test_session_07(tmp_path, mocker):
-    """test basic Session functions"""
+@mark.parametrize(
+    "srv_results, target_result, ignored, results",
+    [
+        # delayed startup crash
+        (SERVED_NONE, Target.RESULT_FAILURE, 0, 1),
+        # startup hang/unresponsive
+        (SERVED_TIMEOUT, Target.RESULT_NONE, 1, 0),
+    ],
+)
+def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, results):
+    """test Session.run() - initial test case was not served"""
     Status.PATH = str(tmp_path)
-    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_adapter.IGNORE_UNSERVED = True
-    fake_testcase = mocker.Mock(spec_set=TestCase, landing_page="page.htm", optional=[], time_limit=10)
-    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
-    fake_iomgr.create_testcase.return_value = fake_testcase
-    fake_iomgr.tests = mocker.Mock(spec=deque)
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_serv.serve_path.return_value = (SERVED_TIMEOUT, [fake_testcase.landing_page])
-    fake_target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
-    fake_target.monitor.launches = 1
-    with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target) as session:
-        session.run([], 10, iteration_limit=1)
-    assert fake_adapter.setup.call_count == 0
-    assert fake_adapter.pre_launch.call_count == 1
-    assert fake_adapter.generate.call_count == 1
-    assert fake_adapter.on_served.call_count == 0
-    assert fake_adapter.on_timeout.call_count == 1
-    assert fake_iomgr.create_testcase.call_count == 1
-    assert fake_iomgr.tests.pop.call_count == 0
-    assert fake_testcase.purge_optional.call_count == 1
-    assert fake_serv.serve_path.call_count == 1
-    assert fake_target.launch.call_count == 1
-    assert fake_target.detect_failure.call_count == 0
-    assert fake_target.handle_hang.call_count == 1
-    assert fake_target.monitor.is_healthy.call_count == 0
+    report = mocker.Mock(spec=Report, major="major123", minor="minor456")
+    report.crash_info.createShortSignature.return_value = "[@ sig]"
+    reporter = mocker.Mock(spec=Reporter)
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    target = mocker.Mock(spec=Target, closed=True, launch_timeout=30, prefs=None)
+    target.RESULT_FAILURE = Target.RESULT_FAILURE
+    target.RESULT_NONE = Target.RESULT_NONE
+    target.monitor.launches = 1
+    target.detect_failure.side_effect = (target_result,)
+    target.create_report.return_value = report
+    with Session(SimpleAdapter(False), reporter, server, target) as session:
+        server.serve_path.return_value = (srv_results, [])
+        with raises(SessionError, match="Please check Adapter and Target"):
+            session.run([], 10, iteration_limit=2)
+        assert session.status.iteration == 1
+        assert session.status.results == results
+        assert session.status.ignored == ignored
+        assert reporter.submit.call_count == results
+        assert target.detect_failure.call_count == results
+        assert target.handle_hang.call_count == ignored
 
 def test_session_08(tmp_path, mocker):
-    """test Session.generate_testcase()"""
-    Status.PATH = str(tmp_path)
-    mocker.patch("grizzly.session.TestFile", autospec=True)
-    fake_adapter = mocker.Mock(spec=Adapter)
-    fake_adapter.NAME = "fake_adapter"
-    fake_iomgr = mocker.Mock(spec=IOManager, server_map=ServerMap())
-    fake_iomgr.create_testcase.return_value = mocker.Mock(spec_set=TestCase, time_limit=10)
-    fake_target = mocker.Mock(spec=Target, prefs="fake")
-    with Session(fake_adapter, fake_iomgr, None, None, fake_target) as session:
-        assert fake_adapter.generate.call_count == 0
-        testcase = session.generate_testcase(10)
-        assert fake_iomgr.create_testcase.call_count == 1
-        fake_iomgr.create_testcase.assert_called_with("fake_adapter", 10)
-        assert fake_adapter.generate.call_count == 1
-        fake_adapter.generate.assert_called_with(testcase, fake_iomgr.server_map)
-        assert testcase.add_meta.call_count == 1
-
-def test_session_09(tmp_path, mocker):
-    """test Session.run() - test case was not served"""
-    # TODO: use parametrize?
-    Status.PATH = str(tmp_path)
-    fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    mocker.patch("grizzly.session.TestFile", autospec=True)
-    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
-    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
-    fake_iomgr.tests = mocker.Mock(spec=deque)
-    fake_report = mocker.Mock(spec=Report, major="major123", minor="minor456")
-    fake_report.crash_info.createShortSignature.return_value = "[@ sig]"
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
-    fake_target.monitor.launches = 1
-    fake_target.create_report.return_value = fake_report
-    fake_reporter = mocker.Mock(spec=Reporter)
-    # delayed startup crash
-    run_result = RunResult([], 1, status=RunResult.FAILED)
-    run_result.attempted = False
-    run_result.initial = True
-    fake_runner.return_value.run.return_value = run_result
-    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
-        with raises(SessionError, match="Please check Adapter and Target"):
-            session.run([], 10, iteration_limit=1)
-        assert fake_runner.return_value.run.call_count == 1
-        assert fake_runner.return_value.launch.call_count == 1
-        assert session.status.iteration == 1
-        assert session.status.results == 1
-        assert session.status.ignored == 0
-        assert fake_reporter.submit.call_count == 1
-    fake_reporter.reset_mock()
-    fake_runner.reset_mock()
-    # startup hang/unresponsive
-    run_result = RunResult([], 1)
-    run_result.attempted = False
-    run_result.initial = True
-    fake_runner.return_value.run.return_value = run_result
-    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
-        with raises(SessionError, match="Please check Adapter and Target"):
-            session.run([], 10, iteration_limit=1)
-        assert fake_runner.return_value.run.call_count == 1
-        assert fake_runner.return_value.launch.call_count == 1
-        assert session.status.iteration == 1
-        assert session.status.results == 0
-        assert session.status.ignored == 0
-        assert fake_reporter.submit.call_count == 0
-
-def test_session_10(tmp_path, mocker):
     """test Session.run() ignoring failures"""
     Status.PATH = str(tmp_path)
     result = RunResult([], 0.1, status=RunResult.IGNORED)
     result.attempted = True
-    fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_runner.return_value.run.return_value = result
+    runner = mocker.patch("grizzly.session.Runner", autospec=True)
+    runner.return_value.run.return_value = result
     mocker.patch("grizzly.session.TestFile", autospec=True)
-    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_adapter.IGNORE_UNSERVED = False
-    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
-    fake_test = mocker.Mock(spec=TestCase)
-    fake_iomgr.create_testcase.return_value = fake_test
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
-    fake_target.monitor.launches = 1
-    with Session(fake_adapter, fake_iomgr, None, fake_serv, fake_target) as session:
+    adapter = mocker.Mock(spec=Adapter, remaining=None)
+    adapter.IGNORE_UNSERVED = False
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    target = mocker.Mock(spec=Target, prefs=None)
+    target.monitor.launches = 1
+    with Session(adapter, None, server, target) as session:
         session.run([], 10, iteration_limit=1)
-        assert fake_runner.return_value.run.call_count == 1
-        assert fake_adapter.on_served.call_count == 1
-        assert fake_adapter.on_timeout.call_count == 0
-        assert fake_iomgr.purge_tests.call_count == 1
-        assert fake_test.purge_optional.call_count == 0
-        assert fake_runner.return_value.launch.call_count == fake_iomgr.purge_tests.call_count
-        assert fake_target.create_report.call_count == 0
+        assert runner.return_value.run.call_count == 1
+        assert adapter.on_served.call_count == 1
+        assert adapter.on_timeout.call_count == 0
+        assert target.create_report.call_count == 0
         assert session.status.iteration == 1
         assert session.status.results == 0
         assert session.status.ignored == 1
 
-def test_session_11(tmp_path, mocker):
+def test_session_09(tmp_path, mocker):
     """test Session.run() handle TargetLaunchError"""
     Status.PATH = str(tmp_path)
-    fake_report = mocker.Mock(spec=Report, major="major123", minor="minor456")
-    fake_report.crash_info.createShortSignature.return_value = "[@ sig]"
-    fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_runner.return_value.launch.side_effect = TargetLaunchError("test", fake_report)
+    report = mocker.Mock(spec=Report, major="major123", minor="minor456")
+    runner = mocker.patch("grizzly.session.Runner", autospec=True)
+    runner.return_value.launch.side_effect = TargetLaunchError("test", report)
     mocker.patch("grizzly.session.TestFile", autospec=True)
-    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_iomgr = mocker.Mock(spec=IOManager, harness=None, server_map=ServerMap())
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target)
-    fake_target.monitor.launches = 1
-    with Session(fake_adapter, fake_iomgr, mocker.Mock(), fake_serv, fake_target) as session:
+    adapter = mocker.Mock(spec=Adapter, remaining=None)
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    target = mocker.Mock(spec=Target)
+    target.monitor.launches = 1
+    with Session(adapter, mocker.Mock(spec=Reporter), server, target) as session:
         with raises(TargetLaunchError, match="test"):
-            session.run([], 10, iteration_limit=1)
+            session.run([], 10, iteration_limit=2)
         assert session.status.iteration == 1
         assert session.status.results == 1
         assert session.status.ignored == 0
 
-def test_session_12(tmp_path, mocker):
+def test_session_10(tmp_path, mocker):
     """test Session.run() report hang"""
     Status.PATH = str(tmp_path)
     result = RunResult([], 60.0, status=RunResult.FAILED, timeout=True)
     result.attempted = True
-    fake_runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    fake_runner.return_value.run.return_value = result
+    runner = mocker.patch("grizzly.session.Runner", autospec=True)
+    runner.return_value.run.return_value = result
     mocker.patch("grizzly.session.TestFile", autospec=True)
-    fake_adapter = mocker.Mock(spec=Adapter, remaining=None)
-    fake_iomgr = mocker.Mock(
-        spec=IOManager,
-        harness=None,
-        server_map=ServerMap(),
-        tests=mocker.Mock(spec=deque))
-    fake_iomgr.create_testcase.return_value = mocker.Mock(spec=TestCase)
-    fake_report = mocker.Mock(spec=Report, major="major123", minor="minor456")
-    fake_reporter = mocker.Mock(spec=Reporter)
-    fake_serv = mocker.Mock(spec=Sapphire, port=0x1337)
-    fake_target = mocker.Mock(spec=Target, prefs="prefs.js")
-    fake_target.monitor.launches = 1
-    fake_target.create_report.return_value = fake_report
-    with Session(fake_adapter, fake_iomgr, fake_reporter, fake_serv, fake_target) as session:
+    adapter = mocker.Mock(spec=Adapter, remaining=None)
+    report = mocker.Mock(spec=Report, major="major123", minor="minor456")
+    reporter = mocker.Mock(spec=Reporter)
+    server = mocker.Mock(spec=Sapphire, port=0x1337)
+    target = mocker.Mock(spec=Target, prefs=None)
+    target.monitor.launches = 1
+    target.create_report.return_value = report
+    with Session(adapter, reporter, server, target) as session:
         session.run([], 10, iteration_limit=1)
-        assert fake_runner.return_value.run.call_count == 1
-        assert fake_adapter.on_served.call_count == 0
-        assert fake_adapter.on_timeout.call_count == 1
-        assert fake_iomgr.purge_tests.call_count == 1
-        assert fake_target.create_report.call_count == 1
-        assert fake_reporter.submit.call_count == 1
+        assert runner.return_value.run.call_count == 1
+        assert adapter.on_served.call_count == 0
+        assert adapter.on_timeout.call_count == 1
+        assert target.create_report.call_count == 1
+        assert reporter.submit.call_count == 1
         assert session.status.iteration == 1
         assert session.status.results == 1
         assert session.status.ignored == 0

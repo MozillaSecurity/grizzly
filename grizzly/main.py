@@ -9,7 +9,6 @@ from os import getcwd, getenv, getpid
 from sapphire import Sapphire
 
 from .adapters import get as get_adapter
-from .common.iomanager import IOManager
 from .common.reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
 from .common.utils import TIMEOUT_DELAY
 from .session import Session
@@ -51,14 +50,9 @@ def main(args):
         LOG.info("Running with Valgrind. This will be SLOW!")
 
     adapter = None
-    iomanager = None
     session = None
     target = None
     try:
-        LOG.debug("initializing the IOManager")
-        # TODO: move this into Session
-        iomanager = IOManager(report_size=(max(args.cache, 0) + 1))
-
         LOG.debug("initializing Adapter %r", args.adapter)
         adapter = get_adapter(args.adapter)()
 
@@ -101,11 +95,6 @@ def main(args):
             LOG.info("Using prefs %r", args.prefs)
         adapter.monitor = target.monitor
 
-        LOG.debug("calling adapter setup()")
-        adapter.setup(args.input, iomanager.server_map)
-        LOG.debug("configuring harness")
-        iomanager.harness = adapter.get_harness()
-
         LOG.debug("initializing the Reporter")
         if args.fuzzmanager:
             LOG.info("Results will be reported via FuzzManager")
@@ -129,13 +118,13 @@ def main(args):
             LOG.debug("initializing the Session")
             session = Session(
                 adapter,
-                iomanager,
                 reporter,
                 server,
                 target,
                 coverage=args.coverage,
                 enable_profiling=args.enable_profiling,
-                relaunch=relaunch)
+                relaunch=relaunch,
+                report_size=max(args.cache, 0) + 1)
             if args.log_level == DEBUG or args.verbose:
                 display_mode = Session.DISPLAY_VERBOSE
             else:
@@ -143,6 +132,7 @@ def main(args):
             session.run(
                 args.ignore,
                 time_limit,
+                input_path=args.input,
                 iteration_limit=args.limit,
                 display_mode=display_mode)
 
@@ -165,9 +155,6 @@ def main(args):
         if adapter is not None:
             LOG.debug("calling adapter.cleanup()")
             adapter.cleanup()
-        if iomanager is not None:
-            LOG.debug("calling iomanager.cleanup()")
-            iomanager.cleanup()
         LOG.info("Done.")
 
     return Session.EXIT_SUCCESS
