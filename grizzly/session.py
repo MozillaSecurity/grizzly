@@ -5,7 +5,7 @@
 from logging import getLogger
 from time import time
 
-from .common import Runner, RunResult, Status, TestFile
+from .common import IOManager, Runner, RunResult, Status, TestFile
 from .target import TargetLaunchError
 
 
@@ -62,19 +62,41 @@ class Session:
 
     TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
 
-    __slots__ = ("_relaunch", "adapter", "coverage", "iomanager", "reporter", "server",
-                 "status", "target")
+    __slots__ = (
+        "_coverage",
+        "_relaunch",
+        "_report_size",
+        "adapter",
+        "iomanager",
+        "reporter",
+        "server",
+        "status",
+        "target"
+    )
 
-    def __init__(self, adapter, iomanager, reporter, server, target,
-                 coverage=False, enable_profiling=False, relaunch=1):
+    def __init__(
+        self,
+        adapter,
+        reporter,
+        server,
+        target,
+        coverage=False,
+        enable_profiling=False,
+        relaunch=1,
+        report_size=1
+    ):
+        assert relaunch > 0
+        assert report_size > 0
+        self._coverage = coverage
         self._relaunch = relaunch
         self.adapter = adapter
-        self.coverage = coverage
-        self.iomanager = iomanager
+        self.iomanager = None
         self.reporter = reporter
         self.server = server
-        self.status = Status.start(enable_profiling=enable_profiling)
         self.target = target
+        self.status = None
+        self.iomanager = IOManager(report_size=report_size)
+        self.status = Status.start(enable_profiling=enable_profiling)
 
     def __enter__(self):
         return self
@@ -83,7 +105,10 @@ class Session:
         self.close()
 
     def close(self):
-        self.status.cleanup()
+        if self.iomanager is not None:
+            self.iomanager.cleanup()
+        if self.status is not None:
+            self.status.cleanup()
 
     def display_status(self, log_limiter):
         if self.adapter.remaining is not None:
@@ -108,9 +133,22 @@ class Session:
             test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
         return test
 
-    def run(self, ignore, time_limit, iteration_limit=0, display_mode=DISPLAY_NORMAL):
+    def run(
+        self,
+        ignore,
+        time_limit,
+        input_path=None,
+        iteration_limit=0,
+        display_mode=DISPLAY_NORMAL
+    ):
         assert time_limit > 0
         assert iteration_limit >= 0
+
+        LOG.debug("calling adapter.setup()")
+        self.adapter.setup(input_path, self.iomanager.server_map)
+        LOG.debug("configuring harness")
+        self.iomanager.harness = self.adapter.get_harness()
+
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         # limit relaunch to max iterations if needed
         relaunch = min(self._relaunch, iteration_limit) or self._relaunch
@@ -120,6 +158,7 @@ class Session:
         runner = Runner(self.server, self.target, relaunch=relaunch)
         startup_error = False
         while True:
+            LOG.debug("- iteration %d -", self.status.iteration + 1)
             self.status.report()
             self.status.iteration += 1
 
@@ -162,7 +201,7 @@ class Session:
                     ignore,
                     self.iomanager.server_map,
                     current_test,
-                    coverage=self.coverage)
+                    coverage=self._coverage)
             current_test.duration = result.duration
             # adapter callbacks
             if result.timeout:
