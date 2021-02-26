@@ -214,8 +214,8 @@ class GrizzlyArgs(CommonArgs):
             help="Use RR (Linux only)")
 
         self.reporter_grp.add_argument(
-            "-c", "--cache", type=int, default=0,
-            help="Maximum number of additional test cases to include in report (default: %(default)s)")
+            "-c", "--collect", type=int, default=1,
+            help="Maximum number of test cases to include in the report (default: %(default)s)")
         self.reporter_grp.add_argument(
             "--s3-fuzzmanager", action="store_true",
             help="Report large attachments (if any) to S3 and then the crash & S3 link to FuzzManager")
@@ -230,6 +230,9 @@ class GrizzlyArgs(CommonArgs):
             else:
                 msg.append("No adapters available.")
             self.parser.error(" ".join(msg))
+
+        if args.collect < 1:
+            self.parser.error("--collect must be greater than 0")
 
         if args.fuzzmanager and args.s3_fuzzmanager:
             self.parser.error("--fuzzmanager and --s3-fuzzmanager are mutually exclusive")

@@ -124,7 +124,7 @@ def main(args):
                 coverage=args.coverage,
                 enable_profiling=args.enable_profiling,
                 relaunch=relaunch,
-                report_size=max(args.cache, 0) + 1)
+                report_size=args.collect)
             if args.log_level == DEBUG or args.verbose:
                 display_mode = Session.DISPLAY_VERBOSE
             else:

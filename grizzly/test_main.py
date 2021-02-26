@@ -16,7 +16,7 @@ class FakeArgs:
         self.binary = None
         self.input = None
         self.adapter = None
-        self.cache = 0
+        self.collect = 1
         self.coverage = False
         self.enable_profiling = False
         self.extension = None
