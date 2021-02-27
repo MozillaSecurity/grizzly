@@ -2,7 +2,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 from collections import deque
 from os import environ
 from os.path import isfile
@@ -18,21 +17,35 @@ __credits__ = ["Tyson Smith"]
 
 
 class IOManager:
+    # TODO: some of these are target specific
     TRACKED_ENVVARS = (
         "ASAN_OPTIONS",
         "LSAN_OPTIONS",
         "GNOME_ACCESSIBILITY",
         "MOZ_CHAOSMODE",
-        "XPCOM_DEBUG_BREAK")
+        "XPCOM_DEBUG_BREAK",
+    )
+
+    __slots__ = (
+        "_environ_files",
+        "_generated",
+        "_report_size",
+        "_test",
+        "_tracked_env",
+        "harness",
+        "server_map",
+        "tests",
+    )
 
     def __init__(self, report_size=1):
         assert report_size > 0
         self.harness = None
-        self.server_map = ServerMap()  # manage redirects, include directories and dynamic responses
+        self.server_map = ServerMap()
         self.tests = deque()
-        self._environ_files = list()  # collection of files that should be added to the testcase
+        self._environ_files = list()
         self._generated = 0  # number of test cases generated
         self._report_size = report_size
+        self._test = None
         # used to record environment variable that directly impact the browser
         self._tracked_env = self.tracked_environ()
         self._add_suppressions()
@@ -57,41 +70,51 @@ class IOManager:
     def cleanup(self):
         for e_file in self._environ_files:
             e_file.close()
-        self.purge_tests()
+        self.purge()
+
+    def commit(self):
+        assert self._test is not None
+        self.tests.appendleft(self._test)
+        self._test = None
+        # manage testcase cache size
+        if len(self.tests) > self._report_size:
+            self.tests.pop().cleanup()
 
     def create_testcase(self, adapter_name, time_limit):
+        assert self._test is None
         # create testcase object and landing page names
-        test = TestCase(
+        self._test = TestCase(
             self.page_name(),
             self.page_name(offset=1),
             adapter_name=adapter_name,
-            time_limit=time_limit)
+            time_limit=time_limit,
+        )
         # add environment variable info to the test case
         for e_name, e_value in self._tracked_env.items():
-            test.add_environ_var(e_name, e_value)
+            self._test.add_environ_var(e_name, e_value)
         # add environment files to the test case
         for e_file in self._environ_files:
-            test.add_meta(e_file.clone())
+            self._test.add_meta(e_file.clone())
         # reset redirect map
         self.server_map.redirect.clear()
-        self.server_map.set_redirect("grz_current_test", self.page_name(), required=False)
+        self.server_map.set_redirect(
+            "grz_current_test", self.page_name(), required=False
+        )
         self.server_map.set_redirect("grz_next_test", self.page_name(offset=1))
         if self.harness is not None:
             self.server_map.set_dynamic_response(
-                "grz_harness",
-                lambda: self.harness,
-                mime_type="text/html")
+                "grz_harness", lambda: self.harness, mime_type="text/html"
+            )
         self._generated += 1
-        self.tests.append(test)
-        # manage testcase cache size
-        if len(self.tests) > self._report_size:
-            self.tests.popleft().cleanup()
-        return test
+        return self._test
 
     def page_name(self, offset=0):
         return "test_%04d.html" % (self._generated + offset,)
 
-    def purge_tests(self):
+    def purge(self):
+        if self._test is not None:
+            self._test.cleanup()
+            self._test = None
         for testcase in self.tests:
             testcase.cleanup()
         self.tests.clear()
