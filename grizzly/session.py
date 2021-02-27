@@ -164,7 +164,7 @@ class Session:
 
             if self.target.closed:
                 # (re-)launch target
-                self.iomanager.purge_tests()
+                self.iomanager.purge()
                 self.adapter.pre_launch()
                 if self.iomanager.harness is None:
                     # harness is not in use, open the test case
@@ -214,7 +214,6 @@ class Session:
             if not result.attempted:
                 LOG.warning("Test case was not served")
                 LOG.debug("ignoring test case since nothing was served")
-                self.iomanager.tests.pop().cleanup()
                 if not current_test.contains(current_test.landing_page):
                     raise SessionError("Test case is missing landing page")
                 if result.initial:
@@ -228,9 +227,11 @@ class Session:
                     # to avoid aborting a fuzzing session unnecessarily
                     if self.status.iteration < 100:
                         startup_error = True
-            elif self.adapter.IGNORE_UNSERVED:
-                LOG.debug("removing unserved files from the test case")
-                current_test.purge_optional(result.served)
+            else:
+                if self.adapter.IGNORE_UNSERVED:
+                    LOG.debug("removing unserved files from the test case")
+                    current_test.purge_optional(result.served)
+                self.iomanager.commit()
             # process results
             if result.status == RunResult.FAILED:
                 LOG.debug("result detected")
@@ -243,8 +244,6 @@ class Session:
                     short_sig,
                     report.major[:8],
                     report.minor[:8])
-                # order test cases newest to oldest
-                self.iomanager.tests.reverse()
                 self.reporter.submit(self.iomanager.tests, report)
                 report.cleanup()
                 self.status.count_result(short_sig)

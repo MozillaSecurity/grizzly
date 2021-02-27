@@ -300,9 +300,9 @@ class TestCase:
                            subdirectories containing testcase data.
                         4) A single file to be used as a test case.
             load_prefs (bool): Load prefs.js file if available.
-            adjacent (str): Load adjacent files as part of the test case.
-                            This is always the case when loading a directory.
-                            WARNING: This should be used with caution!
+            adjacent (bool): Load adjacent files as part of the test case.
+                             This is always the case when loading a directory.
+                             WARNING: This should be used with caution!
 
         Returns:
             list: TestCases successfully loaded from path.
