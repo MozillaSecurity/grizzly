@@ -57,6 +57,7 @@ if __name__ == '__main__':
             'fasteners',
             'ffpuppet',
             'FuzzManager',
+            'lithium-reducer',
             'prefpicker',
             'psutil'
         ],
