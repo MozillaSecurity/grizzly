@@ -229,6 +229,7 @@ class Runner:
             LOG.debug("timeout detected")
             if self._target.handle_hang(ignore_idle=True) or "timeout" in ignore:
                 result.status = RunResult.IGNORED
+            server_map.dynamic.pop("grz_empty", None)
         if result.attempted:
             self._tests_run += 1
             if coverage and not result.timeout:

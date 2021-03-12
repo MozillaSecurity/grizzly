@@ -28,8 +28,9 @@ def test_runner_01(mocker, tmp_path):
     serv_files = ["a.bin", "/another/file.bin"]
     testcase = mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[])
     # all files served
+    serv_map = ServerMap()
     server.serve_path.return_value = (SERVED_ALL, serv_files)
-    result = runner.run([], ServerMap(), testcase)
+    result = runner.run([], serv_map, testcase)
     assert result.attempted
     assert runner._tests_run == 1
     assert result.duration == 1
@@ -37,11 +38,13 @@ def test_runner_01(mocker, tmp_path):
     assert result.status is None
     assert result.served == serv_files
     assert not result.timeout
+    assert not serv_map.dynamic
     assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 0
     assert target.handle_hang.call_count == 0
     assert testcase.dump.call_count == 1
     # some files served
+    serv_map = ServerMap()
     server.serve_path.return_value = (SERVED_REQUEST, serv_files)
     result = runner.run([], ServerMap(), testcase, coverage=True)
     assert result.attempted
@@ -50,6 +53,7 @@ def test_runner_01(mocker, tmp_path):
     assert result.status is None
     assert result.served == serv_files
     assert not result.timeout
+    assert not serv_map.dynamic
     assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 1
     assert target.handle_hang.call_count == 0
@@ -63,6 +67,7 @@ def test_runner_01(mocker, tmp_path):
     assert runner._tests_run == 3
     assert not result.initial
     assert result.status is None
+    assert not serv_map.dynamic
     assert target.close.call_count == 0
     assert testcase.dump.call_count == 0
     tc_path.is_dir()
@@ -177,11 +182,13 @@ def test_runner_04(mocker, ignore, status, idle, detect_failure):
     target.detect_failure.return_value = target.RESULT_FAILURE
     target.handle_hang.return_value = idle
     target.monitor.is_healthy.return_value = False
-    runner = Runner(server, target)
-    result = runner.run(ignore, ServerMap(), testcase)
+    runner = Runner(server, target, relaunch=1)
+    serv_map = ServerMap()
+    result = runner.run(ignore, serv_map, testcase)
     assert result.status == status
     assert result.served == serv_files
     assert result.timeout
+    assert "grz_empty" not in serv_map.dynamic
     assert target.detect_failure.call_count == detect_failure
     assert target.handle_hang.call_count == 1
 
