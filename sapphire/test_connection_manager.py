@@ -4,6 +4,7 @@ ConnectionManager unit tests
 """
 # pylint: disable=protected-access
 
+from itertools import count
 from socket import socket
 from threading import ThreadError
 
@@ -83,7 +84,7 @@ def test_connection_manager_04(mocker, tmp_path):
     # timeout
     job = Job(str(tmp_path))
     fake_time = mocker.patch("sapphire.connection_manager.time", autospec=True)
-    fake_time.side_effect = (1, 2, 3)
+    fake_time.side_effect = count()
     with ConnectionManager(job, serv_sock, max_workers=10) as loadmgr:
         assert not loadmgr.wait(1, continue_cb=lambda: False, poll=0.01)
 
