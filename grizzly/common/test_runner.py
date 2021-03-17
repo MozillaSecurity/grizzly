@@ -44,8 +44,9 @@ def test_runner_01(mocker, tmp_path):
     assert target.handle_hang.call_count == 0
     assert testcase.dump.call_count == 1
     # dump coverage
+    serv_map = ServerMap()
     server.serve_path.return_value = (SERVED_ALL, serv_files)
-    result = runner.run([], ServerMap(), testcase, coverage=True)
+    result = runner.run([], serv_map, testcase, coverage=True)
     assert result.attempted
     assert runner._tests_run == 2
     assert not result.initial
@@ -60,8 +61,9 @@ def test_runner_01(mocker, tmp_path):
     testcase.reset_mock()
     tc_path = (tmp_path / "tc")
     tc_path.mkdir()
+    serv_map = ServerMap()
     server.serve_path.return_value = (SERVED_ALL, serv_files)
-    result = runner.run([], ServerMap(), testcase, test_path=str(tc_path))
+    result = runner.run([], serv_map, testcase, test_path=str(tc_path))
     assert result.attempted
     assert runner._tests_run == 3
     assert not result.initial
