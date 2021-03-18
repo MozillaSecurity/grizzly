@@ -7,9 +7,9 @@ from os import environ
 from os.path import isfile
 
 from sapphire.server_map import ServerMap
-from .storage import TestCase, TestFile
-from ..target import sanitizer_opts
 
+from ..target import sanitizer_opts
+from .storage import TestCase, TestFile
 
 __all__ = ("IOManager",)
 __author__ = "Tyson Smith"

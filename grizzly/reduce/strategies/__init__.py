@@ -26,7 +26,6 @@ from pkg_resources import iter_entry_points
 
 from ...common.utils import grz_tmp
 
-
 LOG = getLogger(__name__)
 
 

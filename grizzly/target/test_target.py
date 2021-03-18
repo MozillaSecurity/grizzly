@@ -3,7 +3,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 
-from .target import sanitizer_opts, Target
+from .target import Target, sanitizer_opts
+
 
 class SimpleTarget(Target):
     def cleanup(self):

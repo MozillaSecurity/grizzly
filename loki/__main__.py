@@ -8,5 +8,4 @@ Loki fuzzing library
 from .args import parse_args
 from .loki import Loki
 
-
 raise SystemExit(Loki.main(parse_args()))

@@ -13,10 +13,9 @@ from pytest import raises
 
 from ..common import TestCaseLoadFailure
 from ..target import TargetLaunchError, TargetLaunchTimeout
-from .args import ReduceArgs
 from . import ReduceManager
+from .args import ReduceArgs
 from .exceptions import GrizzlyReduceBaseException
-
 
 LOG = getLogger(__name__)
 pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")

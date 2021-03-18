@@ -4,8 +4,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod
 from os import walk
-from os.path import abspath, dirname, isdir, isfile, join as pathjoin
-
+from os.path import abspath, dirname, isdir, isfile
+from os.path import join as pathjoin
 
 __all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"

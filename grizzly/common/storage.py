@@ -3,21 +3,21 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 from collections import namedtuple
 from itertools import chain
-import json
-from os import listdir, makedirs, SEEK_END, walk
-from os.path import abspath, basename, dirname, isfile, isdir, join as pathjoin, \
-    normpath, relpath
+from os import SEEK_END, listdir, makedirs, walk
+from os.path import abspath, basename, dirname, isdir, isfile
+from os.path import join as pathjoin
+from os.path import normpath, relpath
 from shutil import copyfileobj, rmtree
-from tempfile import mkdtemp, SpooledTemporaryFile
+from tempfile import SpooledTemporaryFile, mkdtemp
 from time import time
 from zipfile import BadZipfile, ZipFile
 from zlib import error as zlib_error
 
 from ..target import sanitizer_opts
 from .utils import grz_tmp
-
 
 __all__ = ("TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"

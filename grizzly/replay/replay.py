@@ -4,21 +4,24 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from logging import getLogger
-from os.path import dirname, join as pathjoin
-from tempfile import mkdtemp
+from os.path import dirname
+from os.path import join as pathjoin
 from shutil import rmtree
+from tempfile import mkdtemp
 
 from FTB.Signatures.CrashInfo import CrashSignature
+
 from sapphire import Sapphire, ServerMap
 
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner, RunResult
 from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
-from ..common.utils import ConfigError, grz_tmp, TIMEOUT_DELAY
+from ..common.utils import TIMEOUT_DELAY, ConfigError, grz_tmp
 from ..main import configure_logging
 from ..session import Session
-from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
+from ..target import TargetLaunchError, TargetLaunchTimeout
+from ..target import load as load_target
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]

@@ -12,14 +12,18 @@ import pytest
 from pytest import raises
 
 from sapphire import Sapphire
-from ..common import TestCase, TestFile, Report
+
+from ..common import Report, TestCase, TestFile
 from ..replay import ReplayResult
 from ..target import Target
-from .strategies import _load_strategies, Strategy
-from .strategies.beautify import \
-    HAVE_CSSBEAUTIFIER, HAVE_JSBEAUTIFIER, CSSBeautify, JSBeautify
 from . import ReduceManager
-
+from .strategies import Strategy, _load_strategies
+from .strategies.beautify import (
+    HAVE_CSSBEAUTIFIER,
+    HAVE_JSBEAUTIFIER,
+    CSSBeautify,
+    JSBeautify,
+)
 
 LOG = getLogger(__name__)
 pytestmark = pytest.mark.usefixtures("tmp_path_fm_config",

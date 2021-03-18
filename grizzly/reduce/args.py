@@ -10,7 +10,6 @@ from pathlib import Path
 from ..replay.args import ReplayArgs
 from .strategies import DEFAULT_STRATEGIES, STRATEGIES
 
-
 LOG = getLogger(__name__)
 
 

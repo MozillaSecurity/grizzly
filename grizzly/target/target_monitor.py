@@ -5,7 +5,6 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from os import remove
 
-
 __all__ = ("TargetMonitor",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]

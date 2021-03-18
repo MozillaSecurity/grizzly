@@ -14,8 +14,8 @@ import pytest
 
 from .core import Sapphire
 from .job import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
-from .worker import Worker
 from .server_map import ServerMap
+from .worker import Worker
 
 
 class _TestFile:

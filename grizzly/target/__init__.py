@@ -5,9 +5,16 @@
 from logging import getLogger
 from sys import exc_info
 from traceback import extract_tb
+
 from pkg_resources import iter_entry_points
 
-from .target import sanitizer_opts, Target, TargetError, TargetLaunchError, TargetLaunchTimeout
+from .target import (
+    Target,
+    TargetError,
+    TargetLaunchError,
+    TargetLaunchTimeout,
+    sanitizer_opts,
+)
 
 __all__ = ("Target", "TargetError", "TargetLaunchError", "TargetLaunchTimeout",
            "available", "load", "sanitizer_opts")

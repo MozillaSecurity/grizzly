@@ -6,10 +6,12 @@
 from pytest import mark
 
 from sapphire import Sapphire
+
 from .common import Adapter
 from .main import main
 from .session import Session
 from .target import Target, TargetLaunchError
+
 
 class FakeArgs:
     def __init__(self):

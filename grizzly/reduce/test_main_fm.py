@@ -8,9 +8,8 @@ from logging import getLogger
 
 import pytest
 
-from .crash import main as crash_main
 from .bucket import main as bucket_main
-
+from .crash import main as crash_main
 
 LOG = getLogger(__name__)
 pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")

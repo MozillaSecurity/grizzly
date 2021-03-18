@@ -14,13 +14,13 @@ import pytest
 from pytest import raises
 
 from sapphire import Sapphire
-from ..common import TestCase, Report
+
+from ..common import Report, TestCase
 from ..replay import ReplayResult
 from ..target import Target
 from . import ReduceManager
 from .exceptions import NotReproducible
 from .strategies import Strategy
-
 
 LOG = getLogger(__name__)
 pytestmark = pytest.mark.usefixtures("tmp_path_fm_config", "reporter_sequential_strftime")

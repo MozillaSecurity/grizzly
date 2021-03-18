@@ -7,6 +7,7 @@ from pytest import raises
 
 from .args import GrizzlyArgs
 
+
 def test_grizzly_args_01(capsys, tmp_path):
     """test GrizzlyArgs.parse_args()"""
     # test help

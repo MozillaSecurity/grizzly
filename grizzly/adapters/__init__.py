@@ -1,8 +1,10 @@
 from importlib import import_module
 from logging import getLogger
 from os import listdir
-from os.path import abspath, dirname, isfile, join as pathjoin
-from sys import exc_info, path as syspath
+from os.path import abspath, dirname, isfile
+from os.path import join as pathjoin
+from sys import exc_info
+from sys import path as syspath
 from traceback import extract_tb
 
 from grizzly.common import Adapter

@@ -5,12 +5,12 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
 import argparse
-from collections import defaultdict
-from datetime import timedelta
-from functools import partial
 import logging
 import os
 import re
+from collections import defaultdict
+from datetime import timedelta
+from functools import partial
 from time import gmtime, localtime, strftime, time
 
 import psutil

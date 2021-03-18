@@ -5,5 +5,5 @@
 
 __all__ = ("ReplayManager", "ReplayArgs", "ReplayResult")
 
-from .replay import ReplayManager, ReplayResult
 from .args import ReplayArgs
+from .replay import ReplayManager, ReplayResult

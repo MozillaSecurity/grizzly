@@ -6,17 +6,23 @@
 # pylint: disable=protected-access
 
 import os
-from pathlib import Path
 import sys
 import tarfile
+from pathlib import Path
 
 import pytest
-
 from FTB.ProgramConfiguration import ProgramConfiguration
 from FTB.Signatures.CrashInfo import CrashInfo
 
-from .reporter import FilesystemReporter, FuzzManagerReporter, Report, Reporter, S3FuzzManagerReporter
+from .reporter import (
+    FilesystemReporter,
+    FuzzManagerReporter,
+    Report,
+    Reporter,
+    S3FuzzManagerReporter,
+)
 from .storage import TestCase
+
 
 def _create_crash_log(log_path):
     with log_path.open("w") as log_fp:

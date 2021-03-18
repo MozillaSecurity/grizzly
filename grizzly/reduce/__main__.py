@@ -4,8 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Grizzly reducer CLI.
 """
-from .args import ReduceArgs
 from . import ReduceManager
-
+from .args import ReduceArgs
 
 raise SystemExit(ReduceManager.main(ReduceArgs().parse_args()))

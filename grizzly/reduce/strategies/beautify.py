@@ -8,9 +8,9 @@ Constants:
     HAVE_CSSBEAUTIFIER (bool): True if `cssbeautifier` module is available.
     HAVE_JSBEAUTIFIER (bool): True if `jsbeautifier` module is available.
 """
+import re
 from abc import ABC, abstractmethod
 from logging import getLogger
-import re
 
 from lithium.testcases import TestcaseLine
 
@@ -27,7 +27,6 @@ except ImportError:  # pragma: no cover
 
 from ...common.storage import TestCase
 from . import Strategy, _contains_dd
-
 
 LOG = getLogger(__name__)
 

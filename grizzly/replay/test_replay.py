@@ -11,10 +11,11 @@ from os.path import join as pathjoin
 
 from pytest import mark, raises
 
-from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT
-from .replay import ReplayManager, ReplayResult
+from sapphire import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT, Sapphire
+
 from ..common import Report, Status, TestCase, TestCaseLoadFailure
 from ..target import Target
+from .replay import ReplayManager, ReplayResult
 
 
 def _fake_save_logs(result_logs, meta=False):  # pylint: disable=unused-argument

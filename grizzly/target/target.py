@@ -8,7 +8,6 @@ from os.path import isfile
 from re import split as resplit
 from threading import Lock
 
-
 __all__ = ("Target", "sanitizer_opts")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]

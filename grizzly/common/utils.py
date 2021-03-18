@@ -7,7 +7,6 @@ from os import makedirs
 from os.path import join as pathjoin
 from tempfile import gettempdir
 
-
 __all__ = ("ConfigError", "grz_tmp", "TIMEOUT_DELAY")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]

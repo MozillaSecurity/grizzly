@@ -14,7 +14,6 @@ from Collector.Collector import Collector
 
 from .utils import grz_tmp
 
-
 LOG = getLogger(__name__)
 
 

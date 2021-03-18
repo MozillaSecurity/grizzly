@@ -8,7 +8,8 @@ from contextlib import contextmanager
 from json import dump, load
 from logging import getLogger
 from os import close, getpid, listdir, unlink
-from os.path import isdir, isfile, join as pathjoin
+from os.path import isdir, isfile
+from os.path import join as pathjoin
 from tempfile import mkstemp
 from time import time
 
