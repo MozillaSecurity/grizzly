@@ -4,15 +4,15 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 
-from itertools import chain
 import json
-import re
 import os
+import re
 import zipfile
+from itertools import chain
 
 import pytest
 
-from .storage import TestCase, TestFile, TestCaseLoadFailure, TestFileExists
+from .storage import TestCase, TestCaseLoadFailure, TestFile, TestFileExists
 
 
 def test_testcase_01(tmp_path):

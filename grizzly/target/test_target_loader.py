@@ -8,7 +8,7 @@ unittests for target plugin loading
 
 import pytest
 
-from grizzly.target import available, load, Target
+from grizzly.target import Target, available, load
 
 
 class _FakeTarget1(Target):  # pylint: disable=abstract-method

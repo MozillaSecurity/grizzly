@@ -4,12 +4,11 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
 
-from .args import ReduceFuzzManagerIDQualityArgs
-from .crash import main as crash_main
 from ..common.fuzzmanager import Bucket
 from ..main import configure_logging
 from ..session import Session
-
+from .args import ReduceFuzzManagerIDQualityArgs
+from .crash import main as crash_main
 
 LOG = getLogger(__name__)
 

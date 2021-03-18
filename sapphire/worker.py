@@ -9,9 +9,10 @@ from logging import getLogger
 from os import stat
 from os.path import isfile
 from re import compile as re_compile
-from socket import error as sock_error, timeout as sock_timeout
+from socket import error as sock_error
+from socket import timeout as sock_timeout
 from sys import exc_info
-from threading import active_count, Thread, ThreadError
+from threading import Thread, ThreadError, active_count
 from time import sleep
 from urllib.parse import unquote_plus
 

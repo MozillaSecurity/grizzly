@@ -7,23 +7,22 @@ from os import close, kill, unlink
 from os.path import abspath, isfile
 from platform import system
 from signal import SIGABRT
+
 try:
     from signal import SIGUSR1
 except ImportError:
     SIGUSR1 = None
-from time import sleep, time
 from tempfile import mkdtemp, mkstemp
-
-from psutil import AccessDenied, NoSuchProcess, Process, process_iter
+from time import sleep, time
 
 from ffpuppet import BrowserTimeoutError, FFPuppet, LaunchError
 from prefpicker import PrefPicker
+from psutil import AccessDenied, NoSuchProcess, Process, process_iter
 
-from .target_monitor import TargetMonitor
-from .target import Target, TargetLaunchError, TargetLaunchTimeout, TargetError
 from ..common.reporter import Report
 from ..common.utils import grz_tmp
-
+from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
+from .target_monitor import TargetMonitor
 
 __all__ = ("PuppetTarget",)
 __author__ = "Tyson Smith"

@@ -5,6 +5,7 @@
 
 from .utils import grz_tmp
 
+
 def test_testcase_01(mocker, tmp_path):
     """test grz_tmp()"""
     mocker.patch("grizzly.common.utils.gettempdir", autospec=True, return_value=str(tmp_path))

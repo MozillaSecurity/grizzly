@@ -7,24 +7,26 @@ from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 from hashlib import sha1
 from json import dump, dumps, loads
-from logging import getLogger, WARNING
+from logging import WARNING, getLogger
+from os import SEEK_END, getcwd, getenv, makedirs, mkdir, scandir, stat, unlink, walk
+from os.path import basename, expanduser, isdir, isfile
+from os.path import join as pathjoin
+from os.path import realpath, relpath
 from platform import machine, system
-from os import getcwd, getenv, makedirs, mkdir, scandir, SEEK_END, stat, unlink, walk
-from os.path import basename, expanduser, isdir, isfile, join as pathjoin, realpath, relpath
-from re import compile as re_compile, DOTALL, VERBOSE
+from re import DOTALL, VERBOSE
+from re import compile as re_compile
 from shutil import copyfile, copyfileobj, move, rmtree
 from tarfile import open as tar_open
 from tempfile import mkstemp
 from time import strftime
-from zipfile import ZipFile, ZIP_DEFLATED
-
-from fasteners.process_lock import InterProcessLock
-from psutil import disk_usage
+from zipfile import ZIP_DEFLATED, ZipFile
 
 # import FuzzManager utilities
 from Collector.Collector import Collector
+from fasteners.process_lock import InterProcessLock
 from FTB.ProgramConfiguration import ProgramConfiguration
 from FTB.Signatures.CrashInfo import CrashInfo
+from psutil import disk_usage
 
 # check if boto is available for S3FuzzManager reporter
 try:

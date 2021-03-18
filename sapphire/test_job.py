@@ -8,7 +8,7 @@ import platform
 
 import pytest
 
-from .job import Job, SERVED_ALL, SERVED_NONE, SERVED_REQUEST
+from .job import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, Job
 from .server_map import Resource, ServerMap
 
 

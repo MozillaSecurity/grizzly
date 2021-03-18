@@ -3,18 +3,19 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """`ReduceManager` finds the smallest testcase(s) to reproduce an issue."""
-from itertools import chain
 import json
+import os
+from itertools import chain
 from locale import LC_ALL, setlocale
 from logging import getLogger
 from math import ceil, log
-import os
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
 from time import time
 
 from FTB.Signatures.CrashInfo import CrashSignature
+
 from sapphire import Sapphire
 
 from ..common.fuzzmanager import CrashEntry
@@ -24,11 +25,11 @@ from ..common.utils import ConfigError, grz_tmp
 from ..main import configure_logging
 from ..replay import ReplayManager
 from ..session import Session
-from ..target import load as load_target, TargetLaunchError, TargetLaunchTimeout
+from ..target import TargetLaunchError, TargetLaunchTimeout
+from ..target import load as load_target
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
 from .stats import ReductionStats
 from .strategies import STRATEGIES
-
 
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]

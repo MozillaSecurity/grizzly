@@ -6,12 +6,12 @@ from itertools import count
 from os.path import isfile
 from platform import system
 
-from pytest import mark, raises
-
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, FFPuppet
+from pytest import mark, raises
 
 from .puppet_target import PuppetTarget
 from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
+
 
 def test_puppet_target_01(mocker, tmp_path):
     """test creating a PuppetTarget"""

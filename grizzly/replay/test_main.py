@@ -13,11 +13,10 @@ from pytest import mark, raises
 from sapphire import SERVED_ALL
 
 from ..common import Report, TestCase, TestCaseLoadFailure
-from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from ..replay import ReplayManager
 from ..replay.args import ReplayArgs
 from ..session import Session
-
+from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from .test_replay import _fake_save_logs
 
 

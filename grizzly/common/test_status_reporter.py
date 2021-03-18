@@ -5,12 +5,13 @@
 """test Grizzly status reporter"""
 # pylint: disable=protected-access
 
-from itertools import count
 import re
+from itertools import count
 
 import pytest
 
-from .status_reporter import main, Status, StatusReporter, TracebackReport
+from .status_reporter import Status, StatusReporter, TracebackReport, main
+
 
 def _fake_sys_info():
     return "CPU & Load : 64 @ 93.1% (85.25, 76.21, 51.06)\n" \

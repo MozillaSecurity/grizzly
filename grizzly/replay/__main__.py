@@ -5,5 +5,4 @@
 from .args import ReplayArgs
 from .replay import ReplayManager
 
-
 raise SystemExit(ReplayManager.main(ReplayArgs().parse_args()))

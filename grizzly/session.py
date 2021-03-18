@@ -8,7 +8,6 @@ from time import time
 from .common import IOManager, Runner, RunResult, Status, TestFile
 from .target import TargetLaunchError
 
-
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]

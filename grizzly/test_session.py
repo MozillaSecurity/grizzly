@@ -8,7 +8,8 @@ unit tests for grizzly.Session
 """
 from pytest import mark, raises
 
-from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
+from sapphire import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT, Sapphire
+
 from .common import Adapter, Report, Reporter, RunResult, Status
 from .session import LogOutputLimiter, Session, SessionError
 from .target import Target, TargetLaunchError

@@ -7,14 +7,15 @@
 from abc import ABC
 from logging import getLogger
 
-from lithium.strategies import CheckOnly, \
-    CollapseEmptyBraces as LithCollapseEmptyBraces, Minimize, Strategy as LithStrategy
-from lithium.testcases import TestcaseChar, TestcaseJsStr, TestcaseLine, \
-    Testcase as LithTestcase, TestcaseAttrs
+from lithium.strategies import CheckOnly
+from lithium.strategies import CollapseEmptyBraces as LithCollapseEmptyBraces
+from lithium.strategies import Minimize
+from lithium.strategies import Strategy as LithStrategy
+from lithium.testcases import Testcase as LithTestcase
+from lithium.testcases import TestcaseAttrs, TestcaseChar, TestcaseJsStr, TestcaseLine
 
 from ...common.storage import TestCase
 from . import Strategy, _contains_dd
-
 
 LOG = getLogger(__name__)
 

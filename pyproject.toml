@@ -19,9 +19,9 @@ exclude_lines = [
     "pragma: no cover",
 ]
 
-#[tool.isort]
-#known_first_party = "grizzly"
-#profile = "black"
+[tool.isort]
+known_first_party = "grizzly"
+profile = "black"
 
 [tool.pylint.format]
 max-line-length = 88

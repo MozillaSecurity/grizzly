@@ -9,13 +9,11 @@ from errno import EADDRINUSE
 from logging import getLogger
 from os.path import abspath
 from random import randint
-from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
-from socket import gethostname, socket
+from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, gethostname, socket
 from time import sleep, time
 
-from .job import Job, SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT
 from .connection_manager import ConnectionManager
-
+from .job import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT, Job
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]

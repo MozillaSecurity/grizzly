@@ -12,6 +12,7 @@ import pytest
 from .job import Job
 from .worker import Worker, WorkerError
 
+
 def test_worker_01(mocker):
     """test simple Worker in running state"""
     wthread = mocker.Mock(spec=threading.Thread)

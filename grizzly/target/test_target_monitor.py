@@ -5,6 +5,7 @@ import os
 
 from .target_monitor import TargetMonitor
 
+
 def test_target_monitor_01(tmp_path):
     """test a basic TargetMonitor"""
     class _BasicMonitor(TargetMonitor):

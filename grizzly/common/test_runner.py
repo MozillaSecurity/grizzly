@@ -8,12 +8,20 @@ from os.path import join as pathjoin
 
 from pytest import mark, raises
 
-from sapphire import Sapphire, SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT, ServerMap
+from sapphire import (
+    SERVED_ALL,
+    SERVED_NONE,
+    SERVED_REQUEST,
+    SERVED_TIMEOUT,
+    Sapphire,
+    ServerMap,
+)
 
-from .reporter import Report
-from .runner import _IdleChecker, Runner, RunResult
-from .storage import TestCase
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
+from .reporter import Report
+from .runner import Runner, RunResult, _IdleChecker
+from .storage import TestCase
+
 
 def test_runner_01(mocker, tmp_path):
     """test Runner()"""

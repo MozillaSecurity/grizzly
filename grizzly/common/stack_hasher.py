@@ -13,9 +13,10 @@ crash id (1st hash) and a bug id (2nd hash). This is not perfect but works very
 well in most cases.
 """
 from hashlib import sha1
-from logging import basicConfig, getLogger, INFO, DEBUG
+from logging import DEBUG, INFO, basicConfig, getLogger
 from os.path import basename
-from re import compile as re_compile, match as re_match
+from re import compile as re_compile
+from re import match as re_match
 
 __all__ = ("Stack", "StackFrame")
 __author__ = "Tyson Smith"

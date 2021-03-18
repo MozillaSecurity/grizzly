@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
 from sys import exc_info
-from threading import active_count, Thread, ThreadError
+from threading import Thread, ThreadError, active_count
 from time import sleep, time
 from traceback import format_exception
 

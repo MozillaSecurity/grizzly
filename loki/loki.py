@@ -5,15 +5,16 @@
 """
 Loki fuzzing library
 """
-from logging import basicConfig, getLogger, ERROR, INFO
-from os import makedirs, SEEK_END
-from os.path import abspath, getsize, splitext, join as pathjoin
+from logging import ERROR, INFO, basicConfig, getLogger
+from os import SEEK_END, makedirs
+from os.path import abspath, getsize
+from os.path import join as pathjoin
+from os.path import splitext
 from random import choice, getrandbits, randint, sample
 from shutil import copy
 from struct import pack, unpack
-from tempfile import mkdtemp, SpooledTemporaryFile
+from tempfile import SpooledTemporaryFile, mkdtemp
 from time import strftime, time
-
 
 __author__ = "Tyson Smith"
 

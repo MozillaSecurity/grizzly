@@ -2,18 +2,22 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from logging import basicConfig, DEBUG, getLogger
-from os.path import join as pathjoin
+from logging import DEBUG, basicConfig, getLogger
 from os import getcwd, getenv, getpid
+from os.path import join as pathjoin
 
 from sapphire import Sapphire
 
 from .adapters import get as get_adapter
-from .common.reporter import FilesystemReporter, FuzzManagerReporter, S3FuzzManagerReporter
+from .common.reporter import (
+    FilesystemReporter,
+    FuzzManagerReporter,
+    S3FuzzManagerReporter,
+)
 from .common.utils import TIMEOUT_DELAY
 from .session import Session
-from .target import load as load_target, TargetLaunchError, TargetLaunchTimeout
-
+from .target import TargetLaunchError, TargetLaunchTimeout
+from .target import load as load_target
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]

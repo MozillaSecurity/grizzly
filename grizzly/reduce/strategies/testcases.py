@@ -9,7 +9,6 @@ from logging import getLogger
 from ...common.storage import TestCase
 from . import Strategy
 
-
 LOG = getLogger(__name__)
 
 

@@ -3,7 +3,6 @@
 Sapphire unit test fixtures
 """
 import hashlib
-from http.client import BadStatusLine
 import logging
 import random
 import re
@@ -11,12 +10,12 @@ import socket
 import sys
 import threading
 import time
+from http.client import BadStatusLine
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import urlopen
 
 import pytest
-
 
 LOG = logging.getLogger(__name__)
 

@@ -5,11 +5,12 @@
 from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import listdir
-from os.path import exists, isfile, isdir
+from os.path import exists, isdir, isfile
 
 from .adapters import names as adapter_names
 from .common.utils import TIMEOUT_DELAY
 from .target import available as available_targets
+
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
 class SortingHelpFormatter(HelpFormatter):

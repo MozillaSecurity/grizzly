@@ -5,11 +5,13 @@
 """
 Sapphire HTTP server job
 """
-from mimetypes import guess_type
 from collections import defaultdict, namedtuple
 from logging import getLogger
+from mimetypes import guess_type
 from os import walk
-from os.path import abspath, isdir, isfile, join as pathjoin, normpath, relpath, splitext
+from os.path import abspath, isdir, isfile
+from os.path import join as pathjoin
+from os.path import normpath, relpath, splitext
 from queue import Queue
 from threading import Event, Lock
 
