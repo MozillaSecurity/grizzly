@@ -50,7 +50,7 @@ class ServerMap:
         # check and sanitize URL
         url = url.strip("/")
         if re_search(r"\W", url) is not None:
-            raise InvalidURLError("Only alpha-numeric characters accepted in URL.")
+            raise InvalidURLError("Only alphanumeric characters accepted in URL.")
         return url
 
     def set_dynamic_response(self, url, callback, mime_type="application/octet-stream", required=False):
