@@ -115,8 +115,8 @@ class ConnectionManager:
                     serv_job.worker_complete.clear()
                     # remove complete workers
                     LOG.debug("trimming worker pool")
-                    # sometimes the thread that triggered the event doesn't quite cleanup in time
-                    # so add a retry (10x with 0.5 second sleep on failure)
+                    # sometimes the thread that triggered the event doesn't quite
+                    # cleanup in time, so retry (10x with 0.5 second sleep on failure)
                     for _ in range(10):
                         worker_pool = list(w for w in worker_pool if not w.done)
                         pool_size = len(worker_pool)

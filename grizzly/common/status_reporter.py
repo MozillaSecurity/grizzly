@@ -72,13 +72,13 @@ class StatusReporter:
 
     @classmethod
     def load(cls, tb_path=None):
-        """Read Grizzly status reports and create a StatusReporter object
+        """Read Grizzly status reports and create a StatusReporter object.
 
         Args:
-            tb_path (str): Directory to scan for files containing Python tracebacks
+            tb_path (str): Directory to scan for files containing Python tracebacks.
 
         Returns:
-            StatusReporter: Contains status reports and traceback reports that were found
+            StatusReporter: Contains available status reports and traceback reports.
         """
         if tb_path is not None and not os.path.isdir(tb_path):
             raise OSError("%r is not a directory" % (tb_path,))
@@ -307,10 +307,11 @@ class StatusReporter:
         Args:
             path (str): Directory containing log files.
             ignore_kbi (bool): Do not include KeyboardInterupts in results
-            max_preceeding (int): Maximum number of lines preceding traceback to include.
+            max_preceeding (int): Maximum number of lines preceding traceback to
+                                  include.
 
         Returns:
-            list: A list of TracebackReports
+            list: A list of TracebackReports.
         """
         tracebacks = list()
         for screen_log in StatusReporter._scan(path, re.compile(r"screenlog\.\d+")):
@@ -345,7 +346,8 @@ class TracebackReport:
 
         Args:
             input_log (str): File to parse.
-            max_preceeding (int): Number of lines to collect leading up to the traceback.
+            max_preceeding (int): Number of lines to collect leading up to the
+                                  traceback.
 
         Returns:
             TracebackReport: Contains data from input_log.

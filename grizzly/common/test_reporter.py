@@ -163,10 +163,12 @@ def test_report_07(tmp_path):
         log_fp.write(b"GPU|||\n")
         log_fp.write(b"Crash|DUMP_REQUESTED|0x7f57ac9e2e14|0\n")
         log_fp.write(
-            b"0|0|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:234|674|0xc\n"
+            b"0|0|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|"
+            b"bar.cc:234|674|0xc\n"
         )
         log_fp.write(
-            b"0|1|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:4a2|645|0x8\n"
+            b"0|1|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|"
+            b"bar.cc:4a2|645|0x8\n"
         )
     with (tmp_path / "log_minidump_03.txt").open("wb") as log_fp:
         log_fp.write(b"GPU|||\n")

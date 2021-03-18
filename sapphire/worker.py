@@ -145,7 +145,7 @@ class Worker:
                 return
             if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                 LOG.debug("target %r", resource.target)
-                # isfile() check for Resource.URL_FILE happens in serv_job.check_request()
+                # isfile() check for Resource.URL_FILE done by serv_job.check_request()
                 if resource.type == Resource.URL_INCLUDE and not isfile(
                     resource.target
                 ):

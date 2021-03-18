@@ -108,8 +108,8 @@ class ReduceFuzzManagerIDArgs(ReduceArgs):
         # instead of a local testcase.
         # This is not possible with the public argparse API.
         #
-        # refs: https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
-        #       https://bugs.python.org/issue19462
+        # refs: stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
+        #       bugs.python.org/issue19462
 
         # look up the action for the positional `input` arg
         action = None

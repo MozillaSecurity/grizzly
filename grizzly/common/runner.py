@@ -18,13 +18,16 @@ __credits__ = ["Tyson Smith"]
 
 LOG = getLogger(__name__)
 
-# _IdleChecker is used to help determine if the target is hung (actively using CPU)
-# or if it has not made expected the HTTP requests for other reasons (idle).
-# This will allow the framework to move on without interrupting execution of
-# long running test cases.
-# This is not perfect! It is to be used AFTER the test case timeout
-# (initial_delay) has elapsed.
+
 class _IdleChecker:
+    """_IdleChecker is used to help determine if the target is hung (actively using CPU)
+    or if it has not made expected the HTTP requests for other reasons (idle).
+    This will allow the framework to move on without interrupting execution of long
+    running test cases.
+    This is not perfect! It is to be used AFTER the test case timeout (initial_delay)
+    has elapsed.
+    """
+
     __slots__ = ("_check_cb", "_init_delay", "_poll_delay", "_threshold", "_next_poll")
 
     def __init__(self, check_cb, threshold, initial_delay, poll_delay=1):
