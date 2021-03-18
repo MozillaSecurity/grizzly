@@ -251,7 +251,7 @@ class ReduceManager:
                 # Don't test without harness if harness found > 50% crashes
                 continue
             if last_test_only and len(self.testcases) == 1:
-                # Only set `last_test_only` if we have more than one testcase to begin with
+                # Only set `last_test_only` if we initially have more than one testcase
                 continue
             if not use_harness and (not last_test_only and len(self.testcases) > 1):
                 # Can't run without harness if we have more than one testcase
@@ -520,7 +520,7 @@ class ReduceManager:
                                         and self._signature_desc is None
                                     ):
                                         self._signature_desc = (
-                                            first_expected.report.crash_info.createShortSignature()
+                                            first_expected.report.crash_info.createShortSignature()  # noqa: E501
                                         )
                                 served = None
                                 if success and not self._any_crash:

@@ -65,7 +65,7 @@ class Sapphire:
                 sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
                 sock.settimeout(cls.LISTEN_TIMEOUT)
                 # find an unused port and avoid blocked ports
-                # see: dxr.mozilla.org/mozilla-central/source/netwerk/base/nsIOService.cpp
+                # see: searchfox.org/mozilla-central/source/netwerk/base/nsIOService.cpp
                 sock.bind((addr, port or randint(0x2000, 0xFFFF)))
                 sock.listen(5)
             except OSError as soc_e:

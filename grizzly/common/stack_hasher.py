@@ -178,7 +178,12 @@ class StackFrame:
         # Don't bother with the file offset stuff atm
         # m = cls._re_rust_file.match(input_line) if frame is None else None
         # if m is not None:
-        #    frame = {"function":None, "mode":cls.MODE_RUST, "offset":None, "stack_line":None}
+        #    frame = {
+        #        "function": None,
+        #        "mode": cls.MODE_RUST,
+        #        "offset": None,
+        #        "stack_line": None,
+        #    }
         #    input_line = m.group("line").strip()
         #    if ":" in input_line:
         #        frame["location"], frame["offset"] = input_line.rsplit(":", 1)
