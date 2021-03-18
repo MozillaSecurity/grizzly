@@ -92,7 +92,7 @@ def test_servermap_05():
     """test ServerMap._check_url()"""
     assert ServerMap._check_url("test") == "test"
     assert ServerMap._check_url("") == ""
-    # only alpha-numeric is allowed
+    # only alphanumeric is allowed
     with pytest.raises(InvalidURLError):
         ServerMap._check_url("asd!@#")
     # '..' should not be accepted

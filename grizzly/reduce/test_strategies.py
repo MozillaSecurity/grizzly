@@ -45,12 +45,12 @@ def test_strategy_tc_load(is_hang):
         src.duration = 1.2
         src.hang = is_hang
         src.add_from_data("123", "a.htm")
-        strat = _TestStrategy([src])
-    for attempt in strat:
+        strategy = _TestStrategy([src])
+    for attempt in strategy:
         assert len(attempt) == 1
         assert attempt[0].hang == is_hang
         attempt[0].cleanup()
-        strat.update(False)
+        strategy.update(False)
 
 
 def _fake_save_logs_foo(result_logs):

@@ -107,7 +107,7 @@ class Runner:
         Args:
             location (str): URL to open via Target.
             env_mod (dict): Environment modifications.
-            max_retries (int): Number of retries to preform before re-raising
+            max_retries (int): Number of retries to perform before re-raising
                                TargetLaunchTimeout.
             retry_delay (int): Time in seconds to wait between retries.
 
