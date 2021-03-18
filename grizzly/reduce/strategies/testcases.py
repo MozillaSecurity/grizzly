@@ -24,6 +24,7 @@ class MinimizeTestcaseList(Strategy):
                     4       1 2 3   5
                     5       1 2 3 4
     """
+
     name = "list"
 
     def __init__(self, testcases):
@@ -76,8 +77,10 @@ class MinimizeTestcaseList(Strategy):
             testcase_root_dirty = False
             while True:
                 if n_testcases <= 1:
-                    LOG.info("Testcase list has length %d, not enough to reduce!",
-                             n_testcases)
+                    LOG.info(
+                        "Testcase list has length %d, not enough to reduce!",
+                        n_testcases,
+                    )
                     break
                 if idx >= n_testcases:
                     LOG.info("Attempted to remove every single testcase")
@@ -93,15 +96,17 @@ class MinimizeTestcaseList(Strategy):
 
                 if self._current_feedback:
                     testcase_root_dirty = False
-                    LOG.info("Removing testcase %d/%d was successful!", idx + 1,
-                             n_testcases)
+                    LOG.info(
+                        "Removing testcase %d/%d was successful!", idx + 1, n_testcases
+                    )
                     testcases = TestCase.load(str(self._testcase_root), True)
                     try:
                         # remove the actual testcase we were reducing
                         testcases.pop(idx).cleanup()
                         if testcases and self._current_served is not None:
-                            testcase_root_dirty = \
-                                self.purge_unserved(testcases, self._current_served)
+                            testcase_root_dirty = self.purge_unserved(
+                                testcases, self._current_served
+                            )
                         else:
                             self.dump_testcases(testcases, recreate_tcroot=True)
                     finally:
@@ -123,8 +128,9 @@ class MinimizeTestcaseList(Strategy):
                 LOG.info("[%s] final iteration triggered by purge_optional", self.name)
                 yield testcases
                 testcases = None  # caller owns testcases now
-                assert self._current_feedback, \
-                    "Purging unserved files broke the testcase."
+                assert (
+                    self._current_feedback
+                ), "Purging unserved files broke the testcase."
         finally:
             if testcases is not None:
                 for testcase in testcases:

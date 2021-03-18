@@ -18,8 +18,23 @@ from .storage import TestCase, TestCaseLoadFailure, TestFile, TestFileExists
 from .utils import grz_tmp
 
 __all__ = (
-    "Adapter", "AdapterError", "FilesystemReporter", "FuzzManagerReporter", "grz_tmp", "IOManager",
-    "Report", "Reporter", "Runner", "RunResult", "S3FuzzManagerReporter",
-    "ServerMap", "Status", "TestCase", "TestCaseLoadFailure", "TestFile", "TestFileExists")
+    "Adapter",
+    "AdapterError",
+    "FilesystemReporter",
+    "FuzzManagerReporter",
+    "grz_tmp",
+    "IOManager",
+    "Report",
+    "Reporter",
+    "Runner",
+    "RunResult",
+    "S3FuzzManagerReporter",
+    "ServerMap",
+    "Status",
+    "TestCase",
+    "TestCaseLoadFailure",
+    "TestFile",
+    "TestFileExists",
+)
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]

@@ -56,11 +56,16 @@ def test_sapphire_00(client, tmp_path):
     assert test.code == 200
     assert test.len_srv == test.len_org
 
+
 def test_sapphire_01(client, tmp_path):
     """test requesting multiple files (test cleanup code)"""
     to_serve = list()
     for i in range(100):
-        to_serve.append(_create_test("test_%03d.html" % i, tmp_path, data=os.urandom(5), calc_hash=True))
+        to_serve.append(
+            _create_test(
+                "test_%03d.html" % i, tmp_path, data=os.urandom(5), calc_hash=True
+            )
+        )
     with Sapphire(timeout=30) as serv:
         client.launch("127.0.0.1", serv.port, to_serve)
         status, files_served = serv.serve_path(str(tmp_path))
@@ -71,6 +76,7 @@ def test_sapphire_01(client, tmp_path):
         assert t_file.code == 200
         assert t_file.len_srv == t_file.len_org
         assert t_file.md5_srv == t_file.md5_org
+
 
 def test_sapphire_02(client, tmp_path):
     """test serving optional file"""
@@ -87,6 +93,7 @@ def test_sapphire_02(client, tmp_path):
     for t_file in files_to_serve:
         assert t_file.code == 200
         assert t_file.len_srv == t_file.len_org
+
 
 def test_sapphire_03(client, tmp_path):
     """test skipping optional file"""
@@ -106,6 +113,7 @@ def test_sapphire_03(client, tmp_path):
         assert t_file.code == 200
         assert t_file.len_srv == t_file.len_org
 
+
 def test_sapphire_04(client, tmp_path):
     """test requesting invalid file (404)"""
     files_to_serve = list()
@@ -119,6 +127,7 @@ def test_sapphire_04(client, tmp_path):
     assert files_to_serve[0].code == 404
     assert files_to_serve[1].code == 200
 
+
 def test_sapphire_05(client, tmp_path):
     """test requesting a file outside of the server root (403)"""
     files_to_serve = list()
@@ -127,7 +136,9 @@ def test_sapphire_05(client, tmp_path):
     # add invalid file
     files_to_serve.append(_TestFile(os.path.abspath(__file__)))
     # add file in parent of root_dir
-    files_to_serve.append(_create_test("no_access.html", tmp_path, data=b"no_access", url_prefix="../"))
+    files_to_serve.append(
+        _create_test("no_access.html", tmp_path, data=b"no_access", url_prefix="../")
+    )
     assert (tmp_path / "no_access.html").is_file()
     # add valid test
     files_to_serve.append(_create_test("test_case.html", root_dir))
@@ -143,6 +154,7 @@ def test_sapphire_05(client, tmp_path):
     assert files_to_serve[1].code == 403
     assert files_to_serve[2].code == 200
 
+
 def test_sapphire_06(client, tmp_path):
     """test serving no files... this should never happen but..."""
     with Sapphire(timeout=10) as serv:
@@ -150,6 +162,7 @@ def test_sapphire_06(client, tmp_path):
         status, files_served = serv.serve_path(str(tmp_path))
     assert status == SERVED_NONE
     assert not files_served
+
 
 def test_sapphire_07(tmp_path):
     """test timeout of the server"""
@@ -166,6 +179,7 @@ def test_sapphire_07(tmp_path):
         status, files_served = serv.serve_path(str(tmp_path))
     assert status == SERVED_TIMEOUT
     assert not files_served
+
 
 def test_sapphire_08(client, tmp_path):
     """test only serving some files (SERVED_REQUEST)"""
@@ -184,6 +198,7 @@ def test_sapphire_08(client, tmp_path):
     assert status == SERVED_REQUEST
     assert len(files_served) < len(files_to_serve)
 
+
 def test_sapphire_09(client, tmp_path):
     """test serving interesting sized files"""
     tests = [
@@ -196,7 +211,9 @@ def test_sapphire_09(client, tmp_path):
     ]
     for test in tests:
         test["file"] = _TestFile(test["name"])
-        t_data = "".join(random.choice("ABCD1234") for _ in range(test["size"])).encode("ascii")
+        t_data = "".join(random.choice("ABCD1234") for _ in range(test["size"])).encode(
+            "ascii"
+        )
         (tmp_path / test["file"].url).write_bytes(t_data)
         test["file"].md5_org = hashlib.md5(t_data).hexdigest()
     with Sapphire(timeout=10) as serv:
@@ -209,6 +226,7 @@ def test_sapphire_09(client, tmp_path):
         assert test["file"].code == 200
         assert test["file"].len_srv == test["size"]
         assert test["file"].md5_srv == test["file"].md5_org
+
 
 def test_sapphire_10(client, tmp_path):
     """test serving a large (100MB) file"""
@@ -229,9 +247,12 @@ def test_sapphire_10(client, tmp_path):
     assert t_file.len_srv == (100 * 1024 * 1024)
     assert t_file.md5_srv == t_file.md5_org
 
+
 def test_sapphire_11(client, tmp_path):
     """test serving a binary file"""
-    t_file = _create_test("test_case.html", tmp_path, data=os.urandom(512), calc_hash=True)
+    t_file = _create_test(
+        "test_case.html", tmp_path, data=os.urandom(512), calc_hash=True
+    )
     with Sapphire(timeout=10) as serv:
         client.launch("127.0.0.1", serv.port, [t_file])
         assert serv.serve_path(str(tmp_path))[0] == SERVED_ALL
@@ -240,11 +261,13 @@ def test_sapphire_11(client, tmp_path):
     assert t_file.len_srv == t_file.len_org
     assert t_file.md5_srv == t_file.md5_org
 
+
 def test_sapphire_12():
     """test requested port is used"""
     test_port = 0x1337
     with Sapphire(port=test_port, timeout=1) as serv:
         assert test_port == serv.port
+
 
 def test_sapphire_13(client, tmp_path):
     """test serving multiple content types"""
@@ -266,6 +289,7 @@ def test_sapphire_13(client, tmp_path):
         assert test.content_type == content_type
     assert len(content_types) == 2
 
+
 def test_sapphire_14(tmp_path):
     """test callback"""
     cb_status = {"count": 0}
@@ -277,8 +301,11 @@ def test_sapphire_14(tmp_path):
 
     with Sapphire(timeout=10) as serv:
         _create_test("test_case.html", tmp_path)
-        assert serv.serve_path(str(tmp_path), continue_cb=_test_callback)[0] == SERVED_NONE
+        assert (
+            serv.serve_path(str(tmp_path), continue_cb=_test_callback)[0] == SERVED_NONE
+        )
     assert cb_status["count"] == 2
+
 
 def test_sapphire_15(client, tmp_path):
     """test calling serve_path multiple times"""
@@ -293,6 +320,7 @@ def test_sapphire_15(client, tmp_path):
             assert test.len_srv == test.len_org
             (tmp_path / test.url).unlink()
 
+
 def test_sapphire_16(client, tmp_path):
     """test non required mapped redirects"""
     smap = ServerMap()
@@ -305,13 +333,16 @@ def test_sapphire_16(client, tmp_path):
     assert test.code == 200
     assert test.len_srv == test.len_org
 
+
 def test_sapphire_17(client, tmp_path):
     """test required mapped redirects"""
     smap = ServerMap()
     with Sapphire(timeout=10) as serv:
         files_to_serve = list()
         # redir_target will be requested indirectly via the redirect
-        redir_target = _create_test("redir_test_case.html", tmp_path, data=b"Redirect DATA!")
+        redir_target = _create_test(
+            "redir_test_case.html", tmp_path, data=b"Redirect DATA!"
+        )
         redir_test = _TestFile("redirect_test")
         smap.set_redirect(redir_test.url, redir_target.url, required=True)
         files_to_serve.append(redir_test)
@@ -326,6 +357,7 @@ def test_sapphire_17(client, tmp_path):
     assert test.len_srv == test.len_org
     assert redir_test.code == 200
     assert redir_test.len_srv == redir_target.len_org
+
 
 def test_sapphire_18(client, tmp_path):
     """test include directories and permissions"""
@@ -345,21 +377,27 @@ def test_sapphire_18(client, tmp_path):
         nest_path = inc1_path / "nested"
         nest_path.mkdir()
         # add file in a nested dir in inc1
-        nest = _create_test("nested_file.html", nest_path, data=b"blah... .nested", url_prefix="nested/")
+        nest = _create_test(
+            "nested_file.html", nest_path, data=b"blah... .nested", url_prefix="nested/"
+        )
         assert nest_path / "nested_file.html"
         files_to_serve.append(nest)
         # test 404 in nested dir in inc1
         nest_404 = _TestFile("nested/nested_file_404.html")
         files_to_serve.append(nest_404)
         # test path mounted somewhere other than /
-        inc2 = _create_test("included_file2.html", inc2_path, data=b"blah....2", url_prefix="inc_test/")
+        inc2 = _create_test(
+            "included_file2.html", inc2_path, data=b"blah....2", url_prefix="inc_test/"
+        )
         files_to_serve.append(inc2)
         # test 404 in include dir
         inc404 = _TestFile("inc_test/included_file_404.html")
         assert not (nest_path / "included_file_404.html").is_file()
         files_to_serve.append(inc404)
         # test 403
-        inc403 = _create_test("no_access.html", tmp_path, data=b"no_access", url_prefix="inc_test/../")
+        inc403 = _create_test(
+            "no_access.html", tmp_path, data=b"no_access", url_prefix="inc_test/../"
+        )
         assert (tmp_path / "no_access.html").is_file()
         files_to_serve.append(inc403)
         # test file (used to keep sever job alive)
@@ -384,6 +422,7 @@ def test_sapphire_18(client, tmp_path):
     assert inc404.code == 404
     assert inc403.code == 403
 
+
 def test_sapphire_19(client, tmp_path):
     """test dynamic response - not required"""
     _data = b"dynamic response -- TEST DATA!"
@@ -403,6 +442,7 @@ def test_sapphire_19(client, tmp_path):
     assert test_dr.len_srv == test_dr.len_org
     assert test_dr.md5_srv == test_dr.md5_org
 
+
 def test_sapphire_20(client, tmp_path):
     """test dynamic response - required"""
     _data = b"dynamic response -- TEST DATA!"
@@ -410,7 +450,9 @@ def test_sapphire_20(client, tmp_path):
     test_dr.len_org = len(_data)
     test_dr.md5_org = hashlib.md5(_data).hexdigest()
     smap = ServerMap()
-    smap.set_dynamic_response("dyn_test", lambda: _data, mime_type="text/plain", required=True)
+    smap.set_dynamic_response(
+        "dyn_test", lambda: _data, mime_type="text/plain", required=True
+    )
     with Sapphire(timeout=10) as serv:
         client.launch("127.0.0.1", serv.port, [test_dr], in_order=True)
         assert serv.serve_path(str(tmp_path), server_map=smap)[0] == SERVED_ALL
@@ -418,6 +460,7 @@ def test_sapphire_20(client, tmp_path):
     assert test_dr.code == 200
     assert test_dr.len_srv == test_dr.len_org
     assert test_dr.md5_srv == test_dr.md5_org
+
 
 def test_sapphire_21(client_factory, tmp_path):
     """test pending_files == 0 in worker thread"""
@@ -429,7 +472,9 @@ def test_sapphire_21(client_factory, tmp_path):
     with Sapphire(timeout=10) as serv:
         # this test needs to wait just long enough to have the required file served
         # but not too long or the connection will be closed by the server
-        client_defer.launch("127.0.0.1", serv.port, [test_defer], delay=0.1, indicate_failure=True)
+        client_defer.launch(
+            "127.0.0.1", serv.port, [test_defer], delay=0.1, indicate_failure=True
+        )
         client = client_factory(rx_size=2)
         client.launch("127.0.0.1", serv.port, [test], throttle=0.1)
         assert serv.serve_path(str(tmp_path), optional_files=optional)[0] == SERVED_ALL
@@ -437,6 +482,7 @@ def test_sapphire_21(client_factory, tmp_path):
     assert client.wait(timeout=10)
     assert test.code == 200
     assert test_defer.code == 0
+
 
 def test_sapphire_22(client, tmp_path):
     """test handling an invalid request"""
@@ -451,6 +497,7 @@ def test_sapphire_22(client, tmp_path):
     assert test.code == 200
     assert bad_test.code == 400
 
+
 def test_sapphire_23(client, tmp_path):
     """test handling an empty request"""
     bad_test = _TestFile("bad.html")
@@ -458,11 +505,18 @@ def test_sapphire_23(client, tmp_path):
     optional = [bad_test.url]
     test = _create_test("test_case.html", tmp_path)
     with Sapphire(timeout=10) as serv:
-        client.launch("127.0.0.1", serv.port, [bad_test, test], indicate_failure=True, in_order=True)
+        client.launch(
+            "127.0.0.1",
+            serv.port,
+            [bad_test, test],
+            indicate_failure=True,
+            in_order=True,
+        )
         assert serv.serve_path(str(tmp_path), optional_files=optional)[0] == SERVED_ALL
     assert client.wait(timeout=10)
     assert test.code == 200
     assert bad_test.code == 0
+
 
 def test_sapphire_24(client_factory, tmp_path):
     """test requesting multiple files via multiple connections"""
@@ -476,7 +530,9 @@ def test_sapphire_24(client_factory, tmp_path):
             for _ in range(max_workers):  # number of clients to spawn
                 clients.append(client_factory(rx_size=1))
             for client in clients:
-                client.launch("127.0.0.1", serv.port, to_serve, in_order=True, throttle=0.05)
+                client.launch(
+                    "127.0.0.1", serv.port, to_serve, in_order=True, throttle=0.05
+                )
             status, files_served = serv.serve_path(str(tmp_path))
             # call serv.close() instead of waiting for the clients to timeout
             serv.close()
@@ -490,8 +546,10 @@ def test_sapphire_24(client_factory, tmp_path):
         assert t_file.code == 200
         assert t_file.len_srv == t_file.len_org
 
+
 def test_sapphire_25(client_factory, tmp_path):
     """test all request types via multiple connections"""
+
     def _dyn_test_cb():
         return b"A" if random.getrandbits(1) else b"AA"
 
@@ -500,7 +558,9 @@ def test_sapphire_25(client_factory, tmp_path):
         to_serve = list()
         for i in range(50):
             # add required files
-            to_serve.append(_create_test("test_%03d.html" % i, tmp_path, data=b"A" * ((i % 2) + 1)))
+            to_serve.append(
+                _create_test("test_%03d.html" % i, tmp_path, data=b"A" * ((i % 2) + 1))
+            )
             # add a missing files
             to_serve.append(_TestFile("missing_%03d.html" % i))
             # add optional files
@@ -510,16 +570,21 @@ def test_sapphire_25(client_factory, tmp_path):
             # add redirects
             redir_target = _create_test("redir_%03d.html" % i, tmp_path, data=b"AA")
             to_serve.append(_TestFile("redir_%03d" % i))
-            smap.set_redirect(to_serve[-1].url, redir_target.url, required=random.getrandbits(1) > 0)
+            smap.set_redirect(
+                to_serve[-1].url, redir_target.url, required=random.getrandbits(1) > 0
+            )
             # add dynamic responses
             to_serve.append(_TestFile("dynm_%03d" % i))
-            smap.set_dynamic_response(to_serve[-1].url, _dyn_test_cb, mime_type="text/plain")
+            smap.set_dynamic_response(
+                to_serve[-1].url, _dyn_test_cb, mime_type="text/plain"
+            )
         clients = list()
         for _ in range(100):  # number of clients to spawn
             clients.append(client_factory(rx_size=1))
             throttle = 0.05 if random.getrandbits(1) else 0
             clients[-1].launch("127.0.0.1", serv.port, to_serve, throttle=throttle)
         assert serv.serve_path(str(tmp_path), server_map=smap)[0] == SERVED_ALL
+
 
 def test_sapphire_26(client, tmp_path):
     """test dynamic response with bad callbacks"""
@@ -532,10 +597,13 @@ def test_sapphire_26(client, tmp_path):
         with pytest.raises(TypeError):
             serv.serve_path(str(tmp_path), server_map=smap)
 
+
 def test_sapphire_27(client, tmp_path):
     """test serving to a slow client"""
     t_data = "".join(random.choice("ABCD1234") for _ in range(0x19000))  # 100KB
-    t_file = _create_test("test_case.html", tmp_path, data=t_data.encode("ascii"), calc_hash=True)
+    t_file = _create_test(
+        "test_case.html", tmp_path, data=t_data.encode("ascii"), calc_hash=True
+    )
     # rx_size 10KB and throttle to 0.25 sec, which will be ~50KB/s
     # also taking 2.5 seconds to complete will hopefully find problems
     # with any assumptions that were made
@@ -548,18 +616,24 @@ def test_sapphire_27(client, tmp_path):
     assert t_file.len_srv == t_file.len_org
     assert t_file.md5_srv == t_file.md5_org
 
+
 def test_sapphire_28(client, tmp_path):
     """test timeout while requesting multiple files"""
     files_to_serve = list()
     t_data = "".join(random.choice("ABCD1234") for _ in range(1024)).encode("ascii")
     for i in range(50):
-        files_to_serve.append(_create_test("test_case_%03d.html" % i, tmp_path, data=t_data))
+        files_to_serve.append(
+            _create_test("test_case_%03d.html" % i, tmp_path, data=t_data)
+        )
     client.rx_size = 512
     with Sapphire(timeout=1) as serv:  # minimum timeout is 1 second
-        client.launch("127.0.0.1", serv.port, files_to_serve, indicate_failure=True, throttle=0.1)
+        client.launch(
+            "127.0.0.1", serv.port, files_to_serve, indicate_failure=True, throttle=0.1
+        )
         status, files_served = serv.serve_path(str(tmp_path))
     assert status == SERVED_TIMEOUT
     assert len(files_served) < len(files_to_serve)
+
 
 def test_sapphire_29(client_factory, tmp_path):
     """test Sapphire.serve_path() with forever=True"""
@@ -571,10 +645,15 @@ def test_sapphire_29(client_factory, tmp_path):
             clients.append(client_factory())
         for client in clients:
             client.launch("127.0.0.1", serv.port, [test], skip_served=False)
+
         def _test_callback():
             with test.lock:
                 return test.requested < 3
-        assert serv.serve_path(str(tmp_path), continue_cb=_test_callback, forever=True)[0] == SERVED_ALL
+
+        assert (
+            serv.serve_path(str(tmp_path), continue_cb=_test_callback, forever=True)[0]
+            == SERVED_ALL
+        )
     for client in clients:
         assert client.wait(timeout=10)
         client.close()
@@ -582,18 +661,21 @@ def test_sapphire_29(client_factory, tmp_path):
     assert test.code == 200
     assert test.len_srv == test.len_org
 
+
 def test_sapphire_30(client, tmp_path):
     """test interesting file names"""
     to_serve = [
         # space in file name
         _create_test("test case.html", tmp_path),
         # non-alphanumeric chars (valid characters to use on filesystem)
-        _create_test("!@#$%^&(_+-=[]),;'~`{}", tmp_path)]
+        _create_test("!@#$%^&(_+-=[]),;'~`{}", tmp_path),
+    ]
     with Sapphire(timeout=10) as serv:
         client.launch("127.0.0.1", serv.port, to_serve)
         assert serv.serve_path(str(tmp_path))[0] == SERVED_ALL
     assert client.wait(timeout=10)
     assert all(t_file.code == 200 for t_file in to_serve)
+
 
 def test_sapphire_31(client, tmp_path):
     """test interesting path string"""
@@ -602,12 +684,16 @@ def test_sapphire_31(client, tmp_path):
         # should not trigger crash
         _TestFile(all_bytes),
         # used to keep server running
-        _create_test("a.html", tmp_path)]
+        _create_test("a.html", tmp_path),
+    ]
     with Sapphire(timeout=10) as serv:
         client.launch("127.0.0.1", serv.port, to_serve, in_order=True)
-        assert serv.serve_path(str(tmp_path), optional_files=[all_bytes])[0] == SERVED_ALL
+        assert (
+            serv.serve_path(str(tmp_path), optional_files=[all_bytes])[0] == SERVED_ALL
+        )
     assert client.wait(timeout=10)
     assert all(t_file.code is not None for t_file in to_serve)
+
 
 def test_sapphire_32(mocker):
     """test Sapphire._create_listening_socket()"""
@@ -637,6 +723,7 @@ def test_sapphire_32(mocker):
     assert fake_sock.return_value.listen.call_count == 1
     assert fake_sleep.call_count == 1
 
+
 def test_sapphire_33(mocker):
     """test Sapphire.clear_backlog()"""
     mocker.patch("sapphire.core.socket", autospec=True)
@@ -650,13 +737,10 @@ def test_sapphire_33(mocker):
         assert serv._socket.settimeout.call_count == 2
     assert pending.close.call_count == 1
 
+
 def test_main_01(mocker, tmp_path):
     """test Sapphire.main()"""
-    args = mocker.Mock(
-        path=str(tmp_path),
-        port=4536,
-        remote=False,
-        timeout=None)
+    args = mocker.Mock(path=str(tmp_path), port=4536, remote=False, timeout=None)
     fake_srv = mocker.patch("sapphire.core.Sapphire.serve_path", autospec=True)
     fake_srv.return_value = (SERVED_ALL, None)
     Sapphire.main(args)

@@ -25,16 +25,29 @@ LOG = getLogger(__name__)
 
 ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
 
+
 class Status:
     """Status holds status information for the Grizzly session.
     There can be multiple readers of the data but only a single writer.
     """
+
     PATH = grz_tmp("status")
     REPORT_FREQ = 60
 
     __slots__ = (
-        "_enable_profiling", "_lock", "_profiles", "_results", "data_file", "ignored",
-        "iteration", "log_size", "pid", "start_time", "test_name", "timestamp")
+        "_enable_profiling",
+        "_lock",
+        "_profiles",
+        "_results",
+        "data_file",
+        "ignored",
+        "iteration",
+        "log_size",
+        "pid",
+        "start_time",
+        "test_name",
+        "timestamp",
+    )
 
     def __init__(self, data_file, enable_profiling=False, start_time=None):
         assert data_file.endswith(".json")
@@ -97,7 +110,8 @@ class Status:
             "pid": self.pid,
             "start_time": self.start_time,
             "test_name": self.test_name,
-            "timestamp": self.timestamp}
+            "timestamp": self.timestamp,
+        }
 
     @property
     def duration(self):

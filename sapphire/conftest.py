@@ -42,8 +42,17 @@ def client_factory():
                 self.thread = None
             self._idle.set()
 
-        def launch(self, addr, port, files_to_serve, delay=0, in_order=False, indicate_failure=False,
-                   skip_served=True, throttle=0):
+        def launch(
+            self,
+            addr,
+            port,
+            files_to_serve,
+            delay=0,
+            in_order=False,
+            indicate_failure=False,
+            skip_served=True,
+            throttle=0,
+        ):
             assert self._idle.is_set()
             assert self.thread is None
             self._idle.clear()
@@ -55,12 +64,25 @@ def client_factory():
                     "in_order": in_order,
                     "indicate_failure": indicate_failure,
                     "skip_served": skip_served,
-                    "throttle": throttle})
+                    "throttle": throttle,
+                },
+            )
             self.thread.start()
 
-        def _handle_request(self, addr, port, files_to_request, delay=0, in_order=False,
-                            indicate_failure=False, skip_served=True, throttle=0):
-            assert isinstance(files_to_request, list), "files_to_request should be a list"
+        def _handle_request(
+            self,
+            addr,
+            port,
+            files_to_request,
+            delay=0,
+            in_order=False,
+            indicate_failure=False,
+            skip_served=True,
+            throttle=0,
+        ):
+            assert isinstance(
+                files_to_request, list
+            ), "files_to_request should be a list"
             if delay:
                 time.sleep(delay)
             indexes = list(range(len(files_to_request)))
@@ -72,14 +94,16 @@ def client_factory():
                     # check if the file has been served
                     if skip_served and t_file.code is not None:
                         continue
-                    # if t_file.md5_org is set to anything but None the test client will calculate
-                    # the md5 hash
+                    # if t_file.md5_org is set to anything but None the test client
+                    # will calculate the md5 hash
                     data_hash = hashlib.md5() if t_file.md5_org is not None else None
                     target_url = quote(t_file.url)
                 cli = None
                 try:
                     if t_file.custom_request is None:
-                        cli = urlopen("http://%s:%d/%s" % (addr, port, target_url), timeout=10)
+                        cli = urlopen(
+                            "http://%s:%d/%s" % (addr, port, target_url), timeout=10
+                        )
                         resp_code = cli.getcode()
                         content_type = cli.info().get("Content-Type")
                         if resp_code == 200:
@@ -91,7 +115,8 @@ def client_factory():
                                     data_hash.update(data)
                                 if len(data) < self.rx_size:
                                     break
-                                if throttle > 0:  # try to simulate a slow connection
+                                if throttle > 0:
+                                    # try to simulate a slow connection
                                     time.sleep(throttle)
                             if data_hash is not None:
                                 data_hash = data_hash.hexdigest()
@@ -99,16 +124,24 @@ def client_factory():
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         try:
                             sock.connect((addr, port))
-                            sock.settimeout(10)  # safety, so test doesn't hang on failure
+                            # safety, so test doesn't hang on failure
+                            sock.settimeout(10)
                             sock.sendall(t_file.custom_request)
-                            data = sock.recv(self.rx_size) if t_file.custom_request else b""
+                            data = (
+                                sock.recv(self.rx_size)
+                                if t_file.custom_request
+                                else b""
+                            )
                         finally:
                             sock.close()
                         content_type = None
                         data_length = len(data)
                         try:
-                            resp_code = int(re.match(r"HTTP/1\.\d\s(?P<code>\d+)\s",
-                                                     data.decode("ascii")).group("code"))
+                            resp_code = int(
+                                re.match(
+                                    r"HTTP/1\.\d\s(?P<code>\d+)\s", data.decode("ascii")
+                                ).group("code")
+                            )
                         except AttributeError:
                             # set code to zero to help testing
                             resp_code = 0 if indicate_failure else None
@@ -138,7 +171,8 @@ def client_factory():
                             exc_type.__name__,
                             exc_obj,
                             exc_tb.tb_lineno,
-                            t_file.url)
+                            t_file.url,
+                        )
                         if indicate_failure:
                             if not skip_served or t_file.code is None:
                                 t_file.code = 0

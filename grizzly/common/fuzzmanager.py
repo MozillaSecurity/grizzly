@@ -93,14 +93,22 @@ class Bucket:
             """
             LOG.debug("first request to /%s/", endpoint)
 
-            url = "%s://%s:%d/crashmanager/rest/%s/" \
-                % (self._coll.serverProtocol, self._coll.serverHost,
-                   self._coll.serverPort, endpoint)
+            url = "%s://%s:%d/crashmanager/rest/%s/" % (
+                self._coll.serverProtocol,
+                self._coll.serverHost,
+                self._coll.serverPort,
+                endpoint,
+            )
 
             response = self._coll.get(url, params=params).json()
 
             while True:
-                LOG.debug("got %d/%d %s", len(response["results"]), response["count"], endpoint)
+                LOG.debug(
+                    "got %d/%d %s",
+                    len(response["results"]),
+                    response["count"],
+                    endpoint,
+                )
                 while response["results"]:
                     yield response["results"].pop()
 
@@ -120,7 +128,9 @@ class Bucket:
         query = json.dumps(dict(query_args))
 
         n_yielded = 0
-        for crash in _get_results("crashes", params={"query": query, "include_raw": "0"}):
+        for crash in _get_results(
+            "crashes", params={"query": query, "include_raw": "0"}
+        ):
 
             if not crash["testcase"]:
                 LOG.warning("crash %d has no testcase, skipping", crash["id"])
@@ -144,8 +154,11 @@ class Bucket:
         if self._sig_filename is not None:
             return self._sig_filename
 
-        tmpd = Path(mkdtemp(prefix="bucket-%d-" % (self._bucket_id,),
-                            dir=grz_tmp("fuzzmanager")))
+        tmpd = Path(
+            mkdtemp(
+                prefix="bucket-%d-" % (self._bucket_id,), dir=grz_tmp("fuzzmanager")
+            )
+        )
         try:
             sig_basename = "%d.signature" % (self._bucket_id,)
             sig_filename = tmpd / sig_basename
@@ -176,6 +189,7 @@ class CrashEntry:
         crash_id (int): the server ID for the crash
         see crashmanager.serializers.CrashEntrySerializer
     """
+
     RAW_FIELDS = frozenset({"rawCrashData", "rawStderr", "rawStdout"})
 
     def __init__(self, crash_id):
@@ -202,7 +216,9 @@ class CrashEntry:
     def __getattr__(self, name):
         if self._data is None or (name in self.RAW_FIELDS and name not in self._data):
             need_raw = "1" if name in self.RAW_FIELDS else "0"
-            self._data = self._coll.get(self._url, params={"include_raw": need_raw}).json()
+            self._data = self._coll.get(
+                self._url, params={"include_raw": need_raw}
+            ).json()
         if name not in self._data:
             raise AttributeError(
                 "'%s' object has no attribute '%s' (has: %s)"
@@ -248,10 +264,14 @@ class CrashEntry:
         response = self._coll.get(dlurl)
 
         if "content-disposition" not in response.headers:
-            raise RuntimeError("Server sent malformed response: %r" % (response,))  # pragma: no cover
+            raise RuntimeError(
+                "Server sent malformed response: %r" % (response,)
+            )  # pragma: no cover
 
-        handle, filename = mkstemp(dir=grz_tmp("fuzzmanager"),
-            prefix="crash-%d-" % (self.crash_id,), suffix=Path(self.testcase).suffix
+        handle, filename = mkstemp(
+            dir=grz_tmp("fuzzmanager"),
+            prefix="crash-%d-" % (self.crash_id,),
+            suffix=Path(self.testcase).suffix,
         )
         try:
             with open(handle, "wb") as output:

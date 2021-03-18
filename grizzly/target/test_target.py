@@ -9,27 +9,37 @@ from .target import Target, sanitizer_opts
 class SimpleTarget(Target):
     def cleanup(self):
         pass
+
     def close(self):
         pass
+
     @property
     def closed(self):
         pass
+
     def create_report(self, is_hang=False):
         pass
+
     def detect_failure(self, ignored):
         pass
+
     def handle_hang(self, ignore_idle=True):
         pass
+
     def launch(self):
         pass
+
     @property
     def monitor(self):
         return self._monitor
+
     @property
     def prefs(self):
         pass
+
     def save_logs(self, *_args, **_kwargs):
         pass
+
 
 def test_target_01(tmp_path):
     """test creating a simple Target"""
@@ -48,6 +58,7 @@ def test_target_01(tmp_path):
     target.add_abort_token("none!")
     target.dump_coverage()
     target.reverse(1, 2)
+
 
 def test_sanitizer_opts_01(tmp_path):
     """test sanitizer_opts()"""
@@ -69,7 +80,7 @@ def test_sanitizer_opts_01(tmp_path):
     assert opts["p2"] == "'x:\\a.1'"
     assert opts["p3"] == "'/test/path/'"
     assert opts["p4"] == "''"
-    assert opts["p5"] == "\"x:/a.a\""
+    assert opts["p5"] == '"x:/a.a"'
     # platform specific parsing
     fake_file = tmp_path / "fake.log"
     opts = sanitizer_opts("bar=1:file='%s':foo=2" % (str(fake_file),))

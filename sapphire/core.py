@@ -27,7 +27,9 @@ class Sapphire:
 
     __slots__ = ("_auto_close", "_max_workers", "_socket", "_timeout")
 
-    def __init__(self, allow_remote=False, auto_close=-1, max_workers=10, port=None, timeout=60):
+    def __init__(
+        self, allow_remote=False, auto_close=-1, max_workers=10, port=None, timeout=60
+    ):
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
         self._socket = Sapphire._create_listening_socket(allow_remote, port)
@@ -126,7 +128,14 @@ class Sapphire:
         """
         return self._socket.getsockname()[1]
 
-    def serve_path(self, path, continue_cb=None, forever=False, optional_files=None, server_map=None):
+    def serve_path(
+        self,
+        path,
+        continue_cb=None,
+        forever=False,
+        optional_files=None,
+        server_map=None,
+    ):
         """Serve files in path. On completion a list served files and a status
         code will be returned.
         The status codes include:
@@ -153,7 +162,8 @@ class Sapphire:
             auto_close=self._auto_close,
             forever=forever,
             optional_files=optional_files,
-            server_map=server_map)
+            server_map=server_map,
+        )
         if not job.pending:
             job.finish()
             LOG.debug("nothing to serve")
@@ -195,12 +205,15 @@ class Sapphire:
     @classmethod
     def main(cls, args):
         try:
-            with cls(allow_remote=args.remote, port=args.port, timeout=args.timeout) as serv:
+            with cls(
+                allow_remote=args.remote, port=args.port, timeout=args.timeout
+            ) as serv:
                 LOG.info(
                     "Serving %r @ http://%s:%d/",
                     abspath(args.path),
                     gethostname() if args.remote else "127.0.0.1",
-                    serv.port)
+                    serv.port,
+                )
                 status = serv.serve_path(args.path)[0]
             if status == SERVED_ALL:
                 LOG.info("All test case content was served")

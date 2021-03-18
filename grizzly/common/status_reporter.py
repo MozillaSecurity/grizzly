@@ -21,10 +21,12 @@ __all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
+
 class StatusReporter:
     """Read and merge Grizzly status reports, including tracebacks if found.
     Output is a single textual report, e.g. for submission to EC2SpotManager.
     """
+
     CPU_POLL_INTERVAL = 1
     DISPLAY_LIMIT_LOG = 10  # don't include log results unless size exceeds 10MBs
     EXP_LIMIT = 600  # expiration limit, ignore older reports
@@ -60,7 +62,9 @@ class StatusReporter:
             None
         """
         with open(filename, "w") as ofp:
-            ofp.write(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
+            ofp.write(
+                self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp)
+            )
 
     @property
     def has_results(self):
@@ -146,14 +150,18 @@ class StatusReporter:
             # add profiling data if it exists
             if any(report.profile_entries()):
                 txt.append(" * Profiling entries *\n")
-            for entry in sorted(report.profile_entries(), key=lambda x: x.total, reverse=True):
+            for entry in sorted(
+                report.profile_entries(), key=lambda x: x.total, reverse=True
+            ):
                 avg = entry.total / float(entry.count)
                 txt.append(" > %s: %dx " % (entry.name, entry.count))
                 if entry.total > 300:
                     txt.append(str(timedelta(seconds=int(entry.total))))
                 else:
                     txt.append("%0.3fs" % (round(entry.total, 3),))
-                txt.append(" %0.2f%%" % (round(entry.total / report.duration * 100, 2),))
+                txt.append(
+                    " %0.2f%%" % (round(entry.total / report.duration * 100, 2),)
+                )
                 txt.append(" (%0.3f avg," % (round(avg, 3),))
                 txt.append(" %0.3f max," % (round(entry.max, 3),))
                 txt.append(" %0.3f min)" % (round(entry.min, 3),))
@@ -193,13 +201,17 @@ class StatusReporter:
             # Rate
             txt.append("      Rate : %d @ %0.2f" % (count, round(sum(rates), 2)))
             if count > 1:
-                txt.append(" (%0.2f, %0.2f)" % (round(max(rates), 2), round(min(rates), 2)))
+                txt.append(
+                    " (%0.2f, %0.2f)" % (round(max(rates), 2), round(min(rates), 2))
+                )
             txt.append("\n")
             # Results / Signature mismatch
             txt.append("   Results : %d" % (sum(results),))
             if total_ignored:
                 ignore_pct = total_ignored / float(total_iters) * 100
-                txt.append(" (%d ignored @ %0.2f%%)" % (total_ignored, round(ignore_pct, 2)))
+                txt.append(
+                    " (%d ignored @ %0.2f%%)" % (total_ignored, round(ignore_pct, 2))
+                )
             # Runtime
             if runtime:
                 txt.append("\n")
@@ -211,9 +223,10 @@ class StatusReporter:
                 txt.append("\n")
                 txt.append("      Logs : %0.1fMB" % (log_usage,))
                 if count > 1:
-                    txt.append(" (%0.2fMB, %0.2fMB)" % (
-                        max(log_sizes) / 1048576.0,
-                        min(log_sizes) / 1048576.0))
+                    txt.append(
+                        " (%0.2fMB, %0.2fMB)"
+                        % (max(log_sizes) / 1048576.0, min(log_sizes) / 1048576.0)
+                    )
         else:
             txt.append("No status reports available")
         if sysinfo:
@@ -260,9 +273,13 @@ class StatusReporter:
             str: System information formatted to match output from _summary()
         """
         txt = list()
-        txt.append("CPU & Load : %d @ %0.1f%%" % (
-            psutil.cpu_count(),
-            psutil.cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL)))
+        txt.append(
+            "CPU & Load : %d @ %0.1f%%"
+            % (
+                psutil.cpu_count(),
+                psutil.cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL),
+            )
+        )
         try:
             txt.append(" %s\n" % (str(os.getloadavg()),))
         except AttributeError:
@@ -310,6 +327,7 @@ class TracebackReport:
     """Read Python tracebacks from log files and store it in a manner that is helpful
     when generating reports.
     """
+
     MAX_LINES = 16  # should be no less than 6
     READ_LIMIT = 0x10000  # 64KB
 
@@ -387,10 +405,10 @@ class TracebackReport:
             tb_end = max(line_count, cls.MAX_LINES)
         if tb_end - tb_start > cls.MAX_LINES:
             # add first entry
-            lines = data[tb_start:tb_start + 3]
+            lines = data[tb_start : tb_start + 3]
             lines += ["<--- TRACEBACK TRIMMED--->"]
             # add end entries
-            lines += data[tb_end - (cls.MAX_LINES - 3):tb_end]
+            lines += data[tb_end - (cls.MAX_LINES - 3) : tb_end]
         else:
             lines = data[tb_start:tb_end]
         return cls(input_log, lines, is_kbi=is_kbi, prev_lines=prev_lines)
@@ -420,18 +438,22 @@ def main(args=None):
 
     modes = ("status",)
     parser = argparse.ArgumentParser(description="Grizzly status report generator")
+    parser.add_argument("--dump", help="File to write report to")
     parser.add_argument(
-        "--dump",
-        help="File to write report to")
+        "--mode",
+        default="status",
+        help="Status loading mode. Available modes: %s (default: 'status')"
+        % (", ".join(modes),),
+    )
     parser.add_argument(
-        "--mode", default="status",
-        help="Status loading mode. Available modes: %s (default: 'status')" % (", ".join(modes),))
-    parser.add_argument(
-        "--system-report", action="store_true",
-        help="Output summary and system information")
+        "--system-report",
+        action="store_true",
+        help="Output summary and system information",
+    )
     parser.add_argument(
         "--tracebacks",
-        help="Scan path for Python tracebacks found in screenlog.# files")
+        help="Scan path for Python tracebacks found in screenlog.# files",
+    )
     args = parser.parse_args(args)
 
     if args.mode not in modes:
@@ -444,8 +466,8 @@ def main(args=None):
         print("Grizzly Status - No status reports to display")
         return 0
     print(
-        "Grizzly Status - %s - Instance report frequency: %ds\n" %
-        (strftime("%Y/%m/%d %X", localtime()), Status.REPORT_FREQ)
+        "Grizzly Status - %s - Instance report frequency: %ds\n"
+        % (strftime("%Y/%m/%d %X", localtime()), Status.REPORT_FREQ)
     )
     print("[Reports]")
     reporter.print_specific()

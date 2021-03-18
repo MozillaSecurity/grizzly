@@ -41,7 +41,9 @@ class FakeArgs:
         self.verbose = False
         self.xvfb = False
 
+
 # TODO: these could use call_count checks
+
 
 def test_main_01(mocker):
     """test main()"""
@@ -49,7 +51,9 @@ def test_main_01(mocker):
     fake_adapter.NAME = "fake"
     fake_adapter.TIME_LIMIT = 10
     mocker.patch("grizzly.main.get_adapter", return_value=lambda: fake_adapter)
-    mocker.patch.dict("grizzly.target.TARGETS", values={"fake-target": mocker.Mock(spec=Target)})
+    mocker.patch.dict(
+        "grizzly.target.TARGETS", values={"fake-target": mocker.Mock(spec=Target)}
+    )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec=Sapphire)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
@@ -95,13 +99,16 @@ def test_main_01(mocker):
     args.s3_fuzzmanager = True
     assert main(args) == Session.EXIT_SUCCESS
 
+
 def test_main_02(mocker):
     """test main() exit codes"""
     fake_adapter = mocker.Mock(spec=Adapter)
     fake_adapter.TIME_LIMIT = 10
     fake_adapter.RELAUNCH = 0
     mocker.patch("grizzly.main.get_adapter", return_value=lambda: fake_adapter)
-    mocker.patch.dict("grizzly.target.TARGETS", values={"fake-target": mocker.Mock(spec=Target)})
+    mocker.patch.dict(
+        "grizzly.target.TARGETS", values={"fake-target": mocker.Mock(spec=Target)}
+    )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     fake_session.EXIT_ABORT = Session.EXIT_ABORT
@@ -117,6 +124,7 @@ def test_main_02(mocker):
     fake_session.return_value.run.side_effect = TargetLaunchError("test", None)
     assert main(args) == Session.EXIT_LAUNCH_FAILURE
 
+
 @mark.parametrize(
     "arg_testlimit, arg_timeout, result",
     [
@@ -130,7 +138,7 @@ def test_main_02(mocker):
         (10, 11, Session.EXIT_SUCCESS),
         # set test time limit greater than timeout
         (11, 10, Session.EXIT_ARGS),
-    ]
+    ],
 )
 def test_main_03(mocker, arg_testlimit, arg_timeout, result):
     """test main() time-limit and timeout"""
@@ -139,7 +147,9 @@ def test_main_03(mocker, arg_testlimit, arg_timeout, result):
     fake_adapter.RELAUNCH = 1
     fake_adapter.TIME_LIMIT = 10
     mocker.patch("grizzly.main.get_adapter", return_value=lambda: fake_adapter)
-    mocker.patch.dict("grizzly.target.TARGETS", values={"fake-target": mocker.Mock(spec=Target)})
+    mocker.patch.dict(
+        "grizzly.target.TARGETS", values={"fake-target": mocker.Mock(spec=Target)}
+    )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec=Sapphire)
     fake_session.EXIT_ARGS = Session.EXIT_ARGS

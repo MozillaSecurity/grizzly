@@ -24,8 +24,8 @@ LOG = getLogger(__name__)
 
 
 # job status codes
-SERVED_ALL = 0      # all expected requests for required files have been received
-SERVED_NONE = 1     # no requests for required files have been received
+SERVED_ALL = 0  # all expected requests for required files have been received
+SERVED_NONE = 1  # no requests for required files have been received
 SERVED_REQUEST = 2  # some requests for required files have been received
 SERVED_TIMEOUT = 3  # timeout occurred
 
@@ -41,14 +41,31 @@ class Job:
         ".bmp": "image/bmp",
         ".ico": "image/x-icon",
         ".wave": "audio/x-wav",
-        ".webp": "image/webp"
+        ".webp": "image/webp",
     }
 
     __slots__ = (
-        "_complete", "_pending", "_served", "auto_close", "accepting", "base_path",
-        "exceptions", "forever", "initial_queue_size", "server_map", "worker_complete")
+        "_complete",
+        "_pending",
+        "_served",
+        "auto_close",
+        "accepting",
+        "base_path",
+        "exceptions",
+        "forever",
+        "initial_queue_size",
+        "server_map",
+        "worker_complete",
+    )
 
-    def __init__(self, base_path, auto_close=-1, forever=False, optional_files=None, server_map=None):
+    def __init__(
+        self,
+        base_path,
+        auto_close=-1,
+        forever=False,
+        optional_files=None,
+        server_map=None,
+    ):
         self._complete = Event()
         self._pending = Tracker(files=set(), lock=Lock())
         self._served = Tracker(files=defaultdict(int), lock=Lock())
@@ -76,13 +93,15 @@ class Job:
                     continue
                 file_path = abspath(file_path)
                 if "?" in file_path:
-                    LOG.warning("Cannot add files with '?' in path. Skipping %r", file_path)
+                    LOG.warning(
+                        "Cannot add files with '?' in path. Skipping %r", file_path
+                    )
                     continue
                 self._pending.files.add(file_path)
                 LOG.debug("required: %r", location)
         # if nothing was found check if the path exists
         if not self._pending.files and not isdir(self.base_path):
-            raise OSError("%r does not exist" % (self.base_path),)
+            raise OSError("%r does not exist" % (self.base_path,))
         if self.server_map:
             for redirect, resource in self.server_map.redirect.items():
                 if resource.required:
@@ -91,7 +110,8 @@ class Job:
                     "%s: %r -> %r",
                     "required" if resource.required else "optional",
                     redirect,
-                    resource.target)
+                    resource.target,
+                )
             for dyn_resp, resource in self.server_map.dynamic.items():
                 if resource.required:
                     self._pending.files.add(dyn_resp)
@@ -122,7 +142,9 @@ class Job:
             if request in self.server_map.dynamic:
                 return self.server_map.dynamic[request]
             # collect possible include matches
-            includes = tuple(x for x in self.server_map.include if request.startswith(x))
+            includes = tuple(
+                x for x in self.server_map.include if request.startswith(x)
+            )
             if includes:
                 LOG.debug("potential include matches %r", includes)
                 # attempt to find match
@@ -130,12 +152,14 @@ class Job:
                 while True:
                     if url in includes:
                         LOG.debug("found include match %r", url)
-                        location = request.split(url, 1)[-1].lstrip("/") if url else request
+                        location = (
+                            request.split(url, 1)[-1].lstrip("/") if url else request
+                        )
                         # check location points to something
                         if location:
                             target = pathjoin(
-                                self.server_map.include[url].target,
-                                location)
+                                self.server_map.include[url].target, location
+                            )
                             # if the mapping url is empty check the file exists
                             if url or isfile(target):
                                 mime = self.server_map.include[url].mime
@@ -145,7 +169,8 @@ class Job:
                                     Resource.URL_INCLUDE,
                                     normpath(target),
                                     mime=mime,
-                                    required=self.server_map.include[url].required)
+                                    required=self.server_map.include[url].required,
+                                )
                     if "/" in url:
                         url = url.rsplit("/", 1)[0]
                     elif url:

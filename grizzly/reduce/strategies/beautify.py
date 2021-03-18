@@ -16,11 +16,13 @@ from lithium.testcases import TestcaseLine
 
 try:
     import cssbeautifier
+
     HAVE_CSSBEAUTIFIER = True
 except ImportError:  # pragma: no cover
     HAVE_CSSBEAUTIFIER = False
 try:
     import jsbeautifier
+
     HAVE_JSBEAUTIFIER = True
 except ImportError:  # pragma: no cover
     HAVE_JSBEAUTIFIER = False
@@ -45,6 +47,7 @@ class _BeautifyStrategy(Strategy, ABC):
         native_extension (str): The native file extension for this type.
         tag_name (str): Tag name to search for in other (non-native) extensions.
     """
+
     all_extensions = None
     ignore_files = {"test_info.json", "prefs.js"}
     import_available = None
@@ -63,16 +66,21 @@ class _BeautifyStrategy(Strategy, ABC):
         super().__init__(testcases)
         self._files_to_beautify = []
         for path in self._testcase_root.glob("**/*"):
-            if (path.is_file() and path.suffix in self.all_extensions
-                    and path.name not in self.ignore_files):
+            if (
+                path.is_file()
+                and path.suffix in self.all_extensions
+                and path.name not in self.ignore_files
+            ):
                 if _contains_dd(path):
                     self._files_to_beautify.append(path)
         self._current_feedback = None
         tag_bytes = self.tag_name.encode("ascii")
-        self._re_tag_start = re.compile(br"<\s*" + tag_bytes + br".*?>",
-                                        flags=re.DOTALL | re.IGNORECASE)
-        self._re_tag_end = re.compile(br"</\s*" + tag_bytes + br"\s*>",
-                                      flags=re.IGNORECASE)
+        self._re_tag_start = re.compile(
+            br"<\s*" + tag_bytes + br".*?>", flags=re.DOTALL | re.IGNORECASE
+        )
+        self._re_tag_end = re.compile(
+            br"</\s*" + tag_bytes + br"\s*>", flags=re.IGNORECASE
+        )
 
     @classmethod
     def sanity_check_cls_attrs(cls):
@@ -145,7 +153,7 @@ class _BeautifyStrategy(Strategy, ABC):
             # there was an open <tag>
             last_tag_start is not None
             # and it isn't followed by a closing </tag>
-            and self._re_tag_end.search(before[last_tag_start.end(0):]) is None
+            and self._re_tag_end.search(before[last_tag_start.end(0) :]) is None
         )
         if in_tag_already:
             tag_end = self._re_tag_end.search(to_beautify)
@@ -191,9 +199,12 @@ class _BeautifyStrategy(Strategy, ABC):
 
         LOG.info("Beautifying %d files", len(self._files_to_beautify))
         for file_no, file in enumerate(self._files_to_beautify):
-            LOG.info("Beautifying %s (file %d/%d)",
-                     file.relative_to(self._testcase_root), file_no + 1,
-                     len(self._files_to_beautify))
+            LOG.info(
+                "Beautifying %s (file %d/%d)",
+                file.relative_to(self._testcase_root),
+                file_no + 1,
+                len(self._files_to_beautify),
+            )
 
             # Use Lithium just to split the file at DDBEGIN/END.
             # Lithium already has the right logic for DDBEGIN/END and line endings.
@@ -226,8 +237,10 @@ class _BeautifyStrategy(Strategy, ABC):
                     elif to_beautify.strip():  # pragma: no cover
                         # this should never happen, but just in case...
                         # pragma: no cover
-                        LOG.warning("No output from beautify! Writing %s unmodified.",
-                                    self.tag_name)
+                        LOG.warning(
+                            "No output from beautify! Writing %s unmodified.",
+                            self.tag_name,
+                        )
                         testcase_fp.write(to_beautify)  # pragma: no cover
                     last = end
                 testcase_fp.write(raw[last:])
@@ -265,16 +278,17 @@ class CSSBeautify(_BeautifyStrategy):
     This should make the CSS more reducible if there are long lines with compound
     definitions.
     """
+
     all_extensions = {".css", ".htm", ".html", ".xhtml"}
     import_available = HAVE_CSSBEAUTIFIER
     import_name = "cssbeautifier"
     name = "cssbeautify"
     native_extension = ".css"
     opts = (
-        ('end_with_newline', False),
-        ('indent_size', 2),
-        ('newline_between_rules', False),
-        ('preserve_newlines', False),
+        ("end_with_newline", False),
+        ("indent_size", 2),
+        ("newline_between_rules", False),
+        ("preserve_newlines", False),
     )
     tag_name = "style"
 
@@ -290,9 +304,9 @@ class CSSBeautify(_BeautifyStrategy):
         """
         assert cls.import_available
         data = data.decode("utf-8", errors="surrogateescape")
-        return (cssbeautifier
-                .beautify(data, cls.opts)
-                .encode("utf-8", errors="surrogateescape"))
+        return cssbeautifier.beautify(data, cls.opts).encode(
+            "utf-8", errors="surrogateescape"
+        )
 
 
 class JSBeautify(_BeautifyStrategy):
@@ -301,6 +315,7 @@ class JSBeautify(_BeautifyStrategy):
     This should make the javascript more reducible if there are long lines with
     compound statements.
     """
+
     all_extensions = {".js", ".htm", ".html", ".xhtml"}
     import_available = HAVE_JSBEAUTIFIER
     import_name = "jsbeautifier"

@@ -44,11 +44,28 @@ class ReplayManager:
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
     DEFAULT_TIME_LIMIT = 30
 
-    __slots__ = ("ignore", "server", "status", "target", "_any_crash",
-                 "_harness", "_signature", "_relaunch", "_unpacked")
+    __slots__ = (
+        "ignore",
+        "server",
+        "status",
+        "target",
+        "_any_crash",
+        "_harness",
+        "_signature",
+        "_relaunch",
+        "_unpacked",
+    )
 
-    def __init__(self, ignore, server, target, any_crash=False,
-                 relaunch=1, signature=None, use_harness=True):
+    def __init__(
+        self,
+        ignore,
+        server,
+        target,
+        any_crash=False,
+        relaunch=1,
+        signature=None,
+        use_harness=True,
+    ):
         self.ignore = ignore
         self.server = server
         self.status = None
@@ -113,12 +130,12 @@ class ReplayManager:
         if is_hang:
             if signature is None:
                 raise ConfigError(
-                    "Hangs require a signature to replay",
-                    Session.EXIT_ERROR)
+                    "Hangs require a signature to replay", Session.EXIT_ERROR
+                )
             if "timeout" in ignore:
                 raise ConfigError(
-                    "Cannot ignore 'timeout' when detecting hangs",
-                    Session.EXIT_ERROR)
+                    "Cannot ignore 'timeout' when detecting hangs", Session.EXIT_ERROR
+                )
         return is_hang
 
     @classmethod
@@ -166,7 +183,9 @@ class ReplayManager:
         """
         others = list(x.report for x in results if not x.expected)
         if others:
-            reporter = FilesystemReporter(pathjoin(path, "other_reports"), major_bucket=False)
+            reporter = FilesystemReporter(
+                pathjoin(path, "other_reports"), major_bucket=False
+            )
             for report in others:
                 reporter.submit(tests or [], report=report)
         expected = list(x for x in results if x.expected)
@@ -190,7 +209,7 @@ class ReplayManager:
         exit_early=True,
         expect_hang=False,
         idle_delay=0,
-        idle_threshold=0
+        idle_threshold=0,
     ):
         """Run testcase replay.
 
@@ -229,7 +248,9 @@ class ReplayManager:
 
         server_map = ServerMap()
         if self._harness is not None:
-            server_map.set_dynamic_response("grz_harness", lambda: self._harness, mime_type="text/html")
+            server_map.set_dynamic_response(
+                "grz_harness", lambda: self._harness, mime_type="text/html"
+            )
 
         # track unprocessed results
         reports = dict()
@@ -249,21 +270,23 @@ class ReplayManager:
                 self.target,
                 idle_threshold=idle_threshold,
                 idle_delay=idle_delay,
-                relaunch=relaunch * test_count)
+                relaunch=relaunch * test_count,
+            )
             # perform iterations
             for _ in range(repeat):
                 self.status.iteration += 1
                 if self.target.closed:
                     if self._harness is None:
                         location = runner.location(
-                            "/grz_current_test",
-                            self.server.port)
+                            "/grz_current_test", self.server.port
+                        )
                     else:
                         location = runner.location(
                             "/grz_harness",
                             self.server.port,
                             close_after=relaunch * test_count,
-                            time_limit=time_limit)
+                            time_limit=time_limit,
+                        )
                     startup_error = False
                     # The environment from the initial testcase is used because
                     # a sequence of testcases is expected to be run without
@@ -276,28 +299,38 @@ class ReplayManager:
                 served = list()
                 for test_idx in range(test_count):
                     if test_count > 1:
-                        LOG.info("Running test, part %d/%d (%d/%d)...",
-                                 test_idx + 1, test_count, self.status.iteration, repeat)
+                        LOG.info(
+                            "Running test, part %d/%d (%d/%d)...",
+                            test_idx + 1,
+                            test_count,
+                            self.status.iteration,
+                            repeat,
+                        )
                     else:
-                        LOG.info("Running test (%d/%d)...", self.status.iteration, repeat)
+                        LOG.info(
+                            "Running test (%d/%d)...", self.status.iteration, repeat
+                        )
                     # update redirects
                     if self._harness is not None:
                         next_idx = (test_idx + 1) % test_count
                         server_map.set_redirect(
                             "grz_next_test",
                             testcases[next_idx].landing_page,
-                            required=True)
+                            required=True,
+                        )
                     server_map.set_redirect(
                         "grz_current_test",
                         testcases[test_idx].landing_page,
-                        required=False)
+                        required=False,
+                    )
                     # run testcase
                     run_result = runner.run(
                         self.ignore,
                         server_map,
                         testcases[test_idx],
                         test_path=unpacked[test_idx],
-                        wait_for_callback=self._harness is None)
+                        wait_for_callback=self._harness is None,
+                    )
                     durations.append(run_result.duration)
                     served.append(run_result.served)
                     if run_result.status is not None or not run_result.attempted:
@@ -317,9 +350,7 @@ class ReplayManager:
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
                     report = Report(
-                        log_path,
-                        self.target.binary,
-                        is_hang=run_result.timeout
+                        log_path, self.target.binary, is_hang=run_result.timeout
                     )
                     # check signatures
                     if run_result.timeout:
@@ -339,35 +370,47 @@ class ReplayManager:
                         self._signature = report.crash_signature
                     # bucket result
                     if short_sig == "No crash detected":
-                        # TODO: verify report.major == "NO_STACK" otherwise FM failed to parse the logs
+                        # TODO: verify report.major == "NO_STACK"
+                        # otherwise FM failed to parse the logs
                         # TODO: change this to support hangs/timeouts, etc
                         LOG.info("Result: No crash detected")
-                    elif (
-                        not startup_error
-                        and (self._any_crash
-                            or self.check_match(self._signature, report, expect_hang))
+                    elif not startup_error and (
+                        self._any_crash
+                        or self.check_match(self._signature, report, expect_hang)
                     ):
                         self.status.count_result(short_sig)
-                        LOG.info("Result: %s (%s:%s)",
-                                 short_sig, report.major[:8], report.minor[:8])
+                        LOG.info(
+                            "Result: %s (%s:%s)",
+                            short_sig,
+                            report.major[:8],
+                            report.minor[:8],
+                        )
                         if sig_hash:
                             LOG.debug("using provided signature (hash) to bucket")
                             bucket_hash = sig_hash
                         else:
                             bucket_hash = report.crash_hash
                         if bucket_hash not in reports:
-                            reports[bucket_hash] = ReplayResult(report, served, durations, True)
+                            reports[bucket_hash] = ReplayResult(
+                                report, served, durations, True
+                            )
                             LOG.debug("now tracking %s", bucket_hash)
                             report = None  # don't remove report
                         else:
                             reports[bucket_hash].count += 1
                             LOG.debug("already tracking %s", bucket_hash)
                     else:
-                        LOG.info("Result: Different signature: %s (%s:%s)",
-                                 short_sig, report.major[:8], report.minor[:8])
+                        LOG.info(
+                            "Result: Different signature: %s (%s:%s)",
+                            short_sig,
+                            report.major[:8],
+                            report.minor[:8],
+                        )
                         self.status.ignored += 1
                         if report.crash_hash not in reports:
-                            reports[report.crash_hash] = ReplayResult(report, served, durations, False)
+                            reports[report.crash_hash] = ReplayResult(
+                                report, served, durations, False
+                            )
                             LOG.debug("now tracking %s", report.crash_hash)
                             report = None  # don't remove report
                         else:
@@ -383,12 +426,19 @@ class ReplayManager:
 
                 if exit_early:
                     # failed to meet minimum number of results
-                    if repeat - self.status.iteration + self.status.results < min_results:
+                    if (
+                        repeat - self.status.iteration + self.status.results
+                        < min_results
+                    ):
                         if self.status.iteration < repeat:
                             LOG.debug("skipping remaining attempts")
                         # failed to reproduce issue
-                        LOG.debug("results (%d) < minimum (%d), after %d attempts",
-                                  self.status.results, min_results, self.status.iteration)
+                        LOG.debug(
+                            "results (%d) < minimum (%d), after %d attempts",
+                            self.status.results,
+                            min_results,
+                            self.status.iteration,
+                        )
                         # NOTE: this can be tricky if the harness is used because it can
                         # skip the shutdown performed in the harness and runner, if this
                         # is an issue for now use relaunch=1
@@ -396,15 +446,18 @@ class ReplayManager:
                     # check if complete (minimum number of results found)
                     if self.status.results >= min_results:
                         assert self.status.results == min_results
-                        assert sum(x.count for x in reports.values() if x.expected) >= min_results
-                        LOG.debug("results == expected (%d), after %d attempts",
-                                  min_results, self.status.iteration)
+                        assert (
+                            sum(x.count for x in reports.values() if x.expected)
+                            >= min_results
+                        )
+                        LOG.debug(
+                            "results == expected (%d), after %d attempts",
+                            min_results,
+                            self.status.iteration,
+                        )
                         break
 
-                # warn about large browser logs
-                #self.status.log_size = self.target.log_size()
-                #if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
-                #    LOG.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
+                # TODO: should we warn about large browser logs?
 
             # process results
             results = list()
@@ -413,7 +466,11 @@ class ReplayManager:
                 if sum(x.count for x in reports.values()) >= min_results:
                     results = list(reports.values())
                 else:
-                    LOG.debug("%d (any_crash) less than minimum %d", self.status.results, min_results)
+                    LOG.debug(
+                        "%d (any_crash) less than minimum %d",
+                        self.status.results,
+                        min_results,
+                    )
                     for report in reports.values():
                         report.report.cleanup()
             else:
@@ -421,14 +478,23 @@ class ReplayManager:
                 # filter out unreliable expected results
                 for crash_hash, report in reports.items():
                     if report.expected and report.count < min_results:
-                        LOG.debug("%r less than minimum (%d/%d)", crash_hash, report.count, min_results)
+                        LOG.debug(
+                            "%r less than minimum (%d/%d)",
+                            crash_hash,
+                            report.count,
+                            min_results,
+                        )
                         report.report.cleanup()
                         continue
                     results.append(report)
             # this should only be displayed when both conditions are met:
             # 1) runner does not close target (no delay was given before shutdown)
             # 2) result has not been successfully reproduced
-            if self._relaunch > 1 and not self.target.closed and not any(x.expected for x in results):
+            if (
+                self._relaunch > 1
+                and not self.target.closed
+                and not any(x.expected for x in results)
+            ):
                 LOG.info("Perhaps try with --relaunch=1")
             # active reports have been moved to results
             # clear reports to avoid cleanup of active reports
@@ -467,8 +533,10 @@ class ReplayManager:
             timeout = time_limit + TIMEOUT_DELAY
         if timeout < time_limit:
             raise ConfigError(
-                "Timeout (%d) cannot be less than time limit (%d)" % (timeout, time_limit),
-                Session.EXIT_ARGS)
+                "Timeout (%d) cannot be less than time limit (%d)"
+                % (timeout, time_limit),
+                Session.EXIT_ARGS,
+            )
         return time_limit, timeout
 
     @classmethod
@@ -496,9 +564,8 @@ class ReplayManager:
 
         try:
             testcases = cls.load_testcases(
-                args.input,
-                args.prefs is None,
-                subset=args.test_index)
+                args.input, args.prefs is None, subset=args.test_index
+            )
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return Session.EXIT_ERROR
@@ -510,20 +577,24 @@ class ReplayManager:
             if args.no_harness and len(testcases) > 1:
                 LOG.error(
                     "'--no-harness' cannot be used with multiple testcases. "
-                    "Perhaps '--test-index' can help.")
+                    "Perhaps '--test-index' can help."
+                )
                 return Session.EXIT_ARGS
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)
             # check test time limit and timeout
             time_limit, timeout = cls.time_limits(
-                args.time_limit,
-                args.timeout,
-                testcases)
+                args.time_limit, args.timeout, testcases
+            )
             LOG.info("Using time limit: %ds, timeout: %ds", time_limit, timeout)
             repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, repeat)
-            LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
-                     repeat, args.min_crashes, relaunch)
+            LOG.info(
+                "Repeat: %d, Minimum crashes: %d, Relaunch %d",
+                repeat,
+                args.min_crashes,
+                relaunch,
+            )
             LOG.debug("initializing the Target")
             target = load_target(args.platform)(
                 args.binary,
@@ -533,7 +604,8 @@ class ReplayManager:
                 args.memory,
                 rr=args.rr,
                 valgrind=args.valgrind,
-                xvfb=args.xvfb)
+                xvfb=args.xvfb,
+            )
             # prioritize specified prefs.js file over included file
             if args.prefs is not None:
                 for testcase in testcases:
@@ -560,7 +632,7 @@ class ReplayManager:
                     any_crash=args.any_crash,
                     relaunch=relaunch,
                     signature=signature,
-                    use_harness=not args.no_harness
+                    use_harness=not args.no_harness,
                 ) as replay:
                     results = replay.run(
                         testcases,
@@ -569,7 +641,8 @@ class ReplayManager:
                         idle_delay=args.idle_delay,
                         idle_threshold=args.idle_threshold,
                         min_results=args.min_crashes,
-                        repeat=repeat)
+                        repeat=repeat,
+                    )
             # handle results
             success = any(x.expected for x in results)
             if success:
@@ -578,9 +651,8 @@ class ReplayManager:
                 LOG.info("Failed to reproduce results")
             if args.logs and results:
                 cls.report_to_filesystem(
-                    args.logs,
-                    results,
-                    testcases if args.include_test else None)
+                    args.logs, results, testcases if args.include_test else None
+                )
             # TODO: add fuzzmanager reporting
             return Session.EXIT_SUCCESS if success else Session.EXIT_FAILURE
 

@@ -16,11 +16,12 @@ def test_grizzly_args_01(capsys, tmp_path):
     out, _ = capsys.readouterr()
     assert "For addition help check out the wiki" in out
     # test success
-    fake_bin = (tmp_path / "fake.bin")
+    fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
     argp = GrizzlyArgs()
     argp._adapters = ["test_adapter"]
     assert argp.parse_args(argv=[str(fake_bin), "test_adapter"])
+
 
 def test_grizzly_args_03(capsys):
     """test GrizzlyArgs.parse_args() handling binary"""
@@ -35,9 +36,10 @@ def test_grizzly_args_03(capsys):
     _, err = capsys.readouterr()
     assert "error: file not found: 'missing_bin'" in err
 
+
 def test_grizzly_args_04(capsys, tmp_path):
     """test GrizzlyArgs.parse_args() handling adapter"""
-    fake_bin = (tmp_path / "fake.bin")
+    fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
     # no adapters
     with raises(SystemExit):
@@ -51,5 +53,6 @@ def test_grizzly_args_04(capsys, tmp_path):
         argp.parse_args(argv=[str(fake_bin), "missing"])
     _, err = capsys.readouterr()
     assert "error: Adapter 'missing' does not exist. Available adapters: a1, b2" in err
+
 
 # TODO: Add CommonArgs tests

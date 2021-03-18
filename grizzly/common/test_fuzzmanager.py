@@ -65,7 +65,9 @@ def test_bucket_3(mocker):
     crashes = list(bucket.iter_crashes(quality_filter=5))
     assert coll.return_value.get.call_count == 2
     assert coll.return_value.get.call_args_list[0][1]["params"]["include_raw"] == "0"
-    assert json.loads(coll.return_value.get.call_args_list[0][1]["params"]["query"]) == {
+    assert json.loads(
+        coll.return_value.get.call_args_list[0][1]["params"]["query"]
+    ) == {
         "op": "AND",
         "bucket": 123,
         "testcase__quality": 5,
@@ -96,10 +98,10 @@ def test_bucket_4(mocker):
         assert sig_path.with_suffix(".metadata").is_file()
         assert sig_path.read_text() == "sigdata"
         assert json.loads(sig_path.with_suffix(".metadata").read_text()) == {
-                        "size": 10,
-                        "frequent": True,
-                        "shortDescription": "sig desc",
-                        "testcase__quality": 0,
+            "size": 10,
+            "frequent": True,
+            "shortDescription": "sig desc",
+            "testcase__quality": 0,
         }
         assert coll.return_value.get.call_count == 1
         # second call returns same path

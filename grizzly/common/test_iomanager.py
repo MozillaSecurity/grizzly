@@ -20,6 +20,7 @@ def test_iomanager_01():
         assert iom._report_size == 1
         assert iom._test is None
 
+
 @mark.parametrize(
     "report_size, iters",
     [
@@ -27,7 +28,7 @@ def test_iomanager_01():
         (1, 2),
         (2, 2),
         (2, 3),
-    ]
+    ],
 )
 def test_iomanager_02(report_size, iters):
     """test IOManager create_testcase(), commit() and purge()"""
@@ -49,6 +50,7 @@ def test_iomanager_02(report_size, iters):
         assert iom._test is None
         assert not iom.tests
 
+
 def test_iomanager_03():
     """test IOManager.page_name()"""
     with IOManager() as iom:
@@ -56,6 +58,7 @@ def test_iomanager_03():
         next_page = iom.page_name(offset=1)
         iom._generated += 1
         assert iom.page_name() == next_page
+
 
 def test_iomanager_04(mocker, tmp_path):
     """test IOManager._add_suppressions()"""
@@ -70,9 +73,12 @@ def test_iomanager_04(mocker, tmp_path):
                 "ASAN_OPTIONS": "blah=1:suppressions='%s':foo=2" % (str(supp_file),),
                 "DEBUG": "1",
                 "LSAN_OPTIONS": "nothing=1",
-                "JUNK": "test"})
+                "JUNK": "test",
+            },
+        )
         iom._add_suppressions()
         assert "asan.supp" in (x.file_name for x in iom._environ_files)
+
 
 def test_iomanager_05():
     """test IOManager.create_testcase()"""
@@ -108,6 +114,7 @@ def test_iomanager_05():
         assert "grz_next_test" in iom.server_map.redirect
         assert "grz_harness" in iom.server_map.dynamic
 
+
 def test_iomanager_06(mocker):
     """test IOManager.tracked_environ()"""
     mocker.patch.dict("grizzly.common.iomanager.environ", values={})
@@ -121,8 +128,10 @@ def test_iomanager_06(mocker):
             "MOZ_CHAOSMODE": "1",
             # this should be skipped because it uses the FFPuppet debug
             "XPCOM_DEBUG_BREAK": "warn",
-            "TEST_BAD": "FAIL"},
-        clear=True)
+            "TEST_BAD": "FAIL",
+        },
+        clear=True,
+    )
     tracked = IOManager.tracked_environ()
     assert "TEST_BAD" not in tracked
     assert "XPCOM_DEBUG_BREAK" not in tracked
@@ -134,5 +143,6 @@ def test_iomanager_06(mocker):
     mocker.patch.dict(
         "grizzly.common.iomanager.environ",
         values={"ASAN_OPTIONS": "ignored=x"},
-        clear=True)
+        clear=True,
+    )
     assert not IOManager.tracked_environ()

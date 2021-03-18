@@ -19,8 +19,8 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 # is where basicConfig should be called).
 if getenv("DEBUG"):
     basicConfig(
-        format="%(asctime)s %(levelname).1s %(name)s | %(message)s",
-        level=DEBUG)
+        format="%(asctime)s %(levelname).1s %(name)s | %(message)s", level=DEBUG
+    )
 # load Adapters
 load()
 raise SystemExit(main(GrizzlyArgs().parse_args()))

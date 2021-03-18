@@ -23,7 +23,9 @@ from .exceptions import NotReproducible
 from .strategies import Strategy
 
 LOG = getLogger(__name__)
-pytestmark = pytest.mark.usefixtures("tmp_path_fm_config", "reporter_sequential_strftime")
+pytestmark = pytest.mark.usefixtures(
+    "tmp_path_fm_config", "reporter_sequential_strftime"
+)
 
 
 def _fake_save_logs_foo(result_logs, meta=False):  # pylint: disable=unused-argument
@@ -53,7 +55,7 @@ def _fake_save_logs_bar(result_logs, meta=False):  # pylint: disable=unused-argu
 AnalysisTestParams = namedtuple(
     "AnalysisTestParams",
     "harness_last_crashes, harness_crashes, no_harness_crashes, expected_repeat, "
-    "expected_min_crashes, use_harness, result_harness"
+    "expected_min_crashes, use_harness, result_harness",
 )
 
 
@@ -224,12 +226,19 @@ AnalysisTestParams = namedtuple(
         AnalysisTestParams(None, 1, 0, 32, 1, True, True),
         # last test doesn't repro, harness+all tests is (11/11), skip without harness
         AnalysisTestParams(None, 11, None, 2, 2, True, True),
-
-    ]
+    ],
 )
-def test_analysis(mocker, tmp_path, harness_last_crashes, harness_crashes,
-                  no_harness_crashes, expected_repeat, expected_min_crashes,
-                  use_harness, result_harness):
+def test_analysis(
+    mocker,
+    tmp_path,
+    harness_last_crashes,
+    harness_crashes,
+    no_harness_crashes,
+    expected_repeat,
+    expected_min_crashes,
+    use_harness,
+    result_harness,
+):
     """test that analysis sets reasonable params"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value.__enter__.return_value
@@ -254,14 +263,13 @@ def test_analysis(mocker, tmp_path, harness_last_crashes, harness_crashes,
         for _ in range(repeat):
             LOG.debug("interesting: %r", crashes[0])
             if crashes.pop(0):
-                log_path = tmp_path / (
-                    "crash%d_logs" % (replayer.run.call_count,)
-                )
+                log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
                 log_path.mkdir(exist_ok=True)
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
                 results.append(ReplayResult(report, [["test.html"]], [], True))
         return results
+
     replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
@@ -286,9 +294,15 @@ def test_analysis(mocker, tmp_path, harness_last_crashes, harness_crashes,
 
     stats = _ReduceStats()
     try:
-        mgr = ReduceManager(None, mocker.Mock(spec=Sapphire, timeout=30),
-                            mocker.Mock(spec=Target),
-                            tests, None, log_path, use_harness=use_harness)
+        mgr = ReduceManager(
+            None,
+            mocker.Mock(spec=Sapphire, timeout=30),
+            mocker.Mock(spec=Target),
+            tests,
+            None,
+            log_path,
+            use_harness=use_harness,
+        )
         repeat, min_crashes, _ = mgr.run_reliability_analysis(stats)
     finally:
         for test in tests:
@@ -303,16 +317,18 @@ def test_analysis(mocker, tmp_path, harness_last_crashes, harness_crashes,
 
 def _ignore_arg(func):
     """Function wrapper that simply ignores 1 argument"""
+
     @wraps(func)
     def wrapped(_):
         return func()
+
     return wrapped
 
 
 ReproTestParams = namedtuple(
     "ReproTestParams",
     "original, strategies, detect_failure, interesting_str, is_expected,"
-    "expected_run_calls, n_reports, reports, n_other, other_reports, result"
+    "expected_run_calls, n_reports, reports, n_other, other_reports, result",
 )
 
 
@@ -351,8 +367,10 @@ ReproTestParams = namedtuple(
         ReproTestParams(
             original="odd\neven\n" * 3,
             strategies=["check", "lines"],
-            detect_failure=lambda contents: sum(1 for line in contents.splitlines()
-                                                if line == "odd") == 3,
+            detect_failure=lambda contents: sum(
+                1 for line in contents.splitlines() if line == "odd"
+            )
+            == 3,
             interesting_str="%r contains 3x 'odd'",
             is_expected=lambda _: True,
             expected_run_calls=8,
@@ -397,7 +415,9 @@ ReproTestParams = namedtuple(
             detect_failure=(
                 lambda contents: (
                     len(contents.splitlines()) == 6
-                    and set(contents.splitlines()) >= {"A1", "A3", "A5"})),
+                    and set(contents.splitlines()) >= {"A1", "A3", "A5"}
+                )
+            ),
             interesting_str="%r contains {'A1', 'A3', 'A5'} and len() == 6",
             is_expected=lambda _: True,
             expected_run_calls=43,
@@ -413,8 +433,10 @@ ReproTestParams = namedtuple(
             original="A1\nA2\nA3\nA4\nA5\nA6\n",
             strategies=["check", "lines", "chars"],
             detect_failure=(
-                lambda contents: (set(contents.splitlines(keepends=True))
-                                  >= {"A1\n", "A3\n", "A5\n"})),
+                lambda contents: (
+                    set(contents.splitlines(keepends=True)) >= {"A1\n", "A3\n", "A5\n"}
+                )
+            ),
             interesting_str="%r contains {'A1\\n', 'A3\\n', 'A5\\n'}",
             is_expected=lambda _: True,
             expected_run_calls=34,
@@ -436,8 +458,19 @@ ReproTestParams = namedtuple(
             n_reports=1,
             reports={"1\n2\n3\n"},
             n_other=15,
-            other_reports={"\n2\n3\n", "1\n", "1\n\n3\n", "1\n2\n", "1\n2\n\n",
-                           "1\n2\n3", "1\n23\n", "1\n3\n", "12\n3\n", "2\n3\n", "3\n"},
+            other_reports={
+                "\n2\n3\n",
+                "1\n",
+                "1\n\n3\n",
+                "1\n2\n",
+                "1\n2\n\n",
+                "1\n2\n3",
+                "1\n23\n",
+                "1\n3\n",
+                "12\n3\n",
+                "2\n3\n",
+                "3\n",
+            },
             result=0,
         ),
         # reproduces, one strategy, testcase reduces to 0
@@ -459,8 +492,8 @@ ReproTestParams = namedtuple(
             original="1\n2\n3\n",
             strategies=["check", "lines", "lines"],
             detect_failure=_ignore_arg(
-                partial(
-                    [True, False, False, False, False, False, True, True].pop, 0)),
+                partial([True, False, False, False, False, False, True, True].pop, 0)
+            ),
             interesting_str="%r is anything, only in second strategy",
             is_expected=lambda _: True,
             expected_run_calls=8,
@@ -470,12 +503,24 @@ ReproTestParams = namedtuple(
             other_reports=None,
             result=0,
         ),
-    ]
+    ],
 )
 @pytest.mark.usefixtures("reporter_sequential_strftime")
-def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesting_str,
-               is_expected, expected_run_calls, n_reports, reports, n_other,
-               other_reports, result):
+def test_repro(
+    mocker,
+    tmp_path,
+    original,
+    strategies,
+    detect_failure,
+    interesting_str,
+    is_expected,
+    expected_run_calls,
+    n_reports,
+    reports,
+    n_other,
+    other_reports,
+    result,
+):
     """test ReduceManager, difference scenarios produce correct expected/other
     results"""
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
@@ -489,9 +534,7 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
             # pylint: disable=logging-not-lazy
             LOG.debug("interesting if " + interesting_str, contents)
             if detect_failure(contents):
-                log_path = tmp_path / (
-                    "crash%d_logs" % (replayer.run.call_count,)
-                )
+                log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
                 log_path.mkdir()
                 expected = is_expected(contents)
                 if expected:
@@ -501,6 +544,7 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
                 report = Report(str(log_path), "bin")
                 return [ReplayResult(report, [["test.html"]], [], expected)]
         return []
+
     replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
@@ -511,8 +555,15 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
-                            strategies, log_path, use_analysis=False)
+        mgr = ReduceManager(
+            [],
+            mocker.Mock(spec=Sapphire, timeout=30),
+            target,
+            tests,
+            strategies,
+            log_path,
+            use_analysis=False,
+        )
         if isinstance(result, type) and issubclass(result, BaseException):
             with raises(result):
                 mgr.run()
@@ -532,14 +583,17 @@ def test_repro(mocker, tmp_path, original, strategies, detect_failure, interesti
     if n_reports:
         tests = {test.read_text() for test in log_path.glob("reports/*-0/test.html")}
         assert tests == reports
-        assert sum(1 for _ in (log_path / "reports").iterdir()) \
-            == n_reports * 2, list((log_path / "reports").iterdir())
+        assert sum(1 for _ in (log_path / "reports").iterdir()) == n_reports * 2, list(
+            (log_path / "reports").iterdir()
+        )
     if n_other:
-        other_tests = {test.read_text()
-                       for test in log_path.glob("other_reports/*-0/test.html")}
+        other_tests = {
+            test.read_text() for test in log_path.glob("other_reports/*-0/test.html")
+        }
         assert other_tests == other_reports
-        assert sum(1 for _ in (log_path / "other_reports").iterdir()) \
-            == n_other * 2, list((log_path / "other_reports").iterdir())
+        assert (
+            sum(1 for _ in (log_path / "other_reports").iterdir()) == n_other * 2
+        ), list((log_path / "other_reports").iterdir())
     assert replayer.run.call_count == expected_run_calls
 
 
@@ -584,9 +638,16 @@ def test_report_01(mocker, tmp_path):
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target,
-                            testcases, ["fake"], log_path, use_analysis=False,
-                            report_period=30)
+        mgr = ReduceManager(
+            [],
+            mocker.Mock(spec=Sapphire, timeout=30),
+            target,
+            testcases,
+            ["fake"],
+            log_path,
+            use_analysis=False,
+            report_period=30,
+        )
         assert mgr.run() == 0
     finally:
         for test in testcases:
@@ -601,8 +662,9 @@ def test_report_01(mocker, tmp_path):
     assert set(log_path.iterdir()) == expected_dirs
     tests = {test.read_text() for test in log_path.glob("reports/*-0/test.html")}
     assert tests == reports
-    assert sum(1 for _ in (log_path / "reports").iterdir()) \
-        == n_reports * 2, list((log_path / "reports").iterdir())
+    assert sum(1 for _ in (log_path / "reports").iterdir()) == n_reports * 2, list(
+        (log_path / "reports").iterdir()
+    )
 
 
 def test_report_02(mocker, tmp_path):
@@ -647,8 +709,15 @@ def test_report_02(mocker, tmp_path):
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target,
-                            testcases, ["fake"], log_path, use_analysis=False)
+        mgr = ReduceManager(
+            [],
+            mocker.Mock(spec=Sapphire, timeout=30),
+            target,
+            testcases,
+            ["fake"],
+            log_path,
+            use_analysis=False,
+        )
         with raises(KeyboardInterrupt):
             mgr.run()
     finally:
@@ -662,8 +731,9 @@ def test_report_02(mocker, tmp_path):
     assert set(log_path.iterdir()) == expected_dirs
     tests = {test.read_text() for test in log_path.glob("reports/*-0/test.html")}
     assert tests == reports
-    assert sum(1 for _ in (log_path / "reports").iterdir()) \
-        == n_reports * 2, list((log_path / "reports").iterdir())
+    assert sum(1 for _ in (log_path / "reports").iterdir()) == n_reports * 2, list(
+        (log_path / "reports").iterdir()
+    )
 
 
 def test_quality_update(mocker, tmp_path):
@@ -684,6 +754,7 @@ def test_quality_update(mocker, tmp_path):
             report = Report(str(log_path), "bin")
             return [ReplayResult(report, [["test.html"]], [], True)]
         return []
+
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").write_text("123\n")
@@ -698,9 +769,16 @@ def test_quality_update(mocker, tmp_path):
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target,
-                            testcases, ["check", "lines"], log_path, use_analysis=False,
-                            report_to_fuzzmanager=True)
+        mgr = ReduceManager(
+            [],
+            mocker.Mock(spec=Sapphire, timeout=30),
+            target,
+            testcases,
+            ["check", "lines"],
+            log_path,
+            use_analysis=False,
+            report_to_fuzzmanager=True,
+        )
         assert mgr.run() == 0
     finally:
         for test in testcases:
@@ -723,7 +801,7 @@ def test_quality_update(mocker, tmp_path):
 TimeoutTestParams = namedtuple(
     "TimeoutTestParams",
     "durations, interesting, static_timeout, idle_input, idle_output, iter_input,"
-    "iter_output, result"
+    "iter_output, result",
 )
 
 
@@ -785,10 +863,20 @@ TimeoutTestParams = namedtuple(
             iter_output=20,
             result=0,
         ),
-    ]
+    ],
 )
-def test_timeout_update(mocker, tmp_path, durations, interesting, static_timeout,
-                        idle_input, idle_output, iter_input, iter_output, result):
+def test_timeout_update(
+    mocker,
+    tmp_path,
+    durations,
+    interesting,
+    static_timeout,
+    idle_input,
+    idle_output,
+    iter_input,
+    iter_output,
+    result,
+):
     "timeout will be updated based on time to crash"
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
@@ -802,6 +890,7 @@ def test_timeout_update(mocker, tmp_path, durations, interesting, static_timeout
         _fake_save_logs_foo(log_path)
         report = Report(str(log_path), "bin")
         return [ReplayResult(report, [["test.html"]], durations, interesting)]
+
     replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
@@ -814,9 +903,17 @@ def test_timeout_update(mocker, tmp_path, durations, interesting, static_timeout
     server = mocker.Mock(spec=Sapphire)
     server.timeout = iter_input
     try:
-        mgr = ReduceManager([], server, target, tests, ["check"], log_path,
-                            use_analysis=False, idle_delay=idle_input,
-                            static_timeout=static_timeout)
+        mgr = ReduceManager(
+            [],
+            server,
+            target,
+            tests,
+            ["check"],
+            log_path,
+            use_analysis=False,
+            idle_delay=idle_input,
+            static_timeout=static_timeout,
+        )
         mgr.IDLE_DELAY_MIN = 10
         mgr.IDLE_DELAY_DURATION_MULTIPLIER = 1.5
         mgr.ITER_TIMEOUT_MIN = 10

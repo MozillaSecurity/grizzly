@@ -74,9 +74,7 @@ class Loki:
         max_mutations = max(int(round(length * self.aggr)), 1)
         mutations = randint(1, max_mutations)
         LOG.debug(
-            "%d of a possible %d mutations will be performed",
-            mutations,
-            max_mutations
+            "%d of a possible %d mutations will be performed", mutations, max_mutations
         )
         if self.byte_order is not None:
             assert self.byte_order in ("<", ">", "@", "!", "=")
@@ -144,10 +142,7 @@ class Loki:
         LOG.info("Output directory is %r", abspath(out_dir))
         count = max(args.count, 1)
         LOG.info("Generating %d fuzzed test cases...", count)
-        loki = Loki(
-            aggression=args.aggression,
-            byte_order=args.byte_order
-        )
+        loki = Loki(aggression=args.aggression, byte_order=args.byte_order)
         try:
             start_time = time()
             success = loki.fuzz_file(args.input, count, out_dir)

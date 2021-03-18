@@ -41,6 +41,7 @@ def test_puppet_target_01(mocker, tmp_path):
     with PuppetTarget(str(fake_file), None, 1, 1, 1, rr=True, fake=1) as target:
         pass
 
+
 def test_puppet_target_02(mocker, tmp_path):
     """test PuppetTarget.launch()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
@@ -65,11 +66,16 @@ def test_puppet_target_02(mocker, tmp_path):
         fake_ffp.reset_mock()
         (tmp_path / "log_stderr.txt").write_text("fake log")
         (tmp_path / "log_stdout.txt").write_text("fake log")
-        mocker.patch("grizzly.target.puppet_target.mkdtemp", autospec=True, return_value=str(tmp_path))
+        mocker.patch(
+            "grizzly.target.puppet_target.mkdtemp",
+            autospec=True,
+            return_value=str(tmp_path),
+        )
         fake_ffp.return_value.launch.side_effect = BrowserTerminatedError("fail")
         with raises(TargetLaunchError, match="fail"):
             target.launch("launch_target_page")
         assert fake_ffp.return_value.save_logs.call_count == 1
+
 
 @mark.parametrize(
     "healthy, reason, ignore, result, closes",
@@ -88,7 +94,7 @@ def test_puppet_target_02(mocker, tmp_path):
         (False, FFPuppet.RC_WORKER, ["memory"], Target.RESULT_IGNORED, 1),
         # ffpuppet check ignored (log-limit)
         (False, FFPuppet.RC_WORKER, ["log-limit"], Target.RESULT_IGNORED, 1),
-    ]
+    ],
 )
 def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, closes):
     """test PuppetTarget.detect_failure()"""
@@ -109,6 +115,7 @@ def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, clo
     assert target.detect_failure(ignore) == result
     assert fake_ffp.return_value.close.call_count == closes
 
+
 @mark.parametrize(
     "healthy, usage, os_name, killed",
     [
@@ -120,12 +127,13 @@ def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, clo
         (True, [(234, 10), (236, 75), (238, 60)], "Linux", 1),
         # ignore idle timeout (close don't abort)
         (True, [(234, 10)], "Linux", 0),
-
-    ]
+    ],
 )
 def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed):
     """test PuppetTarget.handle_hang()"""
-    mocker.patch("grizzly.target.puppet_target.system", autospec=True, return_value=os_name)
+    mocker.patch(
+        "grizzly.target.puppet_target.system", autospec=True, return_value=os_name
+    )
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_kill = mocker.patch("grizzly.target.puppet_target.kill", autospec=True)
     # raise OSError for code coverage
@@ -141,13 +149,16 @@ def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed):
     assert fake_ffp.return_value.cpu_usage.call_count == (1 if usage else 0)
     assert fake_kill.call_count == fake_ffp.return_value.wait.call_count == killed
 
+
 @mark.skipif(system() == "Windows", reason="Unsupported on Windows")
 def test_puppet_target_05(mocker, tmp_path):
     """test PuppetTarget.dump_coverage()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_proc = mocker.patch("grizzly.target.puppet_target.Process", autospec=True)
     fake_proc.return_value.children.return_value = (mocker.Mock(pid=101),)
-    fake_proc_iter = mocker.patch("grizzly.target.puppet_target.process_iter", autospec=True)
+    fake_proc_iter = mocker.patch(
+        "grizzly.target.puppet_target.process_iter", autospec=True
+    )
     mocker.patch("grizzly.target.puppet_target.sleep", autospec=True)
     fake_time = mocker.patch("grizzly.target.puppet_target.time", autospec=True)
     fake_file = tmp_path / "fake"
@@ -187,7 +198,9 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_ffp.return_value.is_healthy.side_effect = None
     fake_ffp.return_value.get_pid.return_value = 100
     fake_proc_iter.return_value = (
-        mocker.Mock(info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.gcda"),)}),
+        mocker.Mock(
+            info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.gcda"),)}
+        ),
     )
     fake_time.side_effect = (0, 1, 20, 20)
     target.dump_coverage(timeout=15)
@@ -203,17 +216,40 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_time.return_value = 1.0
     fake_proc_iter.side_effect = (
         (
-            mocker.Mock(info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.bin"), mocker.Mock(path="/a/s/d"))}),
+            mocker.Mock(
+                info={
+                    "pid": 100,
+                    "ppid": 0,
+                    "open_files": (
+                        mocker.Mock(path="a.bin"),
+                        mocker.Mock(path="/a/s/d"),
+                    ),
+                }
+            ),
             mocker.Mock(info={"pid": 101, "ppid": 100, "open_files": None}),
-            mocker.Mock(info={"pid": 999, "ppid": 0, "open_files": None})
+            mocker.Mock(info={"pid": 999, "ppid": 0, "open_files": None}),
         ),
         (
-            mocker.Mock(info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.gcda"),)}),
+            mocker.Mock(
+                info={
+                    "pid": 100,
+                    "ppid": 0,
+                    "open_files": (mocker.Mock(path="a.gcda"),),
+                }
+            ),
         ),
         (
-            mocker.Mock(info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.bin"),)}),
-            mocker.Mock(info={"pid": 999, "ppid": 0, "open_files": (mocker.Mock(path="ignore.gcda"),)})
-        )
+            mocker.Mock(
+                info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.bin"),)}
+            ),
+            mocker.Mock(
+                info={
+                    "pid": 999,
+                    "ppid": 0,
+                    "open_files": (mocker.Mock(path="ignore.gcda"),),
+                }
+            ),
+        ),
     )
     target.dump_coverage()
     assert fake_proc_iter.call_count == 3
@@ -233,6 +269,7 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_kill.reset_mock()
     fake_proc_iter.reset_mock()
 
+
 def test_puppet_target_06(mocker, tmp_path):
     """test PuppetTarget.is_idle()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
@@ -243,6 +280,7 @@ def test_puppet_target_06(mocker, tmp_path):
         assert not target.is_idle(0)
         assert not target.is_idle(25)
         assert target.is_idle(50)
+
 
 def test_puppet_target_07(mocker, tmp_path):
     """test PuppetTarget.monitor"""
@@ -265,6 +303,7 @@ def test_puppet_target_07(mocker, tmp_path):
         assert target.monitor.log_length("stdout") == 100
         target.monitor.clone_log("somelog")
         assert fake_ffp.return_value.clone_log.call_count == 1
+
 
 def test_puppet_target_08(mocker, tmp_path):
     """test PuppetTarget.prefs"""

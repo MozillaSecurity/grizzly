@@ -25,6 +25,7 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 LOG = getLogger(__name__)
 
+
 def configure_logging(log_level):
     if getenv("DEBUG") == "1":
         log_level = DEBUG
@@ -35,6 +36,7 @@ def configure_logging(log_level):
         date_fmt = "%Y-%m-%d %H:%M:%S"
         log_fmt = "[%(asctime)s] %(message)s"
     basicConfig(format=log_fmt, datefmt=date_fmt, level=log_level)
+
 
 def main(args):
     configure_logging(args.log_level)
@@ -75,8 +77,10 @@ def main(args):
             LOG.error("Timeout must be at least test time limit if not greater")
             return Session.EXIT_ARGS
         if adapter.HARNESS_FILE and time_limit == timeout:
-            LOG.warning("To avoid relaunches due to tests failing to close"
-                        " themselves use a timeout greater than time limit")
+            LOG.warning(
+                "To avoid relaunches due to tests failing to close"
+                " themselves use a timeout greater than time limit"
+            )
 
         if adapter.RELAUNCH > 0:
             LOG.info("Relaunch (%d) set in Adapter", adapter.RELAUNCH)
@@ -93,7 +97,8 @@ def main(args):
             args.memory,
             rr=args.rr,
             valgrind=args.valgrind,
-            xvfb=args.xvfb)
+            xvfb=args.xvfb,
+        )
         if args.prefs:
             target.prefs = args.prefs
             LOG.info("Using prefs %r", args.prefs)
@@ -104,7 +109,9 @@ def main(args):
             LOG.info("Results will be reported via FuzzManager")
             reporter = FuzzManagerReporter(tool=args.tool)
         elif args.s3_fuzzmanager:
-            LOG.info("Results will be reported via FuzzManager w/ large attachments in S3")
+            LOG.info(
+                "Results will be reported via FuzzManager w/ large attachments in S3"
+            )
             reporter = S3FuzzManagerReporter(tool=args.tool)
         else:
             reporter = FilesystemReporter(pathjoin(getcwd(), "results"))
@@ -128,7 +135,8 @@ def main(args):
                 coverage=args.coverage,
                 enable_profiling=args.enable_profiling,
                 relaunch=relaunch,
-                report_size=args.collect)
+                report_size=args.collect,
+            )
             if args.log_level == DEBUG or args.verbose:
                 display_mode = Session.DISPLAY_VERBOSE
             else:
@@ -138,7 +146,8 @@ def main(args):
                 time_limit,
                 input_path=args.input,
                 iteration_limit=args.limit,
-                display_mode=display_mode)
+                display_mode=display_mode,
+            )
 
     except KeyboardInterrupt:
         LOG.info("Ctrl+C detected.")

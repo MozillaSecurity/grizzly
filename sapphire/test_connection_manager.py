@@ -30,6 +30,7 @@ def test_connection_manager_01(mocker, tmp_path):
     assert not job.accepting.is_set()
     assert job.exceptions.empty()
 
+
 def test_connection_manager_02(mocker):
     """test ConnectionManager.start() failure"""
     mocker.patch("sapphire.connection_manager.sleep", autospec=True)
@@ -42,6 +43,7 @@ def test_connection_manager_02(mocker):
         loadmgr.start()
     loadmgr.close()
     assert job.is_complete()
+
 
 def test_connection_manager_03(mocker, tmp_path):
     """test ConnectionManager multiple files and requests"""
@@ -58,7 +60,8 @@ def test_connection_manager_03(mocker, tmp_path):
         b"GET /test2 HTTP/1.1",
         b"GET /test1 HTTP/1.1",
         b"GET /test1 HTTP/1.1",
-        b"GET /test3 HTTP/1.1")
+        b"GET /test3 HTTP/1.1",
+    )
     serv_sock = mocker.Mock(spec=socket)
     serv_sock.accept.return_value = (clnt_sock, None)
     assert not job.is_complete()
@@ -66,6 +69,7 @@ def test_connection_manager_03(mocker, tmp_path):
         assert loadmgr.wait(1)
     assert clnt_sock.close.call_count == 8
     assert job.is_complete()
+
 
 def test_connection_manager_04(mocker, tmp_path):
     """test ConnectionManager.wait()"""
@@ -88,6 +92,7 @@ def test_connection_manager_04(mocker, tmp_path):
     with ConnectionManager(job, serv_sock, max_workers=10) as loadmgr:
         assert not loadmgr.wait(1, continue_cb=lambda: False, poll=0.01)
 
+
 def test_connection_manager_05(mocker, tmp_path):
     """test ConnectionManager re-raise worker exceptions"""
     (tmp_path / "test1").touch()
@@ -102,6 +107,7 @@ def test_connection_manager_05(mocker, tmp_path):
     assert clnt_sock.close.call_count == 1
     assert job.is_complete()
     assert job.exceptions.empty()
+
 
 def test_connection_manager_06(mocker, tmp_path):
     """test ConnectionManager re-raise launcher exceptions"""
