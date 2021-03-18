@@ -39,7 +39,9 @@ def test_args_01(capsys, tmp_path):
     (inp / "prefs.js").touch()
     ReplayArgs().parse_args([str(exe), str(inp)])
     # test case file
-    ReplayArgs().parse_args([str(exe), str(inp / "somefile"), "--prefs", str(inp / "prefs.js")])
+    ReplayArgs().parse_args(
+        [str(exe), str(inp / "somefile"), "--prefs", str(inp / "prefs.js")]
+    )
     # test negative min-crashes value
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--min-crashes", "-1"])
@@ -55,14 +57,19 @@ def test_args_01(capsys, tmp_path):
     # test any crash and signature
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--any-crash", "--sig", "x"])
-    assert "error: signature is ignored when running with '--any-crash'" in capsys.readouterr()[-1]
+    assert (
+        "error: signature is ignored when running with '--any-crash'"
+        in capsys.readouterr()[-1]
+    )
     # test multiple debuggers
     with raises(SystemExit):
         ReplayArgs().parse_args([str(exe), str(inp), "--rr", "--valgrind"])
     assert "'--rr' and '--valgrind' cannot be used together" in capsys.readouterr()[-1]
     # test idle args
     with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp), "--idle-threshold", "1", "--idle-delay", "0"])
+        ReplayArgs().parse_args(
+            [str(exe), str(inp), "--idle-threshold", "1", "--idle-delay", "0"]
+        )
     assert "'--idle-delay' value must be positive" in capsys.readouterr()[-1]
     # force relaunch == 1 with --no-harness
     args = ReplayArgs().parse_args([str(exe), str(inp), "--no-harness"])
@@ -76,22 +83,33 @@ def test_main_01(mocker, tmp_path):
     # and the forth attempt should be skipped.
     # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
-    serve_path.return_value = (SERVED_ALL, ["test.html"])  # passed to mocked Target.detect_failure
+    serve_path = mocker.patch(
+        "grizzly.replay.replay.Sapphire.serve_path", autospec=True
+    )
+    serve_path.return_value = (
+        SERVED_ALL,
+        ["test.html"],
+    )  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_target")
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.RESULT_NONE = Target.RESULT_NONE
-    target.detect_failure.side_effect = (Target.RESULT_FAILURE, Target.RESULT_NONE, Target.RESULT_FAILURE)
+    target.detect_failure.side_effect = (
+        Target.RESULT_FAILURE,
+        Target.RESULT_NONE,
+        Target.RESULT_FAILURE,
+    )
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
     # setup args
-    log_path = (tmp_path / "logs")
+    log_path = tmp_path / "logs"
     (tmp_path / "test.html").touch()
     (tmp_path / "prefs.js").touch()
-    (tmp_path / "sig.json").write_bytes(b"{\"symptoms\": [{\"type\": \"crashAddress\", \"address\": \"0\"}]}")
+    (tmp_path / "sig.json").write_bytes(
+        b'{"symptoms": [{"type": "crashAddress", "address": "0"}]}'
+    )
     args = mocker.Mock(
         fuzzmanager=False,
         idle_delay=0,
@@ -109,7 +127,8 @@ def test_main_01(mocker, tmp_path):
         test_index=None,
         time_limit=10,
         timeout=None,
-        valgrind=False)
+        valgrind=False,
+    )
     assert ReplayManager.main(args) == Session.EXIT_SUCCESS
     assert target.reverse.call_count == 1
     assert target.launch.call_count == 3
@@ -123,12 +142,18 @@ def test_main_01(mocker, tmp_path):
     assert any(log_path.glob("reports/*/log_stderr.txt"))
     assert any(log_path.glob("reports/*/log_stdout.txt"))
 
+
 def test_main_02(mocker, tmp_path):
     """test ReplayManager.main() - no repro"""
     # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
-    serve_path.return_value = (SERVED_ALL, ["test.html"])  # passed to mocked Target.detect_failure
+    serve_path = mocker.patch(
+        "grizzly.replay.replay.Sapphire.serve_path", autospec=True
+    )
+    serve_path.return_value = (
+        SERVED_ALL,
+        ["test.html"],
+    )  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_target")
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
@@ -154,11 +179,13 @@ def test_main_02(mocker, tmp_path):
         test_index=None,
         time_limit=10,
         timeout=None,
-        valgrind=False)
+        valgrind=False,
+    )
     assert ReplayManager.main(args) == Session.EXIT_FAILURE
     assert target.detect_failure.call_count == 1
     assert target.close.call_count == 2
     assert target.cleanup.call_count == 1
+
 
 def test_main_03(mocker):
     """test ReplayManager.main() error cases"""
@@ -179,7 +206,8 @@ def test_main_03(mocker):
         sig=None,
         test_index=None,
         time_limit=10,
-        timeout=None)
+        timeout=None,
+    )
     # user abort
     fake_load_target.side_effect = KeyboardInterrupt
     # coverage
@@ -220,6 +248,7 @@ def test_main_03(mocker):
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
 
+
 def test_main_04(mocker, tmp_path):
     """test ReplayManager.main() target exceptions"""
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
@@ -228,9 +257,11 @@ def test_main_04(mocker, tmp_path):
     target = mocker.Mock(spec=Target, launch_timeout=30)
     load_target = mocker.patch("grizzly.replay.replay.load_target", autospec=True)
     load_target.return_value.return_value = target
-    fake_tmp = (tmp_path / "grz_tmp")
+    fake_tmp = tmp_path / "grz_tmp"
     fake_tmp.mkdir()
-    mocker.patch("grizzly.replay.replay.grz_tmp", autospec=True, return_value=str(fake_tmp))
+    mocker.patch(
+        "grizzly.replay.replay.grz_tmp", autospec=True, return_value=str(fake_tmp)
+    )
     # setup args
     args = mocker.Mock(
         ignore=list(),
@@ -243,23 +274,35 @@ def test_main_04(mocker, tmp_path):
         sig=None,
         test_index=None,
         time_limit=10,
-        timeout=None)
+        timeout=None,
+    )
     # target launch error
-    fake_logs = (tmp_path / "fake_report")
+    fake_logs = tmp_path / "fake_report"
     fake_logs.mkdir()
     report = mocker.Mock(spec=Report, prefix="fake_report", path=str(fake_logs))
-    mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchError("", report))
+    mocker.patch(
+        "grizzly.replay.replay.ReplayManager.run",
+        side_effect=TargetLaunchError("", report),
+    )
     assert ReplayManager.main(args) == Session.EXIT_LAUNCH_FAILURE
     assert not fake_logs.is_dir()
     assert "fake_report_logs" in (x.name for x in fake_tmp.iterdir())
     # target launch timeout
-    mocker.patch("grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchTimeout)
+    mocker.patch(
+        "grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchTimeout
+    )
     assert ReplayManager.main(args) == Session.EXIT_LAUNCH_FAILURE
+
 
 def test_main_05(mocker, tmp_path):
     """test ReplayManager.main() loading/generating prefs.js"""
-    serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
-    serve_path.return_value = (None, ["test.html"])  # passed to mocked Target.detect_failure
+    serve_path = mocker.patch(
+        "grizzly.replay.replay.Sapphire.serve_path", autospec=True
+    )
+    serve_path.return_value = (
+        None,
+        ["test.html"],
+    )  # passed to mocked Target.detect_failure
     # setup Target
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
@@ -281,13 +324,14 @@ def test_main_05(mocker, tmp_path):
         sig=None,
         test_index=None,
         time_limit=1,
-        timeout=None)
-    log_path = (tmp_path / "logs")
+        timeout=None,
+    )
+    log_path = tmp_path / "logs"
     args.logs = str(log_path)
-    input_path = (tmp_path / "input")
+    input_path = tmp_path / "input"
     input_path.mkdir()
     # build a test case
-    entry_point = (input_path / "test.html")
+    entry_point = input_path / "test.html"
     entry_point.touch()
     with TestCase("test.html", None, "test-adapter") as src:
         src.add_from_file(str(entry_point))
@@ -301,7 +345,7 @@ def test_main_05(mocker, tmp_path):
     assert target.detect_failure.call_count == 1
     assert serve_path.call_count == 1
     assert log_path.is_dir()
-    assert not any(log_path.glob('**/prefs.js'))
+    assert not any(log_path.glob("**/prefs.js"))
 
     target.reset_mock()
     serve_path.reset_mock()
@@ -314,7 +358,7 @@ def test_main_05(mocker, tmp_path):
     assert target.detect_failure.call_count == 1
     assert serve_path.call_count == 1
     assert log_path.is_dir()
-    prefs = next(log_path.glob('**/prefs.js'))
+    prefs = next(log_path.glob("**/prefs.js"))
     assert prefs.read_bytes() == b"included"
 
     target.reset_mock()
@@ -329,8 +373,9 @@ def test_main_05(mocker, tmp_path):
     assert target.detect_failure.call_count == 1
     assert serve_path.call_count == 1
     assert log_path.is_dir()
-    prefs = next(log_path.glob('**/prefs.js'))
+    prefs = next(log_path.glob("**/prefs.js"))
     assert prefs.read_bytes() == b"specified"
+
 
 @mark.parametrize(
     "arg_timelimit, arg_timeout, test_timelimit, result",
@@ -347,14 +392,19 @@ def test_main_05(mocker, tmp_path):
         (10, 11, None, Session.EXIT_FAILURE),
         # set test time limit greater than timeout
         (11, 10, None, Session.EXIT_ARGS),
-    ]
+    ],
 )
 def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, result):
     """test ReplayManager.main() - test time limit and timeout"""
     # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    serve_path = mocker.patch("grizzly.replay.replay.Sapphire.serve_path", autospec=True)
-    serve_path.return_value = (SERVED_ALL, ["test.html"])  # passed to mocked Target.detect_failure
+    serve_path = mocker.patch(
+        "grizzly.replay.replay.Sapphire.serve_path", autospec=True
+    )
+    serve_path.return_value = (
+        SERVED_ALL,
+        ["test.html"],
+    )  # passed to mocked Target.detect_failure
     # setup Target
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE
@@ -388,5 +438,6 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         test_index=None,
         time_limit=arg_timelimit,
         timeout=arg_timeout,
-        valgrind=False)
+        valgrind=False,
+    )
     assert ReplayManager.main(args) == result

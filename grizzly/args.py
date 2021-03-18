@@ -42,80 +42,115 @@ class CommonArgs:
             "ERROR": ERROR,
             "WARN": WARNING,
             "INFO": INFO,
-            "DEBUG": DEBUG}
+            "DEBUG": DEBUG,
+        }
         self._sanity_skip = set()
 
         if not hasattr(self, "parser"):
             self.parser = ArgumentParser(
-                formatter_class=SortingHelpFormatter,
-                conflict_handler='resolve')
+                formatter_class=SortingHelpFormatter, conflict_handler="resolve"
+            )
 
+        self.parser.add_argument("binary", help="Firefox binary to run")
         self.parser.add_argument(
-            "binary",
-            help="Firefox binary to run")
-        self.parser.add_argument(
-            "--log-level", default="INFO",
-            help="Configure console logging. Options: %s (default: %%(default)s)" %
-            ", ".join(k for k, v in sorted(self._level_map.items(), key=lambda x: x[1])))
+            "--log-level",
+            default="INFO",
+            help="Configure console logging. Options: %s (default: %%(default)s)"
+            % ", ".join(
+                k for k, v in sorted(self._level_map.items(), key=lambda x: x[1])
+            ),
+        )
 
         self.launcher_grp = self.parser.add_argument_group("Launcher Arguments")
         self.launcher_grp.add_argument(
-            "-e", "--extension", action="append",
+            "-e",
+            "--extension",
+            action="append",
             help="Install an extension. Specify the path to the xpi or the directory"
-                 " containing the unpacked extension. To install multiple extensions"
-                 " specify multiple times")
+            " containing the unpacked extension. To install multiple extensions"
+            " specify multiple times",
+        )
         self.launcher_grp.add_argument(
-            "--launch-timeout", type=int, default=300,
-            help="Number of seconds to wait before LaunchError is raised (default: %(default)s)")
+            "--launch-timeout",
+            type=int,
+            default=300,
+            help="Number of seconds to wait before LaunchError is raised"
+            " (default: %(default)s)",
+        )
         self.launcher_grp.add_argument(
-            "--log-limit", type=int, default=0,
-            help="Browser log file size limit in MBs (default: 'no limit')")
+            "--log-limit",
+            type=int,
+            default=0,
+            help="Browser log file size limit in MBs (default: 'no limit')",
+        )
         self.launcher_grp.add_argument(
-            "-m", "--memory", type=int, default=0,
-            help="Browser process memory limit in MBs (default: 'no limit')")
+            "-m",
+            "--memory",
+            type=int,
+            default=0,
+            help="Browser process memory limit in MBs (default: 'no limit')",
+        )
         self.launcher_grp.add_argument(
-            "--platform", default="ffpuppet",
-            help="Platforms available: %s (default: %%(default)s)" % ", ".join(available_targets()))
+            "--platform",
+            default="ffpuppet",
+            help="Platforms available: %s (default: %%(default)s)"
+            % ", ".join(available_targets()),
+        )
+        self.launcher_grp.add_argument("-p", "--prefs", help="prefs.js file to use")
         self.launcher_grp.add_argument(
-            "-p", "--prefs",
-            help="prefs.js file to use")
+            "--relaunch",
+            type=int,
+            default=1000,
+            help="Number of iterations performed before relaunching the browser"
+            " (default: %(default)s)",
+        )
         self.launcher_grp.add_argument(
-            "--relaunch", type=int, default=1000,
-            help="Number of iterations performed before relaunching the browser (default: %(default)s)")
-        self.launcher_grp.add_argument(
-            "--time-limit", type=int, default=None,
+            "--time-limit",
+            type=int,
+            default=None,
             help="This is the maximum amount of time that a test is expected to take."
-                 " After the time has elapsed the harness will attempt to close the test."
-                 " By default `Adapter.TIME_LIMIT` is used."
-                 " Browser build types and debuggers can affect the amount of time"
-                 " required to run a test case.")
+            " After the time has elapsed the harness will attempt to close the test."
+            " By default `Adapter.TIME_LIMIT` is used."
+            " Browser build types and debuggers can affect the amount of time"
+            " required to run a test case.",
+        )
         self.launcher_grp.add_argument(
-            "-t", "--timeout", type=int, default=None,
+            "-t",
+            "--timeout",
+            type=int,
+            default=None,
             help="Iteration timeout in seconds. By default this is `test-duration`+%ds."
-                 " If the timeout is reached the target is assumed to be in a bad state"
-                 " and will be closed. Typically this should be a few seconds greater"
-                 " than the value used for `test-duration`." % (TIMEOUT_DELAY,))
+            " If the timeout is reached the target is assumed to be in a bad state"
+            " and will be closed. Typically this should be a few seconds greater"
+            " than the value used for `test-duration`." % (TIMEOUT_DELAY,),
+        )
         self.launcher_grp.add_argument(
-            "--valgrind", action="store_true",
-            help="Use Valgrind (Linux only)")
+            "--valgrind", action="store_true", help="Use Valgrind (Linux only)"
+        )
         self.launcher_grp.add_argument(
-            "--xvfb", action="store_true",
-            help="Use Xvfb (Linux only)")
+            "--xvfb", action="store_true", help="Use Xvfb (Linux only)"
+        )
 
         self.reporter_grp = self.parser.add_argument_group("Reporter Arguments")
         self.reporter_grp.add_argument(
-            "--fuzzmanager", action="store_true",
-            help="Report results to FuzzManager")
+            "--fuzzmanager", action="store_true", help="Report results to FuzzManager"
+        )
         self.reporter_grp.add_argument(
-            "--ignore", nargs="*", default=list(self.IGNORE),
+            "--ignore",
+            nargs="*",
+            default=list(self.IGNORE),
             help="Space separated list of issue types to ignore. Valid options: %s"
-                 " (default: %s)" % (" ".join(self.IGNORABLE), " ".join(self.IGNORE)))
+            " (default: %s)" % (" ".join(self.IGNORABLE), " ".join(self.IGNORE)),
+        )
         self.reporter_grp.add_argument(
             "--tool",
-            help="Override tool name used when reporting issues to FuzzManager")
+            help="Override tool name used when reporting issues to FuzzManager",
+        )
 
-        self.parser.epilog = "For addition help check out the wiki:" \
+        self.parser.epilog = (
+            "For addition help check out the wiki:"
             " https://github.com/MozillaSecurity/grizzly/wiki"
+        )
 
     def parse_args(self, argv=None):
         args = self.parser.parse_args(argv)
@@ -123,7 +158,7 @@ class CommonArgs:
         return args
 
     def sanity_check(self, args):
-        if hasattr(super(), 'sanity_check'):
+        if hasattr(super(), "sanity_check"):
             super().sanity_check(args)
 
         if "binary" not in self._sanity_skip and not isfile(args.binary):
@@ -188,38 +223,54 @@ class GrizzlyArgs(CommonArgs):
         self._adapters = sorted(adapter_names())
         self._sanity_skip.add("tool")
         self.parser.add_argument(
-            "adapter",
-            help="Available adapters: %s" % ", ".join(self._adapters))
+            "adapter", help="Available adapters: %s" % ", ".join(self._adapters)
+        )
         self.parser.add_argument(
-            "--enable-profiling", action="store_true",
+            "--enable-profiling",
+            action="store_true",
             help="Record profiling data. The data can be viewed by running the"
-                 " status reporter while running Grizzly.")
+            " status reporter while running Grizzly.",
+        )
         self.parser.add_argument(
-            "-i", "--input",
-            help="Test case or directory containing test cases")
+            "-i", "--input", help="Test case or directory containing test cases"
+        )
         self.parser.add_argument(
-            "--limit", type=int, default=0,
-            help="Maximum number of iterations to be performed. (default: no limit)")
+            "--limit",
+            type=int,
+            default=0,
+            help="Maximum number of iterations to be performed. (default: no limit)",
+        )
         self.parser.add_argument(
-            "-v", "--verbose", action="store_true",
+            "-v",
+            "--verbose",
+            action="store_true",
             help="Output console updates every iteration. By default the number"
-                 " of iterations between console updates doubles each update."
-                 " Updates are always printed when a result is detected or the"
-                 " target is relaunched.")
+            " of iterations between console updates doubles each update."
+            " Updates are always printed when a result is detected or the"
+            " target is relaunched.",
+        )
 
         self.launcher_grp.add_argument(
-            "--coverage", action="store_true",
-            help="Enable coverage collection")
+            "--coverage", action="store_true", help="Enable coverage collection"
+        )
         self.launcher_grp.add_argument(
-            "--rr", action="store_true",
-            help="Use RR (Linux only)")
+            "--rr", action="store_true", help="Use RR (Linux only)"
+        )
 
         self.reporter_grp.add_argument(
-            "-c", "--collect", type=int, default=1,
-            help="Maximum number of test cases to include in the report (default: %(default)s)")
+            "-c",
+            "--collect",
+            type=int,
+            default=1,
+            help="Maximum number of test cases to include in the report"
+            "(default: %(default)s)",
+        )
         self.reporter_grp.add_argument(
-            "--s3-fuzzmanager", action="store_true",
-            help="Report large attachments (if any) to S3 and then the crash & S3 link to FuzzManager")
+            "--s3-fuzzmanager",
+            action="store_true",
+            help="Report large attachments (if any) to S3 and then the crash &"
+            " S3 link to FuzzManager",
+        )
 
     def sanity_check(self, args):
         super().sanity_check(args)
@@ -236,13 +287,17 @@ class GrizzlyArgs(CommonArgs):
             self.parser.error("--collect must be greater than 0")
 
         if args.fuzzmanager and args.s3_fuzzmanager:
-            self.parser.error("--fuzzmanager and --s3-fuzzmanager are mutually exclusive")
+            self.parser.error(
+                "--fuzzmanager and --s3-fuzzmanager are mutually exclusive"
+            )
 
         if args.limit < 0:
             self.parser.error("--limit must be >= 0 (0 = no limit)")
 
         if args.tool is not None and not (args.fuzzmanager or args.s3_fuzzmanager):
-            self.parser.error("--tool can only be given with --fuzzmanager/--s3-fuzzmanager")
+            self.parser.error(
+                "--tool can only be given with --fuzzmanager/--s3-fuzzmanager"
+            )
 
         if args.rr and args.valgrind:
             self.parser.error("'--rr' and '--valgrind' cannot be used together")

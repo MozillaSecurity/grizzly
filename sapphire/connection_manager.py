@@ -44,7 +44,8 @@ class ConnectionManager:
             exc_type, exc_obj, exc_tb = self._job.exceptions.get()
             LOG.error(
                 "Unexpected exception:\n%s",
-                "".join(format_exception(exc_type, exc_obj, exc_tb)))
+                "".join(format_exception(exc_type, exc_obj, exc_tb)),
+            )
             # re-raise exception from worker once all workers are closed
             raise exc_obj
 
@@ -54,7 +55,8 @@ class ConnectionManager:
         listener = Thread(
             target=self.listener,
             args=(self._socket, self._job, self._workers),
-            kwargs={"shutdown_delay": self.SHUTDOWN_DELAY})
+            kwargs={"shutdown_delay": self.SHUTDOWN_DELAY},
+        )
         # launch listener thread and handle thread errors
         for retry in reversed(range(10)):
             try:
@@ -106,7 +108,9 @@ class ConnectionManager:
                     pool_size += 1
                 # manage worker pool
                 if pool_size >= max_workers:
-                    LOG.debug("pool size: %d, waiting for worker to finish...", pool_size)
+                    LOG.debug(
+                        "pool size: %d, waiting for worker to finish...", pool_size
+                    )
                     serv_job.worker_complete.wait()
                     serv_job.worker_complete.clear()
                     # remove complete workers

@@ -22,7 +22,7 @@ from .loki import Loki
         (4, 0.1, None),
         (5, 0.5, None),
         (100, 0.2, None),
-    ]
+    ],
 )
 def test_loki_fuzz_file(tmp_path, in_size, aggression, byte_order):
     """test Loki.fuzz_file() with different file sizes"""
@@ -45,6 +45,7 @@ def test_loki_fuzz_file(tmp_path, in_size, aggression, byte_order):
     else:
         raise AssertionError("failed to fuzz data")
 
+
 def test_loki_01(tmp_path):
     """test Loki.fuzz_file() error cases"""
     fuzzer = Loki(aggression=0.1)
@@ -59,6 +60,7 @@ def test_loki_01(tmp_path):
     assert not fuzzer.fuzz_file(str(tmp_fn), 1, str(out_path))
     assert not list(out_path.iterdir())
 
+
 def test_loki_02():
     """test Loki.fuzz_data()"""
     in_data = b"This is test DATA!"
@@ -72,6 +74,7 @@ def test_loki_02():
             break
     else:
         raise AssertionError("failed to fuzz data")
+
 
 def test_loki_fuzz_01(mocker):
     """test Loki._fuzz()"""
@@ -101,6 +104,7 @@ def test_loki_fuzz_01(mocker):
         tmp_fp.write(b"1")
         loki._fuzz(tmp_fp)
 
+
 def test_loki_fuzz_02(mocker):
     """test Loki._fuzz_data() paths"""
     fake_randint = mocker.patch("loki.loki.randint", autospec=True)
@@ -128,6 +132,7 @@ def test_loki_fuzz_02(mocker):
     with raises(AssertionError, match=r"Unsupported data size:"):
         Loki._fuzz_data(b"", ">")
 
+
 def test_loki_stress_01():
     """test Loki._fuzz_data() with random input"""
     orders = ("<", ">")
@@ -142,27 +147,23 @@ def test_loki_stress_01():
             in_data = pack("I", getrandbits(32))
         assert len(Loki._fuzz_data(in_data, choice(orders))) == size
 
+
 def test_main_01(mocker, tmp_path):
     """test main()"""
     out_path = tmp_path / "out"
     out_path.mkdir()
     # no output path provided
     fake_mkdtemp = mocker.patch(
-        "loki.loki.mkdtemp",
-        autospec=True,
-        return_value=str(out_path)
+        "loki.loki.mkdtemp", autospec=True, return_value=str(out_path)
     )
     sample = tmp_path / "file.bin"
     sample.write_bytes(b"test!")
     args = mocker.Mock(
-        aggression=0.1,
-        byte_order=None,
-        count=15,
-        input=str(sample),
-        output=None
+        aggression=0.1, byte_order=None, count=15, input=str(sample), output=None
     )
     assert Loki.main(args) == 0
     assert fake_mkdtemp.call_count == 1
+
 
 def test_args_01(capsys):
     """test parse_args()"""

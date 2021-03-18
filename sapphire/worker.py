@@ -42,18 +42,22 @@ class Worker:
     @staticmethod
     def _200_header(c_length, c_type, encoding="ascii"):
         assert c_type is not None
-        data = "HTTP/1.1 200 OK\r\n" \
-               "Cache-Control: max-age=0, no-cache\r\n" \
-               "Content-Length: %d\r\n" \
-               "Content-Type: %s\r\n" \
-               "Connection: close\r\n\r\n" % (c_length, c_type)
+        data = (
+            "HTTP/1.1 200 OK\r\n"
+            "Cache-Control: max-age=0, no-cache\r\n"
+            "Content-Length: %d\r\n"
+            "Content-Type: %s\r\n"
+            "Connection: close\r\n\r\n" % (c_length, c_type)
+        )
         return data.encode(encoding)
 
     @staticmethod
     def _307_redirect(redirct_to, encoding="ascii"):
-        data = "HTTP/1.1 307 Temporary Redirect\r\n" \
-               "Location: %s\r\n" \
-               "Connection: close\r\n\r\n" % (redirct_to,)
+        data = (
+            "HTTP/1.1 307 Temporary Redirect\r\n"
+            "Location: %s\r\n"
+            "Connection: close\r\n\r\n" % (redirct_to,)
+        )
         return data.encode(encoding)
 
     @staticmethod
@@ -61,14 +65,18 @@ class Worker:
         if close < 0:
             content = "<h3>%d!</h3>" % (code,)
         else:
-            content = "<script>window.setTimeout(window.close, %d)</script>\n" \
-                      "<body style=\"background-color:#ffffe0\">\n" \
-                      "<h3>%d! - Calling window.close() in %d seconds</h3>\n" \
-                      "</body>\n" % (close * 1000, code, close)
-        data = "HTTP/1.1 %d %s\r\n" \
-               "Content-Length: %d\r\n" \
-               "Content-Type: text/html\r\n" \
-               "Connection: close\r\n\r\n%s" % (code, hdr_msg, len(content), content)
+            content = (
+                "<script>window.setTimeout(window.close, %d)</script>\n"
+                '<body style="background-color:#ffffe0">\n'
+                "<h3>%d! - Calling window.close() in %d seconds</h3>\n"
+                "</body>\n" % (close * 1000, code, close)
+            )
+        data = (
+            "HTTP/1.1 %d %s\r\n"
+            "Content-Length: %d\r\n"
+            "Content-Type: text/html\r\n"
+            "Connection: close\r\n\r\n%s" % (code, hdr_msg, len(content), content)
+        )
         return data.encode(encoding)
 
     def close(self):
@@ -102,7 +110,11 @@ class Worker:
             if request is None:
                 serv_job.accepting.set()
                 conn.sendall(cls._4xx_page(400, "Bad Request", serv_job.auto_close))
-                LOG.debug("400 request length %d (%d to go)", len(raw_request), serv_job.pending)
+                LOG.debug(
+                    "400 request length %d (%d to go)",
+                    len(raw_request),
+                    serv_job.pending,
+                )
                 return
 
             request = unquote_plus(request.group("request").decode("ascii"))
@@ -134,7 +146,9 @@ class Worker:
             if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                 LOG.debug("target %r", resource.target)
                 # isfile() check for Resource.URL_FILE happens in serv_job.check_request()
-                if resource.type == Resource.URL_INCLUDE and not isfile(resource.target):
+                if resource.type == Resource.URL_INCLUDE and not isfile(
+                    resource.target
+                ):
                     conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
                     LOG.debug("404 %r (%d to go)", request, serv_job.pending)
                     return
@@ -147,7 +161,12 @@ class Worker:
                     return
             elif resource.type == Resource.URL_REDIRECT:
                 conn.sendall(cls._307_redirect(resource.target))
-                LOG.debug("307 %r -> %r (%d to go)", request, resource.target, serv_job.pending)
+                LOG.debug(
+                    "307 %r -> %r (%d to go)",
+                    request,
+                    resource.target,
+                    serv_job.pending,
+                )
                 return
             elif resource.type == Resource.URL_DYNAMIC:
                 data = resource.target()
@@ -156,13 +175,17 @@ class Worker:
                     raise TypeError("dynamic request callback must return 'bytes'")
                 conn.sendall(cls._200_header(len(data), resource.mime))
                 conn.sendall(data)
-                LOG.debug("200 %r - dynamic request (%d to go)", request, serv_job.pending)
+                LOG.debug(
+                    "200 %r - dynamic request (%d to go)", request, serv_job.pending
+                )
                 return
 
             # at this point we know "resource.target" maps to a file on disk
             # serve the file
             data_size = stat(resource.target).st_size
-            LOG.debug("sending: %s bytes, mime: %r", format(data_size, ","), resource.mime)
+            LOG.debug(
+                "sending: %s bytes, mime: %r", format(data_size, ","), resource.mime
+            )
             with open(resource.target, "rb") as in_fp:
                 conn.sendall(cls._200_header(data_size, resource.mime))
                 offset = 0

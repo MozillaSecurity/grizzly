@@ -26,8 +26,7 @@ pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")
         ("arg_sig.json", None, 789, "arg_sig.json", "test-tool"),
         # --tool respected
         (None, "tool2", None, None, "tool2"),
-
-    ]
+    ],
 )
 def test_crash_main(mocker, arg_sig, arg_tool, crash_bucket, result_sig, result_tool):
     """tests for `grizzly.reduce.crash.main`"""
@@ -62,7 +61,7 @@ def test_crash_main(mocker, arg_sig, arg_tool, crash_bucket, result_sig, result_
         (3, 0, 0),
         (4, 6, 5),
         (5, 5, 10),
-    ]
+    ],
 )
 def test_crash_main_quality(mocker, mgr_exit_code, pre_quality, post_quality):
     """test that quality is updated"""
@@ -100,7 +99,7 @@ def test_crash_main_quality(mocker, mgr_exit_code, pre_quality, post_quality):
         ([(123, "test-tool")], [0], 0, None, "test-tool-arg"),
         # abort in crash main should also abort bucket main
         ([(123, "test-tool")], [3], 3, None, None),
-    ]
+    ],
 )
 def test_bucket_main(mocker, crashes, main_exit_codes, result, arg_sig, arg_tool):
     """tests for `grizzly.reduce.bucket.main`"""
@@ -109,10 +108,12 @@ def test_bucket_main(mocker, crashes, main_exit_codes, result, arg_sig, arg_tool
     def copy_args(args):
         call_args.append(deepcopy(args))
         return main_exit_codes[main.call_count - 1]
+
     mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     bucket = mocker.patch("grizzly.reduce.bucket.Bucket", autospec=True)
-    main = mocker.patch("grizzly.reduce.bucket.crash_main", autospec=True,
-                        side_effect=copy_args)
+    main = mocker.patch(
+        "grizzly.reduce.bucket.crash_main", autospec=True, side_effect=copy_args
+    )
     bucket.return_value.signature_path.return_value = "test_sig.json"
     bucket.return_value.iter_crashes.return_value = [
         mocker.Mock(crash_id=crash, tool=tool) for crash, tool in crashes
@@ -125,7 +126,7 @@ def test_bucket_main(mocker, crashes, main_exit_codes, result, arg_sig, arg_tool
     )
     assert bucket_main(args) == result
     assert main.call_count == len(main_exit_codes)
-    for idx, (crash, _tool) in enumerate(crashes[:main.call_count]):
+    for idx, (crash, _tool) in enumerate(crashes[: main.call_count]):
         assert call_args[idx].input == crash
         if arg_tool is not None:
             assert call_args[idx].tool == arg_tool

@@ -26,13 +26,15 @@ from .strategies.beautify import (
 )
 
 LOG = getLogger(__name__)
-pytestmark = pytest.mark.usefixtures("tmp_path_fm_config",
-                                     "reporter_sequential_strftime")
+pytestmark = pytest.mark.usefixtures(
+    "tmp_path_fm_config", "reporter_sequential_strftime"
+)
 
 
 @pytest.mark.parametrize("is_hang", [True, False])
 def test_strategy_tc_load(is_hang):
     """test that strategy base class dump and load doesn't change testcase metadata"""
+
     class _TestStrategy(Strategy):
         def __iter__(self):
             yield TestCase.load(str(self._testcase_root), False)
@@ -67,8 +69,10 @@ def _fake_save_logs_foo(result_logs):
 
 def test_strategy_load_fail(mocker):
     """test that a broken strategy doesn't block other strategies"""
+
     class _GoodStrategy:
         name = "good"
+
         @classmethod
         def sanity_check_cls_attrs(cls):
             pass
@@ -79,6 +83,7 @@ def test_strategy_load_fail(mocker):
 
     class _BadStrategy:
         name = "bad"
+
         @classmethod
         def load(cls):
             raise RuntimeError("oops")
@@ -101,7 +106,7 @@ def test_strategy_load_fail(mocker):
 ListStrategyParams = namedtuple(
     "ListStrategyParams",
     "test_data, strategies, required_first, expected_run_calls, expected_results,"
-    "expected_num_reports"
+    "expected_num_reports",
 )
 
 
@@ -135,10 +140,18 @@ ListStrategyParams = namedtuple(
             expected_results={"required", "123"},
             expected_num_reports=3,
         ),
-    ]
+    ],
 )
-def test_list(mocker, tmp_path, test_data, strategies, required_first,
-              expected_run_calls, expected_results, expected_num_reports):
+def test_list(
+    mocker,
+    tmp_path,
+    test_data,
+    strategies,
+    required_first,
+    expected_run_calls,
+    expected_results,
+    expected_num_reports,
+):
     """tests for the "list" strategy"""
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
@@ -153,15 +166,15 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
             if contents == "required" and required_first:
                 required_seen = True
             elif contents == "123" and (required_seen or not required_first):
-                log_path = tmp_path / (
-                    "crash%d_logs" % (replayer.run.call_count,)
-                )
+                log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
-                return [ReplayResult(report, [["test.html"]] * len(testcases), [],
-                                     True)]
+                return [
+                    ReplayResult(report, [["test.html"]] * len(testcases), [], True)
+                ]
         return []
+
     replayer.run.side_effect = replay_run
 
     tests = []
@@ -174,8 +187,15 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
-                            strategies, log_path, use_analysis=False)
+        mgr = ReduceManager(
+            [],
+            mocker.Mock(spec=Sapphire, timeout=30),
+            target,
+            tests,
+            strategies,
+            log_path,
+            use_analysis=False,
+        )
         assert mgr.run() == 0
     finally:
         for test in tests:
@@ -185,14 +205,15 @@ def test_list(mocker, tmp_path, test_data, strategies, required_first,
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/test.html")}
     assert tests == expected_results
-    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, \
-        list((log_path / "reports").iterdir())
+    assert (
+        sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports
+    ), list((log_path / "reports").iterdir())
 
 
 BeautifyStrategyParams = namedtuple(
     "BeautifyStrategyParams",
     "test_data, test_name, expected_run_calls, expected_results, expected_num_reports,"
-    "strategies, have_beautifiers"
+    "strategies, have_beautifiers",
 )
 
 
@@ -212,8 +233,9 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test beautify js embedded in html
         pytest.param(
@@ -221,14 +243,17 @@ BeautifyStrategyParams = namedtuple(
                 test_data="<script>try{'fluff';'required'}catch(e){}</script>\n",
                 test_name="test.html",
                 expected_run_calls=1,
-                expected_results={"<script>\ntry {\n    'fluff';\n    'required'\n} "
-                                  "catch (e) {}\n</script>\n"},
+                expected_results={
+                    "<script>\ntry {\n    'fluff';\n    'required'\n} "
+                    "catch (e) {}\n</script>\n"
+                },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test beautify multiple js embedded in html
         pytest.param(
@@ -237,15 +262,18 @@ BeautifyStrategyParams = namedtuple(
                 "<script>'fluff';'requisite'</script>\n",
                 test_name="test.html",
                 expected_run_calls=1,
-                expected_results={"<script>\ntry {\n    'fluff';\n    'required'\n} "
-                                  "catch (e) {}\n</script><script>\n'fluff';\n'"
-                                  "requisite'\n</script>\n"},
+                expected_results={
+                    "<script>\ntry {\n    'fluff';\n    'required'\n} "
+                    "catch (e) {}\n</script><script>\n'fluff';\n'"
+                    "requisite'\n</script>\n"
+                },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test beautify js embedded in html with no end
         pytest.param(
@@ -260,8 +288,9 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test DDBEGIN/END respected in .js file
         pytest.param(
@@ -276,14 +305,15 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test DDBEGIN/END respected for js embedded in html, DD outside <script>
         pytest.param(
             *BeautifyStrategyParams(
                 test_data="<!--DDBEGIN-->\n<script>\ntry{'fluff';'required'}"
-                          "catch(e){}\n</script><!--DDEND-->\n",
+                "catch(e){}\n</script><!--DDEND-->\n",
                 test_name="test.html",
                 expected_run_calls=1,
                 expected_results={
@@ -294,14 +324,15 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test DDBEGIN/END respected for js embedded in html, DD inside <script>
         pytest.param(
             *BeautifyStrategyParams(
                 test_data="<script>try{\n//DDBEGIN\n'fluff';'required'\n//DDEND\n}"
-                          "catch(e){}</script>\n",
+                "catch(e){}</script>\n",
                 test_name="test.html",
                 expected_run_calls=1,
                 expected_results={
@@ -312,15 +343,16 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test DDBEGIN/END respected for js embedded in html, DD straddle before
         # <script>
         pytest.param(
             *BeautifyStrategyParams(
                 test_data="<!--DDBEGIN-->\n<script>\ntry{'fluff';'required'}catch(e){}"
-                          "\n//DDEND\n",
+                "\n//DDEND\n",
                 test_name="test.html",
                 expected_run_calls=1,
                 expected_results={
@@ -331,14 +363,15 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test DDBEGIN/END respected for js embedded in html, DD straddle after <script>
         pytest.param(
             *BeautifyStrategyParams(
                 test_data="<script>\n//DDBEGIN\ntry{'fluff';'required'}catch(e){}\n"
-                          "//DDEND\n",
+                "//DDEND\n",
                 test_name="test.html",
                 expected_run_calls=1,
                 expected_results={
@@ -349,15 +382,16 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test DDBEGIN/END respected for js embedded in html, DD straddle after
         # </script>
         pytest.param(
             *BeautifyStrategyParams(
                 test_data="<script>\n//DDBEGIN\ntry{'fluff';'required'}catch(e){}\n"
-                          "</script>\n<!--DDEND-->\n",
+                "</script>\n<!--DDEND-->\n",
                 test_name="test.html",
                 expected_run_calls=1,
                 expected_results={
@@ -368,8 +402,9 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test beautify js embedded in html (no <script>)
         pytest.param(
@@ -383,8 +418,9 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify", "check"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test beautify js where beautification breaks
         pytest.param(
@@ -398,8 +434,9 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["jsbeautify", "check"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_JSBEAUTIFIER,
-                                     reason="jsbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_JSBEAUTIFIER, reason="jsbeautifier required"
+            ),
         ),
         # test beautify a .css file
         pytest.param(
@@ -412,8 +449,9 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["cssbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
-                                     reason="cssbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"
+            ),
         ),
         # test beautify css embedded in html
         pytest.param(
@@ -428,8 +466,9 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["cssbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
-                                     reason="cssbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"
+            ),
         ),
         # test beautify css embedded in html with no end
         pytest.param(
@@ -442,14 +481,16 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["cssbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
-                                     reason="cssbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"
+            ),
         ),
         # test already beautified css (beautify does nothing)
         pytest.param(
             *BeautifyStrategyParams(
                 test_data=(
-                    "<style>\n*,\n#a {\n  fluff: 0;\n  required: 1\n}\n</style>\n"),
+                    "<style>\n*,\n#a {\n  fluff: 0;\n  required: 1\n}\n</style>\n"
+                ),
                 test_name="test.html",
                 expected_run_calls=1,
                 expected_results={
@@ -459,8 +500,9 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["check", "cssbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
-                                     reason="cssbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"
+            ),
         ),
         # test almost beautified css (any change breaks test, beautify only removes an
         # extra blank line so `lines` will have already tried it, and this will hit the
@@ -469,7 +511,8 @@ BeautifyStrategyParams = namedtuple(
             *BeautifyStrategyParams(
                 test_data=(
                     "<style nochange=true>\n/*DDBEGIN*/\n\nrequisite {\n"
-                    "  required: 1\n}\n/*DDEND*/\n</style>\n"),
+                    "  required: 1\n}\n/*DDEND*/\n</style>\n"
+                ),
                 test_name="test.html",
                 expected_run_calls=8,
                 expected_results={
@@ -480,8 +523,9 @@ BeautifyStrategyParams = namedtuple(
                 strategies=["check", "lines", "cssbeautify"],
                 have_beautifiers=True,
             ),
-            marks=pytest.mark.skipif(not HAVE_CSSBEAUTIFIER,
-                                     reason="cssbeautifier required"),
+            marks=pytest.mark.skipif(
+                not HAVE_CSSBEAUTIFIER, reason="cssbeautifier required"
+            ),
         ),
         # test that when beautifiers are not available, the strategies have no effect
         BeautifyStrategyParams(
@@ -493,11 +537,19 @@ BeautifyStrategyParams = namedtuple(
             strategies=["check", "cssbeautify"],
             have_beautifiers=False,
         ),
-    ]
+    ],
 )
-def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
-                    expected_results, expected_num_reports, strategies,
-                    have_beautifiers):
+def test_beautifier(
+    mocker,
+    tmp_path,
+    test_data,
+    test_name,
+    expected_run_calls,
+    expected_results,
+    expected_num_reports,
+    strategies,
+    have_beautifiers,
+):
     """test for the "beautify" strategies"""
     if not have_beautifiers:
         mocker.patch.object(CSSBeautify, "import_available", False)
@@ -515,22 +567,25 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
                 LOG.debug("interesting if test unchanged")
                 interesting = test_data == contents
             elif "requisite" in test_data:
-                LOG.debug("interesting if ('requisite' and 'required') or "
-                          "'requi'+'red' in %r", contents)
-                interesting = ("required" in contents and "requisite" in contents) \
-                    or "'requi'+'red'" in contents
+                LOG.debug(
+                    "interesting if ('requisite' and 'required') or "
+                    "'requi'+'red' in %r",
+                    contents,
+                )
+                interesting = (
+                    "required" in contents and "requisite" in contents
+                ) or "'requi'+'red'" in contents
             else:
                 LOG.debug("interesting if 'required' or 'requi'+'red' in %r", contents)
                 interesting = "required" in contents or "'requi'+'red'" in contents
             if interesting:
-                log_path = tmp_path / (
-                    "crash%d_logs" % (replayer.run.call_count,)
-                )
+                log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
                 return [ReplayResult(report, [[test_name]], [], True)]
         return []
+
     replayer.run.side_effect = replay_run
 
     test = TestCase(test_name, None, "test-adapter")
@@ -541,8 +596,15 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
-                            strategies, log_path, use_analysis=False)
+        mgr = ReduceManager(
+            [],
+            mocker.Mock(spec=Sapphire, timeout=30),
+            target,
+            tests,
+            strategies,
+            log_path,
+            use_analysis=False,
+        )
         assert mgr.run() == 0
     finally:
         for test in tests:
@@ -552,14 +614,15 @@ def test_beautifier(mocker, tmp_path, test_data, test_name, expected_run_calls,
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/" + test_name)}
     assert tests == expected_results
-    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, \
-        list((log_path / "reports").iterdir())
+    assert (
+        sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports
+    ), list((log_path / "reports").iterdir())
 
 
 PurgeUnservedTestParams = namedtuple(
     "PurgeUnservedTestParams",
     "strategies, test_data, served, expected_results, expected_run_calls,"
-    "expected_num_reports, purging_breaks"
+    "expected_num_reports, purging_breaks",
 )
 
 
@@ -601,11 +664,15 @@ PurgeUnservedTestParams = namedtuple(
         # second test.
         PurgeUnservedTestParams(
             strategies=["chars"],
-            test_data=[{"test.html": "123", "opt.html": "456"},
-                       {"test.html": "789", "opt.html": "abc"}],
-            served=[[["test.html", "opt.html"], ["test.html", "opt.html"]],
-                    [["test.html", "opt.html"], ["test.html"]],
-                    [["test.html", "opt.html"], ["test.html"]]],
+            test_data=[
+                {"test.html": "123", "opt.html": "456"},
+                {"test.html": "789", "opt.html": "abc"},
+            ],
+            served=[
+                [["test.html", "opt.html"], ["test.html", "opt.html"]],
+                [["test.html", "opt.html"], ["test.html"]],
+                [["test.html", "opt.html"], ["test.html"]],
+            ],
             expected_results={"1", "4", "7"},
             expected_run_calls=6,
             expected_num_reports=3,
@@ -615,11 +682,15 @@ PurgeUnservedTestParams = namedtuple(
         # (first test remains)
         PurgeUnservedTestParams(
             strategies=["chars"],
-            test_data=[{"test.html": "123", "opt.html": "456"},
-                       {"test.html": "789", "opt.html": "abc"}],
-            served=[[["test.html", "opt.html"], ["test.html", "opt.html"]],
-                    [["test.html", "opt.html"], ["opt.html"]],
-                    [["test.html", "opt.html"]]],
+            test_data=[
+                {"test.html": "123", "opt.html": "456"},
+                {"test.html": "789", "opt.html": "abc"},
+            ],
+            served=[
+                [["test.html", "opt.html"], ["test.html", "opt.html"]],
+                [["test.html", "opt.html"], ["opt.html"]],
+                [["test.html", "opt.html"]],
+            ],
             expected_results={"1", "4"},
             expected_run_calls=5,
             expected_num_reports=2,
@@ -628,11 +699,12 @@ PurgeUnservedTestParams = namedtuple(
         # triple test, list strategy. first test gets reduced, third gets eliminated
         PurgeUnservedTestParams(
             strategies=["list"],
-            test_data=[{"test.html": "123"}, {"test.html": "456"},
-                       {"test.html": "789"}],
-            served=[[["test.html"]],
-                    [["test.html"]],
-                    [["test.html"]]],
+            test_data=[
+                {"test.html": "123"},
+                {"test.html": "456"},
+                {"test.html": "789"},
+            ],
+            served=[[["test.html"]], [["test.html"]], [["test.html"]]],
             expected_results={"456"},
             expected_run_calls=2,
             expected_num_reports=2,
@@ -641,19 +713,30 @@ PurgeUnservedTestParams = namedtuple(
         # triple test, list strategy. None for served still eliminates first two tests
         PurgeUnservedTestParams(
             strategies=["list"],
-            test_data=[{"test.html": "123"}, {"test.html": "456"},
-                       {"test.html": "789"}],
+            test_data=[
+                {"test.html": "123"},
+                {"test.html": "456"},
+                {"test.html": "789"},
+            ],
             served=[None, None, None],
             expected_results={"789"},
             expected_run_calls=2,
             expected_num_reports=2,
             purging_breaks=False,
         ),
-    ]
+    ],
 )
-def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
-                        expected_results, expected_run_calls, expected_num_reports,
-                        purging_breaks):
+def test_purge_unserved(
+    mocker,
+    tmp_path,
+    strategies,
+    test_data,
+    served,
+    expected_results,
+    expected_run_calls,
+    expected_num_reports,
+    purging_breaks,
+):
     """test purging unserved files"""
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
@@ -679,6 +762,7 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
         _fake_save_logs_foo(log_path)
         report = Report(str(log_path), "bin")
         return [ReplayResult(report, served.pop(0), [], True)]
+
     replayer.run.side_effect = replay_run
 
     tests = []
@@ -693,8 +777,15 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
-                            strategies, log_path, use_analysis=False)
+        mgr = ReduceManager(
+            [],
+            mocker.Mock(spec=Sapphire, timeout=30),
+            target,
+            tests,
+            strategies,
+            log_path,
+            use_analysis=False,
+        )
         if purging_breaks:
             with raises(AssertionError):
                 mgr.run()
@@ -710,15 +801,17 @@ def test_purge_unserved(mocker, tmp_path, strategies, test_data, served,
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/*.html")}
     assert tests == expected_results
-    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, \
-        list((log_path / "reports").iterdir())
+    assert (
+        sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports
+    ), list((log_path / "reports").iterdir())
     # each input has 2 files, so if there are more than 2 reports, the result has 2
     # testcases
     assert (
         sum(1 for _ in log_path.glob("reports/*-*/prefs.js"))
         == (expected_num_reports + 1) // 2
     ), "prefs.js missing in %r" % [
-        str(p.relative_to(log_path)) for p in log_path.glob("reports/**/*")
+        str(p.relative_to(log_path))
+        for p in log_path.glob("reports/**/*")
         if p.is_file()
     ]
 
@@ -735,14 +828,13 @@ def test_dd_only(mocker, tmp_path):
             LOG.debug("interesting if 'required' in %r", contents)
             interesting = "required" in contents
             if interesting:
-                log_path = tmp_path / (
-                    "crash%d_logs" % (replayer.run.call_count,)
-                )
+                log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
                 return [ReplayResult(report, [["test.html", "other.html"]], [], True)]
         return []
+
     replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
@@ -754,8 +846,15 @@ def test_dd_only(mocker, tmp_path):
     target = mocker.Mock(spec=Target)
     target.relaunch = 1
     try:
-        mgr = ReduceManager([], mocker.Mock(spec=Sapphire, timeout=30), target, tests,
-                            ["lines"], log_path, use_analysis=False)
+        mgr = ReduceManager(
+            [],
+            mocker.Mock(spec=Sapphire, timeout=30),
+            target,
+            tests,
+            ["lines"],
+            log_path,
+            use_analysis=False,
+        )
         assert mgr.run() == 0
     finally:
         for test in tests:
@@ -769,7 +868,8 @@ def test_dd_only(mocker, tmp_path):
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/test.html")}
     assert tests == expected_results
-    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, \
-        list((log_path / "reports").iterdir())
+    assert (
+        sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports
+    ), list((log_path / "reports").iterdir())
     others = {test.read_text() for test in log_path.glob("reports/*-*/other.html")}
     assert others == {"blah\n"}

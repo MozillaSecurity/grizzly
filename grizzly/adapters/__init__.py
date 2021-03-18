@@ -14,8 +14,10 @@ LOG = getLogger(__name__)
 __all__ = ("get", "load", "names")
 __adapters__ = dict()
 
+
 def get(name):
     return __adapters__.get(name.lower(), None)
+
 
 def load(path=None, skip_failures=True):
     assert not __adapters__, "adapters have already been loaded"
@@ -35,7 +37,13 @@ def load(path=None, skip_failures=True):
                 raise
             exc_type, exc_obj, exc_tb = exc_info()
             tbinfo = extract_tb(exc_tb)[-1]
-            LOG.debug("raised %s: %s (%s:%d)", exc_type.__name__, exc_obj, tbinfo[0], tbinfo[1])
+            LOG.debug(
+                "raised %s: %s (%s:%d)",
+                exc_type.__name__,
+                exc_obj,
+                tbinfo[0],
+                tbinfo[1],
+            )
             continue
         for clsname in dir(lib):
             cls = getattr(lib, clsname)
@@ -45,20 +53,23 @@ def load(path=None, skip_failures=True):
                 LOG.debug("sanity checking %r", clsname)
                 if not isinstance(cls.NAME, str):
                     raise RuntimeError(
-                        "%s.NAME must be 'str' not %r" % (cls.__name__, type(cls.NAME).__name__))
+                        "%s.NAME must be 'str' not %r"
+                        % (cls.__name__, type(cls.NAME).__name__)
+                    )
                 if cls.NAME.lower() != cls.NAME:
                     raise RuntimeError(
-                        "%s.NAME %r must be lowercase" % (cls.__name__, cls.NAME))
+                        "%s.NAME %r must be lowercase" % (cls.__name__, cls.NAME)
+                    )
                 if cls.NAME in __adapters__:
                     raise RuntimeError(
-                        "Name collision! %r is used by %r and %r" % (
-                            cls.NAME,
-                            __adapters__[cls.NAME].__name__,
-                            cls.__name__))
+                        "Name collision! %r is used by %r and %r"
+                        % (cls.NAME, __adapters__[cls.NAME].__name__, cls.__name__)
+                    )
                 __adapters__[cls.NAME] = cls
         else:
             LOG.debug("ignored %r", sub)
     LOG.debug("%d adapters loaded", len(__adapters__))
+
 
 def names():
     return __adapters__.keys()

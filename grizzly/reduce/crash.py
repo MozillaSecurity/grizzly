@@ -50,9 +50,7 @@ def main(args):
                 Session.EXIT_ABORT: crash.testcase_quality,
                 Session.EXIT_SUCCESS: FuzzManagerReporter.QUAL_REDUCED_ORIGINAL,
                 Session.EXIT_FAILURE: FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE,
-            }.get(
-                result, FuzzManagerReporter.QUAL_UNREDUCED
-            )
+            }.get(result, FuzzManagerReporter.QUAL_UNREDUCED)
             # don't ever set things back to Q4, default to Q5 for that case.
             # Q4 is only used in automation, so ABORT should never happen.
             if quality == FuzzManagerReporter.QUAL_REDUCING:

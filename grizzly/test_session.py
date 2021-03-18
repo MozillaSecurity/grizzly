@@ -17,14 +17,17 @@ from .target import Target, TargetLaunchError
 
 class SimpleAdapter(Adapter):
     NAME = "simple"
+
     def __init__(self, use_harness, remaining=None):
         super().__init__()
         self.remaining = remaining
         self._use_harness = use_harness
+
     def setup(self, input_path, server_map):
         if self._use_harness:
             self.enable_harness()
         self.fuzz["input"] = input_path
+
     def generate(self, testcase, server_map):
         assert testcase.adapter_name == self.NAME
         testcase.input_fname = self.fuzz["input"]
@@ -53,7 +56,7 @@ class SimpleAdapter(Adapter):
         (True, True, False, 10, 10),
         # test Session.dump_coverage()
         (True, True, True, 2, 2),
-    ]
+    ],
 )
 def test_session_01(mocker, tmp_path, harness, profiling, coverage, relaunch, iters):
     """test Session with typical fuzzer Adapter"""
@@ -81,7 +84,7 @@ def test_session_01(mocker, tmp_path, harness, profiling, coverage, relaunch, it
     ) as session:
         server.serve_path = lambda *a, **kv: (
             SERVED_ALL,
-            [session.iomanager.page_name(offset=-1)]
+            [session.iomanager.page_name(offset=-1)],
         )
         session.run([], 10, input_path="file.bin", iteration_limit=iters)
         assert session.status.iteration == iters
@@ -98,6 +101,7 @@ def test_session_01(mocker, tmp_path, harness, profiling, coverage, relaunch, it
         else:
             assert target.dump_coverage.call_count == 0
 
+
 @mark.parametrize(
     "harness, relaunch, remaining",
     [
@@ -111,7 +115,7 @@ def test_session_01(mocker, tmp_path, harness, profiling, coverage, relaunch, it
         (True, 2, 10),
         # harness, 10 iterations
         (True, 10, 10),
-    ]
+    ],
 )
 def test_session_02(tmp_path, mocker, harness, relaunch, remaining):
     """test Session with playback Adapter"""
@@ -131,17 +135,18 @@ def test_session_02(tmp_path, mocker, harness, relaunch, remaining):
         None,
         server,
         target,
-        relaunch=relaunch
+        relaunch=relaunch,
     ) as session:
         server.serve_path = lambda *a, **kv: (
             SERVED_ALL,
-            [session.iomanager.page_name(offset=-1)]
+            [session.iomanager.page_name(offset=-1)],
         )
         session.run([], 10)
         assert session.status.iteration == remaining
         assert session.status.test_name is None
         assert target.detect_failure.call_count == remaining
         assert target.handle_hang.call_count == 0
+
 
 @mark.parametrize(
     "harness, report_size, relaunch, iters",
@@ -189,19 +194,23 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
     ) as session:
         server.serve_path = lambda *a, **kv: (
             SERVED_ALL,
-            [session.iomanager.page_name(offset=-1)]
+            [session.iomanager.page_name(offset=-1)],
         )
         session.run([], 10, input_path="file.bin", iteration_limit=iters)
         assert reporter.submit.call_count == 1
         assert len(reporter.submit.call_args[0][0]) == min(report_size, relaunch)
         assert reporter.submit.call_args[0][1].major == "major123"
 
+
 def test_session_04(mocker, tmp_path):
     """test Adapter creating invalid test case"""
+
     class FuzzAdapter(Adapter):
         NAME = "fuzz"
+
         def generate(self, testcase, server_map):
             pass
+
     Status.PATH = str(tmp_path)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_NONE, [])
@@ -210,6 +219,7 @@ def test_session_04(mocker, tmp_path):
     with Session(FuzzAdapter(), None, server, target) as session:
         with raises(SessionError, match="Test case is missing landing page"):
             session.run([], 10)
+
 
 def test_session_05(mocker, tmp_path):
     """test Target not requesting landing page"""
@@ -221,6 +231,7 @@ def test_session_05(mocker, tmp_path):
     with Session(SimpleAdapter(False), None, server, target) as session:
         with raises(SessionError, match="Please check Adapter and Target"):
             session.run([], 10)
+
 
 @mark.parametrize(
     "harness, report_size",
@@ -254,7 +265,7 @@ def test_session_06(mocker, tmp_path, harness, report_size):
         server,
         target,
         relaunch=2,
-        report_size=report_size
+        report_size=report_size,
     ) as session:
         server.serve_path.side_effect = (
             (SERVED_ALL, [session.iomanager.page_name()]),
@@ -264,6 +275,7 @@ def test_session_06(mocker, tmp_path, harness, report_size):
         assert reporter.submit.call_count == 1
         assert len(reporter.submit.call_args[0][0]) == 1
         assert reporter.submit.call_args[0][1].major == "major123"
+
 
 @mark.parametrize(
     "srv_results, target_result, ignored, results",
@@ -298,6 +310,7 @@ def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, resul
         assert target.detect_failure.call_count == results
         assert target.handle_hang.call_count == ignored
 
+
 def test_session_08(tmp_path, mocker):
     """test Session.run() ignoring failures"""
     Status.PATH = str(tmp_path)
@@ -321,6 +334,7 @@ def test_session_08(tmp_path, mocker):
         assert session.status.results == 0
         assert session.status.ignored == 1
 
+
 def test_session_09(tmp_path, mocker):
     """test Session.run() handle TargetLaunchError"""
     Status.PATH = str(tmp_path)
@@ -338,6 +352,7 @@ def test_session_09(tmp_path, mocker):
         assert session.status.iteration == 1
         assert session.status.results == 1
         assert session.status.ignored == 0
+
 
 def test_session_10(tmp_path, mocker):
     """test Session.run() report hang"""
@@ -365,6 +380,7 @@ def test_session_10(tmp_path, mocker):
         assert session.status.results == 1
         assert session.status.ignored == 0
 
+
 def test_log_output_limiter_01(mocker):
     """test LogOutputLimiter.ready() not ready"""
     fake_time = mocker.patch("grizzly.session.time", autospec=True)
@@ -384,6 +400,7 @@ def test_log_output_limiter_01(mocker):
     lol._verbose = True
     assert lol.ready(0, 0)
 
+
 def test_log_output_limiter_02(mocker):
     """test LogOutputLimiter.ready() due to iterations"""
     fake_time = mocker.patch("grizzly.session.time", autospec=True)
@@ -396,6 +413,7 @@ def test_log_output_limiter_02(mocker):
     assert lol._launches == 2
     assert lol._time == 1.1
 
+
 def test_log_output_limiter_03(mocker):
     """test LogOutputLimiter.ready() due to launches"""
     fake_time = mocker.patch("grizzly.session.time", autospec=True)
@@ -406,6 +424,7 @@ def test_log_output_limiter_03(mocker):
     assert lol._launches == 2
     assert lol._iterations == 4
     assert lol._time == 1.0
+
 
 def test_log_output_limiter_04(mocker):
     """test LogOutputLimiter.ready() due to time"""

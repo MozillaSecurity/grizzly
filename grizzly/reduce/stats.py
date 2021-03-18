@@ -12,12 +12,13 @@ from itertools import zip_longest
 from time import time
 
 ReductionStat = namedtuple(
-    "ReductionStat", "name, duration, successes, attempts, size, iterations")
+    "ReductionStat", "name, duration, successes, attempts, size, iterations"
+)
 
 
 class _FormatTable:
-    """Format tabular data in a table.
-    """
+    """Format tabular data in a table."""
+
     def __init__(self, columns, formatters, vsep=" | ", hsep="-"):
         """Initialize a FormatTable instance.
 
@@ -29,8 +30,9 @@ class _FormatTable:
             hsep (str): Horizontal separation between header and data.
         """
         assert len(columns) == len(formatters)
-        self._columns = tuple(column for (column, fmt) in zip(columns, formatters)
-                              if fmt is not None)
+        self._columns = tuple(
+            column for (column, fmt) in zip(columns, formatters) if fmt is not None
+        )
         self._formatters = formatters
         self._vsep = vsep
         self._hsep = hsep
@@ -118,8 +120,15 @@ class ReductionStats:
         result._data = deepcopy(self._data, memo)  # pylint: disable=protected-access
         return result
 
-    def add(self, name, testcase_size, elapsed=None, iterations=None, attempts=None,
-            successes=None):
+    def add(
+        self,
+        name,
+        testcase_size,
+        elapsed=None,
+        iterations=None,
+        attempts=None,
+        successes=None,
+    ):
         """Record reduction stats for a given point in time:
 
         - name of the milestone (eg. init, strategy name completed)
@@ -238,16 +247,27 @@ class ReductionStats:
                 """
                 elapsed = time() - sub._start
                 other.add(
-                    name, testcase_size_cb(), elapsed=elapsed, attempts=sub._attempts,
-                    successes=sub._successes, iterations=sub._iterations)
+                    name,
+                    testcase_size_cb(),
+                    elapsed=elapsed,
+                    attempts=sub._attempts,
+                    successes=sub._successes,
+                    iterations=sub._iterations,
+                )
                 if sub._parent is not None:
                     sub._parent._stop_early(other)  # pylint: disable=protected-access
 
             def __exit__(sub, exc_type, exc_value, traceback):
                 elapsed = time() - sub._start
-                self.add(sub._name, testcase_size_cb(), elapsed=elapsed,
-                         attempts=sub._attempts, successes=sub._successes,
-                         iterations=sub._iterations)
+                self.add(
+                    sub._name,
+                    testcase_size_cb(),
+                    elapsed=elapsed,
+                    attempts=sub._attempts,
+                    successes=sub._successes,
+                    iterations=sub._iterations,
+                )
+
         return _MilestoneTimer(name)
 
     def copy(self, stop_timer=None):
@@ -287,7 +307,7 @@ class ReductionStats:
                 successes=partial(_format_number, total=stats[-1].successes),
                 iterations=None,  # hide
                 size=partial(_format_number, total=stats[0].size),
-            )
+            ),
         )
         yield from tabulator.format_rows(stats)
 

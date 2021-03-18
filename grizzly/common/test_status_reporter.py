@@ -14,9 +14,12 @@ from .status_reporter import Status, StatusReporter, TracebackReport, main
 
 
 def _fake_sys_info():
-    return "CPU & Load : 64 @ 93.1% (85.25, 76.21, 51.06)\n" \
-           "    Memory : 183.9GB of 251.9GB free\n" \
-           "      Disk : 22.2GB of 28.7GB free"
+    return (
+        "CPU & Load : 64 @ 93.1% (85.25, 76.21, 51.06)\n"
+        "    Memory : 183.9GB of 251.9GB free\n"
+        "      Disk : 22.2GB of 28.7GB free"
+    )
+
 
 def test_status_reporter_01(tmp_path):
     """test basic StatusReporter"""
@@ -33,6 +36,7 @@ def test_status_reporter_01(tmp_path):
     st_rpt.dump_summary(str(report))
     assert report.is_file()
     st_rpt.print_summary()
+
 
 def test_status_reporter_02(tmp_path):
     """test StatusReporter.load()"""
@@ -51,6 +55,7 @@ def test_status_reporter_02(tmp_path):
     assert isinstance(st_rpt.tracebacks, list)
     assert not st_rpt.tracebacks
 
+
 def test_status_reporter_03(mocker):
     """test StatusReporter._sys_info()"""
     gbs = 1024 * 1024 * 1024
@@ -61,7 +66,9 @@ def test_status_reporter_03(mocker):
     fake_psutil.disk_usage.return_value = mocker.Mock(free=12, total=gbs)
     sysinfo = StatusReporter._sys_info()
     assert "MB" in sysinfo
-    fake_psutil.virtual_memory.return_value = mocker.Mock(available=1.1 * gbs, total=2 * gbs)
+    fake_psutil.virtual_memory.return_value = mocker.Mock(
+        available=1.1 * gbs, total=2 * gbs
+    )
     fake_psutil.disk_usage.return_value = mocker.Mock(free=10.23 * gbs, total=100 * gbs)
     sysinfo = StatusReporter._sys_info()
     assert "MB" not in sysinfo
@@ -75,6 +82,7 @@ def test_status_reporter_03(mocker):
     for line in lines:
         assert line[position] == ":"
 
+
 def test_status_reporter_04(tmp_path):
     """test StatusReporter._scan()"""
     re_filter = re.compile("TEST_FILE")
@@ -87,6 +95,7 @@ def test_status_reporter_04(tmp_path):
     assert not any(StatusReporter._scan(str(tmp_path), re_filter))
     test_path.write_bytes(b"test")
     assert tuple(StatusReporter._scan(str(tmp_path), re_filter))
+
 
 def test_status_reporter_05(tmp_path):
     """test StatusReporter._summary()"""
@@ -133,14 +142,17 @@ def test_status_reporter_05(tmp_path):
     # verify alignment
     position = len(lines[0].split(":")[0])
     for line in lines:
-        assert re.match(r"\S\s:\s\S", line[position - 2:])
+        assert re.match(r"\S\s:\s\S", line[position - 2 :])
+
 
 def test_status_reporter_06(mocker, tmp_path):
     """test StatusReporter._specific()"""
     Status.PATH = str(tmp_path)
     mocker.patch("grizzly.common.status_reporter.time", return_value=3661.0)
     # single report
-    mocker.patch("grizzly.common.status.time", side_effect=count(start=0.0, step=3600.0))
+    mocker.patch(
+        "grizzly.common.status.time", side_effect=count(start=0.0, step=3600.0)
+    )
     status = Status.start()
     status.ignored = 0
     status.iteration = 1
@@ -155,7 +167,9 @@ def test_status_reporter_06(mocker, tmp_path):
     assert "Results" in output
     assert "EXPIRED" not in output
     # multiple reports
-    mocker.patch("grizzly.common.status.time", side_effect=count(start=0.0, step=3661.0))
+    mocker.patch(
+        "grizzly.common.status.time", side_effect=count(start=0.0, step=3661.0)
+    )
     status = Status.start(enable_profiling=True)
     status.ignored = 1
     status.iteration = 432422
@@ -187,6 +201,7 @@ def test_status_reporter_06(mocker, tmp_path):
     output = rptr._specific()
     assert len(output.split("\n")[:-1]) == 8
     assert "EXPIRED" in output
+
 
 def test_status_reporter_07(tmp_path):
     """test StatusReporter._results()"""
@@ -222,6 +237,7 @@ def test_status_reporter_07(tmp_path):
     assert "1: '[@ test2]'" in output
     assert "1: '[@ longsignature...'" in output
     assert len(output.split("\n")[:-1]) == 3
+
 
 def test_status_reporter_08(tmp_path):
     """test StatusReporter.load() with traceback"""
@@ -263,6 +279,7 @@ def test_status_reporter_08(tmp_path):
     assert "foo.bar.error" in merged_log
     assert "screenlog.3" not in merged_log
 
+
 def test_status_reporter_09(tmp_path):
     """test StatusReporter.load() no reports with traceback"""
     (tmp_path / "status").mkdir()
@@ -279,6 +296,7 @@ def test_status_reporter_09(tmp_path):
     assert len(output.splitlines()) == 7
     assert "No status reports available" in output
     assert "IndexError" in output
+
 
 def test_status_reporter_10(tmp_path):
     """test StatusReporter.summary() limit with traceback"""
@@ -302,7 +320,9 @@ def test_status_reporter_10(tmp_path):
         with (tmp_path / ("screenlog.%d" % (i,))).open("wb") as test_fp:
             test_fp.write(b"Traceback (most recent call last):\n")
             for j in range(TracebackReport.MAX_LINES):
-                test_fp.write(b"  File \"some/long/path/name/foobar.py\", line 5000, in <module>\n")
+                test_fp.write(
+                    b'  File "some/long/path/name/foobar.py", line 5000, in <module>\n'
+                )
                 test_fp.write(b"    some_long_name_for_a_func_%04d()\n" % (j,))
             test_fp.write(b"IndexError: list index out of range\n")
     rptr = StatusReporter.load(tb_path=str(tmp_path))
@@ -310,6 +330,7 @@ def test_status_reporter_10(tmp_path):
     assert len(rptr.tracebacks) == 10
     merged_log = rptr._summary(runtime=True, sysinfo=True, timestamp=True)
     assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
+
 
 def test_traceback_report_01():
     """test simple TracebackReport"""
@@ -321,6 +342,7 @@ def test_traceback_report_01():
     assert "2" in output
     assert "-2" in output
 
+
 def test_traceback_report_02():
     """test empty TracebackReport"""
     tbr = TracebackReport("log.txt", [])
@@ -329,15 +351,16 @@ def test_traceback_report_02():
     assert len(output.splitlines()) == 1
     assert "log.txt" in output
 
+
 def test_traceback_report_03(tmp_path):
     """test TracebackReport.from_file()"""
     test_log = tmp_path / "screenlog.0"
     with test_log.open("wb") as test_fp:
         test_fp.write(b"start junk\npre1\npre2\npre3\npre4\npre5\n")
         test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b"  File \"foo.py\", line 556, in <module>\n")
+        test_fp.write(b'  File "foo.py", line 556, in <module>\n')
         test_fp.write(b"    main(parse_args())\n")
-        test_fp.write(b"  File \"foo.py\", line 207, in bar\n")
+        test_fp.write(b'  File "foo.py", line 207, in bar\n')
         test_fp.write(b"    a = b[10]\n")
         test_fp.write(b"IndexError: list index out of range\n")
         test_fp.write(b"end junk\n")
@@ -355,9 +378,9 @@ def test_traceback_report_03(tmp_path):
     with test_log.open("wb") as test_fp:
         test_fp.write(b"start junk\n")
         test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b"  File \"foo.py\", line 556, in <module>\n")
+        test_fp.write(b'  File "foo.py", line 556, in <module>\n')
         test_fp.write(b"    main(parse_args())\n")
-        test_fp.write(b"  File \"foo.py\", line 207, in bar\n")
+        test_fp.write(b'  File "foo.py", line 207, in bar\n')
         test_fp.write(b"    a = b[10]\n")
         test_fp.write(b"foo.bar.error: blah\n")
         test_fp.write(b"end junk\n")
@@ -373,9 +396,9 @@ def test_traceback_report_03(tmp_path):
     # kbi
     with test_log.open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b"  File \"foo.py\", line 556, in <module>\n")
+        test_fp.write(b'  File "foo.py", line 556, in <module>\n')
         test_fp.write(b"    main(parse_args())\n")
-        test_fp.write(b"  File \"foo.py\", line 207, in bar\n")
+        test_fp.write(b'  File "foo.py", line 207, in bar\n')
         test_fp.write(b"    a = b[10]\n")
         test_fp.write(b"KeyboardInterrupt\n")
         test_fp.write(b"end junk\n")
@@ -385,17 +408,18 @@ def test_traceback_report_03(tmp_path):
     assert len(output.splitlines()) == 7
     assert "KeyboardInterrupt" in output
 
+
 def test_traceback_report_04(tmp_path):
     """test TracebackReport.from_file() exceed size limit"""
     test_log = tmp_path / "screenlog.0"
     with test_log.open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
         test_fp.write(b"    first()\n")
-        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
         test_fp.write(b"    second()\n")
         for i in reversed(range(TracebackReport.MAX_LINES)):
-            test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+            test_fp.write(b'  File "foo.py", line 5, in <module>\n')
             test_fp.write(b"    func_%02d()\n" % i)
         test_fp.write(b"END_WITH_BLANK_LINE\n\n")
         test_fp.write(b"end junk\n")
@@ -410,15 +434,16 @@ def test_traceback_report_04(tmp_path):
     assert "func_06()" not in output
     assert "END_WITH_BLANK_LINE" in output
 
+
 def test_traceback_report_05(tmp_path):
     """test TracebackReport.from_file() cut off"""
     test_log = tmp_path / "screenlog.0"
     with test_log.open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
         test_fp.write(b"    first()\n")
         for i in range(TracebackReport.MAX_LINES * 2):
-            test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+            test_fp.write(b'  File "foo.py", line 5, in <module>\n')
             test_fp.write(b"    func_%d()\n" % i)
     tbr = TracebackReport.from_file(str(test_log))
     assert not tbr.is_kbi
@@ -427,12 +452,13 @@ def test_traceback_report_05(tmp_path):
     assert "first()" in output
     assert "func_%d" % (TracebackReport.MAX_LINES * 2 - 1) in output
 
+
 def test_traceback_report_06(tmp_path):
     """test TracebackReport.from_file() single word error"""
     test_log = tmp_path / "screenlog.0"
     with test_log.open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
         test_fp.write(b"    first()\n")
         test_fp.write(b"AssertionError\n")
         test_fp.write(b"end junk\n")
@@ -444,12 +470,13 @@ def test_traceback_report_06(tmp_path):
     assert "AssertionError" in output
     assert "end junk" not in output
 
+
 def test_traceback_report_07(tmp_path):
     """test TracebackReport.from_file() with binary data"""
     test_log = tmp_path / "screenlog.0"
     with test_log.open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
         test_fp.write(b"    bin\xd8()\n")
         test_fp.write(b"AssertionError\n")
     tbr = TracebackReport.from_file(str(test_log))
@@ -458,13 +485,14 @@ def test_traceback_report_07(tmp_path):
     assert "bin()" in output
     assert "AssertionError" in output
 
+
 def test_traceback_report_08(tmp_path):
     """test TracebackReport.from_file() locate token across chunks"""
     test_log = tmp_path / "screenlog.0"
     with test_log.open("wb") as test_fp:
         test_fp.write(b"A" * (TracebackReport.READ_LIMIT - 5))
         test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b"  File \"foo.py\", line 5, in <module>\n")
+        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
         test_fp.write(b"    first()\n")
         test_fp.write(b"AssertionError\n")
     tbr = TracebackReport.from_file(str(test_log))
@@ -474,11 +502,13 @@ def test_traceback_report_08(tmp_path):
     assert "first()" in output
     assert "AssertionError" in output
 
+
 def test_main_01(tmp_path):
     """test main() with no reports"""
     Status.PATH = str(tmp_path)
     StatusReporter.CPU_POLL_INTERVAL = 0.01
     assert main([]) == 0
+
 
 def test_main_02(tmp_path):
     """test main() with a report"""
@@ -489,6 +519,7 @@ def test_main_02(tmp_path):
     status.count_result("[@ test]")
     status.report(force=True)
     assert main([]) == 0
+
 
 def test_main_03(tmp_path):
     """test main() --dump"""
@@ -501,7 +532,8 @@ def test_main_03(tmp_path):
     assert main(["--dump", str(dump_file)]) == 0
     assert dump_file.is_file()
     assert b"Runtime" not in dump_file.read_bytes()
-    #assert False, dump_file.read_bytes()
+    # assert False, dump_file.read_bytes()
+
 
 def test_main_04():
     """test main() with invalid mode"""

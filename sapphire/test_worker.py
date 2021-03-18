@@ -34,15 +34,15 @@ def test_worker_01(mocker):
     assert worker._thread is None
     assert worker.done
 
+
 def test_worker_02(mocker):
     """test simple Worker fails to close"""
-    worker = Worker(
-        mocker.Mock(spec=socket.socket),
-        mocker.Mock(spec=threading.Thread))
+    worker = Worker(mocker.Mock(spec=socket.socket), mocker.Mock(spec=threading.Thread))
     # it is assumed that launch() has already been called at this point
     worker._thread.is_alive.return_value = True
     with pytest.raises(WorkerError, match="Worker thread failed to join!"):
         worker.close()
+
 
 def test_worker_03(mocker):
     """test Worker.launch() fail cases"""
@@ -63,6 +63,7 @@ def test_worker_03(mocker):
     assert serv_job.accepting.clear.call_count == 0
     assert serv_job.accepting.set.call_count == 1
 
+
 def test_worker_04(mocker, tmp_path):
     """test Worker.launch()"""
     (tmp_path / "testfile").touch()
@@ -81,6 +82,7 @@ def test_worker_04(mocker, tmp_path):
     assert serv_sock.accept.call_count == 1
     assert clnt_sock.close.call_count == 2
 
+
 def test_worker_05(mocker):
     """test Worker.handle_request() socket errors"""
     serv_con = mocker.Mock(spec=socket.socket)
@@ -91,16 +93,19 @@ def test_worker_05(mocker):
     assert serv_con.sendall.call_count == 0
     assert serv_con.close.call_count == 1
 
+
 def test_response_data_01():
     """test _200_header()"""
     output = Worker._200_header(10, "text/html")
     assert b"Content-Length: 10" in output
     assert b"Content-Type: text/html" in output
 
+
 def test_response_data_02():
     """test _307_redirect()"""
     output = Worker._307_redirect("http://some.test.url")
     assert b"Location: http://some.test.url" in output
+
 
 def test_response_data_03():
     """test _4xx_page() without close timeout"""
@@ -108,6 +113,7 @@ def test_response_data_03():
     assert b"Content-Length: " in output
     assert b"HTTP/1.1 400 Bad Request" in output
     assert b"400!" in output
+
 
 def test_response_data_04():
     """test _4xx_page() with close timeout"""

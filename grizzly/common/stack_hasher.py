@@ -42,16 +42,26 @@ class StackFrame:
     _re_gdb = re_compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
     _re_rr = re_compile(r"rr\((?P<loc>.+)\+(?P<off>0x[0-9a-f]+)\)\[0x[0-9a-f]+\]")
     _re_rust_frame = re_compile(r"^\s+(?P<num>\d+):\s+0x[0-9a-f]+\s+\-\s+(?P<line>.+)")
-    _re_sanitizer = re_compile(r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+(?P<in>\sin)?\s+(?P<line>.+)")
-    _re_tsan = re_compile(r"^\s*#(?P<num>\d+)\s(?P<line>.+)\s\(((?P<mod>.+)\+)?(?P<off>0x[0-9a-f]+)\)")
-    _re_valgrind = re_compile(r"^==\d+==\s+(at|by)\s+0x[0-9A-F]+\:\s+(?P<func>.+?)\s+\((?P<line>.+)\)")
+    _re_sanitizer = re_compile(
+        r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+(?P<in>\sin)?\s+(?P<line>.+)"
+    )
+    _re_tsan = re_compile(
+        r"^\s*#(?P<num>\d+)\s(?P<line>.+)\s\(((?P<mod>.+)\+)?(?P<off>0x[0-9a-f]+)\)"
+    )
+    _re_valgrind = re_compile(
+        r"^==\d+==\s+(at|by)\s+0x[0-9A-F]+\:\s+(?P<func>.+?)\s+\((?P<line>.+)\)"
+    )
     # TODO: add additional debugger support?
-    #_re_rust_file = re_compile(r"^\s+at\s+(?P<line>.+)")
-    #_re_windbg = re_compile(r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)")
+    # _re_rust_file = re_compile(r"^\s+at\s+(?P<line>.+)")
+    # _re_windbg = re_compile(
+    #   r"^(\(Inline\)|[a-f0-9]+)\s([a-f0-9]+|-+)\s+(?P<line>.+)\+(?P<off>0x[a-f0-9]+)"
+    # )
 
     __slots__ = ("function", "location", "mode", "offset", "stack_line")
 
-    def __init__(self, function=None, location=None, mode=None, offset=None, stack_line=None):
+    def __init__(
+        self, function=None, location=None, mode=None, offset=None, stack_line=None
+    ):
         self.function = function
         self.location = location
         self.mode = mode
@@ -101,7 +111,7 @@ class StackFrame:
         if not input_line:
             return None
         sframe = cls(mode=cls.MODE_GDB, stack_line=m.group("num"))
-        #sframe.offset = m.group("off")  # ignore binary offset for now
+        # sframe.offset = m.group("off")  # ignore binary offset for now
         # find function/method name
         m = cls._re_func_name.match(input_line)
         if m is not None:
@@ -119,7 +129,15 @@ class StackFrame:
     @classmethod
     def _parse_minidump(cls, input_line):
         try:
-            tid, stack_line, lib_name, func_name, file_name, line_no, offset = input_line.split("|")
+            (
+                tid,
+                stack_line,
+                lib_name,
+                func_name,
+                file_name,
+                line_no,
+                offset,
+            ) = input_line.split("|")
             if int(tid) < 0 or int(stack_line) < 0:
                 return None
         except ValueError:
@@ -158,8 +176,8 @@ class StackFrame:
         sframe = cls(mode=cls.MODE_RUST, stack_line=m.group("num"))
         sframe.function = m.group("line").strip().rsplit("::h", 1)[0]
         # Don't bother with the file offset stuff atm
-        #m = cls._re_rust_file.match(input_line) if frame is None else None
-        #if m is not None:
+        # m = cls._re_rust_file.match(input_line) if frame is None else None
+        # if m is not None:
         #    frame = {"function":None, "mode":cls.MODE_RUST, "offset":None, "stack_line":None}
         #    input_line = m.group("line").strip()
         #    if ":" in input_line:
@@ -337,9 +355,17 @@ class Stack:
             if int(frames[0].stack_line) != 0:
                 LOG.warning("First stack line %s not 0", frames[0].stack_line)
             if int(frames[-1].stack_line) != len(frames) - 1:
-                LOG.warning("Last stack line %s not %d (frames-1)", frames[0].stack_line, len(frames) - 1)
+                LOG.warning(
+                    "Last stack line %s not %d (frames-1)",
+                    frames[0].stack_line,
+                    len(frames) - 1,
+                )
 
-        if frames and frames[0].mode == StackFrame.MODE_RUST and major_depth < MAJOR_DEPTH_RUST:
+        if (
+            frames
+            and frames[0].mode == StackFrame.MODE_RUST
+            and major_depth < MAJOR_DEPTH_RUST
+        ):
             major_depth = MAJOR_DEPTH_RUST
 
         return cls(frames=frames, major_depth=major_depth)

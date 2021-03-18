@@ -63,7 +63,8 @@ def _load_strategies():
         assert (
             strategy in strategies
         ), "Unknown entry in DEFAULT_STRATEGIES: %s (STRATEGIES: [%s])" % (
-            strategy, ",".join(strategies)
+            strategy,
+            ",".join(strategies),
         )
     return MappingProxyType(strategies)
 
@@ -82,6 +83,7 @@ class Strategy(ABC):
     Class Attributes:
         name (str): The strategy name.
     """
+
     name = None
 
     def __init__(self, testcases):
@@ -119,7 +121,8 @@ class Strategy(ABC):
             in_tried = result in self._tried
             LOG.debug(
                 "Testcase hash: %s (%sin cache)",
-                print_hash.hexdigest()[:32], "" if in_tried else "not "
+                print_hash.hexdigest()[:32],
+                "" if in_tried else "not ",
             )
 
         return result
@@ -248,8 +251,11 @@ class Strategy(ABC):
         LOG.debug("purging from %d testcases", len(testcases))
         anything_purged = False
         while len(served) < len(testcases):
-            LOG.debug("not all %d testcases served (%d served), popping one",
-                      len(testcases), len(served))
+            LOG.debug(
+                "not all %d testcases served (%d served), popping one",
+                len(testcases),
+                len(served),
+            )
             testcases.pop().cleanup()
             anything_purged = True
         remove_testcases = []

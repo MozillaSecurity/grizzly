@@ -16,10 +16,13 @@ class SimpleAdapter(Adapter):
 
 def test_adapter_01():
     """test a bad Adapter"""
+
     class BadAdapter(SimpleAdapter):
         NAME = None
+
     with pytest.raises(AdapterError, match="BadAdapter.NAME must be a string"):
         BadAdapter()
+
 
 def test_adapter_02():
     """test a simple Adapter"""
@@ -35,6 +38,7 @@ def test_adapter_02():
     adpt.on_timeout(None, None)
     adpt.pre_launch()
     adpt.cleanup()
+
 
 def test_adapter_03(tmp_path):
     """test Adapter.enable_harness()"""
@@ -53,6 +57,7 @@ def test_adapter_03(tmp_path):
     adpt.enable_harness(str(ext_harness_file))
     assert adpt.get_harness() == test_data
 
+
 def test_adapter_04(tmp_path):
     """test Adapter.scan_path()"""
     # empty path
@@ -60,7 +65,7 @@ def test_adapter_04(tmp_path):
     # missing path
     assert not any(SimpleAdapter.scan_path(str(tmp_path / "none")))
     # path to file
-    file1 = (tmp_path / "test1.txt")
+    file1 = tmp_path / "test1.txt"
     file1.touch()
     found = tuple(SimpleAdapter.scan_path(str(file1)))
     assert str(file1) in found
@@ -69,9 +74,9 @@ def test_adapter_04(tmp_path):
     assert len(tuple(SimpleAdapter.scan_path(str(tmp_path)))) == 1
     # path to directory (w/ ignored)
     (tmp_path / ".ignored").touch()
-    nested = (tmp_path / "nested")
+    nested = tmp_path / "nested"
     nested.mkdir()
-    file2 = (nested / "test2.bin")
+    file2 = nested / "test2.bin"
     file2.touch()
     assert len(tuple(SimpleAdapter.scan_path(str(tmp_path)))) == 1
     # path to directory (recursive)

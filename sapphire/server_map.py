@@ -53,7 +53,9 @@ class ServerMap:
             raise InvalidURLError("Only alphanumeric characters accepted in URL.")
         return url
 
-    def set_dynamic_response(self, url, callback, mime_type="application/octet-stream", required=False):
+    def set_dynamic_response(
+        self, url, callback, mime_type="application/octet-stream", required=False
+    ):
         url = self._check_url(url)
         if not callable(callback):
             raise TypeError("callback must be callable")
@@ -63,10 +65,8 @@ class ServerMap:
             raise MapCollisionError("URL collision on %r" % (url,))
         LOG.debug("mapping dynamic response %r -> %r (%r)", url, callback, mime_type)
         self.dynamic[url] = Resource(
-            Resource.URL_DYNAMIC,
-            callback,
-            mime=mime_type,
-            required=required)
+            Resource.URL_DYNAMIC, callback, mime=mime_type, required=required
+        )
 
     def set_include(self, url, target_path):
         url = self._check_url(url)
@@ -85,14 +85,16 @@ class ServerMap:
                 continue
             if not relpath(target_path, resource.target).startswith(".."):
                 LOG.error("%r mapping includes path %r", existing_url, target_path)
-                raise MapCollisionError("%r and %r include %r" % (url, existing_url, target_path))
+                raise MapCollisionError(
+                    "%r and %r include %r" % (url, existing_url, target_path)
+                )
             if not relpath(resource.target, target_path).startswith(".."):
                 LOG.error("%r mapping includes path %r", url, resource.target)
-                raise MapCollisionError("%r and %r include %r" % (url, existing_url, resource.target))
+                raise MapCollisionError(
+                    "%r and %r include %r" % (url, existing_url, resource.target)
+                )
         LOG.debug("mapping include %r -> %r", url, target_path)
-        self.include[url] = Resource(
-            Resource.URL_INCLUDE,
-            target_path)
+        self.include[url] = Resource(Resource.URL_INCLUDE, target_path)
 
     def set_redirect(self, url, target, required=True):
         url = self._check_url(url)
@@ -102,7 +104,4 @@ class ServerMap:
             raise TypeError("target must not be an empty string")
         if url in self.dynamic or url in self.include:
             raise MapCollisionError("URL collision on %r" % (url,))
-        self.redirect[url] = Resource(
-            Resource.URL_REDIRECT,
-            target,
-            required=required)
+        self.redirect[url] = Resource(Resource.URL_REDIRECT, target, required=required)

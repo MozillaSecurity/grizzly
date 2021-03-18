@@ -38,11 +38,28 @@ TestFileMap = namedtuple("TestFileMap", "meta optional required")
 
 class TestCase:
     __slots__ = (
-        "adapter_name", "duration", "env_vars", "hang", "input_fname", "landing_page",
-        "redirect_page", "time_limit", "timestamp", "_existing_paths", "_files")
+        "adapter_name",
+        "duration",
+        "env_vars",
+        "hang",
+        "input_fname",
+        "landing_page",
+        "redirect_page",
+        "time_limit",
+        "timestamp",
+        "_existing_paths",
+        "_files",
+    )
 
-    def __init__(self, landing_page, redirect_page, adapter_name, input_fname=None,
-                 time_limit=None, timestamp=None):
+    def __init__(
+        self,
+        landing_page,
+        redirect_page,
+        adapter_name,
+        input_fname=None,
+        time_limit=None,
+        timestamp=None,
+    ):
         self.adapter_name = adapter_name
         self.duration = None
         self.env_vars = dict()  # environment variables
@@ -56,7 +73,8 @@ class TestCase:
         self._files = TestFileMap(
             meta=list(),  # environment files such as prefs.js, etc...
             optional=list(),
-            required=list())
+            required=list(),
+        )
 
     def __enter__(self):
         return self
@@ -202,8 +220,14 @@ class TestCase:
         Returns:
             TestCase: A copy of the TestCase instance.
         """
-        result = type(self)(self.landing_page, self.redirect_page, self.adapter_name,
-                            self.input_fname, self.time_limit, self.timestamp)
+        result = type(self)(
+            self.landing_page,
+            self.redirect_page,
+            self.adapter_name,
+            self.input_fname,
+            self.time_limit,
+            self.timestamp,
+        )
         result.duration = self.duration
         result.hang = self.hang
         result.env_vars.update(self.env_vars)
@@ -267,7 +291,8 @@ class TestCase:
                 "input": basename(self.input_fname) if self.input_fname else None,
                 "target": self.landing_page,
                 "time_limit": self.time_limit,
-                "timestamp": self.timestamp}
+                "timestamp": self.timestamp,
+            }
             with open(pathjoin(out_path, "test_info.json"), "w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
             # save meta files
@@ -283,7 +308,9 @@ class TestCase:
         Returns:
             TestFile: TestFile with matching file name otherwise None.
         """
-        for tfile in chain(self._files.meta, self._files.optional, self._files.required):
+        for tfile in chain(
+            self._files.meta, self._files.optional, self._files.required
+        ):
             if tfile.file_name == file_name:
                 return tfile
         return None
@@ -344,11 +371,13 @@ class TestCase:
         known_suppressions = ("lsan.supp", "tsan.supp", "ubsan.supp")
         for supp in listdir(path):
             if supp.lower() in known_suppressions:
-                # Update *SAN_OPTIONS environment variable to use provided suppression files.
+                # Update *SAN_OPTIONS to use provided suppression files.
                 opt_key = "%s_OPTIONS" % (supp.split(".")[0].upper(),)
                 opts = sanitizer_opts(self.env_vars.get(opt_key, ""))
                 opts["suppressions"] = "'%s'" % (pathjoin(path, supp),)
-                self.env_vars[opt_key] = ":".join("=".join((k, v)) for k, v in opts.items())
+                self.env_vars[opt_key] = ":".join(
+                    "=".join((k, v)) for k, v in opts.items()
+                )
 
     @classmethod
     def load_single(cls, path, load_prefs, adjacent=False):
@@ -379,7 +408,9 @@ class TestCase:
                 raise TestCaseLoadFailure("'test_info.json' has invalid 'target' entry")
             entry_point = basename(info["target"])
             if not isfile(pathjoin(path, entry_point)):
-                raise TestCaseLoadFailure("Entry point %r not found in '%s'" % (entry_point, path))
+                raise TestCaseLoadFailure(
+                    "Entry point %r not found in '%s'" % (entry_point, path)
+                )
             # always load all contents of a directory if a 'test_info.json' is loaded
             adjacent = True
         elif isfile(path):
@@ -395,7 +426,7 @@ class TestCase:
             info.get("adapter", None),
             input_fname=info.get("input", None),
             time_limit=info.get("time_limit", None),
-            timestamp=info.get("timestamp", 0)
+            timestamp=info.get("timestamp", 0),
         )
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
@@ -419,9 +450,8 @@ class TestCase:
                         continue
                     location = "/".join((dpath.split(path, 1)[-1], fname))
                     test.add_from_file(
-                        pathjoin(dpath, fname),
-                        file_name=location,
-                        required=False)
+                        pathjoin(dpath, fname), file_name=location, required=False
+                    )
         return test
 
     @property
@@ -502,16 +532,17 @@ class TestFile:
             file_name = file_name.lstrip("/")
         if file_name.endswith("."):
             file_name = file_name.rstrip(".")
-        if not file_name \
-                or ("/" in file_name and not file_name.rsplit("/", 1)[-1]) \
-                or file_name.startswith("../"):
+        if (
+            not file_name
+            or ("/" in file_name and not file_name.rsplit("/", 1)[-1])
+            or file_name.startswith("../")
+        ):
             raise TypeError("file_name is invalid %r" % (file_name,))
         # name including path relative to wwwroot
         self._file_name = normpath(file_name)
         self._fp = SpooledTemporaryFile(
-            dir=grz_tmp("storage"),
-            max_size=self.CACHE_LIMIT,
-            prefix="testfile_")
+            dir=grz_tmp("storage"), max_size=self.CACHE_LIMIT, prefix="testfile_"
+        )
 
     def __enter__(self):
         return self
@@ -530,7 +561,9 @@ class TestFile:
         """
         cloned = type(self)(self._file_name)
         self._fp.seek(0)
-        copyfileobj(self._fp, cloned._fp, self.XFER_BUF)  # pylint: disable=protected-access
+        copyfileobj(
+            self._fp, cloned._fp, self.XFER_BUF
+        )  # pylint: disable=protected-access
         return cloned
 
     def close(self):
@@ -617,7 +650,9 @@ class TestFile:
             file_name = basename(input_file)
         t_file = cls(file_name)
         with open(input_file, "rb") as src_fp:
-            copyfileobj(src_fp, t_file._fp, cls.XFER_BUF)  # pylint: disable=protected-access
+            copyfileobj(
+                src_fp, t_file._fp, cls.XFER_BUF
+            )  # pylint: disable=protected-access
         return t_file
 
     @property

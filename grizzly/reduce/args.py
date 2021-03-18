@@ -26,25 +26,35 @@ class ReduceArgs(ReplayArgs):
         # these arguments have other defaults vs how they are defined in ReplayArgs
         self.parser.set_defaults(
             include_test=True,
-            logs='.',
+            logs=".",
         )
 
         reduce_args = self.parser.add_argument_group("Reduce Arguments")
         reduce_args.add_argument(
-            "--no-analysis", action="store_true",
-            help="Disable analysis to auto-set --repeat/--min-crashes.")
+            "--no-analysis",
+            action="store_true",
+            help="Disable analysis to auto-set --repeat/--min-crashes.",
+        )
         reduce_args.add_argument(
-            "--report-period", type=int,
+            "--report-period",
+            type=int,
             help="Periodically report the best testcase for long-running strategies."
-            " (value in seconds, default: no)")
+            " (value in seconds, default: no)",
+        )
         reduce_args.add_argument(
-            "--static-timeout", action="store_true",
-            help="Disable automatically updating the iteration timeout.")
+            "--static-timeout",
+            action="store_true",
+            help="Disable automatically updating the iteration timeout.",
+        )
         reduce_args.add_argument(
-            "--strategy", nargs="+", default=DEFAULT_STRATEGIES, metavar="STRATEGY",
+            "--strategy",
+            nargs="+",
+            default=DEFAULT_STRATEGIES,
+            metavar="STRATEGY",
             dest="strategies",
             help="One or more strategies (space-separated). Available: %s (default: %s)"
-            % (" ".join(sorted(STRATEGIES)), " ".join(DEFAULT_STRATEGIES)))
+            % (" ".join(sorted(STRATEGIES)), " ".join(DEFAULT_STRATEGIES)),
+        )
 
     def sanity_check(self, args):
         """Sanity check reducer args.
@@ -83,20 +93,20 @@ class ReduceArgs(ReplayArgs):
                 error_str = " and ".join(errors)
                 LOG.warning(
                     "%s specified, with analysis enabled, they will be ignored",
-                    error_str
+                    error_str,
                 )
 
 
 class ReduceFuzzManagerIDArgs(ReduceArgs):
-
     def __init__(self):
         """Initialize argument parser."""
         super().__init__()
 
         # madhax alert!
         #
-        # We need to modify the meaning of the 'input' positional to accept an int ID instead of a
-        # local testcase. This is not possible with the public argparse API.
+        # We need to modify the meaning of the 'input' positional to accept an int ID
+        # instead of a local testcase.
+        # This is not possible with the public argparse API.
         #
         # refs: https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
         #       https://bugs.python.org/issue19462
@@ -118,13 +128,12 @@ class ReduceFuzzManagerIDArgs(ReduceArgs):
 
 
 class ReduceFuzzManagerIDQualityArgs(ReduceFuzzManagerIDArgs):
-
     def __init__(self):
         """Initialize argument parser."""
         super().__init__()
         self.parser.add_argument(
-            "--quality", type=int,
-            help="Only try crashes with a given quality value")
+            "--quality", type=int, help="Only try crashes with a given quality value"
+        )
 
     def sanity_check(self, args):
         super().sanity_check(args)

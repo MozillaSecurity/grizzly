@@ -31,6 +31,7 @@ def _create_crash_log(log_path):
         log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
         log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
 
+
 def test_report_01(tmp_path):
     """test Report() with boring logs (no stack)"""
     (tmp_path / "not_a_log.txt").touch()
@@ -50,6 +51,7 @@ def test_report_01(tmp_path):
     report.cleanup()
     assert not tmp_path.exists()
 
+
 def test_report_02(tmp_path):
     """test Report() with crash logs"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
@@ -67,6 +69,7 @@ def test_report_02(tmp_path):
     assert report.prefix is not None
     report.cleanup()
 
+
 def test_report_03(tmp_path):
     """test Report.tail()"""
     tmp_file = tmp_path / "file.txt"
@@ -81,6 +84,7 @@ def test_report_03(tmp_path):
     assert log_data.startswith(b"[LOG TAILED]\n")
     assert log_data[13:] == b"FOO"
 
+
 def test_report_04(tmp_path):
     """test Report.select_logs() uninteresting data"""
     # test with empty path
@@ -88,6 +92,7 @@ def test_report_04(tmp_path):
     # empty file
     (tmp_path / "not_a_log.txt").touch()
     assert Report.select_logs(str(tmp_path)) is None
+
 
 def test_report_05(tmp_path):
     """test Report.select_logs()"""
@@ -98,16 +103,24 @@ def test_report_05(tmp_path):
     # crash on another thread
     with (tmp_path / "log_asan.txt.2").open("wb") as log_fp:
         log_fp.write(b"GOOD LOG\n")
-        log_fp.write(b"==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x00000BADF00D")
-        log_fp.write(b" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T0)\n")  # must be 2nd line
+        log_fp.write(
+            b"==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x00000BADF00D"
+        )
+        log_fp.write(
+            b" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T0)\n"
+        )  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
             log_fp.write(b"    #%d blah...\n" % l_no)
     # child log that should be ignored (created when parent crashes)
     with (tmp_path / "log_asan.txt.3").open("wb") as log_fp:
         log_fp.write(b"BAD LOG\n")
-        log_fp.write(b"==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000")
-        log_fp.write(b" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T2)\n")  # must be 2nd line
+        log_fp.write(
+            b"==70811==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000"
+        )
+        log_fp.write(
+            b" (pc 0x7f4c0bb54c67 bp 0x7f4c07bea380 sp 0x7f4c07bea360 T2)\n"
+        )  # must be 2nd line
         # pad out to 6 lines
         for l_no in range(4):
             log_fp.write(b"    #%d blah...\n" % l_no)
@@ -120,6 +133,7 @@ def test_report_05(tmp_path):
     assert "GOOD LOG" in (tmp_path / log_map.aux).read_text()
     assert "STDERR" in (tmp_path / log_map.stderr).read_text()
     assert "STDOUT" in (tmp_path / log_map.stdout).read_text()
+
 
 def test_report_06(tmp_path):
     """test minidump with Report.select_logs()"""
@@ -135,6 +149,7 @@ def test_report_06(tmp_path):
     assert (tmp_path / log_map.stdout).is_file()
     assert "minidump log" in (tmp_path / log_map.aux).read_text()
 
+
 def test_report_07(tmp_path):
     """test selecting preferred DUMP_REQUESTED minidump with Report.select_logs()"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
@@ -147,8 +162,12 @@ def test_report_07(tmp_path):
     with (tmp_path / "log_minidump_02.txt").open("wb") as log_fp:
         log_fp.write(b"GPU|||\n")
         log_fp.write(b"Crash|DUMP_REQUESTED|0x7f57ac9e2e14|0\n")
-        log_fp.write(b"0|0|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:234|674|0xc\n")
-        log_fp.write(b"0|1|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:4a2|645|0x8\n")
+        log_fp.write(
+            b"0|0|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:234|674|0xc\n"
+        )
+        log_fp.write(
+            b"0|1|foo.so|google_breakpad::ExceptionHandler::WriteMinidump|bar.cc:4a2|645|0x8\n"
+        )
     with (tmp_path / "log_minidump_03.txt").open("wb") as log_fp:
         log_fp.write(b"GPU|||\n")
         log_fp.write(b"Crash|DUMP_REQUESTED|0x7f9518665d18|0\n")
@@ -157,7 +176,11 @@ def test_report_07(tmp_path):
     log_map = Report.select_logs(str(tmp_path))
     assert (tmp_path / log_map.stderr).is_file()
     assert (tmp_path / log_map.stdout).is_file()
-    assert "google_breakpad::ExceptionHandler::WriteMinidump" in (tmp_path / log_map.aux).read_text()
+    assert (
+        "google_breakpad::ExceptionHandler::WriteMinidump"
+        in (tmp_path / log_map.aux).read_text()
+    )
+
 
 def test_report_08(tmp_path):
     """test selecting worker logs with Report.select_logs()"""
@@ -170,6 +193,7 @@ def test_report_08(tmp_path):
     assert (tmp_path / log_map.stderr).is_file()
     assert (tmp_path / log_map.stdout).is_file()
     assert "worker log" in (tmp_path / log_map.aux).read_text()
+
 
 def test_report_09(tmp_path):
     """test prioritizing sanitizer logs with Report._find_sanitizer()"""
@@ -184,7 +208,8 @@ def test_report_09(tmp_path):
     assert "test" in Path(selected).read_text()
     # test UBSan log
     (tmp_path / "log_asan.txt.1").write_text(
-        "test.cc:3:5: runtime error: signed integer overflow: ...")
+        "test.cc:3:5: runtime error: signed integer overflow: ..."
+    )
     selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
     assert selected is not None
     assert "runtime error: signed integer overflow" in Path(selected).read_text()
@@ -201,7 +226,9 @@ def test_report_09(tmp_path):
     assert "AddressSanitizer: stack-overflow" in Path(selected).read_text()
     # test selecting prioritized
     with (tmp_path / "log_asan.txt.4").open("wb") as log_fp:
-        log_fp.write(b"==1942==ERROR: AddressSanitizer: heap-use-after-free on ... blah\n")
+        log_fp.write(
+            b"==1942==ERROR: AddressSanitizer: heap-use-after-free on ... blah\n"
+        )
         for l_no in range(4):
             log_fp.write(b"    #%d blah...\n" % (l_no,))
     with (tmp_path / "log_asan.txt.5").open("wb") as log_fp:
@@ -212,6 +239,7 @@ def test_report_09(tmp_path):
     selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
     assert selected is not None
     assert "heap-use-after-free" in Path(selected).read_text()
+
 
 def test_report_10(tmp_path):
     """test Report() size_limit"""
@@ -234,6 +262,7 @@ def test_report_10(tmp_path):
     report.cleanup()
     assert not tmp_path.is_dir()
 
+
 def test_report_11(tmp_path):
     """test selecting Valgrind logs with Report.select_logs()"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
@@ -243,6 +272,7 @@ def test_report_11(tmp_path):
     assert (tmp_path / log_map.stderr).is_file()
     assert (tmp_path / log_map.stdout).is_file()
     assert "valgrind log" in (tmp_path / log_map.aux).read_text()
+
 
 def test_report_12(tmp_path):
     """test Report.crash_info"""
@@ -265,6 +295,7 @@ def test_report_12(tmp_path):
     assert report.crash_info is not None
     assert report._crash_info is not None
 
+
 def test_report_13(mocker, tmp_path):
     """test Report.crash_signature and Report.crash_hash"""
     mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
@@ -277,25 +308,35 @@ def test_report_13(mocker, tmp_path):
     assert report.crash_info.createShortSignature() == "[@ foo]"
     assert report.crash_hash
 
+
 def test_report_14(mocker):
     """test Report.crash_signature_max_frames()"""
     info = mocker.Mock(spec=CrashInfo)
-    info.backtrace = ("blah")
+    info.backtrace = ("blah",)
     assert Report.crash_signature_max_frames(info) == 8
-    info.backtrace = ("std::panicking::rust_panic", "std::panicking::rust_panic_with_hook")
+    info.backtrace = (
+        "std::panicking::rust_panic",
+        "std::panicking::rust_panic_with_hook",
+    )
     assert Report.crash_signature_max_frames(info) == 14
+
 
 def test_reporter_01(mocker):
     """test creating a simple Reporter"""
+
     class SimpleReporter(Reporter):
         def _pre_submit(self, report):
             pass
+
         def _post_submit(self):
             pass
+
         def _submit_report(self, report, test_cases):
             pass
+
     reporter = SimpleReporter()
     reporter.submit([], report=mocker.Mock(spec=Report))
+
 
 def test_filesystem_reporter_01(tmp_path):
     """test FilesystemReporter without testcases"""
@@ -317,6 +358,7 @@ def test_filesystem_reporter_01(tmp_path):
     assert len(log_dirs) == 1
     assert log_dirs[0].is_dir()
     assert "_logs" in str(log_dirs[0])
+
 
 def test_filesystem_reporter_02(tmp_path, mocker):
     """test FilesystemReporter with testcases"""
@@ -344,6 +386,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     assert len(tuple(report_path.iterdir())) == 2
     assert len(tuple(report_path.glob("NO_STACK"))) == 1
 
+
 def test_filesystem_reporter_03(tmp_path):
     """test FilesystemReporter disk space failsafe"""
     log_path = tmp_path / "logs"
@@ -355,19 +398,18 @@ def test_filesystem_reporter_03(tmp_path):
     with pytest.raises(RuntimeError, match="Running low on disk space"):
         reporter.submit([], Report(str(log_path), "fake_bin"))
 
+
 def test_filesystem_reporter_04(mocker, tmp_path):
     """test FilesystemReporter w/o major bucket"""
-    fake_report = (tmp_path / "fake_report")
+    fake_report = tmp_path / "fake_report"
     fake_report.mkdir()
-    report = mocker.Mock(
-        spec=Report,
-        path=str(fake_report),
-        prefix="test_prefix")
+    report = mocker.Mock(spec=Report, path=str(fake_report), prefix="test_prefix")
     reporter = FilesystemReporter(str(tmp_path / "dst"), major_bucket=False)
     reporter.submit([], report)
     assert not fake_report.is_dir()
     assert not report.major.call_count
     assert any((tmp_path / "dst").glob("test_prefix_logs"))
+
 
 def test_fuzzmanager_reporter_01(mocker, tmp_path):
     """test FuzzManagerReporter.sanity_check()"""
@@ -390,15 +432,22 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
     FuzzManagerReporter.sanity_check(str(fake_bin))
     assert fake_reporter.fromBinary.call_count == 1
 
+
 def test_fuzzmanager_reporter_02(mocker, tmp_path):
     """test FuzzManagerReporter.submit()"""
-    mocker.patch("grizzly.common.reporter.getcwd", autospec=True, return_value=str(tmp_path))
+    mocker.patch(
+        "grizzly.common.reporter.getcwd", autospec=True, return_value=str(tmp_path)
+    )
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="0")
     fake_crashinfo = mocker.patch("grizzly.common.reporter.CrashInfo", autospec=True)
-    fake_crashinfo.fromRawCrashData.return_value.createShortSignature.return_value = "test [@ test]"
+    fake_crashinfo.fromRawCrashData.return_value.createShortSignature.return_value = (
+        "test [@ test]"
+    )
     fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (None, None)
-    fake_collector.return_value.generate.return_value = str(tmp_path / "fm_file.signature")
+    fake_collector.return_value.generate.return_value = str(
+        tmp_path / "fm_file.signature"
+    )
     log_path = tmp_path / "log_path"
     log_path.mkdir()
     (log_path / "log_ffp_worker_blah.txt").touch()
@@ -410,25 +459,33 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path):
         spec=TestCase,
         adapter_name="adapter",
         env_vars={"TEST": "1"},
-        input_fname="input")
+        input_fname="input",
+    )
     reporter = FuzzManagerReporter("fake_bin")
     reporter.submit([fake_test], Report(str(log_path), "fake_bin", is_hang=True))
     assert not log_path.is_dir()
     assert fake_test.dump.call_count == 1
     assert fake_collector.return_value.submit.call_count == 1
     meta_data = (tmp_path / "fm_file.metadata").read_text()
-    assert "\"frequent\": false" in meta_data
-    assert "\"_grizzly_seen_count\": 1" in meta_data
-    assert "\"shortDescription\": \"test [@ test]\"" in meta_data
+    assert '"frequent": false' in meta_data
+    assert '"_grizzly_seen_count": 1' in meta_data
+    assert '"shortDescription": "test [@ test]"' in meta_data
+
 
 def test_fuzzmanager_reporter_03(mocker, tmp_path):
     """test FuzzManagerReporter.submit() - no test / mark as frequent"""
-    mocker.patch("grizzly.common.reporter.getcwd", autospec=True, return_value=str(tmp_path))
+    mocker.patch(
+        "grizzly.common.reporter.getcwd", autospec=True, return_value=str(tmp_path)
+    )
     fake_crashinfo = mocker.patch("grizzly.common.reporter.CrashInfo", autospec=True)
-    fake_crashinfo.fromRawCrashData.return_value.createShortSignature.return_value = "test [@ test]"
+    fake_crashinfo.fromRawCrashData.return_value.createShortSignature.return_value = (
+        "test [@ test]"
+    )
     fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (None, None)
-    fake_collector.return_value.generate.return_value = str(tmp_path / "fm_file.signature")
+    fake_collector.return_value.generate.return_value = str(
+        tmp_path / "fm_file.signature"
+    )
     log_path = tmp_path / "log_path"
     log_path.mkdir()
     (log_path / "log_stderr.txt").touch()
@@ -438,9 +495,10 @@ def test_fuzzmanager_reporter_03(mocker, tmp_path):
     reporter.submit([], Report(str(log_path), "fake_bin"))
     assert fake_collector.return_value.submit.call_count == 1
     meta_data = (tmp_path / "fm_file.metadata").read_text()
-    assert "\"frequent\": true" in meta_data
-    assert "\"_grizzly_seen_count\": 1" in meta_data
-    assert "\"shortDescription\": \"test [@ test]\"" in meta_data
+    assert '"frequent": true' in meta_data
+    assert '"_grizzly_seen_count": 1' in meta_data
+    assert '"shortDescription": "test [@ test]"' in meta_data
+
 
 def test_fuzzmanager_reporter_04(mocker, tmp_path):
     """test FuzzManagerReporter.submit() hit frequent crash"""
@@ -448,7 +506,8 @@ def test_fuzzmanager_reporter_04(mocker, tmp_path):
     fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (
         None,
-        {"frequent": True, "shortDescription": "[@ test]"})
+        {"frequent": True, "shortDescription": "[@ test]"},
+    )
     log_path = tmp_path / "log_path"
     log_path.mkdir()
     (log_path / "log_stderr.txt").touch()
@@ -457,13 +516,15 @@ def test_fuzzmanager_reporter_04(mocker, tmp_path):
     reporter.submit([], Report(str(log_path), "fake_bin"))
     fake_collector.return_value.submit.assert_not_called()
 
+
 def test_fuzzmanager_reporter_05(mocker, tmp_path):
     """test FuzzManagerReporter.submit() hit existing crash"""
     mocker.patch("grizzly.common.reporter.CrashInfo", autospec=True)
     fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (
         None,
-        {"bug__id":1, "frequent": False, "shortDescription": "[@ test]"})
+        {"bug__id": 1, "frequent": False, "shortDescription": "[@ test]"},
+    )
     log_path = tmp_path / "log_path"
     log_path.mkdir()
     (log_path / "log_stderr.txt").touch()
@@ -472,6 +533,7 @@ def test_fuzzmanager_reporter_05(mocker, tmp_path):
     reporter._ignored = lambda x: True
     reporter.submit([], Report(str(log_path), "fake_bin"))
     fake_collector.return_value.submit.assert_not_called()
+
 
 def test_fuzzmanager_reporter_06(mocker, tmp_path):
     """test FuzzManagerReporter.submit() no signature"""
@@ -485,6 +547,7 @@ def test_fuzzmanager_reporter_06(mocker, tmp_path):
     reporter = FuzzManagerReporter("fake_bin")
     with pytest.raises(RuntimeError, match="Failed to create FM signature"):
         reporter.submit([], Report(str(log_path), "fake_bin"))
+
 
 def test_fuzzmanager_reporter_07(mocker, tmp_path):
     """test FuzzManagerReporter.submit() unsymbolized crash"""
@@ -500,14 +563,16 @@ def test_fuzzmanager_reporter_07(mocker, tmp_path):
     reporter.submit([], Report(str(log_path), "fake_bin"))
     fake_collector.return_value.submit.assert_not_called()
 
+
 def test_fuzzmanager_reporter_08():
     """test FuzzManagerReporter.quality_name()"""
     assert FuzzManagerReporter.quality_name(0) == "QUAL_REDUCED_RESULT"
     assert FuzzManagerReporter.quality_name(-1) == "unknown quality (-1)"
 
+
 def test_fuzzmanager_reporter_09(mocker, tmp_path):
     """test FuzzManagerReporter._ignored()"""
-    log_file = (tmp_path / "test.log")
+    log_file = tmp_path / "test.log"
     log_file.touch()
     report = mocker.Mock(spec=Report, path=str(tmp_path), preferred=str(log_file))
     # not ignored
@@ -519,17 +584,21 @@ def test_fuzzmanager_reporter_09(mocker, tmp_path):
     log_file.write_bytes(b"VEX temporary storage exhausted.")
     assert FuzzManagerReporter._ignored(report)
 
+
 def test_s3fuzzmanager_reporter_01(mocker, tmp_path):
     """test S3FuzzManagerReporter.sanity_check()"""
     mocker.patch("grizzly.common.reporter.FuzzManagerReporter", autospec=True)
     fake_bin = tmp_path / "bin"
     # test GRZ_S3_BUCKET missing
-    with pytest.raises(EnvironmentError, match="'GRZ_S3_BUCKET' is not set in environment"):
+    with pytest.raises(
+        EnvironmentError, match="'GRZ_S3_BUCKET' is not set in environment"
+    ):
         S3FuzzManagerReporter.sanity_check(str(fake_bin))
     # test GRZ_S3_BUCKET set
     pytest.importorskip("boto3")
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="test")
     S3FuzzManagerReporter.sanity_check(str(fake_bin))
+
 
 def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     """test S3FuzzManagerReporter._pre_submit()"""
@@ -560,19 +629,26 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     reporter._extra_metadata.clear()
     trace_dir.mkdir(parents=True)
     (trace_dir / "trace-file").touch()
+
     class FakeClientError(Exception):
         def __init__(self, message, response):
             super().__init__(message)
             self.response = response
+
     mocker.patch("grizzly.common.reporter.ClientError", new=FakeClientError)
-    fake_resource.return_value.Object.side_effect = FakeClientError("test", {"Error": {"Code": "404"}})
+    fake_resource.return_value.Object.side_effect = FakeClientError(
+        "test", {"Error": {"Code": "404"}}
+    )
     reporter._pre_submit(fake_report)
     assert not any(tmp_path.iterdir())
     assert "rr-trace" in reporter._extra_metadata
     assert fake_report.minor in reporter._extra_metadata["rr-trace"]
     assert fake_resource.return_value.meta.client.upload_file.call_count == 1
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RR only supported on Linux")
+
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="RR only supported on Linux"
+)
 def test_s3fuzzmanager_reporter_03(tmp_path):
     """test S3FuzzManagerReporter.compress_rr_trace()"""
     # create fake trace
@@ -587,7 +663,9 @@ def test_s3fuzzmanager_reporter_03(tmp_path):
     (src / "mmap").write_bytes(b"bar")
     (src / "tasks").write_bytes(b"foo")
     (src / "version").write_bytes(b"123")
-    (tmp_path / "rr-traces" / "latest-trace").symlink_to(str(src), target_is_directory=True)
+    (tmp_path / "rr-traces" / "latest-trace").symlink_to(
+        str(src), target_is_directory=True
+    )
     src = tmp_path / "rr-traces"
     dest = tmp_path / "dest"
     dest.mkdir()
@@ -599,5 +677,6 @@ def test_s3fuzzmanager_reporter_03(tmp_path):
     assert "echo-1" in entries
     assert "echo-0" not in entries
     assert "latest-trace" not in entries
+
 
 # TODO: fill out tests for FuzzManagerReporter and S3FuzzManagerReporter

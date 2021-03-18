@@ -33,6 +33,7 @@ def test_status_01(tmp_path):
     assert not status._enable_profiling
     assert not status._profiles
 
+
 def test_status_02(tmp_path):
     """test Status.cleanup()"""
     Status.PATH = str(tmp_path)
@@ -47,6 +48,7 @@ def test_status_02(tmp_path):
     status = Status.start()
     remove(status.data_file)
     status.cleanup()
+
 
 def test_status_03(tmp_path):
     """test Status.report()"""
@@ -66,18 +68,20 @@ def test_status_03(tmp_path):
     assert status.timestamp < future
     status.cleanup()
 
+
 def test_status_04(tmp_path):
     """test Status.load() failure paths"""
     Status.PATH = str(tmp_path)
     # load no db
     assert Status.load(str(tmp_path / "missing.json")) is None
     # load empty
-    bad = (tmp_path / "bad.json")
+    bad = tmp_path / "bad.json"
     bad.touch()
     assert Status.load(str(bad)) is None
     # load invalid/incomplete json
     bad.write_bytes(b"{}")
     assert Status.load(str(bad)) is None
+
 
 def test_status_05(tmp_path):
     """test Status.load()"""
@@ -106,9 +110,10 @@ def test_status_05(tmp_path):
     status.cleanup()
     assert not isfile(data_file)
 
+
 def test_status_06(tmp_path):
     """test Status.loadall()"""
-    working_path = (tmp_path / "status")
+    working_path = tmp_path / "status"
     Status.PATH = str(working_path)
     # missing path
     assert not any(Status.loadall())
@@ -120,6 +125,7 @@ def test_status_06(tmp_path):
         Status.start()
     (working_path / "empty.json").touch()
     assert len(tuple(Status.loadall())) == 5
+
 
 def test_status_07(tmp_path):
     """test Status.duration and Status.rate calculations"""
@@ -134,6 +140,7 @@ def test_status_07(tmp_path):
     assert status.rate == 1
     status.timestamp += 1
     assert status.rate == 0.5
+
 
 def _client_writer(done, reported, working_path):
     """Used by test_status_08"""
@@ -151,6 +158,7 @@ def _client_writer(done, reported, working_path):
     finally:
         status.cleanup()
 
+
 def test_status_08(tmp_path):
     """test Status.loadall() with multiple active reporters"""
     Status.PATH = str(tmp_path)
@@ -161,7 +169,11 @@ def test_status_08(tmp_path):
         # launch processes
         for _ in range(5):
             report_events.append(Event())
-            procs.append(Process(target=_client_writer, args=(done, report_events[-1], Status.PATH)))
+            procs.append(
+                Process(
+                    target=_client_writer, args=(done, report_events[-1], Status.PATH)
+                )
+            )
             procs[-1].start()
         # wait for processes to launch and report
         for has_reported in report_events:
@@ -177,6 +189,7 @@ def test_status_08(tmp_path):
                 proc.join()
     # verify cleanup
     assert not any(Status.loadall())
+
 
 def test_status_09(tmp_path):
     """test Status.count_result() and Status.signatures()"""
@@ -196,6 +209,7 @@ def test_status_09(tmp_path):
     assert found["sig2"] == 1
     assert "sig3" in found
     assert found["sig3"] == 1
+
 
 def test_status_10(tmp_path):
     """test Status.measure() and Status.record() - profiling support"""

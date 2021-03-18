@@ -51,6 +51,7 @@ class ReduceManager:
         testcases (list(grizzly.common.storage.TestCase)): List of one or more Grizzly
                                                            testcases to reduce.
     """
+
     ANALYSIS_ITERATIONS = 11  # number of iterations to analyze
     # --min-crashes value when analysis is used and reliability is less than perfect
     ANALYSIS_MIN_CRASHES = 1
@@ -65,11 +66,28 @@ class ReduceManager:
     ITER_TIMEOUT_MIN = 10
     ITER_TIMEOUT_DURATION_MULTIPLIER = 2
 
-    def __init__(self, ignore, server, target, testcases, strategies, log_path,
-                 any_crash=False, expect_hang=False, idle_delay=0, idle_threshold=0,
-                 relaunch=1, report_period=None, report_to_fuzzmanager=False,
-                 signature=None, signature_desc=None, static_timeout=False, tool=None,
-                 use_analysis=True, use_harness=True):
+    def __init__(
+        self,
+        ignore,
+        server,
+        target,
+        testcases,
+        strategies,
+        log_path,
+        any_crash=False,
+        expect_hang=False,
+        idle_delay=0,
+        idle_threshold=0,
+        relaunch=1,
+        report_period=None,
+        report_to_fuzzmanager=False,
+        signature=None,
+        signature_desc=None,
+        static_timeout=False,
+        tool=None,
+        use_analysis=True,
+        use_harness=True,
+    ):
         """Initialize reduction manager. Many arguments are common with `ReplayManager`.
 
         Args:
@@ -146,8 +164,11 @@ class ReduceManager:
         """
         # TODO: properly handle test duration and timeout
         assert self._static_timeout or not self._expect_hang
-        if (self._static_timeout or self._any_crash or
-                getattr(self.target, "use_valgrind", False)):
+        if (
+            self._static_timeout
+            or self._any_crash
+            or getattr(self.target, "use_valgrind", False)
+        ):
             # the amount of time it can take to replay a test case can vary
             # when under Valgrind so do not update the timeout in that case
 
@@ -155,26 +176,31 @@ class ReduceManager:
             # expected), so lowering timeout or idle delay will only hide crashes
             return
 
-        durations = list(chain.from_iterable(result.durations
-                                             for result in results if result.expected))
+        durations = list(
+            chain.from_iterable(
+                result.durations for result in results if result.expected
+            )
+        )
         if not durations:
             # no expected results
             return
         run_time = max(durations)
 
         # If `run_time * multiplier` is less than idle poll delay, update it
-        LOG.debug('Run time %r', run_time)
-        new_idle_delay = max(self.IDLE_DELAY_MIN,
-                             min(run_time * self.IDLE_DELAY_DURATION_MULTIPLIER,
-                                 self._idle_delay))
+        LOG.debug("Run time %r", run_time)
+        new_idle_delay = max(
+            self.IDLE_DELAY_MIN,
+            min(run_time * self.IDLE_DELAY_DURATION_MULTIPLIER, self._idle_delay),
+        )
         if new_idle_delay < self._idle_delay:
             LOG.info("Updating poll delay to: %r", new_idle_delay)
             self._idle_delay = new_idle_delay
         # If `run_time * multiplier` is less than iter_timeout, update it
         # in other words, decrease the timeout if this ran in less than half the timeout
-        new_iter_timeout = max(self.ITER_TIMEOUT_MIN,
-                               min(run_time * self.ITER_TIMEOUT_DURATION_MULTIPLIER,
-                                   self.server.timeout))
+        new_iter_timeout = max(
+            self.ITER_TIMEOUT_MIN,
+            min(run_time * self.ITER_TIMEOUT_DURATION_MULTIPLIER, self.server.timeout),
+        )
         if new_iter_timeout < self.server.timeout:
             LOG.info("Updating max timeout to: %r", new_iter_timeout)
             self.server.timeout = new_iter_timeout
@@ -206,16 +232,20 @@ class ReduceManager:
         #   on every call to interesting.
 
         # N.B. We only use `last_test_only` if `len(self.testcases) > 1` ..
-        # if `self.testcases` only has 1 entry to begin with, we don't need `last_test_only` to trim it
-        for (use_harness, last_test_only) in [
-                (True, True),
-                (True, False),
-                # only one of the two use_harness=False cases will run:
-                (False, True),  # input is len(self.testcases)>1 and we will only try the last testcase
-                (False, False)]:  # input is len(self.testcases)==1 already and there's no need to trim
+        # if `self.testcases` only has 1 entry to begin with, we don't need
+        # `last_test_only` to trim it
+        for (use_harness, last_test_only) in (
+            (True, True),
+            (True, False),
+            # only one of the two use_harness=False cases will run:
+            # input is len(self.testcases)>1 and we will only try the last testcase
+            (False, True),
+            # input is len(self.testcases)==1 already and there's no need to trim
+            (False, False),
+        ):
             if use_harness and (not self._original_use_harness or harness_crashes):
-                # Don't test with harness again if we already found crashes with the harness (last_test_only)
-                # or if it was disabled by command-line.
+                # Don't test with harness again if we already found crashes with the
+                # harness (last_test_only) or if it was disabled by command-line.
                 continue
             if not use_harness and harness_crashes >= self.ANALYSIS_ITERATIONS / 2:
                 # Don't test without harness if harness found > 50% crashes
@@ -224,7 +254,8 @@ class ReduceManager:
                 # Only set `last_test_only` if we have more than one testcase to begin with
                 continue
             if not use_harness and (not last_test_only and len(self.testcases) > 1):
-                # Can't run without harness if we have more than one testcase (`last_test_only` will run)
+                # Can't run without harness if we have more than one testcase
+                # (`last_test_only` will run)
                 continue
 
             if use_harness and (last_test_only or len(self.testcases) == 1):
@@ -233,36 +264,54 @@ class ReduceManager:
                 relaunch = 1
 
             with ReplayManager(
-                self.ignore, self.server, self.target, any_crash=self._any_crash,
-                relaunch=relaunch, signature=self._signature, use_harness=use_harness,
+                self.ignore,
+                self.server,
+                self.target,
+                any_crash=self._any_crash,
+                relaunch=relaunch,
+                signature=self._signature,
+                use_harness=use_harness,
             ) as replay:
-                LOG.info("Running for %d iterations to assess reliability %s harness.",
-                         self.ANALYSIS_ITERATIONS,
-                         "using" if use_harness else "without")
+                LOG.info(
+                    "Running for %d iterations to assess reliability %s harness.",
+                    self.ANALYSIS_ITERATIONS,
+                    "using" if use_harness else "without",
+                )
                 testcases = self.testcases
                 if last_test_only:
                     if use_harness:
                         LOG.warning("Checking reliability with only the last testcase.")
                     else:
-                        LOG.warning("Only the last testcase of %d given will be used to "
-                                    "assess reliability without harness.", len(testcases))
+                        LOG.warning(
+                            "Only the last testcase of %d given will be used to "
+                            "assess reliability without harness.",
+                            len(testcases),
+                        )
                     testcases = [testcases[-1]]
                 results = replay.run(
-                    testcases, self.server.timeout, repeat=self.ANALYSIS_ITERATIONS,
-                    min_results=1, exit_early=False, idle_delay=self._idle_delay,
+                    testcases,
+                    self.server.timeout,
+                    repeat=self.ANALYSIS_ITERATIONS,
+                    min_results=1,
+                    exit_early=False,
+                    idle_delay=self._idle_delay,
                     idle_threshold=self._idle_threshold,
                 )
                 try:
                     stats.add_iterations(replay.status.iteration)
                     crashes = sum(x.count for x in results if x.expected)
                     if crashes and not self._any_crash and self._signature_desc is None:
-                        first_expected = next((report for report in results
-                                               if report.expected), None)
-                        self._signature_desc = (first_expected.report.crash_info
-                                                .createShortSignature())
+                        first_expected = next(
+                            (report for report in results if report.expected), None
+                        )
+                        self._signature_desc = (
+                            first_expected.report.crash_info.createShortSignature()
+                        )
                     self.report(
                         [result for result in results if not result.expected],
-                        testcases, self._stats.copy(stats))
+                        testcases,
+                        self._stats.copy(stats),
+                    )
                     if use_harness:
                         # set harness_crashes in both cases (last_test True/False)
                         # we only want to iterate through all testcases if the last
@@ -279,8 +328,12 @@ class ReduceManager:
                 key = ("using" if use_harness else "without") + " harness"
                 if last_test_only:
                     key += "/last test only"
-                LOG.info("Testcase was interesting %0.1f%% of %d attempts %s.",
-                         100.0 * reliability, self.ANALYSIS_ITERATIONS, key)
+                LOG.info(
+                    "Testcase was interesting %0.1f%% of %d attempts %s.",
+                    100.0 * reliability,
+                    self.ANALYSIS_ITERATIONS,
+                    key,
+                )
                 info[key] = reliability
                 # ensure same signature is always used
                 self._signature = replay.signature
@@ -294,18 +347,22 @@ class ReduceManager:
 
         # should we use the harness? go with harness unless no-harness crashed 50% more
         self._use_harness = not (
-            non_harness_crashes > harness_crashes and (
-                harness_crashes == 0 or
-                (non_harness_crashes - harness_crashes) / harness_crashes >= 0.5
+            non_harness_crashes > harness_crashes
+            and (
+                harness_crashes == 0
+                or (non_harness_crashes - harness_crashes) / harness_crashes >= 0.5
             )
         )
 
-        if ((self._use_harness and harness_last_crashes)
-                or (not self._use_harness and len(self.testcases) > 1)):
-            LOG.warning("Last testcase %s harness was selected, other %d "
-                        "testcases in the original will be ignored.",
-                        "with" if self._use_harness else "without",
-                        len(self.testcases) - 1)
+        if (self._use_harness and harness_last_crashes) or (
+            not self._use_harness and len(self.testcases) > 1
+        ):
+            LOG.warning(
+                "Last testcase %s harness was selected, other %d "
+                "testcases in the original will be ignored.",
+                "with" if self._use_harness else "without",
+                len(self.testcases) - 1,
+            )
             while len(self.testcases) > 1:
                 self.testcases.pop(0).cleanup()
 
@@ -319,20 +376,31 @@ class ReduceManager:
         else:
             min_crashes = self.ANALYSIS_MIN_CRASHES
         # crashes_percent is max 99.9% to avoid domain errors
-        repeat = int(ceil(log(1 - self.ANALYSIS_TARGET_PROBABILITY,
-                              1 - min(crashes_percent, 0.9999))) * min_crashes)
+        repeat = int(
+            ceil(
+                log(
+                    1 - self.ANALYSIS_TARGET_PROBABILITY,
+                    1 - min(crashes_percent, 0.9999),
+                )
+            )
+            * min_crashes
+        )
 
         LOG.info("Analysis results:")
         if harness_crashes >= self.ANALYSIS_ITERATIONS / 2:
-            LOG.info("* testcase was better than 50% reliable with the harness "
-                     "(--no-harness not assessed)")
+            LOG.info(
+                "* testcase was better than 50% reliable with the harness "
+                "(--no-harness not assessed)"
+            )
         elif harness_crashes == non_harness_crashes:
             LOG.info("* testcase was equally reliable with/without the harness")
         elif not self._original_use_harness:
             LOG.info("* --no-harness was already set")
         else:
-            LOG.info("* testcase was %s reliable with the harness",
-                     "more" if harness_crashes > non_harness_crashes else "less")
+            LOG.info(
+                "* testcase was %s reliable with the harness",
+                "more" if harness_crashes > non_harness_crashes else "less",
+            )
         return (repeat, min_crashes, info)
 
     def testcase_size(self):
@@ -364,8 +432,11 @@ class ReduceManager:
         with self._stats.add_timed("final", self.testcase_size) as total_stats:
             if self._use_analysis:
                 with total_stats.add_timed("analysis") as stats:
-                    repeat, min_results, reliability_info = \
-                        self.run_reliability_analysis(stats)
+                    (
+                        repeat,
+                        min_results,
+                        reliability_info,
+                    ) = self.run_reliability_analysis(stats)
                 self._stats.add_info("Analysis", reliability_info)
                 any_success = True  # analysis ran and didn't raise
             # multi part test cases should always use relaunch == 1
@@ -374,24 +445,39 @@ class ReduceManager:
                 relaunch = min(self._original_relaunch, repeat)
             else:
                 relaunch = 1
-            LOG.info("Repeat: %d, Minimum crashes: %d, Relaunch %d",
-                     repeat, min_results, relaunch)
-            self._stats.add_info("Run Parameters", {
-                "Repeat": repeat,
-                "Min Crashes": min_results,
-                "Relaunch": relaunch,
-                "Harness": self._use_harness,
-            })
+            LOG.info(
+                "Repeat: %d, Minimum crashes: %d, Relaunch %d",
+                repeat,
+                min_results,
+                relaunch,
+            )
+            self._stats.add_info(
+                "Run Parameters",
+                {
+                    "Repeat": repeat,
+                    "Min Crashes": min_results,
+                    "Relaunch": relaunch,
+                    "Harness": self._use_harness,
+                },
+            )
 
             for strategy_no, strategy in enumerate(self.strategies):
                 LOG.info("")
-                LOG.info("Using strategy %s (%d/%d)", strategy, strategy_no + 1,
-                         len(self.strategies))
-                replay = ReplayManager(self.ignore, self.server, self.target,
-                                       any_crash=self._any_crash,
-                                       relaunch=relaunch,
-                                       signature=self._signature,
-                                       use_harness=self._use_harness)
+                LOG.info(
+                    "Using strategy %s (%d/%d)",
+                    strategy,
+                    strategy_no + 1,
+                    len(self.strategies),
+                )
+                replay = ReplayManager(
+                    self.ignore,
+                    self.server,
+                    self.target,
+                    any_crash=self._any_crash,
+                    relaunch=relaunch,
+                    signature=self._signature,
+                    use_harness=self._use_harness,
+                )
                 strategy = STRATEGIES[strategy](self.testcases)
                 if last_tried is not None:
                     strategy.update_tried(last_tried)
@@ -415,14 +501,17 @@ class ReduceManager:
                                     idle_delay=self._idle_delay,
                                     idle_threshold=self._idle_threshold,
                                     min_results=min_results,
-                                    repeat=repeat)
+                                    repeat=repeat,
+                                )
                                 strategy_stats.add_iterations(replay.status.iteration)
                                 strategy_stats.add_attempts(1)
                                 self.update_timeout(results)
                                 # get the first expected result (if any),
                                 #   and update the strategy
-                                first_expected = next((report for report in results
-                                                       if report.expected), None)
+                                first_expected = next(
+                                    (report for report in results if report.expected),
+                                    None,
+                                )
                                 success = first_expected is not None
                                 if success:
                                     strategy_stats.add_successes(1)
@@ -430,10 +519,9 @@ class ReduceManager:
                                         not self._any_crash
                                         and self._signature_desc is None
                                     ):
-                                        self._signature_desc = (first_expected
-                                                                .report
-                                                                .crash_info
-                                                                .createShortSignature())
+                                        self._signature_desc = (
+                                            first_expected.report.crash_info.createShortSignature()
+                                        )
                                 served = None
                                 if success and not self._any_crash:
                                     served = first_expected.served
@@ -453,25 +541,34 @@ class ReduceManager:
                                     for result in best_results:
                                         result.report.cleanup()
                                     # filter expected results out into `best_results`
-                                    best_results = [result for result in results
-                                                    if result.expected]
-                                    results = [result for result in results
-                                               if not result.expected]
+                                    best_results = [
+                                        result for result in results if result.expected
+                                    ]
+                                    results = [
+                                        result
+                                        for result in results
+                                        if not result.expected
+                                    ]
                                 else:
                                     LOG.info("Attempt failed")
                                 # if the reduction found other crashes,
                                 #   report those immediately
                                 self.report(
-                                    results, reduction,
-                                    self._stats.copy(strategy_stats))
+                                    results, reduction, self._stats.copy(strategy_stats)
+                                )
 
                                 now = time()
-                                if self._report_periodically and \
-                                        best_results and \
-                                        now - strategy_last_report > self._report_periodically:
+                                if (
+                                    self._report_periodically
+                                    and best_results
+                                    and now - strategy_last_report
+                                    > self._report_periodically
+                                ):
                                     last_reports = self.report(
-                                        best_results, self.testcases,
-                                        self._stats.copy(strategy_stats))
+                                        best_results,
+                                        self.testcases,
+                                        self._stats.copy(strategy_stats),
+                                    )
                                     for result in best_results:
                                         result.report.cleanup()
                                     best_results = []
@@ -491,16 +588,18 @@ class ReduceManager:
 
                     if best_results:
                         last_reports = self.report(
-                            best_results, self.testcases,
-                            self._stats.copy(total_stats))
+                            best_results, self.testcases, self._stats.copy(total_stats)
+                        )
 
                 except KeyboardInterrupt:
                     if best_results:
                         last_reports = self.report(
-                            best_results, self.testcases,
-                            self._stats.copy(total_stats))
-                        LOG.warning("Ctrl+C detected, best reduction so far "
-                                    "reported as %r", last_reports)
+                            best_results, self.testcases, self._stats.copy(total_stats)
+                        )
+                        LOG.warning(
+                            "Ctrl+C detected, best reduction so far " "reported as %r",
+                            last_reports,
+                        )
                     raise
                 finally:
                     for result in best_results:
@@ -512,22 +611,35 @@ class ReduceManager:
             # if we complete all strategies, mark the last reported crashes as reduced
             if self._report_to_fuzzmanager and last_reports:
                 for crash_id in last_reports:
-                    LOG.info("Updating crash %d to quality %s", crash_id,
-                             FuzzManagerReporter.quality_name(FuzzManagerReporter.QUAL_REDUCED_RESULT))
-                    CrashEntry(crash_id).testcase_quality = FuzzManagerReporter.QUAL_REDUCED_RESULT
+                    LOG.info(
+                        "Updating crash %d to quality %s",
+                        crash_id,
+                        FuzzManagerReporter.quality_name(
+                            FuzzManagerReporter.QUAL_REDUCED_RESULT
+                        ),
+                    )
+                    CrashEntry(
+                        crash_id
+                    ).testcase_quality = FuzzManagerReporter.QUAL_REDUCED_RESULT
 
         # it's possible we made it this far without ever setting signature_desc.
         # this is only possible if --no-analysis is given
         # just give None instead of trying to format the CrashSignature
-        self._stats.add_info("Signature", {
-            "given": sig_given,
-            "any": self._any_crash,
-            "description": self._signature_desc,
-        })
+        self._stats.add_info(
+            "Signature",
+            {
+                "given": sig_given,
+                "any": self._any_crash,
+                "description": self._signature_desc,
+            },
+        )
 
         # log a summary of what was done.
-        LOG.info("Reduction summary:%s%s", os.linesep,
-                 os.linesep.join(self._stats.format_lines()))
+        LOG.info(
+            "Reduction summary:%s%s",
+            os.linesep,
+            os.linesep.join(self._stats.format_lines()),
+        )
 
         if any_success:
             return Session.EXIT_SUCCESS
@@ -554,8 +666,8 @@ class ReduceManager:
             else:
                 report_dir = "reports" if result.expected else "other_reports"
                 reporter = FilesystemReporter(
-                    report_path=str(self._log_path / report_dir),
-                    major_bucket=False)
+                    report_path=str(self._log_path / report_dir), major_bucket=False
+                )
             # write reduction stats
             if stats is not None:
                 report_path = Path(result.report.path)
@@ -619,16 +731,17 @@ class ReduceManager:
 
             try:
                 testcases = ReplayManager.load_testcases(
-                    args.input,
-                    args.prefs is None,
-                    subset=args.test_index)
+                    args.input, args.prefs is None, subset=args.test_index
+                )
             except TestCaseLoadFailure as exc:
                 LOG.error("Error: %s", str(exc))
                 return Session.EXIT_ERROR
 
             if args.tool is None and testcases[0].adapter_name is not None:
-                LOG.warning("Setting default --tool=grizzly-%s from testcase",
-                            testcases[0].adapter_name)
+                LOG.warning(
+                    "Setting default --tool=grizzly-%s from testcase",
+                    testcases[0].adapter_name,
+                )
                 args.tool = "grizzly-%s" % (testcases[0].adapter_name,)
 
             expect_hang = ReplayManager.expect_hang(args.ignore, signature, testcases)
@@ -637,7 +750,8 @@ class ReduceManager:
                 if len(testcases) > 1:
                     LOG.error(
                         "Error: '--no-harness' cannot be used with multiple "
-                        "testcases. Perhaps '--test-index' can help.")
+                        "testcases. Perhaps '--test-index' can help."
+                    )
                     return Session.EXIT_ARGS
                 LOG.debug("--no-harness specified relaunch set to 1")
                 args.relaunch = 1
@@ -645,9 +759,8 @@ class ReduceManager:
             # check test time limit and timeout
             # TODO: add support for test time limit, use timeout in both cases for now
             _, timeout = ReplayManager.time_limits(
-                args.timeout,
-                args.timeout,
-                testcases)
+                args.timeout, args.timeout, testcases
+            )
 
             args.repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, args.repeat)
@@ -660,7 +773,8 @@ class ReduceManager:
                 args.memory,
                 rr=args.rr,
                 valgrind=args.valgrind,
-                xvfb=args.xvfb)
+                xvfb=args.xvfb,
+            )
             # prioritize specified prefs.js file over included file
             if args.prefs is not None:
                 for testcase in testcases:
@@ -671,8 +785,9 @@ class ReduceManager:
                 for testcase in testcases:
                     prefs_tf = testcase.get_file("prefs.js")
                     if prefs_tf:
-                        tmp_prefs = Path(mkdtemp(prefix="prefs_",
-                                                 dir=grz_tmp("replay")))
+                        tmp_prefs = Path(
+                            mkdtemp(prefix="prefs_", dir=grz_tmp("replay"))
+                        )
                         prefs_tf.dump(str(tmp_prefs))
                         LOG.info("Using prefs.js from testcase")
                         target.prefs = str(tmp_prefs / "prefs.js")
@@ -701,7 +816,8 @@ class ReduceManager:
                     static_timeout=args.static_timeout,
                     tool=args.tool,
                     use_analysis=not args.no_analysis,
-                    use_harness=not args.no_harness)
+                    use_harness=not args.no_harness,
+                )
                 return_code = mgr.run(repeat=args.repeat, min_results=args.min_crashes)
             return return_code
 

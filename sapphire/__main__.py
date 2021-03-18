@@ -18,26 +18,31 @@ def configure_logging(log_level):
         log_fmt = "[%(asctime)s] %(message)s"
     basicConfig(format=log_fmt, datefmt=date_fmt, level=log_level)
 
+
 def parse_args(argv=None):
     # log levels for console logging
     level_map = {"DEBUG": DEBUG, "INFO": INFO}
     parser = ArgumentParser()
+    parser.add_argument("path", help="Specify a directory to act as wwwroot")
     parser.add_argument(
-        "path",
-        help="Specify a directory to act as wwwroot")
+        "--log-level",
+        default="INFO",
+        help="Configure console logging. Options: %s (default: %%(default)s)"
+        % ", ".join(k for k, v in sorted(level_map.items(), key=lambda x: x[1])),
+    )
     parser.add_argument(
-        "--log-level", default="INFO",
-        help="Configure console logging. Options: %s (default: %%(default)s)" %
-        ", ".join(k for k, v in sorted(level_map.items(), key=lambda x: x[1])))
+        "--port", type=int, help="Specify a port to bind to (default: random)"
+    )
     parser.add_argument(
-        "--port", type=int,
-        help="Specify a port to bind to (default: random)")
+        "--remote",
+        action="store_true",
+        help="Allow connections from addresses other than 127.0.0.1",
+    )
     parser.add_argument(
-        "--remote", action="store_true",
-        help="Allow connections from addresses other than 127.0.0.1")
-    parser.add_argument(
-        "--timeout", type=int,
-        help="Duration in seconds to serve before exiting. Default run forever.")
+        "--timeout",
+        type=int,
+        help="Duration in seconds to serve before exiting. Default run forever.",
+    )
     args = parser.parse_args(argv)
     # sanity check
     if not isdir(args.path):
@@ -49,6 +54,7 @@ def parse_args(argv=None):
         parser.error("Invalid log-level %r" % (args.log_level,))
     args.log_level = log_level
     return args
+
 
 ARGS = parse_args()
 configure_logging(ARGS.log_level)

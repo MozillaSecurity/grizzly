@@ -25,6 +25,7 @@ def test_args_01(capsys, tmp_path, mocker):
     """test args in common with grizzly.replay"""
     # pylint: disable=import-outside-toplevel
     from ..replay.test_main import test_args_01 as real_test
+
     mocker.patch("grizzly.replay.test_main.ReplayArgs", new=ReduceArgs)
     real_test(capsys, tmp_path)
 
@@ -51,8 +52,9 @@ def test_args_02(tmp_path):
     logs_dir.mkdir()
     ReduceArgs().parse_args([str(exe), str(inp), "--logs", str(logs_dir)])
     # test no-analysis
-    ReduceArgs().parse_args([str(exe), str(inp), "--no-analysis", "--repeat", "99",
-                             "--min-crashes", "99"])
+    ReduceArgs().parse_args(
+        [str(exe), str(inp), "--no-analysis", "--repeat", "99", "--min-crashes", "99"]
+    )
     # these should both log a warning that the args will be ignored due to analysis
     ReduceArgs().parse_args([str(exe), str(inp), "--repeat", "99"])
     ReduceArgs().parse_args([str(exe), str(inp), "--min-crashes", "99"])
@@ -68,32 +70,45 @@ def test_args_02(tmp_path):
     [
         (
             "grizzly.reduce.core.ReduceManager.run",
-            TargetLaunchError("error", None), None, {}, 1
+            TargetLaunchError("error", None),
+            None,
+            {},
+            1,
         ),
         ("grizzly.reduce.core.ReduceManager.run", TargetLaunchTimeout, None, {}, 1),
         ("grizzly.reduce.core.load_target", KeyboardInterrupt, None, {}, 1),
         (
             "grizzly.reduce.core.load_target",
-            GrizzlyReduceBaseException(""), None, {}, 1
+            GrizzlyReduceBaseException(""),
+            None,
+            {},
+            1,
         ),
         (
             "grizzly.reduce.core.ReplayManager.load_testcases",
-            TestCaseLoadFailure, None, {}, 1
+            TestCaseLoadFailure,
+            None,
+            {},
+            1,
         ),
         ("grizzly.reduce.core.ReplayManager.load_testcases", None, [], {}, 1),
         (
-            "grizzly.reduce.core.ReplayManager.load_testcases", None,
+            "grizzly.reduce.core.ReplayManager.load_testcases",
+            None,
             [Mock(hang=False), Mock(hang=False)],
-            {"no_harness": True}, 2
+            {"no_harness": True},
+            2,
         ),
-    ]
+    ],
 )
 def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result):
     """test ReduceManager.main() failure cases"""
     mocker.patch(
-        "grizzly.reduce.core.FuzzManagerReporter", autospec=True,
+        "grizzly.reduce.core.FuzzManagerReporter",
+        autospec=True,
         QUAL_NO_TESTCASE=7,
-        QUAL_REDUCER_ERROR=9)
+        QUAL_REDUCER_ERROR=9,
+    )
     mocker.patch("grizzly.reduce.core.load_target", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
     # setup args
@@ -105,7 +120,8 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result
         relaunch=1,
         repeat=1,
         sig=None,
-        **kwargs)
+        **kwargs
+    )
 
     mocker.patch(patch_func, side_effect=side_effect, return_value=return_value)
     assert ReduceManager.main(args) == result
@@ -116,7 +132,7 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result
     [
         TargetLaunchError,
         TargetLaunchTimeout,
-    ]
+    ],
 )
 def test_main_launch_error(mocker, exc_type):
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
@@ -139,8 +155,9 @@ def test_main_launch_error(mocker, exc_type):
         sig=None,
     )
 
-    exc_obj = exc_type("error",
-                       mocker.Mock() if exc_type is TargetLaunchError else None)
+    exc_obj = exc_type(
+        "error", mocker.Mock() if exc_type is TargetLaunchError else None
+    )
     run.side_effect = exc_obj
     assert ReduceManager.main(args) == 4
     if exc_type is TargetLaunchError:

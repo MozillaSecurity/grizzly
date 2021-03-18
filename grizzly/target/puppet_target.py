@@ -34,7 +34,9 @@ LOG = getLogger(__name__)
 class PuppetTarget(Target):
     __slots__ = ("use_rr", "use_valgrind", "_puppet", "_remove_prefs")
 
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, **kwds):
+    def __init__(
+        self, binary, extension, launch_timeout, log_limit, memory_limit, **kwds
+    ):
         super().__init__(binary, extension, launch_timeout, log_limit, memory_limit)
         self.use_rr = kwds.pop("rr", False)
         self.use_valgrind = kwds.pop("valgrind", False)
@@ -43,9 +45,12 @@ class PuppetTarget(Target):
         self._puppet = FFPuppet(
             use_rr=self.use_rr,
             use_valgrind=self.use_valgrind,
-            use_xvfb=kwds.pop("xvfb", False))
+            use_xvfb=kwds.pop("xvfb", False),
+        )
         if kwds:
-            LOG.warning("PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds))
+            LOG.warning(
+                "PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds)
+            )
 
     def add_abort_token(self, token):
         self._puppet.add_abort_token(token)
@@ -80,19 +85,25 @@ class PuppetTarget(Target):
     @property
     def monitor(self):
         if self._monitor is None:
+
             class _PuppetMonitor(TargetMonitor):
                 # pylint: disable=no-self-argument,protected-access
                 def clone_log(_, log_id, offset=0):
                     return self._puppet.clone_log(log_id, offset=offset)
+
                 def is_running(_):
                     return self._puppet.is_running()
+
                 def is_healthy(_):
                     return self._puppet.is_healthy()
+
                 @property
                 def launches(_):
                     return self._puppet.launches
+
                 def log_length(_, log_id):
                     return self._puppet.log_length(log_id)
+
             self._monitor = _PuppetMonitor()
         return self._monitor
 
@@ -198,7 +209,9 @@ class PuppetTarget(Target):
                     break
                 if elapsed >= timeout:
                     # timeout failure
-                    LOG.warning("gcda file open by pid %d after %0.2fs", gcda_open, elapsed)
+                    LOG.warning(
+                        "gcda file open by pid %d after %0.2fs", gcda_open, elapsed
+                    )
                     try:
                         kill(gcda_open, SIGABRT)
                     except OSError:
@@ -233,7 +246,8 @@ class PuppetTarget(Target):
                 memory_limit=self.memory_limit,
                 prefs_js=self.prefs,
                 extension=self.extension,
-                env_mod=env_mod)
+                env_mod=env_mod,
+            )
         except LaunchError as exc:
             LOG.error("FFPuppet LaunchError: %s", str(exc))
             self.close()
@@ -251,7 +265,9 @@ class PuppetTarget(Target):
             for prefs_template in PrefPicker.templates():
                 if prefs_template.endswith("browser-fuzzing.yml"):
                     LOG.debug("using prefpicker template %r", prefs_template)
-                    tmp_fd, self._prefs = mkstemp(prefix="prefs_", suffix=".js", dir=grz_tmp())
+                    tmp_fd, self._prefs = mkstemp(
+                        prefix="prefs_", suffix=".js", dir=grz_tmp()
+                    )
                     close(tmp_fd)
                     PrefPicker.load_template(prefs_template).create_prefsjs(self._prefs)
                     LOG.debug("generated prefs.js %r", self._prefs)

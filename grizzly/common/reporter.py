@@ -32,6 +32,7 @@ from psutil import disk_usage
 try:
     from boto3 import resource
     from botocore.exceptions import ClientError
+
     _boto_import_error = None  # pylint: disable=invalid-name
     getLogger("botocore").setLevel(WARNING)
     getLogger("boto3").setLevel(WARNING)
@@ -42,7 +43,12 @@ except ImportError as err:
 from .stack_hasher import Stack
 from .utils import grz_tmp
 
-__all__ = ("FilesystemReporter", "FuzzManagerReporter", "Report", "S3FuzzManagerReporter")
+__all__ = (
+    "FilesystemReporter",
+    "FuzzManagerReporter",
+    "Report",
+    "S3FuzzManagerReporter",
+)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -58,8 +64,16 @@ class Report:
     HANG_STACK_HEIGHT = 10
     MAX_LOG_SIZE = 1048576  # 1MB
 
-    __slots__ = ("_crash_info", "_logs", "_signature",  "_target_binary",
-                 "is_hang", "path", "prefix", "stack")
+    __slots__ = (
+        "_crash_info",
+        "_logs",
+        "_signature",
+        "_target_binary",
+        "is_hang",
+        "path",
+        "prefix",
+        "stack",
+    )
 
     def __init__(self, log_path, target_binary, is_hang=False, size_limit=MAX_LOG_SIZE):
         assert isinstance(log_path, str)
@@ -146,7 +160,9 @@ class Report:
             # read in the log files and create a CrashInfo object
             if self._logs.aux is not None:
                 with open(self._logs.aux, "rb") as log_fp:
-                    aux_data = log_fp.read().decode("utf-8", errors="ignore").splitlines()
+                    aux_data = (
+                        log_fp.read().decode("utf-8", errors="ignore").splitlines()
+                    )
             else:
                 aux_data = None
             # create ProgramConfiguration that can be reported to a FM server
@@ -162,13 +178,17 @@ class Report:
                 fm_cfg = ProgramConfiguration(
                     basename(self._target_binary),
                     "x86_64" if cpu == "amd64" else cpu,
-                    system())
-            with open(self._logs.stderr, "rb") as err_fp, open(self._logs.stdout, "rb") as out_fp:
+                    system(),
+                )
+            with open(self._logs.stderr, "rb") as err_fp, open(
+                self._logs.stdout, "rb"
+            ) as out_fp:
                 self._crash_info = CrashInfo.fromRawCrashData(
                     out_fp.read().decode("utf-8", errors="ignore").splitlines(),
                     err_fp.read().decode("utf-8", errors="ignore").splitlines(),
                     fm_cfg,
-                    auxCrashData=aux_data)
+                    auxCrashData=aux_data,
+                )
         return self._crash_info
 
     @property
@@ -183,14 +203,15 @@ class Report:
         """
         if self._signature is None:
             self._signature = self.crash_info.createCrashSignature(
-                maxFrames=self.crash_signature_max_frames(self.crash_info))
+                maxFrames=self.crash_signature_max_frames(self.crash_info)
+            )
         return self._signature
 
     @staticmethod
     def crash_signature_max_frames(crash_info, suggested_frames=8):
         if set(crash_info.backtrace) & {
-                "std::panicking::rust_panic",
-                "std::panicking::rust_panic_with_hook",
+            "std::panicking::rust_panic",
+            "std::panicking::rust_panic_with_hook",
         }:
             # rust panic adds 5-6 frames of noise at the top of the stack
             suggested_frames += 6
@@ -224,7 +245,9 @@ class Report:
         Returns:
             str: The full file path if a match is found otherwise None.
         """
-        re_dump_req = re_compile(r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump")
+        re_dump_req = re_compile(
+            r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump"
+        )
         for fname in (x for x in logs if "minidump" in x):
             with open(fname, "r") as log_fp:
                 data = log_fp.read(65536)
@@ -248,10 +271,13 @@ class Report:
         """
         # pattern to identify the ASan crash triggered when the parent process goes away
         # TODO: this may no longer be required
-        re_e10s_forced = re_compile(r"""
+        re_e10s_forced = re_compile(
+            r"""
             ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
             #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
-            """, DOTALL | VERBOSE)
+            """,
+            DOTALL | VERBOSE,
+        )
         # this is a list of Sanitizer error reports to prioritize
         # Sanitizer reports not included below are deprioritized
         prioritize_tokens = (
@@ -261,7 +287,8 @@ class Report:
             "access-violation on ",
             "attempting free on ",
             "negative-size-param",
-            "-param-overlap")
+            "-param-overlap",
+        )
         found = None
         for fname in (x for x in logs if "asan" in x):
             with open(fname, "r") as log_fp:
@@ -481,7 +508,9 @@ class FilesystemReporter(Reporter):
         # avoid filling the disk
         free_space = disk_usage(log_path).free
         if free_space < self.DISK_SPACE_ABORT:
-            raise RuntimeError("Running low on disk space (%0.1fMB)" % (free_space / 1048576.0,))
+            raise RuntimeError(
+                "Running low on disk space (%0.1fMB)" % (free_space / 1048576.0,)
+            )
         return dest_path
 
 
@@ -496,7 +525,7 @@ class FuzzManagerReporter(Reporter):
     QUAL_REDUCING = 4  # the testcase is currently being reduced
     QUAL_UNREDUCED = 5  # haven't attempted reduction yet (1st attempt, generic reducer)
     QUAL_REQUEST_SPECIFIC = 6  # platform specific reduction requested (2nd attempt)
-    QUAL_NO_TESTCASE = 7  # no testcase was detected (could be the "testcase" is not a testcase)
+    QUAL_NO_TESTCASE = 7  # testcase not detected ("testcase" not a testcase?)
     QUAL_REDUCER_BROKE = 8  # the testcase was reproducible, but broke during reduction
     QUAL_REDUCER_ERROR = 9  # reducer error
     QUAL_NOT_REPRODUCIBLE = 10  # could not reproduce the testcase
@@ -531,15 +560,15 @@ class FuzzManagerReporter(Reporter):
 
         Arguments:
             key (str): key for this data in the metadata dict
-            value (object): JSON serializable object to be included in the FM crash metadata.
-                            The object will be deep-copied.
+            value (object): JSON serializable object to be included in the FM crash
+                            metadata. The object will be deep-copied.
 
         Returns:
             None
         """
         assert isinstance(key, str)
         assert key not in self._extra_metadata
-        # this not only does a deep copy, but also ensures that value is JSON serializable
+        # deep copy and ensure that value is JSON serializable
         self._extra_metadata[key] = loads(dumps(value))
 
     @classmethod
@@ -557,7 +586,7 @@ class FuzzManagerReporter(Reporter):
         trace_path = pathjoin(report.path, "rr-traces")
         if isdir(trace_path):
             LOG.info("Ignored rr trace")
-            self.add_extra_metadata("rr-trace",  "ignored")
+            self.add_extra_metadata("rr-trace", "ignored")
             # remove traces so they are not uploaded to FM (because they are huge)
             # use S3FuzzManagerReporter instead
             rmtree(trace_path)
@@ -568,9 +597,7 @@ class FuzzManagerReporter(Reporter):
         # that were caused by system OOM or bogus other crashes
         with open(report.preferred, "rb") as log_fp:
             log_data = log_fp.read().decode("utf-8", errors="ignore")
-        mem_errs = (
-            "ERROR: Failed to mmap",
-            ": AddressSanitizer failed to allocate")
+        mem_errs = ("ERROR: Failed to mmap", ": AddressSanitizer failed to allocate")
         # ignore sanitizer OOMs missing stack
         for msg in mem_errs:
             if msg in log_data and "#0 " not in log_data:
@@ -588,14 +615,18 @@ class FuzzManagerReporter(Reporter):
             cache_sig_file, cache_metadata = collector.search(report.crash_info)
             if cache_metadata is not None:
                 if cache_metadata["frequent"]:
-                    LOG.info("Frequent crash matched existing signature: %s",
-                             cache_metadata["shortDescription"])
+                    LOG.info(
+                        "Frequent crash matched existing signature: %s",
+                        cache_metadata["shortDescription"],
+                    )
                     if not self.force_report:
                         return None
                 elif "bug__id" in cache_metadata:
-                    LOG.info("Crash matched existing signature (bug %s): %s",
-                             cache_metadata["bug__id"],
-                             cache_metadata["shortDescription"])
+                    LOG.info(
+                        "Crash matched existing signature (bug %s): %s",
+                        cache_metadata["bug__id"],
+                        cache_metadata["shortDescription"],
+                    )
                     # we will still report this one, but no more
                     cache_metadata["frequent"] = True
                 # there is already a signature, initialize count
@@ -604,11 +635,14 @@ class FuzzManagerReporter(Reporter):
                 # there is no signature, create one locally so we can count
                 # the number of times we've seen it
                 max_frames = report.crash_signature_max_frames(report.crash_info)
-                cache_sig_file = collector.generate(report.crash_info, numFrames=max_frames)
+                cache_sig_file = collector.generate(
+                    report.crash_info, numFrames=max_frames
+                )
                 cache_metadata = {
                     "_grizzly_seen_count": 0,
                     "frequent": False,
-                    "shortDescription": report.crash_info.createShortSignature()}
+                    "shortDescription": report.crash_info.createShortSignature(),
+                }
             if cache_sig_file is None:
                 if self._ignored(report):
                     LOG.info("Report is unsupported and is in ignore list")
@@ -636,10 +670,16 @@ class FuzzManagerReporter(Reporter):
             if not isdir(dump_path):
                 mkdir(dump_path)
             test_case.dump(dump_path, include_details=True)
-        report.crash_info.configuration.addMetadata({"grizzly_input": repr(test_case_meta)})
+        report.crash_info.configuration.addMetadata(
+            {"grizzly_input": repr(test_case_meta)}
+        )
         if test_cases:
-            environ_string = " ".join("=".join(kv) for kv in test_cases[0].env_vars.items())
-            report.crash_info.configuration.addMetadata({"recorded_envvars": environ_string})
+            environ_string = " ".join(
+                "=".join(kv) for kv in test_cases[0].env_vars.items()
+            )
+            report.crash_info.configuration.addMetadata(
+                {"recorded_envvars": environ_string}
+            )
         else:
             self.quality = self.QUAL_NO_TESTCASE
         report.crash_info.configuration.addMetadata(self._extra_metadata)
@@ -661,17 +701,23 @@ class FuzzManagerReporter(Reporter):
                 for file_name in dir_files:
                     zip_fp.write(
                         pathjoin(dir_name, file_name),
-                        arcname=pathjoin(arc_path, file_name))
+                        arcname=pathjoin(arc_path, file_name),
+                    )
 
         # override tool name if specified
         if self.tool is not None:
             collector.tool = self.tool
 
         # announce shortDescription if crash is not in a bucket
-        if cache_metadata["_grizzly_seen_count"] == 1 and not cache_metadata["frequent"]:
+        if (
+            cache_metadata["_grizzly_seen_count"] == 1
+            and not cache_metadata["frequent"]
+        ):
             LOG.info("Submitting new crash %r", cache_metadata["shortDescription"])
         # submit results to the FuzzManager server
-        new_entry = collector.submit(report.crash_info, testCase=zip_name, testCaseQuality=self.quality)
+        new_entry = collector.submit(
+            report.crash_info, testCase=zip_name, testCaseQuality=self.quality
+        )
         LOG.info("Logged %d with quality %d", new_entry["id"], self.quality)
 
         # remove zipfile
@@ -727,7 +773,9 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
 
         # Upload to S3
         rr_arc = self.compress_rr_trace(trace_path, report.path)
-        s3.meta.client.upload_file(rr_arc, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"})
+        s3.meta.client.upload_file(
+            rr_arc, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"}
+        )
         unlink(rr_arc)
         self.add_extra_metadata("rr-trace", s3_url)
         return s3_url

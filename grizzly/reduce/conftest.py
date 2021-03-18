@@ -30,4 +30,5 @@ def reporter_sequential_strftime(mocker):
 
     def report_prefix(_):
         return "%04d" % (prefix.call_count,)
+
     prefix.side_effect = report_prefix

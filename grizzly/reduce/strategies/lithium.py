@@ -31,6 +31,7 @@ class _LithiumStrategy(Strategy, ABC):
         strategy_cls (lithium.strategies.Strategy): Lithium strategy type.
         testcase_cls (lithium.testcases.Testcase): Lithium testcase type.
     """
+
     strategy_cls = None
     testcase_cls = None
 
@@ -114,9 +115,13 @@ class _LithiumStrategy(Strategy, ABC):
             LOG.debug("Reduce queue: %r", reduce_queue)
             file = reduce_queue.pop(0)
             file_no += 1
-            LOG.info("[%s] Reducing %s (file %d/%d)", self.name,
-                     file.relative_to(self._testcase_root), file_no,
-                     len(self._files_to_reduce))
+            LOG.info(
+                "[%s] Reducing %s (file %d/%d)",
+                self.name,
+                file.relative_to(self._testcase_root),
+                file_no,
+                len(self._files_to_reduce),
+            )
             lithium_testcase = self.testcase_cls()  # pylint: disable=not-callable
             lithium_testcase.load(file)
             strategy = self.strategy_cls()  # pylint: disable=not-callable
@@ -157,8 +162,7 @@ class _LithiumStrategy(Strategy, ABC):
                     LOG.debug("files being reduced after: %r", self._files_to_reduce)
                     files_to_reduce = set(self._files_to_reduce)
                     reduce_queue = list(sorted(set(reduce_queue) & files_to_reduce))
-                    testcase_root_dirty = \
-                        len(self._files_to_reduce) != num_files_before
+                    testcase_root_dirty = len(self._files_to_reduce) != num_files_before
                     if file not in files_to_reduce:
                         # current reduction was for a purged file
                         break
@@ -182,6 +186,7 @@ class Check(_LithiumStrategy):
     This strategy does no reduction, and only yields once. It is intended to provide a
     pass/fail result in a reduction pipeline.
     """
+
     name = "check"
     strategy_cls = CheckOnly
     testcase_cls = TestcaseLine
@@ -204,14 +209,15 @@ class CollapseEmptyBraces(_LithiumStrategy):
     This strategy tries to collapse empty braces onto the same line between each
     iteration, so that empty blocks can be removed if otherwise possible.
     """
+
     name = "collapsebraces"
     strategy_cls = LithCollapseEmptyBraces
     testcase_cls = TestcaseLine
 
 
 class MinimizeChars(_LithiumStrategy):
-    """Minimize all bytes in the testcase.
-    """
+    """Minimize all bytes in the testcase."""
+
     name = "chars"
     strategy_cls = Minimize
     testcase_cls = TestcaseChar
@@ -224,14 +230,15 @@ class MinimizeJSChars(_LithiumStrategy):
     looks like a quoted string. It also treats escaped characters as a single token
     for reduction.
     """
+
     name = "jschars"
     strategy_cls = Minimize
     testcase_cls = TestcaseJsStr
 
 
 class MinimizeLines(_LithiumStrategy):
-    """Minimize all lines in the testcase.
-    """
+    """Minimize all lines in the testcase."""
+
     name = "lines"
     strategy_cls = Minimize
     testcase_cls = TestcaseLine
@@ -239,6 +246,7 @@ class MinimizeLines(_LithiumStrategy):
 
 class MinimizeAttrs(_LithiumStrategy):
     """Remove HTML/XML attributes and their values."""
+
     name = "attrs"
     strategy_cls = Minimize
     testcase_cls = TestcaseAttrs

@@ -41,6 +41,7 @@ class TargetError(Exception):
 
 class TargetLaunchError(TargetError):
     """Raised if a failure during launch occurs"""
+
     def __init__(self, message, report):
         super().__init__(message)
         self.report = report
@@ -56,8 +57,15 @@ class Target(metaclass=ABCMeta):
     RESULT_IGNORED = 2
 
     __slots__ = (
-        "_lock", "_monitor", "_prefs", "binary", "extension", "launch_timeout",
-        "log_limit", "memory_limit")
+        "_lock",
+        "_monitor",
+        "_prefs",
+        "binary",
+        "extension",
+        "launch_timeout",
+        "log_limit",
+        "memory_limit",
+    )
 
     def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit):
         assert log_limit >= 0

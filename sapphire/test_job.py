@@ -30,6 +30,7 @@ def test_job_01(tmp_path):
     assert not any(job.served)
     assert job.is_complete()
 
+
 def test_job_02(tmp_path):
     """test Job proper handling of required and optional files"""
     opt1_path = tmp_path / "opt_file_1.txt"
@@ -42,8 +43,7 @@ def test_job_02(tmp_path):
     req2_path = tmp_path / "nested" / "req_file_2.txt"
     req2_path.write_bytes(b"d")
     job = Job(
-        str(tmp_path),
-        optional_files=[opt1_path.name, "nested/%s" % (opt2_path.name,)]
+        str(tmp_path), optional_files=[opt1_path.name, "nested/%s" % (opt2_path.name,)]
     )
     assert job.status == SERVED_NONE
     assert not job.is_complete()
@@ -74,6 +74,7 @@ def test_job_02(tmp_path):
     job.finish()
     assert job.is_complete()
 
+
 def test_job_03(tmp_path):
     """test Job redirects"""
     smap = ServerMap()
@@ -89,6 +90,7 @@ def test_job_03(tmp_path):
     assert job.pending == 1
     assert job.remove_pending("two")
     assert job.pending == 0
+
 
 def test_job_04(mocker, tmp_path):
     """test Job includes"""
@@ -142,6 +144,7 @@ def test_job_04(mocker, tmp_path):
     assert not job.is_forbidden(str(srv_root / ".." / "test" / "test_file.txt"))
     assert not job.is_forbidden(str(srv_include / ".." / "root" / "req_file.txt"))
 
+
 def test_job_05(tmp_path):
     """test Job.check_request() with tricky includes"""
     srv_root = tmp_path / "root"
@@ -176,17 +179,18 @@ def test_job_05(tmp_path):
     assert resource.target == str(file_a)
     # inc and inc subdir collision
     # TODO: This can fail. How do we detect or support it?
-    #smap.include.clear()
-    #(inc_dir / "c").mkdir()
-    #inc_c_d = (inc_dir / "c" / "d.bin")
-    #inc_c_d.write_bytes(b"a")
-    #inc_d = (inc_dir / "d.bin")
-    #inc_d.write_bytes(b"a")
-    #smap.include["c"] = Resource(Resource.URL_INCLUDE, str(inc_dir))
-    #smap.include[""] = Resource(Resource.URL_INCLUDE, str(inc_dir / "c"))
-    #resource = job.check_request("c/d.bin")
-    #assert resource.type == Resource.URL_INCLUDE
-    #assert resource.target == str(inc_c_d)
+    # smap.include.clear()
+    # (inc_dir / "c").mkdir()
+    # inc_c_d = (inc_dir / "c" / "d.bin")
+    # inc_c_d.write_bytes(b"a")
+    # inc_d = (inc_dir / "d.bin")
+    # inc_d.write_bytes(b"a")
+    # smap.include["c"] = Resource(Resource.URL_INCLUDE, str(inc_dir))
+    # smap.include[""] = Resource(Resource.URL_INCLUDE, str(inc_dir / "c"))
+    # resource = job.check_request("c/d.bin")
+    # assert resource.type == Resource.URL_INCLUDE
+    # assert resource.target == str(inc_c_d)
+
 
 def test_job_06(tmp_path):
     """test Job dynamic"""
@@ -206,6 +210,7 @@ def test_job_06(tmp_path):
     assert callable(resource.target)
     assert isinstance(resource.mime, str)
 
+
 def test_job_07(tmp_path):
     """test accessing forbidden files"""
     srv_root = tmp_path / "root"
@@ -223,8 +228,8 @@ def test_job_07(tmp_path):
     assert not job.is_forbidden(str(test_1))
     assert job.is_forbidden(str(srv_root / "../no_access.txt"))
 
-@pytest.mark.skipif(platform.system() == "Windows",
-                    reason="Unsupported on Windows")
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="Unsupported on Windows")
 def test_job_08(tmp_path):
     """test Job with file names containing invalid characters"""
     test_file = tmp_path / "test.txt"
@@ -235,10 +240,12 @@ def test_job_08(tmp_path):
     assert job.pending == 1
     assert job.check_request("test.txt").target == str(test_file)
 
+
 def test_job_09():
     """test Job with missing directory"""
     with pytest.raises(OSError):
         Job("missing")
+
 
 def test_job_10(tmp_path):
     """test Job.increment_served() and Job.served"""
@@ -248,6 +255,7 @@ def test_job_10(tmp_path):
     assert "file.bin" in job.served
     job.increment_served("/some/include/path/inc.bin")
     assert "/some/include/path/inc.bin" in job.served
+
 
 def test_job_11():
     """test Job.lookup_mime()"""

@@ -21,7 +21,14 @@ class SessionError(Exception):
 
 
 class LogOutputLimiter:
-    __slots__ = ("_delay", "_iterations", "_launches", "_multiplier", "_time", "_verbose")
+    __slots__ = (
+        "_delay",
+        "_iterations",
+        "_launches",
+        "_multiplier",
+        "_time",
+        "_verbose",
+    )
 
     def __init__(self, delay=300, delta_multiplier=2, verbose=False):
         self._delay = delay  # maximum time delay between output
@@ -59,7 +66,8 @@ class Session:
     EXIT_LAUNCH_FAILURE = 4  # unrelated Target failure (browser startup crash, etc)
     EXIT_FAILURE = 5  # expected results not reproduced (opposite of EXIT_SUCCESS)
 
-    TARGET_LOG_SIZE_WARN = 0x1900000  # display warning when target log files exceed limit (25MB)
+    # display warning when target log files exceed limit (25MB)
+    TARGET_LOG_SIZE_WARN = 0x1900000
 
     __slots__ = (
         "_coverage",
@@ -70,7 +78,7 @@ class Session:
         "reporter",
         "server",
         "status",
-        "target"
+        "target",
     )
 
     def __init__(
@@ -82,7 +90,7 @@ class Session:
         coverage=False,
         enable_profiling=False,
         relaunch=1,
-        report_size=1
+        report_size=1,
     ):
         assert relaunch > 0
         assert report_size > 0
@@ -116,7 +124,8 @@ class Session:
                 self.status.iteration,
                 self.adapter.remaining,
                 self.status.results,
-                self.status.test_name)
+                self.status.test_name,
+            )
         elif log_limiter.ready(self.status.iteration, self.target.monitor.launches):
             LOG.info("I%04d-R%02d ", self.status.iteration, self.status.results)
 
@@ -138,7 +147,7 @@ class Session:
         time_limit,
         input_path=None,
         iteration_limit=0,
-        display_mode=DISPLAY_NORMAL
+        display_mode=DISPLAY_NORMAL,
     ):
         assert time_limit > 0
         assert iteration_limit >= 0
@@ -174,16 +183,19 @@ class Session:
                         "/grz_harness",
                         self.server.port,
                         close_after=relaunch,
-                        time_limit=time_limit)
+                        time_limit=time_limit,
+                    )
                 try:
                     with self.status.measure("launch"):
                         runner.launch(location, max_retries=3, retry_delay=0)
                 except TargetLaunchError as exc:
                     short_sig = exc.report.crash_info.createShortSignature()
-                    LOG.info("Result: %s (%s:%s)",
+                    LOG.info(
+                        "Result: %s (%s:%s)",
                         short_sig,
                         exc.report.major[:8],
-                        exc.report.minor[:8])
+                        exc.report.minor[:8],
+                    )
                     self.reporter.submit([], exc.report)
                     exc.report.cleanup()
                     self.status.count_result(short_sig)
@@ -200,7 +212,8 @@ class Session:
                     ignore,
                     self.iomanager.server_map,
                     current_test,
-                    coverage=self._coverage)
+                    coverage=self._coverage,
+                )
             current_test.duration = result.duration
             # adapter callbacks
             if result.timeout:
@@ -239,10 +252,9 @@ class Session:
                     short_sig = "Potential hang detected"
                 else:
                     short_sig = report.crash_info.createShortSignature()
-                LOG.info("Result: %s (%s:%s)",
-                    short_sig,
-                    report.major[:8],
-                    report.minor[:8])
+                LOG.info(
+                    "Result: %s (%s:%s)", short_sig, report.major[:8], report.minor[:8]
+                )
                 self.reporter.submit(self.iomanager.tests, report)
                 report.cleanup()
                 self.status.count_result(short_sig)
@@ -265,4 +277,6 @@ class Session:
             # warn about large browser logs
             self.status.log_size = self.target.log_size()
             if self.status.log_size > self.TARGET_LOG_SIZE_WARN:
-                LOG.warning("Large browser logs: %dMBs", (self.status.log_size / 0x100000))
+                LOG.warning(
+                    "Large browser logs: %dMBs", (self.status.log_size / 0x100000)
+                )
