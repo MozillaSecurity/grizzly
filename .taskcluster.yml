@@ -1,0 +1,174 @@
+version: 1
+policy:
+  pullRequests: collaborators
+tasks:
+  $let:
+    user: ${event.sender.login}
+
+    fetch_rev:
+      $if: 'tasks_for == "github-pull-request"'
+      then: ${event.pull_request.head.sha}
+      else:
+        $if: 'tasks_for == "github-push"'
+        then: ${event.after}
+        else: ${event.release.tag_name}
+
+    fetch_ref:
+      $if: 'tasks_for == "github-pull-request"'
+      then: ${event.pull_request.head.sha}
+      else:
+        $if: 'tasks_for == "github-push"'
+        then: ${event.after}
+        else: "refs/tags/${event.release.tag_name}:refs/tags/${event.release.tag_name}"
+
+    http_repo:
+      $if: 'tasks_for == "github-pull-request"'
+      then: ${event.pull_request.base.repo.clone_url}
+      else: ${event.repository.clone_url}
+
+    codecov_secret:
+      codecov-grizzly
+
+    pypi_secret:
+      pypi-grizzly
+
+    project_name:
+      Grizzly
+
+  in:
+    $if: 'tasks_for in ["github-push", "github-release"] || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
+    then:
+      $flatten:
+        - $map: []
+          #- {msys: 'NmOU83KwRJGjk-btMbOOPA', toxenv: 'py38', name: 'tests python 3.8'}
+          each(build):
+            taskId: {$eval: as_slugid(build.toxenv + '-win')}
+            provisionerId: proj-fuzzing
+            workerType: ci-windows
+            created: {$fromNow: ''}
+            deadline: {$fromNow: '1 hour'}
+            scopes:
+              - secrets:get:project/fuzzing/${codecov_secret}
+            dependencies:
+              - ${build.msys}
+            payload:
+              env:
+                MSYSTEM: MINGW64
+                TOXENV: ${build.toxenv}
+                CODECOV_SECRET: ${codecov_secret}
+                FETCH_REF: ${fetch_ref}
+                FETCH_REV: ${fetch_rev}
+                CLONE_REPO: ${http_repo}
+              mounts:
+                - format: tar.bz2
+                  content:
+                    taskId: ${build.msys}
+                    artifact: public/msys2.tar.bz2
+                  directory: .
+              command:
+                - "set HOME=%CD%"
+                - "set ARTIFACTS=%CD%"
+                - "set PATH=%CD%\\msys64\\MINGW64\\bin;%PATH%"
+                - "set PATH=%CD%\\msys64\\usr\\bin;%PATH%"
+                - >-
+                  bash -x -e -c "
+                  . py-ci.sh;
+                  clone;
+                  tox;
+                  tox_codecov;"
+              features:
+                taskclusterProxy: true
+              maxRunTime: 900
+            metadata:
+              name: ${project_name} ${build.name} (windows)
+              description: ${project_name} ${build.name} (windows)
+              owner: '${user}@users.noreply.github.com'
+              source: ${http_repo}/raw/${fetch_rev}/.taskcluster.yml
+        - $map:
+          - {image: ci-py-36, toxenv: 'py36', name: 'tests python 3.6'}
+          - {image: ci-py-37, toxenv: 'py37', name: 'tests python 3.7'}
+          - {image: ci-py-38, toxenv: 'py38', name: 'tests python 3.8'}
+          - {image: ci-py-39, toxenv: 'py39', name: 'tests python 3.9'}
+          - {image: ci-py-39, toxenv: 'lint', name: 'lint'}
+          each(build):
+            taskId: {$eval: as_slugid(build.toxenv)}
+            provisionerId: proj-fuzzing
+            workerType: ci
+            created: {$fromNow: ''}
+            deadline: {$fromNow: '1 hour'}
+            scopes:
+              - secrets:get:project/fuzzing/${codecov_secret}
+            payload:
+              maxRunTime: 900
+              image:
+                type: indexed-image
+                path: public/${build.image}.tar.zst
+                namespace: project.fuzzing.orion.${build.image}.master
+              env:
+                TOXENV: ${build.toxenv}
+                CODECOV_SECRET: ${codecov_secret}
+                FETCH_REF: ${fetch_ref}
+                FETCH_REV: ${fetch_rev}
+                CLONE_REPO: ${http_repo}
+              features:
+                taskclusterProxy: true
+              command:
+                - /bin/bash
+                - '--login'
+                - '-x'
+                - '-e'
+                - '-c'
+                - >-
+                  . py-ci.sh;
+                  clone;
+                  tox;
+                  if [[ "${build.toxenv}" != "lint" ]]; then tox_codecov; fi;
+            metadata:
+              name: ${project_name} ${build.name}
+              description: ${project_name} ${build.name}
+              owner: '${user}@users.noreply.github.com'
+              source: ${http_repo}/raw/${fetch_rev}/.taskcluster.yml
+        - $if: 'tasks_for in ["github-release"]'
+          then:
+            - provisionerId: proj-fuzzing
+              workerType: ci
+              dependencies:
+                - {$eval: as_slugid("py36")}
+                - {$eval: as_slugid("py37")}
+                - {$eval: as_slugid("py38")}
+                #- {$eval: as_slugid("py38-win")}
+                - {$eval: as_slugid("py39")}
+                - {$eval: as_slugid("lint")}
+              created: {$fromNow: ''}
+              deadline: {$fromNow: '1 hour'}
+              scopes:
+                - secrets:get:project/fuzzing/${pypi_secret}
+              payload:
+                maxRunTime: 900
+                image:
+                  type: indexed-image
+                  path: public/ci-py-38.tar.zst
+                  namespace: project.fuzzing.orion.ci-py-38.master
+                features:
+                  taskclusterProxy: true
+                env:
+                  TOXENV: pypi
+                  FETCH_REF: ${fetch_ref}
+                  FETCH_REV: ${fetch_rev}
+                  CLONE_REPO: ${http_repo}
+                  PYPI_SECRET: ${pypi_secret}
+                command:
+                  - /bin/bash
+                  - '--login'
+                  - '-x'
+                  - '-e'
+                  - '-c'
+                  - >-
+                    . py-ci.sh;
+                    clone;
+                    tox_pypi;
+              metadata:
+                name: ${project_name} PyPI upload
+                description: ${project_name} PyPI upload
+                owner: '${user}@users.noreply.github.com'
+                source: ${http_repo}/raw/${fetch_rev}/.taskcluster.yml
