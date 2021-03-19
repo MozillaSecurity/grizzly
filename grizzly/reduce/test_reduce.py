@@ -914,10 +914,6 @@ def test_timeout_update(
             idle_delay=idle_input,
             static_timeout=static_timeout,
         )
-        mgr.IDLE_DELAY_MIN = 10
-        mgr.IDLE_DELAY_DURATION_MULTIPLIER = 1.5
-        mgr.ITER_TIMEOUT_MIN = 10
-        mgr.ITER_TIMEOUT_DURATION_MULTIPLIER = 2
         if isinstance(result, type) and issubclass(result, BaseException):
             with raises(result):
                 mgr.run()

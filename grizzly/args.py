@@ -159,7 +159,7 @@ class CommonArgs:
 
     def sanity_check(self, args):
         if hasattr(super(), "sanity_check"):
-            super().sanity_check(args)
+            super().sanity_check(args)  # pylint: disable=no-member
 
         if "binary" not in self._sanity_skip and not isfile(args.binary):
             self.parser.error("file not found: %r" % args.binary)

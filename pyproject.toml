@@ -28,11 +28,13 @@ max-line-length = 88
 
 [tool.pylint.messages_control]
 disable = [
-    "C0330",
-    "C0326",
-    "bad-continuation",
+    "duplicate-code",
     "fixme",
     "import-error",
+    # need to finish adding docs...
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "missing-module-docstring",
     "subprocess-run-check",
     "too-few-public-methods",
     "too-many-arguments",

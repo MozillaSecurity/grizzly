@@ -477,6 +477,7 @@ class FilesystemReporter(Reporter):
 
     def __init__(self, report_path, major_bucket=True):
         self.major_bucket = major_bucket
+        self.min_space = FilesystemReporter.DISK_SPACE_ABORT
         assert isinstance(report_path, str) and report_path
         self.report_path = report_path
 
@@ -507,7 +508,7 @@ class FilesystemReporter(Reporter):
         move(report.path, log_path)
         # avoid filling the disk
         free_space = disk_usage(log_path).free
-        if free_space < self.DISK_SPACE_ABORT:
+        if free_space < self.min_space:
             raise RuntimeError(
                 "Running low on disk space (%0.1fMB)" % (free_space / 1048576.0,)
             )
@@ -533,6 +534,7 @@ class FuzzManagerReporter(Reporter):
     def __init__(self, tool=None):
         self._extra_metadata = {}
         self.force_report = False
+        self.max_reports = FuzzManagerReporter.MAX_REPORTS
         self.quality = self.QUAL_UNREDUCED
         self.tool = tool  # optional tool name
 
@@ -652,7 +654,7 @@ class FuzzManagerReporter(Reporter):
                 raise RuntimeError("Failed to create FM signature")
             # limit the number of times we report per cycle
             cache_metadata["_grizzly_seen_count"] += 1
-            if cache_metadata["_grizzly_seen_count"] >= self.MAX_REPORTS:
+            if cache_metadata["_grizzly_seen_count"] >= self.max_reports:
                 # we will still report this one, but no more
                 cache_metadata["frequent"] = True
             metadata_file = cache_sig_file.replace(".signature", ".metadata")
@@ -751,11 +753,12 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
         s3_bucket = getenv("GRZ_S3_BUCKET")
         assert s3_bucket is not None
         # check for existing minor hash in S3
-        s3 = resource("s3")
+        s3_res = resource("s3")
         s3_key = "rr-%s.tar.bz2" % (report.minor,)
         s3_url = "http://%s.s3.amazonaws.com/%s" % (s3_bucket, s3_key)
         try:
-            s3.Object(s3_bucket, s3_key).load()  # HEAD, doesn't fetch the whole object
+            # HEAD, doesn't fetch the whole object
+            s3_res.Object(s3_bucket, s3_key).load()
         except ClientError as exc:
             if exc.response["Error"]["Code"] == "404":
                 # The object does not exist.
@@ -773,7 +776,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
 
         # Upload to S3
         rr_arc = self.compress_rr_trace(trace_path, report.path)
-        s3.meta.client.upload_file(
+        s3_res.meta.client.upload_file(
             rr_arc, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"}
         )
         unlink(rr_arc)

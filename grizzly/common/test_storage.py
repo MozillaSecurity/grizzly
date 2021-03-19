@@ -259,7 +259,7 @@ def test_testcase_10(tmp_path):
         loaded = TestCase.load_single(str(tmp_path), False)
         try:
             for prop in TestCase.__slots__:
-                if prop.startswith("_") or "redirect_page":
+                if prop.startswith("_") or prop == "redirect_page":
                     continue
                 assert getattr(loaded, prop) == getattr(org, prop)
             assert org._existing_paths == loaded._existing_paths

@@ -104,18 +104,18 @@ class StackFrame:
     def _parse_gdb(cls, input_line):
         if "#" not in input_line:
             return None
-        m = cls._re_gdb.match(input_line)
-        if m is None:
+        match = cls._re_gdb.match(input_line)
+        if match is None:
             return None
-        input_line = m.group("line").strip()
+        input_line = match.group("line").strip()
         if not input_line:
             return None
-        sframe = cls(mode=cls.MODE_GDB, stack_line=m.group("num"))
+        sframe = cls(mode=cls.MODE_GDB, stack_line=match.group("num"))
         # sframe.offset = m.group("off")  # ignore binary offset for now
         # find function/method name
-        m = cls._re_func_name.match(input_line)
-        if m is not None:
-            sframe.function = m.group("func")
+        match = cls._re_func_name.match(input_line)
+        if match is not None:
+            sframe.function = match.group("func")
         # find file name and line number
         if ") at " in input_line:
             input_line = input_line.split(") at ")[-1]
@@ -163,28 +163,30 @@ class StackFrame:
     def _parse_rr(cls, input_line):
         if "rr(" not in input_line:
             return None
-        m = cls._re_rr.match(input_line)
-        if m is None:
+        match = cls._re_rr.match(input_line)
+        if match is None:
             return None
-        return cls(location=m.group("loc"), mode=cls.MODE_RR, offset=m.group("off"))
+        return cls(
+            location=match.group("loc"), mode=cls.MODE_RR, offset=match.group("off")
+        )
 
     @classmethod
     def _parse_rust(cls, input_line):
-        m = cls._re_rust_frame.match(input_line)
-        if m is None:
+        match = cls._re_rust_frame.match(input_line)
+        if match is None:
             return None
-        sframe = cls(mode=cls.MODE_RUST, stack_line=m.group("num"))
-        sframe.function = m.group("line").strip().rsplit("::h", 1)[0]
+        sframe = cls(mode=cls.MODE_RUST, stack_line=match.group("num"))
+        sframe.function = match.group("line").strip().rsplit("::h", 1)[0]
         # Don't bother with the file offset stuff atm
-        # m = cls._re_rust_file.match(input_line) if frame is None else None
-        # if m is not None:
+        # match = cls._re_rust_file.match(input_line) if frame is None else None
+        # if match is not None:
         #    frame = {
         #        "function": None,
         #        "mode": cls.MODE_RUST,
         #        "offset": None,
         #        "stack_line": None,
         #    }
-        #    input_line = m.group("line").strip()
+        #    input_line = match.group("line").strip()
         #    if ":" in input_line:
         #        frame["location"], frame["offset"] = input_line.rsplit(":", 1)
         #    else:
@@ -195,17 +197,17 @@ class StackFrame:
     def _parse_sanitizer(cls, input_line):
         if "#" not in input_line:
             return None
-        m = cls._re_sanitizer.match(input_line)
-        if m is None:
+        match = cls._re_sanitizer.match(input_line)
+        if match is None:
             return None
-        sframe = cls(mode=cls.MODE_SANITIZER, stack_line=m.group("num"))
-        input_line = m.group("line")
+        sframe = cls(mode=cls.MODE_SANITIZER, stack_line=match.group("num"))
+        input_line = match.group("line")
         # check if line is symbolized
-        if m.group("in"):
+        if match.group("in"):
             # find function/method name
-            m = cls._re_func_name.match(input_line)
-            if m is not None:
-                sframe.function = m.group("func")
+            match = cls._re_func_name.match(input_line)
+            if match is not None:
+                sframe.function = match.group("func")
         if input_line.startswith("("):
             input_line = input_line.strip("()")
         # find location (file name or module) and offset (line # or offset)
@@ -221,11 +223,11 @@ class StackFrame:
     def _parse_tsan(cls, input_line):
         if "#" not in input_line:
             return None
-        m = cls._re_tsan.match(input_line)
-        if m is None:
+        match = cls._re_tsan.match(input_line)
+        if match is None:
             return None
-        sframe = cls(mode=cls.MODE_TSAN, stack_line=m.group("num"))
-        input_line = m.group("line")
+        sframe = cls(mode=cls.MODE_TSAN, stack_line=match.group("num"))
+        input_line = match.group("line")
         location = basename(input_line)
         # try to parse file name and line number
         if location:
@@ -236,13 +238,13 @@ class StackFrame:
                     sframe.offset = location.pop(0)
         # use module name if file name cannot be found
         if not sframe.location:
-            sframe.location = m.group("mod")
+            sframe.location = match.group("mod")
         # use module offset if line number cannot be found
         if not sframe.offset:
-            sframe.offset = m.group("off")
-        m = cls._re_func_name.match(input_line)
-        if m is not None:
-            function = m.group("func")
+            sframe.offset = match.group("off")
+        match = cls._re_func_name.match(input_line)
+        if match is not None:
+            function = match.group("func")
             if function and function != "<null>":
                 sframe.function = function
         return sframe
@@ -251,15 +253,15 @@ class StackFrame:
     def _parse_valgrind(cls, input_line):
         if "== " not in input_line:
             return None
-        m = cls._re_valgrind.match(input_line)
-        if m is None:
+        match = cls._re_valgrind.match(input_line)
+        if match is None:
             return None
-        input_line = m.group("line")
+        input_line = match.group("line")
         if input_line is None:  # pragma: no cover
             # this should not happen
             LOG.warning("failure in _parse_valgrind()")
             return None
-        sframe = cls(function=m.group("func"), mode=cls.MODE_VALGRIND)
+        sframe = cls(function=match.group("func"), mode=cls.MODE_VALGRIND)
         try:
             location, sframe.offset = input_line.split(":")
             sframe.location = location.strip()
@@ -291,7 +293,7 @@ class Stack:
     def _calculate_hash(self, major=False):
         if not self.frames or (major and self._major_depth < 1):
             return None
-        h = sha1()
+        shash = sha1()
         if self._height_limit is None:
             offset = 0
         else:
@@ -300,16 +302,16 @@ class Stack:
             if major and depth > self._major_depth:
                 break
             if frame.location is not None:
-                h.update(frame.location.encode("utf-8", errors="ignore"))
+                shash.update(frame.location.encode("utf-8", errors="ignore"))
             if frame.function is not None:
-                h.update(frame.function.encode("utf-8", errors="ignore"))
+                shash.update(frame.function.encode("utf-8", errors="ignore"))
             if major and depth > 1:
                 # only add the offset from the top frame when calculating
                 # the major hash and skip the rest
                 continue
             if frame.offset is not None:
-                h.update(frame.offset.encode("utf-8", errors="ignore"))
-        return h.hexdigest()
+                shash.update(frame.offset.encode("utf-8", errors="ignore"))
+        return shash.hexdigest()
 
     def from_file(self, file_name):  # pragma: no cover
         raise NotImplementedError()  # TODO
@@ -406,24 +408,25 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
     from os import getenv  # pylint: disable=ungrouped-imports
 
-    parser = ArgumentParser()
-    parser.add_argument("input", help="")
-    args = parser.parse_args()
-
     # set output verbosity
     if getenv("DEBUG"):
-        log_level = DEBUG
-        log_fmt = "[%(levelname).1s] %(message)s"
+        basicConfig(
+            format="[%(levelname).1s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+            level=DEBUG,
+        )
     else:
-        log_level = INFO
-        log_fmt = "%(message)s"
-    basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+        basicConfig(format="%(message)s", datefmt="%Y-%m-%d %H:%M:%S", level=INFO)
 
-    with open(args.input, "rb") as fp:
-        stack = Stack.from_text(fp.read().decode("utf-8", errors="ignore"))
+    def main(args):
+        with open(args.input, "rb") as in_fp:
+            stack = Stack.from_text(in_fp.read().decode("utf-8", errors="ignore"))
+        for frame in stack.frames:
+            LOG.info(frame)
+        LOG.info("Minor: %s", stack.minor)
+        LOG.info("Major: %s", stack.major)
+        LOG.info("Frames: %d", len(stack.frames))
 
-    for frame in stack.frames:
-        LOG.info(frame)
-    LOG.info("Minor: %s", stack.minor)
-    LOG.info("Major: %s", stack.major)
-    LOG.info("Frames: %d", len(stack.frames))
+    parser = ArgumentParser()
+    parser.add_argument("input", help="File to scan for stack trace")
+    main(parser.parse_args())

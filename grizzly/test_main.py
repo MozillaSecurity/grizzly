@@ -31,7 +31,7 @@ class FakeArgs:
         self.memory = 0
         self.platform = "fake-target"
         self.prefs = None
-        self.rr = False
+        self.rr = False  # pylint: disable=invalid-name
         self.relaunch = 1000
         self.s3_fuzzmanager = False
         self.time_limit = None

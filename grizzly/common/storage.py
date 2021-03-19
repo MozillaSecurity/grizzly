@@ -562,8 +562,8 @@ class TestFile:
         cloned = type(self)(self._file_name)
         self._fp.seek(0)
         copyfileobj(
-            self._fp, cloned._fp, self.XFER_BUF
-        )  # pylint: disable=protected-access
+            self._fp, cloned._fp, self.XFER_BUF  # pylint: disable=protected-access
+        )
         return cloned
 
     def close(self):
@@ -651,8 +651,8 @@ class TestFile:
         t_file = cls(file_name)
         with open(input_file, "rb") as src_fp:
             copyfileobj(
-                src_fp, t_file._fp, cls.XFER_BUF
-            )  # pylint: disable=protected-access
+                src_fp, t_file._fp, cls.XFER_BUF  # pylint: disable=protected-access
+            )
         return t_file
 
     @property

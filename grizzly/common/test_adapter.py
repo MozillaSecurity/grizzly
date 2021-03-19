@@ -47,7 +47,7 @@ def test_adapter_03(tmp_path):
     harness_file = tmp_path / "harness.html"
     test_data = b"default_harness_data"
     harness_file.write_bytes(test_data)
-    adpt.HARNESS_FILE = str(harness_file)
+    adpt.HARNESS_FILE = str(harness_file)  # pylint: disable=invalid-name
     adpt.enable_harness()
     assert adpt.get_harness() == test_data
     # external harness
