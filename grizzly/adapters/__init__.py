@@ -66,8 +66,6 @@ def load(path=None, skip_failures=True):
                         % (cls.NAME, __adapters__[cls.NAME].__name__, cls.__name__)
                     )
                 __adapters__[cls.NAME] = cls
-        else:
-            LOG.debug("ignored %r", sub)
     LOG.debug("%d adapters loaded", len(__adapters__))
 
 

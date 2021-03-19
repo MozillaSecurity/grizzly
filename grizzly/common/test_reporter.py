@@ -396,7 +396,7 @@ def test_filesystem_reporter_03(tmp_path):
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     reporter = FilesystemReporter(str(tmp_path / "reports"))
-    reporter.DISK_SPACE_ABORT = 2 ** 50
+    reporter.min_space = 2 ** 50
     with pytest.raises(RuntimeError, match="Running low on disk space"):
         reporter.submit([], Report(str(log_path), "fake_bin"))
 
@@ -493,7 +493,7 @@ def test_fuzzmanager_reporter_03(mocker, tmp_path):
     (log_path / "log_stderr.txt").touch()
     (log_path / "log_stdout.txt").touch()
     reporter = FuzzManagerReporter("fake_bin")
-    reporter.MAX_REPORTS = 1
+    reporter.max_reports = 1
     reporter.submit([], Report(str(log_path), "fake_bin"))
     assert fake_collector.return_value.submit.call_count == 1
     meta_data = (tmp_path / "fm_file.metadata").read_text()

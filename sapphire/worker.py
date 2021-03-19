@@ -97,6 +97,7 @@ class Worker:
 
     @classmethod
     def handle_request(cls, conn, serv_job):
+        # pylint: disable=too-many-return-statements
         finish_job = False  # call finish() on return
         try:
             # receive all the incoming data

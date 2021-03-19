@@ -520,6 +520,7 @@ class ReduceManager:
                                         and self._signature_desc is None
                                     ):
                                         self._signature_desc = (
+                                            # pylint: disable=line-too-long
                                             first_expected.report.crash_info.createShortSignature()  # noqa: E501
                                         )
                                 served = None
@@ -700,6 +701,7 @@ class ReduceManager:
         Returns:
             int: 0 for success. non-0 indicates a problem.
         """
+        # pylint: disable=too-many-return-statements
         configure_logging(args.log_level)
         setlocale(LC_ALL, "")
         if args.fuzzmanager:

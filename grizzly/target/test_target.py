@@ -26,7 +26,7 @@ class SimpleTarget(Target):
     def handle_hang(self, ignore_idle=True):
         pass
 
-    def launch(self):
+    def launch(self, _location, _env_mod=None):
         pass
 
     @property

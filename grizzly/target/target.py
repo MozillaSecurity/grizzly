@@ -86,7 +86,7 @@ class Target(metaclass=ABCMeta):
     def __exit__(self, *exc):
         self.cleanup()
 
-    def add_abort_token(self, token):  # pylint: disable=no-self-use,unused-argument
+    def add_abort_token(self, _token):  # pylint: disable=no-self-use
         LOG.warning("add_abort_token() not implemented!")
 
     @abstractmethod
@@ -109,7 +109,7 @@ class Target(metaclass=ABCMeta):
     def detect_failure(self, ignored):
         pass
 
-    def dump_coverage(self):  # pylint: disable=no-self-use
+    def dump_coverage(self, _timeout=0):  # pylint: disable=no-self-use
         LOG.warning("dump_coverage() is not supported!")
 
     @abstractmethod
@@ -117,12 +117,12 @@ class Target(metaclass=ABCMeta):
         pass
 
     # TODO: move to monitor?
-    def is_idle(self, threshold):  # pylint: disable=no-self-use,unused-argument
+    def is_idle(self, _threshold):  # pylint: disable=no-self-use
         LOG.debug("Target.is_idle() not implemented! returning False")
         return False
 
     @abstractmethod
-    def launch(self):
+    def launch(self, _location, _env_mod=None):
         pass
 
     def log_size(self):  # pylint: disable=no-self-use
