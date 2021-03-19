@@ -1,0 +1,52 @@
+repos:
+  - repo: https://github.com/pycqa/isort
+    rev: 5.7.0
+    hooks:
+      - id: isort
+  - repo: https://github.com/asottile/yesqa
+    rev: v1.2.2
+    hooks:
+      - id: yesqa
+  - repo: https://github.com/ambv/black
+    rev: 20.8b1
+    hooks:
+      - id: black
+  - repo: https://github.com/pycqa/pylint
+    rev: pylint-2.7.2
+    hooks:
+      - id: pylint
+  - repo: https://gitlab.com/pycqa/flake8
+    rev: 3.9.0
+    hooks:
+      - id: flake8
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.4.0
+    hooks:
+      - id: check-ast
+      - id: check-docstring-first
+      - id: check-executables-have-shebangs
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: debug-statements
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: mixed-line-ending
+      - id: name-tests-test
+        args: ['--django']
+      - id: check-json
+      - id: requirements-txt-fixer
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.0.0
+    hooks:
+      - id: codespell
+        exclude_types: [json]
+  - repo: https://github.com/marco-c/taskcluster_yml_validator
+    rev: v0.0.7
+    hooks:
+      - id: taskcluster_yml
+  - repo: meta
+    hooks:
+      - id: check-useless-excludes
+
+default_language_version:
+  python: python3
