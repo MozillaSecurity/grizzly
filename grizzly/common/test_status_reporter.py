@@ -94,7 +94,7 @@ def test_status_reporter_04(tmp_path):
     test_path.touch()
     assert not any(StatusReporter._scan(str(tmp_path), re_filter))
     test_path.write_bytes(b"test")
-    assert tuple(StatusReporter._scan(str(tmp_path), re_filter))
+    assert any(StatusReporter._scan(str(tmp_path), re_filter))
 
 
 def test_status_reporter_05(tmp_path):

@@ -111,15 +111,13 @@ class StatusReporter:
 
     @staticmethod
     def _scan(path, fname_pattern):
-        abs_path = os.path.abspath(path)
-        for fname in os.listdir(abs_path):
-            if fname_pattern.match(fname) is None:
+        for entry in os.scandir(path):
+            if fname_pattern.match(entry.name) is None:
                 continue
-            full_path = os.path.join(abs_path, fname)
-            if not os.path.isfile(full_path):
+            if not entry.is_file():
                 continue
-            if os.path.getsize(full_path) > 0:
-                yield full_path
+            if entry.stat().st_size:
+                yield entry.path
 
     def _specific(self):
         """Merged and generate formatted output of status reports.
@@ -283,6 +281,7 @@ class StatusReporter:
         try:
             txt.append(" %s\n" % (str(os.getloadavg()),))
         except AttributeError:
+            # os.getloadavg() is not available on all platforms
             txt.append("\n")
         mem_usage = psutil.virtual_memory()
         txt.append("    Memory : ")
