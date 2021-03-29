@@ -5,12 +5,15 @@
 """test Grizzly status reporter"""
 # pylint: disable=protected-access
 
-import re
 from itertools import count
+from re import match
+from unittest.mock import Mock
 
-import pytest
+from pytest import mark, raises
 
 from .status_reporter import Status, StatusReporter, TracebackReport, main
+
+GBYTES = 1_073_741_824
 
 
 def _fake_sys_info():
@@ -44,10 +47,6 @@ def test_status_reporter_02(tmp_path):
     # missing reports path
     st_rpt = StatusReporter.load()
     assert not st_rpt.reports
-    # missing tb path
-    Status.PATH = str(tmp_path)
-    with pytest.raises(OSError):
-        StatusReporter.load(tb_path="no_dir")
     # empty reports and tb paths
     st_rpt = StatusReporter.load(tb_path=str(tmp_path))
     assert isinstance(st_rpt.reports, list)
@@ -56,25 +55,57 @@ def test_status_reporter_02(tmp_path):
     assert not st_rpt.tracebacks
 
 
-def test_status_reporter_03(mocker):
+@mark.parametrize(
+    "disk, memory, getloadavg",
+    [
+        (Mock(free=12, total=GBYTES), Mock(available=12, total=GBYTES), None),
+        (
+            Mock(free=10.23 * GBYTES, total=100 * GBYTES),
+            Mock(available=1.1 * GBYTES, total=2 * GBYTES),
+            None,
+        ),
+        (
+            Mock(free=12, total=GBYTES),
+            Mock(available=12, total=GBYTES),
+            lambda: "(0.12, 0.34, 0.56)",
+        ),
+    ],
+)
+def test_status_reporter_03(mocker, disk, memory, getloadavg):
     """test StatusReporter._sys_info()"""
-    gbs = 1024 * 1024 * 1024
-    fake_psutil = mocker.patch("grizzly.common.status_reporter.psutil", autospec=True)
-    fake_psutil.cpu_count.return_value = 4
-    fake_psutil.cpu_percent.return_value = 10.0
-    fake_psutil.virtual_memory.return_value = mocker.Mock(available=12, total=gbs)
-    fake_psutil.disk_usage.return_value = mocker.Mock(free=12, total=gbs)
-    sysinfo = StatusReporter._sys_info()
-    assert "MB" in sysinfo
-    fake_psutil.virtual_memory.return_value = mocker.Mock(
-        available=1.1 * gbs, total=2 * gbs
+    mocker.patch(
+        "grizzly.common.status_reporter.cpu_count", autospec=True, return_value=4
     )
-    fake_psutil.disk_usage.return_value = mocker.Mock(free=10.23 * gbs, total=100 * gbs)
+    mocker.patch(
+        "grizzly.common.status_reporter.cpu_percent", autospec=True, return_value=10
+    )
+    mocker.patch(
+        "grizzly.common.status_reporter.disk_usage", autospec=True, return_value=disk
+    )
+    mocker.patch(
+        "grizzly.common.status_reporter.virtual_memory",
+        autospec=True,
+        return_value=memory,
+    )
+    if getloadavg is None:
+        # simulate platform that does not have os.getloadavg()
+        mocker.patch("grizzly.common.status_reporter.getloadavg", None)
+    else:
+        mocker.patch(
+            "grizzly.common.status_reporter.getloadavg",
+            autospec=True,
+            side_effect=getloadavg,
+        )
     sysinfo = StatusReporter._sys_info()
-    assert "MB" not in sysinfo
+    if disk.free < GBYTES or memory.available < GBYTES:
+        assert "MB" in sysinfo
+    else:
+        assert "MB" not in sysinfo
     lines = sysinfo.split("\n")
     assert len(lines) == 3
     assert "CPU & Load : " in lines[0]
+    if getloadavg is not None:
+        assert lines[0].endswith("(0.12, 0.34, 0.56)")
     assert "Memory : " in lines[1]
     assert "Disk : " in lines[2]
     # verify alignment
@@ -85,16 +116,15 @@ def test_status_reporter_03(mocker):
 
 def test_status_reporter_04(tmp_path):
     """test StatusReporter._scan()"""
-    re_filter = re.compile("TEST_FILE")
     (tmp_path / "somefile.txt").touch()
     test_path = tmp_path / "TEST_FILE"
     test_path.mkdir()
-    assert not any(StatusReporter._scan(str(tmp_path), re_filter))
+    assert not any(StatusReporter._scan(str(tmp_path), "TEST_FILE"))
     test_path.rmdir()
     test_path.touch()
-    assert not any(StatusReporter._scan(str(tmp_path), re_filter))
+    assert not any(StatusReporter._scan(str(tmp_path), "TEST_FILE"))
     test_path.write_bytes(b"test")
-    assert any(StatusReporter._scan(str(tmp_path), re_filter))
+    assert any(StatusReporter._scan(str(tmp_path), "TEST_FILE"))
 
 
 def test_status_reporter_05(tmp_path):
@@ -142,7 +172,7 @@ def test_status_reporter_05(tmp_path):
     # verify alignment
     position = len(lines[0].split(":")[0])
     for line in lines:
-        assert re.match(r"\S\s:\s\S", line[position - 2 :])
+        assert match(r"\S\s:\s\S", line[position - 2 :])
 
 
 def test_status_reporter_06(mocker, tmp_path):
@@ -536,6 +566,8 @@ def test_main_03(tmp_path):
 
 
 def test_main_04():
-    """test main() with invalid mode"""
-    with pytest.raises(SystemExit):
+    """test main() with invalid args"""
+    with raises(SystemExit):
         main(["--mode", "invalid"])
+    with raises(SystemExit):
+        main(["--tracebacks", "missing"])
