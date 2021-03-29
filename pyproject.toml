@@ -16,6 +16,9 @@ omit = [
 
 [tool.coverage.report]
 exclude_lines = [
+    "@(abc.)?abstract*",
+    "except ImportError:",
+    "if __name__ == .__main__.:",
     "pragma: no cover",
 ]
 
