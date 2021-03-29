@@ -4,16 +4,23 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
-import argparse
-import logging
-import os
-import re
+from argparse import ArgumentParser
 from collections import defaultdict
 from datetime import timedelta
 from functools import partial
-from time import gmtime, localtime, strftime, time
+from logging import DEBUG, INFO, basicConfig
 
-import psutil
+try:
+    from os import getloadavg
+except ImportError:  # pragma: no cover
+    # os.getloadavg() is not available on all platforms
+    getloadavg = None
+from os import SEEK_CUR, getenv, scandir
+from os.path import isdir
+from re import match
+from time import gmtime, strftime, time
+
+from psutil import cpu_count, cpu_percent, disk_usage, virtual_memory
 
 from .status import Status
 
@@ -80,8 +87,6 @@ class StatusReporter:
         Returns:
             StatusReporter: Contains available status reports and traceback reports.
         """
-        if tb_path is not None and not os.path.isdir(tb_path):
-            raise OSError("%r is not a directory" % (tb_path,))
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
         return cls(list(Status.loadall()), tracebacks=tracebacks)
 
@@ -111,8 +116,8 @@ class StatusReporter:
 
     @staticmethod
     def _scan(path, fname_pattern):
-        for entry in os.scandir(path):
-            if fname_pattern.match(entry.name) is None:
+        for entry in scandir(path):
+            if match(fname_pattern, entry.name) is None:
                 continue
             if not entry.is_file():
                 continue
@@ -274,29 +279,28 @@ class StatusReporter:
         txt.append(
             "CPU & Load : %d @ %0.1f%%"
             % (
-                psutil.cpu_count(),
-                psutil.cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL),
+                cpu_count(),
+                cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL),
             )
         )
-        try:
-            txt.append(" %s\n" % (str(os.getloadavg()),))
-        except AttributeError:
-            # os.getloadavg() is not available on all platforms
+        if getloadavg is not None:
+            txt.append(" %s\n" % (str(getloadavg()),))
+        else:
             txt.append("\n")
-        mem_usage = psutil.virtual_memory()
+        mem_usage = virtual_memory()
         txt.append("    Memory : ")
         if mem_usage.available < 1073741824:  # < 1GB
             txt.append("%dMB" % (mem_usage.available / 1048576,))
         else:
             txt.append("%0.1fGB" % (mem_usage.available / 1073741824.0,))
         txt.append(" of %0.1fGB free\n" % (mem_usage.total / 1073741824.0,))
-        disk_usage = psutil.disk_usage("/")
+        usage = disk_usage("/")
         txt.append("      Disk : ")
-        if disk_usage.free < 1073741824:  # < 1GB
-            txt.append("%dMB" % (disk_usage.free / 1048576,))
+        if usage.free < 1073741824:  # < 1GB
+            txt.append("%dMB" % (usage.free / 1048576,))
         else:
-            txt.append("%0.1fGB" % (disk_usage.free / 1073741824.0,))
-        txt.append(" of %0.1fGB free" % (disk_usage.total / 1073741824.0,))
+            txt.append("%0.1fGB" % (usage.free / 1073741824.0,))
+        txt.append(" of %0.1fGB free" % (usage.total / 1073741824.0,))
         return "".join(txt)
 
     @staticmethod
@@ -313,7 +317,7 @@ class StatusReporter:
             list: A list of TracebackReports.
         """
         tracebacks = list()
-        for screen_log in StatusReporter._scan(path, re.compile(r"screenlog\.\d+")):
+        for screen_log in StatusReporter._scan(path, r"screenlog\.\d+"):
             tbr = TracebackReport.from_file(screen_log, max_preceeding=max_preceeding)
             if tbr is None:
                 continue
@@ -363,7 +367,7 @@ class TracebackReport:
                         break
                     if len(chunk) == cls.READ_LIMIT:
                         # seek back to avoid missing beginning of token
-                        in_fp.seek(len(token) * -1, os.SEEK_CUR)
+                        in_fp.seek(len(token) * -1, SEEK_CUR)
                 else:
                     # no traceback here, move along
                     return None
@@ -390,7 +394,7 @@ class TracebackReport:
                     # stop at first empty line
                     tb_end = min(line_num, line_count)
                     break
-                if re.match(r"^\w+(\.\w+)*\:\s|^\w+(Interrupt|Error)$", log_line):
+                if match(r"^\w+(\.\w+)*\:\s|^\w+(Interrupt|Error)$", log_line):
                     is_kbi = log_line.startswith("KeyboardInterrupt")
                     # stop after error message
                     tb_end = min(line_num + 1, line_count)
@@ -430,15 +434,16 @@ def main(args=None):
     Returns:
         None
     """
-    log_level = logging.INFO
-    log_fmt = "[%(asctime)s] %(message)s"
-    if bool(os.getenv("DEBUG")):  # pragma: no cover
-        log_level = logging.DEBUG
+    if bool(getenv("DEBUG")):  # pragma: no cover
+        log_level = DEBUG
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
-    logging.basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
+    else:
+        log_level = INFO
+        log_fmt = "[%(asctime)s] %(message)s"
+    basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
     modes = ("status",)
-    parser = argparse.ArgumentParser(description="Grizzly status report generator")
+    parser = ArgumentParser(description="Grizzly status report generator")
     parser.add_argument("--dump", help="File to write report to")
     parser.add_argument(
         "--mode",
@@ -456,9 +461,11 @@ def main(args=None):
         help="Scan path for Python tracebacks found in screenlog.# files",
     )
     args = parser.parse_args(args)
-
     if args.mode not in modes:
         parser.error("Invalid mode %r" % args.mode)
+    if args.tracebacks and not isdir(args.tracebacks):
+        parser.error("--tracebacks must be a directory")
+
     reporter = StatusReporter.load(tb_path=args.tracebacks)
     if args.dump:
         reporter.dump_summary(args.dump)
@@ -468,7 +475,7 @@ def main(args=None):
         return 0
     print(
         "Grizzly Status - %s - Instance report frequency: %ds\n"
-        % (strftime("%Y/%m/%d %X", localtime()), Status.REPORT_FREQ)
+        % (strftime("%Y/%m/%d %X"), Status.REPORT_FREQ)
     )
     print("[Reports]")
     reporter.print_specific()
