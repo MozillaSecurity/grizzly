@@ -8,7 +8,7 @@ from pytest import raises
 from .args import GrizzlyArgs
 
 
-def test_grizzly_args_01(capsys, tmp_path):
+def test_grizzly_args_01(capsys, mocker, tmp_path):
     """test GrizzlyArgs.parse_args()"""
     # test help
     with raises(SystemExit):
@@ -18,13 +18,19 @@ def test_grizzly_args_01(capsys, tmp_path):
     # test success
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
-    argp = GrizzlyArgs()
-    argp._adapters = ["test_adapter"]
-    assert argp.parse_args(argv=[str(fake_bin), "test_adapter"])
+    mocker.patch(
+        "grizzly.args.scan_plugins",
+        autospec=True,
+        side_effect=(["targ1"], ["adpt1"], ["targ1"], ["adpt1"]),
+    )
+    assert GrizzlyArgs().parse_args(
+        argv=[str(fake_bin), "adpt1", "--platform", "targ1"]
+    )
 
 
-def test_grizzly_args_03(capsys):
+def test_grizzly_args_02(capsys, mocker):
     """test GrizzlyArgs.parse_args() handling binary"""
+    mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=["blah"])
     # test missing required args
     with raises(SystemExit):
         GrizzlyArgs().parse_args(argv=[])
@@ -37,22 +43,23 @@ def test_grizzly_args_03(capsys):
     assert "error: file not found: 'missing_bin'" in err
 
 
-def test_grizzly_args_04(capsys, tmp_path):
-    """test GrizzlyArgs.parse_args() handling adapter"""
+def test_grizzly_args_03(capsys, mocker, tmp_path):
+    """test GrizzlyArgs.parse_args() handling Adapter"""
+    scan_plugins = mocker.patch("grizzly.args.scan_plugins", autospec=True)
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
-    # no adapters
+    # no adapters installed
+    scan_plugins.side_effect = (["targ1"], [], ["targ1"], [])
     with raises(SystemExit):
-        GrizzlyArgs().parse_args(argv=[str(fake_bin), "missing"])
+        GrizzlyArgs().parse_args(argv=[str(fake_bin), "adpt", "--platform", "targ1"])
     _, err = capsys.readouterr()
-    assert "error: Adapter 'missing' does not exist. No adapters available." in err
+    assert "error: No Adapters are installed" in err
     # invalid adapter name
-    argp = GrizzlyArgs()
-    argp._adapters = ["a1", "b2"]
+    scan_plugins.side_effect = (["targ1"], ["a1", "a2"], ["targ1"], ["a1", "a2"])
     with raises(SystemExit):
-        argp.parse_args(argv=[str(fake_bin), "missing"])
+        GrizzlyArgs().parse_args(argv=[str(fake_bin), "missing", "--platform", "targ1"])
     _, err = capsys.readouterr()
-    assert "error: Adapter 'missing' does not exist. Available adapters: a1, b2" in err
+    assert "error: Adapter 'missing' is not installed" in err
 
 
 # TODO: Add CommonArgs tests

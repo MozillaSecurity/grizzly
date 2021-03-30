@@ -8,28 +8,19 @@ from .adapter import Adapter, AdapterError
 
 
 class SimpleAdapter(Adapter):
-    NAME = "simple"
-
     def generate(self, testcase, server_map):
         pass
 
 
 def test_adapter_01():
-    """test a bad Adapter"""
-
-    class BadAdapter(SimpleAdapter):
-        NAME = None
-
-    with pytest.raises(AdapterError, match="BadAdapter.NAME must be a string"):
-        BadAdapter()
-
-
-def test_adapter_02():
     """test a simple Adapter"""
-    adpt = SimpleAdapter()
+    with pytest.raises(AdapterError, match="name must not be empty"):
+        SimpleAdapter("")
+    adpt = SimpleAdapter("simple")
     assert isinstance(adpt.fuzz, dict)
     assert not adpt.fuzz
     assert adpt.monitor is None
+    assert adpt.name == "simple"
     assert adpt.remaining is None
     assert adpt.get_harness() is None
     adpt.setup(None, None)
@@ -40,16 +31,12 @@ def test_adapter_02():
     adpt.cleanup()
 
 
-def test_adapter_03(tmp_path):
+def test_adapter_02(tmp_path):
     """test Adapter.enable_harness()"""
-    adpt = SimpleAdapter()
+    adpt = SimpleAdapter("a")
     # built-in harness
-    harness_file = tmp_path / "harness.html"
-    test_data = b"default_harness_data"
-    harness_file.write_bytes(test_data)
-    adpt.HARNESS_FILE = str(harness_file)  # pylint: disable=invalid-name
     adpt.enable_harness()
-    assert adpt.get_harness() == test_data
+    assert adpt.get_harness()
     # external harness
     ext_harness_file = tmp_path / "ext_harness.html"
     test_data = b"external_harness_data"
@@ -58,7 +45,7 @@ def test_adapter_03(tmp_path):
     assert adpt.get_harness() == test_data
 
 
-def test_adapter_04(tmp_path):
+def test_adapter_03(tmp_path):
     """test Adapter.scan_path()"""
     # empty path
     assert not any(SimpleAdapter.scan_path(str(tmp_path)))
