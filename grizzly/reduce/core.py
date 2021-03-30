@@ -19,14 +19,14 @@ from FTB.Signatures.CrashInfo import CrashSignature
 from sapphire import Sapphire
 
 from ..common.fuzzmanager import CrashEntry
+from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter
 from ..common.storage import TestCaseLoadFailure, TestFile
 from ..common.utils import ConfigError, grz_tmp
 from ..main import configure_logging
 from ..replay import ReplayManager
 from ..session import Session
-from ..target import TargetLaunchError, TargetLaunchTimeout
-from ..target import load as load_target
+from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
 from .stats import ReductionStats
 from .strategies import STRATEGIES
@@ -767,7 +767,7 @@ class ReduceManager:
             args.repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, args.repeat)
             LOG.debug("initializing the Target")
-            target = load_target(args.platform)(
+            target = load_plugin(args.platform, "grizzly_targets", Target)(
                 args.binary,
                 args.extension,
                 args.launch_timeout,
@@ -844,7 +844,7 @@ class ReduceManager:
             LOG.error(exc.msg)
             return exc.code
 
-        except Exception:  # noqa pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except
             LOG.exception("Exception during reduction!")
             return Session.EXIT_ERROR
 

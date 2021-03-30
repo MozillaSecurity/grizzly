@@ -76,9 +76,9 @@ def test_args_02(tmp_path):
             1,
         ),
         ("grizzly.reduce.core.ReduceManager.run", TargetLaunchTimeout, None, {}, 1),
-        ("grizzly.reduce.core.load_target", KeyboardInterrupt, None, {}, 1),
+        ("grizzly.reduce.core.load_plugin", KeyboardInterrupt, None, {}, 1),
         (
-            "grizzly.reduce.core.load_target",
+            "grizzly.reduce.core.load_plugin",
             GrizzlyReduceBaseException(""),
             None,
             {},
@@ -109,7 +109,7 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result
         QUAL_NO_TESTCASE=7,
         QUAL_REDUCER_ERROR=9,
     )
-    mocker.patch("grizzly.reduce.core.load_target", autospec=True)
+    mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
     # setup args
     args = mocker.Mock(
@@ -137,7 +137,7 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result
 def test_main_launch_error(mocker, exc_type):
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
-    mocker.patch("grizzly.reduce.core.load_target", autospec=True)
+    mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)
     mocker.patch("grizzly.reduce.core.ReplayManager.load_testcases")
     mocker.patch(
         "grizzly.reduce.core.ReplayManager.time_limits", return_value=(None, 10)
@@ -173,7 +173,7 @@ def test_main_launch_error(mocker, exc_type):
 def test_testcase_prefs(mocker, tmp_path, result):
     """test that prefs from testcase are used if --prefs not specified and --prefs
     overrides"""
-    load_target = mocker.patch("grizzly.reduce.core.load_target")
+    load_target = mocker.patch("grizzly.reduce.core.load_plugin")
     mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
     rmtree_mock = mocker.patch("grizzly.reduce.core.rmtree", autospec=True)

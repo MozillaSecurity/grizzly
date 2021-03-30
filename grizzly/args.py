@@ -7,9 +7,8 @@ from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import listdir
 from os.path import exists, isdir, isfile
 
-from .adapters import names as adapter_names
+from .common.plugins import scan as scan_plugins
 from .common.utils import TIMEOUT_DELAY
-from .target import available as available_targets
 
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
@@ -94,7 +93,7 @@ class CommonArgs:
             "--platform",
             default="ffpuppet",
             help="Platforms available: %s (default: %%(default)s)"
-            % ", ".join(available_targets()),
+            % ", ".join(scan_plugins("grizzly_targets")),
         )
         self.launcher_grp.add_argument("-p", "--prefs", help="prefs.js file to use")
         self.launcher_grp.add_argument(
@@ -160,6 +159,9 @@ class CommonArgs:
     def sanity_check(self, args):
         if hasattr(super(), "sanity_check"):
             super().sanity_check(args)  # pylint: disable=no-member
+        targets = scan_plugins("grizzly_targets")
+        if not targets:
+            self.parser.error("No Target platforms are installed")
 
         if "binary" not in self._sanity_skip and not isfile(args.binary):
             self.parser.error("file not found: %r" % args.binary)
@@ -200,7 +202,7 @@ class CommonArgs:
                 if not isdir(ext) or (isfile(ext) and ext.endswith(".xpi")):
                     self.parser.error("Extension must be a folder or .xpi")
 
-        if args.platform.lower() not in set(available_targets()):
+        if args.platform not in targets:
             self.parser.error("Unsupported platform %r" % args.platform)
 
         if args.prefs and not isfile(args.prefs):
@@ -220,10 +222,10 @@ class CommonArgs:
 class GrizzlyArgs(CommonArgs):
     def __init__(self):
         super().__init__()
-        self._adapters = sorted(adapter_names())
         self._sanity_skip.add("tool")
         self.parser.add_argument(
-            "adapter", help="Available adapters: %s" % ", ".join(self._adapters)
+            "adapter",
+            help="Available adapters: %s" % ", ".join(scan_plugins("grizzly_adapters")),
         )
         self.parser.add_argument(
             "--enable-profiling",
@@ -274,14 +276,12 @@ class GrizzlyArgs(CommonArgs):
 
     def sanity_check(self, args):
         super().sanity_check(args)
+        adapters = scan_plugins("grizzly_adapters")
+        if not adapters:
+            self.parser.error("No Adapters are installed")
 
-        if args.adapter.lower() not in self._adapters:
-            msg = ["Adapter %r does not exist." % args.adapter.lower()]
-            if self._adapters:
-                msg.append("Available adapters: %s" % ", ".join(self._adapters))
-            else:
-                msg.append("No adapters available.")
-            self.parser.error(" ".join(msg))
+        if args.adapter not in adapters:
+            self.parser.error("Adapter %r is not installed" % (args.adapter,))
 
         if args.collect < 1:
             self.parser.error("--collect must be greater than 0")

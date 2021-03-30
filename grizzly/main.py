@@ -8,7 +8,8 @@ from os.path import join as pathjoin
 
 from sapphire import Sapphire
 
-from .adapters import get as get_adapter
+from .adapter import Adapter
+from .common.plugins import load as load_plugin
 from .common.reporter import (
     FilesystemReporter,
     FuzzManagerReporter,
@@ -16,8 +17,7 @@ from .common.reporter import (
 )
 from .common.utils import TIMEOUT_DELAY
 from .session import Session
-from .target import TargetLaunchError, TargetLaunchTimeout
-from .target import load as load_target
+from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
@@ -27,6 +27,7 @@ LOG = getLogger(__name__)
 
 
 def configure_logging(log_level):
+    # TODO: move this to grizzly.common.utils
     if getenv("DEBUG") == "1":
         log_level = DEBUG
     if log_level == DEBUG:
@@ -52,7 +53,7 @@ def main(args):
         LOG.info("Running with Xvfb")
     if args.rr:
         LOG.info("Running with RR")
-    elif args.valgrind:
+    if args.valgrind:
         LOG.info("Running with Valgrind. This will be SLOW!")
 
     adapter = None
@@ -60,7 +61,7 @@ def main(args):
     target = None
     try:
         LOG.debug("initializing Adapter %r", args.adapter)
-        adapter = get_adapter(args.adapter)()
+        adapter = load_plugin(args.adapter, "grizzly_adapters", Adapter)(args.adapter)
 
         # test time limit and timeout sanity checking
         if args.time_limit:
@@ -88,8 +89,8 @@ def main(args):
         else:
             relaunch = args.relaunch
 
-        LOG.debug("initializing the Target")
-        target = load_target(args.platform)(
+        LOG.debug("initializing the Target %r", args.platform)
+        target = load_plugin(args.platform, "grizzly_targets", Target)(
             args.binary,
             args.extension,
             args.launch_timeout,

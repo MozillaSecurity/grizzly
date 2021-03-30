@@ -131,7 +131,7 @@ class Session:
 
     def generate_testcase(self, time_limit):
         LOG.debug("calling iomanager.create_testcase()")
-        test = self.iomanager.create_testcase(self.adapter.NAME, time_limit)
+        test = self.iomanager.create_testcase(self.adapter.name, time_limit)
         LOG.debug("calling self.adapter.generate()")
         with self.status.measure("generate"):
             self.adapter.generate(test, self.iomanager.server_map)

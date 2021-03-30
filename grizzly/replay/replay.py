@@ -13,6 +13,7 @@ from FTB.Signatures.CrashInfo import CrashSignature
 
 from sapphire import Sapphire, ServerMap
 
+from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner, RunResult
 from ..common.status import Status
@@ -20,8 +21,7 @@ from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
 from ..common.utils import TIMEOUT_DELAY, ConfigError, grz_tmp
 from ..main import configure_logging
 from ..session import Session
-from ..target import TargetLaunchError, TargetLaunchTimeout
-from ..target import load as load_target
+from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -596,7 +596,7 @@ class ReplayManager:
                 relaunch,
             )
             LOG.debug("initializing the Target")
-            target = load_target(args.platform)(
+            target = load_plugin(args.platform, "grizzly_targets", Target)(
                 args.binary,
                 args.extension,
                 args.launch_timeout,

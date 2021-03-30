@@ -31,15 +31,14 @@ class Adapter(metaclass=ABCMeta):
         fuzz (dict): Available as a safe scratch pad for the end-user.
         monitor (TargetMonitor): Used to provide Target status information to
                                  the adapter.
+        name (str): Name of the adapter.
         remaining (int): Can be used to indicate the number of TestCases
                          remaining to process.
     """
 
-    HARNESS_FILE = pathjoin(dirname(__file__), "harness.html")
+    HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
     # Only report test cases with served content.
     IGNORE_UNSERVED = True
-    # This is used as the identifier when launching Grizzly. Must be a unique string.
-    NAME = None
     # Maximum iterations between Target relaunches (<1 use default)
     RELAUNCH = 0
     # Maximum execution time per test (used as minimum timeout). The iteration is
@@ -47,14 +46,16 @@ class Adapter(metaclass=ABCMeta):
     # close it.
     TIME_LIMIT = 30
 
-    __slots__ = ("_harness", "fuzz", "monitor", "remaining")
+    __slots__ = ("_harness", "fuzz", "monitor", "name", "remaining")
 
-    def __init__(self):
-        if not isinstance(self.NAME, str):
-            raise AdapterError("%s.NAME must be a string" % (type(self).__name__,))
+    def __init__(self, name):
+        assert isinstance(name, str)
+        if not name:
+            raise AdapterError("name must not be empty")
         self._harness = None
         self.fuzz = dict()
         self.monitor = None
+        self.name = name
         self.remaining = None
 
     def cleanup(self):

@@ -10,26 +10,25 @@ from pytest import mark, raises
 
 from sapphire import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT, Sapphire
 
-from .common import Adapter, Report, Reporter, RunResult, Status
+from .adapter import Adapter
+from .common import Report, Reporter, RunResult, Status
 from .session import LogOutputLimiter, Session, SessionError
 from .target import Target, TargetLaunchError
 
 
 class SimpleAdapter(Adapter):
-    NAME = "simple"
-
     def __init__(self, use_harness, remaining=None):
-        super().__init__()
+        super().__init__("simple")
         self.remaining = remaining
         self._use_harness = use_harness
 
-    def setup(self, input_path, server_map):
+    def setup(self, input_path, _server_map):
         if self._use_harness:
             self.enable_harness()
         self.fuzz["input"] = input_path
 
-    def generate(self, testcase, server_map):
-        assert testcase.adapter_name == self.NAME
+    def generate(self, testcase, _server_map):
+        assert testcase.adapter_name == self.name
         testcase.input_fname = self.fuzz["input"]
         testcase.add_from_data("test", testcase.landing_page)
         if self.remaining is not None:
@@ -206,9 +205,7 @@ def test_session_04(mocker, tmp_path):
     """test Adapter creating invalid test case"""
 
     class FuzzAdapter(Adapter):
-        NAME = "fuzz"
-
-        def generate(self, testcase, server_map):
+        def generate(self, _testcase, _server_map):
             pass
 
     Status.PATH = str(tmp_path)
@@ -216,7 +213,7 @@ def test_session_04(mocker, tmp_path):
     server.serve_path.return_value = (SERVED_NONE, [])
     target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
     target.monitor.launches = 1
-    with Session(FuzzAdapter(), None, server, target) as session:
+    with Session(FuzzAdapter("fuzz"), None, server, target) as session:
         with raises(SessionError, match="Test case is missing landing page"):
             session.run([], 10)
 
