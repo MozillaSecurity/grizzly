@@ -2,8 +2,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from logging import DEBUG, basicConfig, getLogger
-from os import getcwd, getenv, getpid
+from logging import DEBUG, getLogger
+from os import getcwd, getpid
 from os.path import join as pathjoin
 
 from sapphire import Sapphire
@@ -15,7 +15,7 @@ from .common.reporter import (
     FuzzManagerReporter,
     S3FuzzManagerReporter,
 )
-from .common.utils import TIMEOUT_DELAY
+from .common.utils import TIMEOUT_DELAY, configure_logging
 from .session import Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -24,19 +24,6 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
 LOG = getLogger(__name__)
-
-
-def configure_logging(log_level):
-    # TODO: move this to grizzly.common.utils
-    if getenv("DEBUG") == "1":
-        log_level = DEBUG
-    if log_level == DEBUG:
-        date_fmt = None
-        log_fmt = "%(asctime)s %(levelname).1s %(name)s | %(message)s"
-    else:
-        date_fmt = "%Y-%m-%d %H:%M:%S"
-        log_fmt = "[%(asctime)s] %(message)s"
-    basicConfig(format=log_fmt, datefmt=date_fmt, level=log_level)
 
 
 def main(args):
