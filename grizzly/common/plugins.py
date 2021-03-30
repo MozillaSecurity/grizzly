@@ -20,12 +20,13 @@ def load(name, group, base_type):
     """Load a plug-in.
 
     Args:
-        name (str):
-        group (str):
-        base_type (*): Used to validate loaded objects.
+        name (str): Name of entry point to load.
+        group (str): Group containing entry point.
+        base_type (type): Used to validate loaded objects.
     Returns:
         *: Python object.
     """
+    assert isinstance(base_type, type)
     for entry in iter_entry_points(group):
         if entry.name == name:
             LOG.debug("loading %r (%s)", name, base_type.__name__)
@@ -39,13 +40,13 @@ def load(name, group, base_type):
 
 
 def scan(group):
-    """Scan for available plug-ins.
+    """Scan for installed plug-ins.
 
     Args:
         group (str): Entry point group to scan.
 
     Returns:
-        list: Names of available entry points.
+        list: Names of installed entry points.
     """
     found = list()
     LOG.debug("scanning %r", group)

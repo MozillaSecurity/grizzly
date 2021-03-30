@@ -92,8 +92,8 @@ class CommonArgs:
         self.launcher_grp.add_argument(
             "--platform",
             default="ffpuppet",
-            help="Platforms available: %s (default: %%(default)s)"
-            % ", ".join(scan_plugins("grizzly_targets")),
+            help="Installed Platforms (Targets): %s (default: %%(default)s)"
+            % ", ".join(sorted(scan_plugins("grizzly_targets"))),
         )
         self.launcher_grp.add_argument("-p", "--prefs", help="prefs.js file to use")
         self.launcher_grp.add_argument(
@@ -161,7 +161,7 @@ class CommonArgs:
             super().sanity_check(args)  # pylint: disable=no-member
         targets = scan_plugins("grizzly_targets")
         if not targets:
-            self.parser.error("No Target platforms are installed")
+            self.parser.error("No Platforms (Targets) are installed")
 
         if "binary" not in self._sanity_skip and not isfile(args.binary):
             self.parser.error("file not found: %r" % args.binary)
@@ -225,7 +225,8 @@ class GrizzlyArgs(CommonArgs):
         self._sanity_skip.add("tool")
         self.parser.add_argument(
             "adapter",
-            help="Available adapters: %s" % ", ".join(scan_plugins("grizzly_adapters")),
+            help="Installed Adapters: %s"
+            % ", ".join(sorted(scan_plugins("grizzly_adapters"))),
         )
         self.parser.add_argument(
             "--enable-profiling",
