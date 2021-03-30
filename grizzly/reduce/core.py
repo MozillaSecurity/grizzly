@@ -22,8 +22,7 @@ from ..common.fuzzmanager import CrashEntry
 from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter
 from ..common.storage import TestCaseLoadFailure, TestFile
-from ..common.utils import ConfigError, grz_tmp
-from ..main import configure_logging
+from ..common.utils import ConfigError, configure_logging, grz_tmp
 from ..replay import ReplayManager
 from ..session import Session
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout

@@ -18,8 +18,7 @@ from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner, RunResult
 from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
-from ..common.utils import TIMEOUT_DELAY, ConfigError, grz_tmp
-from ..main import configure_logging
+from ..common.utils import TIMEOUT_DELAY, ConfigError, configure_logging, grz_tmp
 from ..session import Session
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 

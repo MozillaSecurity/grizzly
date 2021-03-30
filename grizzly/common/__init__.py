@@ -14,11 +14,12 @@ from .reporter import (
 from .runner import Runner, RunResult
 from .status import Status
 from .storage import TestCase, TestCaseLoadFailure, TestFile, TestFileExists
-from .utils import grz_tmp
+from .utils import configure_logging, grz_tmp
 
 __all__ = (
     "FilesystemReporter",
     "FuzzManagerReporter",
+    "configure_logging",
     "grz_tmp",
     "IOManager",
     "Report",
