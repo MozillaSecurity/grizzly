@@ -8,72 +8,15 @@ unit tests for grizzly.replay.main
 """
 from shutil import rmtree
 
-from pytest import mark, raises
+from pytest import mark
 
 from sapphire import SERVED_ALL
 
 from ..common import Report, TestCase, TestCaseLoadFailure
-from ..replay import ReplayManager
-from ..replay.args import ReplayArgs
 from ..session import Session
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
+from .replay import ReplayManager
 from .test_replay import _fake_save_logs
-
-
-def test_args_01(capsys, tmp_path):
-    """test parsing args"""
-    # missing args tests
-    with raises(SystemExit):
-        ReplayArgs().parse_args([])
-    # specified prefs.js missing
-    exe = tmp_path / "binary"
-    exe.touch()
-    inp = tmp_path / "input"
-    inp.mkdir()
-    (inp / "somefile").touch()
-    (inp / "test_info.json").touch()
-    with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp / "somefile"), "--prefs", "missing"])
-    assert "error: -p/--prefs not found 'missing'" in capsys.readouterr()[-1]
-    # test case directory
-    (inp / "prefs.js").touch()
-    ReplayArgs().parse_args([str(exe), str(inp)])
-    # test case file
-    ReplayArgs().parse_args(
-        [str(exe), str(inp / "somefile"), "--prefs", str(inp / "prefs.js")]
-    )
-    # test negative min-crashes value
-    with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp), "--min-crashes", "-1"])
-    assert "error: '--min-crashes' value must be positive" in capsys.readouterr()[-1]
-    # test negative repeat value
-    with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp), "--repeat", "-1"])
-    assert "error: '--repeat' value must be positive" in capsys.readouterr()[-1]
-    # test missing signature file
-    with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp), "--sig", "missing"])
-    assert "error: signature file not found" in capsys.readouterr()[-1]
-    # test any crash and signature
-    with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp), "--any-crash", "--sig", "x"])
-    assert (
-        "error: signature is ignored when running with '--any-crash'"
-        in capsys.readouterr()[-1]
-    )
-    # test multiple debuggers
-    with raises(SystemExit):
-        ReplayArgs().parse_args([str(exe), str(inp), "--rr", "--valgrind"])
-    assert "'--rr' and '--valgrind' cannot be used together" in capsys.readouterr()[-1]
-    # test idle args
-    with raises(SystemExit):
-        ReplayArgs().parse_args(
-            [str(exe), str(inp), "--idle-threshold", "1", "--idle-delay", "0"]
-        )
-    assert "'--idle-delay' value must be positive" in capsys.readouterr()[-1]
-    # force relaunch == 1 with --no-harness
-    args = ReplayArgs().parse_args([str(exe), str(inp), "--no-harness"])
-    assert args.relaunch == 1
 
 
 def test_main_01(mocker, tmp_path):

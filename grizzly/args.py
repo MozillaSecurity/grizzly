@@ -4,7 +4,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
-from os import listdir
 from os.path import exists, isdir, isfile
 
 from .common.plugins import scan as scan_plugins
@@ -34,7 +33,6 @@ class CommonArgs:
     IGNORE = ("log-limit", "timeout")
 
     def __init__(self):
-        super().__init__()
         # log levels for console logging
         self._level_map = {
             "CRIT": CRITICAL,
@@ -104,6 +102,9 @@ class CommonArgs:
             " (default: %(default)s)",
         )
         self.launcher_grp.add_argument(
+            "--rr", action="store_true", help="Use rr (Linux only)"
+        )
+        self.launcher_grp.add_argument(
             "--time-limit",
             type=int,
             default=None,
@@ -157,40 +158,32 @@ class CommonArgs:
         return args
 
     def sanity_check(self, args):
-        if hasattr(super(), "sanity_check"):
-            super().sanity_check(args)  # pylint: disable=no-member
         targets = scan_plugins("grizzly_targets")
         if not targets:
             self.parser.error("No Platforms (Targets) are installed")
 
         if "binary" not in self._sanity_skip and not isfile(args.binary):
-            self.parser.error("file not found: %r" % args.binary)
+            self.parser.error("file not found: %r" % (args.binary,))
 
         # sanitize ignore list
         args.ignore = {arg.lower() for arg in args.ignore}
         for ignore in args.ignore:
             if ignore not in self.IGNORABLE:
-                self.parser.error("Unrecognized ignore value: %s" % ignore)
-
-        if "input" not in self._sanity_skip and args.input:
-            if not exists(args.input):
-                self.parser.error("%r does not exist" % args.input)
-            elif isdir(args.input) and not listdir(args.input):
-                self.parser.error("%r is empty" % args.input)
+                self.parser.error("Unrecognized ignore value %r" % (ignore,))
 
         # check log level
         log_level = self._level_map.get(args.log_level.upper(), None)
         if log_level is None:
-            self.parser.error("Invalid log-level %r" % args.log_level)
+            self.parser.error("Invalid log-level %r" % (args.log_level,))
         args.log_level = log_level
 
         if args.log_limit < 0:
             self.parser.error("--log-limit must be >= 0")
-        args.log_limit *= 1048576
+        args.log_limit *= 1_048_576
 
         if args.memory < 0:
-            self.parser.error("-m/--memory must be >= 0")
-        args.memory *= 1048576
+            self.parser.error("--memory must be >= 0")
+        args.memory *= 1_048_576
 
         if args.relaunch < 1:
             self.parser.error("--relaunch must be >= 1")
@@ -198,21 +191,24 @@ class CommonArgs:
         if args.extension:
             for ext in args.extension:
                 if not exists(ext):
-                    self.parser.error("%r does not exist" % ext)
+                    self.parser.error("%r does not exist" % (ext,))
                 if not isdir(ext) or (isfile(ext) and ext.endswith(".xpi")):
                     self.parser.error("Extension must be a folder or .xpi")
 
         if args.platform not in targets:
-            self.parser.error("Unsupported platform %r" % args.platform)
+            self.parser.error("Platform %r not installed" % (args.platform,))
 
         if args.prefs and not isfile(args.prefs):
-            self.parser.error("-p/--prefs not found %r" % args.prefs)
+            self.parser.error("--prefs file not found")
+
+        if args.rr and args.valgrind:
+            self.parser.error("--rr and --valgrind are mutually exclusive")
 
         if args.time_limit is not None and args.time_limit < 1:
-            self.parser.error("--time-limit must be at least 1")
+            self.parser.error("--time-limit must be >= 1")
 
         if args.timeout is not None and args.timeout < 1:
-            self.parser.error("--timeout must be at least 1")
+            self.parser.error("--timeout must be >= 1")
 
         if "tool" not in self._sanity_skip:
             if args.tool is not None and not args.fuzzmanager:
@@ -256,9 +252,6 @@ class GrizzlyArgs(CommonArgs):
         self.launcher_grp.add_argument(
             "--coverage", action="store_true", help="Enable coverage collection"
         )
-        self.launcher_grp.add_argument(
-            "--rr", action="store_true", help="Use RR (Linux only)"
-        )
 
         self.reporter_grp.add_argument(
             "-c",
@@ -292,6 +285,9 @@ class GrizzlyArgs(CommonArgs):
                 "--fuzzmanager and --s3-fuzzmanager are mutually exclusive"
             )
 
+        if args.input and not exists(args.input):
+            self.parser.error("%r does not exist" % (args.input,))
+
         if args.limit < 0:
             self.parser.error("--limit must be >= 0 (0 = no limit)")
 
@@ -299,6 +295,3 @@ class GrizzlyArgs(CommonArgs):
             self.parser.error(
                 "--tool can only be given with --fuzzmanager/--s3-fuzzmanager"
             )
-
-        if args.rr and args.valgrind:
-            self.parser.error("'--rr' and '--valgrind' cannot be used together")
