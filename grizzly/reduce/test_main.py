@@ -24,10 +24,10 @@ pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")
 def test_args_01(capsys, tmp_path, mocker):
     """test args in common with grizzly.replay"""
     # pylint: disable=import-outside-toplevel
-    from ..replay.test_main import test_args_01 as real_test
+    from ..replay.test_args import test_replay_args_01 as real_test
 
-    mocker.patch("grizzly.replay.test_main.ReplayArgs", new=ReduceArgs)
-    real_test(capsys, tmp_path)
+    mocker.patch("grizzly.replay.test_args.ReplayArgs", new=ReduceArgs)
+    real_test(capsys, mocker, tmp_path)
 
 
 def test_args_02(tmp_path):

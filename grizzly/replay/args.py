@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from os.path import isfile
+from os.path import exists, isfile
 
 from ..args import CommonArgs
 
@@ -76,10 +76,6 @@ class ReplayArgs(CommonArgs):
             "0 == Oldest, n-1 == Newest (default: run all testcases)",
         )
 
-        self.launcher_grp.add_argument(
-            "--rr", action="store_true", help="Use RR (Linux only)"
-        )
-
         self.reporter_grp.add_argument(
             "--include-test",
             action="store_true",
@@ -90,22 +86,19 @@ class ReplayArgs(CommonArgs):
         super().sanity_check(args)
 
         if args.any_crash and args.sig is not None:
-            self.parser.error("signature is ignored when running with '--any-crash'")
+            self.parser.error("signature is ignored when running with --any-crash")
 
         if args.idle_threshold and args.idle_delay <= 0:
-            self.parser.error("'--idle-delay' value must be positive")
+            self.parser.error("--idle-delay value must be positive")
+
+        if "input" not in self._sanity_skip and not exists(args.input):
+            self.parser.error("%r does not exist" % (args.input,))
 
         if args.min_crashes < 1:
-            self.parser.error("'--min-crashes' value must be positive")
-
-        if args.no_harness:
-            args.relaunch = 1
+            self.parser.error("--min-crashes value must be positive")
 
         if args.repeat < 1:
-            self.parser.error("'--repeat' value must be positive")
-
-        if args.rr and args.valgrind:
-            self.parser.error("'--rr' and '--valgrind' cannot be used together")
+            self.parser.error("--repeat value must be positive")
 
         if args.sig is not None and not isfile(args.sig):
             self.parser.error("signature file not found: %r" % (args.sig,))

@@ -587,7 +587,11 @@ class ReplayManager:
             )
             LOG.info("Using time limit: %ds, timeout: %ds", time_limit, timeout)
             repeat = max(args.min_crashes, args.repeat)
-            relaunch = min(args.relaunch, repeat)
+            if args.no_harness:
+                LOG.debug("no-harness enabled, forcing relaunch=1")
+                relaunch = 1
+            else:
+                relaunch = min(args.relaunch, repeat)
             LOG.info(
                 "Repeat: %d, Minimum crashes: %d, Relaunch %d",
                 repeat,
