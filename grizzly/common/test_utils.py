@@ -46,4 +46,7 @@ def test_configure_logging_01(mocker, env, log_level):
     mocker.patch("grizzly.common.utils.getenv", autospec=True, return_value=env)
     configure_logging(log_level)
     assert config.call_count == 1
-    assert config.call_args.kwargs["level"] == (DEBUG if env != "0" else log_level)
+    if env != "0":
+        assert config.call_args[-1]["level"] == DEBUG
+    else:
+        assert config.call_args[-1]["level"] == log_level
