@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 
-from .target import Target, sanitizer_opts
+from .target import Target
 
 
 class SimpleTarget(Target):
@@ -58,31 +58,3 @@ def test_target_01(tmp_path):
     target.add_abort_token("none!")
     target.dump_coverage()
     target.reverse(1, 2)
-
-
-def test_sanitizer_opts_01(tmp_path):
-    """test sanitizer_opts()"""
-    # test empty string
-    assert not sanitizer_opts("")
-    # test single value
-    opts = sanitizer_opts("test_value=true")
-    assert len(opts) == 1
-    assert opts["test_value"] == "true"
-    # test multiple values
-    opts = sanitizer_opts("a=1:b=-2:C=3")
-    assert len(opts) == 3
-    assert opts["a"] == "1"
-    assert opts["b"] == "-2"
-    assert opts["C"] == "3"
-    # path parsing
-    opts = sanitizer_opts("p1='z:/a':p2='x:\\a.1':p3='/test/path/':p4='':p5=\"x:/a.a\"")
-    assert opts["p1"] == "'z:/a'"
-    assert opts["p2"] == "'x:\\a.1'"
-    assert opts["p3"] == "'/test/path/'"
-    assert opts["p4"] == "''"
-    assert opts["p5"] == '"x:/a.a"'
-    # platform specific parsing
-    fake_file = tmp_path / "fake.log"
-    opts = sanitizer_opts("bar=1:file='%s':foo=2" % (str(fake_file),))
-    assert len(opts) == 3
-    assert opts["file"] == "'%s'" % (str(fake_file),)

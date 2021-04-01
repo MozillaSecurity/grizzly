@@ -8,8 +8,8 @@ from os.path import isfile
 
 from sapphire.server_map import ServerMap
 
-from ..target import sanitizer_opts
 from .storage import TestCase, TestFile
+from .utils import sanitizer_opts
 
 __all__ = ("IOManager",)
 __author__ = "Tyson Smith"

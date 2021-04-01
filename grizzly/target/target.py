@@ -5,34 +5,13 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from logging import getLogger
 from os.path import isfile
-from re import split as resplit
 from threading import Lock
 
-__all__ = ("Target", "sanitizer_opts")
+__all__ = ("Target", "TargetError", "TargetLaunchError")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 LOG = getLogger(__name__)
-
-
-def sanitizer_opts(env_data):
-    """Parse the values defined in given *SAN_OPTIONS environment variable.
-    For example "ASAN_OPTIONS=debug=false:log_path='/test/file.log'"
-    would return {"debug": "false", "log_path": "'/test/file.log'"}
-
-    Args:
-        env_var (str): *SAN_OPTIONS environment variable to parse.
-
-    Returns:
-        dict: Sanitized values from environment.
-    """
-    opts = dict()
-    for opt in resplit(r":(?![\\|/])", env_data):
-        if not opt:
-            continue
-        key, val = opt.split("=")
-        opts[key] = val
-    return opts
 
 
 class TargetError(Exception):
