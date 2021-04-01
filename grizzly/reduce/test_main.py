@@ -14,7 +14,7 @@ from pytest import raises
 from ..common import TestCaseLoadFailure
 from ..target import TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
-from .args import ReduceArgs
+from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
 from .exceptions import GrizzlyReduceBaseException
 
 LOG = getLogger(__name__)
@@ -63,6 +63,24 @@ def test_args_02(tmp_path):
         ReduceArgs().parse_args([str(exe), str(inp), "--report-period", "0"])
     with raises(SystemExit):
         ReduceArgs().parse_args([str(exe), str(inp), "--report-period", "15"])
+
+
+def test_args_03(tmp_path):
+    """test ReduceFuzzManagerIDArgs"""
+    exe = tmp_path / "binary"
+    exe.touch()
+    ReduceFuzzManagerIDArgs().parse_args([str(exe), "123"])
+
+
+def test_args_04(capsys, tmp_path):
+    """test ReduceFuzzManagerIDQualityArgs"""
+    exe = tmp_path / "binary"
+    exe.touch()
+    with raises(SystemExit):
+        ReduceFuzzManagerIDQualityArgs().parse_args(
+            [str(exe), "123", "--quality", "-1"]
+        )
+    assert "error: '--quality' value cannot be negative" in capsys.readouterr()[-1]
 
 
 @pytest.mark.parametrize(
