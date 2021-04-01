@@ -16,8 +16,7 @@ from time import time
 from zipfile import BadZipfile, ZipFile
 from zlib import error as zlib_error
 
-from ..target import sanitizer_opts
-from .utils import grz_tmp
+from .utils import grz_tmp, sanitizer_opts
 
 __all__ = ("TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"

@@ -5,9 +5,16 @@
 from logging import DEBUG, basicConfig
 from os import getenv, makedirs
 from os.path import join as pathjoin
+from re import split as resplit
 from tempfile import gettempdir
 
-__all__ = ("ConfigError", "configure_logging", "grz_tmp", "TIMEOUT_DELAY")
+__all__ = (
+    "ConfigError",
+    "configure_logging",
+    "grz_tmp",
+    "sanitizer_opts",
+    "TIMEOUT_DELAY",
+)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -49,3 +56,23 @@ def grz_tmp(*subdir):
     path = pathjoin(gettempdir(), "grizzly", *subdir)
     makedirs(path, exist_ok=True)
     return path
+
+
+def sanitizer_opts(env_data):
+    """Parse the values defined in given *SAN_OPTIONS environment variable.
+    For example "ASAN_OPTIONS=debug=false:log_path='/test/file.log'"
+    would return {"debug": "false", "log_path": "'/test/file.log'"}
+
+    Args:
+        env_var (str): *SAN_OPTIONS environment variable to parse.
+
+    Returns:
+        dict: Sanitized values from environment.
+    """
+    opts = dict()
+    for opt in resplit(r":(?![\\|/])", env_data):
+        if not opt:
+            continue
+        key, val = opt.split("=")
+        opts[key] = val
+    return opts
