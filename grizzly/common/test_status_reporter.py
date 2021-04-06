@@ -92,9 +92,7 @@ def test_status_reporter_03(mocker, disk, memory, getloadavg):
         mocker.patch("grizzly.common.status_reporter.getloadavg", None)
     else:
         mocker.patch(
-            "grizzly.common.status_reporter.getloadavg",
-            autospec=True,
-            side_effect=getloadavg,
+            "grizzly.common.status_reporter.getloadavg", side_effect=getloadavg
         )
     sysinfo = StatusReporter._sys_info()
     if disk.free < GBYTES or memory.available < GBYTES:
