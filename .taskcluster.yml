@@ -35,140 +35,103 @@ tasks:
     project_name:
       Grizzly
 
+    matrix:
+      language: python
+      secrets:
+        - type: env
+          secret: project/fuzzing/codecov-grizzly
+          name: CODECOV_TOKEN
+          key: token
+      script:
+        - bash
+        - '-xec'
+        - tox; tox -e codecov
+      jobs:
+        include:
+          - name: tests python 3.6
+            version: "3.6"
+            env:
+              TOXENV: py36
+          - name: tests python 3.7
+            version: "3.7"
+            env:
+              TOXENV: py37
+          - name: tests python 3.8
+            version: "3.8"
+            env:
+              TOXENV: py38
+          - name: test python 3.8 (windows)
+            version: "3.8"
+            platform: windows
+            env:
+              TOXENV: py38
+          - name: tests python 3.9
+            version: "3.9"
+            env:
+              TOXENV: py39
+          - name: lint
+            version: "3.9"
+            env:
+              TOXENV: lint
+            script:
+              - tox
+          - name: precommit
+            version: "3.9"
+            env:
+              TOXENV: precommit
+            script:
+              - tox
+          - name: PyPI upload
+            version: "3.8"
+            env:
+              TOXENV: pypi
+            script:
+              - tox
+            when:
+              release: true
+              all_passed: true
+            secrets:
+              - type: env
+                secret: project/fuzzing/pypi-grizzly
+                name: TWINE_USERNAME
+                key: username
+              - type: env
+                secret: project/fuzzing/pypi-grizzly
+                name: TWINE_PASSWORD
+                key: password
+
   in:
     $if: 'tasks_for in ["github-push", "github-release"] || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
     then:
-      $flatten:
-        - $map: []
-          #- {msys: 'NmOU83KwRJGjk-btMbOOPA', toxenv: 'py38', name: 'tests python 3.8'}
-          each(build):
-            taskId: {$eval: as_slugid(build.toxenv + '-win')}
-            provisionerId: proj-fuzzing
-            workerType: ci-windows
-            created: {$fromNow: ''}
-            deadline: {$fromNow: '1 hour'}
-            scopes:
-              - secrets:get:project/fuzzing/${codecov_secret}
-            dependencies:
-              - ${build.msys}
-            payload:
-              env:
-                MSYSTEM: MINGW64
-                TOXENV: ${build.toxenv}
-                CODECOV_SECRET: ${codecov_secret}
-                FETCH_REF: ${fetch_ref}
-                FETCH_REV: ${fetch_rev}
-                CLONE_REPO: ${http_repo}
-              mounts:
-                - format: tar.bz2
-                  content:
-                    taskId: ${build.msys}
-                    artifact: public/msys2.tar.bz2
-                  directory: .
-              command:
-                - "set HOME=%CD%"
-                - "set ARTIFACTS=%CD%"
-                - "set PATH=%CD%\\msys64\\MINGW64\\bin;%PATH%"
-                - "set PATH=%CD%\\msys64\\usr\\bin;%PATH%"
-                - >-
-                  bash -x -e -c "
-                  . py-ci.sh;
-                  clone;
-                  tox;
-                  tox_codecov;"
-              features:
-                taskclusterProxy: true
-              maxRunTime: 900
-            metadata:
-              name: ${project_name} ${build.name} (windows)
-              description: ${project_name} ${build.name} (windows)
-              owner: '${user}@users.noreply.github.com'
-              source: ${http_repo}/raw/${fetch_rev}/.taskcluster.yml
-        - $map:
-          - {image: ci-py-36, toxenv: 'py36', name: 'tests python 3.6'}
-          - {image: ci-py-37, toxenv: 'py37', name: 'tests python 3.7'}
-          - {image: ci-py-38, toxenv: 'py38', name: 'tests python 3.8'}
-          - {image: ci-py-39, toxenv: 'py39', name: 'tests python 3.9'}
-          - {image: ci-py-39, toxenv: 'lint', name: 'lint'}
-          each(build):
-            taskId: {$eval: as_slugid(build.toxenv)}
-            provisionerId: proj-fuzzing
-            workerType: ci
-            created: {$fromNow: ''}
-            deadline: {$fromNow: '1 hour'}
-            scopes:
-              - secrets:get:project/fuzzing/${codecov_secret}
-            payload:
-              maxRunTime: 900
-              image:
-                type: indexed-image
-                path: public/${build.image}.tar.zst
-                namespace: project.fuzzing.orion.${build.image}.master
-              env:
-                TOXENV: ${build.toxenv}
-                CODECOV_SECRET: ${codecov_secret}
-                FETCH_REF: ${fetch_ref}
-                FETCH_REV: ${fetch_rev}
-                CLONE_REPO: ${http_repo}
-              features:
-                taskclusterProxy: true
-              command:
-                - /bin/bash
-                - '--login'
-                - '-x'
-                - '-e'
-                - '-c'
-                - >-
-                  . py-ci.sh;
-                  clone;
-                  tox;
-                  if [[ "${build.toxenv}" != "lint" ]]; then tox_codecov; fi;
-            metadata:
-              name: ${project_name} ${build.name}
-              description: ${project_name} ${build.name}
-              owner: '${user}@users.noreply.github.com'
-              source: ${http_repo}/raw/${fetch_rev}/.taskcluster.yml
-        - $if: 'tasks_for in ["github-release"]'
-          then:
-            - provisionerId: proj-fuzzing
-              workerType: ci
-              dependencies:
-                - {$eval: as_slugid("py36")}
-                - {$eval: as_slugid("py37")}
-                - {$eval: as_slugid("py38")}
-                #- {$eval: as_slugid("py38-win")}
-                - {$eval: as_slugid("py39")}
-                - {$eval: as_slugid("lint")}
-              created: {$fromNow: ''}
-              deadline: {$fromNow: '1 hour'}
-              scopes:
-                - secrets:get:project/fuzzing/${pypi_secret}
-              payload:
-                maxRunTime: 900
-                image:
-                  type: indexed-image
-                  path: public/ci-py-38.tar.zst
-                  namespace: project.fuzzing.orion.ci-py-38.master
-                features:
-                  taskclusterProxy: true
-                env:
-                  TOXENV: pypi
-                  FETCH_REF: ${fetch_ref}
-                  FETCH_REV: ${fetch_rev}
-                  CLONE_REPO: ${http_repo}
-                  PYPI_SECRET: ${pypi_secret}
-                command:
-                  - /bin/bash
-                  - '--login'
-                  - '-x'
-                  - '-e'
-                  - '-c'
-                  - >-
-                    . py-ci.sh;
-                    clone;
-                    tox_pypi;
-              metadata:
-                name: ${project_name} PyPI upload
-                description: ${project_name} PyPI upload
-                owner: '${user}@users.noreply.github.com'
-                source: ${http_repo}/raw/${fetch_rev}/.taskcluster.yml
+      - created: {$fromNow: ''}
+        deadline: {$fromNow: '1 hour'}
+        provisionerId: proj-fuzzing
+        workerType: ci
+        payload:
+          features:
+            taskclusterProxy: true
+          maxRunTime: 3600
+          image:
+            type: indexed-image
+            path: public/orion-decision.tar.zst
+            namespace: project.fuzzing.orion.orion-decision.master
+          env:
+            PROJECT_NAME: ${project_name}
+            CI_MATRIX: {$json: {$eval: matrix}}
+            GITHUB_EVENT: {$json: {$eval: event}}
+            GITHUB_ACTION: ${tasks_for}
+            TASKCLUSTER_NOW: ${now}
+          command:
+            - ci-decision
+            - -v
+        scopes:
+          - queue:create-task:highest:proj-fuzzing/ci
+          - queue:create-task:highest:proj-fuzzing/ci-*
+          - queue:scheduler-id:taskcluster-github
+          - secrets:get:project/fuzzing/codecov-grizzly
+          - secrets:get:project/fuzzing/pypi-grizzly
+        metadata:
+          name: ${project_name} CI decision
+          description: Schedule CI tasks for ${project_name}
+          owner: twsmith@mozilla.com
+          source: https://github.com/MozillaSecurity/grizzly

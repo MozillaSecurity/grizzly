@@ -1,24 +1,8 @@
 repos:
-  - repo: https://github.com/pycqa/isort
-    rev: 5.7.0
-    hooks:
-      - id: isort
   - repo: https://github.com/asottile/yesqa
     rev: v1.2.2
     hooks:
       - id: yesqa
-  - repo: https://github.com/ambv/black
-    rev: 20.8b1
-    hooks:
-      - id: black
-  - repo: https://github.com/pycqa/pylint
-    rev: pylint-2.7.3
-    hooks:
-      - id: pylint
-  - repo: https://gitlab.com/pycqa/flake8
-    rev: 3.9.0
-    hooks:
-      - id: flake8
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v3.4.0
     hooks:
@@ -35,18 +19,25 @@ repos:
         args: ['--django']
       - id: check-json
       - id: requirements-txt-fixer
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.0.0
-    hooks:
-      - id: codespell
-        exclude_types: [json]
   - repo: https://github.com/marco-c/taskcluster_yml_validator
     rev: v0.0.7
     hooks:
       - id: taskcluster_yml
+  - repo: https://github.com/MozillaSecurity/orion
+    rev: v0.0.2
+    hooks:
+      - id: orion_ci
   - repo: meta
     hooks:
       - id: check-useless-excludes
+  - repo: local
+    hooks:
+      - id: lint
+        name: Run linters
+        entry: tox -e lint
+        language: system
+        pass_filenames: false
+        types: [python]
 
 default_language_version:
   python: python3
