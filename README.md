@@ -14,7 +14,7 @@ For additional information please check out the [wiki](https://github.com/Mozill
 
 Quick Start
 ------------
-Install the latest version from PyPI. For more details see [getting started](https://github.com/MozillaSecurity/grizzly/wiki/Getting-Started) on the wiki for more details.
+Install the latest version from PyPI. For more details see [getting started](https://github.com/MozillaSecurity/grizzly/wiki/Getting-Started) on the wiki.
 
 ```python3 -m pip install grizzly-framework```
 
