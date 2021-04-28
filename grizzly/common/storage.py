@@ -539,6 +539,7 @@ class TestFile:
             raise TypeError("file_name is invalid %r" % (file_name,))
         # name including path relative to wwwroot
         self._file_name = normpath(file_name)
+        # pylint: disable=consider-using-with
         self._fp = SpooledTemporaryFile(
             dir=grz_tmp("storage"), max_size=self.CACHE_LIMIT, prefix="testfile_"
         )
