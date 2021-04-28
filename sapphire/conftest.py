@@ -98,28 +98,27 @@ def client_factory():
                     # will calculate the md5 hash
                     data_hash = hashlib.md5() if t_file.md5_org is not None else None
                     target_url = quote(t_file.url)
-                cli = None
                 try:
                     if t_file.custom_request is None:
-                        cli = urlopen(
+                        with urlopen(
                             "http://%s:%d/%s" % (addr, port, target_url), timeout=10
-                        )
-                        resp_code = cli.getcode()
-                        content_type = cli.info().get("Content-Type")
-                        if resp_code == 200:
-                            data_length = 0
-                            while True:
-                                data = cli.read(self.rx_size)
-                                data_length += len(data)
+                        ) as cli:
+                            resp_code = cli.getcode()
+                            content_type = cli.info().get("Content-Type")
+                            if resp_code == 200:
+                                data_length = 0
+                                while True:
+                                    data = cli.read(self.rx_size)
+                                    data_length += len(data)
+                                    if data_hash is not None:
+                                        data_hash.update(data)
+                                    if len(data) < self.rx_size:
+                                        break
+                                    if throttle > 0:
+                                        # try to simulate a slow connection
+                                        time.sleep(throttle)
                                 if data_hash is not None:
-                                    data_hash.update(data)
-                                if len(data) < self.rx_size:
-                                    break
-                                if throttle > 0:
-                                    # try to simulate a slow connection
-                                    time.sleep(throttle)
-                            if data_hash is not None:
-                                data_hash = data_hash.hexdigest()
+                                    data_hash = data_hash.hexdigest()
                     else:  # custom request
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         try:
@@ -177,9 +176,6 @@ def client_factory():
                             if not skip_served or t_file.code is None:
                                 t_file.code = 0
                                 break
-                finally:
-                    if cli is not None:
-                        cli.close()
             self._idle.set()
 
         def wait(self, timeout=None):
