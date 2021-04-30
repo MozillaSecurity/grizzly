@@ -113,8 +113,7 @@ class ConnectionManager:
                     )
                     serv_job.worker_complete.wait()
                     serv_job.worker_complete.clear()
-                    # remove complete workers
-                    LOG.debug("trimming worker pool")
+                    LOG.debug("removing completed workers from worker pool")
                     # sometimes the thread that triggered the event doesn't quite
                     # cleanup in time, so retry (10x with 0.5 second sleep on failure)
                     for _ in range(10):
@@ -132,16 +131,20 @@ class ConnectionManager:
                 serv_job.exceptions.put(exc_info())
             serv_job.finish()
         finally:
-            LOG.debug("listener cleaning up workers")
+            LOG.debug(
+                "shutting down listener, waiting %0.2fs for %d worker(s)...",
+                shutdown_delay,
+                len(worker_pool),
+            )
+            # use shutdown_delay to avoid cutting off connections
             deadline = time() + shutdown_delay
             while time() < deadline:
-                worker_pool = list(w for w in worker_pool if not w.done)
-                if not worker_pool:
+                # wait for all running workers to exit
+                if all(w.done for w in worker_pool):
                     break
-                # avoid cutting off connections
-                LOG.debug("waiting for %d worker(s)...", len(worker_pool))
                 sleep(0.1)
             else:  # pragma: no cover
-                LOG.debug("closing remaining workers")
-                for worker in (w for w in worker_pool if not w.done):
+                worker_pool = list(w for w in worker_pool if not w.done)
+                LOG.debug("closing remaining %d worker(s)", len(worker_pool))
+                for worker in worker_pool:
                     worker.close()
