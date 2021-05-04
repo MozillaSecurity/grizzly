@@ -5,6 +5,7 @@
 from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os.path import exists, isdir, isfile
+from platform import system
 
 from .common.plugins import scan as scan_plugins
 from .common.utils import TIMEOUT_DELAY
@@ -213,6 +214,15 @@ class CommonArgs:
         if "tool" not in self._sanity_skip:
             if args.tool is not None and not args.fuzzmanager:
                 self.parser.error("--tool can only be given with --fuzzmanager")
+
+        # check platform specific args
+        os_name = system()
+        if args.rr and os_name != "Linux":
+            self.parser.error("--rr is only supported on Linux")
+        if args.valgrind and os_name != "Linux":
+            self.parser.error("--valgrind is only supported on Linux")
+        if args.xvfb and os_name != "Linux":
+            self.parser.error("--xvfb is only supported on Linux")
 
 
 class GrizzlyArgs(CommonArgs):
