@@ -87,11 +87,30 @@ def test_common_args_01a(capsys, mocker, tmp_path):
             "error: --rr and --valgrind are mutually exclusive",
             ["targ1"],
         ),
+        # test rr on unsupported platform
+        (
+            ["--platform", "targ1", "--rr"],
+            "error: --rr is only supported on Linux",
+            ["targ1"],
+        ),
+        # test Valgrind on unsupported platform
+        (
+            ["--platform", "targ1", "--valgrind"],
+            "error: --valgrind is only supported on Linux",
+            ["targ1"],
+        ),
+        # test Xvfb on unsupported platform
+        (
+            ["--platform", "targ1", "--xvfb"],
+            "error: --xvfb is only supported on Linux",
+            ["targ1"],
+        ),
     ],
 )
 def test_common_args_02(capsys, mocker, tmp_path, args, msg, targets):
     """test CommonArgs.parse_args()"""
     mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=targets)
+    mocker.patch("grizzly.args.system", autospec=True, return_value="foo")
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
     with raises(SystemExit):
