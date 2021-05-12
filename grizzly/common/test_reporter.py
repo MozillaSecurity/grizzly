@@ -576,7 +576,12 @@ def test_fuzzmanager_reporter_09(mocker, tmp_path):
     """test FuzzManagerReporter._ignored()"""
     log_file = tmp_path / "test.log"
     log_file.touch()
-    report = mocker.Mock(spec=Report, path=str(tmp_path), preferred=str(log_file))
+    report = mocker.Mock(
+        spec_set=Report,
+        path=str(tmp_path),
+        preferred=str(log_file),
+        stack=None,
+    )
     # not ignored
     assert not FuzzManagerReporter._ignored(report)
     # ignored - sanitizer OOM missing stack

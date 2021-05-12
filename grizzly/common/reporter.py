@@ -62,7 +62,7 @@ class Report:
     DEFAULT_MAJOR = "NO_STACK"
     DEFAULT_MINOR = "0"
     HANG_STACK_HEIGHT = 10
-    MAX_LOG_SIZE = 1048576  # 1MB
+    MAX_LOG_SIZE = 1_048_576  # 1MB
 
     __slots__ = (
         "_crash_info",
@@ -596,14 +596,20 @@ class FuzzManagerReporter(Reporter):
     @staticmethod
     def _ignored(report):
         # This is here to prevent reporting stack-less crashes
-        # that were caused by system OOM or bogus other crashes
+        # that were caused by system OOM
         with open(report.preferred, "rb") as log_fp:
             log_data = log_fp.read().decode("utf-8", errors="ignore")
-        mem_errs = ("ERROR: Failed to mmap", ": AddressSanitizer failed to allocate")
         # ignore sanitizer OOMs missing stack
-        for msg in mem_errs:
-            if msg in log_data and "#0 " not in log_data:
-                return True
+        if report.stack is None:
+            mem_errs = (
+                "ERROR: Failed to mmap",
+                # NOTE: max_allocation_size_mb can trigger a similar message
+                ": AddressSanitizer failed to allocate",
+                "Sanitizer: internal allocator is out of memory trying to allocate",
+            )
+            for msg in mem_errs:
+                if msg in log_data:
+                    return True
         # ignore Valgrind crashes
         if log_data.startswith("VEX temporary storage exhausted."):
             return True
