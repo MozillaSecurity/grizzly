@@ -241,6 +241,22 @@ def test_report_09(tmp_path):
     selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
     assert selected is not None
     assert "heap-use-after-free" in Path(selected).read_text()
+    # test selecting TSan reports
+    tsan_path = tmp_path / "tsan"
+    tsan_path.mkdir()
+    (tsan_path / "log_asan_benign.txt").write_text(
+        "==27531==WARNING: Symbolizer buffer too small\n"
+        "==27531==WARNING: Symbolizer buffer too small"
+    )
+    tsan_report = tsan_path / "log_asan_report.txt"
+    tsan_report.write_text(
+        "WARNING: ThreadSanitizer: data race (pid=26919)\n"
+        "  Write of size 8 at 0x7f0ca2fc3400 by thread T51:\n"
+        "    #0 memcpy /sanitizer_common_interceptors.inc:810:5 (lib+0x6656e)\n"
+    )
+    selected = Report._find_sanitizer([str(x) for x in tsan_path.iterdir()])
+    assert selected is not None
+    assert selected == str(tsan_report)
 
 
 def test_report_10(tmp_path):
