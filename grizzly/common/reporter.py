@@ -283,18 +283,20 @@ class Report:
         prioritize_tokens = (
             "use-after-",
             "-buffer-overflow on",
+            ": data race ",
             ": SEGV on ",
             "access-violation on ",
             "attempting free on ",
             "negative-size-param",
             "-param-overlap",
         )
+        fallback = None
         found = None
         for fname in (x for x in logs if "asan" in x):
             with open(fname, "r") as log_fp:
                 data = log_fp.read(65536)
             # look for interesting crash info in the log
-            if "==ERROR:" in data:
+            if "==ERROR:" in data or "WARNING:" in data:
                 # check for e10s forced crash
                 if re_e10s_forced.search(data) is not None:
                     continue
@@ -310,8 +312,8 @@ class Report:
                     found = fname
                 # catch all (choose the one with info for now)
                 elif data:
-                    found = fname
-        return found
+                    fallback = fname
+        return found or fallback
 
     @staticmethod
     def _find_valgrind(logs):
