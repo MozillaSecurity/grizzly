@@ -89,10 +89,9 @@ class Report:
         if size_limit < 1:
             LOG.warning("No limit set on report log size!")
         else:
-            with scandir(path=log_path) as contents:
-                for log in contents:
-                    if log.is_file() and log.stat().st_size > size_limit:
-                        Report.tail(log.path, size_limit)
+            for log in scandir(path=log_path):
+                if log.is_file() and log.stat().st_size > size_limit:
+                    Report.tail(log.path, size_limit)
         # look through logs one by one until we find a stack
         for log_file in (x for x in self._logs if x is not None):
             with open(log_file, "rb") as log_fp:
@@ -383,11 +382,9 @@ class Report:
         Returns:
             LogMap: A LogMap pointing to log files or None if path is empty.
         """
-        to_scan = None
-        with scandir(path=path) as contents:
-            files = (x for x in contents if x.is_file())
-            # order by date hopefully the oldest log is the cause of the issue
-            to_scan = [x.path for x in sorted(files, key=lambda x: x.stat().st_mtime)]
+        files = (x for x in scandir(path=path) if x.is_file())
+        # order by date hopefully the oldest log is the cause of the issue
+        to_scan = [x.path for x in sorted(files, key=lambda x: x.stat().st_mtime)]
         if not to_scan:
             LOG.warning("No files found in %r", path)
             return None
@@ -495,8 +492,7 @@ class FilesystemReporter(Reporter):
             dest_path = pathjoin(self.report_path, report.major[:16])
         else:
             dest_path = self.report_path
-        if not isdir(dest_path):
-            makedirs(dest_path)
+        makedirs(dest_path, exist_ok=True)
         # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(test_cases):
             dump_path = pathjoin(dest_path, "%s-%d" % (report.prefix, test_number))
