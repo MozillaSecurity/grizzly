@@ -17,7 +17,7 @@ from re import DOTALL, VERBOSE
 from re import compile as re_compile
 from shutil import copyfile, copyfileobj, move, rmtree
 from tarfile import open as tar_open
-from tempfile import mkstemp
+from tempfile import TemporaryDirectory, mkstemp
 from time import strftime
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -702,37 +702,32 @@ class FuzzManagerReporter(Reporter):
                 copyfile(screen_log, target_log)
                 Report.tail(target_log, 10240)  # limit to last 10K
 
-        # add results to a zip file
-        zip_name = "%s.zip" % (report.prefix,)
-        with ZipFile(zip_name, mode="w", compression=ZIP_DEFLATED) as zip_fp:
-            # add test files
-            for dir_name, _, dir_files in walk(report.path):
-                arc_path = relpath(dir_name, report.path)
-                for file_name in dir_files:
-                    zip_fp.write(
-                        pathjoin(dir_name, file_name),
-                        arcname=pathjoin(arc_path, file_name),
-                    )
-
-        # override tool name if specified
-        if self.tool is not None:
-            collector.tool = self.tool
-
-        # announce shortDescription if crash is not in a bucket
-        if (
-            cache_metadata["_grizzly_seen_count"] == 1
-            and not cache_metadata["frequent"]
-        ):
-            LOG.info("Submitting new crash %r", cache_metadata["shortDescription"])
-        # submit results to the FuzzManager server
-        new_entry = collector.submit(
-            report.crash_info, testCase=zip_name, testCaseQuality=self.quality
-        )
+        with TemporaryDirectory(prefix="fm-zip", dir=grz_tmp()) as tmp_dir:
+            # add results to a zip file
+            zip_name = pathjoin(tmp_dir, "%s.zip" % (report.prefix,))
+            with ZipFile(zip_name, mode="w", compression=ZIP_DEFLATED) as zip_fp:
+                # add test files
+                for dir_name, _, dir_files in walk(report.path):
+                    arc_path = relpath(dir_name, report.path)
+                    for file_name in dir_files:
+                        zip_fp.write(
+                            pathjoin(dir_name, file_name),
+                            arcname=pathjoin(arc_path, file_name),
+                        )
+            # override tool name if specified
+            if self.tool is not None:
+                collector.tool = self.tool
+            # announce shortDescription if crash is not in a bucket
+            if (
+                cache_metadata["_grizzly_seen_count"] == 1
+                and not cache_metadata["frequent"]
+            ):
+                LOG.info("Submitting new crash %r", cache_metadata["shortDescription"])
+            # submit results to the FuzzManager server
+            new_entry = collector.submit(
+                report.crash_info, testCase=zip_name, testCaseQuality=self.quality
+            )
         LOG.info("Logged %d with quality %d", new_entry["id"], self.quality)
-
-        # remove zipfile
-        if isfile(zip_name):
-            unlink(zip_name)
 
         return new_entry["id"]
 
