@@ -504,7 +504,8 @@ class ReplayManager:
             # remove unpacked testcase data
             for tc_path in unpacked:
                 rmtree(tc_path)
-            self.target.close()
+            # we don't want to clean up but we are not checking results
+            self.target.close(force_close=True)
             # remove unprocessed reports
             for report in reports.values():
                 report.report.cleanup()
