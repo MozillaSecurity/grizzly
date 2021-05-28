@@ -59,6 +59,8 @@ def test_replay_02(mocker, tmp_path):
             assert replay.status.results == 0
             assert target.monitor.is_healthy.call_count == 1
             assert target.close.call_count == 2
+            assert target.close.mock_calls[0] == mocker.call()
+            assert target.close.mock_calls[1] == mocker.call(force_close=True)
         assert not any(tmp_path.iterdir())
 
 
