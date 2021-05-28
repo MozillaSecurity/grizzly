@@ -10,7 +10,7 @@ class SimpleTarget(Target):
     def cleanup(self):
         pass
 
-    def close(self):
+    def close(self, force_close=False):
         pass
 
     @property

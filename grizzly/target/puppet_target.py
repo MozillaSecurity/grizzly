@@ -62,10 +62,10 @@ class PuppetTarget(Target):
         if self._remove_prefs and self._prefs and isfile(self._prefs):
             unlink(self._prefs)
 
-    def close(self):
+    def close(self, force_close=False):
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
         with self._lock:
-            self._puppet.close()
+            self._puppet.close(force_close=force_close)
 
     @property
     def closed(self):

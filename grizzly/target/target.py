@@ -73,7 +73,7 @@ class Target(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def close(self):
+    def close(self, force_close=False):
         pass
 
     @abstractproperty
