@@ -34,6 +34,10 @@ def main(args):
             bucket = Bucket(crash.bucket)
             args.sig = str(bucket.signature_path())
         if args.tool is None:
+            LOG.info(
+                "Setting default --tool=%s from CrashEntry",
+                crash.tool,
+            )
             args.tool = crash.tool
 
         # call grizzly.reduce
