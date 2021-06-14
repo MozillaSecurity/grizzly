@@ -29,6 +29,7 @@ class FakeArgs:
         self.log_level = 10  # 10 = DEBUG, 20 = INFO
         self.log_limit = 0
         self.memory = 0
+        self.pernosco = False
         self.platform = "fake-target"
         self.prefs = None
         self.rr = False  # pylint: disable=invalid-name

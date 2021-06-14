@@ -81,30 +81,6 @@ def test_common_args_01a(capsys, mocker, tmp_path):
             "error: --tool can only be given with --fuzzmanager",
             ["targ1"],
         ),
-        # test enabling both rr and Valgrind
-        (
-            ["--platform", "targ1", "--rr", "--valgrind"],
-            "error: --rr and --valgrind are mutually exclusive",
-            ["targ1"],
-        ),
-        # test rr on unsupported platform
-        (
-            ["--platform", "targ1", "--rr"],
-            "error: --rr is only supported on Linux",
-            ["targ1"],
-        ),
-        # test Valgrind on unsupported platform
-        (
-            ["--platform", "targ1", "--valgrind"],
-            "error: --valgrind is only supported on Linux",
-            ["targ1"],
-        ),
-        # test Xvfb on unsupported platform
-        (
-            ["--platform", "targ1", "--xvfb"],
-            "error: --xvfb is only supported on Linux",
-            ["targ1"],
-        ),
     ],
 )
 def test_common_args_02(capsys, mocker, tmp_path, args, msg, targets):

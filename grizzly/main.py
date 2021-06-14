@@ -83,6 +83,7 @@ def main(args):
             args.launch_timeout,
             args.log_limit,
             args.memory,
+            pernosco=args.pernosco,
             rr=args.rr,
             valgrind=args.valgrind,
             xvfb=args.xvfb,

@@ -103,9 +103,6 @@ class CommonArgs:
             " (default: %(default)s)",
         )
         self.launcher_grp.add_argument(
-            "--rr", action="store_true", help="Use rr (Linux only)"
-        )
-        self.launcher_grp.add_argument(
             "--time-limit",
             type=int,
             default=None,
@@ -125,12 +122,10 @@ class CommonArgs:
             " and will be closed. Typically this should be a few seconds greater"
             " than the value used for `test-duration`." % (TIMEOUT_DELAY,),
         )
-        self.launcher_grp.add_argument(
-            "--valgrind", action="store_true", help="Use Valgrind (Linux only)"
-        )
-        self.launcher_grp.add_argument(
-            "--xvfb", action="store_true", help="Use Xvfb (Linux only)"
-        )
+        if system().startswith("Linux"):
+            self.launcher_grp.add_argument(
+                "--xvfb", action="store_true", help="Use Xvfb."
+            )
 
         self.reporter_grp = self.parser.add_argument_group("Reporter Arguments")
         self.reporter_grp.add_argument(
@@ -147,6 +142,18 @@ class CommonArgs:
             "--tool",
             help="Override tool name used when reporting issues to FuzzManager",
         )
+
+        if system().startswith("Linux"):
+            dbg_group = self.launcher_grp.add_mutually_exclusive_group()
+            dbg_group.add_argument(
+                "--pernosco",
+                action="store_true",
+                help="Use rr. Trace intended to be used with Pernosco.",
+            )
+            dbg_group.add_argument("--rr", action="store_true", help="Use rr.")
+            dbg_group.add_argument(
+                "--valgrind", action="store_true", help="Use Valgrind."
+            )
 
         self.parser.epilog = (
             "For addition help check out the wiki:"
@@ -202,9 +209,6 @@ class CommonArgs:
         if args.prefs and not isfile(args.prefs):
             self.parser.error("--prefs file not found")
 
-        if args.rr and args.valgrind:
-            self.parser.error("--rr and --valgrind are mutually exclusive")
-
         if args.time_limit is not None and args.time_limit < 1:
             self.parser.error("--time-limit must be >= 1")
 
@@ -214,15 +218,6 @@ class CommonArgs:
         if "tool" not in self._sanity_skip:
             if args.tool is not None and not args.fuzzmanager:
                 self.parser.error("--tool can only be given with --fuzzmanager")
-
-        # check platform specific args
-        os_name = system()
-        if args.rr and os_name != "Linux":
-            self.parser.error("--rr is only supported on Linux")
-        if args.valgrind and os_name != "Linux":
-            self.parser.error("--valgrind is only supported on Linux")
-        if args.xvfb and os_name != "Linux":
-            self.parser.error("--xvfb is only supported on Linux")
 
 
 class GrizzlyArgs(CommonArgs):
