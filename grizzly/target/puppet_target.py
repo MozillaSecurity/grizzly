@@ -16,6 +16,7 @@ from tempfile import mkdtemp, mkstemp
 from time import sleep, time
 
 from ffpuppet import BrowserTimeoutError, FFPuppet, LaunchError
+from ffpuppet.core import Debugger, Reason
 from prefpicker import PrefPicker
 from psutil import AccessDenied, NoSuchProcess, Process, process_iter
 
@@ -32,20 +33,29 @@ LOG = getLogger(__name__)
 
 
 class PuppetTarget(Target):
-    __slots__ = ("use_rr", "use_valgrind", "_puppet", "_remove_prefs")
+    __slots__ = ("use_valgrind", "_puppet", "_remove_prefs")
 
     def __init__(
         self, binary, extension, launch_timeout, log_limit, memory_limit, **kwds
     ):
         super().__init__(binary, extension, launch_timeout, log_limit, memory_limit)
-        self.use_rr = kwds.pop("rr", False)
-        self.use_valgrind = kwds.pop("valgrind", False)
+        # TODO: clean up handling debuggers
+        if kwds.pop("pernosco", False):
+            debugger = Debugger.PERNOSCO
+        elif kwds.pop("rr", False):
+            debugger = Debugger.RR
+        elif kwds.pop("valgrind", False):
+            self.use_valgrind = True
+            debugger = Debugger.VALGRIND
+        else:
+            debugger = Debugger.NONE
         self._remove_prefs = False
+
         # create Puppet object
         self._puppet = FFPuppet(
-            use_rr=self.use_rr,
-            use_valgrind=self.use_valgrind,
+            debugger=debugger,
             use_xvfb=kwds.pop("xvfb", False),
+            working_path=grz_tmp("target_ffpuppet"),
         )
         if kwds:
             LOG.warning(
@@ -113,19 +123,19 @@ class PuppetTarget(Target):
         if not self._puppet.is_healthy():
             self.close()
             # something has happened figure out what
-            if self._puppet.reason == FFPuppet.RC_CLOSED:
+            if self._puppet.reason == Reason.CLOSED:
                 LOG.debug("target.close() was called")
-            elif self._puppet.reason == FFPuppet.RC_EXITED:
+            elif self._puppet.reason == Reason.EXITED:
                 LOG.debug("target closed itself")
             elif (
-                self._puppet.reason == FFPuppet.RC_WORKER
+                self._puppet.reason == Reason.WORKER
                 and "memory" in ignored
                 and "ffp_worker_memory_usage" in self._puppet.available_logs()
             ):
                 status = self.RESULT_IGNORED
                 LOG.debug("memory limit exceeded")
             elif (
-                self._puppet.reason == FFPuppet.RC_WORKER
+                self._puppet.reason == Reason.WORKER
                 and "log-limit" in ignored
                 and "ffp_worker_log_size" in self._puppet.available_logs()
             ):
@@ -133,7 +143,7 @@ class PuppetTarget(Target):
                 LOG.debug("log size limit exceeded")
             else:
                 # crash or hang (forced SIGABRT) has been detected
-                LOG.debug("failure detected, ffpuppet reason %r", self._puppet.reason)
+                LOG.debug("failure detected, ffpuppet %s", self._puppet.reason)
                 status = self.RESULT_FAILURE
         return status
 

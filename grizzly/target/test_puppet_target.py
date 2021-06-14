@@ -6,7 +6,8 @@ from itertools import count
 from os.path import isfile
 from platform import system
 
-from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, FFPuppet
+from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
+from ffpuppet.core import Reason
 from pytest import mark, raises
 
 from .puppet_target import PuppetTarget
@@ -16,7 +17,7 @@ from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
 def test_puppet_target_01(mocker, tmp_path):
     """test creating a PuppetTarget"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
-    fake_ffp.return_value.reason = FFPuppet.RC_CLOSED
+    fake_ffp.return_value.reason = Reason.CLOSED
     fake_ffp.return_value.log_length.return_value = 562
     fake_file = tmp_path / "fake"
     fake_file.touch()
@@ -83,26 +84,22 @@ def test_puppet_target_02(mocker, tmp_path):
         # running as expected - no failures
         (True, None, [], Target.RESULT_NONE, 0),
         # browser process closed
-        (False, FFPuppet.RC_CLOSED, [], Target.RESULT_NONE, 1),
+        (False, Reason.CLOSED, [], Target.RESULT_NONE, 1),
         # browser process crashed
-        (False, FFPuppet.RC_ALERT, [], Target.RESULT_FAILURE, 1),
+        (False, Reason.ALERT, [], Target.RESULT_FAILURE, 1),
         # browser exit with no crash logs
-        (False, FFPuppet.RC_EXITED, [], Target.RESULT_NONE, 1),
+        (False, Reason.EXITED, [], Target.RESULT_NONE, 1),
         # ffpuppet check failed
-        (False, FFPuppet.RC_WORKER, [], Target.RESULT_FAILURE, 1),
+        (False, Reason.WORKER, [], Target.RESULT_FAILURE, 1),
         # ffpuppet check ignored (memory)
-        (False, FFPuppet.RC_WORKER, ["memory"], Target.RESULT_IGNORED, 1),
+        (False, Reason.WORKER, ["memory"], Target.RESULT_IGNORED, 1),
         # ffpuppet check ignored (log-limit)
-        (False, FFPuppet.RC_WORKER, ["log-limit"], Target.RESULT_IGNORED, 1),
+        (False, Reason.WORKER, ["log-limit"], Target.RESULT_IGNORED, 1),
     ],
 )
 def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, closes):
     """test PuppetTarget.detect_failure()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
-    fake_ffp.RC_ALERT = FFPuppet.RC_ALERT
-    fake_ffp.RC_CLOSED = FFPuppet.RC_CLOSED
-    fake_ffp.RC_EXITED = FFPuppet.RC_EXITED
-    fake_ffp.RC_WORKER = FFPuppet.RC_WORKER
     fake_file = tmp_path / "fake"
     fake_file.touch()
     target = PuppetTarget(str(fake_file), None, 300, 25, 5000)
