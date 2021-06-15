@@ -552,7 +552,9 @@ class ReplayManager:
             LOG.info("Ignoring: %s", ", ".join(args.ignore))
         if args.xvfb:
             LOG.info("Running with Xvfb")
-        if args.rr:
+        if args.pernosco:
+            LOG.info("Running with RR (Pernosco mode)")
+        elif args.rr:
             LOG.info("Running with RR")
         elif args.valgrind:
             LOG.info("Running with Valgrind. This will be SLOW!")
@@ -606,6 +608,7 @@ class ReplayManager:
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
+                pernosco=args.pernosco,
                 rr=args.rr,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb,
