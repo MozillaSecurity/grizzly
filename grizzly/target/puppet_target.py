@@ -40,15 +40,14 @@ class PuppetTarget(Target):
     ):
         super().__init__(binary, extension, launch_timeout, log_limit, memory_limit)
         # TODO: clean up handling debuggers
+        debugger = Debugger.NONE
         if kwds.pop("pernosco", False):
             debugger = Debugger.PERNOSCO
-        elif kwds.pop("rr", False):
+        if kwds.pop("rr", False):
             debugger = Debugger.RR
-        elif kwds.pop("valgrind", False):
+        if kwds.pop("valgrind", False):
             self.use_valgrind = True
             debugger = Debugger.VALGRIND
-        else:
-            debugger = Debugger.NONE
         self._remove_prefs = False
 
         # create Puppet object
