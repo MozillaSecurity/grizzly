@@ -7,7 +7,7 @@ from os.path import isfile
 from platform import system
 
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
-from ffpuppet.core import Reason
+from ffpuppet.core import Debugger, Reason
 from pytest import mark, raises
 
 from .puppet_target import PuppetTarget
@@ -328,3 +328,35 @@ def test_puppet_target_08(mocker, tmp_path):
         with raises(TargetError, match="Missing prefs.js file 'missing'"):
             target.prefs = "missing"
         assert not isfile(prefs_file)
+
+
+@mark.parametrize(
+    "pernosco, rr, valgrind",
+    [
+        # No debugger selected
+        (False, False, False),
+        # Pernosco selected
+        (True, False, False),
+        # rr selected
+        (False, True, False),
+        # Valgrind selected
+        (False, False, True),
+    ],  # pylint: disable=invalid-name
+)
+def test_puppet_target_09(mocker, tmp_path, pernosco, rr, valgrind):
+    """test PuppetTarget debugger args"""
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    with PuppetTarget(
+        str(fake_file), None, 30, 25, 500, pernosco=pernosco, rr=rr, valgrind=valgrind
+    ) as _:
+        pass
+    if pernosco:
+        assert fake_ffp.call_args[-1]["debugger"] == Debugger.PERNOSCO
+    elif rr:
+        assert fake_ffp.call_args[-1]["debugger"] == Debugger.RR
+    elif valgrind:
+        assert fake_ffp.call_args[-1]["debugger"] == Debugger.VALGRIND
+    else:
+        assert fake_ffp.call_args[-1]["debugger"] == Debugger.NONE
