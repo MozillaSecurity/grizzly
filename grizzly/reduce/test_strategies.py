@@ -295,11 +295,15 @@ BeautifyStrategyParams = namedtuple(
         # test DDBEGIN/END respected in .js file
         pytest.param(
             *BeautifyStrategyParams(
-                test_data="try{\n//DDBEGIN\n'fluff';'required'\n//DDEND\n}catch(e){}\n",
+                test_data=(
+                    "try{\r\n//DDBEGIN\r\n'fluff';'required'\r\n//DDEND\r\n"
+                    "}catch(e){}\r\n\r\n"
+                ),
                 test_name="test.js",
                 expected_run_calls=1,
                 expected_results={
-                    "try{\n//DDBEGIN\n'fluff';\n'required'\n//DDEND\n}catch(e){}\n"
+                    "try{\r\n//DDBEGIN\r\n'fluff';\r\n'required'\r\n//DDEND\r\n"
+                    "}catch(e){}\r\n"
                 },
                 expected_num_reports=2,
                 strategies=["jsbeautify"],
@@ -612,7 +616,12 @@ def test_beautifier(
 
     assert replayer.run.call_count == expected_run_calls
     assert set(log_path.iterdir()) == {log_path / "reports"}
-    tests = {test.read_text() for test in log_path.glob("reports/*-*/" + test_name)}
+    # don't use test.read_text() because that converts newlines, and some tests need
+    # unaltered newlines
+    tests = {
+        test.read_bytes().decode("utf-8")
+        for test in log_path.glob("reports/*-*/" + test_name)
+    }
     assert tests == expected_results
     assert (
         sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports
