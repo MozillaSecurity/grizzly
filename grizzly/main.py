@@ -38,9 +38,11 @@ def main(args):
         LOG.info("Ignoring: %s", ", ".join(args.ignore))
     if args.xvfb:
         LOG.info("Running with Xvfb")
-    if args.rr:
+    if args.pernosco:
+        LOG.info("Running with RR (Pernosco mode)")
+    elif args.rr:
         LOG.info("Running with RR")
-    if args.valgrind:
+    elif args.valgrind:
         LOG.info("Running with Valgrind. This will be SLOW!")
 
     adapter = None
