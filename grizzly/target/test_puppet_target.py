@@ -6,8 +6,7 @@ from itertools import count
 from os.path import isfile
 from platform import system
 
-from ffpuppet import BrowserTerminatedError, BrowserTimeoutError
-from ffpuppet.core import Debugger, Reason
+from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, Debugger, Reason
 from pytest import mark, raises
 
 from .puppet_target import PuppetTarget

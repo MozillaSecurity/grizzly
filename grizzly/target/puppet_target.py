@@ -15,8 +15,7 @@ except ImportError:
 from tempfile import mkdtemp, mkstemp
 from time import sleep, time
 
-from ffpuppet import BrowserTimeoutError, FFPuppet, LaunchError
-from ffpuppet.core import Debugger, Reason
+from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
 from prefpicker import PrefPicker
 from psutil import AccessDenied, NoSuchProcess, Process, process_iter
 
