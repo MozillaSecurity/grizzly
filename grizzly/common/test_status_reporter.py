@@ -125,8 +125,10 @@ def test_status_reporter_04(tmp_path):
     assert any(StatusReporter._scan(str(tmp_path), "TEST_FILE"))
 
 
-def test_status_reporter_05(tmp_path):
+def test_status_reporter_05(mocker, tmp_path):
     """test StatusReporter._summary()"""
+    mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
+    mocker.patch("grizzly.common.status_reporter.time", side_effect=(1.0, 2.0))
     Status.PATH = str(tmp_path)
     # single report
     status = Status.start()
@@ -149,7 +151,6 @@ def test_status_reporter_05(tmp_path):
     assert len(output.split("\n")) == 3
     # multiple reports
     status = Status.start()
-    status.start_time += 66.0
     status.ignored = 1
     status.iteration = 8
     status.log_size = 86900000
