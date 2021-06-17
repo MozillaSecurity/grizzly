@@ -236,7 +236,7 @@ class GrizzlyArgs(CommonArgs):
             " status reporter while running Grizzly.",
         )
         self.parser.add_argument(
-            "-i", "--input", help="Test case or directory containing test cases"
+            "-i", "--input", help="Test case or directory containing test cases."
         )
         self.parser.add_argument(
             "--limit",
@@ -255,7 +255,14 @@ class GrizzlyArgs(CommonArgs):
         )
 
         self.launcher_grp.add_argument(
-            "--coverage", action="store_true", help="Enable coverage collection"
+            "--coverage", action="store_true", help="Enable coverage collection."
+        )
+        self.launcher_grp.add_argument(
+            "--runtime",
+            type=int,
+            default=0,
+            help="Maximum runtime in seconds. Checked after each iteration."
+            " (default: 'no limit')",
         )
 
         self.reporter_grp.add_argument(
@@ -263,14 +270,14 @@ class GrizzlyArgs(CommonArgs):
             "--collect",
             type=int,
             default=1,
-            help="Maximum number of test cases to include in the report"
-            "(default: %(default)s)",
+            help="Maximum number of test cases to include in the report."
+            " (default: %(default)s)",
         )
         self.reporter_grp.add_argument(
             "--s3-fuzzmanager",
             action="store_true",
             help="Report large attachments (if any) to S3 and then the crash &"
-            " S3 link to FuzzManager",
+            " S3 link to FuzzManager.",
         )
 
     def sanity_check(self, args):
@@ -294,7 +301,10 @@ class GrizzlyArgs(CommonArgs):
             self.parser.error("%r does not exist" % (args.input,))
 
         if args.limit < 0:
-            self.parser.error("--limit must be >= 0 (0 = no limit)")
+            self.parser.error("--limit must be >= 0")
+
+        if args.runtime < 0:
+            self.parser.error("--runtime must be >= 0")
 
         if args.tool is not None and not (args.fuzzmanager or args.s3_fuzzmanager):
             self.parser.error(

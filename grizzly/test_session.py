@@ -6,6 +6,8 @@
 """
 unit tests for grizzly.Session
 """
+from itertools import count
+
 from pytest import mark, raises
 
 from sapphire import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT, Sapphire
@@ -37,29 +39,34 @@ class SimpleAdapter(Adapter):
 
 
 @mark.parametrize(
-    "harness, profiling, coverage, relaunch, iters",
+    "harness, profiling, coverage, relaunch, iters, runtime",
     [
         # with harness, single iteration
-        (True, False, False, 1, 1),
+        (True, False, False, 1, 1, 0),
         # with harness, 10 iterations relaunch every iteration
-        (True, False, False, 1, 10),
+        (True, False, False, 1, 10, 0),
         # with harness, 10 iterations relaunch every other iteration
-        (True, False, False, 2, 10),
+        (True, False, False, 2, 10, 0),
         # with harness, 10 iterations no relaunches
-        (True, False, False, 10, 10),
+        (True, False, False, 10, 10, 0),
         # no harness, single iteration
-        (False, False, False, 1, 1),
+        (False, False, False, 1, 1, 0),
         # no harness, 10 iterations
-        (False, False, False, 1, 10),
+        (False, False, False, 1, 10, 0),
         # test enable profiling
-        (True, True, False, 10, 10),
+        (True, True, False, 10, 10, 0),
         # test Session.dump_coverage()
-        (True, True, True, 2, 2),
+        (True, True, True, 2, 2, 0),
+        # with harness, runtime limit
+        (True, False, False, 1, 0, 1),
     ],
 )
-def test_session_01(mocker, tmp_path, harness, profiling, coverage, relaunch, iters):
+def test_session_01(
+    mocker, tmp_path, harness, profiling, coverage, relaunch, iters, runtime
+):
     """test Session with typical fuzzer Adapter"""
     Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     prefs = tmp_path / "prefs.js"
     prefs.touch()
@@ -68,9 +75,12 @@ def test_session_01(mocker, tmp_path, harness, profiling, coverage, relaunch, it
     target.monitor.launches = 1
     # avoid shutdown delay
     target.monitor.is_healthy.return_value = False
+    # we can only test iter limit OR runtime limit not both
+    assert bool(iters) != bool(runtime), "test is broken!"
+    max_iters = iters or 1
     # calculate if the target is 'closed' based on relaunch
     type(target).closed = mocker.PropertyMock(
-        side_effect=((x % relaunch == 0) for x in range(iters))
+        side_effect=((x % relaunch == 0) for x in range(max_iters))
     )
     with Session(
         SimpleAdapter(harness),
@@ -85,18 +95,24 @@ def test_session_01(mocker, tmp_path, harness, profiling, coverage, relaunch, it
             SERVED_ALL,
             [session.iomanager.page_name(offset=-1)],
         )
-        session.run([], 10, input_path="file.bin", iteration_limit=iters)
-        assert session.status.iteration == iters
+        session.run(
+            [],
+            10,
+            input_path="file.bin",
+            iteration_limit=iters,
+            runtime_limit=runtime,
+        )
+        assert session.status.iteration == max_iters
         assert session.status.test_name == "file.bin"
-        assert target.close.call_count == iters / relaunch
-        assert target.detect_failure.call_count == iters
+        assert target.close.call_count == max_iters / relaunch
+        assert target.detect_failure.call_count == max_iters
         assert target.handle_hang.call_count == 0
         if profiling:
-            assert any(session.status.profile_entries())
+            assert any(session.status.profile_entries()) == profiling
         else:
             assert not any(session.status.profile_entries())
         if coverage:
-            assert target.dump_coverage.call_count == iters
+            assert target.dump_coverage.call_count == max_iters
         else:
             assert target.dump_coverage.call_count == 0
 
