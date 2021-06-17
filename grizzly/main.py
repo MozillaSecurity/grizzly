@@ -52,7 +52,7 @@ def main(args):
         LOG.debug("initializing Adapter %r", args.adapter)
         adapter = load_plugin(args.adapter, "grizzly_adapters", Adapter)(args.adapter)
 
-        # test time limit and timeout sanity checking
+        # test case time limit and timeout sanity checking
         if args.time_limit:
             time_limit = args.time_limit
         else:
@@ -108,8 +108,10 @@ def main(args):
             reporter = FilesystemReporter(pathjoin(getcwd(), "results"))
             LOG.info("Results will be stored in %r", reporter.report_path)
 
-        if args.limit > 0:
+        if args.limit:
             LOG.info("%r iteration(s) will be attempted", args.limit)
+        if args.runtime:
+            LOG.info("Runtime is limited to %rs", args.runtime)
 
         # set 'auto_close=1' so the client error pages (code 4XX) will
         # call 'window.close()' after a second.
@@ -137,6 +139,7 @@ def main(args):
                 time_limit,
                 input_path=args.input,
                 iteration_limit=args.limit,
+                runtime_limit=args.runtime,
                 display_mode=display_mode,
             )
 

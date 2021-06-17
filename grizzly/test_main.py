@@ -34,6 +34,7 @@ class FakeArgs:
         self.prefs = None
         self.rr = False  # pylint: disable=invalid-name
         self.relaunch = 1000
+        self.runtime = 0
         self.s3_fuzzmanager = False
         self.time_limit = None
         self.timeout = None
@@ -44,21 +45,23 @@ class FakeArgs:
 
 
 @mark.parametrize(
-    "cov, adpt_relaunch, limit, verbose",
+    "cov, adpt_relaunch, limit, runtime, verbose",
     [
         # successful run
-        (False, 0, 0, True),
-        # successful run (with limit)
-        (False, 0, 10, True),
+        (False, 0, 0, 0, True),
+        # successful run (with iteration limit)
+        (False, 0, 10, 0, True),
+        # successful run (with runtime limit)
+        (False, 0, 0, 10, True),
         # successful run (with coverage)
-        (True, 0, 0, False),
+        (True, 0, 0, 0, False),
         # relaunch 1
-        (False, 1, 0, False),
+        (False, 1, 0, 0, False),
         # relaunch 10
-        (False, 10, 0, False),
+        (False, 10, 0, 0, False),
     ],
 )
-def test_main_01(mocker, cov, adpt_relaunch, limit, verbose):
+def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     """test main()"""
     fake_adapter = mocker.NonCallableMock(spec_set=Adapter)
     fake_adapter.RELAUNCH = adpt_relaunch
@@ -76,6 +79,7 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, verbose):
     args.adapter = "fake"
     args.ignore = ["fake", "fake"]
     args.limit = limit
+    args.runtime = runtime
     args.prefs = "fake"
     args.rr = True
     args.valgrind = True
