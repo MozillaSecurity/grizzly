@@ -41,6 +41,7 @@ class StatusReporter:
     SUMMARY_LIMIT = 4095  # summary output must be no more than 4KB
 
     def __init__(self, reports, tracebacks=None):
+        assert all(x.data_file is None for x in reports)
         self.reports = reports
         self.tracebacks = tracebacks
 
@@ -136,7 +137,7 @@ class StatusReporter:
         if not self.reports:
             return "No status reports available"
         exp = int(time()) - self.EXP_LIMIT
-        self.reports.sort(key=lambda x: x.duration, reverse=True)
+        self.reports.sort(key=lambda x: x.runtime, reverse=True)
         self.reports.sort(key=lambda x: x.timestamp < exp)
         txt = list()
         for num, report in enumerate(self.reports, start=1):
@@ -144,7 +145,7 @@ class StatusReporter:
             if report.timestamp < exp:
                 txt.append(" (EXPIRED)\n")
                 continue
-            txt.append(" Runtime %s\n" % (timedelta(seconds=int(report.duration)),))
+            txt.append(" Runtime %s\n" % (timedelta(seconds=int(report.runtime)),))
             txt.append(" * Iterations: %d" % (report.iteration,))
             txt.append(" @ %0.2f," % (round(report.rate, 2),))
             txt.append(" Ignored: %d," % (report.ignored,))
@@ -162,9 +163,7 @@ class StatusReporter:
                     txt.append(str(timedelta(seconds=int(entry.total))))
                 else:
                     txt.append("%0.3fs" % (round(entry.total, 3),))
-                txt.append(
-                    " %0.2f%%" % (round(entry.total / report.duration * 100, 2),)
-                )
+                txt.append(" %0.2f%%" % (round(entry.total / report.runtime * 100, 2),))
                 txt.append(" (%0.3f avg," % (round(avg, 3),))
                 txt.append(" %0.3f max," % (round(entry.max, 3),))
                 txt.append(" %0.3f min)" % (round(entry.min, 3),))
@@ -218,7 +217,7 @@ class StatusReporter:
             # Runtime
             if runtime:
                 txt.append("\n")
-                total_runtime = sum(x.duration for x in reports)
+                total_runtime = sum(x.runtime for x in reports)
                 txt.append("   Runtime : %s" % (timedelta(seconds=int(total_runtime)),))
             # Log size
             log_usage = sum(log_sizes) / 1048576.0

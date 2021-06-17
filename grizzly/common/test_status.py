@@ -13,9 +13,10 @@ from time import sleep, time
 from .status import Status
 
 
-def test_status_01(tmp_path):
+def test_status_01(mocker, tmp_path):
     """test Status.start()"""
     Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.common.status.time", return_value=1.0)
     status = Status.start()
     assert status is not None
     assert status.data_file is not None
@@ -23,12 +24,12 @@ def test_status_01(tmp_path):
     assert stat(status.data_file).st_size > 0
     assert status.start_time > 0
     assert status.timestamp >= status.start_time
-    assert int(status.duration) == 0
     assert status.ignored == 0
     assert status.iteration == 0
     assert status.log_size == 0
     assert status.rate == 0
     assert status.results == 0
+    assert int(status.runtime) == 0
     assert status.pid is not None
     assert not status._enable_profiling
     assert not status._profiles
@@ -83,9 +84,10 @@ def test_status_04(tmp_path):
     assert Status.load(str(bad)) is None
 
 
-def test_status_05(tmp_path):
+def test_status_05(mocker, tmp_path):
     """test Status.load()"""
     Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.common.status.time", return_value=1.0)
     # create simple entry
     status = Status.start(enable_profiling=True)
     status.count_result("sig1")
@@ -96,7 +98,7 @@ def test_status_05(tmp_path):
     assert loaded.data_file is None
     assert status.start_time == loaded.start_time
     assert status.timestamp == loaded.timestamp
-    assert status.duration == loaded.duration
+    assert status.runtime == loaded.runtime
     assert status.ignored == loaded.ignored
     assert status.iteration == loaded.iteration
     assert status.log_size == loaded.log_size
@@ -127,19 +129,33 @@ def test_status_06(tmp_path):
     assert len(tuple(Status.loadall())) == 5
 
 
-def test_status_07(tmp_path):
-    """test Status.duration and Status.rate calculations"""
+def test_status_07(mocker, tmp_path):
+    """test Status.runtime and Status.rate calculations"""
     Status.PATH = str(tmp_path)
+    mocker.patch(
+        "grizzly.common.status.time", side_effect=(1.0, 1.0, 3.0, 3.0, 5.0, 5.0, 5.0)
+    )
     status = Status.start()
-    status.start_time = 1
-    status.timestamp = 2
-    status.iteration = 0
-    assert status.duration == 1
+    assert status.data_file is not None
+    assert status.start_time == 1
+    # test no iterations
+    assert status.runtime == 2.0
     assert status.rate == 0
+    # test one iteration
     status.iteration = 1
-    assert status.rate == 1
-    status.timestamp += 1
-    assert status.rate == 0.5
+    # timestamp should be ignored when calculating rate and runtime on active object
+    status.timestamp = 100
+    assert status.runtime == 4.0
+    assert status.rate == 0.25
+    # test loaded
+    status.report(force=True)
+    loaded = Status.load(status.data_file)
+    assert loaded.runtime == 4.0
+    assert loaded.rate == 0.25
+    # timestamp should be used when calculating rate and runtime on loaded object
+    loaded.timestamp = 2.0
+    assert loaded.runtime == 1.0
+    assert loaded.rate == 1.0
 
 
 def _client_writer(done, reported, working_path):

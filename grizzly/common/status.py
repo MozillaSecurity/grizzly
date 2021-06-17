@@ -113,18 +113,6 @@ class Status:
             "timestamp": self.timestamp,
         }
 
-    @property
-    def duration(self):
-        """Calculate the number of seconds since start() was called.
-
-        Args:
-            None
-
-        Returns:
-            int: Total runtime in seconds since start() was called
-        """
-        return max(self.timestamp - self.start_time, 0)
-
     @classmethod
     def load(cls, data_file):
         """Load status report. Loading a status report from disk will create a
@@ -162,6 +150,7 @@ class Status:
             return None
         for attr, value in data.items():
             setattr(status, attr, value)
+        assert status.start_time <= status.timestamp
         # set read only
         status.data_file = None
         return status
@@ -231,7 +220,8 @@ class Status:
         Returns:
             float: Number of iterations performed per second.
         """
-        return self.iteration / float(self.duration) if self.duration > 0 else 0
+        runtime = self.runtime
+        return self.iteration / float(runtime) if runtime else 0
 
     def record(self, name, duration):
         """Used to add profiling data. This is intended to be used to make rough
@@ -278,6 +268,7 @@ class Status:
         now = time()
         if not force and now < (self.timestamp + report_freq):
             return False
+        assert self.start_time <= now
         self.timestamp = now
         with self._lock:
             with open(self.data_file, "w") as out_fp:
@@ -295,6 +286,21 @@ class Status:
             int: Total number of results.
         """
         return sum(self._results.values())
+
+    @property
+    def runtime(self):
+        """Calculate the number of seconds since start() was called. Value is
+        calculated relative to 'timestamp' if status object is read-only.
+
+        Args:
+            None
+
+        Returns:
+            int: Total runtime in seconds.
+        """
+        if self.data_file is None:
+            return self.timestamp - self.start_time
+        return max(time() - self.start_time, 0)
 
     def signatures(self):
         """Provide the signature and the number of times it has been found for
