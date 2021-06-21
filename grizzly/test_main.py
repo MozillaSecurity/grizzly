@@ -209,3 +209,43 @@ def test_main_04(mocker, arg_testlimit, arg_timeout, exit_code):
     args.time_limit = arg_testlimit
     args.timeout = arg_timeout
     assert main(args) == exit_code
+
+
+@mark.parametrize(
+    "pernosco, rr, valgrind",
+    [
+        # No debugger enabled
+        (False, False, False),
+        # Pernosco enabled
+        (True, False, False),
+        # rr enabled
+        (False, True, False),
+        # Valgrind enabled
+        (False, False, True),
+    ],  # pylint: disable=invalid-name
+)
+def test_main_05(mocker, pernosco, rr, valgrind):
+    """test enabling debuggers"""
+    fake_adapter = mocker.NonCallableMock(spec_set=Adapter)
+    fake_adapter.RELAUNCH = 1
+    fake_adapter.TIME_LIMIT = 10
+    fake_target = mocker.Mock(spec_set=Target)
+    plugin_loader = mocker.patch("grizzly.main.load_plugin", autospec=True)
+    plugin_loader.side_effect = (
+        mocker.Mock(spec_set=Adapter, return_value=fake_adapter),
+        fake_target,
+    )
+    fake_session = mocker.patch("grizzly.main.Session", autospec=True)
+    fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
+    fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
+    args = FakeArgs()
+    args.adapter = "fake"
+    # maximum one debugger allowed at a time
+    assert sum((pernosco, rr, valgrind)) < 2, "test broken!"
+    args.pernosco = pernosco
+    args.rr = rr
+    args.valgrind = valgrind
+    assert main(args) == Session.EXIT_SUCCESS
+    assert fake_target.call_args[-1]["pernosco"] == pernosco
+    assert fake_target.call_args[-1]["rr"] == rr
+    assert fake_target.call_args[-1]["valgrind"] == valgrind

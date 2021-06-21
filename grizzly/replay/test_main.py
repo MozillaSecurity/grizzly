@@ -24,15 +24,13 @@ def test_main_01(mocker, tmp_path):
     # This is a typical scenario - a test that reproduces results ~50% of the time.
     # Of the four attempts only the first and third will 'reproduce' the result
     # and the forth attempt should be skipped.
-    # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
+    # mock Sapphire.serve_path only
     serve_path = mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path", autospec=True
+        "grizzly.replay.replay.Sapphire.serve_path",
+        autospec=True,
+        return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
     )
-    serve_path.return_value = (
-        SERVED_ALL,
-        ["test.html"],
-    )  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin")
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
@@ -61,7 +59,8 @@ def test_main_01(mocker, tmp_path):
         input=str(tmp_path / "test.html"),
         logs=str(log_path),
         min_crashes=2,
-        no_harness=True,
+        no_harness=False,
+        pernosco=False,
         prefs=str(tmp_path / "prefs.js"),
         relaunch=1,
         repeat=4,
@@ -88,15 +87,13 @@ def test_main_01(mocker, tmp_path):
 
 def test_main_02(mocker, tmp_path):
     """test ReplayManager.main() - no repro"""
-    # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    serve_path = mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path", autospec=True
+    # mock Sapphire.serve_path only
+    mocker.patch(
+        "grizzly.replay.replay.Sapphire.serve_path",
+        autospec=True,
+        return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
     )
-    serve_path.return_value = (
-        SERVED_ALL,
-        ["test.html"],
-    )  # passed to mocked Target.detect_failure
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin")
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
@@ -105,7 +102,6 @@ def test_main_02(mocker, tmp_path):
     load_target.return_value.return_value = target
     # setup args
     (tmp_path / "test.html").touch()
-    (tmp_path / "prefs.js").touch()
     args = mocker.Mock(
         fuzzmanager=False,
         idle_delay=0,
@@ -114,6 +110,7 @@ def test_main_02(mocker, tmp_path):
         input=str(tmp_path / "test.html"),
         min_crashes=2,
         no_harness=True,
+        pernosco=False,
         prefs=None,
         relaunch=1,
         repeat=1,
@@ -142,31 +139,27 @@ def test_main_03(mocker):
         ignore=list(),
         input="test",
         min_crashes=1,
-        no_harenss=True,
+        no_harness=True,
+        pernosco=False,
         prefs=None,
         relaunch=1,
         repeat=1,
+        rr=False,
         sig=None,
         test_index=None,
         time_limit=10,
         timeout=None,
+        valgrind=False,
     )
     # user abort
     fake_load_target.side_effect = KeyboardInterrupt
-    # coverage
-    args.rr = True
-    args.valgrind = False
     assert ReplayManager.main(args) == Session.EXIT_ABORT
     fake_load_target.reset_mock()
     # invalid test case
     fake_tc.load.side_effect = TestCaseLoadFailure
-    # coverage
-    args.rr = False
-    args.valgrind = True
     assert ReplayManager.main(args) == Session.EXIT_ERROR
     assert fake_load_target.call_count == 0
     # no test cases
-    args.valgrind = False
     fake_tc.load.side_effect = None
     fake_tc.load.return_value = list()
     assert ReplayManager.main(args) == Session.EXIT_ERROR
@@ -210,14 +203,17 @@ def test_main_04(mocker, tmp_path):
         ignore=list(),
         input="test",
         min_crashes=1,
-        no_harenss=True,
+        no_harness=True,
+        pernosco=False,
         prefs=None,
         relaunch=1,
         repeat=1,
+        rr=False,
         sig=None,
         test_index=None,
         time_limit=10,
         timeout=None,
+        valgrind=False,
     )
     # target launch error
     fake_logs = tmp_path / "fake_report"
@@ -240,12 +236,10 @@ def test_main_04(mocker, tmp_path):
 def test_main_05(mocker, tmp_path):
     """test ReplayManager.main() loading/generating prefs.js"""
     serve_path = mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path", autospec=True
+        "grizzly.replay.replay.Sapphire.serve_path",
+        autospec=True,
+        return_value=(None, ["test.html"]),  # passed to Target.detect_failure
     )
-    serve_path.return_value = (
-        None,
-        ["test.html"],
-    )  # passed to mocked Target.detect_failure
     # setup Target
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
@@ -262,12 +256,15 @@ def test_main_05(mocker, tmp_path):
         ignore=list(),
         min_crashes=1,
         no_harness=True,
+        pernosco=False,
         relaunch=1,
         repeat=1,
+        rr=False,
         sig=None,
         test_index=None,
         time_limit=1,
         timeout=None,
+        valgrind=False,
     )
     log_path = tmp_path / "logs"
     args.logs = str(log_path)
@@ -339,15 +336,13 @@ def test_main_05(mocker, tmp_path):
 )
 def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, result):
     """test ReplayManager.main() - test time limit and timeout"""
-    # mock Sapphire.serve_path only
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    serve_path = mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path", autospec=True
+    # mock Sapphire.serve_path only
+    mocker.patch(
+        "grizzly.replay.replay.Sapphire.serve_path",
+        autospec=True,
+        return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
     )
-    serve_path.return_value = (
-        SERVED_ALL,
-        ["test.html"],
-    )  # passed to mocked Target.detect_failure
     # setup Target
     target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE
@@ -355,16 +350,15 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
     load_target = mocker.patch("grizzly.replay.replay.load_plugin")
     load_target.return_value.return_value = target
     # create test to load
-    test = TestCase("test.html", None, None)
-    test_file = tmp_path / "test.html"
-    test_file.write_text("test")
-    test.add_from_file(str(test_file))
-    replay_path = tmp_path / "test"
-    replay_path.mkdir()
-    test.time_limit = test_timelimit
-    test.dump(str(replay_path), include_details=True)
+    with TestCase("test.html", None, None) as test:
+        test_file = tmp_path / "test.html"
+        test_file.write_text("test")
+        test.add_from_file(str(test_file))
+        replay_path = tmp_path / "test"
+        replay_path.mkdir()
+        test.time_limit = test_timelimit
+        test.dump(str(replay_path), include_details=True)
     # setup args
-    (tmp_path / "prefs.js").touch()
     args = mocker.Mock(
         fuzzmanager=False,
         idle_delay=0,
@@ -373,6 +367,7 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         input=str(replay_path),
         min_crashes=2,
         no_harness=True,
+        pernosco=False,
         prefs=None,
         relaunch=1,
         repeat=1,
@@ -384,3 +379,65 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         valgrind=False,
     )
     assert ReplayManager.main(args) == result
+
+
+@mark.parametrize(
+    "pernosco, rr, valgrind, no_harness",
+    [
+        # No debugger enabled and no harness
+        (False, False, False, False),
+        # No debugger enabled and with harness
+        (False, False, False, True),
+        # Pernosco enabled
+        (True, False, False, False),
+        # rr enabled
+        (False, True, False, False),
+        # Valgrind enabled
+        (False, False, True, False),
+    ],  # pylint: disable=invalid-name
+)
+def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
+    """test ReplayManager.main() enable debuggers"""
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
+    # mock Sapphire.serve_path only
+    mocker.patch(
+        "grizzly.replay.replay.Sapphire.serve_path",
+        autospec=True,
+        return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
+    )
+    # setup Target
+    load_target = mocker.patch("grizzly.replay.replay.load_plugin")
+    target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
+    target.RESULT_NONE = Target.RESULT_NONE
+    target.detect_failure.return_value = Target.RESULT_NONE
+    load_target.return_value.return_value = target
+    # setup args
+    (tmp_path / "test.html").touch()
+    args = mocker.Mock(
+        fuzzmanager=False,
+        idle_delay=0,
+        idle_threshold=0,
+        ignore=["fake", "timeout"],
+        input=str(tmp_path / "test.html"),
+        min_crashes=2,
+        no_harness=no_harness,
+        pernosco=pernosco,
+        prefs=None,
+        relaunch=1,
+        repeat=1,
+        rr=rr,
+        sig=None,
+        test_index=None,
+        time_limit=10,
+        timeout=None,
+        valgrind=valgrind,
+    )
+    # maximum one debugger allowed at a time
+    assert sum((pernosco, rr, valgrind)) < 2, "test broken!"
+    assert ReplayManager.main(args) == Session.EXIT_FAILURE
+    assert target.detect_failure.call_count == 1
+    assert target.close.call_count == 2
+    assert target.cleanup.call_count == 1
+    assert load_target.return_value.call_args[-1]["pernosco"] == pernosco
+    assert load_target.return_value.call_args[-1]["rr"] == rr
+    assert load_target.return_value.call_args[-1]["valgrind"] == valgrind
