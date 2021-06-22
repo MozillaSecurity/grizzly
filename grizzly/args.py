@@ -126,6 +126,8 @@ class CommonArgs:
             self.launcher_grp.add_argument(
                 "--xvfb", action="store_true", help="Use Xvfb."
             )
+        else:
+            self.parser.set_defaults(xvfb=False)
 
         self.reporter_grp = self.parser.add_argument_group("Reporter Arguments")
         self.reporter_grp.add_argument(
@@ -153,6 +155,12 @@ class CommonArgs:
             dbg_group.add_argument("--rr", action="store_true", help="Use rr.")
             dbg_group.add_argument(
                 "--valgrind", action="store_true", help="Use Valgrind."
+            )
+        else:
+            self.parser.set_defaults(
+                pernosco=False,
+                rr=False,
+                valgrind=False,
             )
 
         self.parser.epilog = (
