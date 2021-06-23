@@ -250,16 +250,16 @@ class Status:
         Returns:
             None
         """
-        assert isinstance(duration, (float, int))
-        try:
-            self._profiles[name]["count"] += 1
-            if self._profiles[name]["max"] < duration:
-                self._profiles[name]["max"] = duration
-            elif self._profiles[name]["min"] > duration:
-                self._profiles[name]["min"] = duration
-            self._profiles[name]["total"] += duration
-        except KeyError:
-            if self._enable_profiling:
+        if self._enable_profiling:
+            assert isinstance(duration, (float, int))
+            try:
+                self._profiles[name]["count"] += 1
+                if self._profiles[name]["max"] < duration:
+                    self._profiles[name]["max"] = duration
+                elif self._profiles[name]["min"] > duration:
+                    self._profiles[name]["min"] = duration
+                self._profiles[name]["total"] += duration
+            except KeyError:
                 # add profile entry
                 self._profiles[name] = {
                     "count": 1,
