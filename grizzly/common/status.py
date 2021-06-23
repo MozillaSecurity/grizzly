@@ -50,13 +50,18 @@ class Status:
     )
 
     def __init__(self, data_file, enable_profiling=False, start_time=None):
-        assert data_file.endswith(".json")
-        assert start_time is None or isinstance(start_time, float)
-        self._lock = InterProcessLock("%s.lock" % (data_file,))
-        self._enable_profiling = enable_profiling
+        if data_file is None:
+            # read-only mode
+            assert start_time is None
+            self._lock = None
+            self._enable_profiling = False
+        else:
+            assert data_file.endswith(".json")
+            assert isinstance(start_time, float)
+            self._lock = InterProcessLock(self.lock_file(data_file))
+            self._enable_profiling = enable_profiling
         self._profiles = dict()
         self._results = defaultdict(int)
-        # if data_file is None the status report is read only (no reporting)
         self.data_file = data_file
         self.ignored = 0
         self.iteration = 0
@@ -75,24 +80,23 @@ class Status:
         Returns:
             None
         """
-        if self.data_file is None:
-            return
-        try:
-            with self._lock:
-                unlink(self.data_file)
-        except OSError:  # pragma: no cover
-            LOG.warning("Failed to delete %r", self.data_file)
-        try:
-            unlink("%s.lock" % (self.data_file,))
-        except OSError:  # pragma: no cover
-            pass
-        self.data_file = None
+        if self.data_file is not None:
+            try:
+                with self._lock:
+                    unlink(self.data_file)
+            except OSError:  # pragma: no cover
+                LOG.warning("Failed to delete %r", self.data_file)
+            try:
+                unlink(self.lock_file(self.data_file))
+            except OSError:  # pragma: no cover
+                pass
+            self.data_file = None
 
     def count_result(self, signature):
         """Increment counter that matches `signature`.
 
         Args:
-            signature (str):
+            signature (str): Signature to increment.
 
         Returns:
             None
@@ -122,12 +126,13 @@ class Status:
             data_file (str): JSON file that contains status data.
 
         Returns:
-            Status: Loaded status object or None
+            Status: Loaded status object (read-only) or None
         """
-        status = cls(data_file)
+        assert data_file
+        status = cls(None)
         data = None
         try:
-            with status._lock:  # pylint: disable=protected-access
+            with InterProcessLock(cls.lock_file(data_file)):
                 with open(data_file, "r") as out_fp:
                     data = load(out_fp)
         except OSError:
@@ -136,7 +141,7 @@ class Status:
             if not isfile(data_file):
                 # attempt to remove potentially leaked lock file
                 try:
-                    unlink("%s.lock" % (data_file,))
+                    unlink(cls.lock_file(data_file))
                 except OSError:  # pragma: no cover
                     pass
         except ValueError:
@@ -151,8 +156,7 @@ class Status:
         for attr, value in data.items():
             setattr(status, attr, value)
         assert status.start_time <= status.timestamp
-        # set read only
-        status.data_file = None
+        assert status.data_file is None
         return status
 
     @classmethod
@@ -173,6 +177,18 @@ class Status:
                 if status is None:
                     continue
                 yield status
+
+    @staticmethod
+    def lock_file(data_file):
+        """Name of lock file to use with data_file.
+
+        Args:
+            data_file (str): Name of data file.
+
+        Returns:
+            str: Lock file name.
+        """
+        return "%s.lock" % (data_file,)
 
     @contextmanager
     def measure(self, name):
