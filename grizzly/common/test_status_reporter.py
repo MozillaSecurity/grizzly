@@ -241,7 +241,7 @@ def test_status_reporter_07(tmp_path):
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     assert not rptr.has_results
-    assert not rptr._results()
+    assert rptr._results() == "No results available\n"
     # multiple reports with results
     status = Status.start(path=str(tmp_path))
     status.iteration = 1
