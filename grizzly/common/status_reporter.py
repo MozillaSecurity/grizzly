@@ -15,7 +15,7 @@ try:
 except ImportError:  # pragma: no cover
     # os.getloadavg() is not available on all platforms
     getloadavg = None
-from os import SEEK_CUR, getenv, scandir
+from os import SEEK_CUR, getenv, remove, scandir
 from os.path import isdir
 from re import match
 from time import gmtime, strftime, time
@@ -44,6 +44,37 @@ class StatusReporter:
         assert all(x.data_file is None for x in reports)
         self.reports = reports
         self.tracebacks = tracebacks
+
+    @staticmethod
+    def delete_expired(path, exp_limit=EXP_LIMIT):
+        """Remove expired reports from the filesystem.
+
+        Args:
+            path (str): Path to scan for status report files.
+            exp_limit (int): Age limit of report in seconds before it is considered
+                             expired.
+
+        Returns:
+            None
+        """
+        exp = int(time()) - exp_limit
+        expired = 0
+        for entry in scandir(path):
+            if entry.name.endswith(".json") and entry.is_file():
+                report = Status.load(entry.path)
+                if report and report.timestamp <= exp:
+                    # remove lock file
+                    try:
+                        remove(Status.lock_file(entry.path))
+                    except OSError:  # pragma: no cover
+                        pass
+                    # remove data file
+                    try:
+                        remove(entry.path)
+                        expired += 1
+                    except OSError:  # pragma: no cover
+                        pass
+        print("%d expired report(s) removed" % (expired,))
 
     def dump_specific(self, filename):
         """Write out merged reports.
@@ -448,13 +479,13 @@ def main(args=None):
         log_fmt = "[%(asctime)s] %(message)s"
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    modes = ("status",)
+    modes = ("status", "cleanup")
     parser = ArgumentParser(description="Grizzly status report generator")
     parser.add_argument("--dump", help="File to write report to")
     parser.add_argument(
         "--mode",
         default="status",
-        help="Status loading mode. Available modes: %s (default: 'status')"
+        help="Report mode. Available modes: %s (default: 'status')"
         % (", ".join(modes),),
     )
     parser.add_argument(
@@ -476,6 +507,11 @@ def main(args=None):
         parser.error("Invalid mode %r" % args.mode)
     if args.tracebacks and not isdir(args.tracebacks):
         parser.error("--tracebacks must be a directory")
+
+    if args.mode == "cleanup":
+        print("Removing expired reports from disk...")
+        StatusReporter.delete_expired(args.reports)
+        return 0
 
     reporter = StatusReporter.load(args.reports, tb_path=args.tracebacks)
     if args.dump:
