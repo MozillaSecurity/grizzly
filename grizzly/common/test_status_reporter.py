@@ -6,6 +6,7 @@
 # pylint: disable=protected-access
 
 from itertools import count
+from os.path import isfile
 from re import match
 from unittest.mock import Mock
 
@@ -355,6 +356,22 @@ def test_status_reporter_10(tmp_path):
     assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
 
 
+def test_status_reporter_11(mocker, tmp_path):
+    """test StatusReporter.delete_expired()"""
+    # test not expired
+    mocker.patch("grizzly.common.status.time", return_value=1.0)
+    mocker.patch("grizzly.common.status_reporter.time", return_value=1.0)
+    status = Status.start(path=str(tmp_path))
+    status.report(force=True)
+    StatusReporter.delete_expired(str(tmp_path))
+    assert isfile(status.data_file)
+    # test expired
+    mocker.patch("grizzly.common.status_reporter.time", return_value=2.0)
+    status.report(force=True)
+    StatusReporter.delete_expired(str(tmp_path), exp_limit=1)
+    assert not isfile(status.data_file)
+
+
 def test_traceback_report_01():
     """test simple TracebackReport"""
     tbr = TracebackReport("log.txt", ["0", "1", "2"], prev_lines=["-2", "-1"])
@@ -561,3 +578,8 @@ def test_main_04():
         main(["--mode", "invalid"])
     with raises(SystemExit):
         main(["--tracebacks", "missing"])
+
+
+def test_main_05(tmp_path):
+    """test main() cleanup mode"""
+    assert main(["--mode", "cleanup", "--reports", str(tmp_path)]) == 0
