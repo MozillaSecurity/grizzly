@@ -27,7 +27,22 @@ ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
 
 class Status:
     """Status holds status information for the Grizzly session.
-    There can be multiple readers of the data but only a single writer.
+    There can be multiple readers (read-only) but only a single writer of data.
+    Read-only mode is implied if `data_file` is None.
+
+    Attributes:
+        _enable_profiling (bool): Profiling support status.
+        _lock (InterProcessLock): Lock used with data_file.
+        _profiles (dict): Profiling data.
+        _results (dict): Results data. Used to count occurrences of a signature.
+        data_file (str): File to save data to. None in read-only mode.
+        ignored (int): Ignored result count.
+        iteration (int): Iteration count.
+        log_size (int): Log size in bytes.
+        pid (int): Python process ID.
+        start_time (float): Start time of session.
+        test_name (str): Current test name.
+        timestamp (float): Last time data was saved to data_file. Set by report().
     """
 
     PATH = grz_tmp("status")
@@ -118,8 +133,7 @@ class Status:
 
     @classmethod
     def load(cls, data_file):
-        """Load status report. Loading a status report from disk will create a
-        read only status report.
+        """Load status report from a file. This will create a read-only status report.
 
         Args:
             data_file (str): JSON file that contains status data.
@@ -166,7 +180,7 @@ class Status:
             path (str): Path to scan for files containing status data.
 
         Yields:
-            Status: Objects contain status data from files found in `path`.
+            Status: Successfully loaded read-only status objects.
         """
         if isdir(path):
             for entry in scandir(path):
@@ -194,7 +208,7 @@ class Status:
         Args:
             name (str): Used to group the entries.
 
-        Returns:
+        Yields:
             None
         """
         if self._enable_profiling:
@@ -323,7 +337,7 @@ class Status:
             None
 
         Yields:
-            tuples: Containing signature and count.
+            tuple: Signature and count.
         """
         for sig, count in self._results.items():
             yield (sig, count)
