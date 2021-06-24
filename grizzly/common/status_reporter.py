@@ -103,10 +103,14 @@ class StatusReporter:
 
     def _results(self, max_len=85):
         signatures = defaultdict(int)
+        exp = int(time()) - self.EXP_LIMIT
         # calculate totals
-        for result in self.reports:
-            for sig, count in result.signatures():
-                signatures[sig] += count
+        for report in self.reports:
+            # filter expired reports
+            if report.timestamp > exp:
+                # count results in report
+                for sig, count in report.signatures():
+                    signatures[sig] += count
         # generate output
         txt = list()
         for sig, count in sorted(signatures.items(), key=lambda x: x[1], reverse=True):
@@ -114,6 +118,8 @@ class StatusReporter:
                 txt.append("%d: '%s...'\n" % (count, sig[:max_len]))
             else:
                 txt.append("%d: %r\n" % (count, sig))
+        if not txt:
+            txt.append("No results available\n")
         return "".join(txt)
 
     @staticmethod
@@ -221,14 +227,14 @@ class StatusReporter:
                 total_runtime = sum(x.runtime for x in reports)
                 txt.append("   Runtime : %s" % (timedelta(seconds=int(total_runtime)),))
             # Log size
-            log_usage = sum(log_sizes) / 1048576.0
+            log_usage = sum(log_sizes) / 1_048_576.0
             if log_usage > self.DISPLAY_LIMIT_LOG:
                 txt.append("\n")
                 txt.append("      Logs : %0.1fMB" % (log_usage,))
                 if count > 1:
                     txt.append(
                         " (%0.2fMB, %0.2fMB)"
-                        % (max(log_sizes) / 1048576.0, min(log_sizes) / 1048576.0)
+                        % (max(log_sizes) / 1_048_576.0, min(log_sizes) / 1_048_576.0)
                     )
         else:
             txt.append("No status reports available")
@@ -289,18 +295,18 @@ class StatusReporter:
             txt.append("\n")
         mem_usage = virtual_memory()
         txt.append("    Memory : ")
-        if mem_usage.available < 1073741824:  # < 1GB
-            txt.append("%dMB" % (mem_usage.available / 1048576,))
+        if mem_usage.available < 1_073_741_824:  # < 1GB
+            txt.append("%dMB" % (mem_usage.available / 1_048_576,))
         else:
-            txt.append("%0.1fGB" % (mem_usage.available / 1073741824.0,))
-        txt.append(" of %0.1fGB free\n" % (mem_usage.total / 1073741824.0,))
+            txt.append("%0.1fGB" % (mem_usage.available / 1_073_741_824.0,))
+        txt.append(" of %0.1fGB free\n" % (mem_usage.total / 1_073_741_824.0,))
         usage = disk_usage("/")
         txt.append("      Disk : ")
-        if usage.free < 1073741824:  # < 1GB
-            txt.append("%dMB" % (usage.free / 1048576,))
+        if usage.free < 1_073_741_824:  # < 1GB
+            txt.append("%dMB" % (usage.free / 1_048_576,))
         else:
-            txt.append("%0.1fGB" % (usage.free / 1073741824.0,))
-        txt.append(" of %0.1fGB free" % (usage.total / 1073741824.0,))
+            txt.append("%0.1fGB" % (usage.free / 1_073_741_824.0,))
+        txt.append(" of %0.1fGB free" % (usage.total / 1_073_741_824.0,))
         return "".join(txt)
 
     @staticmethod
