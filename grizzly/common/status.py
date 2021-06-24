@@ -353,9 +353,14 @@ class Status:
         Returns:
             Status: Active status report.
         """
-        tfd, filepath = mkstemp(dir=path, prefix="grzstatus_", suffix=".json")
+        pid = getpid()
+        tfd, filepath = mkstemp(
+            dir=path,
+            prefix="grzstatus_%d_" % (pid,),
+            suffix=".json",
+        )
         close(tfd)
         status = cls(filepath, enable_profiling=enable_profiling, start_time=time())
-        status.pid = getpid()
+        status.pid = pid
         status.report(force=True)
         return status
