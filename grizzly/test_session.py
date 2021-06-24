@@ -13,7 +13,7 @@ from pytest import mark, raises
 from sapphire import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT, Sapphire
 
 from .adapter import Adapter
-from .common import Report, Reporter, RunResult, Status
+from .common import Report, Reporter, RunResult
 from .session import LogOutputLimiter, Session, SessionError
 from .target import Target, TargetLaunchError
 
@@ -65,7 +65,7 @@ def test_session_01(
     mocker, tmp_path, harness, profiling, coverage, relaunch, iters, runtime
 ):
     """test Session with typical fuzzer Adapter"""
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     prefs = tmp_path / "prefs.js"
@@ -134,7 +134,7 @@ def test_session_01(
 )
 def test_session_02(tmp_path, mocker, harness, relaunch, remaining):
     """test Session with playback Adapter"""
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
     # calculate if the target is 'closed' based on relaunch
@@ -182,7 +182,7 @@ def test_session_02(tmp_path, mocker, harness, relaunch, remaining):
 )
 def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
     """test Session - detecting failure"""
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec=Reporter)
     report = mocker.Mock(spec=Report, major="major123", minor="minor456")
@@ -224,7 +224,7 @@ def test_session_04(mocker, tmp_path):
         def generate(self, _testcase, _server_map):
             pass
 
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_NONE, [])
     target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
@@ -236,7 +236,7 @@ def test_session_04(mocker, tmp_path):
 
 def test_session_05(mocker, tmp_path):
     """test Target not requesting landing page"""
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_TIMEOUT, [])
     target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
@@ -259,7 +259,7 @@ def test_session_05(mocker, tmp_path):
 )
 def test_session_06(mocker, tmp_path, harness, report_size):
     """test Session - handle Target delayed failures"""
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     reporter = mocker.Mock(spec=Reporter)
     report = mocker.Mock(spec=Report, major="major123", minor="minor456")
     report.crash_info.createShortSignature.return_value = "[@ sig]"
@@ -301,7 +301,7 @@ def test_session_06(mocker, tmp_path, harness, report_size):
 )
 def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, results):
     """test Session.run() - initial test case was not served"""
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     report = mocker.Mock(spec=Report, major="major123", minor="minor456")
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     reporter = mocker.Mock(spec=Reporter)
@@ -326,7 +326,7 @@ def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, resul
 
 def test_session_08(tmp_path, mocker):
     """test Session.run() ignoring failures"""
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     result = RunResult([], 0.1, status=RunResult.IGNORED)
     result.attempted = True
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
@@ -350,7 +350,7 @@ def test_session_08(tmp_path, mocker):
 
 def test_session_09(tmp_path, mocker):
     """test Session.run() handle TargetLaunchError"""
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     report = mocker.Mock(spec=Report, major="major123", minor="minor456")
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
     runner.return_value.launch.side_effect = TargetLaunchError("test", report)
@@ -369,7 +369,7 @@ def test_session_09(tmp_path, mocker):
 
 def test_session_10(tmp_path, mocker):
     """test Session.run() report hang"""
-    Status.PATH = str(tmp_path)
+    mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     result = RunResult([], 60.0, status=RunResult.FAILED, timeout=True)
     result.attempted = True
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
