@@ -79,17 +79,18 @@ class StatusReporter:
         return any(x.results for x in self.reports)
 
     @classmethod
-    def load(cls, tb_path=None):
+    def load(cls, path, tb_path=None):
         """Read Grizzly status reports and create a StatusReporter object.
 
         Args:
+            path (str): Path to scan for status data files.
             tb_path (str): Directory to scan for files containing Python tracebacks.
 
         Returns:
             StatusReporter: Contains available status reports and traceback reports.
         """
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
-        return cls(list(Status.loadall()), tracebacks=tracebacks)
+        return cls(list(Status.loadall(path)), tracebacks=tracebacks)
 
     def print_results(self):
         print(self._results())
@@ -451,6 +452,11 @@ def main(args=None):
         % (", ".join(modes),),
     )
     parser.add_argument(
+        "--reports",
+        default=Status.PATH,
+        help="Scan path for status report json files (default: %(default)s)",
+    )
+    parser.add_argument(
         "--system-report",
         action="store_true",
         help="Output summary and system information",
@@ -465,7 +471,7 @@ def main(args=None):
     if args.tracebacks and not isdir(args.tracebacks):
         parser.error("--tracebacks must be a directory")
 
-    reporter = StatusReporter.load(tb_path=args.tracebacks)
+    reporter = StatusReporter.load(args.reports, tb_path=args.tracebacks)
     if args.dump:
         reporter.dump_summary(args.dump)
         return 0

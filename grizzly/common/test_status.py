@@ -15,9 +15,8 @@ from .status import Status
 
 def test_status_01(mocker, tmp_path):
     """test Status.start()"""
-    Status.PATH = str(tmp_path)
     mocker.patch("grizzly.common.status.time", return_value=1.0)
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     assert status is not None
     assert status.data_file is not None
     assert isfile(status.data_file)
@@ -37,8 +36,7 @@ def test_status_01(mocker, tmp_path):
 
 def test_status_02(tmp_path):
     """test Status.cleanup()"""
-    Status.PATH = str(tmp_path)
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     dfile = status.data_file
     status.cleanup()
     assert status.data_file is None
@@ -46,15 +44,14 @@ def test_status_02(tmp_path):
     # call 2nd time
     status.cleanup()
     # missing data file
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     remove(status.data_file)
     status.cleanup()
 
 
 def test_status_03(tmp_path):
     """test Status.report()"""
-    Status.PATH = str(tmp_path)
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.count_result("sig1")
     # try to report before REPORT_FREQ elapses
     assert not status.report()
@@ -72,7 +69,6 @@ def test_status_03(tmp_path):
 
 def test_status_04(tmp_path):
     """test Status.load() failure paths"""
-    Status.PATH = str(tmp_path)
     # load no db
     assert Status.load(str(tmp_path / "missing.json")) is None
     # load empty
@@ -86,10 +82,9 @@ def test_status_04(tmp_path):
 
 def test_status_05(mocker, tmp_path):
     """test Status.load()"""
-    Status.PATH = str(tmp_path)
     mocker.patch("grizzly.common.status.time", return_value=1.0)
     # create simple entry
-    status = Status.start(enable_profiling=True)
+    status = Status.start(path=str(tmp_path), enable_profiling=True)
     status.count_result("sig1")
     status.record("test", 123.45)
     status.report(force=True)
@@ -115,27 +110,23 @@ def test_status_05(mocker, tmp_path):
 
 def test_status_06(tmp_path):
     """test Status.loadall()"""
-    working_path = tmp_path / "status"
-    Status.PATH = str(working_path)
     # missing path
-    assert not any(Status.loadall())
+    assert not any(Status.loadall("missing"))
     # no status data
-    working_path.mkdir()
-    assert not any(Status.loadall())
+    assert not any(Status.loadall(str(tmp_path)))
     # add more entries
     for _ in range(5):
-        Status.start()
-    (working_path / "empty.json").touch()
-    assert len(tuple(Status.loadall())) == 5
+        Status.start(path=str(tmp_path))
+    (tmp_path / "empty.json").touch()
+    assert len(tuple(Status.loadall(str(tmp_path)))) == 5
 
 
 def test_status_07(mocker, tmp_path):
     """test Status.runtime and Status.rate calculations"""
-    Status.PATH = str(tmp_path)
     mocker.patch(
         "grizzly.common.status.time", side_effect=(1.0, 1.0, 3.0, 3.0, 5.0, 5.0, 5.0)
     )
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     assert status.data_file is not None
     assert status.start_time == 1
     # test no iterations
@@ -161,8 +152,7 @@ def test_status_07(mocker, tmp_path):
 def _client_writer(done, reported, working_path):
     """Used by test_status_08"""
     # NOTE: this must be at the top level to work on Windows
-    Status.PATH = working_path
-    status = Status.start()
+    status = Status.start(path=working_path)
     try:
         while not done.is_set():
             status.iteration += 1
@@ -177,7 +167,6 @@ def _client_writer(done, reported, working_path):
 
 def test_status_08(tmp_path):
     """test Status.loadall() with multiple active reporters"""
-    Status.PATH = str(tmp_path)
     done = Event()
     procs = list()
     report_events = list()
@@ -187,7 +176,7 @@ def test_status_08(tmp_path):
             report_events.append(Event())
             procs.append(
                 Process(
-                    target=_client_writer, args=(done, report_events[-1], Status.PATH)
+                    target=_client_writer, args=(done, report_events[-1], str(tmp_path))
                 )
             )
             procs[-1].start()
@@ -195,7 +184,7 @@ def test_status_08(tmp_path):
         for has_reported in report_events:
             assert has_reported.wait(timeout=60)
         # collect reports
-        reports = tuple(Status.loadall())
+        reports = tuple(Status.loadall(str(tmp_path)))
         assert len(reports) == len(procs)
         assert max(x.rate for x in reports) > 0
     finally:
@@ -204,13 +193,12 @@ def test_status_08(tmp_path):
             if proc.pid is not None:
                 proc.join()
     # verify cleanup
-    assert not any(Status.loadall())
+    assert not any(Status.loadall(str(tmp_path)))
 
 
 def test_status_09(tmp_path):
     """test Status.count_result() and Status.signatures()"""
-    Status.PATH = str(tmp_path)
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.count_result("sig1")
     status.count_result("sig2")
     status.count_result("sig1")
@@ -229,9 +217,8 @@ def test_status_09(tmp_path):
 
 def test_status_10(tmp_path):
     """test Status.measure() and Status.record() - profiling support"""
-    Status.PATH = str(tmp_path)
     # profiling disabled
-    status = Status.start(enable_profiling=False)
+    status = Status.start(path=str(tmp_path), enable_profiling=False)
     status.record("x", 10.1)
     assert not status._profiles
     with status.measure("x"):
@@ -239,7 +226,7 @@ def test_status_10(tmp_path):
     assert not status._profiles
     status.cleanup()
     # profiling enabled
-    status = Status.start(enable_profiling=True)
+    status = Status.start(path=str(tmp_path), enable_profiling=True)
     assert not status._profiles
     # initial entry
     status.record("test1", 10.1)
