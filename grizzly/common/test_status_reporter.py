@@ -43,12 +43,11 @@ def test_status_reporter_01(tmp_path):
 
 def test_status_reporter_02(tmp_path):
     """test StatusReporter.load()"""
-    Status.PATH = str(tmp_path / "missing")
     # missing reports path
-    st_rpt = StatusReporter.load()
+    st_rpt = StatusReporter.load(str(tmp_path / "missing"))
     assert not st_rpt.reports
     # empty reports and tb paths
-    st_rpt = StatusReporter.load(tb_path=str(tmp_path))
+    st_rpt = StatusReporter.load(str(tmp_path), tb_path=str(tmp_path))
     assert isinstance(st_rpt.reports, list)
     assert not st_rpt.reports
     assert isinstance(st_rpt.tracebacks, list)
@@ -129,14 +128,13 @@ def test_status_reporter_05(mocker, tmp_path):
     """test StatusReporter._summary()"""
     mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
     mocker.patch("grizzly.common.status_reporter.time", side_effect=(1.0, 2.0))
-    Status.PATH = str(tmp_path)
     # single report
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.report(force=True)
-    rptr = StatusReporter.load()
+    rptr = StatusReporter.load(str(tmp_path))
     rptr._sys_info = _fake_sys_info
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
@@ -150,12 +148,12 @@ def test_status_reporter_05(mocker, tmp_path):
     assert "Timestamp" not in output
     assert len(output.split("\n")) == 3
     # multiple reports
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.ignored = 1
     status.iteration = 8
     status.log_size = 86900000
     status.report(force=True)
-    rptr = StatusReporter.load()
+    rptr = StatusReporter.load(str(tmp_path))
     rptr._sys_info = _fake_sys_info
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
@@ -176,18 +174,17 @@ def test_status_reporter_05(mocker, tmp_path):
 
 def test_status_reporter_06(mocker, tmp_path):
     """test StatusReporter._specific()"""
-    Status.PATH = str(tmp_path)
     mocker.patch("grizzly.common.status_reporter.time", return_value=3661.0)
     # single report
     mocker.patch(
         "grizzly.common.status.time", side_effect=count(start=0.0, step=3600.0)
     )
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.report(force=True)
-    rptr = StatusReporter.load()
+    rptr = StatusReporter.load(str(tmp_path))
     assert rptr.reports is not None
     output = rptr._specific()
     assert len(output.split("\n")[:-1]) == 2
@@ -199,7 +196,7 @@ def test_status_reporter_06(mocker, tmp_path):
     mocker.patch(
         "grizzly.common.status.time", side_effect=count(start=0.0, step=3661.0)
     )
-    status = Status.start(enable_profiling=True)
+    status = Status.start(path=str(tmp_path), enable_profiling=True)
     status.ignored = 1
     status.iteration = 432422
     status._results = {"sig": 123}
@@ -208,7 +205,7 @@ def test_status_reporter_06(mocker, tmp_path):
     status.record("test1", 1.23456)
     status.record("test2", 1201.1)
     status.report(force=True)
-    rptr = StatusReporter.load()
+    rptr = StatusReporter.load(str(tmp_path))
     assert len(rptr.reports) == 2
     output = rptr._specific()
     assert len(output.split("\n")[:-1]) == 7
@@ -221,11 +218,11 @@ def test_status_reporter_06(mocker, tmp_path):
     assert "EXPIRED" not in output
     # expired report
     mocker.patch("grizzly.common.status.time", return_value=1.0)
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.ignored = 1
     status.iteration = 1
     status.report(force=True)
-    rptr = StatusReporter.load()
+    rptr = StatusReporter.load(str(tmp_path))
     assert len(rptr.reports) == 3
     output = rptr._specific()
     assert len(output.split("\n")[:-1]) == 8
@@ -234,31 +231,30 @@ def test_status_reporter_06(mocker, tmp_path):
 
 def test_status_reporter_07(tmp_path):
     """test StatusReporter._results()"""
-    Status.PATH = str(tmp_path)
     # single report without results
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.report(force=True)
-    rptr = StatusReporter.load()
+    rptr = StatusReporter.load(str(tmp_path))
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     assert not rptr.has_results
     assert not rptr._results()
     # multiple reports with results
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.iteration = 1
     status.count_result("[@ test1]")
     status.count_result("[@ test2]")
     status.count_result("[@ test1]")
     status.report(force=True)
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.iteration = 1
     status.count_result("[@ test1]")
     status.count_result("[@ longsignature123]")
     status.report(force=True)
-    rptr = StatusReporter.load()
+    rptr = StatusReporter.load(str(tmp_path))
     assert rptr.has_results
     assert len(rptr.reports) == 3
     output = rptr._results(max_len=16)
@@ -270,9 +266,9 @@ def test_status_reporter_07(tmp_path):
 
 def test_status_reporter_08(tmp_path):
     """test StatusReporter.load() with traceback"""
-    (tmp_path / "status").mkdir()
-    Status.PATH = str(tmp_path / "status")
-    status = Status.start()
+    status_path = tmp_path / "status"
+    status_path.mkdir()
+    status = Status.start(path=str(status_path))
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
@@ -284,21 +280,21 @@ def test_status_reporter_08(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(tb_path=str(tmp_path))
+    rptr = StatusReporter.load(str(status_path), tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 1
     # create second screenlog
     with (tmp_path / "screenlog.1234").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"foo.bar.error: blah\n")
-    rptr = StatusReporter.load(tb_path=str(tmp_path))
+    rptr = StatusReporter.load(str(status_path), tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
     # create third screenlog
     with (tmp_path / "screenlog.3").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"KeyboardInterrupt\n")
-    rptr = StatusReporter.load(tb_path=str(tmp_path))
+    rptr = StatusReporter.load(str(status_path), tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
     merged_log = rptr._summary()
     assert len(merged_log.splitlines()) == 14
@@ -311,14 +307,12 @@ def test_status_reporter_08(tmp_path):
 
 def test_status_reporter_09(tmp_path):
     """test StatusReporter.load() no reports with traceback"""
-    (tmp_path / "status").mkdir()
-    Status.PATH = str(tmp_path / "status")
     # create screenlog with tb
     with (tmp_path / "screenlog.1").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(tb_path=str(tmp_path))
+    rptr = StatusReporter.load(str(tmp_path), tb_path=str(tmp_path))
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 1
     output = rptr._summary()
@@ -329,16 +323,16 @@ def test_status_reporter_09(tmp_path):
 
 def test_status_reporter_10(tmp_path):
     """test StatusReporter.summary() limit with traceback"""
-    (tmp_path / "status").mkdir()
-    Status.PATH = str(tmp_path / "status")
+    status_path = tmp_path / "status"
+    status_path.mkdir()
     # create reports
-    status = Status.start()
+    status = Status.start(path=str(status_path))
     status.ignored = 100
     status.iteration = 1000
     status.log_size = 9999999999
     status._results = {"sig": 123}
     status.report(force=True)
-    status = Status.start()
+    status = Status.start(path=str(status_path))
     status.ignored = 9
     status.iteration = 192938
     status.log_size = 0
@@ -354,7 +348,7 @@ def test_status_reporter_10(tmp_path):
                 )
                 test_fp.write(b"    some_long_name_for_a_func_%04d()\n" % (j,))
             test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(tb_path=str(tmp_path))
+    rptr = StatusReporter.load(str(status_path), tb_path=str(tmp_path))
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 10
     merged_log = rptr._summary(runtime=True, sysinfo=True, timestamp=True)
@@ -534,31 +528,28 @@ def test_traceback_report_08(tmp_path):
 
 def test_main_01(tmp_path):
     """test main() with no reports"""
-    Status.PATH = str(tmp_path)
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    assert main([]) == 0
+    assert main(["--reports", str(tmp_path)]) == 0
 
 
 def test_main_02(tmp_path):
     """test main() with a report"""
-    Status.PATH = str(tmp_path)
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.iteration = 1
     status.count_result("[@ test]")
     status.report(force=True)
-    assert main([]) == 0
+    assert main(["--reports", str(tmp_path)]) == 0
 
 
 def test_main_03(tmp_path):
     """test main() --dump"""
-    Status.PATH = str(tmp_path)
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    status = Status.start()
+    status = Status.start(path=str(tmp_path))
     status.iteration = 1
     status.report(force=True)
     dump_file = tmp_path / "output.txt"
-    assert main(["--dump", str(dump_file)]) == 0
+    assert main(["--dump", str(dump_file), "--reports", str(tmp_path)]) == 0
     assert dump_file.is_file()
     assert b"Runtime" not in dump_file.read_bytes()
     # assert False, dump_file.read_bytes()

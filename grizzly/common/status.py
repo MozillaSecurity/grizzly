@@ -7,9 +7,8 @@ from collections import defaultdict, namedtuple
 from contextlib import contextmanager
 from json import dump, load
 from logging import getLogger
-from os import close, getpid, listdir, unlink
+from os import close, getpid, scandir, unlink
 from os.path import isdir, isfile
-from os.path import join as pathjoin
 from tempfile import mkstemp
 from time import time
 
@@ -160,23 +159,21 @@ class Status:
         return status
 
     @classmethod
-    def loadall(cls):
-        """Load all status reports found in cls.PATH.
+    def loadall(cls, path):
+        """Load all status reports found in `path`.
 
         Args:
-            None
+            path (str): Path to scan for files containing status data.
 
-        Returns:
-            Generator: Status objects stored in cls.PATH.
+        Yields:
+            Status: Objects contain status data from files found in `path`.
         """
-        if isdir(cls.PATH):
-            for data_file in listdir(cls.PATH):
-                if not data_file.endswith(".json"):
-                    continue
-                status = cls.load(pathjoin(cls.PATH, data_file))
-                if status is None:
-                    continue
-                yield status
+        if isdir(path):
+            for entry in scandir(path):
+                if entry.is_file() and entry.name.endswith(".json"):
+                    status = cls.load(entry.path)
+                    if status is not None:
+                        yield status
 
     @staticmethod
     def lock_file(data_file):
@@ -332,16 +329,17 @@ class Status:
             yield (sig, count)
 
     @classmethod
-    def start(cls, enable_profiling=False):
+    def start(cls, path=PATH, enable_profiling=False):
         """Create a unique Status object.
 
         Args:
+            path (str): Location to save files containing status data.
             enable_profiling (bool): Record profiling data.
 
         Returns:
             Status: Active status report.
         """
-        tfd, filepath = mkstemp(dir=cls.PATH, prefix="grzstatus_", suffix=".json")
+        tfd, filepath = mkstemp(dir=path, prefix="grzstatus_", suffix=".json")
         close(tfd)
         status = cls(filepath, enable_profiling=enable_profiling, start_time=time())
         status.pid = getpid()
