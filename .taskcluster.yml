@@ -75,12 +75,6 @@ tasks:
               TOXENV: lint
             script:
               - tox
-          - name: precommit
-            version: "3.9"
-            env:
-              TOXENV: precommit
-            script:
-              - tox
           - name: PyPI upload
             version: "3.8"
             env:
