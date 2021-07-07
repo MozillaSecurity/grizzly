@@ -13,7 +13,9 @@ from pytest import mark, raises
 
 from sapphire import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT, Sapphire
 
-from ..common import Report, Status, TestCase, TestCaseLoadFailure
+from ..common.reporter import Report
+from ..common.status import Status
+from ..common.storage import TestCase, TestCaseLoadFailure
 from ..target import Target
 from .replay import ReplayManager, ReplayResult
 
