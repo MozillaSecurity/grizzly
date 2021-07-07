@@ -11,7 +11,7 @@ from unittest.mock import Mock
 import pytest
 from pytest import raises
 
-from ..common import TestCaseLoadFailure
+from ..common.storage import TestCaseLoadFailure
 from ..target import TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs

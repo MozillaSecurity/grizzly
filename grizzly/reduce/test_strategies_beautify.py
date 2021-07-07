@@ -9,7 +9,7 @@ from os import linesep
 
 import pytest
 
-from ..common import TestCase
+from ..common.storage import TestCase
 from .strategies.beautify import CSSBeautify, JSBeautify
 
 LOG = getLogger(__name__)

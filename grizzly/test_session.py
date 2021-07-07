@@ -13,7 +13,8 @@ from pytest import mark, raises
 from sapphire import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT, Sapphire
 
 from .adapter import Adapter
-from .common import Report, Reporter, RunResult
+from .common.reporter import Report, Reporter
+from .common.runner import RunResult
 from .session import LogOutputLimiter, Session, SessionError
 from .target import Target, TargetLaunchError
 

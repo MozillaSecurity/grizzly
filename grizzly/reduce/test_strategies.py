@@ -12,7 +12,8 @@ from pytest import raises
 
 from sapphire import Sapphire
 
-from ..common import Report, TestCase, TestFile
+from ..common.reporter import Report
+from ..common.storage import TestCase, TestFile
 from ..replay import ReplayResult
 from ..target import Target
 from . import ReduceManager

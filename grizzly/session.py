@@ -5,7 +5,10 @@
 from logging import getLogger
 from time import time
 
-from .common import IOManager, Runner, RunResult, Status, TestFile
+from .common.iomanager import IOManager
+from .common.runner import Runner, RunResult
+from .common.status import Status
+from .common.storage import TestFile
 from .target import TargetLaunchError
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
