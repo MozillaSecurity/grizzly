@@ -4,14 +4,71 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod, abstractproperty
 from logging import getLogger
-from os.path import isfile
+from os import unlink
+from os.path import basename, dirname, exists, isfile
+from os.path import join as pathjoin
+from shutil import copyfile, copytree, rmtree
+from tempfile import mkdtemp
 from threading import Lock
+
+from ..common.utils import grz_tmp
 
 __all__ = ("Target", "TargetError", "TargetLaunchError")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 LOG = getLogger(__name__)
+
+
+class AssetManager:
+    __slots__ = ("assets", "path")
+
+    def __init__(self, base_path=None):
+        self.assets = dict()
+        self.path = mkdtemp(prefix="assets_", dir=base_path)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
+
+    def add(self, asset, path):
+        assert isinstance(asset, str)
+        if not path or not exists(path):
+            raise OSError("Asset %r not found %r" % (asset, path))
+        assert asset not in self.assets
+        # only copy files from outside working path
+        if dirname(path) != self.path:
+            # check file name collision
+            dst_path = pathjoin(self.path, basename(path))
+            if exists(dst_path):
+                raise OSError("Name collision in asset path %r" % (basename(path),))
+            if isfile(path):
+                copyfile(path, dst_path)
+            else:
+                copytree(path, dst_path)
+            self.assets[asset] = dst_path
+        else:
+            self.assets[asset] = path
+        LOG.debug("added asset %r from %r", asset, path)
+
+    def cleanup(self):
+        if self.path:
+            rmtree(self.path, ignore_errors=True)
+            self.assets.clear()
+            self.path = None
+
+    def get(self, asset):
+        return self.assets.get(asset, None)
+
+    def remove(self, asset):
+        path = self.assets.pop(asset, None)
+        if path:
+            if isfile(path):
+                unlink(path)
+            else:
+                rmtree(path, ignore_errors=True)
 
 
 class TargetError(Exception):
@@ -34,27 +91,26 @@ class Target(metaclass=ABCMeta):
     RESULT_NONE = 0
     RESULT_FAILURE = 1
     RESULT_IGNORED = 2
+    SUPPORTED_ASSETS = None
 
     __slots__ = (
         "_lock",
         "_monitor",
-        "_prefs",
+        "assets",
         "binary",
-        "extension",
         "launch_timeout",
         "log_limit",
         "memory_limit",
     )
 
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit):
+    def __init__(self, binary, launch_timeout, log_limit, memory_limit):
         assert log_limit >= 0
         assert memory_limit >= 0
         assert binary is not None and isfile(binary)
         self._lock = Lock()
         self._monitor = None
-        self._prefs = None
+        self.assets = AssetManager(base_path=grz_tmp("target"))
         self.binary = binary
-        self.extension = extension
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit
         self.memory_limit = memory_limit
@@ -69,8 +125,13 @@ class Target(metaclass=ABCMeta):
         LOG.warning("add_abort_token() not implemented!")
 
     @abstractmethod
-    def cleanup(self):
+    def _cleanup(self):
         pass
+
+    def cleanup(self):
+        # call target specific _cleanup first
+        self._cleanup()
+        self.assets.cleanup()
 
     @abstractmethod
     def close(self, force_close=False):
@@ -112,9 +173,8 @@ class Target(metaclass=ABCMeta):
     def monitor(self):
         pass
 
-    # TODO: better meta file handling
-    @abstractproperty
-    def prefs(self):
+    @abstractmethod
+    def process_assets(self):
         pass
 
     def reverse(self, remote, local):

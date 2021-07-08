@@ -779,6 +779,8 @@ class ReduceManager:
                 valgrind=args.valgrind,
                 xvfb=args.xvfb,
             )
+            if args.extension:
+                target.assets.add("extension", args.extension)
             # prioritize specified prefs.js file over included file
             if args.prefs is not None:
                 for testcase in testcases:
@@ -796,7 +798,7 @@ class ReduceManager:
                         LOG.info("Using prefs.js from testcase")
                         target.prefs = str(tmp_prefs / "prefs.js")
                         break
-
+            target.process_assets()
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=timeout) as server:

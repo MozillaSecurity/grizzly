@@ -139,9 +139,11 @@ class Session:
         with self.status.measure("generate"):
             self.adapter.generate(test, self.iomanager.server_map)
         self.status.test_name = test.input_fname
-        if self.target.prefs is not None:
-            # TODO: this can likely be improved
-            test.add_meta(TestFile.from_file(self.target.prefs, "prefs.js"))
+        # TODO: update TestCase to better handle assets
+        if self.target.assets.get("prefs"):
+            test.add_meta(
+                TestFile.from_file(self.target.assets.get("prefs"), "prefs.js")
+            )
         return test
 
     def run(

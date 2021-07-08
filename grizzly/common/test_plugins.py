@@ -5,7 +5,8 @@
 from pkg_resources import EntryPoint
 from pytest import raises
 
-from .plugins import PluginLoadError, load, scan
+from ..target import Target
+from .plugins import PluginLoadError, load, scan, scan_target_assets
 
 
 class FakeType1:
@@ -79,3 +80,23 @@ def test_scan_03(mocker):
         return_value=[entry],
     )
     assert "test-name" in scan("test_group")
+
+
+def test_scan_target_assets_01(mocker):
+    """test scan_target_assets() - success"""
+    targ1 = mocker.Mock(set_spec=EntryPoint)
+    targ1.name = "t1"
+    targ1.load.return_value = mocker.Mock(set_spec=Target, SUPPORTED_ASSETS=None)
+    targ2 = mocker.Mock(set_spec=EntryPoint)
+    targ2.name = "t2"
+    targ2.load.return_value = mocker.Mock(set_spec=Target, SUPPORTED_ASSETS=("a", "B"))
+    mocker.patch(
+        "grizzly.common.plugins.iter_entry_points",
+        autospec=True,
+        return_value=[targ1, targ2],
+    )
+    assets = scan_target_assets()
+    assert "t1" in assets
+    assert assets["t1"] is None
+    assert "t2" in assets
+    assert "B" in assets["t2"]

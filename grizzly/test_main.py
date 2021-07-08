@@ -77,6 +77,7 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs()
     args.adapter = "fake"
+    args.extension = "fake"
     args.ignore = ["fake", "fake"]
     args.limit = limit
     args.runtime = runtime

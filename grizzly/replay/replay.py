@@ -574,7 +574,6 @@ class ReplayManager:
 
         results = None
         target = None
-        tmp_prefs = None
         try:
             if args.no_harness and len(testcases) > 1:
                 LOG.error(
@@ -604,7 +603,6 @@ class ReplayManager:
             LOG.debug("initializing the Target")
             target = load_plugin(args.platform, "grizzly_targets", Target)(
                 args.binary,
-                args.extension,
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
@@ -613,21 +611,27 @@ class ReplayManager:
                 valgrind=args.valgrind,
                 xvfb=args.xvfb,
             )
+            if args.extension:
+                target.assets.add("extension", args.extension)
             # prioritize specified prefs.js file over included file
-            if args.prefs is not None:
+            if args.prefs:
                 for testcase in testcases:
                     testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
                 LOG.info("Using specified prefs.js")
-                target.prefs = args.prefs
+                target.assets.add("prefs", args.prefs)
             else:
                 for testcase in testcases:
                     prefs_tf = testcase.get_file("prefs.js")
                     if prefs_tf:
-                        tmp_prefs = mkdtemp(prefix="prefs_", dir=grz_tmp("replay"))
-                        prefs_tf.dump(tmp_prefs)
                         LOG.info("Using prefs.js from testcase")
-                        target.prefs = pathjoin(tmp_prefs, "prefs.js")
+                        prefs_tf.dump(target.assets.path)
+                        target.assets.add(
+                            "prefs",
+                            pathjoin(target.assets.path, "prefs.js"),
+                        )
                         break
+            target.process_assets()
+
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=timeout) as server:
@@ -689,6 +693,4 @@ class ReplayManager:
                 target.cleanup()
             for testcase in testcases:
                 testcase.cleanup()
-            if tmp_prefs is not None:
-                rmtree(tmp_prefs, ignore_errors=True)
             LOG.info("Done.")
