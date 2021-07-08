@@ -71,7 +71,7 @@ def test_session_01(
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     prefs = tmp_path / "prefs.js"
     prefs.touch()
-    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=str(prefs))
+    target = mocker.Mock(spec=Target, launch_timeout=30, assets={"prefs": str(prefs)})
     target.log_size.return_value = 1000
     target.monitor.launches = 1
     # avoid shutdown delay
@@ -137,7 +137,7 @@ def test_session_02(tmp_path, mocker, harness, relaunch, remaining):
     """test Session with playback Adapter"""
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    target = mocker.Mock(spec=Target, launch_timeout=30, assets=dict())
     # calculate if the target is 'closed' based on relaunch
     type(target).closed = mocker.PropertyMock(
         side_effect=((x % relaunch == 0) for x in range(remaining))
@@ -189,7 +189,7 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
     report = mocker.Mock(spec=Report, major="major123", minor="minor456")
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    target = mocker.Mock(spec=Target, launch_timeout=30, assets=dict())
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
     target.monitor.launches = 1
@@ -228,7 +228,7 @@ def test_session_04(mocker, tmp_path):
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_NONE, [])
-    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    target = mocker.Mock(spec=Target, launch_timeout=30, assets=dict())
     target.monitor.launches = 1
     with Session(FuzzAdapter("fuzz"), None, server, target) as session:
         with raises(SessionError, match="Test case is missing landing page"):
@@ -240,7 +240,7 @@ def test_session_05(mocker, tmp_path):
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     server = mocker.Mock(spec=Sapphire, port=0x1337)
     server.serve_path.return_value = (SERVED_TIMEOUT, [])
-    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    target = mocker.Mock(spec=Target, launch_timeout=30, assets=dict())
     target.monitor.launches = 1
     with Session(SimpleAdapter(False), None, server, target) as session:
         with raises(SessionError, match="Please check Adapter and Target"):
@@ -265,7 +265,7 @@ def test_session_06(mocker, tmp_path, harness, report_size):
     report = mocker.Mock(spec=Report, major="major123", minor="minor456")
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    target = mocker.Mock(spec=Target, launch_timeout=30, prefs=None)
+    target = mocker.Mock(spec=Target, launch_timeout=30, assets=dict())
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
     target.monitor.launches = 1
@@ -307,7 +307,7 @@ def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, resul
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     reporter = mocker.Mock(spec=Reporter)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    target = mocker.Mock(spec=Target, closed=True, launch_timeout=30, prefs=None)
+    target = mocker.Mock(spec=Target, closed=True, launch_timeout=30, assets=dict())
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
     target.monitor.launches = 1
@@ -336,7 +336,7 @@ def test_session_08(tmp_path, mocker):
     adapter = mocker.Mock(spec=Adapter, remaining=None)
     adapter.IGNORE_UNSERVED = False
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    target = mocker.Mock(spec=Target, prefs=None)
+    target = mocker.Mock(spec=Target, assets=dict())
     target.monitor.launches = 1
     with Session(adapter, None, server, target) as session:
         session.run([], 10, iteration_limit=1)
@@ -380,7 +380,7 @@ def test_session_10(tmp_path, mocker):
     report = mocker.Mock(spec=Report, major="major123", minor="minor456")
     reporter = mocker.Mock(spec=Reporter)
     server = mocker.Mock(spec=Sapphire, port=0x1337)
-    target = mocker.Mock(spec=Target, prefs=None)
+    target = mocker.Mock(spec=Target, assets=dict())
     target.monitor.launches = 1
     target.create_report.return_value = report
     with Session(adapter, reporter, server, target) as session:

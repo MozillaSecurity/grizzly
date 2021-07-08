@@ -8,6 +8,7 @@ from os.path import exists, isdir, isfile
 from platform import system
 
 from .common.plugins import scan as scan_plugins
+from .common.plugins import scan_target_assets
 from .common.utils import TIMEOUT_DELAY
 
 
@@ -59,14 +60,30 @@ class CommonArgs:
             ),
         )
 
+        # build 'asset' help string
+        assets = scan_target_assets()
+        asset_msg = list()
+        for target in sorted(assets):
+            if assets[target]:
+                asset_msg.append(
+                    "%s: %s. " % (target, ", ".join(sorted(assets[target])))
+                )
+
         self.launcher_grp = self.parser.add_argument_group("Launcher Arguments")
+        self.launcher_grp.add_argument(
+            "--asset",
+            action="append",
+            metavar=("ASSET", "PATH"),
+            nargs=2,
+            help="Specify target specific asset files. %s" % ("".join(asset_msg),),
+        )
         self.launcher_grp.add_argument(
             "-e",
             "--extension",
             action="append",
-            help="Install an extension. Specify the path to the xpi or the directory"
-            " containing the unpacked extension. To install multiple extensions"
-            " specify multiple times",
+            help="DEPRECATED. Install an extension. Specify the path to the xpi or the"
+            " directory containing the unpacked extension. To install multiple"
+            " extensions specify multiple times",
         )
         self.launcher_grp.add_argument(
             "--launch-timeout",
@@ -94,7 +111,9 @@ class CommonArgs:
             help="Installed Platforms (Targets): %s (default: %%(default)s)"
             % ", ".join(sorted(scan_plugins("grizzly_targets"))),
         )
-        self.launcher_grp.add_argument("-p", "--prefs", help="prefs.js file to use")
+        self.launcher_grp.add_argument(
+            "-p", "--prefs", help="DEPRECATED. prefs.js file to use"
+        )
         self.launcher_grp.add_argument(
             "--relaunch",
             type=int,
@@ -213,6 +232,17 @@ class CommonArgs:
 
         if args.platform not in targets:
             self.parser.error("Platform %r not installed" % (args.platform,))
+
+        # check args.platform before args.asset since it is used
+        if args.asset:
+            supported_assets = scan_target_assets()[args.platform]
+            for asset, path in args.asset:
+                if not supported_assets or asset not in supported_assets:
+                    self.parser.error(
+                        "Asset %r not supported by target %r" % (asset, args.platform)
+                    )
+                if not exists(path):
+                    self.parser.error("%r does not exist %r" % (asset, path))
 
         if args.prefs and not isfile(args.prefs):
             self.parser.error("--prefs file not found")

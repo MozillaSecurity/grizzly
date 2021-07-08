@@ -63,6 +63,18 @@ def test_common_args_01a(capsys, mocker, tmp_path):
             "error: --prefs file not found",
             ["targ1"],
         ),
+        # test invalid asset
+        (
+            ["--platform", "targ1", "--asset", "bad", "a"],
+            "error: Asset 'bad' not supported by target",
+            ["targ1"],
+        ),
+        # test invalid asset path
+        (
+            ["--platform", "targ1", "--asset", "a", "a"],
+            "error: 'a' does not exist",
+            ["targ1"],
+        ),
         # test invalid time-limit
         (
             ["--platform", "targ1", "--time-limit", "-1"],
@@ -86,6 +98,11 @@ def test_common_args_01a(capsys, mocker, tmp_path):
 def test_common_args_02(capsys, mocker, tmp_path, args, msg, targets):
     """test CommonArgs.parse_args()"""
     mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=targets)
+    mocker.patch(
+        "grizzly.args.scan_target_assets",
+        autospec=True,
+        return_value={"targ1": ["a", "b"]},
+    )
     mocker.patch("grizzly.args.system", autospec=True, return_value="foo")
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()

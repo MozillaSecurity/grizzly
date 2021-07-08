@@ -23,6 +23,7 @@ def load(name, group, base_type):
         name (str): Name of entry point to load.
         group (str): Group containing entry point.
         base_type (type): Used to validate loaded objects.
+
     Returns:
         *: Python object.
     """
@@ -56,3 +57,18 @@ def scan(group):
             raise PluginLoadError("Duplicate entry %r in %r" % (entry.name, group))
         found.append(entry.name)
     return found
+
+
+def scan_target_assets():
+    """Scan targets and load list of supported assets (minimal sanity checking).
+
+    Args:
+        None
+
+    Returns:
+        dict: Name of target and list of supported assets.
+    """
+    assets = dict()
+    for entry in iter_entry_points("grizzly_targets"):
+        assets[entry.name] = entry.load().SUPPORTED_ASSETS
+    return assets

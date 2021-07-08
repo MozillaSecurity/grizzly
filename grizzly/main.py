@@ -81,7 +81,6 @@ def main(args):
         LOG.debug("initializing the Target %r", args.platform)
         target = load_plugin(args.platform, "grizzly_targets", Target)(
             args.binary,
-            args.extension,
             args.launch_timeout,
             args.log_limit,
             args.memory,
@@ -91,9 +90,12 @@ def main(args):
             xvfb=args.xvfb,
         )
         if args.prefs:
-            target.prefs = args.prefs
             LOG.info("Using prefs %r", args.prefs)
+            target.assets.add("prefs", args.prefs)
+        if args.extension:
+            target.assets.add("extension", args.extension)
         adapter.monitor = target.monitor
+        target.process_assets()
 
         LOG.debug("initializing the Reporter")
         if args.fuzzmanager:

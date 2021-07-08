@@ -15,7 +15,7 @@ from sapphire import SERVED_ALL
 from ..common.reporter import Report
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..session import Session
-from ..target import Target, TargetLaunchError, TargetLaunchTimeout
+from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 from .replay import ReplayManager
 from .test_replay import _fake_save_logs
 
@@ -242,7 +242,13 @@ def test_main_05(mocker, tmp_path):
         return_value=(None, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
-    target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
+    assets = mocker.Mock(spec_set=AssetManager, path=str(tmp_path))
+    target = mocker.Mock(
+        spec_set=Target,
+        assets=assets,
+        binary="bin",
+        launch_timeout=30,
+    )
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.monitor.is_healthy.return_value = False
