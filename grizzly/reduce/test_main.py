@@ -4,21 +4,18 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Unit tests for `grizzly.reduce.main`."""
 from logging import getLogger
-from pathlib import Path
-from shutil import rmtree
 from unittest.mock import Mock
 
-import pytest
-from pytest import raises
+from pytest import mark, raises
 
-from ..common.storage import TestCaseLoadFailure
-from ..target import TargetLaunchError, TargetLaunchTimeout
+from ..common.storage import TestCase, TestCaseLoadFailure
+from ..target import AssetManager, TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
 from .exceptions import GrizzlyReduceBaseException
 
 LOG = getLogger(__name__)
-pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")
+pytestmark = mark.usefixtures("tmp_path_fm_config")
 
 
 def test_args_01(capsys, tmp_path, mocker):
@@ -83,7 +80,7 @@ def test_args_04(capsys, tmp_path):
     assert "error: '--quality' value cannot be negative" in capsys.readouterr()[-1]
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     "patch_func, side_effect, return_value, kwargs, result",
     [
         (
@@ -113,7 +110,7 @@ def test_args_04(capsys, tmp_path):
         (
             "grizzly.reduce.core.ReplayManager.load_testcases",
             None,
-            [Mock(hang=False), Mock(hang=False)],
+            ([Mock(hang=False), Mock(hang=False)], Mock(spec_set=AssetManager)),
             {"no_harness": True},
             2,
         ),
@@ -134,7 +131,6 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result
         ignore=["fake"],
         input="test",
         min_crashes=1,
-        prefs=None,
         relaunch=1,
         repeat=1,
         sig=None,
@@ -145,7 +141,7 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result
     assert ReduceManager.main(args) == result
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     "exc_type",
     [
         TargetLaunchError,
@@ -156,7 +152,13 @@ def test_main_launch_error(mocker, exc_type):
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
     mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)
-    mocker.patch("grizzly.reduce.core.ReplayManager.load_testcases")
+    mocker.patch(
+        "grizzly.reduce.core.ReplayManager.load_testcases",
+        return_value=(
+            [mocker.Mock(spec_set=TestCase, hang=False, adapter_name="fake")],
+            None,
+        ),
+    )
     mocker.patch(
         "grizzly.reduce.core.ReplayManager.time_limits", return_value=(None, 10)
     )
@@ -167,10 +169,10 @@ def test_main_launch_error(mocker, exc_type):
         ignore=["fake"],
         input="test",
         min_crashes=1,
-        prefs=None,
         relaunch=1,
         repeat=1,
         sig=None,
+        tool=None,
     )
 
     exc_obj = exc_type(
@@ -185,37 +187,3 @@ def test_main_launch_error(mocker, exc_type):
         assert report is exc_obj.report
     else:
         assert reporter.return_value.submit.call_count == 0
-
-
-@pytest.mark.parametrize("result", ["testprefs", "argprefs"])
-def test_testcase_prefs(mocker, tmp_path, result):
-    """test that prefs from testcase are used if --prefs not specified and --prefs
-    overrides"""
-    load_target = mocker.patch("grizzly.reduce.core.load_plugin")
-    mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True)
-    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
-    rmtree_mock = mocker.patch("grizzly.reduce.core.rmtree", autospec=True)
-    (tmp_path / "test.html").touch()
-    (tmp_path / "prefs.js").write_text("testprefs")
-    args = mocker.Mock(
-        fuzzmanager=False,
-        ignore=[],
-        input=str(tmp_path / "test.html"),
-        min_crashes=1,
-        prefs=None,
-        repeat=1,
-        sig=None,
-        test_index=None,
-        time_limit=10,
-        timeout=10,
-    )
-    if result == "argprefs":
-        (tmp_path / "args.js").write_text("argprefs")
-        args.prefs = str(tmp_path / "args.js")
-
-    try:
-        ReduceManager.main(args)
-        assert Path(load_target.return_value.return_value.prefs).read_text() == result
-    finally:
-        for rm_args, rm_kwds in rmtree_mock.call_args_list:
-            rmtree(*rm_args, **rm_kwds)

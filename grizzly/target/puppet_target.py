@@ -42,7 +42,13 @@ class PuppetTarget(Target):
     __slots__ = ("use_valgrind", "_extension", "_prefs", "_puppet")
 
     def __init__(self, binary, launch_timeout, log_limit, memory_limit, **kwds):
-        super().__init__(binary, launch_timeout, log_limit, memory_limit)
+        super().__init__(
+            binary,
+            launch_timeout,
+            log_limit,
+            memory_limit,
+            assets=kwds.pop("assets", None),
+        )
         # TODO: clean up handling debuggers
         debugger = Debugger.NONE
         if kwds.pop("pernosco", False):

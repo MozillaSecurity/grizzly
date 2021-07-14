@@ -10,7 +10,7 @@ from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, Debugger, Reas
 from pytest import mark, raises
 
 from .puppet_target import PuppetTarget
-from .target import Target, TargetLaunchError, TargetLaunchTimeout
+from .target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 
 
 def test_puppet_target_01(mocker, tmp_path):
@@ -21,7 +21,11 @@ def test_puppet_target_01(mocker, tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+        assert target.assets
         assert target.closed
+        assert target.launch_timeout == 300
+        assert target.log_limit == 25
+        assert target.memory_limit == 5000
         assert target.detect_failure([]) == Target.RESULT_NONE
         assert target.log_size() == 1124
         fake_ffp.return_value.log_length.assert_any_call("stderr")
@@ -44,7 +48,6 @@ def test_puppet_target_02(mocker, tmp_path):
     fake_file.touch()
     # test providing prefs.js
     with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
-        target.assets.add("prefs", str(fake_file))
         # launch success
         target.launch("launch_target_page")
         assert fake_ffp.return_value.launch.call_count == 1
@@ -307,11 +310,12 @@ def test_puppet_target_08(mocker, tmp_path):
         assert isfile(target.assets.get("prefs"))
         assert target.assets.get("prefs").endswith("prefs.js")
     # prefs file provided
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
-        target.assets.add("prefs", str(fake_file))
-        target.process_assets()
-        assert isfile(target.assets.get("prefs"))
-        assert target.assets.get("prefs").endswith("fake")
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        assets.add("prefs", str(fake_file))
+        with PuppetTarget(str(fake_file), 300, 25, 5000, assets=assets) as target:
+            target.process_assets()
+            assert isfile(target.assets.get("prefs"))
+            assert target.assets.get("prefs").endswith("fake")
 
 
 @mark.parametrize(

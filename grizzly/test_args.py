@@ -8,9 +8,10 @@ from pytest import mark, raises
 from .args import CommonArgs, GrizzlyArgs
 
 
-def test_common_args_01(capsys, mocker):
+def test_common_args_01(capsys, mocker, tmp_path):
     """test CommonArgs.parse_args()"""
-    mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=[])
+    scan_plugins = mocker.patch("grizzly.args.scan_plugins", autospec=True)
+    scan_plugins.return_value = []
     # test help
     with raises(SystemExit):
         CommonArgs().parse_args(argv=["-h"])
@@ -19,23 +20,15 @@ def test_common_args_01(capsys, mocker):
     with raises(SystemExit):
         CommonArgs().parse_args(argv=[])
     assert "the following arguments are required: binary" in capsys.readouterr()[-1]
-
-
-def test_common_args_01a(capsys, mocker, tmp_path):
-    """test CommonArgs.parse_args()"""
-    mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=["targ1"])
+    # test with missing bin
+    scan_plugins.return_value = ["targ1"]
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
-    # test with missing bin
     with raises(SystemExit):
         CommonArgs().parse_args(argv=["missing-bin"])
     assert "error: file not found: 'missing-bin'" in capsys.readouterr()[-1]
     # test success
     CommonArgs().parse_args(argv=[str(fake_bin), "--platform", "targ1"])
-    # test invalid extension
-    with raises(SystemExit):
-        CommonArgs().parse_args(argv=[str(fake_bin), "--extension", str(fake_bin)])
-    assert "error: Extension must be a folder or .xpi" in capsys.readouterr()[-1]
 
 
 @mark.parametrize(
@@ -53,16 +46,8 @@ def test_common_args_01a(capsys, mocker, tmp_path):
         (["--memory", "-1"], "error: --memory must be >= 0", ["targ1"]),
         # test invalid relaunch value
         (["--relaunch", "0"], "error: --relaunch must be >= 1", ["targ1"]),
-        # test missing extension
-        (["--extension", "missing"], "error: 'missing' does not exist", ["targ1"]),
         # test invalid platform/target
         (["--platform", "bad"], "error: Platform 'bad' not installed", ["targ1"]),
-        # test invalid prefs file
-        (
-            ["--platform", "targ1", "--prefs", "bad"],
-            "error: --prefs file not found",
-            ["targ1"],
-        ),
         # test invalid asset
         (
             ["--platform", "targ1", "--asset", "bad", "a"],
@@ -72,7 +57,7 @@ def test_common_args_01a(capsys, mocker, tmp_path):
         # test invalid asset path
         (
             ["--platform", "targ1", "--asset", "a", "a"],
-            "error: 'a' does not exist",
+            "error: Failed to add asset 'a' cannot find 'a'",
             ["targ1"],
         ),
         # test invalid time-limit

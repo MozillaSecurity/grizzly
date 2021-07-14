@@ -10,8 +10,6 @@ from locale import LC_ALL, setlocale
 from logging import getLogger
 from math import ceil, log
 from pathlib import Path
-from shutil import rmtree
-from tempfile import mkdtemp
 from time import time
 
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -21,7 +19,7 @@ from sapphire import Sapphire
 from ..common.fuzzmanager import CrashEntry
 from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter
-from ..common.storage import TestCaseLoadFailure, TestFile
+from ..common.storage import TestCaseLoadFailure
 from ..common.utils import ConfigError, configure_logging, grz_tmp
 from ..replay import ReplayManager
 from ..session import Session
@@ -719,11 +717,11 @@ class ReduceManager:
         elif args.valgrind:
             LOG.info("Running with Valgrind. This will be SLOW!")
 
+        assets = None
         signature = None
         signature_desc = None
         target = None
         testcases = []
-        tmp_prefs = None
         try:
             if args.sig:
                 signature = CrashSignature.fromFile(args.sig)
@@ -733,8 +731,8 @@ class ReduceManager:
                     signature_desc = meta["shortDescription"]
 
             try:
-                testcases = ReplayManager.load_testcases(
-                    args.input, args.prefs is None, subset=args.test_index
+                testcases, assets = ReplayManager.load_testcases(
+                    args.input, subset=args.test_index
                 )
             except TestCaseLoadFailure as exc:
                 LOG.error("Error: %s", str(exc))
@@ -770,34 +768,18 @@ class ReduceManager:
             LOG.debug("initializing the Target")
             target = load_plugin(args.platform, "grizzly_targets", Target)(
                 args.binary,
-                args.extension,
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
+                assets=assets,
                 pernosco=args.pernosco,
                 rr=args.rr,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb,
             )
-            if args.extension:
-                target.assets.add("extension", args.extension)
-            # prioritize specified prefs.js file over included file
-            if args.prefs is not None:
-                for testcase in testcases:
-                    testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
-                LOG.info("Using specified prefs.js")
-                target.prefs = args.prefs
-            else:
-                for testcase in testcases:
-                    prefs_tf = testcase.get_file("prefs.js")
-                    if prefs_tf:
-                        tmp_prefs = Path(
-                            mkdtemp(prefix="prefs_", dir=grz_tmp("replay"))
-                        )
-                        prefs_tf.dump(str(tmp_prefs))
-                        LOG.info("Using prefs.js from testcase")
-                        target.prefs = str(tmp_prefs / "prefs.js")
-                        break
+            # TODO: support overriding existing assets
+            # prioritize specified assets over included
+            target.assets.add_batch(args.asset)
             target.process_assets()
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
@@ -858,6 +840,6 @@ class ReduceManager:
                 target.cleanup()
             for testcase in testcases:
                 testcase.cleanup()
-            if tmp_prefs is not None:
-                rmtree(str(tmp_prefs), ignore_errors=True)
+            if assets:
+                assets.cleanup()
             LOG.info("Done.")

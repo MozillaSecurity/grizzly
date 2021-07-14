@@ -17,7 +17,7 @@ from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner, RunResult
 from ..common.status import Status
-from ..common.storage import TestCase, TestCaseLoadFailure, TestFile
+from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import TIMEOUT_DELAY, ConfigError, configure_logging, grz_tmp
 from ..session import Session
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
@@ -138,21 +138,27 @@ class ReplayManager:
         return is_hang
 
     @classmethod
-    def load_testcases(cls, path, load_prefs, subset=None):
+    def load_testcases(cls, path, subset=None):
         """Load TestCases.
 
         Args:
             path (str): Path to load.
-            load_prefs (bool): Load prefs.js file if available.
             subset (list(int)): Indices of tests to load when loading multiple
                                 tests.
         Returns:
-            list(TestCase): Loaded TestCases.
+            tuple (list(TestCase), AssetManager): Loaded TestCases and AssetManager.
         """
         LOG.debug("loading the TestCases")
-        testcases = TestCase.load(path, load_prefs)
+        testcases = TestCase.load(path)
         if not testcases:
             raise TestCaseLoadFailure("Failed to load TestCases")
+        # remove loaded assets from test cases
+        assets = None
+        for test in testcases:
+            if assets is None:
+                assets = test.pop_assets()
+            else:
+                test.pop_assets()
         if subset:
             count = len(testcases)
             # deduplicate and limit requested indices to valid range
@@ -165,7 +171,7 @@ class ReplayManager:
             for test in testcases:
                 test.cleanup()
             testcases = selected
-        return testcases
+        return testcases, assets
 
     @staticmethod
     def report_to_filesystem(path, results, tests=None):
@@ -565,9 +571,7 @@ class ReplayManager:
             signature = None
 
         try:
-            testcases = cls.load_testcases(
-                args.input, args.prefs is None, subset=args.test_index
-            )
+            testcases, assets = cls.load_testcases(args.input, subset=args.test_index)
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return Session.EXIT_ERROR
@@ -606,30 +610,15 @@ class ReplayManager:
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
+                assets=assets,
                 pernosco=args.pernosco,
                 rr=args.rr,
                 valgrind=args.valgrind,
                 xvfb=args.xvfb,
             )
-            if args.extension:
-                target.assets.add("extension", args.extension)
-            # prioritize specified prefs.js file over included file
-            if args.prefs:
-                for testcase in testcases:
-                    testcase.add_meta(TestFile.from_file(args.prefs, "prefs.js"))
-                LOG.info("Using specified prefs.js")
-                target.assets.add("prefs", args.prefs)
-            else:
-                for testcase in testcases:
-                    prefs_tf = testcase.get_file("prefs.js")
-                    if prefs_tf:
-                        LOG.info("Using prefs.js from testcase")
-                        prefs_tf.dump(target.assets.path)
-                        target.assets.add(
-                            "prefs",
-                            pathjoin(target.assets.path, "prefs.js"),
-                        )
-                        break
+            # TODO: support overriding existing assets
+            # prioritize specified assets over included
+            target.assets.add_batch(args.asset)
             target.process_assets()
 
             LOG.debug("starting sapphire server")
@@ -661,6 +650,10 @@ class ReplayManager:
             else:
                 LOG.info("Failed to reproduce results")
             if args.logs and results:
+                # add target assets to test cases
+                if not target.assets.is_empty():
+                    for test in testcases:
+                        test.assets = target.assets
                 cls.report_to_filesystem(
                     args.logs, results, testcases if args.include_test else None
                 )
@@ -693,4 +686,6 @@ class ReplayManager:
                 target.cleanup()
             for testcase in testcases:
                 testcase.cleanup()
+            if assets:
+                assets.cleanup()
             LOG.info("Done.")

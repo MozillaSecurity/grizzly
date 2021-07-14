@@ -16,6 +16,7 @@ from time import time
 from zipfile import BadZipfile, ZipFile
 from zlib import error as zlib_error
 
+from ..target import AssetManager
 from .utils import grz_tmp, sanitizer_opts
 
 __all__ = ("TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
@@ -32,12 +33,13 @@ class TestFileExists(Exception):
     TestFile with the same name"""
 
 
-TestFileMap = namedtuple("TestFileMap", "meta optional required")
+TestFileMap = namedtuple("TestFileMap", "optional required")
 
 
 class TestCase:
     __slots__ = (
         "adapter_name",
+        "assets",
         "duration",
         "env_vars",
         "hang",
@@ -60,6 +62,7 @@ class TestCase:
         timestamp=None,
     ):
         self.adapter_name = adapter_name
+        self.assets = None
         self.duration = None
         self.env_vars = dict()  # environment variables
         self.hang = False
@@ -69,11 +72,7 @@ class TestCase:
         self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
         self._existing_paths = list()  # file paths in use
-        self._files = TestFileMap(
-            meta=list(),  # environment files such as prefs.js, etc...
-            optional=list(),
-            required=list(),
-        )
+        self._files = TestFileMap(optional=list(), required=list())
 
     def __enter__(self):
         return self
@@ -120,17 +119,6 @@ class TestCase:
                 test_path = "/".join((prefix, test_path))
             self.add_from_file(fname, file_name=test_path)
 
-    def add_meta(self, meta_file):
-        """Add a TestFile to TestCase as a meta file.
-
-        Args:
-            meta_file (TestFile): TestFile to add to TestCase.
-
-        Returns:
-            None
-        """
-        self._add(self._files.meta, meta_file)
-
     def add_environ_var(self, name, value):
         """Add environment variable to TestCase.
 
@@ -147,7 +135,7 @@ class TestCase:
         """Add a TestFile to TestCase.
 
         Args:
-            meta_file (TestFile): TestFile to add to TestCase.
+            test_file (TestFile): TestFile to add to TestCase.
             required (bool): Indicates if test file must be served.
 
         Returns:
@@ -197,11 +185,11 @@ class TestCase:
             tfile.close()
             raise
 
-    def cleanup(self):
+    def cleanup(self, skip_assets=True):
         """Close all the test files.
 
         Args:
-            None
+            skip_assets (bool): Skip calling cleanup() on assets.
 
         Returns:
             None
@@ -209,6 +197,8 @@ class TestCase:
         for file_group in self._files:
             for test_file in file_group:
                 test_file.close()
+        if not skip_assets and self.assets:
+            self.assets.cleanup()
 
     def clone(self):
         """Make a copy of the TestCase.
@@ -230,8 +220,6 @@ class TestCase:
         result.duration = self.duration
         result.hang = self.hang
         result.env_vars.update(self.env_vars)
-        for entry in self._files.meta:
-            result.add_meta(entry.clone())
         for entry in self._files.optional:
             result.add_file(entry.clone(), required=False)
         for entry in self._files.required:
@@ -265,19 +253,19 @@ class TestCase:
             total += sum(x.size for x in group)
         return total
 
-    def dump(self, out_path, include_details=False):
+    def dump(self, dst_path, include_details=False):
         """Write all the test case data to the filesystem.
 
         Args:
-            out_path (str): Path to directory to output data.
+            dst_path (str): Path to directory to output data.
             include_details (bool): Output "test_info.json" file.
 
         Returns:
             None
         """
-        # save test files to out_path
+        # save test files to dst_path
         for test_file in chain(self._files.required, self._files.optional):
-            test_file.dump(out_path)
+            test_file.dump(dst_path)
         # save test case files and meta data including:
         # adapter used, input file, environment info and files
         if include_details:
@@ -292,11 +280,12 @@ class TestCase:
                 "time_limit": self.time_limit,
                 "timestamp": self.timestamp,
             }
-            with open(pathjoin(out_path, "test_info.json"), "w") as out_fp:
+            # save target assets and update meta data
+            if self.assets and not self.assets.is_empty():
+                info["assets_path"] = "_assets_"
+                info["assets"] = self.assets.dump(dst_path, subdir=info["assets_path"])
+            with open(pathjoin(dst_path, "test_info.json"), "w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
-            # save meta files
-            for meta_file in self._files.meta:
-                meta_file.dump(out_path)
 
     def get_file(self, file_name):
         """Lookup and return the TestFile with the specified file name.
@@ -307,15 +296,13 @@ class TestCase:
         Returns:
             TestFile: TestFile with matching file name otherwise None.
         """
-        for tfile in chain(
-            self._files.meta, self._files.optional, self._files.required
-        ):
+        for tfile in chain(self._files.optional, self._files.required):
             if tfile.file_name == file_name:
                 return tfile
         return None
 
     @classmethod
-    def load(cls, path, load_prefs, adjacent=False):
+    def load(cls, path, adjacent=False):
         """Load TestCases from disk.
 
         Args:
@@ -325,7 +312,6 @@ class TestCase:
                         3) A zip archive containing testcase data or
                            subdirectories containing testcase data.
                         4) A single file to be used as a test case.
-            load_prefs (bool): Load prefs.js file if available.
             adjacent (bool): Load adjacent files as part of the test case.
                              This is always the case when loading a directory.
                              WARNING: This should be used with caution!
@@ -348,11 +334,20 @@ class TestCase:
         # load testcase data from disk
         try:
             if isfile(path):
-                tests = [cls.load_single(path, load_prefs, adjacent=adjacent)]
+                tests = [cls.load_single(path, adjacent=adjacent)]
             elif isdir(path):
                 tests = list()
+                assets = None
                 for tc_path in TestCase.scan_path(path):
-                    tests.append(cls.load_single(tc_path, load_prefs))
+                    tests.append(cls.load_single(tc_path, load_assets=assets is None))
+                    # only load assets once
+                    if not assets and tests[-1].assets:
+                        assets = tests[-1].assets
+                # reuse AssetManager on all tests
+                if assets:
+                    for test in tests:
+                        if test.assets is None:
+                            test.assets = assets
                 tests.sort(key=lambda tc: tc.timestamp)
             else:
                 raise TestCaseLoadFailure("Invalid TestCase path")
@@ -379,13 +374,12 @@ class TestCase:
                 )
 
     @classmethod
-    def load_single(cls, path, load_prefs, adjacent=False):
+    def load_single(cls, path, adjacent=False, load_assets=True):
         """Load contents of a TestCase from disk. If `path` is a directory it must
         contain a valid 'test_info.json' file.
 
         Args:
             path (str): Path to the directory or file to load.
-            load_prefs (bool): Load prefs.js file if available.
             adjacent (bool): Load adjacent files as part of the TestCase.
                              This is always true when loading a directory.
                              WARNING: This should be used with caution!
@@ -429,23 +423,34 @@ class TestCase:
         )
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
-        if load_prefs and isfile(pathjoin(path, "prefs.js")):
-            test.add_meta(TestFile.from_file(pathjoin(path, "prefs.js")))
         test.add_from_file(pathjoin(path, entry_point))
         test.landing_page = entry_point
-        # load environment variables
         if info:
+            # load assets
+            try:
+                if load_assets and info.get("assets", None):
+                    test.assets = AssetManager.load(
+                        info.get("assets"),
+                        pathjoin(path, info.get("assets_path", "")),
+                    )
+            except OSError as exc:
+                raise TestCaseLoadFailure(str(exc)) from None
+            # load environment variables
             try:
                 test.load_environ(path, info.get("env", {}))
             except TestCaseLoadFailure:
-                test.cleanup()
+                test.cleanup(skip_assets=False)
                 raise
         # load all adjacent data from directory
         if adjacent:
+            asset_path = info.get("assets_path", None)
             for dpath, _, files in walk(path):
+                # ignore asset path
+                if asset_path and dpath == pathjoin(path, asset_path):
+                    continue
                 for fname in files:
                     # ignore files that have been previously loaded
-                    if fname in (entry_point, "prefs.js", "test_info.json"):
+                    if fname in (entry_point, "test_info.json"):
                         continue
                     location = "/".join((dpath.split(path, 1)[-1], fname))
                     test.add_from_file(
@@ -465,6 +470,14 @@ class TestCase:
         """
         for test in self._files.optional:
             yield test.file_name
+
+    def pop_assets(self):
+        if self.assets is None:
+            assets = None
+        else:
+            assets = self.assets
+            self.assets = None
+        return assets
 
     def purge_optional(self, keep):
         """Remove optional files (by name) that are not in keep.

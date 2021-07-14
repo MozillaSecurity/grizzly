@@ -6,8 +6,6 @@
 """
 unit tests for grizzly.replay.main
 """
-from shutil import rmtree
-
 from pytest import mark
 
 from sapphire import SERVED_ALL
@@ -33,8 +31,9 @@ def test_main_01(mocker, tmp_path):
         return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
-    load_target = mocker.patch("grizzly.replay.replay.load_plugin")
-    target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
+    load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
+    target = mocker.Mock(spec_set=Target, binary="bin", launch_timeout=30)
+    target.assets = mocker.Mock(spec_set=AssetManager)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.RESULT_NONE = Target.RESULT_NONE
@@ -48,11 +47,11 @@ def test_main_01(mocker, tmp_path):
     # setup args
     log_path = tmp_path / "logs"
     (tmp_path / "test.html").touch()
-    (tmp_path / "prefs.js").touch()
     (tmp_path / "sig.json").write_bytes(
         b'{"symptoms": [{"type": "crashAddress", "address": "0"}]}'
     )
     args = mocker.Mock(
+        asset=list(),
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
@@ -62,7 +61,6 @@ def test_main_01(mocker, tmp_path):
         min_crashes=2,
         no_harness=False,
         pernosco=False,
-        prefs=str(tmp_path / "prefs.js"),
         relaunch=1,
         repeat=4,
         rr=False,
@@ -80,6 +78,8 @@ def test_main_01(mocker, tmp_path):
     assert load_target.call_count == 1
     assert target.close.call_count == 4
     assert target.cleanup.call_count == 1
+    assert target.assets.add.call_count == 0
+    assert target.assets.is_empty.call_count == 1
     assert log_path.is_dir()
     assert any(log_path.glob("reports/*/log_asan_blah.txt"))
     assert any(log_path.glob("reports/*/log_stderr.txt"))
@@ -104,6 +104,7 @@ def test_main_02(mocker, tmp_path):
     # setup args
     (tmp_path / "test.html").touch()
     args = mocker.Mock(
+        asset=list(),
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
@@ -112,7 +113,6 @@ def test_main_02(mocker, tmp_path):
         min_crashes=2,
         no_harness=True,
         pernosco=False,
-        prefs=None,
         relaunch=1,
         repeat=1,
         rr=False,
@@ -137,12 +137,12 @@ def test_main_03(mocker):
     fake_tc = mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
     # setup args
     args = mocker.Mock(
+        asset=list(),
         ignore=list(),
         input="test",
         min_crashes=1,
         no_harness=True,
         pernosco=False,
-        prefs=None,
         relaunch=1,
         repeat=1,
         rr=False,
@@ -201,12 +201,12 @@ def test_main_04(mocker, tmp_path):
     )
     # setup args
     args = mocker.Mock(
+        asset=list(),
         ignore=list(),
         input="test",
         min_crashes=1,
         no_harness=True,
         pernosco=False,
-        prefs=None,
         relaunch=1,
         repeat=1,
         rr=False,
@@ -235,28 +235,28 @@ def test_main_04(mocker, tmp_path):
 
 
 def test_main_05(mocker, tmp_path):
-    """test ReplayManager.main() loading/generating prefs.js"""
+    """test ReplayManager.main() loading specified assets"""
     serve_path = mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
         return_value=(None, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
-    assets = mocker.Mock(spec_set=AssetManager, path=str(tmp_path))
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=assets,
-        binary="bin",
-        launch_timeout=30,
-    )
+    target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.monitor.is_healthy.return_value = False
     target.save_logs = _fake_save_logs
-    load_target = mocker.patch("grizzly.replay.replay.load_plugin")
-    load_target.return_value.return_value = target
+    mocker.patch(
+        "grizzly.replay.replay.load_plugin",
+        autospec=True,
+        return_value=mocker.Mock(spec_set=Target, return_value=target),
+    )
+    asset = tmp_path / "sample_asset"
+    asset.touch()
     # setup args
     args = mocker.Mock(
+        asset=[["from_cmdline", str(asset)]],
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
@@ -284,44 +284,15 @@ def test_main_05(mocker, tmp_path):
         src.add_from_file(str(entry_point))
         src.dump(str(input_path), include_details=True)
     args.input = str(input_path)
-
-    # test no specified prefs.js
-    args.prefs = None
-    assert ReplayManager.main(args) == Session.EXIT_SUCCESS
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        target.assets = assets
+        assert ReplayManager.main(args) == Session.EXIT_SUCCESS
+        assert "from_cmdline" in target.assets.assets
     assert target.launch.call_count == 1
     assert target.detect_failure.call_count == 1
     assert serve_path.call_count == 1
     assert log_path.is_dir()
-    assert not any(log_path.glob("**/prefs.js"))
-
-    target.reset_mock()
-    serve_path.reset_mock()
-    rmtree(str(log_path), ignore_errors=True)
-
-    # test included prefs.js
-    (input_path / "prefs.js").write_bytes(b"included")
-    assert ReplayManager.main(args) == Session.EXIT_SUCCESS
-    assert target.launch.call_count == 1
-    assert target.detect_failure.call_count == 1
-    assert serve_path.call_count == 1
-    assert log_path.is_dir()
-    prefs = next(log_path.glob("**/prefs.js"))
-    assert prefs.read_bytes() == b"included"
-
-    target.reset_mock()
-    serve_path.reset_mock()
-    rmtree(str(log_path), ignore_errors=True)
-
-    # test specified prefs.js
-    (tmp_path / "prefs.js").write_bytes(b"specified")
-    args.prefs = str(tmp_path / "prefs.js")
-    assert ReplayManager.main(args) == Session.EXIT_SUCCESS
-    assert target.launch.call_count == 1
-    assert target.detect_failure.call_count == 1
-    assert serve_path.call_count == 1
-    assert log_path.is_dir()
-    prefs = next(log_path.glob("**/prefs.js"))
-    assert prefs.read_bytes() == b"specified"
+    assert any(log_path.glob("**/sample_asset"))
 
 
 @mark.parametrize(
@@ -367,6 +338,7 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         test.dump(str(replay_path), include_details=True)
     # setup args
     args = mocker.Mock(
+        asset=list(),
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
@@ -375,7 +347,6 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         min_crashes=2,
         no_harness=True,
         pernosco=False,
-        prefs=None,
         relaunch=1,
         repeat=1,
         rr=False,
@@ -421,6 +392,7 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
     # setup args
     (tmp_path / "test.html").touch()
     args = mocker.Mock(
+        asset=list(),
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
@@ -429,7 +401,6 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
         min_crashes=2,
         no_harness=no_harness,
         pernosco=pernosco,
-        prefs=None,
         relaunch=1,
         repeat=1,
         rr=rr,
