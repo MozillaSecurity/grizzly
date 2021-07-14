@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
-from os.path import exists, isdir, isfile
+from os.path import exists, isfile
 from platform import system
 
 from .common.plugins import scan as scan_plugins
@@ -73,6 +73,7 @@ class CommonArgs:
         self.launcher_grp.add_argument(
             "--asset",
             action="append",
+            default=list(),
             metavar=("ASSET", "PATH"),
             nargs=2,
             help="Specify target specific asset files. %s" % ("".join(asset_msg),),
@@ -80,10 +81,8 @@ class CommonArgs:
         self.launcher_grp.add_argument(
             "-e",
             "--extension",
-            action="append",
             help="DEPRECATED. Install an extension. Specify the path to the xpi or the"
-            " directory containing the unpacked extension. To install multiple"
-            " extensions specify multiple times",
+            " directory containing the unpacked extension.",
         )
         self.launcher_grp.add_argument(
             "--launch-timeout",
@@ -223,15 +222,16 @@ class CommonArgs:
         if args.relaunch < 1:
             self.parser.error("--relaunch must be >= 1")
 
-        if args.extension:
-            for ext in args.extension:
-                if not exists(ext):
-                    self.parser.error("%r does not exist" % (ext,))
-                if not isdir(ext) or (isfile(ext) and ext.endswith(".xpi")):
-                    self.parser.error("Extension must be a folder or .xpi")
-
         if args.platform not in targets:
             self.parser.error("Platform %r not installed" % (args.platform,))
+
+        # TODO: remove deprecated 'extension' from args
+        if args.extension:  # pragma: no cover
+            args.asset.append(["extension", args.extension])
+
+        # TODO: remove deprecated 'prefs' from args
+        if args.prefs:  # pragma: no cover
+            args.asset.append(["prefs", args.extension])
 
         # check args.platform before args.asset since it is used
         if args.asset:
@@ -242,10 +242,9 @@ class CommonArgs:
                         "Asset %r not supported by target %r" % (asset, args.platform)
                     )
                 if not exists(path):
-                    self.parser.error("%r does not exist %r" % (asset, path))
-
-        if args.prefs and not isfile(args.prefs):
-            self.parser.error("--prefs file not found")
+                    self.parser.error(
+                        "Failed to add asset %r cannot find %r" % (asset, path)
+                    )
 
         if args.time_limit is not None and args.time_limit < 1:
             self.parser.error("--time-limit must be >= 1")

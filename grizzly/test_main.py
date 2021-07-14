@@ -10,7 +10,7 @@ from sapphire import Sapphire
 from .adapter import Adapter
 from .main import main
 from .session import Session
-from .target import Target, TargetLaunchError
+from .target import AssetManager, Target, TargetLaunchError
 
 
 class FakeArgs:
@@ -18,6 +18,7 @@ class FakeArgs:
         self.binary = None
         self.input = None
         self.adapter = None
+        self.asset = list()
         self.collect = 1
         self.coverage = False
         self.enable_profiling = False
@@ -66,7 +67,9 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     fake_adapter = mocker.NonCallableMock(spec_set=Adapter)
     fake_adapter.RELAUNCH = adpt_relaunch
     fake_adapter.TIME_LIMIT = 10
-    fake_target = mocker.NonCallableMock(spec_set=Target)
+    fake_target = mocker.NonCallableMock(
+        spec_set=Target, assets=mocker.Mock(set_spec=AssetManager)
+    )
     plugin_loader = mocker.patch("grizzly.main.load_plugin", autospec=True)
     plugin_loader.side_effect = (
         mocker.Mock(spec_set=Adapter, return_value=fake_adapter),
@@ -76,12 +79,13 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs()
+    args.asset = [
+        ["fake", "fake"],
+    ]
     args.adapter = "fake"
-    args.extension = "fake"
     args.ignore = ["fake", "fake"]
     args.limit = limit
     args.runtime = runtime
-    args.prefs = "fake"
     args.rr = True
     args.valgrind = True
     args.xvfb = True

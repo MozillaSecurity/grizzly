@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from os.path import isfile
 from pathlib import Path
 from shutil import rmtree
 
@@ -55,6 +56,9 @@ def test_target_01(tmp_path):
     with SimpleTarget(str(fake_file), 321, 2, 3) as target:
         assert target.binary == str(fake_file)
         assert target.assets
+        org_path = target.assets.path
+        target.assets = AssetManager(base_path=str(tmp_path))
+        assert target.assets.path != org_path
         assert not target.is_idle(0)
         assert target.launch_timeout == 321
         assert target.log_size() == 0
@@ -124,3 +128,49 @@ def test_assert_manager_01(tmp_path):
         assets.cleanup()
         assert not assets.assets
         assert assets.path is None
+
+
+def test_assert_manager_02(tmp_path):
+    """test AssetManager() dump/load"""
+    # test dump()
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        # add file
+        example = Path(assets.path) / "example.txt"
+        example.write_text("example")
+        assets.add("example_file", str(example))
+        # add directory
+        example = Path(assets.path) / "example_path"
+        example.mkdir()
+        (example / "a").mkdir()
+        (example / "a" / "1.txt").write_text("1")
+        assets.add("example_path", str(example))
+        # invalid entry
+        assets.assets["invalid"] = "bad/path"
+        # dump
+        dump_path = tmp_path / "dump"
+        dumped = assets.dump(str(dump_path), subdir="sub")
+    assert len(dumped) == 2
+    assert (dump_path / "sub" / "example.txt").is_file()
+    assert (dump_path / "sub" / "example_path" / "a" / "1.txt").is_file()
+    # test load()
+    with AssetManager.load(dumped, str(dump_path / "sub")) as assets:
+        assert len(assets.assets) == 2
+        assert isfile(assets.assets["example_file"])
+
+
+def test_assert_manager_03(tmp_path):
+    """test AssetManager.add_batch()"""
+    batch = list()
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        # add file
+        example = Path(assets.path) / "example.txt"
+        example.write_text("example")
+        batch.append(["example_file", str(example)])
+        # add directory
+        example = Path(assets.path) / "example_path"
+        example.mkdir()
+        (example / "a").mkdir()
+        (example / "a" / "1.txt").write_text("1")
+        batch.append(["example_path", str(example)])
+        assets.add_batch(batch)
+        assert len(assets.assets) == 2

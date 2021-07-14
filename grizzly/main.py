@@ -89,13 +89,10 @@ def main(args):
             valgrind=args.valgrind,
             xvfb=args.xvfb,
         )
-        if args.prefs:
-            LOG.info("Using prefs %r", args.prefs)
-            target.assets.add("prefs", args.prefs)
-        if args.extension:
-            target.assets.add("extension", args.extension)
-        adapter.monitor = target.monitor
+        # add specified assets
+        target.assets.add_batch(args.asset)
         target.process_assets()
+        adapter.monitor = target.monitor
 
         LOG.debug("initializing the Reporter")
         if args.fuzzmanager:

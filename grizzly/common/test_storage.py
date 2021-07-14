@@ -10,8 +10,9 @@ import re
 import zipfile
 from itertools import chain
 
-import pytest
+from pytest import raises
 
+from ..target import AssetManager
 from .storage import TestCase, TestCaseLoadFailure, TestFile, TestFileExists
 
 
@@ -23,6 +24,7 @@ def test_testcase_01(tmp_path):
     with TestCase(l_page, r_page, adpt_name) as tcase:
         assert tcase.landing_page == l_page
         assert tcase.redirect_page == r_page
+        assert tcase.assets is None
         assert tcase.adapter_name == adpt_name
         assert tcase.duration is None
         assert tcase.data_size == 0
@@ -30,10 +32,10 @@ def test_testcase_01(tmp_path):
         assert tcase.timestamp > 0
         assert not tcase.env_vars
         assert not tcase._existing_paths
-        assert not tcase._files.meta
         assert not tcase._files.optional
         assert not tcase._files.required
         assert not tcase.contains("no_file")
+        assert tcase.pop_assets() is None
         assert not any(tcase.optional)
         tcase.dump(str(tmp_path))
         assert not any(tmp_path.iterdir())
@@ -51,9 +53,9 @@ def test_testcase_02(tmp_path):
         in_file.write_bytes(b"test_req")
         tcase.add_from_file(str(in_file))
         assert tcase.data_size == 8
-        with pytest.raises(TestFileExists, match="'testfile1.bin' exists in test"):
+        with raises(TestFileExists, match="'testfile1.bin' exists in test"):
             tcase.add_from_file(str(in_file), file_name="testfile1.bin")
-        with pytest.raises(TestFileExists, match="'testfile1.bin' exists in test"):
+        with raises(TestFileExists, match="'testfile1.bin' exists in test"):
             tcase.add_from_data("test", "testfile1.bin")
         tcase.add_from_data("test_nreq", "nested/testfile2.bin", required=False)
         tcase.add_from_data("test_blah", "/testfile3.bin")
@@ -78,20 +80,6 @@ def test_testcase_02(tmp_path):
 
 
 def test_testcase_03(tmp_path):
-    """test TestCase.add_meta()"""
-    with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
-        dmp_path = tmp_path / "dmp_test"
-        dmp_path.mkdir()
-        meta_file = dmp_path / "metafile.bin"
-        meta_data = b"foobar"
-        tcase.add_meta(TestFile.from_data(meta_data, meta_file.name))
-        tcase.dump(str(dmp_path), include_details=True)
-        assert tcase.data_size == 6
-        assert meta_file.is_file()
-        assert meta_file.read_bytes() == meta_data
-
-
-def test_testcase_04(tmp_path):
     """test TestCase.add_environ_var() and TestCase.env_vars"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         tcase.add_environ_var("TEST_ENV_VAR", "1")
@@ -107,7 +95,7 @@ def test_testcase_04(tmp_path):
         assert data["env"]["TEST_NONE"] is None
 
 
-def test_testcase_05():
+def test_testcase_04():
     """test TestCase.purge_optional()"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         tcase.add_from_data("foo", "testfile1.bin")
@@ -132,7 +120,7 @@ def test_testcase_05():
         assert not any(tcase.optional)
 
 
-def test_testcase_06():
+def test_testcase_05():
     """test TestCase.data_size"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         assert tcase.data_size == 0
@@ -140,29 +128,26 @@ def test_testcase_06():
         assert tcase.data_size == 1
         tcase.add_from_data("12", "testfile2.bin", required=False)
         assert tcase.data_size == 3
-        tcase.add_meta(TestFile.from_data("123", "meta.bin"))
-        assert tcase.data_size == 6
 
 
-def test_testcase_07(tmp_path):
+def test_testcase_06(tmp_path):
     """test TestCase.load_single() using a directory - fail cases"""
     # missing test_info.json
-    with pytest.raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
-        TestCase.load_single(str(tmp_path), True)
+    with raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
+        TestCase.load_single(str(tmp_path))
     # invalid test_info.json
     (tmp_path / "test_info.json").write_bytes(b"X")
-    with pytest.raises(TestCaseLoadFailure, match="Invalid 'test_info.json'"):
-        TestCase.load_single(str(tmp_path), True)
+    with raises(TestCaseLoadFailure, match="Invalid 'test_info.json'"):
+        TestCase.load_single(str(tmp_path))
     # test_info.json missing 'target' entry
     (tmp_path / "test_info.json").write_bytes(b"{}")
-    with pytest.raises(
+    with raises(
         TestCaseLoadFailure, match="'test_info.json' has invalid 'target' entry"
     ):
-        TestCase.load_single(str(tmp_path), True)
+        TestCase.load_single(str(tmp_path))
     # build a test case
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    (src_dir / "prefs.js").touch()
     entry_point = src_dir / "target.bin"
     entry_point.touch()
     with TestCase("target.bin", None, "test-adapter") as src:
@@ -170,29 +155,26 @@ def test_testcase_07(tmp_path):
         src.dump(str(src_dir), include_details=True)
     # bad 'target' entry in test_info.json
     entry_point.unlink()
-    with pytest.raises(
-        TestCaseLoadFailure, match="Entry point 'target.bin' not found in"
-    ):
-        TestCase.load_single(str(src_dir), True)
+    with raises(TestCaseLoadFailure, match="Entry point 'target.bin' not found in"):
+        TestCase.load_single(str(src_dir))
     # bad 'env' entry in test_info.json
     entry_point.touch()
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_environ_var("TEST_ENV_VAR", 100)
         src.dump(str(src_dir), include_details=True)
-    with pytest.raises(
-        TestCaseLoadFailure, match="'env_data' contains invalid 'env' entries"
-    ):
-        TestCase.load_single(str(src_dir), True)
+    with raises(TestCaseLoadFailure, match="'env_data' contains invalid 'env' entries"):
+        TestCase.load_single(str(src_dir))
 
 
-def test_testcase_08(tmp_path):
+def test_testcase_07(mocker, tmp_path):
     """test TestCase.load_single() using a directory"""
     # build a valid test case
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    (src_dir / "prefs.js").touch()
     entry_point = src_dir / "target.bin"
     entry_point.touch()
+    asset_file = src_dir / "example_asset"
+    asset_file.touch()
     (src_dir / "optional.bin").touch()
     (src_dir / "x.bin").touch()
     nested = tmp_path / "src" / "nested"
@@ -200,14 +182,30 @@ def test_testcase_08(tmp_path):
     # overlap file name in different directories
     (nested / "x.bin").touch()
     (tmp_path / "src" / "nested" / "empty").mkdir()
-    with TestCase("target.bin", None, "test-adapter") as src:
-        src.add_environ_var("TEST_ENV_VAR", "100")
-        src.add_from_file(str(entry_point))
-        src.dump(str(src_dir), include_details=True)
-    # load test case from test_info.json
-    with TestCase.load_single(str(src_dir), True) as dst:
+    dst_dir = tmp_path / "dst"
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        assets.add("example", str(asset_file))
+        with TestCase("target.bin", None, "test-adapter") as src:
+            src.add_environ_var("TEST_ENV_VAR", "100")
+            src.add_from_file(str(entry_point))
+            src.add_from_file(str(src_dir / "optional.bin"), required=False)
+            src.add_from_file(str(src_dir / "x.bin"), required=False)
+            src.add_from_file(
+                str(nested / "x.bin"),
+                file_name=os.path.join("nested", "x.bin"),
+                required=False,
+            )
+            src.assets = assets
+            src.dump(str(dst_dir), include_details=True)
+    # test loading test case from test_info.json
+    with TestCase.load_single(str(dst_dir)) as dst:
+        asset = dst.pop_assets()
+        assert asset
+        try:
+            assert "example" in asset.assets
+        finally:
+            asset.cleanup()
         assert dst.landing_page == "target.bin"
-        assert "prefs.js" in (x.file_name for x in dst._files.meta)
         assert "target.bin" in (x.file_name for x in dst._files.required)
         assert "optional.bin" in (x.file_name for x in dst._files.optional)
         assert "x.bin" in (x.file_name for x in dst._files.optional)
@@ -216,37 +214,41 @@ def test_testcase_08(tmp_path):
         )
         assert dst.env_vars["TEST_ENV_VAR"] == "100"
         assert dst.timestamp > 0
+    # test load with missing asset
+    mocker.patch("grizzly.common.storage.AssetManager.load", side_effect=OSError)
+    with raises(TestCaseLoadFailure):
+        TestCase.load_single(str(dst_dir))
 
 
-def test_testcase_09(tmp_path):
+def test_testcase_08(tmp_path):
     """test TestCase.load_single() using a file"""
     # invalid entry_point specified
-    with pytest.raises(TestCaseLoadFailure, match="Missing or invalid TestCase"):
-        TestCase.load_single(str(tmp_path / "missing_file"), False)
+    with raises(TestCaseLoadFailure, match="Missing or invalid TestCase"):
+        TestCase.load_single(str(tmp_path / "missing_file"), adjacent=False)
     # valid test case
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    (src_dir / "prefs.js").touch()
     entry_point = src_dir / "target.bin"
     entry_point.touch()
     (src_dir / "optional.bin").touch()
     # load single file test case
-    with TestCase.load_single(str(entry_point), False) as tcase:
+    with TestCase.load_single(str(entry_point), adjacent=False) as tcase:
+        assert tcase.assets is None
         assert tcase.landing_page == "target.bin"
-        assert "prefs.js" not in (x.file_name for x in tcase._files.meta)
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
         assert tcase.timestamp == 0
     # load full test case
-    with TestCase.load_single(str(entry_point), True, adjacent=True) as tcase:
+    with TestCase.load_single(str(entry_point), adjacent=True) as tcase:
         assert tcase.landing_page == "target.bin"
-        assert "prefs.js" in (x.file_name for x in tcase._files.meta)
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
 
 
-def test_testcase_10(tmp_path):
+def test_testcase_09(tmp_path):
     """test TestCase - dump, load and compare"""
+    working = tmp_path / "working"
+    working.mkdir()
     with TestCase("a.html", "b.html", "adpt") as org:
         # set non default values
         org.duration = 1.23
@@ -255,75 +257,94 @@ def test_testcase_10(tmp_path):
         org.input_fname = "infile"
         org.time_limit = 10
         org.add_from_data("a", "a.html")
-        org.dump(str(tmp_path), include_details=True)
-        loaded = TestCase.load_single(str(tmp_path), False)
+        with AssetManager(base_path=str(tmp_path)) as assets:
+            fake = tmp_path / "fake_asset"
+            fake.touch()
+            assets.add("fake", str(fake))
+            org.assets = assets
+            org.dump(str(working), include_details=True)
+        org.assets = None
+        loaded = TestCase.load_single(str(working), adjacent=False)
         try:
             for prop in TestCase.__slots__:
-                if prop.startswith("_") or prop == "redirect_page":
+                if prop.startswith("_") or prop in ("assets", "redirect_page"):
                     continue
                 assert getattr(loaded, prop) == getattr(org, prop)
             assert org._existing_paths == loaded._existing_paths
+            assert loaded.assets
+            assert "fake" in loaded.assets.assets
         finally:
-            loaded.cleanup()
+            loaded.cleanup(skip_assets=False)
+
+
+def test_testcase_10(tmp_path):
+    """test TestCase.load() - missing file and empty directory"""
+    # missing file
+    with raises(TestCaseLoadFailure, match="Invalid TestCase path"):
+        TestCase.load("missing")
+    # empty path
+    assert not TestCase.load(str(tmp_path), adjacent=True)
 
 
 def test_testcase_11(tmp_path):
-    """test TestCase.load() - missing file and empty directory"""
-    # missing file
-    with pytest.raises(TestCaseLoadFailure, match="Invalid TestCase path"):
-        TestCase.load("missing", False)
-    # empty path
-    assert not TestCase.load(str(tmp_path), True)
-
-
-def test_testcase_12(tmp_path):
     """test TestCase.load() - single file"""
     tfile = tmp_path / "testcase.html"
     tfile.touch()
-    testcases = TestCase.load(str(tfile), False)
+    testcases = TestCase.load(str(tfile), adjacent=False)
     try:
         assert len(testcases) == 1
+        assert all(x.assets is None for x in testcases)
     finally:
         map(lambda x: x.cleanup, testcases)
 
 
-def test_testcase_13(tmp_path):
+def test_testcase_12(tmp_path):
     """test TestCase.load() - single directory"""
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_from_data("test", "target.bin")
         src.dump(str(tmp_path), include_details=True)
-    testcases = TestCase.load(str(tmp_path), False)
+    testcases = TestCase.load(str(tmp_path))
     try:
         assert len(testcases) == 1
+        assert all(x.assets is None for x in testcases)
     finally:
-        map(lambda x: x.cleanup, testcases)
+        map(lambda x: x.cleanup(), testcases)
+
+
+def test_testcase_13(tmp_path):
+    """test TestCase.load() - multiple directories (with assets)"""
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    asset_file = tmp_path / "example_asset"
+    asset_file.touch()
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        assets.add("example", str(asset_file))
+        with TestCase("target.bin", None, "test-adapter") as src:
+            src.assets = assets
+            src.add_from_data("test", "target.bin")
+            src.dump(str(nested / "test-1"), include_details=True)
+            src.dump(str(nested / "test-2"), include_details=True)
+            src.dump(str(nested / "test-3"), include_details=True)
+    testcases = TestCase.load(str(nested))
+    try:
+        assert len(testcases) == 3
+        assert all(x.assets is not None for x in testcases)
+        asset = testcases[-1].pop_assets()
+        assert asset is not None
+        assert "example" in asset.assets
+    finally:
+        map(lambda x: x.cleanup(skip_assets=False), testcases)
+    # try loading testcases that are nested too deep
+    assert not TestCase.load(str(tmp_path))
 
 
 def test_testcase_14(tmp_path):
-    """test TestCase.load() - multiple directories"""
-    nested = tmp_path / "nested"
-    nested.mkdir()
-    with TestCase("target.bin", None, "test-adapter") as src:
-        src.add_from_data("test", "target.bin")
-        src.dump(str(nested / "test-1"), include_details=True)
-        src.dump(str(nested / "test-2"), include_details=True)
-        src.dump(str(nested / "test-3"), include_details=True)
-    testcases = TestCase.load(str(nested), False)
-    try:
-        assert len(testcases) == 3
-    finally:
-        map(lambda x: x.cleanup, testcases)
-    # try loading testcases that are nested too deep
-    assert not TestCase.load(str(tmp_path), False)
-
-
-def test_testcase_15(tmp_path):
     """test TestCase.load() - archive"""
     archive = tmp_path / "testcase.zip"
     # bad archive
     archive.write_bytes(b"x")
-    with pytest.raises(TestCaseLoadFailure, match="Testcase archive is corrupted"):
-        TestCase.load(str(archive), True)
+    with raises(TestCaseLoadFailure, match="Testcase archive is corrupted"):
+        TestCase.load(str(archive))
     # build archive containing multiple testcases
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_from_data("test", "target.bin")
@@ -344,14 +365,15 @@ def test_testcase_15(tmp_path):
                     os.path.join(dir_name, file_name),
                     arcname=os.path.join(arc_path, file_name),
                 )
-    testcases = TestCase.load(str(archive), True)
+    testcases = TestCase.load(str(archive))
     try:
-        assert len(tuple(testcases)) == 3
+        assert len(testcases) == 3
+        assert all(x.assets is None for x in testcases)
     finally:
         map(lambda x: x.cleanup, testcases)
 
 
-def test_testcase_16(tmp_path):
+def test_testcase_15(tmp_path):
     """test TestCase.load_environ()"""
     (tmp_path / "ubsan.supp").touch()
     (tmp_path / "other_file").touch()
@@ -369,7 +391,7 @@ def test_testcase_16(tmp_path):
         assert len(opts) == 3
 
 
-def test_testcase_17(tmp_path):
+def test_testcase_16(tmp_path):
     """test TestCase.add_batch()"""
     include = tmp_path / "inc_path"
     include.mkdir()
@@ -386,7 +408,7 @@ def test_testcase_17(tmp_path):
         tcase.add_batch("/missing/path/", tuple())
         assert not tcase._existing_paths
         # missing file
-        with pytest.raises(IOError):
+        with raises(IOError):
             tcase.add_batch(str(tmp_path), [str(tmp_path / "missing.bin")])
         assert not tcase._existing_paths
         # relative file name
@@ -405,11 +427,11 @@ def test_testcase_17(tmp_path):
         assert tcase.contains(os.path.join("test", "file.bin"))
         assert len(tcase._existing_paths) == 3
         # collision
-        with pytest.raises(TestFileExists, match="'file.bin' exists in test"):
+        with raises(TestFileExists, match="'file.bin' exists in test"):
             tcase.add_batch(str(include), [str(inc_1)])
 
 
-def test_testcase_18(tmp_path):
+def test_testcase_17(tmp_path):
     """test TestCase.scan_path()"""
     # empty path
     (tmp_path / "not-test").mkdir()
@@ -427,7 +449,7 @@ def test_testcase_18(tmp_path):
     assert len(tc_paths) == 1
 
 
-def test_testcase_19():
+def test_testcase_18():
     """test TestCase.get_file()"""
     with TestCase("test.htm", None, "test-adapter") as src:
         src.add_from_data("test", "test.htm")
@@ -435,14 +457,13 @@ def test_testcase_19():
         assert src.get_file("test.htm").data == b"test"
 
 
-def test_testcase_20():
+def test_testcase_19():
     """test TestCase.clone()"""
     with TestCase("a.htm", "b.htm", "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
         src.hang = True
         src.add_from_data("123", "test.htm")
         src.add_from_data("456", "opt.htm", required=False)
-        src.add_meta(TestFile.from_data("pref", "prefs.js"))
         src.add_environ_var("go", "away")
         with src.clone() as tgt:
             for prop in TestCase.__slots__:
@@ -453,7 +474,6 @@ def test_testcase_20():
             for file, data in (
                 ("test.htm", b"123"),
                 ("opt.htm", b"456"),
-                ("prefs.js", b"pref"),
             ):
                 src.get_file(file).write(b"src")
                 tgt.get_file(file).write(b"tgt")
@@ -478,19 +498,19 @@ def test_testfile_01():
 def test_testfile_02():
     """test TestFile file names"""
     # empty file name
-    with pytest.raises(TypeError, match="file_name is invalid"):
+    with raises(TypeError, match="file_name is invalid"):
         TestFile("")
     # path (root) with missing file name
-    with pytest.raises(TypeError, match="file_name is invalid"):
+    with raises(TypeError, match="file_name is invalid"):
         TestFile("/")
     # path (root) with missing file name
-    with pytest.raises(TypeError, match="file_name is invalid"):
+    with raises(TypeError, match="file_name is invalid"):
         TestFile("/.")
     # path with missing file name
-    with pytest.raises(TypeError, match="file_name is invalid"):
+    with raises(TypeError, match="file_name is invalid"):
         TestFile("path/")
     # invalid use of '..'
-    with pytest.raises(TypeError, match="file_name is invalid"):
+    with raises(TypeError, match="file_name is invalid"):
         TestFile("../test")
     # path (root) with file
     with TestFile("/valid.txt") as tfile:

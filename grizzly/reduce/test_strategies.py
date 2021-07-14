@@ -7,25 +7,22 @@
 from collections import namedtuple
 from logging import getLogger
 
-import pytest
-from pytest import raises
+from pytest import mark, raises
 
 from sapphire import Sapphire
 
 from ..common.reporter import Report
-from ..common.storage import TestCase, TestFile
+from ..common.storage import TestCase
 from ..replay import ReplayResult
 from ..target import Target
 from . import ReduceManager
 from .strategies import Strategy, _load_strategies
 
 LOG = getLogger(__name__)
-pytestmark = pytest.mark.usefixtures(
-    "tmp_path_fm_config", "reporter_sequential_strftime"
-)
+pytestmark = mark.usefixtures("tmp_path_fm_config", "reporter_sequential_strftime")
 
 
-@pytest.mark.parametrize("is_hang", [True, False])
+@mark.parametrize("is_hang", [True, False])
 def test_strategy_tc_load(is_hang):
     """test that strategy base class dump and load doesn't change testcase metadata"""
 
@@ -104,7 +101,7 @@ ListStrategyParams = namedtuple(
 )
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     ListStrategyParams._fields,
     [
         # "list" is a no-op with a single testcase
@@ -211,7 +208,7 @@ PurgeUnservedTestParams = namedtuple(
 )
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     PurgeUnservedTestParams._fields,
     [
         # single test, first reduction uses 2 files, second uses only target file.
@@ -355,7 +352,6 @@ def test_purge_unserved(
         test = TestCase("test.html", None, "test-adapter")
         for filename, data in testcase.items():
             test.add_from_data(data, filename)
-        test.add_meta(TestFile.from_data("12345", "prefs.js"))
         tests.append(test)
     log_path = tmp_path / "logs"
 
@@ -389,16 +385,6 @@ def test_purge_unserved(
     assert (
         sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports
     ), list((log_path / "reports").iterdir())
-    # each input has 2 files, so if there are more than 2 reports, the result has 2
-    # testcases
-    assert (
-        sum(1 for _ in log_path.glob("reports/*-*/prefs.js"))
-        == (expected_num_reports + 1) // 2
-    ), "prefs.js missing in %r" % [
-        str(p.relative_to(log_path))
-        for p in log_path.glob("reports/**/*")
-        if p.is_file()
-    ]
 
 
 def test_dd_only(mocker, tmp_path):

@@ -8,7 +8,6 @@ from time import time
 from .common.iomanager import IOManager
 from .common.runner import Runner, RunResult
 from .common.status import Status
-from .common.storage import TestFile
 from .target import TargetLaunchError
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
@@ -139,11 +138,6 @@ class Session:
         with self.status.measure("generate"):
             self.adapter.generate(test, self.iomanager.server_map)
         self.status.test_name = test.input_fname
-        # TODO: update TestCase to better handle assets
-        if self.target.assets.get("prefs"):
-            test.add_meta(
-                TestFile.from_file(self.target.assets.get("prefs"), "prefs.js")
-            )
         return test
 
     def run(
@@ -222,6 +216,7 @@ class Session:
                     coverage=self._coverage,
                 )
             current_test.duration = result.duration
+            current_test.assets = self.target.assets
             # adapter callbacks
             if result.timeout:
                 current_test.hang = True

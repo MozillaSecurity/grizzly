@@ -4,8 +4,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod, abstractproperty
 from logging import getLogger
-from os import unlink
-from os.path import basename, dirname, exists, isfile
+from os import makedirs, unlink
+from os.path import basename, dirname, exists, isdir, isfile
 from os.path import join as pathjoin
 from shutil import copyfile, copytree, rmtree
 from tempfile import mkdtemp
@@ -35,6 +35,7 @@ class AssetManager:
 
     def add(self, asset, path):
         assert isinstance(asset, str)
+        assert self.path, "cleanup() was called"
         if not path or not exists(path):
             raise OSError("Asset %r not found %r" % (asset, path))
         assert asset not in self.assets
@@ -53,14 +54,46 @@ class AssetManager:
             self.assets[asset] = path
         LOG.debug("added asset %r from %r", asset, path)
 
+    def add_batch(self, assets):
+        for asset, path in assets:
+            self.add(asset, path)
+
     def cleanup(self):
         if self.path:
             rmtree(self.path, ignore_errors=True)
             self.assets.clear()
             self.path = None
 
+    def dump(self, dst_path, subdir="_assets_"):
+        dumped = dict()
+        if self.assets:
+            if subdir:
+                dst_path = pathjoin(dst_path, subdir)
+            makedirs(dst_path, exist_ok=not subdir)
+            for asset, src in self.assets.items():
+                dst_name = basename(src)
+                dumped[asset] = dst_name
+                if isfile(src):
+                    copyfile(src, pathjoin(dst_path, dst_name))
+                elif isdir(src):
+                    copytree(src, pathjoin(dst_path, dst_name))
+                else:
+                    dumped.pop(asset)
+                    LOG.warning("Failed to dump asset %r from %r", asset, src)
+        return dumped
+
     def get(self, asset):
         return self.assets.get(asset, None)
+
+    def is_empty(self):
+        return not self.assets
+
+    @classmethod
+    def load(cls, assets, src_path):
+        obj = cls()
+        for asset, src_name in assets.items():
+            obj.add(asset, pathjoin(src_path, src_name))
+        return obj
 
     def remove(self, asset):
         path = self.assets.pop(asset, None)
@@ -94,22 +127,23 @@ class Target(metaclass=ABCMeta):
     SUPPORTED_ASSETS = None
 
     __slots__ = (
+        "_assets",
         "_lock",
         "_monitor",
-        "assets",
         "binary",
         "launch_timeout",
         "log_limit",
         "memory_limit",
     )
 
-    def __init__(self, binary, launch_timeout, log_limit, memory_limit):
+    def __init__(self, binary, launch_timeout, log_limit, memory_limit, assets=None):
         assert log_limit >= 0
         assert memory_limit >= 0
         assert binary is not None and isfile(binary)
+        assert assets is None or isinstance(assets, AssetManager)
+        self._assets = assets if assets else AssetManager(base_path=grz_tmp("target"))
         self._lock = Lock()
         self._monitor = None
-        self.assets = AssetManager(base_path=grz_tmp("target"))
         self.binary = binary
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit
@@ -122,7 +156,18 @@ class Target(metaclass=ABCMeta):
         self.cleanup()
 
     def add_abort_token(self, _token):  # pylint: disable=no-self-use
+        # TODO: change this to asset file containing tokens
         LOG.warning("add_abort_token() not implemented!")
+
+    @property
+    def assets(self):
+        return self._assets
+
+    @assets.setter
+    def assets(self, assets):
+        self._assets.cleanup()
+        assert isinstance(assets, AssetManager)
+        self._assets = assets
 
     @abstractmethod
     def _cleanup(self):
@@ -131,7 +176,7 @@ class Target(metaclass=ABCMeta):
     def cleanup(self):
         # call target specific _cleanup first
         self._cleanup()
-        self.assets.cleanup()
+        self._assets.cleanup()
 
     @abstractmethod
     def close(self, force_close=False):

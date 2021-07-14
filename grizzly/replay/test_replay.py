@@ -16,7 +16,7 @@ from sapphire import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, SERVED_TIMEOUT, Sa
 from ..common.reporter import Report
 from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..target import Target
+from ..target import AssetManager, Target
 from .replay import ReplayManager, ReplayResult
 
 
@@ -723,33 +723,40 @@ def test_replay_20(mocker, tmp_path):
 
 def test_replay_21(mocker, tmp_path):
     """test ReplayManager.load_testcases()"""
-    fake_load = mocker.patch("grizzly.replay.replay.TestCase.load")
-    test0 = mocker.Mock(spec=TestCase)
-    test1 = mocker.Mock(spec=TestCase, landing_page="x.html")
-    test2 = mocker.Mock(spec=TestCase)
+    fake_load = mocker.patch("grizzly.replay.replay.TestCase.load", autospec=True)
+    test0 = mocker.Mock(spec_set=TestCase)
+    test0.pop_assets.return_value = None
+    test1 = mocker.Mock(spec_set=TestCase, landing_page="x.html")
+    test1.pop_assets.return_value = None
+    test2 = mocker.Mock(spec_set=TestCase)
+    test2.pop_assets.return_value = None
     # failure
     fake_load.return_value = ()
     with raises(TestCaseLoadFailure, match="Failed to load TestCases"):
-        ReplayManager.load_testcases(str(tmp_path), False)
+        ReplayManager.load_testcases(str(tmp_path))
     # success
     fake_load.return_value = [test0, test1]
-    tests = ReplayManager.load_testcases(str(tmp_path), False)
+    tests, assets = ReplayManager.load_testcases(str(tmp_path))
     assert len(tests) == 2
     assert tests[0].cleanup.call_count == 0
     assert tests[1].cleanup.call_count == 0
+    assert assets is None
     # success select
-    fake_load.return_value = [test0, test1, test2, mocker.Mock(spec=TestCase)]
-    tests = ReplayManager.load_testcases(str(tmp_path), False, subset=[1, 3])
+    test0.pop_assets.return_value = mocker.Mock(spec_set=AssetManager)
+    fake_load.return_value = [test0, test1, test2, mocker.Mock(spec_set=TestCase)]
+    tests, assets = ReplayManager.load_testcases(str(tmp_path), subset=[1, 3])
     assert len(tests) == 2
     assert tests[0].landing_page == "x.html"
     assert test0.cleanup.call_count == 1
     assert test1.cleanup.call_count == 0
     assert test2.cleanup.call_count == 1
+    assert assets is not None
     test0.reset_mock()
     test2.reset_mock()
     # select (first and last) with invalid input
+    test0.pop_assets.return_value = None
     fake_load.return_value = [test0, test1, test2]
-    tests = ReplayManager.load_testcases(str(tmp_path), False, subset=[0, 10, -10, -1])
+    tests, _ = ReplayManager.load_testcases(str(tmp_path), subset=[0, 10, -10, -1])
     assert len(tests) == 2
     assert test0.cleanup.call_count == 0
     assert test1.cleanup.call_count == 1
@@ -775,7 +782,7 @@ def test_replay_22(mocker, tmp_path, is_hang, use_sig, match_sig, ignored, resul
     """test ReplayManager.run() - detect hangs"""
     mocker.patch("grizzly.replay.replay.grz_tmp", return_value=str(tmp_path))
     served = ["index.html"]
-    server = mocker.Mock(spec=Sapphire, port=0x1337, timeout=10)
+    server = mocker.Mock(spec_set=Sapphire, port=0x1337, timeout=10)
     server.serve_path.return_value = (SERVED_TIMEOUT, served)
     if use_sig:
         signature = mocker.Mock()
@@ -783,7 +790,7 @@ def test_replay_22(mocker, tmp_path, is_hang, use_sig, match_sig, ignored, resul
         signature.rawSignature = "fakesig"
     else:
         signature = None
-    target = mocker.Mock(spec=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.handle_hang.return_value = False

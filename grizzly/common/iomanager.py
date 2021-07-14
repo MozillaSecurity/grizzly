@@ -92,9 +92,6 @@ class IOManager:
         # add environment variable info to the test case
         for e_name, e_value in self._tracked_env.items():
             self._test.add_environ_var(e_name, e_value)
-        # add environment files to the test case
-        for e_file in self._environ_files:
-            self._test.add_meta(e_file.clone())
         # reset redirect map
         self.server_map.redirect.clear()
         self.server_map.set_redirect(
