@@ -26,15 +26,15 @@ from .storage import TestCase
 def test_runner_01(mocker, tmp_path):
     """test Runner()"""
     mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
-    server = mocker.Mock(spec=Sapphire)
-    target = mocker.Mock(spec=Target)
+    server = mocker.Mock(spec_set=Sapphire)
+    target = mocker.Mock(spec_set=Target)
     target.detect_failure.return_value = target.RESULT_NONE
     runner = Runner(server, target, relaunch=10)
     assert runner._idle is None
     assert runner._relaunch == 10
     assert runner._tests_run == 0
     serv_files = ["a.bin", "/another/file.bin"]
-    testcase = mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[])
     # all files served
     serv_map = ServerMap()
     server.serve_path.return_value = (SERVED_ALL, serv_files)
@@ -86,12 +86,12 @@ def test_runner_02(mocker):
     """test Runner.run() relaunch"""
     mocker.patch("grizzly.common.runner.time", autospec=True, return_value=1)
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server = mocker.Mock(spec=Sapphire)
-    target = mocker.Mock(spec=Target)
+    server = mocker.Mock(spec_set=Sapphire)
+    target = mocker.Mock(spec_set=Target)
     target.detect_failure.return_value = target.RESULT_NONE
     serv_files = ["a.bin"]
     server.serve_path.return_value = (SERVED_ALL, serv_files)
-    testcase = mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[])
     # single run/iteration relaunch (not idle exit)
     target.is_idle.return_value = False
     runner = Runner(server, target, relaunch=1)
@@ -158,11 +158,11 @@ def test_runner_02(mocker):
 )
 def test_runner_03(mocker, srv_result, served):
     """test Runner() errors"""
-    server = mocker.Mock(spec=Sapphire)
+    server = mocker.Mock(spec_set=Sapphire)
     server.serve_path.return_value = (srv_result, served)
-    target = mocker.Mock(spec=Target)
+    target = mocker.Mock(spec_set=Target)
     target.detect_failure.return_value = target.RESULT_NONE
-    testcase = mocker.Mock(spec=TestCase, landing_page="x", optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, landing_page="x", optional=[])
     runner = Runner(server, target)
     result = runner.run([], ServerMap(), testcase)
     assert result.status is None
@@ -186,9 +186,9 @@ def test_runner_03(mocker, srv_result, served):
 )
 def test_runner_04(mocker, ignore, status, idle, detect_failure):
     """test reporting timeout"""
-    server = mocker.Mock(spec=Sapphire)
-    target = mocker.Mock(spec=Target)
-    testcase = mocker.Mock(spec=TestCase, landing_page="a.bin", optional=[])
+    server = mocker.Mock(spec_set=Sapphire)
+    target = mocker.Mock(spec_set=Target)
+    testcase = mocker.Mock(spec_set=TestCase, landing_page="a.bin", optional=[])
     serv_files = ["a.bin", "/another/file.bin"]
     server.serve_path.return_value = (SERVED_TIMEOUT, serv_files)
     target.detect_failure.return_value = target.RESULT_FAILURE
@@ -218,14 +218,14 @@ def test_runner_04(mocker, ignore, status, idle, detect_failure):
 )
 def test_runner_05(mocker, served, attempted, target_result, status):
     """test reporting failures"""
-    server = mocker.Mock(spec=Sapphire)
+    server = mocker.Mock(spec_set=Sapphire)
     server.serve_path.return_value = (SERVED_REQUEST, served)
-    target = mocker.Mock(spec=Target, launch_timeout=10)
+    target = mocker.Mock(spec_set=Target, launch_timeout=10)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
     target.detect_failure.return_value = target_result
     target.monitor.is_healthy.return_value = False
-    testcase = mocker.Mock(spec=TestCase, landing_page="a.bin", optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, landing_page="a.bin", optional=[])
     runner = Runner(server, target)
     runner.launch("http://a/")
     result = runner.run([], ServerMap(), testcase)
@@ -238,8 +238,8 @@ def test_runner_05(mocker, served, attempted, target_result, status):
 
 def test_runner_06(mocker):
     """test Runner() with idle checking"""
-    server = mocker.Mock(spec=Sapphire)
-    target = mocker.Mock(spec=Target)
+    server = mocker.Mock(spec_set=Sapphire)
+    target = mocker.Mock(spec_set=Target)
     target.detect_failure.return_value = target.RESULT_NONE
     serv_files = ["/fake/file", "/another/file.bin"]
     server.serve_path.return_value = (SERVED_ALL, serv_files)
@@ -248,7 +248,7 @@ def test_runner_06(mocker):
     result = runner.run(
         [],
         ServerMap(),
-        mocker.Mock(spec=TestCase, landing_page=serv_files[0], optional=[]),
+        mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[]),
     )
     assert result.status is None
     assert result.attempted
@@ -257,8 +257,8 @@ def test_runner_06(mocker):
 
 def test_runner_07(mocker):
     """test Runner._keep_waiting()"""
-    server = mocker.Mock(spec=Sapphire)
-    target = mocker.Mock(spec=Target)
+    server = mocker.Mock(spec_set=Sapphire)
+    target = mocker.Mock(spec_set=Target)
 
     target.monitor.is_healthy.return_value = True
     runner = Runner(server, target)
@@ -267,7 +267,7 @@ def test_runner_07(mocker):
     target.monitor.is_healthy.return_value = False
     assert not runner._keep_waiting()
 
-    runner._idle = mocker.Mock(spec=_IdleChecker)
+    runner._idle = mocker.Mock(spec_set=_IdleChecker)
     runner._idle.is_idle.return_value = False
     target.monitor.is_healthy.return_value = True
     assert runner._keep_waiting()
@@ -297,8 +297,8 @@ def test_runner_08():
 
 def test_runner_09(mocker):
     """test Runner.launch()"""
-    server = mocker.Mock(spec=Sapphire, port=0x1337)
-    target = mocker.Mock(spec=Target, launch_timeout=30)
+    server = mocker.Mock(spec_set=Sapphire, port=0x1337)
+    target = mocker.Mock(spec_set=Target, launch_timeout=30)
     runner = Runner(server, target)
     # successful launch
     runner._tests_run = 1
@@ -307,7 +307,7 @@ def test_runner_09(mocker):
     assert target.launch.call_count == 1
     target.reset_mock()
     # target launch error
-    target.launch.side_effect = TargetLaunchError("test", mocker.Mock(spec=Report))
+    target.launch.side_effect = TargetLaunchError("test", mocker.Mock(spec_set=Report))
     with raises(TargetLaunchError, match="test"):
         runner.launch("http://a/")
     assert target.launch.call_count == 3
@@ -321,8 +321,8 @@ def test_runner_09(mocker):
 
 def test_runner_10(mocker, tmp_path):
     """test Runner.run() adding includes to testcase"""
-    server = mocker.Mock(spec=Sapphire)
-    target = mocker.Mock(spec=Target)
+    server = mocker.Mock(spec_set=Sapphire)
+    target = mocker.Mock(spec_set=Target)
     target.detect_failure.return_value = target.RESULT_NONE
     runner = Runner(server, target, relaunch=10)
     # create test files

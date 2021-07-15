@@ -353,7 +353,7 @@ def test_reporter_01(mocker):
             pass
 
     reporter = SimpleReporter()
-    reporter.submit([], report=mocker.Mock(spec=Report))
+    reporter.submit([], report=mocker.Mock(spec_set=Report))
 
 
 def test_filesystem_reporter_01(tmp_path):
@@ -385,7 +385,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     _create_crash_log(log_path / "log_asan_blah.txt")
-    tests = list(mocker.Mock(spec=TestCase) for _ in range(10))
+    tests = list(mocker.Mock(spec_set=TestCase) for _ in range(10))
     report_path = tmp_path / "reports"
     assert not report_path.exists()
     reporter = FilesystemReporter(str(report_path))
@@ -398,7 +398,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     log_path.mkdir()
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    tests = list(mocker.Mock(spec=TestCase) for _ in range(2))
+    tests = list(mocker.Mock(spec_set=TestCase) for _ in range(2))
     reporter.submit(tests, Report(str(log_path), "fake_bin"))
     assert all(x.dump.call_count == 1 for x in tests)
     assert len(tuple(report_path.iterdir())) == 2
@@ -421,7 +421,7 @@ def test_filesystem_reporter_04(mocker, tmp_path):
     """test FilesystemReporter w/o major bucket"""
     fake_report = tmp_path / "fake_report"
     fake_report.mkdir()
-    report = mocker.Mock(spec=Report, path=str(fake_report), prefix="test_prefix")
+    report = mocker.Mock(spec_set=Report, path=str(fake_report), prefix="test_prefix")
     reporter = FilesystemReporter(str(tmp_path / "dst"), major_bucket=False)
     reporter.submit([], report)
     assert not fake_report.is_dir()
@@ -432,7 +432,7 @@ def test_filesystem_reporter_04(mocker, tmp_path):
 def test_fuzzmanager_reporter_01(mocker, tmp_path):
     """test FuzzManagerReporter.sanity_check()"""
     fake_reporter = mocker.patch("grizzly.common.reporter.ProgramConfiguration")
-    fake_reporter.fromBinary.return_value = mocker.Mock(spec=ProgramConfiguration)
+    fake_reporter.fromBinary.return_value = mocker.Mock(spec_set=ProgramConfiguration)
     # missing global FM config file
     FuzzManagerReporter.FM_CONFIG = "no_file"
     with pytest.raises(IOError, match="Missing: no_file"):
@@ -474,7 +474,7 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path):
     (log_path / "rr-traces").mkdir()
     (tmp_path / "screenlog.0").touch()
     fake_test = mocker.Mock(
-        spec=TestCase,
+        spec_set=TestCase,
         adapter_name="adapter",
         env_vars={"TEST": "1"},
         input_fname="input",
@@ -630,7 +630,7 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="test")
     fake_resource = mocker.patch("grizzly.common.reporter.resource", autospec=True)
 
-    fake_report = mocker.Mock(spec=Report)
+    fake_report = mocker.Mock(spec_set=Report)
     fake_report.path = "no-path"
     reporter = S3FuzzManagerReporter("fake_bin")
     # test will missing rr-trace

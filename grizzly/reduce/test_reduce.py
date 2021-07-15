@@ -297,8 +297,8 @@ def test_analysis(
     try:
         mgr = ReduceManager(
             None,
-            mocker.Mock(spec=Sapphire, timeout=30),
-            mocker.Mock(spec=Target),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
+            mocker.Mock(spec_set=Target),
             tests,
             None,
             log_path,
@@ -553,12 +553,11 @@ def test_repro(
     tests = [test]
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec=Target)
-    target.relaunch = 1
+    target = mocker.Mock(spec_set=Target)
     try:
         mgr = ReduceManager(
             [],
-            mocker.Mock(spec=Sapphire, timeout=30),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
             target,
             tests,
             strategies,
@@ -622,7 +621,7 @@ def test_report_01(mocker, tmp_path):
     assert testcases
     log_path = tmp_path / "logs"
 
-    fake_strat = mocker.MagicMock(spec=Strategy)
+    fake_strat = mocker.MagicMock(spec_set=Strategy)
     fake_strat.return_value.name = "fake"
 
     def fake_iter():
@@ -636,12 +635,11 @@ def test_report_01(mocker, tmp_path):
     fake_strat.return_value.__iter__.side_effect = fake_iter
     mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
 
-    target = mocker.Mock(spec=Target)
-    target.relaunch = 1
+    target = mocker.Mock(spec_set=Target)
     try:
         mgr = ReduceManager(
             [],
-            mocker.Mock(spec=Sapphire, timeout=30),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
             target,
             testcases,
             ["fake"],
@@ -692,7 +690,7 @@ def test_report_02(mocker, tmp_path):
     assert testcases
     log_path = tmp_path / "logs"
 
-    fake_strat = mocker.MagicMock(spec=Strategy)
+    fake_strat = mocker.MagicMock(spec_set=Strategy)
     fake_strat.return_value.name = "fake"
 
     def fake_iter():
@@ -707,12 +705,11 @@ def test_report_02(mocker, tmp_path):
     fake_strat.return_value.__iter__.side_effect = fake_iter
     mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
 
-    target = mocker.Mock(spec=Target)
-    target.relaunch = 1
+    target = mocker.Mock(spec_set=Target)
     try:
         mgr = ReduceManager(
             [],
-            mocker.Mock(spec=Sapphire, timeout=30),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
             target,
             testcases,
             ["fake"],
@@ -767,12 +764,11 @@ def test_quality_update(mocker, tmp_path):
     reporter = mocker.patch("grizzly.reduce.core.FuzzManagerReporter")
     reporter.QUAL_REDUCED_RESULT = 0
     update_coll = mocker.patch("grizzly.common.fuzzmanager.Collector")
-    target = mocker.Mock(spec=Target)
-    target.relaunch = 1
+    target = mocker.Mock(spec_set=Target)
     try:
         mgr = ReduceManager(
             [],
-            mocker.Mock(spec=Sapphire, timeout=30),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
             target,
             testcases,
             ["check", "lines"],
@@ -899,9 +895,8 @@ def test_timeout_update(
     tests = [test]
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec=Target)
-    target.relaunch = 1
-    server = mocker.Mock(spec=Sapphire)
+    target = mocker.Mock(spec_set=Target)
+    server = mocker.Mock(spec_set=Sapphire)
     server.timeout = iter_input
     try:
         mgr = ReduceManager(
