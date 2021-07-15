@@ -728,9 +728,9 @@ def test_sapphire_33(mocker):
     """test Sapphire.clear_backlog()"""
     mocker.patch("sapphire.core.socket", autospec=True)
     mocker.patch("sapphire.core.time", autospec=True, return_value=1)
-    pending = mocker.Mock(spec=socket.socket)
+    pending = mocker.Mock(spec_set=socket.socket)
     with Sapphire(timeout=10) as serv:
-        serv._socket = mocker.Mock(spec=socket.socket)
+        serv._socket = mocker.Mock(spec_set=socket.socket)
         serv._socket.accept.side_effect = ((pending, None), OSError, BlockingIOError)
         serv.clear_backlog()
         assert serv._socket.accept.call_count == 3

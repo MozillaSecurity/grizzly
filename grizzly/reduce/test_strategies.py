@@ -175,12 +175,11 @@ def test_list(
         tests.append(test)
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec=Target)
-    target.relaunch = 1
+    target = mocker.Mock(spec_set=Target)
     try:
         mgr = ReduceManager(
             [],
-            mocker.Mock(spec=Sapphire, timeout=30),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
             target,
             tests,
             strategies,
@@ -355,12 +354,11 @@ def test_purge_unserved(
         tests.append(test)
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec=Target)
-    target.relaunch = 1
+    target = mocker.Mock(spec_set=Target)
     try:
         mgr = ReduceManager(
             [],
-            mocker.Mock(spec=Sapphire, timeout=30),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
             target,
             tests,
             strategies,
@@ -414,12 +412,11 @@ def test_dd_only(mocker, tmp_path):
     tests = [test]
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec=Target)
-    target.relaunch = 1
+    target = mocker.Mock(spec_set=Target)
     try:
         mgr = ReduceManager(
             [],
-            mocker.Mock(spec=Sapphire, timeout=30),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
             target,
             tests,
             ["lines"],

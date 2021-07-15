@@ -15,9 +15,9 @@ from .worker import Worker, WorkerError
 
 def test_worker_01(mocker):
     """test simple Worker in running state"""
-    wthread = mocker.Mock(spec=threading.Thread)
+    wthread = mocker.Mock(spec_set=threading.Thread)
     wthread.is_alive.return_value = True
-    worker = Worker(mocker.Mock(spec=socket.socket), wthread)
+    worker = Worker(mocker.Mock(spec_set=socket.socket), wthread)
     assert worker._conn is not None
     assert worker._thread is not None
     # it is assumed that launch() has already been called at this point
@@ -37,7 +37,9 @@ def test_worker_01(mocker):
 
 def test_worker_02(mocker):
     """test simple Worker fails to close"""
-    worker = Worker(mocker.Mock(spec=socket.socket), mocker.Mock(spec=threading.Thread))
+    worker = Worker(
+        mocker.Mock(spec_set=socket.socket), mocker.Mock(spec_set=threading.Thread)
+    )
     # it is assumed that launch() has already been called at this point
     worker._thread.is_alive.return_value = True
     with pytest.raises(WorkerError, match="Worker thread failed to join!"):
@@ -46,8 +48,8 @@ def test_worker_02(mocker):
 
 def test_worker_03(mocker):
     """test Worker.launch() fail cases"""
-    serv_con = mocker.Mock(spec=socket.socket)
-    serv_job = mocker.Mock(spec=Job)
+    serv_con = mocker.Mock(spec_set=socket.socket)
+    serv_job = mocker.Mock(spec_set=Job)
     fake_thread = mocker.patch("sapphire.worker.Thread", autospec=True)
     mocker.patch("sapphire.worker.sleep", autospec=True)
 
@@ -55,7 +57,7 @@ def test_worker_03(mocker):
     assert Worker.launch(serv_con, serv_job) is None
 
     serv_con.accept.side_effect = None
-    conn = mocker.Mock(spec=socket.socket)
+    conn = mocker.Mock(spec_set=socket.socket)
     serv_con.accept.return_value = (conn, None)
     fake_thread.side_effect = threading.ThreadError
     assert Worker.launch(serv_con, serv_job) is None
@@ -68,9 +70,9 @@ def test_worker_04(mocker, tmp_path):
     """test Worker.launch()"""
     (tmp_path / "testfile").touch()
     job = Job(str(tmp_path))
-    clnt_sock = mocker.Mock(spec=socket.socket)
+    clnt_sock = mocker.Mock(spec_set=socket.socket)
     clnt_sock.recv.return_value = b"GET /testfile HTTP/1.1"
-    serv_sock = mocker.Mock(spec=socket.socket)
+    serv_sock = mocker.Mock(spec_set=socket.socket)
     serv_sock.accept.return_value = (clnt_sock, None)
     worker = Worker.launch(serv_sock, job)
     assert worker is not None
@@ -85,9 +87,9 @@ def test_worker_04(mocker, tmp_path):
 
 def test_worker_05(mocker):
     """test Worker.handle_request() socket errors"""
-    serv_con = mocker.Mock(spec=socket.socket)
+    serv_con = mocker.Mock(spec_set=socket.socket)
     serv_con.recv.side_effect = socket.error
-    serv_job = mocker.Mock(spec=Job)
+    serv_job = mocker.Mock(spec_set=Job)
     Worker.handle_request(serv_con, serv_job)
     assert serv_job.accepting.set.call_count == 1
     assert serv_con.sendall.call_count == 0

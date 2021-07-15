@@ -28,7 +28,8 @@ def test_load_01(mocker):
 
 def test_load_02(mocker):
     """test load() - successful load"""
-    entry = mocker.Mock(set_spec=EntryPoint)
+    # Note: Mock.name cannot be set via the constructor so spec_set cannot be used
+    entry = mocker.Mock(spec=EntryPoint)
     entry.name = "test-name"
     entry.load.return_value = FakeType1
     mocker.patch(
@@ -39,7 +40,7 @@ def test_load_02(mocker):
 
 def test_load_03(mocker):
     """test load() - invalid type"""
-    entry = mocker.Mock(set_spec=EntryPoint)
+    entry = mocker.Mock(spec=EntryPoint)
     entry.name = "test-name"
     entry.load.return_value = FakeType1
     mocker.patch(
@@ -59,7 +60,7 @@ def test_scan_01(mocker):
 
 def test_scan_02(mocker):
     """test scan() - duplicate entry"""
-    entry = mocker.Mock(set_spec=EntryPoint)
+    entry = mocker.Mock(spec=EntryPoint)
     entry.name = "test_entry"
     mocker.patch(
         "grizzly.common.plugins.iter_entry_points",
@@ -72,7 +73,7 @@ def test_scan_02(mocker):
 
 def test_scan_03(mocker):
     """test scan() - success"""
-    entry = mocker.Mock(set_spec=EntryPoint)
+    entry = mocker.Mock(spec=EntryPoint)
     entry.name = "test-name"
     mocker.patch(
         "grizzly.common.plugins.iter_entry_points",
@@ -84,12 +85,12 @@ def test_scan_03(mocker):
 
 def test_scan_target_assets_01(mocker):
     """test scan_target_assets() - success"""
-    targ1 = mocker.Mock(set_spec=EntryPoint)
+    targ1 = mocker.Mock(spec=EntryPoint)
     targ1.name = "t1"
-    targ1.load.return_value = mocker.Mock(set_spec=Target, SUPPORTED_ASSETS=None)
-    targ2 = mocker.Mock(set_spec=EntryPoint)
+    targ1.load.return_value = mocker.Mock(spec_set=Target, SUPPORTED_ASSETS=None)
+    targ2 = mocker.Mock(spec=EntryPoint)
     targ2.name = "t2"
-    targ2.load.return_value = mocker.Mock(set_spec=Target, SUPPORTED_ASSETS=("a", "B"))
+    targ2.load.return_value = mocker.Mock(spec_set=Target, SUPPORTED_ASSETS=("a", "B"))
     mocker.patch(
         "grizzly.common.plugins.iter_entry_points",
         autospec=True,

@@ -2,7 +2,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-# pylint: disable=protected-access
 """
 unit tests for grizzly.replay.main
 """
@@ -97,7 +96,7 @@ def test_main_02(mocker, tmp_path):
     )
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin")
-    target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary="bin", launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
     load_target.return_value.return_value = target
@@ -191,9 +190,12 @@ def test_main_04(mocker, tmp_path):
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
     mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
     mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
-    target = mocker.Mock(spec=Target, launch_timeout=30)
-    load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
-    load_target.return_value.return_value = target
+    target = mocker.NonCallableMock(spec_set=Target, launch_timeout=30)
+    mocker.patch(
+        "grizzly.replay.replay.load_plugin",
+        autospec=True,
+        return_value=mocker.Mock(spec_set=Target, return_value=target),
+    )
     fake_tmp = tmp_path / "grz_tmp"
     fake_tmp.mkdir()
     mocker.patch(
@@ -219,7 +221,7 @@ def test_main_04(mocker, tmp_path):
     # target launch error
     fake_logs = tmp_path / "fake_report"
     fake_logs.mkdir()
-    report = mocker.Mock(spec=Report, prefix="fake_report", path=str(fake_logs))
+    report = mocker.Mock(spec_set=Report, prefix="fake_report", path=str(fake_logs))
     mocker.patch(
         "grizzly.replay.replay.ReplayManager.run",
         side_effect=TargetLaunchError("", report),
@@ -322,11 +324,14 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
-    target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
+    target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
-    load_target = mocker.patch("grizzly.replay.replay.load_plugin")
-    load_target.return_value.return_value = target
+    mocker.patch(
+        "grizzly.replay.replay.load_plugin",
+        autospec=True,
+        return_value=mocker.Mock(spec_set=Target, return_value=target),
+    )
     # create test to load
     with TestCase("test.html", None, None) as test:
         test_file = tmp_path / "test.html"
@@ -384,11 +389,14 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
         return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
-    load_target = mocker.patch("grizzly.replay.replay.load_plugin")
-    target = mocker.Mock(spec=Target, binary="bin", launch_timeout=30)
+    target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
-    load_target.return_value.return_value = target
+    load_target = mocker.patch(
+        "grizzly.replay.replay.load_plugin",
+        autospec=True,
+        return_value=mocker.Mock(spec_set=Target, return_value=target),
+    )
     # setup args
     (tmp_path / "test.html").touch()
     args = mocker.Mock(

@@ -68,14 +68,14 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     fake_adapter.RELAUNCH = adpt_relaunch
     fake_adapter.TIME_LIMIT = 10
     fake_target = mocker.NonCallableMock(
-        spec_set=Target, assets=mocker.Mock(set_spec=AssetManager)
+        spec_set=Target, assets=mocker.Mock(spec_set=AssetManager)
     )
     plugin_loader = mocker.patch("grizzly.main.load_plugin", autospec=True)
     plugin_loader.side_effect = (
         mocker.Mock(spec_set=Adapter, return_value=fake_adapter),
         mocker.Mock(spec_set=Target, return_value=fake_target),
     )
-    fake_session = mocker.patch("grizzly.main.Session", autospec=True)
+    fake_session = mocker.patch("grizzly.main.Session", autospec_set=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
     fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs()
