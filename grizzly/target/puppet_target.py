@@ -12,7 +12,7 @@ try:
     from signal import SIGUSR1
 except ImportError:
     SIGUSR1 = None
-from tempfile import mkdtemp
+from tempfile import TemporaryDirectory, mkdtemp
 from time import sleep, time
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
@@ -284,10 +284,11 @@ class PuppetTarget(Target):
             for template in PrefPicker.templates():
                 if template.endswith("browser-fuzzing.yml"):
                     LOG.debug("using prefpicker template %r", template)
-                    self._prefs = pathjoin(self.assets.path, "prefs.js")
-                    PrefPicker.load_template(template).create_prefsjs(self._prefs)
-                    LOG.debug("generated %r", self._prefs)
-                    self.assets.add("prefs", self._prefs)
+                    with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
+                        prefs = pathjoin(tmp_path, "prefs.js")
+                        PrefPicker.load_template(template).create_prefsjs(prefs)
+                        LOG.debug("generated %r", prefs)
+                        self._prefs = self.assets.add("prefs", prefs, copy=False)
                     break
             else:  # pragma: no cover
                 raise TargetError("Failed to generate prefs.js")

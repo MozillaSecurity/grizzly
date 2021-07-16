@@ -16,7 +16,7 @@ from time import time
 from zipfile import BadZipfile, ZipFile
 from zlib import error as zlib_error
 
-from ..target import AssetManager
+from ..target import AssetError, AssetManager
 from .utils import grz_tmp, sanitizer_opts
 
 __all__ = ("TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
@@ -433,7 +433,7 @@ class TestCase:
                         info.get("assets"),
                         pathjoin(path, info.get("assets_path", "")),
                     )
-            except OSError as exc:
+            except (AssetError, OSError) as exc:
                 raise TestCaseLoadFailure(str(exc)) from None
             # load environment variables
             try:
