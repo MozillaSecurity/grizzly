@@ -315,10 +315,13 @@ def test_puppet_target_08(mocker, tmp_path):
             assert isfile(target.assets.get("prefs"))
             assert target.assets.get("prefs").endswith("fake")
     # abort tokens file provided
-    assert target._puppet.add_abort_token.call_count == 0
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("abort-tokens", str(fake_file))
         with PuppetTarget(str(fake_file), 300, 25, 5000, assets=assets) as target:
+            # ignore E1101: (pylint 2.9.3 bug?)
+            #    Method 'add_abort_token' has no 'call_count' member (no-member)
+            # pylint: disable=no-member
+            assert target._puppet.add_abort_token.call_count == 0
             target.process_assets()
             assert isfile(target.assets.get("abort-tokens"))
             assert target.assets.get("abort-tokens").endswith("fake")

@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 from os import remove
 
 __all__ = ("TargetMonitor",)
@@ -23,7 +23,8 @@ class TargetMonitor(metaclass=ABCMeta):
     def is_running(self):
         pass
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def launches(self):
         pass
 
