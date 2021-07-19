@@ -33,6 +33,8 @@ LOG = getLogger(__name__)
 
 class PuppetTarget(Target):
     SUPPORTED_ASSETS = (
+        # file containing line separated list of tokens to scan stderr/out for
+        "abort-tokens",
         # xpi or directory containing the unpacked extension
         "extension",
         # prefs.js file to use
@@ -71,9 +73,6 @@ class PuppetTarget(Target):
             LOG.warning(
                 "PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds)
             )
-
-    def add_abort_token(self, token):
-        self._puppet.add_abort_token(token)
 
     def _cleanup(self):
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
@@ -292,6 +291,14 @@ class PuppetTarget(Target):
                     break
             else:  # pragma: no cover
                 raise TargetError("Failed to generate prefs.js")
+        abort_tokens = self.assets.get("abort-tokens")
+        if abort_tokens:
+            LOG.debug("loading 'abort tokens' from %r", abort_tokens)
+            with open(abort_tokens, "r") as in_fp:
+                for line in in_fp:
+                    line = line.strip()
+                    if line:
+                        self._puppet.add_abort_token(line)
 
     def save_logs(self, *args, **kwargs):
         self._puppet.save_logs(*args, **kwargs)
