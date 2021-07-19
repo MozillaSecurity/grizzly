@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 from logging import getLogger
 from os.path import isfile
 from threading import Lock
@@ -91,7 +91,8 @@ class Target(metaclass=ABCMeta):
     def close(self, force_close=False):
         pass
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def closed(self):
         pass
 
@@ -123,7 +124,8 @@ class Target(metaclass=ABCMeta):
         LOG.debug("log_size() not implemented! returning 0")
         return 0
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def monitor(self):
         pass
 
