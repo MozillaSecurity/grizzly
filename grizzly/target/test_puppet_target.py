@@ -31,8 +31,6 @@ def test_puppet_target_01(mocker, tmp_path):
         fake_ffp.return_value.log_length.assert_any_call("stderr")
         fake_ffp.return_value.log_length.assert_any_call("stdout")
         assert target.monitor is not None
-        target.add_abort_token("test")
-        assert fake_ffp.return_value.add_abort_token.call_count == 1
         target.save_logs("fake_dest")
         assert fake_ffp.return_value.save_logs.call_count == 1
     assert fake_ffp.return_value.clean_up.call_count == 1
@@ -302,7 +300,7 @@ def test_puppet_target_08(mocker, tmp_path):
     """test PuppetTarget.process_assets()"""
     mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
-    fake_file.touch()
+    fake_file.write_text("1\n2\n")
     # no prefs file provided
     with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
         assert target.assets.get("prefs") is None
@@ -316,6 +314,15 @@ def test_puppet_target_08(mocker, tmp_path):
             target.process_assets()
             assert isfile(target.assets.get("prefs"))
             assert target.assets.get("prefs").endswith("fake")
+    # abort tokens file provided
+    assert target._puppet.add_abort_token.call_count == 0
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        assets.add("abort-tokens", str(fake_file))
+        with PuppetTarget(str(fake_file), 300, 25, 5000, assets=assets) as target:
+            target.process_assets()
+            assert isfile(target.assets.get("abort-tokens"))
+            assert target.assets.get("abort-tokens").endswith("fake")
+            assert target._puppet.add_abort_token.call_count == 2
 
 
 @mark.parametrize(

@@ -60,6 +60,5 @@ def test_target_01(tmp_path):
         assert target.memory_limit == 3
         assert target.monitor is None
         # test stubs
-        target.add_abort_token("none!")
         target.dump_coverage()
         target.reverse(1, 2)

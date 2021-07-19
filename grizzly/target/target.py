@@ -68,10 +68,6 @@ class Target(metaclass=ABCMeta):
     def __exit__(self, *exc):
         self.cleanup()
 
-    def add_abort_token(self, _token):  # pylint: disable=no-self-use
-        # TODO: change this to asset file containing tokens
-        LOG.warning("add_abort_token() not implemented!")
-
     @property
     def assets(self):
         return self._assets
