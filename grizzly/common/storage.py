@@ -17,7 +17,7 @@ from zipfile import BadZipfile, ZipFile
 from zlib import error as zlib_error
 
 from ..target import AssetError, AssetManager
-from .utils import grz_tmp, sanitizer_opts
+from .utils import grz_tmp
 
 __all__ = ("TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
@@ -64,7 +64,7 @@ class TestCase:
         self.adapter_name = adapter_name
         self.assets = None
         self.duration = None
-        self.env_vars = dict()  # environment variables
+        self.env_vars = dict()
         self.hang = False
         self.input_fname = input_fname  # file that was used to create the test case
         self.landing_page = landing_page
@@ -118,18 +118,6 @@ class TestCase:
             if prefix:
                 test_path = "/".join((prefix, test_path))
             self.add_from_file(fname, file_name=test_path)
-
-    def add_environ_var(self, name, value):
-        """Add environment variable to TestCase.
-
-        Args:
-            name (str): Environment variable name.
-            value (str): Environment variable value.
-
-        Returns:
-            None
-        """
-        self.env_vars[name] = value
 
     def add_file(self, test_file, required=True):
         """Add a TestFile to TestCase.
@@ -220,6 +208,7 @@ class TestCase:
         result.duration = self.duration
         result.hang = self.hang
         result.env_vars.update(self.env_vars)
+        # TODO: should we handle assets?
         for entry in self._files.optional:
             result.add_file(entry.clone(), required=False)
         for entry in self._files.required:
@@ -356,23 +345,6 @@ class TestCase:
                 rmtree(unpacked, ignore_errors=True)
         return tests
 
-    def load_environ(self, path, env_data):
-        # sanity check environment variable data
-        for name, value in env_data.items():
-            if not isinstance(name, str) or not isinstance(value, str):
-                raise TestCaseLoadFailure("'env_data' contains invalid 'env' entries")
-        self.env_vars = env_data
-        known_suppressions = ("lsan.supp", "tsan.supp", "ubsan.supp")
-        for supp in listdir(path):
-            if supp.lower() in known_suppressions:
-                # Update *SAN_OPTIONS to use provided suppression files.
-                opt_key = "%s_OPTIONS" % (supp.split(".")[0].upper(),)
-                opts = sanitizer_opts(self.env_vars.get(opt_key, ""))
-                opts["suppressions"] = "'%s'" % (pathjoin(path, supp),)
-                self.env_vars[opt_key] = ":".join(
-                    "=".join((k, v)) for k, v in opts.items()
-                )
-
     @classmethod
     def load_single(cls, path, adjacent=False, load_assets=True):
         """Load contents of a TestCase from disk. If `path` is a directory it must
@@ -437,7 +409,12 @@ class TestCase:
                 raise TestCaseLoadFailure(str(exc)) from None
             # load environment variables
             try:
-                test.load_environ(path, info.get("env", {}))
+                test.env_vars = info.get("env", dict())
+                assert isinstance(test.env_vars, dict)
+                # sanity check environment variable data
+                for name, value in test.env_vars.items():
+                    if not isinstance(name, str) or not isinstance(value, str):
+                        raise TestCaseLoadFailure("'env' contains invalid entries")
             except TestCaseLoadFailure:
                 test.cleanup(skip_assets=False)
                 raise

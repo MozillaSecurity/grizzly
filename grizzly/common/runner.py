@@ -104,12 +104,11 @@ class Runner:
         self._target = target  # target to run test case
         self._tests_run = 0  # number of tests run since target (re)launched
 
-    def launch(self, location, env_mod=None, max_retries=3, retry_delay=0):
+    def launch(self, location, max_retries=3, retry_delay=0):
         """Launch a target and open `location`.
 
         Args:
             location (str): URL to open via Target.
-            env_mod (dict): Environment modifications.
             max_retries (int): Number of retries to perform before re-raising
                                TargetLaunchTimeout.
             retry_delay (int): Time in seconds to wait between retries.
@@ -125,7 +124,7 @@ class Runner:
         LOG.debug("launching target (timeout %ds)", self._target.launch_timeout)
         for retries in reversed(range(max_retries)):
             try:
-                self._target.launch(location, env_mod=env_mod)
+                self._target.launch(location)
             except TargetLaunchError as exc:
                 # This is likely due to a bad build or environment configuration.
                 if retries:

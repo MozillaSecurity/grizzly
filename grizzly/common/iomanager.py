@@ -3,13 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from collections import deque
-from os import environ
-from os.path import isfile
 
 from sapphire.server_map import ServerMap
 
-from .storage import TestCase, TestFile
-from .utils import sanitizer_opts
+from .storage import TestCase
 
 __all__ = ("IOManager",)
 __author__ = "Tyson Smith"
@@ -17,21 +14,10 @@ __credits__ = ["Tyson Smith"]
 
 
 class IOManager:
-    # TODO: some of these are target specific
-    TRACKED_ENVVARS = (
-        "ASAN_OPTIONS",
-        "LSAN_OPTIONS",
-        "GNOME_ACCESSIBILITY",
-        "MOZ_CHAOSMODE",
-        "XPCOM_DEBUG_BREAK",
-    )
-
     __slots__ = (
-        "_environ_files",
         "_generated",
         "_report_size",
         "_test",
-        "_tracked_env",
         "harness",
         "server_map",
         "tests",
@@ -42,13 +28,9 @@ class IOManager:
         self.harness = None
         self.server_map = ServerMap()
         self.tests = deque()
-        self._environ_files = list()
         self._generated = 0  # number of test cases generated
         self._report_size = report_size
         self._test = None
-        # used to record environment variable that directly impact the browser
-        self._tracked_env = self.tracked_environ()
-        self._add_suppressions()
 
     def __enter__(self):
         return self
@@ -56,20 +38,7 @@ class IOManager:
     def __exit__(self, *exc):
         self.cleanup()
 
-    def _add_suppressions(self):
-        # Add suppression files to environment files
-        for env_var in (x for x in environ if "SAN_OPTIONS" in x):
-            opts = sanitizer_opts(environ.get(env_var, ""))
-            if "suppressions" not in opts:
-                continue
-            supp_file = opts["suppressions"].strip("'\"")
-            if isfile(supp_file):
-                fname = "%s.supp" % (env_var.split("_")[0].lower(),)
-                self._environ_files.append(TestFile.from_file(supp_file, fname))
-
     def cleanup(self):
-        for e_file in self._environ_files:
-            e_file.close()
         self.purge()
 
     def commit(self):
@@ -89,9 +58,6 @@ class IOManager:
             adapter_name=adapter_name,
             time_limit=time_limit,
         )
-        # add environment variable info to the test case
-        for e_name, e_value in self._tracked_env.items():
-            self._test.add_environ_var(e_name, e_value)
         # reset redirect map
         self.server_map.redirect.clear()
         self.server_map.set_redirect(
@@ -115,29 +81,3 @@ class IOManager:
         for testcase in self.tests:
             testcase.cleanup()
         self.tests.clear()
-
-    @staticmethod
-    def tracked_environ():
-        # Scan os.environ and collect environment variables
-        # that are relevant to Grizzly or the test case.
-        env = dict()
-        tracked_san_opts = ("detect_leaks",)
-        for var in IOManager.TRACKED_ENVVARS:
-            if var not in environ:
-                continue
-            if var.endswith("SAN_OPTIONS"):
-                opts = sanitizer_opts(environ.get(var, ""))
-                # strip unwanted options
-                tracked = dict()
-                for opt in tracked_san_opts:
-                    if opt in opts:
-                        tracked[opt] = opts[opt]
-                # only record *SAN_OPTIONS if there are options
-                if tracked:
-                    env[var] = ":".join("=".join((k, v)) for k, v in tracked.items())
-            elif var == "XPCOM_DEBUG_BREAK" and environ.get(var, "").lower() == "warn":
-                # ignore FFPuppet default XPCOM_DEBUG_BREAK value (set in helpers.py)
-                continue
-            else:
-                env[var] = environ[var]
-        return env

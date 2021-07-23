@@ -358,3 +358,43 @@ def test_puppet_target_09(mocker, tmp_path, pernosco, rr, valgrind):
         assert fake_ffp.call_args[-1]["debugger"] == Debugger.VALGRIND
     else:
         assert fake_ffp.call_args[-1]["debugger"] == Debugger.NONE
+
+
+@mark.parametrize(
+    "asset, env",
+    [
+        # suppressions via asset
+        (True, False),
+        # suppressions via env
+        (False, True),
+        # suppressions via both asset and env (asset should be preferred)
+        (True, True),
+        # missing suppressions file
+        (False, False),
+    ],
+)
+def test_puppet_target_10(tmp_path, asset, env):
+    """test PuppetTarget.process_assets() - configure sanitizer suppressions"""
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        assets.add("prefs", str(fake_file))
+        if asset:
+            supp_asset = tmp_path / "supp_asset"
+            supp_asset.touch()
+            assets.add("lsan-suppressions", str(supp_asset))
+        with PuppetTarget(str(fake_file), 300, 25, 5000, assets=assets) as target:
+            if env:
+                supp_env = tmp_path / "supp_env"
+                supp_env.touch()
+                target.environ["LSAN_OPTIONS"] = "suppressions='%s'" % (str(supp_env),)
+            else:
+                target.environ["LSAN_OPTIONS"] = "suppressions='missing'"
+            target.process_assets()
+            if asset:
+                assert supp_asset.name in target.environ["LSAN_OPTIONS"]
+            elif env:
+                assert supp_env.name in target.environ["LSAN_OPTIONS"]
+                assert assets.get("lsan-suppressions")
+            else:
+                assert not assets.get("lsan-suppressions")

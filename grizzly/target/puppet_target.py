@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
 from os import kill
+from os.path import isfile
 from os.path import join as pathjoin
 from platform import system
 from signal import SIGABRT
@@ -20,7 +21,7 @@ from prefpicker import PrefPicker
 from psutil import AccessDenied, NoSuchProcess, Process, process_iter
 
 from ..common.reporter import Report
-from ..common.utils import grz_tmp
+from ..common.utils import grz_tmp, split_sanitizer_opts
 from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
@@ -37,8 +38,24 @@ class PuppetTarget(Target):
         "abort-tokens",
         # xpi or directory containing the unpacked extension
         "extension",
+        # LSan suppression list file
+        "lsan-suppressions",
         # prefs.js file to use
         "prefs",
+        # TSan suppression list file
+        "tsan-suppressions",
+        # UBSan suppression list file
+        "ubsan-suppressions",
+    )
+
+    TRACKED_ENVVARS = (
+        "ASAN_OPTIONS",
+        "LSAN_OPTIONS",
+        "TSAN_OPTIONS",
+        "UBSAN_OPTIONS",
+        "GNOME_ACCESSIBILITY",
+        "MOZ_CHAOSMODE",
+        "XPCOM_DEBUG_BREAK",
     )
 
     __slots__ = ("use_valgrind", "_extension", "_prefs", "_puppet")
@@ -248,9 +265,9 @@ class PuppetTarget(Target):
                 break
             sleep(delay)
 
-    def launch(self, location, env_mod=None):
+    def launch(self, location):
         # setup environment
-        env_mod = dict(env_mod or [])
+        env_mod = dict(self.environ)
         # do not allow network connections to non local endpoints
         env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
         env_mod["MOZ_CRASHREPORTER_SHUTDOWN"] = "1"
@@ -299,6 +316,32 @@ class PuppetTarget(Target):
                     line = line.strip()
                     if line:
                         self._puppet.add_abort_token(line)
+
+        # configure sanitizer suppressions
+        for sanitizer in ("lsan", "tsan", "ubsan"):
+            var_name = "%s_OPTIONS" % (sanitizer.upper(),)
+            # load existing sanitizer options from environment
+            if var_name in self.environ:
+                opts = split_sanitizer_opts(self.environ[var_name])
+            else:
+                opts = dict()
+            asset = "%s-suppressions" % (sanitizer,)
+            supp_file = opts.pop("suppressions", "").strip("'")
+            if self.assets.get(asset):
+                # use suppression file if provided as asset
+                opts["suppressions"] = "%r" % (self.assets.get(asset),)
+            elif isfile(supp_file):
+                # use environment specified suppression file
+                LOG.debug("using %r from environment", asset)
+                opts["suppressions"] = "%r" % (self.assets.add(asset, supp_file),)
+            elif supp_file:
+                LOG.warning("Missing %s suppressions file %r", sanitizer, supp_file)
+            # update sanitized *SAN_OPTIONS
+            if "suppressions" in opts:
+                LOG.debug("updating suppressions in %r", var_name)
+                self.environ[var_name] = ":".join(
+                    "=".join((k, v)) for k, v in opts.items()
+                )
 
     def save_logs(self, *args, **kwargs):
         self._puppet.save_logs(*args, **kwargs)

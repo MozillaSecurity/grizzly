@@ -69,7 +69,9 @@ class AssetManager:
         else:
             move(path, self.path)
         self.assets[asset] = dst_path
-        LOG.debug("added asset %r %s to %r", asset, "copied" if copy else "moved", path)
+        LOG.debug(
+            "added asset %r %s to %r", asset, "copied" if copy else "moved", dst_path
+        )
         return dst_path
 
     def add_batch(self, assets):

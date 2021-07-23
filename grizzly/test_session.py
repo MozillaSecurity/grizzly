@@ -71,8 +71,9 @@ def test_session_01(
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        launch_timeout=30,
         assets=mocker.Mock(spec_set=AssetManager),
+        environ=dict(),
+        launch_timeout=30,
     )
     target.log_size.return_value = 1000
     target.monitor.launches = 1
@@ -141,8 +142,9 @@ def test_session_02(tmp_path, mocker, harness, relaunch, remaining):
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        launch_timeout=30,
         assets=mocker.Mock(spec_set=AssetManager),
+        environ=dict(),
+        launch_timeout=30,
     )
     # calculate if the target is 'closed' based on relaunch
     type(target).closed = mocker.PropertyMock(
@@ -197,8 +199,9 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        launch_timeout=30,
         assets=mocker.Mock(spec_set=AssetManager),
+        environ=dict(),
+        launch_timeout=30,
     )
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
@@ -240,8 +243,9 @@ def test_session_04(mocker, tmp_path):
     server.serve_path.return_value = (SERVED_NONE, [])
     target = mocker.Mock(
         spec_set=Target,
-        launch_timeout=30,
         assets=mocker.Mock(spec_set=AssetManager),
+        environ=dict(),
+        launch_timeout=30,
     )
     target.monitor.launches = 1
     with Session(FuzzAdapter("fuzz"), None, server, target) as session:
@@ -256,8 +260,9 @@ def test_session_05(mocker, tmp_path):
     server.serve_path.return_value = (SERVED_TIMEOUT, [])
     target = mocker.Mock(
         spec_set=Target,
-        launch_timeout=30,
         assets=mocker.Mock(spec_set=AssetManager),
+        environ=dict(),
+        launch_timeout=30,
     )
     target.monitor.launches = 1
     with Session(SimpleAdapter(False), None, server, target) as session:
@@ -285,8 +290,9 @@ def test_session_06(mocker, tmp_path, harness, report_size):
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        launch_timeout=30,
         assets=mocker.Mock(spec_set=AssetManager),
+        environ=dict(),
+        launch_timeout=30,
     )
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
@@ -331,9 +337,10 @@ def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, resul
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        closed=True,
-        launch_timeout=30,
         assets=mocker.Mock(spec_set=AssetManager),
+        closed=True,
+        environ=dict(),
+        launch_timeout=30,
     )
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_NONE = Target.RESULT_NONE
@@ -362,7 +369,9 @@ def test_session_08(tmp_path, mocker):
     adapter = mocker.Mock(spec_set=Adapter, remaining=None)
     adapter.IGNORE_UNSERVED = False
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(spec_set=Target, assets=mocker.Mock(spec_set=AssetManager))
+    target = mocker.Mock(
+        spec_set=Target, assets=mocker.Mock(spec_set=AssetManager), environ=dict()
+    )
     target.monitor.launches = 1
     with Session(adapter, None, server, target) as session:
         session.run([], 10, iteration_limit=1)
@@ -404,7 +413,11 @@ def test_session_10(tmp_path, mocker):
     report = mocker.Mock(spec_set=Report, major="major123", minor="minor456")
     reporter = mocker.Mock(spec_set=Reporter)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(spec_set=Target, assets=mocker.Mock(spec_set=AssetManager))
+    target = mocker.Mock(
+        spec_set=Target,
+        assets=mocker.Mock(spec_set=AssetManager),
+        environ=dict(),
+    )
     target.monitor.launches = 1
     target.create_report.return_value = report
     with Session(adapter, reporter, server, target) as session:

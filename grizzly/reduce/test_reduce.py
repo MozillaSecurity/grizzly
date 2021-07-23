@@ -10,8 +10,7 @@ from functools import partial, wraps
 from itertools import count
 from logging import getLogger
 
-import pytest
-from pytest import raises
+from pytest import mark, raises
 
 from sapphire import Sapphire
 
@@ -24,9 +23,7 @@ from .exceptions import NotReproducible
 from .strategies import Strategy
 
 LOG = getLogger(__name__)
-pytestmark = pytest.mark.usefixtures(
-    "tmp_path_fm_config", "reporter_sequential_strftime"
-)
+pytestmark = mark.usefixtures("tmp_path_fm_config", "reporter_sequential_strftime")
 
 
 def _fake_save_logs_foo(result_logs, meta=False):  # pylint: disable=unused-argument
@@ -60,7 +57,7 @@ AnalysisTestParams = namedtuple(
 )
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     AnalysisTestParams._fields,
     [
         # perfect with harness
@@ -333,7 +330,7 @@ ReproTestParams = namedtuple(
 )
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     ReproTestParams._fields,
     [
         # no repro
@@ -506,7 +503,7 @@ ReproTestParams = namedtuple(
         ),
     ],
 )
-@pytest.mark.usefixtures("reporter_sequential_strftime")
+@mark.usefixtures("reporter_sequential_strftime")
 def test_repro(
     mocker,
     tmp_path,
@@ -802,7 +799,7 @@ TimeoutTestParams = namedtuple(
 )
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     TimeoutTestParams._fields,
     [
         # 0 duration test sets both timeouts to minimum

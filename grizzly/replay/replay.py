@@ -152,13 +152,23 @@ class ReplayManager:
         testcases = TestCase.load(path)
         if not testcases:
             raise TestCaseLoadFailure("Failed to load TestCases")
-        # remove loaded assets from test cases
+        # remove loaded assets and environment variables from test cases
         assets = None
+        env_vars = None
         for test in testcases:
             if assets is None:
                 assets = test.pop_assets()
             else:
                 test.pop_assets()
+            if not env_vars and test.env_vars:
+                env_vars = dict(test.env_vars)
+            test.env_vars.clear()
+        LOG.debug(
+            "loaded TestCase(s): %d, assets: %r, env vars: %r",
+            len(testcases),
+            assets is not None,
+            env_vars is not None,
+        )
         if subset:
             count = len(testcases)
             # deduplicate and limit requested indices to valid range
@@ -171,7 +181,7 @@ class ReplayManager:
             for test in testcases:
                 test.cleanup()
             testcases = selected
-        return testcases, assets
+        return testcases, assets, env_vars
 
     @staticmethod
     def report_to_filesystem(path, results, tests=None):
@@ -293,12 +303,7 @@ class ReplayManager:
                             time_limit=time_limit,
                         )
                     startup_error = False
-                    # The environment from the initial testcase is used because
-                    # a sequence of testcases is expected to be run without
-                    # relaunching the Target to match the functionality of
-                    # Grizzly. If this is not the case each TestCase should
-                    # be run individually.
-                    runner.launch(location, env_mod=testcases[0].env_vars)
+                    runner.launch(location)
                 # run tests
                 durations = list()
                 served = list()
@@ -571,7 +576,9 @@ class ReplayManager:
             signature = None
 
         try:
-            testcases, assets = cls.load_testcases(args.input, subset=args.test_index)
+            testcases, assets, env_vars = cls.load_testcases(
+                args.input, subset=args.test_index
+            )
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return Session.EXIT_ERROR
@@ -616,6 +623,11 @@ class ReplayManager:
                 valgrind=args.valgrind,
                 xvfb=args.xvfb,
             )
+            # local environ takes priority over environ loaded from test case
+            if env_vars is not None:
+                env_vars.update(target.environ)
+                target.environ = env_vars
+                env_vars = None
             # TODO: support overriding existing assets
             # prioritize specified assets over included
             target.assets.add_batch(args.asset)
@@ -654,6 +666,10 @@ class ReplayManager:
                 if not target.assets.is_empty():
                     for test in testcases:
                         test.assets = target.assets
+                # add target environment variables
+                if target.environ:
+                    for test in testcases:
+                        test.env_vars = dict(target.environ)
                 cls.report_to_filesystem(
                     args.logs, results, testcases if args.include_test else None
                 )

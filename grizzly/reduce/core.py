@@ -731,7 +731,7 @@ class ReduceManager:
                     signature_desc = meta["shortDescription"]
 
             try:
-                testcases, assets = ReplayManager.load_testcases(
+                testcases, assets, env_vars = ReplayManager.load_testcases(
                     args.input, subset=args.test_index
                 )
             except TestCaseLoadFailure as exc:
@@ -777,6 +777,11 @@ class ReduceManager:
                 valgrind=args.valgrind,
                 xvfb=args.xvfb,
             )
+            # local environ takes priority over environ loaded from test case
+            if env_vars is not None:
+                env_vars.update(target.environ)
+                target.environ = env_vars
+                env_vars = None
             # TODO: support overriding existing assets
             # prioritize specified assets over included
             target.assets.add_batch(args.asset)
