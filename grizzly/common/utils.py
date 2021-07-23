@@ -12,7 +12,7 @@ __all__ = (
     "ConfigError",
     "configure_logging",
     "grz_tmp",
-    "sanitizer_opts",
+    "split_sanitizer_opts",
     "TIMEOUT_DELAY",
 )
 __author__ = "Tyson Smith"
@@ -58,7 +58,7 @@ def grz_tmp(*subdir):
     return path
 
 
-def sanitizer_opts(env_data):
+def split_sanitizer_opts(env_data):
     """Parse the values defined in given *SAN_OPTIONS environment variable.
     For example "ASAN_OPTIONS=debug=false:log_path='/test/file.log'"
     would return {"debug": "false", "log_path": "'/test/file.log'"}

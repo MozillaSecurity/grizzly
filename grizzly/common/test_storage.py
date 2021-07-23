@@ -4,11 +4,10 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 
-import json
 import os
-import re
-import zipfile
 from itertools import chain
+from json import dumps, loads
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from pytest import raises
 
@@ -45,10 +44,7 @@ def test_testcase_01(tmp_path):
 
 def test_testcase_02(tmp_path):
     """test TestCase with TestFiles"""
-    tcase = TestCase(
-        "land_page.html", "redirect.html", "test-adapter", input_fname="testinput.bin"
-    )
-    try:
+    with TestCase("land_page.html", "a.html", "adpt", input_fname="in.bin") as tcase:
         in_file = tmp_path / "testfile1.bin"
         in_file.write_bytes(b"test_req")
         tcase.add_from_file(str(in_file))
@@ -66,36 +62,19 @@ def test_testcase_02(tmp_path):
         assert len(opt_files) == 1
         tcase.dump(str(tmp_path), include_details=True)
         assert (tmp_path / "nested").is_dir()
-        test_info = json.loads((tmp_path / "test_info.json").read_text())
-        assert test_info["adapter"] == "test-adapter"
-        assert test_info["input"] == "testinput.bin"
+        test_info = loads((tmp_path / "test_info.json").read_text())
+        assert test_info["adapter"] == "adpt"
+        assert test_info["input"] == "in.bin"
         assert test_info["target"] == "land_page.html"
         assert isinstance(test_info["env"], dict)
         assert in_file.read_bytes() == b"test_req"
         assert (tmp_path / "nested" / "testfile2.bin").read_bytes() == b"test_nreq"
         assert (tmp_path / "testfile3.bin").read_bytes() == b"test_blah"
         assert (tmp_path / "dir" / "file.bin").read_bytes() == b"test_windows"
-    finally:
         tcase.cleanup()
 
 
-def test_testcase_03(tmp_path):
-    """test TestCase.add_environ_var() and TestCase.env_vars"""
-    with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
-        tcase.add_environ_var("TEST_ENV_VAR", "1")
-        assert len(tcase.env_vars) == 1
-        tcase.add_environ_var("TEST_NONE", None)
-        assert len(tcase.env_vars) == 2
-        dmp_path = tmp_path / "dmp_test"
-        dmp_path.mkdir()
-        tcase.dump(str(dmp_path), include_details=True)
-        data = json.loads((dmp_path / "test_info.json").read_text())
-        assert "env" in data
-        assert data["env"]["TEST_ENV_VAR"] == "1"
-        assert data["env"]["TEST_NONE"] is None
-
-
-def test_testcase_04():
+def test_testcase_03():
     """test TestCase.purge_optional()"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         tcase.add_from_data("foo", "testfile1.bin")
@@ -120,7 +99,7 @@ def test_testcase_04():
         assert not any(tcase.optional)
 
 
-def test_testcase_05():
+def test_testcase_04():
     """test TestCase.data_size"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         assert tcase.data_size == 0
@@ -130,7 +109,7 @@ def test_testcase_05():
         assert tcase.data_size == 3
 
 
-def test_testcase_06(tmp_path):
+def test_testcase_05(tmp_path):
     """test TestCase.load_single() using a directory - fail cases"""
     # missing test_info.json
     with raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
@@ -160,13 +139,15 @@ def test_testcase_06(tmp_path):
     # bad 'env' entry in test_info.json
     entry_point.touch()
     with TestCase("target.bin", None, "test-adapter") as src:
-        src.add_environ_var("TEST_ENV_VAR", 100)
         src.dump(str(src_dir), include_details=True)
-    with raises(TestCaseLoadFailure, match="'env_data' contains invalid 'env' entries"):
+    test_info = loads((src_dir / "test_info.json").read_text())
+    test_info["env"] = {"bad": 1}
+    (src_dir / "test_info.json").write_text(dumps(test_info))
+    with raises(TestCaseLoadFailure, match="'env' contains invalid entries"):
         TestCase.load_single(str(src_dir))
 
 
-def test_testcase_07(mocker, tmp_path):
+def test_testcase_06(mocker, tmp_path):
     """test TestCase.load_single() using a directory"""
     # build a valid test case
     src_dir = tmp_path / "src"
@@ -186,7 +167,7 @@ def test_testcase_07(mocker, tmp_path):
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("example", str(asset_file))
         with TestCase("target.bin", None, "test-adapter") as src:
-            src.add_environ_var("TEST_ENV_VAR", "100")
+            src.env_vars["TEST_ENV_VAR"] = "100"
             src.add_from_file(str(entry_point))
             src.add_from_file(str(src_dir / "optional.bin"), required=False)
             src.add_from_file(str(src_dir / "x.bin"), required=False)
@@ -220,7 +201,7 @@ def test_testcase_07(mocker, tmp_path):
         TestCase.load_single(str(dst_dir))
 
 
-def test_testcase_08(tmp_path):
+def test_testcase_07(tmp_path):
     """test TestCase.load_single() using a file"""
     # invalid entry_point specified
     with raises(TestCaseLoadFailure, match="Missing or invalid TestCase"):
@@ -234,6 +215,7 @@ def test_testcase_08(tmp_path):
     # load single file test case
     with TestCase.load_single(str(entry_point), adjacent=False) as tcase:
         assert tcase.assets is None
+        assert not tcase.env_vars
         assert tcase.landing_page == "target.bin"
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
@@ -245,7 +227,7 @@ def test_testcase_08(tmp_path):
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
 
 
-def test_testcase_09(tmp_path):
+def test_testcase_08(tmp_path):
     """test TestCase - dump, load and compare"""
     working = tmp_path / "working"
     working.mkdir()
@@ -277,7 +259,7 @@ def test_testcase_09(tmp_path):
             loaded.cleanup(skip_assets=False)
 
 
-def test_testcase_10(tmp_path):
+def test_testcase_09(tmp_path):
     """test TestCase.load() - missing file and empty directory"""
     # missing file
     with raises(TestCaseLoadFailure, match="Invalid TestCase path"):
@@ -286,7 +268,7 @@ def test_testcase_10(tmp_path):
     assert not TestCase.load(str(tmp_path), adjacent=True)
 
 
-def test_testcase_11(tmp_path):
+def test_testcase_10(tmp_path):
     """test TestCase.load() - single file"""
     tfile = tmp_path / "testcase.html"
     tfile.touch()
@@ -298,7 +280,7 @@ def test_testcase_11(tmp_path):
         map(lambda x: x.cleanup, testcases)
 
 
-def test_testcase_12(tmp_path):
+def test_testcase_11(tmp_path):
     """test TestCase.load() - single directory"""
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_from_data("test", "target.bin")
@@ -311,7 +293,7 @@ def test_testcase_12(tmp_path):
         map(lambda x: x.cleanup(), testcases)
 
 
-def test_testcase_13(tmp_path):
+def test_testcase_12(tmp_path):
     """test TestCase.load() - multiple directories (with assets)"""
     nested = tmp_path / "nested"
     nested.mkdir()
@@ -338,7 +320,7 @@ def test_testcase_13(tmp_path):
     assert not TestCase.load(str(tmp_path))
 
 
-def test_testcase_14(tmp_path):
+def test_testcase_13(tmp_path):
     """test TestCase.load() - archive"""
     archive = tmp_path / "testcase.zip"
     # bad archive
@@ -355,9 +337,7 @@ def test_testcase_14(tmp_path):
     (tmp_path / "log_dummy.txt").touch()
     (tmp_path / "not_a_tc").mkdir()
     (tmp_path / "not_a_tc" / "file.txt").touch()
-    with zipfile.ZipFile(
-        str(archive), mode="w", compression=zipfile.ZIP_DEFLATED
-    ) as zfp:
+    with ZipFile(str(archive), mode="w", compression=ZIP_DEFLATED) as zfp:
         for dir_name, _, dir_files in os.walk(str(tmp_path)):
             arc_path = os.path.relpath(dir_name, str(tmp_path))
             for file_name in dir_files:
@@ -373,25 +353,7 @@ def test_testcase_14(tmp_path):
         map(lambda x: x.cleanup, testcases)
 
 
-def test_testcase_15(tmp_path):
-    """test TestCase.load_environ()"""
-    (tmp_path / "ubsan.supp").touch()
-    (tmp_path / "other_file").touch()
-    with TestCase("a.html", "b.html", "test-adapter") as tcase:
-        tcase.load_environ(str(tmp_path), {})
-        assert "UBSAN_OPTIONS" in tcase.env_vars
-        assert "ubsan.supp" in tcase.env_vars["UBSAN_OPTIONS"]
-        # existing *SAN_OPTIONS
-        tcase.load_environ(str(tmp_path), {"UBSAN_OPTIONS": "a=1:b=2"})
-        assert "UBSAN_OPTIONS" in tcase.env_vars
-        assert "ubsan.supp" in tcase.env_vars["UBSAN_OPTIONS"]
-        opts = re.split(r":(?![\\|/])", tcase.env_vars["UBSAN_OPTIONS"])
-        assert "a=1" in opts
-        assert "b=2" in opts
-        assert len(opts) == 3
-
-
-def test_testcase_16(tmp_path):
+def test_testcase_14(tmp_path):
     """test TestCase.add_batch()"""
     include = tmp_path / "inc_path"
     include.mkdir()
@@ -431,7 +393,7 @@ def test_testcase_16(tmp_path):
             tcase.add_batch(str(include), [str(inc_1)])
 
 
-def test_testcase_17(tmp_path):
+def test_testcase_15(tmp_path):
     """test TestCase.scan_path()"""
     # empty path
     (tmp_path / "not-test").mkdir()
@@ -449,7 +411,7 @@ def test_testcase_17(tmp_path):
     assert len(tc_paths) == 1
 
 
-def test_testcase_18():
+def test_testcase_16():
     """test TestCase.get_file()"""
     with TestCase("test.htm", None, "test-adapter") as src:
         src.add_from_data("test", "test.htm")
@@ -457,14 +419,14 @@ def test_testcase_18():
         assert src.get_file("test.htm").data == b"test"
 
 
-def test_testcase_19():
+def test_testcase_17():
     """test TestCase.clone()"""
     with TestCase("a.htm", "b.htm", "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
         src.hang = True
         src.add_from_data("123", "test.htm")
         src.add_from_data("456", "opt.htm", required=False)
-        src.add_environ_var("go", "away")
+        src.env_vars["foo"] = "bar"
         with src.clone() as tgt:
             for prop in TestCase.__slots__:
                 if prop.startswith("_"):
@@ -479,10 +441,7 @@ def test_testcase_19():
                 tgt.get_file(file).write(b"tgt")
                 assert src.get_file(file).data == data + b"src"
                 assert tgt.get_file(file).data == data + b"tgt"
-            src.add_environ_var("foo", "bar")
-            tgt.add_environ_var("hello", "kitty")
-            assert src.env_vars == {"foo": "bar", "go": "away"}
-            assert tgt.env_vars == {"hello": "kitty", "go": "away"}
+            assert tgt.env_vars == {"foo": "bar"}
 
 
 def test_testfile_01():

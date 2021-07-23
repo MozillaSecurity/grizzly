@@ -6,7 +6,7 @@ from logging import DEBUG, INFO
 
 from pytest import mark
 
-from .utils import configure_logging, grz_tmp, sanitizer_opts
+from .utils import configure_logging, grz_tmp, split_sanitizer_opts
 
 
 def test_grz_tmp_01(mocker, tmp_path):
@@ -80,8 +80,8 @@ def test_configure_logging_01(mocker, env, log_level):
     ],
 )
 def test_sanitizer_opts_01(to_parse, expected):
-    """test sanitizer_opts()"""
-    parsed = sanitizer_opts(to_parse)
+    """test split_sanitizer_opts()"""
+    parsed = split_sanitizer_opts(to_parse)
     assert len(parsed) == len(expected)
     for key in expected:
         assert expected[key] == parsed[key]

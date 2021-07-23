@@ -31,7 +31,7 @@ def test_main_01(mocker, tmp_path):
     )
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
-    target = mocker.Mock(spec_set=Target, binary="bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
     target.assets = mocker.Mock(spec_set=AssetManager)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
@@ -43,19 +43,23 @@ def test_main_01(mocker, tmp_path):
     )
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
+    with TestCase("test.html", None, "adpt") as src:
+        src.env_vars["TEST_VAR"] = "100"
+        src.add_from_data("test", "test.html")
+        src.dump(str(tmp_path / "testcase"), include_details=True)
     # setup args
     log_path = tmp_path / "logs"
-    (tmp_path / "test.html").touch()
     (tmp_path / "sig.json").write_bytes(
         b'{"symptoms": [{"type": "crashAddress", "address": "0"}]}'
     )
     args = mocker.Mock(
+        any_crash=False,
         asset=list(),
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
-        input=str(tmp_path / "test.html"),
+        input=str(tmp_path / "testcase"),
         logs=str(log_path),
         min_crashes=2,
         no_harness=False,
@@ -73,6 +77,7 @@ def test_main_01(mocker, tmp_path):
     assert target.reverse.call_count == 1
     assert target.launch.call_count == 3
     assert target.detect_failure.call_count == 3
+    assert "TEST_VAR" in target.environ
     assert serve_path.call_count == 3
     assert load_target.call_count == 1
     assert target.close.call_count == 4
@@ -96,7 +101,7 @@ def test_main_02(mocker, tmp_path):
     )
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin")
-    target = mocker.Mock(spec_set=Target, binary="bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
     target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.return_value = Target.RESULT_NONE
     load_target.return_value.return_value = target
@@ -123,6 +128,7 @@ def test_main_02(mocker, tmp_path):
     )
     assert ReplayManager.main(args) == Session.EXIT_FAILURE
     assert target.detect_failure.call_count == 1
+    assert not target.environ
     assert target.close.call_count == 2
     assert target.cleanup.call_count == 1
 
@@ -166,19 +172,21 @@ def test_main_03(mocker):
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # multiple test cases with --no-harness
-    fake_tc.load.return_value = [mocker.Mock(hang=False), mocker.Mock(hang=False)]
+    fake_tc.load.return_value = [
+        mocker.Mock(spec_set=TestCase, env_vars={}, hang=False) for _ in range(2)
+    ]
     assert ReplayManager.main(args) == Session.EXIT_ARGS
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # signature required replaying hang
-    fake_tc.load.return_value = [mocker.Mock(hang=True)]
+    fake_tc.load.return_value = [mocker.Mock(spec_set=TestCase, env_vars={}, hang=True)]
     assert ReplayManager.main(args) == Session.EXIT_ERROR
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # can't ignore timeout replaying hang
     args.ignore = ["timeout"]
     args.sig = "sig"
-    fake_tc.load.return_value = [mocker.Mock(hang=True)]
+    fake_tc.load.return_value = [mocker.Mock(spec_set=TestCase, env_vars={}, hang=True)]
     assert ReplayManager.main(args) == Session.EXIT_ERROR
     assert fake_sig.fromFile.call_count == 1
     assert fake_load_target.call_count == 0
@@ -244,7 +252,9 @@ def test_main_05(mocker, tmp_path):
         return_value=(None, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
-    target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
+    target = mocker.NonCallableMock(
+        spec_set=Target, binary="bin", environ={}, launch_timeout=30
+    )
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.detect_failure.return_value = Target.RESULT_FAILURE
     target.monitor.is_healthy.return_value = False

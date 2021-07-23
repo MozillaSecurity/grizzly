@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod
 from logging import getLogger
+from os import environ
 from os.path import isfile
 from threading import Lock
 
@@ -38,12 +39,14 @@ class Target(metaclass=ABCMeta):
     RESULT_FAILURE = 1
     RESULT_IGNORED = 2
     SUPPORTED_ASSETS = None
+    TRACKED_ENVVARS = ()
 
     __slots__ = (
         "_assets",
         "_lock",
         "_monitor",
         "binary",
+        "environ",
         "launch_timeout",
         "log_limit",
         "memory_limit",
@@ -58,6 +61,7 @@ class Target(metaclass=ABCMeta):
         self._lock = Lock()
         self._monitor = None
         self.binary = binary
+        self.environ = self.scan_environment(dict(environ), self.TRACKED_ENVVARS)
         self.launch_timeout = max(launch_timeout, 300)
         self.log_limit = log_limit
         self.memory_limit = memory_limit
@@ -117,7 +121,7 @@ class Target(metaclass=ABCMeta):
         return False
 
     @abstractmethod
-    def launch(self, _location, _env_mod=None):
+    def launch(self, location):
         pass
 
     def log_size(self):  # pylint: disable=no-self-use
@@ -136,6 +140,16 @@ class Target(metaclass=ABCMeta):
     def reverse(self, remote, local):
         # remote->device, local->desktop
         pass
+
+    @staticmethod
+    def scan_environment(to_scan, tracked):
+        # scan environment for tracked environment variables
+        env = dict()
+        if tracked:
+            for var in tracked:
+                if var in to_scan:
+                    env[var] = to_scan[var]
+        return env
 
     @abstractmethod
     def save_logs(self, *args, **kwargs):
