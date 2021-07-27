@@ -256,7 +256,8 @@ def test_testcase_08(tmp_path):
             assert loaded.assets
             assert "fake" in loaded.assets.assets
         finally:
-            loaded.cleanup(skip_assets=False)
+            if loaded.assets:
+                loaded.assets.cleanup()
 
 
 def test_testcase_09(tmp_path):
@@ -290,7 +291,7 @@ def test_testcase_11(tmp_path):
         assert len(testcases) == 1
         assert all(x.assets is None for x in testcases)
     finally:
-        map(lambda x: x.cleanup(), testcases)
+        map(lambda x: x.cleanup, testcases)
 
 
 def test_testcase_12(tmp_path):
@@ -315,7 +316,9 @@ def test_testcase_12(tmp_path):
         assert asset is not None
         assert "example" in asset.assets
     finally:
-        map(lambda x: x.cleanup(skip_assets=False), testcases)
+        for test in testcases:
+            if test.assets:
+                test.cleanup()
     # try loading testcases that are nested too deep
     assert not TestCase.load(str(tmp_path))
 

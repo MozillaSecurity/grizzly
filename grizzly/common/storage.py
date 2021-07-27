@@ -173,11 +173,11 @@ class TestCase:
             tfile.close()
             raise
 
-    def cleanup(self, skip_assets=True):
+    def cleanup(self):
         """Close all the test files.
 
         Args:
-            skip_assets (bool): Skip calling cleanup() on assets.
+            None
 
         Returns:
             None
@@ -185,8 +185,6 @@ class TestCase:
         for file_group in self._files:
             for test_file in file_group:
                 test_file.close()
-        if not skip_assets and self.assets:
-            self.assets.cleanup()
 
     def clone(self):
         """Make a copy of the TestCase.
@@ -205,10 +203,10 @@ class TestCase:
             self.time_limit,
             self.timestamp,
         )
+        result.assets = self.assets
         result.duration = self.duration
+        result.env_vars = dict(self.env_vars)
         result.hang = self.hang
-        result.env_vars.update(self.env_vars)
-        # TODO: should we handle assets?
         for entry in self._files.optional:
             result.add_file(entry.clone(), required=False)
         for entry in self._files.required:
@@ -416,7 +414,8 @@ class TestCase:
                     if not isinstance(name, str) or not isinstance(value, str):
                         raise TestCaseLoadFailure("'env' contains invalid entries")
             except TestCaseLoadFailure:
-                test.cleanup(skip_assets=False)
+                if test.assets:
+                    test.assets.cleanup()
                 raise
         # load all adjacent data from directory
         if adjacent:
