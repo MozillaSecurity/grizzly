@@ -231,7 +231,7 @@ class CommonArgs:
 
         # TODO: remove deprecated 'prefs' from args
         if args.prefs:  # pragma: no cover
-            args.asset.append(["prefs", args.extension])
+            args.asset.append(["prefs", args.prefs])
 
         # check args.platform before args.asset since it is used
         if args.asset:
