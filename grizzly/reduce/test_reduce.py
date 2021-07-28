@@ -17,7 +17,7 @@ from sapphire import Sapphire
 from ..common.reporter import Report
 from ..common.storage import TestCase
 from ..replay import ReplayResult
-from ..target import Target
+from ..target import AssetManager, Target
 from . import ReduceManager
 from .exceptions import NotReproducible
 from .strategies import Strategy
@@ -550,7 +550,8 @@ def test_repro(
     tests = [test]
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target)
+    target = mocker.Mock(spec_set=Target, environ={})
+    target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -614,7 +615,7 @@ def test_report_01(mocker, tmp_path):
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").touch()
-    testcases = TestCase.load(str(tmp_path / "test.html"), False)
+    testcases = TestCase.load(str(tmp_path / "test.html"))
     assert testcases
     log_path = tmp_path / "logs"
 
@@ -625,14 +626,15 @@ def test_report_01(mocker, tmp_path):
         for count_ in range(1, 61):
             LOG.debug("fake_iter() %d", count_)
             (tmp_path / "test.html").write_text(str(count_))
-            testcases = TestCase.load(str(tmp_path / "test.html"), False)
+            testcases = TestCase.load(str(tmp_path / "test.html"))
             assert testcases
             yield testcases
 
     fake_strat.return_value.__iter__.side_effect = fake_iter
     mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
 
-    target = mocker.Mock(spec_set=Target)
+    target = mocker.Mock(spec_set=Target, environ={})
+    target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -683,7 +685,7 @@ def test_report_02(mocker, tmp_path):
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").touch()
-    testcases = TestCase.load(str(tmp_path / "test.html"), False)
+    testcases = TestCase.load(str(tmp_path / "test.html"))
     assert testcases
     log_path = tmp_path / "logs"
 
@@ -694,7 +696,7 @@ def test_report_02(mocker, tmp_path):
         for count_ in range(1, 31):
             LOG.debug("fake_iter() %d", count_)
             (tmp_path / "test.html").write_text(str(count_))
-            testcases = TestCase.load(str(tmp_path / "test.html"), False)
+            testcases = TestCase.load(str(tmp_path / "test.html"))
             assert testcases
             yield testcases
         raise KeyboardInterrupt()
@@ -702,7 +704,8 @@ def test_report_02(mocker, tmp_path):
     fake_strat.return_value.__iter__.side_effect = fake_iter
     mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
 
-    target = mocker.Mock(spec_set=Target)
+    target = mocker.Mock(spec_set=Target, environ={})
+    target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -753,15 +756,16 @@ def test_quality_update(mocker, tmp_path):
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").write_text("123\n")
-    testcases = TestCase.load(str(tmp_path / "test.html"), False)
+    testcases = TestCase.load(str(tmp_path / "test.html"))
     assert testcases
     log_path = tmp_path / "logs"
 
-    mocker.patch("grizzly.common.reporter.Collector")
-    reporter = mocker.patch("grizzly.reduce.core.FuzzManagerReporter")
+    mocker.patch("grizzly.common.reporter.Collector", autospec=True)
+    reporter = mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     reporter.QUAL_REDUCED_RESULT = 0
     update_coll = mocker.patch("grizzly.common.fuzzmanager.Collector")
-    target = mocker.Mock(spec_set=Target)
+    target = mocker.Mock(spec_set=Target, environ={})
+    target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -779,17 +783,78 @@ def test_quality_update(mocker, tmp_path):
             test.cleanup()
 
     assert reporter.return_value.submit.call_count == 1
-    report_args, report_kwds = reporter.return_value.submit.call_args
-    assert len(report_args) == 1
+    report_args, _ = reporter.return_value.submit.call_args
+    assert len(report_args) == 2
     assert isinstance(report_args[0], list)
     assert len(report_args[0]) == 1
     assert isinstance(report_args[0][0], TestCase)
-    assert report_kwds.keys() == {"report"}
+    assert isinstance(report_args[1], Report)
     assert update_coll.call_count == 1
     assert update_coll.return_value.patch.call_count == 1
     assert update_coll.return_value.patch.call_args[1] == {
         "data": {"testcase_quality": reporter.QUAL_REDUCED_RESULT},
     }
+
+
+def test_include_assets_and_environ(mocker, tmp_path):
+    """test report with assets and environment variables"""
+    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
+    replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+    replayer.status.iteration = 1
+
+    def replay_run(testcases, _time_limit, **_kw):
+        for test in testcases:
+            contents = test.get_file("test.html").data.decode("ascii")
+            if not contents.strip():
+                continue
+            log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+            log_path.mkdir()
+            _fake_save_logs_foo(log_path)
+            report = Report(str(log_path), "bin")
+            return [ReplayResult(report, [["test.html"]], [], True)]
+        return []
+
+    replayer.run.side_effect = replay_run
+
+    (tmp_path / "test.html").write_text("123\n")
+    testcases = TestCase.load(str(tmp_path / "test.html"))
+    assert testcases
+    log_path = tmp_path / "logs"
+
+    reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
+
+    def submit(test_cases, report):
+        assert test_cases
+        assert isinstance(report, Report)
+        for test in test_cases:
+            assert test.assets.get("example")
+            assert test.env_vars == {"test": "abc"}
+            test.cleanup()
+
+    reporter.return_value.submit.side_effect = submit
+
+    target = mocker.Mock(spec_set=Target, environ={"test": "abc"})
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        (tmp_path / "example_asset").touch()
+        assets.add("example", str(tmp_path / "example_asset"), copy=False)
+        target.assets = assets
+        try:
+            mgr = ReduceManager(
+                [],
+                mocker.Mock(spec_set=Sapphire, timeout=30),
+                target,
+                testcases,
+                ["check", "lines"],
+                log_path,
+                use_analysis=False,
+            )
+            assert mgr.run() == 0
+        finally:
+            for test in testcases:
+                test.cleanup()
+
+    assert reporter.return_value.submit.call_count == 1
 
 
 TimeoutTestParams = namedtuple(
@@ -892,9 +957,9 @@ def test_timeout_update(
     tests = [test]
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target)
-    server = mocker.Mock(spec_set=Sapphire)
-    server.timeout = iter_input
+    target = mocker.Mock(spec_set=Target, environ={})
+    target.assets = mocker.Mock(spec_set=AssetManager)
+    server = mocker.Mock(spec_set=Sapphire, timeout=iter_input)
     try:
         mgr = ReduceManager(
             [],
