@@ -14,7 +14,7 @@ from sapphire import Sapphire
 from ..common.reporter import Report
 from ..common.storage import TestCase
 from ..replay import ReplayResult
-from ..target import Target
+from ..target import AssetManager, Target
 from . import ReduceManager
 from .strategies import Strategy, _load_strategies
 
@@ -175,7 +175,8 @@ def test_list(
         tests.append(test)
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target)
+    target = mocker.Mock(spec_set=Target, environ={})
+    target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -354,7 +355,8 @@ def test_purge_unserved(
         tests.append(test)
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target)
+    target = mocker.Mock(spec_set=Target, environ={})
+    target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -412,7 +414,8 @@ def test_dd_only(mocker, tmp_path):
     tests = [test]
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target)
+    target = mocker.Mock(spec_set=Target, environ={})
+    target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],

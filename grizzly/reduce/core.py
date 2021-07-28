@@ -533,6 +533,14 @@ class ReduceManager:
                                     LOG.info("Reduction succeeded")
                                     for testcase in self.testcases:
                                         testcase.cleanup()
+                                    # add target assets to test cases
+                                    if not self.target.assets.is_empty():
+                                        for test in reduction:
+                                            test.assets = self.target.assets
+                                    # add target environment variables
+                                    if self.target.environ:
+                                        for test in reduction:
+                                            test.env_vars = dict(self.target.environ)
                                     self.testcases = reduction
                                     keep_reduction = True
                                     # cleanup old best results
@@ -682,7 +690,7 @@ class ReduceManager:
                 if result.served is not None:
                     for clone, served in zip(clones, result.served):
                         clone.purge_optional(served)
-                ret_values.append(reporter.submit(clones, report=result.report))
+                ret_values.append(reporter.submit(clones, result.report))
             finally:
                 for clone in clones:
                     clone.cleanup()
