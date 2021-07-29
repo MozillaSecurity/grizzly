@@ -448,6 +448,14 @@ class TestCase:
             yield test.file_name
 
     def pop_assets(self):
+        """Remove AssetManager from TestCase.
+
+        Args:
+            None
+
+        Returns:
+            AssetManager: AssetManager if exists otherwise None.
+        """
         if self.assets is None:
             assets = None
         else:
