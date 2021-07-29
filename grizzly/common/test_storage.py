@@ -9,7 +9,7 @@ from itertools import chain
 from json import dumps, loads
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from pytest import raises
+from pytest import mark, raises
 
 from ..target import AssetManager
 from .storage import TestCase, TestCaseLoadFailure, TestFile, TestFileExists
@@ -77,6 +77,9 @@ def test_testcase_02(tmp_path):
 def test_testcase_03():
     """test TestCase.purge_optional()"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
+        # no optional files
+        tcase.purge_optional(["foo"])
+        # setup
         tcase.add_from_data("foo", "testfile1.bin")
         tcase.add_from_data("foo", "testfile2.bin", required=False)
         tcase.add_from_data("foo", "testfile3.bin", required=False)
@@ -138,8 +141,12 @@ def test_testcase_05(tmp_path):
         TestCase.load_single(str(src_dir))
     # bad 'env' entry in test_info.json
     entry_point.touch()
-    with TestCase("target.bin", None, "test-adapter") as src:
-        src.dump(str(src_dir), include_details=True)
+    with AssetManager(base_path=str(tmp_path)) as assets:
+        (tmp_path / "example_asset").touch()
+        assets.add("example", str(tmp_path / "example_asset"), copy=False)
+        with TestCase("target.bin", None, "test-adapter") as src:
+            src.assets = assets
+            src.dump(str(src_dir), include_details=True)
     test_info = loads((src_dir / "test_info.json").read_text())
     test_info["env"] = {"bad": 1}
     (src_dir / "test_info.json").write_text(dumps(test_info))
@@ -182,10 +189,8 @@ def test_testcase_06(mocker, tmp_path):
     with TestCase.load_single(str(dst_dir)) as dst:
         asset = dst.pop_assets()
         assert asset
-        try:
+        with asset:
             assert "example" in asset.assets
-        finally:
-            asset.cleanup()
         assert dst.landing_page == "target.bin"
         assert "target.bin" in (x.file_name for x in dst._files.required)
         assert "optional.bin" in (x.file_name for x in dst._files.optional)
@@ -513,14 +518,22 @@ def test_testfile_04(tmp_path):
         assert out_file.is_file()
 
 
-def test_testfile_05(tmp_path):
+@mark.parametrize(
+    "in_data, out_data",
+    [
+        # data as string
+        ("foo", "foo"),
+        # data as binary
+        (b"foo", "foo"),
+    ],
+)
+def test_testfile_05(tmp_path, in_data, out_data):
     """test TestFile.from_data()"""
-    # TODO: different encodings
-    with TestFile.from_data("foo", "test_file.txt") as tfile:
-        out_file = tmp_path / "test_file.txt"
+    with TestFile.from_data(in_data, "test_file.txt") as tfile:
         tfile.dump(str(tmp_path))
+        out_file = tmp_path / "test_file.txt"
         assert out_file.is_file()
-        assert out_file.read_text() == "foo"
+        assert out_file.read_text() == out_data
 
 
 def test_testfile_06(tmp_path):
