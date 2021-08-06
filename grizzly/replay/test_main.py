@@ -12,7 +12,13 @@ from sapphire import Served
 from ..common.reporter import Report
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..session import Session
-from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
+from ..target import (
+    AssetManager,
+    Result,
+    Target,
+    TargetLaunchError,
+    TargetLaunchTimeout,
+)
 from .replay import ReplayManager
 from .test_replay import _fake_save_logs
 
@@ -33,13 +39,10 @@ def test_main_01(mocker, tmp_path):
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
     target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
     target.assets = mocker.Mock(spec_set=AssetManager)
-    target.RESULT_FAILURE = Target.RESULT_FAILURE
-    target.RESULT_IGNORED = Target.RESULT_IGNORED
-    target.RESULT_NONE = Target.RESULT_NONE
     target.detect_failure.side_effect = (
-        Target.RESULT_FAILURE,
-        Target.RESULT_NONE,
-        Target.RESULT_FAILURE,
+        Result.FAILURE,
+        Result.NONE,
+        Result.FAILURE,
     )
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
@@ -102,8 +105,7 @@ def test_main_02(mocker, tmp_path):
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin")
     target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
-    target.RESULT_NONE = Target.RESULT_NONE
-    target.detect_failure.return_value = Target.RESULT_NONE
+    target.detect_failure.return_value = Result.NONE
     load_target.return_value.return_value = target
     # setup args
     (tmp_path / "test.html").touch()
@@ -255,8 +257,7 @@ def test_main_05(mocker, tmp_path):
     target = mocker.NonCallableMock(
         spec_set=Target, binary="bin", environ={}, launch_timeout=30
     )
-    target.RESULT_FAILURE = Target.RESULT_FAILURE
-    target.detect_failure.return_value = Target.RESULT_FAILURE
+    target.detect_failure.return_value = Result.FAILURE
     target.monitor.is_healthy.return_value = False
     target.save_logs = _fake_save_logs
     mocker.patch(
@@ -335,8 +336,7 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
     )
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
-    target.RESULT_NONE = Target.RESULT_NONE
-    target.detect_failure.return_value = Target.RESULT_NONE
+    target.detect_failure.return_value = Result.NONE
     mocker.patch(
         "grizzly.replay.replay.load_plugin",
         autospec=True,
@@ -400,8 +400,7 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
     )
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
-    target.RESULT_NONE = Target.RESULT_NONE
-    target.detect_failure.return_value = Target.RESULT_NONE
+    target.detect_failure.return_value = Result.NONE
     load_target = mocker.patch(
         "grizzly.replay.replay.load_plugin",
         autospec=True,

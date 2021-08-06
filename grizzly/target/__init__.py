@@ -3,11 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from .assets import AssetError, AssetManager
-from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
+from .target import Result, Target, TargetError, TargetLaunchError, TargetLaunchTimeout
 
 __all__ = (
     "AssetError",
     "AssetManager",
+    "Result",
     "Target",
     "TargetError",
     "TargetLaunchError",

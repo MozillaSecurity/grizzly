@@ -16,7 +16,7 @@ from .adapter import Adapter
 from .common.reporter import Report, Reporter
 from .common.runner import RunResult
 from .session import LogOutputLimiter, Session, SessionError
-from .target import AssetManager, Target, TargetLaunchError
+from .target import AssetManager, Result, Target, TargetLaunchError
 
 
 class SimpleAdapter(Adapter):
@@ -203,8 +203,6 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
         environ=dict(),
         launch_timeout=30,
     )
-    target.RESULT_FAILURE = Target.RESULT_FAILURE
-    target.RESULT_NONE = Target.RESULT_NONE
     target.monitor.launches = 1
     # avoid shutdown delay
     target.monitor.is_healthy.return_value = False
@@ -213,9 +211,9 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
         side_effect=((x % relaunch == 0) for x in range(iters))
     )
     # failure is on final iteration
-    target.detect_failure.side_effect = [
-        Target.RESULT_NONE for x in range(iters - 1)
-    ] + [Target.RESULT_FAILURE]
+    target.detect_failure.side_effect = [Result.NONE for x in range(iters - 1)] + [
+        Result.FAILURE
+    ]
     target.log_size.return_value = 1
     target.create_report.return_value = report
     with Session(
@@ -294,11 +292,9 @@ def test_session_06(mocker, tmp_path, harness, report_size):
         environ=dict(),
         launch_timeout=30,
     )
-    target.RESULT_FAILURE = Target.RESULT_FAILURE
-    target.RESULT_NONE = Target.RESULT_NONE
     target.monitor.launches = 1
     type(target).closed = mocker.PropertyMock(side_effect=(True, False))
-    target.detect_failure.side_effect = (Target.RESULT_NONE, Target.RESULT_FAILURE)
+    target.detect_failure.side_effect = (Result.NONE, Result.FAILURE)
     target.log_size.return_value = 1
     target.create_report.return_value = report
     with Session(
@@ -323,9 +319,9 @@ def test_session_06(mocker, tmp_path, harness, report_size):
     "srv_results, target_result, ignored, results",
     [
         # delayed startup crash
-        (Served.NONE, Target.RESULT_FAILURE, 0, 1),
+        (Served.NONE, Result.FAILURE, 0, 1),
         # startup hang/unresponsive
-        (Served.TIMEOUT, Target.RESULT_NONE, 1, 0),
+        (Served.TIMEOUT, Result.NONE, 1, 0),
     ],
 )
 def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, results):
@@ -342,8 +338,6 @@ def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, resul
         environ=dict(),
         launch_timeout=30,
     )
-    target.RESULT_FAILURE = Target.RESULT_FAILURE
-    target.RESULT_NONE = Target.RESULT_NONE
     target.monitor.launches = 1
     target.detect_failure.side_effect = (target_result,)
     target.create_report.return_value = report

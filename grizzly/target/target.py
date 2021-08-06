@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod
+from enum import Enum, unique
 from logging import getLogger
 from os import environ
 from os.path import isfile
@@ -11,11 +12,20 @@ from threading import Lock
 from ..common.utils import grz_tmp
 from .assets import AssetManager
 
-__all__ = ("Target", "TargetError", "TargetLaunchError")
+__all__ = ("Result", "Target", "TargetError", "TargetLaunchError")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 LOG = getLogger(__name__)
+
+
+@unique
+class Result(Enum):
+    """Target results codes"""
+
+    NONE = 0
+    FAILURE = 1
+    IGNORED = 2
 
 
 class TargetError(Exception):
@@ -35,9 +45,6 @@ class TargetLaunchTimeout(TargetError):
 
 
 class Target(metaclass=ABCMeta):
-    RESULT_NONE = 0
-    RESULT_FAILURE = 1
-    RESULT_IGNORED = 2
     SUPPORTED_ASSETS = None
     TRACKED_ENVVARS = ()
 

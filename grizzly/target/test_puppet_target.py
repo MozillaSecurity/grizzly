@@ -10,7 +10,7 @@ from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, Debugger, Reas
 from pytest import mark, raises
 
 from .puppet_target import PuppetTarget
-from .target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
+from .target import AssetManager, Result, TargetLaunchError, TargetLaunchTimeout
 
 
 def test_puppet_target_01(mocker, tmp_path):
@@ -26,7 +26,7 @@ def test_puppet_target_01(mocker, tmp_path):
         assert target.launch_timeout == 300
         assert target.log_limit == 25
         assert target.memory_limit == 5000
-        assert target.detect_failure([]) == Target.RESULT_NONE
+        assert target.detect_failure([]) == Result.NONE
         assert target.log_size() == 1124
         fake_ffp.return_value.log_length.assert_any_call("stderr")
         fake_ffp.return_value.log_length.assert_any_call("stdout")
@@ -76,19 +76,19 @@ def test_puppet_target_02(mocker, tmp_path):
     "healthy, reason, ignore, result, closes",
     [
         # running as expected - no failures
-        (True, None, [], Target.RESULT_NONE, 0),
+        (True, None, [], Result.NONE, 0),
         # browser process closed
-        (False, Reason.CLOSED, [], Target.RESULT_NONE, 1),
+        (False, Reason.CLOSED, [], Result.NONE, 1),
         # browser process crashed
-        (False, Reason.ALERT, [], Target.RESULT_FAILURE, 1),
+        (False, Reason.ALERT, [], Result.FAILURE, 1),
         # browser exit with no crash logs
-        (False, Reason.EXITED, [], Target.RESULT_NONE, 1),
+        (False, Reason.EXITED, [], Result.NONE, 1),
         # ffpuppet check failed
-        (False, Reason.WORKER, [], Target.RESULT_FAILURE, 1),
+        (False, Reason.WORKER, [], Result.FAILURE, 1),
         # ffpuppet check ignored (memory)
-        (False, Reason.WORKER, ["memory"], Target.RESULT_IGNORED, 1),
+        (False, Reason.WORKER, ["memory"], Result.IGNORED, 1),
         # ffpuppet check ignored (log-limit)
-        (False, Reason.WORKER, ["log-limit"], Target.RESULT_IGNORED, 1),
+        (False, Reason.WORKER, ["log-limit"], Result.IGNORED, 1),
     ],
 )
 def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, closes):
