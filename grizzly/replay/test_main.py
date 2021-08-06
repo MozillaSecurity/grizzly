@@ -33,16 +33,16 @@ def test_main_01(mocker, tmp_path):
     serve_path = mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
-        return_value=(Served.ALL, ["test.html"]),  # passed to Target.detect_failure
+        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
     )
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
     target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
     target.assets = mocker.Mock(spec_set=AssetManager)
-    target.detect_failure.side_effect = (
-        Result.FAILURE,
+    target.check_result.side_effect = (
+        Result.FOUND,
         Result.NONE,
-        Result.FAILURE,
+        Result.FOUND,
     )
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
@@ -79,7 +79,7 @@ def test_main_01(mocker, tmp_path):
     assert ReplayManager.main(args) == Session.EXIT_SUCCESS
     assert target.reverse.call_count == 1
     assert target.launch.call_count == 3
-    assert target.detect_failure.call_count == 3
+    assert target.check_result.call_count == 3
     assert "TEST_VAR" in target.environ
     assert serve_path.call_count == 3
     assert load_target.call_count == 1
@@ -100,12 +100,12 @@ def test_main_02(mocker, tmp_path):
     mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
-        return_value=(Served.ALL, ["test.html"]),  # passed to Target.detect_failure
+        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
     )
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin")
     target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
-    target.detect_failure.return_value = Result.NONE
+    target.check_result.return_value = Result.NONE
     load_target.return_value.return_value = target
     # setup args
     (tmp_path / "test.html").touch()
@@ -129,7 +129,7 @@ def test_main_02(mocker, tmp_path):
         valgrind=False,
     )
     assert ReplayManager.main(args) == Session.EXIT_FAILURE
-    assert target.detect_failure.call_count == 1
+    assert target.check_result.call_count == 1
     assert not target.environ
     assert target.close.call_count == 2
     assert target.cleanup.call_count == 1
@@ -251,13 +251,13 @@ def test_main_05(mocker, tmp_path):
     serve_path = mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
-        return_value=(None, ["test.html"]),  # passed to Target.detect_failure
+        return_value=(None, ["test.html"]),  # passed to Target.check_result
     )
     # setup Target
     target = mocker.NonCallableMock(
         spec_set=Target, binary="bin", environ={}, launch_timeout=30
     )
-    target.detect_failure.return_value = Result.FAILURE
+    target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
     target.save_logs = _fake_save_logs
     mocker.patch(
@@ -302,7 +302,7 @@ def test_main_05(mocker, tmp_path):
         assert ReplayManager.main(args) == Session.EXIT_SUCCESS
         assert "from_cmdline" in target.assets.assets
     assert target.launch.call_count == 1
-    assert target.detect_failure.call_count == 1
+    assert target.check_result.call_count == 1
     assert serve_path.call_count == 1
     assert log_path.is_dir()
     assert any(log_path.glob("**/sample_asset"))
@@ -332,11 +332,11 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
     mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
-        return_value=(Served.ALL, ["test.html"]),  # passed to Target.detect_failure
+        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
     )
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
-    target.detect_failure.return_value = Result.NONE
+    target.check_result.return_value = Result.NONE
     mocker.patch(
         "grizzly.replay.replay.load_plugin",
         autospec=True,
@@ -396,11 +396,11 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
     mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
-        return_value=(Served.ALL, ["test.html"]),  # passed to Target.detect_failure
+        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
     )
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
-    target.detect_failure.return_value = Result.NONE
+    target.check_result.return_value = Result.NONE
     load_target = mocker.patch(
         "grizzly.replay.replay.load_plugin",
         autospec=True,
@@ -430,7 +430,7 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
     # maximum one debugger allowed at a time
     assert sum((pernosco, rr, valgrind)) < 2, "test broken!"
     assert ReplayManager.main(args) == Session.EXIT_FAILURE
-    assert target.detect_failure.call_count == 1
+    assert target.check_result.call_count == 1
     assert target.close.call_count == 2
     assert target.cleanup.call_count == 1
     assert load_target.return_value.call_args[-1]["pernosco"] == pernosco

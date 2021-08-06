@@ -15,12 +15,12 @@ from sapphire import Sapphire, ServerMap
 
 from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
-from ..common.runner import Runner, RunResult
+from ..common.runner import Runner
 from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import TIMEOUT_DELAY, ConfigError, configure_logging, grz_tmp
 from ..session import Session
-from ..target import Target, TargetLaunchError, TargetLaunchTimeout
+from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -343,19 +343,19 @@ class ReplayManager:
                     )
                     durations.append(run_result.duration)
                     served.append(run_result.served)
-                    if run_result.status is not None or not run_result.attempted:
+                    if run_result.status != Result.NONE or not run_result.attempted:
                         break
                 if not run_result.attempted:
                     LOG.warning("Test case was not served")
                     if run_result.initial:
                         startup_error = True
-                        if run_result.status == RunResult.FAILED:
+                        if run_result.status == Result.FOUND:
                             # TODO: what is to best action to take in this case?
                             LOG.warning("Delayed startup failure detected")
                         else:
                             LOG.warning("Timeout too short? System too busy?")
                 # process run results
-                if run_result.status == RunResult.FAILED:
+                if run_result.status == Result.FOUND:
                     # TODO: use self.target.create_report here
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
@@ -430,7 +430,7 @@ class ReplayManager:
                     if report is not None:
                         report.cleanup()
                         report = None
-                elif run_result.status == RunResult.IGNORED:
+                elif run_result.status == Result.IGNORED:
                     self.status.ignored += 1
                     LOG.info("Result: Ignored (%d)", self.status.ignored)
 

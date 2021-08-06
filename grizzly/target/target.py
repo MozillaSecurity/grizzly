@@ -24,7 +24,7 @@ class Result(Enum):
     """Target results codes"""
 
     NONE = 0
-    FAILURE = 1
+    FOUND = 1
     IGNORED = 2
 
 
@@ -93,6 +93,10 @@ class Target(metaclass=ABCMeta):
     def _cleanup(self):
         pass
 
+    @abstractmethod
+    def check_result(self, ignored):
+        pass
+
     def cleanup(self):
         # call target specific _cleanup first
         self._cleanup()
@@ -109,10 +113,6 @@ class Target(metaclass=ABCMeta):
 
     @abstractmethod
     def create_report(self, is_hang=False):
-        pass
-
-    @abstractmethod
-    def detect_failure(self, ignored):
         pass
 
     def dump_coverage(self, _timeout=0):  # pylint: disable=no-self-use

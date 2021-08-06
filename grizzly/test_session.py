@@ -109,7 +109,7 @@ def test_session_01(
         assert session.status.iteration == max_iters
         assert session.status.test_name == "file.bin"
         assert target.close.call_count == max_iters / relaunch
-        assert target.detect_failure.call_count == max_iters
+        assert target.check_result.call_count == max_iters
         assert target.handle_hang.call_count == 0
         if profiling:
             assert any(session.status.profile_entries()) == profiling
@@ -168,7 +168,7 @@ def test_session_02(tmp_path, mocker, harness, relaunch, remaining):
         session.run([], 10)
         assert session.status.iteration == remaining
         assert session.status.test_name is None
-        assert target.detect_failure.call_count == remaining
+        assert target.check_result.call_count == remaining
         assert target.handle_hang.call_count == 0
 
 
@@ -211,8 +211,8 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
         side_effect=((x % relaunch == 0) for x in range(iters))
     )
     # failure is on final iteration
-    target.detect_failure.side_effect = [Result.NONE for x in range(iters - 1)] + [
-        Result.FAILURE
+    target.check_result.side_effect = [Result.NONE for x in range(iters - 1)] + [
+        Result.FOUND
     ]
     target.log_size.return_value = 1
     target.create_report.return_value = report
@@ -294,7 +294,7 @@ def test_session_06(mocker, tmp_path, harness, report_size):
     )
     target.monitor.launches = 1
     type(target).closed = mocker.PropertyMock(side_effect=(True, False))
-    target.detect_failure.side_effect = (Result.NONE, Result.FAILURE)
+    target.check_result.side_effect = (Result.NONE, Result.FOUND)
     target.log_size.return_value = 1
     target.create_report.return_value = report
     with Session(
@@ -319,7 +319,7 @@ def test_session_06(mocker, tmp_path, harness, report_size):
     "srv_results, target_result, ignored, results",
     [
         # delayed startup crash
-        (Served.NONE, Result.FAILURE, 0, 1),
+        (Served.NONE, Result.FOUND, 0, 1),
         # startup hang/unresponsive
         (Served.TIMEOUT, Result.NONE, 1, 0),
     ],
@@ -339,7 +339,7 @@ def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, resul
         launch_timeout=30,
     )
     target.monitor.launches = 1
-    target.detect_failure.side_effect = (target_result,)
+    target.check_result.side_effect = (target_result,)
     target.create_report.return_value = report
     with Session(SimpleAdapter(False), reporter, server, target) as session:
         server.serve_path.return_value = (srv_results, [])
@@ -349,14 +349,14 @@ def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, resul
         assert session.status.results == results
         assert session.status.ignored == ignored
         assert reporter.submit.call_count == results
-        assert target.detect_failure.call_count == results
+        assert target.check_result.call_count == results
         assert target.handle_hang.call_count == ignored
 
 
 def test_session_08(tmp_path, mocker):
     """test Session.run() ignoring failures"""
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
-    result = RunResult([], 0.1, status=RunResult.IGNORED)
+    result = RunResult([], 0.1, status=Result.IGNORED)
     result.attempted = True
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
     runner.return_value.run.return_value = result
@@ -399,7 +399,7 @@ def test_session_09(tmp_path, mocker):
 def test_session_10(tmp_path, mocker):
     """test Session.run() report hang"""
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
-    result = RunResult([], 60.0, status=RunResult.FAILED, timeout=True)
+    result = RunResult([], 60.0, status=Result.FOUND, timeout=True)
     result.attempted = True
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
     runner.return_value.run.return_value = result

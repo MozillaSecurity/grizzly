@@ -12,7 +12,7 @@ from sapphire import Sapphire, Served, ServerMap
 
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .reporter import Report
-from .runner import Runner, RunResult, _IdleChecker
+from .runner import Runner, _IdleChecker
 from .storage import TestCase
 
 
@@ -21,7 +21,7 @@ def test_runner_01(mocker, tmp_path):
     mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
-    target.detect_failure.return_value = Result.NONE
+    target.check_result.return_value = Result.NONE
     runner = Runner(server, target, relaunch=10)
     assert runner._idle is None
     assert runner._relaunch == 10
@@ -36,7 +36,7 @@ def test_runner_01(mocker, tmp_path):
     assert runner._tests_run == 1
     assert result.duration == 1
     assert result.initial
-    assert result.status is None
+    assert result.status == Result.NONE
     assert result.served == serv_files
     assert not result.timeout
     assert not serv_map.dynamic
@@ -51,7 +51,7 @@ def test_runner_01(mocker, tmp_path):
     assert result.attempted
     assert runner._tests_run == 2
     assert not result.initial
-    assert result.status is None
+    assert result.status == Result.NONE
     assert result.served == serv_files
     assert not result.timeout
     assert not serv_map.dynamic
@@ -68,7 +68,7 @@ def test_runner_01(mocker, tmp_path):
     assert result.attempted
     assert runner._tests_run == 3
     assert not result.initial
-    assert result.status is None
+    assert result.status == Result.NONE
     assert not serv_map.dynamic
     assert target.close.call_count == 0
     assert testcase.dump.call_count == 0
@@ -81,7 +81,7 @@ def test_runner_02(mocker):
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
-    target.detect_failure.return_value = Result.NONE
+    target.check_result.return_value = Result.NONE
     serv_files = ["a.bin"]
     server.serve_path.return_value = (Served.ALL, serv_files)
     testcase = mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[])
@@ -96,7 +96,7 @@ def test_runner_02(mocker):
     assert target.close.call_count == 1
     assert target.is_idle.call_count > 0
     assert target.monitor.is_healthy.call_count > 0
-    assert result.status is None
+    assert result.status == Result.NONE
     assert result.served == serv_files
     assert not smap.dynamic
     assert smap.redirect.get("grz_next_test").target == "grz_empty"
@@ -122,7 +122,7 @@ def test_runner_02(mocker):
         assert result.attempted
         assert target.close.call_count == 0
         assert target.monitor.is_healthy.call_count == 0
-        assert result.status is None
+        assert result.status == Result.NONE
         assert result.served == serv_files
         assert not result.timeout
         assert not smap.dynamic
@@ -134,7 +134,7 @@ def test_runner_02(mocker):
     assert target.close.call_count == 1
     assert target.is_idle.call_count == 0
     assert target.monitor.is_healthy.call_count == 1
-    assert result.status is None
+    assert result.status == Result.NONE
     assert result.served == serv_files
     assert not smap.dynamic
     assert smap.redirect.get("grz_next_test").target == "grz_empty"
@@ -154,11 +154,11 @@ def test_runner_03(mocker, srv_result, served):
     server = mocker.Mock(spec_set=Sapphire)
     server.serve_path.return_value = (srv_result, served)
     target = mocker.Mock(spec_set=Target)
-    target.detect_failure.return_value = Result.NONE
+    target.check_result.return_value = Result.NONE
     testcase = mocker.Mock(spec_set=TestCase, landing_page="x", optional=[])
     runner = Runner(server, target)
     result = runner.run([], ServerMap(), testcase)
-    assert result.status is None
+    assert result.status == Result.NONE
     assert not result.attempted
     assert result.initial
     assert set(result.served) == set(served)
@@ -167,24 +167,24 @@ def test_runner_03(mocker, srv_result, served):
 
 
 @mark.parametrize(
-    "ignore, status, idle, detect_failure",
+    "ignore, status, idle, check_result",
     [
         # detect a hang
-        (["memory"], RunResult.FAILED, False, 1),
+        (["memory"], Result.FOUND, False, 1),
         # ignore a hang
-        (["timeout"], RunResult.IGNORED, False, 0),
+        (["timeout"], Result.IGNORED, False, 0),
         # ignore idle hang
-        ([], RunResult.IGNORED, True, 0),
+        ([], Result.IGNORED, True, 0),
     ],
 )
-def test_runner_04(mocker, ignore, status, idle, detect_failure):
+def test_runner_04(mocker, ignore, status, idle, check_result):
     """test reporting timeout"""
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
     testcase = mocker.Mock(spec_set=TestCase, landing_page="a.bin", optional=[])
     serv_files = ["a.bin", "/another/file.bin"]
     server.serve_path.return_value = (Served.TIMEOUT, serv_files)
-    target.detect_failure.return_value = Result.FAILURE
+    target.check_result.return_value = Result.FOUND
     target.handle_hang.return_value = idle
     target.monitor.is_healthy.return_value = False
     runner = Runner(server, target, relaunch=1)
@@ -194,7 +194,7 @@ def test_runner_04(mocker, ignore, status, idle, detect_failure):
     assert result.served == serv_files
     assert result.timeout
     assert "grz_empty" not in serv_map.dynamic
-    assert target.detect_failure.call_count == detect_failure
+    assert target.check_result.call_count == check_result
     assert target.handle_hang.call_count == 1
 
 
@@ -202,11 +202,11 @@ def test_runner_04(mocker, ignore, status, idle, detect_failure):
     "served, attempted, target_result, status",
     [
         # FAILURE
-        (["a.bin"], True, Result.FAILURE, RunResult.FAILED),
+        (["a.bin"], True, Result.FOUND, Result.FOUND),
         # IGNORED
-        (["a.bin"], True, Result.IGNORED, RunResult.IGNORED),
+        (["a.bin"], True, Result.IGNORED, Result.IGNORED),
         # failure before serving landing page
-        (["harness"], False, Result.FAILURE, RunResult.FAILED),
+        (["harness"], False, Result.FOUND, Result.FOUND),
     ],
 )
 def test_runner_05(mocker, served, attempted, target_result, status):
@@ -214,7 +214,7 @@ def test_runner_05(mocker, served, attempted, target_result, status):
     server = mocker.Mock(spec_set=Sapphire)
     server.serve_path.return_value = (Served.REQUEST, served)
     target = mocker.Mock(spec_set=Target, launch_timeout=10)
-    target.detect_failure.return_value = target_result
+    target.check_result.return_value = target_result
     target.monitor.is_healthy.return_value = False
     testcase = mocker.Mock(spec_set=TestCase, landing_page="a.bin", optional=[])
     runner = Runner(server, target)
@@ -231,7 +231,7 @@ def test_runner_06(mocker):
     """test Runner() with idle checking"""
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
-    target.detect_failure.return_value = Result.NONE
+    target.check_result.return_value = Result.NONE
     serv_files = ["/fake/file", "/another/file.bin"]
     server.serve_path.return_value = (Served.ALL, serv_files)
     runner = Runner(server, target, idle_threshold=0.01, idle_delay=0.01, relaunch=10)
@@ -241,7 +241,7 @@ def test_runner_06(mocker):
         ServerMap(),
         mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[]),
     )
-    assert result.status is None
+    assert result.status == Result.NONE
     assert result.attempted
     assert target.close.call_count == 0
 
@@ -314,7 +314,7 @@ def test_runner_10(mocker, tmp_path):
     """test Runner.run() adding includes to testcase"""
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
-    target.detect_failure.return_value = Result.NONE
+    target.check_result.return_value = Result.NONE
     runner = Runner(server, target, relaunch=10)
     # create test files
     inc_path1 = tmp_path / "include"
@@ -337,7 +337,7 @@ def test_runner_10(mocker, tmp_path):
     with TestCase("a.b", "x", "x") as tcase:
         result = runner.run([], smap, tcase)
         assert result.attempted
-        assert result.status is None
+        assert result.status == Result.NONE
         assert "inc_file.bin" in tcase._existing_paths
         assert pathjoin("nested", "nested_inc.bin") in tcase._existing_paths
         assert pathjoin("test", "inc_file3.txt") in tcase._existing_paths
