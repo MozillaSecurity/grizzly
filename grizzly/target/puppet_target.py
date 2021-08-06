@@ -22,7 +22,7 @@ from psutil import AccessDenied, NoSuchProcess, Process, process_iter
 
 from ..common.reporter import Report
 from ..common.utils import grz_tmp, split_sanitizer_opts
-from .target import Target, TargetError, TargetLaunchError, TargetLaunchTimeout
+from .target import Result, Target, TargetError, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
 __all__ = ("PuppetTarget",)
@@ -142,7 +142,7 @@ class PuppetTarget(Target):
         return self._monitor
 
     def detect_failure(self, ignored):
-        status = self.RESULT_NONE
+        status = Result.NONE
         # check if there has been a crash, hangs will appear as SIGABRT
         if not self._puppet.is_healthy():
             self.close()
@@ -156,19 +156,19 @@ class PuppetTarget(Target):
                 and "memory" in ignored
                 and "ffp_worker_memory_usage" in self._puppet.available_logs()
             ):
-                status = self.RESULT_IGNORED
+                status = Result.IGNORED
                 LOG.debug("memory limit exceeded")
             elif (
                 self._puppet.reason == Reason.WORKER
                 and "log-limit" in ignored
                 and "ffp_worker_log_size" in self._puppet.available_logs()
             ):
-                status = self.RESULT_IGNORED
+                status = Result.IGNORED
                 LOG.debug("log size limit exceeded")
             else:
                 # crash or hang (forced SIGABRT) has been detected
                 LOG.debug("failure detected, ffpuppet %s", self._puppet.reason)
-                status = self.RESULT_FAILURE
+                status = Result.FAILURE
         return status
 
     def handle_hang(self, ignore_idle=True):

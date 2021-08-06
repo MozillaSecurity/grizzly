@@ -9,7 +9,7 @@ from time import sleep, time
 
 from sapphire import Served
 
-from ..target import TargetLaunchError, TargetLaunchTimeout
+from ..target import Result, TargetLaunchError, TargetLaunchTimeout
 from .utils import grz_tmp
 
 __all__ = ("Runner", "RunResult")
@@ -271,9 +271,9 @@ class Runner:
         # detect failure
         if result.status is None:
             failure_detected = self._target.detect_failure(ignore)
-            if failure_detected == self._target.RESULT_FAILURE:
+            if failure_detected == Result.FAILURE:
                 result.status = RunResult.FAILED
-            elif failure_detected == self._target.RESULT_IGNORED:
+            elif failure_detected == Result.IGNORED:
                 result.status = RunResult.IGNORED
         return result
 
