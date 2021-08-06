@@ -13,7 +13,7 @@ from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, gethostname, 
 from time import sleep, time
 
 from .connection_manager import ConnectionManager
-from .job import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT, Job
+from .job import Job, Served
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -139,9 +139,9 @@ class Sapphire:
         """Serve files in path. On completion a list served files and a status
         code will be returned.
         The status codes include:
-            - SERVED_ALL: All files excluding files in optional_files were served
-            - SERVED_NONE: No files were served
-            - SERVED_REQUEST: Some files were requested
+            - Served.ALL: All files excluding files in optional_files were served
+            - Served.NONE: No files were served
+            - Served.REQUEST: Some files were requested
 
         Args:
             path (str): Directory to use as wwwroot.
@@ -167,11 +167,11 @@ class Sapphire:
         if not job.pending:
             job.finish()
             LOG.debug("nothing to serve")
-            return (SERVED_NONE, tuple())
+            return (Served.NONE, tuple())
         with ConnectionManager(job, self._socket, self._max_workers) as loadmgr:
             was_timeout = not loadmgr.wait(self.timeout, continue_cb=continue_cb)
-        LOG.debug("status: %r, timeout: %r", job.status, was_timeout)
-        return (SERVED_TIMEOUT if was_timeout else job.status, tuple(job.served))
+        LOG.debug("%s, timeout: %r", job.status, was_timeout)
+        return (Served.TIMEOUT if was_timeout else job.status, tuple(job.served))
 
     @property
     def timeout(self):
@@ -215,7 +215,7 @@ class Sapphire:
                     serv.port,
                 )
                 status = serv.serve_path(args.path)[0]
-            if status == SERVED_ALL:
+            if status == Served.ALL:
                 LOG.info("All test case content was served")
             else:
                 LOG.warning("Failed to serve all test content")

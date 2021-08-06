@@ -8,7 +8,7 @@ import platform
 
 import pytest
 
-from .job import SERVED_ALL, SERVED_NONE, SERVED_REQUEST, Job
+from .job import Job, Served
 from .server_map import Resource, ServerMap
 
 
@@ -16,7 +16,7 @@ def test_job_01(tmp_path):
     """test creating an empty Job"""
     job = Job(str(tmp_path))
     assert not job.forever
-    assert job.status == SERVED_ALL
+    assert job.status == Served.ALL
     assert job.check_request("") is None
     assert job.check_request("test") is None
     assert job.check_request("test/test/") is None
@@ -45,7 +45,7 @@ def test_job_02(tmp_path):
     job = Job(
         str(tmp_path), optional_files=[opt1_path.name, "nested/%s" % (opt2_path.name,)]
     )
-    assert job.status == SERVED_NONE
+    assert job.status == Served.NONE
     assert not job.is_complete()
     resource = job.check_request("req_file_1.txt")
     assert resource.required
@@ -56,10 +56,10 @@ def test_job_02(tmp_path):
     assert not job.remove_pending("no_file.test")
     assert job.pending == 2
     assert not job.remove_pending(str(req1_path))
-    assert job.status == SERVED_REQUEST
+    assert job.status == Served.REQUEST
     assert job.pending == 1
     assert job.remove_pending(str(req2_path))
-    assert job.status == SERVED_ALL
+    assert job.status == Served.ALL
     assert job.pending == 0
     assert job.remove_pending(str(req1_path))
     resource = job.check_request("opt_file_1.txt")
@@ -81,7 +81,7 @@ def test_job_03(tmp_path):
     smap.set_redirect("one", "somefile.txt", required=False)
     smap.set_redirect("two", "reqfile.txt")
     job = Job(str(tmp_path), server_map=smap)
-    assert job.status == SERVED_NONE
+    assert job.status == Served.NONE
     resource = job.check_request("one")
     assert resource.type == Resource.URL_REDIRECT
     resource = job.check_request("two?q=123")
@@ -121,7 +121,7 @@ def test_job_04(mocker, tmp_path):
     smap.include[""] = Resource(Resource.URL_INCLUDE, str(srv_include))
     smap.set_include("testinc/inc2", str(srv_include_2))
     job = Job(str(srv_root), server_map=smap)
-    assert job.status == SERVED_NONE
+    assert job.status == Served.NONE
     # test includes that map to 'srv_include'
     for incl, inc_path in smap.include.items():
         if inc_path != str(srv_include):  # only check 'srv_include' mappings
@@ -198,7 +198,7 @@ def test_job_06(tmp_path):
     smap.set_dynamic_response("cb1", lambda: 0, mime_type="mime_type")
     smap.set_dynamic_response("cb2", lambda: 1)
     job = Job(str(tmp_path), server_map=smap)
-    assert job.status == SERVED_ALL
+    assert job.status == Served.ALL
     assert job.pending == 0
     resource = job.check_request("cb1")
     assert resource.type == Resource.URL_DYNAMIC
@@ -220,7 +220,7 @@ def test_job_07(tmp_path):
     no_access = tmp_path / "no_access.txt"
     no_access.write_bytes(b"a")
     job = Job(str(srv_root))
-    assert job.status == SERVED_NONE
+    assert job.status == Served.NONE
     assert job.pending == 1
     resource = job.check_request("../no_access.txt")
     assert resource.target == str(no_access)
@@ -236,7 +236,7 @@ def test_job_08(tmp_path):
     test_file.write_bytes(b"a")
     (tmp_path / "?_2.txt").write_bytes(b"a")
     job = Job(str(tmp_path))
-    assert job.status == SERVED_NONE
+    assert job.status == Served.NONE
     assert job.pending == 1
     assert job.check_request("test.txt").target == str(test_file)
 

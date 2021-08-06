@@ -7,7 +7,7 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from time import sleep, time
 
-from sapphire import SERVED_TIMEOUT
+from sapphire import Served
 
 from ..target import TargetLaunchError, TargetLaunchTimeout
 from .utils import grz_tmp
@@ -221,7 +221,7 @@ class Runner:
             # remove temporary files
             if test_path is None:
                 rmtree(wwwdir)
-        result = RunResult(served, duration, timeout=server_status == SERVED_TIMEOUT)
+        result = RunResult(served, duration, timeout=server_status == Served.TIMEOUT)
         result.attempted = testcase.landing_page in result.served
         result.initial = self._tests_run == 0
         # TODO: fix calling TestCase.add_batch() for multi-test replay
