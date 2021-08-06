@@ -7,7 +7,7 @@ unit tests for grizzly.replay.main
 """
 from pytest import mark
 
-from sapphire import SERVED_ALL
+from sapphire import Served
 
 from ..common.reporter import Report
 from ..common.storage import TestCase, TestCaseLoadFailure
@@ -27,7 +27,7 @@ def test_main_01(mocker, tmp_path):
     serve_path = mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
-        return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
+        return_value=(Served.ALL, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
@@ -97,7 +97,7 @@ def test_main_02(mocker, tmp_path):
     mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
-        return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
+        return_value=(Served.ALL, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin")
@@ -331,7 +331,7 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
     mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
-        return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
+        return_value=(Served.ALL, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
@@ -396,7 +396,7 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
     mocker.patch(
         "grizzly.replay.replay.Sapphire.serve_path",
         autospec=True,
-        return_value=(SERVED_ALL, ["test.html"]),  # passed to Target.detect_failure
+        return_value=(Served.ALL, ["test.html"]),  # passed to Target.detect_failure
     )
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)

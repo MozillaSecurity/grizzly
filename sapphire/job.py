@@ -6,6 +6,7 @@
 Sapphire HTTP server job
 """
 from collections import defaultdict, namedtuple
+from enum import Enum, unique
 from logging import getLogger
 from mimetypes import guess_type
 from os import walk
@@ -23,11 +24,18 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-# job status codes
-SERVED_ALL = 0  # all expected requests for required files have been received
-SERVED_NONE = 1  # no requests for required files have been received
-SERVED_REQUEST = 2  # some requests for required files have been received
-SERVED_TIMEOUT = 3  # timeout occurred
+@unique
+class Served(Enum):
+    """Server Job status codes"""
+
+    # all expected requests for required files have been received
+    ALL = 0
+    # no requests for required files have been received
+    NONE = 1
+    # some requests for required files have been received
+    REQUEST = 2
+    # timeout occurred
+    TIMEOUT = 3
 
 
 Tracker = namedtuple("Tracker", "files lock")
@@ -239,7 +247,7 @@ class Job:
         with self._pending.lock:
             queue_size = len(self._pending.files)
         if queue_size == 0:
-            return SERVED_ALL
+            return Served.ALL
         if queue_size < self.initial_queue_size:
-            return SERVED_REQUEST
-        return SERVED_NONE
+            return Served.REQUEST
+        return Served.NONE

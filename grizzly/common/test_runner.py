@@ -8,14 +8,7 @@ from os.path import join as pathjoin
 
 from pytest import mark, raises
 
-from sapphire import (
-    SERVED_ALL,
-    SERVED_NONE,
-    SERVED_REQUEST,
-    SERVED_TIMEOUT,
-    Sapphire,
-    ServerMap,
-)
+from sapphire import Sapphire, Served, ServerMap
 
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from .reporter import Report
@@ -37,7 +30,7 @@ def test_runner_01(mocker, tmp_path):
     testcase = mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[])
     # all files served
     serv_map = ServerMap()
-    server.serve_path.return_value = (SERVED_ALL, serv_files)
+    server.serve_path.return_value = (Served.ALL, serv_files)
     result = runner.run([], serv_map, testcase)
     assert result.attempted
     assert runner._tests_run == 1
@@ -53,7 +46,7 @@ def test_runner_01(mocker, tmp_path):
     assert testcase.dump.call_count == 1
     # dump coverage
     serv_map = ServerMap()
-    server.serve_path.return_value = (SERVED_ALL, serv_files)
+    server.serve_path.return_value = (Served.ALL, serv_files)
     result = runner.run([], serv_map, testcase, coverage=True)
     assert result.attempted
     assert runner._tests_run == 2
@@ -70,7 +63,7 @@ def test_runner_01(mocker, tmp_path):
     tc_path = tmp_path / "tc"
     tc_path.mkdir()
     serv_map = ServerMap()
-    server.serve_path.return_value = (SERVED_ALL, serv_files)
+    server.serve_path.return_value = (Served.ALL, serv_files)
     result = runner.run([], serv_map, testcase, test_path=str(tc_path))
     assert result.attempted
     assert runner._tests_run == 3
@@ -90,7 +83,7 @@ def test_runner_02(mocker):
     target = mocker.Mock(spec_set=Target)
     target.detect_failure.return_value = target.RESULT_NONE
     serv_files = ["a.bin"]
-    server.serve_path.return_value = (SERVED_ALL, serv_files)
+    server.serve_path.return_value = (Served.ALL, serv_files)
     testcase = mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[])
     # single run/iteration relaunch (not idle exit)
     target.is_idle.return_value = False
@@ -151,9 +144,9 @@ def test_runner_02(mocker):
     "srv_result, served",
     [
         # no files served
-        (SERVED_NONE, []),
+        (Served.NONE, []),
         # landing page not served
-        (SERVED_REQUEST, ["harness"]),
+        (Served.REQUEST, ["harness"]),
     ],
 )
 def test_runner_03(mocker, srv_result, served):
@@ -190,7 +183,7 @@ def test_runner_04(mocker, ignore, status, idle, detect_failure):
     target = mocker.Mock(spec_set=Target)
     testcase = mocker.Mock(spec_set=TestCase, landing_page="a.bin", optional=[])
     serv_files = ["a.bin", "/another/file.bin"]
-    server.serve_path.return_value = (SERVED_TIMEOUT, serv_files)
+    server.serve_path.return_value = (Served.TIMEOUT, serv_files)
     target.detect_failure.return_value = target.RESULT_FAILURE
     target.handle_hang.return_value = idle
     target.monitor.is_healthy.return_value = False
@@ -219,7 +212,7 @@ def test_runner_04(mocker, ignore, status, idle, detect_failure):
 def test_runner_05(mocker, served, attempted, target_result, status):
     """test reporting failures"""
     server = mocker.Mock(spec_set=Sapphire)
-    server.serve_path.return_value = (SERVED_REQUEST, served)
+    server.serve_path.return_value = (Served.REQUEST, served)
     target = mocker.Mock(spec_set=Target, launch_timeout=10)
     target.RESULT_FAILURE = Target.RESULT_FAILURE
     target.RESULT_IGNORED = Target.RESULT_IGNORED
@@ -242,7 +235,7 @@ def test_runner_06(mocker):
     target = mocker.Mock(spec_set=Target)
     target.detect_failure.return_value = target.RESULT_NONE
     serv_files = ["/fake/file", "/another/file.bin"]
-    server.serve_path.return_value = (SERVED_ALL, serv_files)
+    server.serve_path.return_value = (Served.ALL, serv_files)
     runner = Runner(server, target, idle_threshold=0.01, idle_delay=0.01, relaunch=10)
     assert runner._idle is not None
     result = runner.run(
@@ -342,7 +335,7 @@ def test_runner_10(mocker, tmp_path):
     smap.set_include("/", str(inc_path1))
     smap.set_include("/test", str(inc_path2))
     serv_files = ["a.b", str(inc1), str(inc2), str(inc3)]
-    server.serve_path.return_value = (SERVED_ALL, serv_files)
+    server.serve_path.return_value = (Served.ALL, serv_files)
     with TestCase("a.b", "x", "x") as tcase:
         result = runner.run([], smap, tcase)
         assert result.attempted

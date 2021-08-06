@@ -10,7 +10,7 @@ from itertools import count
 
 from pytest import mark, raises
 
-from sapphire import SERVED_ALL, SERVED_NONE, SERVED_TIMEOUT, Sapphire
+from sapphire import Sapphire, Served
 
 from .adapter import Adapter
 from .common.reporter import Report, Reporter
@@ -96,7 +96,7 @@ def test_session_01(
         relaunch=relaunch,
     ) as session:
         server.serve_path = lambda *a, **kv: (
-            SERVED_ALL,
+            Served.ALL,
             [session.iomanager.page_name(offset=-1)],
         )
         session.run(
@@ -162,7 +162,7 @@ def test_session_02(tmp_path, mocker, harness, relaunch, remaining):
         relaunch=relaunch,
     ) as session:
         server.serve_path = lambda *a, **kv: (
-            SERVED_ALL,
+            Served.ALL,
             [session.iomanager.page_name(offset=-1)],
         )
         session.run([], 10)
@@ -222,7 +222,7 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
         adapter, reporter, server, target, relaunch=relaunch, report_size=report_size
     ) as session:
         server.serve_path = lambda *a, **kv: (
-            SERVED_ALL,
+            Served.ALL,
             [session.iomanager.page_name(offset=-1)],
         )
         session.run([], 10, input_path="file.bin", iteration_limit=iters)
@@ -240,7 +240,7 @@ def test_session_04(mocker, tmp_path):
 
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    server.serve_path.return_value = (SERVED_NONE, [])
+    server.serve_path.return_value = (Served.NONE, [])
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
@@ -257,7 +257,7 @@ def test_session_05(mocker, tmp_path):
     """test Target not requesting landing page"""
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    server.serve_path.return_value = (SERVED_TIMEOUT, [])
+    server.serve_path.return_value = (Served.TIMEOUT, [])
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
@@ -310,8 +310,8 @@ def test_session_06(mocker, tmp_path, harness, report_size):
         report_size=report_size,
     ) as session:
         server.serve_path.side_effect = (
-            (SERVED_ALL, [session.iomanager.page_name()]),
-            (SERVED_NONE, []),
+            (Served.ALL, [session.iomanager.page_name()]),
+            (Served.NONE, []),
         )
         session.run([], 10, iteration_limit=2)
         assert reporter.submit.call_count == 1
@@ -323,9 +323,9 @@ def test_session_06(mocker, tmp_path, harness, report_size):
     "srv_results, target_result, ignored, results",
     [
         # delayed startup crash
-        (SERVED_NONE, Target.RESULT_FAILURE, 0, 1),
+        (Served.NONE, Target.RESULT_FAILURE, 0, 1),
         # startup hang/unresponsive
-        (SERVED_TIMEOUT, Target.RESULT_NONE, 1, 0),
+        (Served.TIMEOUT, Target.RESULT_NONE, 1, 0),
     ],
 )
 def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, results):
