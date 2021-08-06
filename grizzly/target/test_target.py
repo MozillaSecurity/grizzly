@@ -11,6 +11,9 @@ class SimpleTarget(Target):
     def _cleanup(self):
         pass
 
+    def check_result(self, ignored):
+        pass
+
     def close(self, force_close=False):
         pass
 
@@ -19,9 +22,6 @@ class SimpleTarget(Target):
         pass
 
     def create_report(self, is_hang=False):
-        pass
-
-    def detect_failure(self, ignored):
         pass
 
     def handle_hang(self, ignore_idle=True):

@@ -141,8 +141,8 @@ class PuppetTarget(Target):
             self._monitor = _PuppetMonitor()
         return self._monitor
 
-    def detect_failure(self, ignored):
-        status = Result.NONE
+    def check_result(self, ignored):
+        result = Result.NONE
         # check if there has been a crash, hangs will appear as SIGABRT
         if not self._puppet.is_healthy():
             self.close()
@@ -156,20 +156,20 @@ class PuppetTarget(Target):
                 and "memory" in ignored
                 and "ffp_worker_memory_usage" in self._puppet.available_logs()
             ):
-                status = Result.IGNORED
+                result = Result.IGNORED
                 LOG.debug("memory limit exceeded")
             elif (
                 self._puppet.reason == Reason.WORKER
                 and "log-limit" in ignored
                 and "ffp_worker_log_size" in self._puppet.available_logs()
             ):
-                status = Result.IGNORED
+                result = Result.IGNORED
                 LOG.debug("log size limit exceeded")
             else:
                 # crash or hang (forced SIGABRT) has been detected
                 LOG.debug("failure detected, ffpuppet %s", self._puppet.reason)
-                status = Result.FAILURE
-        return status
+                result = Result.FOUND
+        return result
 
     def handle_hang(self, ignore_idle=True):
         was_idle = False

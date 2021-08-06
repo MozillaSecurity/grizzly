@@ -231,12 +231,12 @@ class Runner:
         if result.timeout:
             LOG.debug("timeout detected")
             if self._target.handle_hang(ignore_idle=True) or "timeout" in ignore:
-                result.status = RunResult.IGNORED
+                result.status = Result.IGNORED
             server_map.dynamic.pop("grz_empty", None)
         if result.attempted:
             self._tests_run += 1
             if coverage and not result.timeout:
-                # dump_coverage() should be called before detect_failure()
+                # dump_coverage() should be called before check_result()
                 # to help catch any coverage related issues.
                 self._target.dump_coverage()
             # relaunch check
@@ -268,13 +268,9 @@ class Runner:
             # previous iteration put target in a bad state?
             LOG.debug("landing page %r not served!", testcase.landing_page)
             self._target.close()
-        # detect failure
-        if result.status is None:
-            failure_detected = self._target.detect_failure(ignore)
-            if failure_detected == Result.FAILURE:
-                result.status = RunResult.FAILED
-            elif failure_detected == Result.IGNORED:
-                result.status = RunResult.IGNORED
+        # detect results
+        if result.status == Result.NONE:
+            result.status = self._target.check_result(ignore)
         return result
 
     def _keep_waiting(self):
@@ -305,12 +301,9 @@ class RunResult:
         timeout (bool): A timeout occurred waiting for test to complete.
     """
 
-    FAILED = 1
-    IGNORED = 2
-
     __slots__ = ("attempted", "duration", "initial", "served", "status", "timeout")
 
-    def __init__(self, served, duration, status=None, timeout=False):
+    def __init__(self, served, duration, status=Result.NONE, timeout=False):
         self.attempted = False
         self.duration = duration
         self.initial = False

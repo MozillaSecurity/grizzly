@@ -6,9 +6,9 @@ from logging import getLogger
 from time import time
 
 from .common.iomanager import IOManager
-from .common.runner import Runner, RunResult
+from .common.runner import Runner
 from .common.status import Status
-from .target import TargetLaunchError
+from .target import Result, TargetLaunchError
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
 __author__ = "Tyson Smith"
@@ -234,7 +234,7 @@ class Session:
                 if result.initial:
                     # since this is the first iteration since the Target launched
                     # something is likely wrong with the Target or Adapter
-                    if result.status == RunResult.FAILED:
+                    if result.status == Result.FOUND:
                         LOG.warning("Delayed startup failure detected")
                     else:
                         LOG.warning("Timeout too short? System too busy?")
@@ -248,7 +248,7 @@ class Session:
                     current_test.purge_optional(result.served)
                 self.iomanager.commit()
             # process results
-            if result.status == RunResult.FAILED:
+            if result.status == Result.FOUND:
                 LOG.debug("result detected")
                 report = self.target.create_report(is_hang=result.timeout)
                 if result.timeout:
@@ -261,7 +261,7 @@ class Session:
                 self.reporter.submit(self.iomanager.tests, report)
                 report.cleanup()
                 self.status.count_result(short_sig)
-            elif result.status == RunResult.IGNORED:
+            elif result.status == Result.IGNORED:
                 self.status.ignored += 1
                 LOG.info("Ignored (%d)", self.status.ignored)
 

@@ -26,7 +26,7 @@ def test_puppet_target_01(mocker, tmp_path):
         assert target.launch_timeout == 300
         assert target.log_limit == 25
         assert target.memory_limit == 5000
-        assert target.detect_failure([]) == Result.NONE
+        assert target.check_result([]) == Result.NONE
         assert target.log_size() == 1124
         fake_ffp.return_value.log_length.assert_any_call("stderr")
         fake_ffp.return_value.log_length.assert_any_call("stdout")
@@ -80,11 +80,11 @@ def test_puppet_target_02(mocker, tmp_path):
         # browser process closed
         (False, Reason.CLOSED, [], Result.NONE, 1),
         # browser process crashed
-        (False, Reason.ALERT, [], Result.FAILURE, 1),
+        (False, Reason.ALERT, [], Result.FOUND, 1),
         # browser exit with no crash logs
         (False, Reason.EXITED, [], Result.NONE, 1),
         # ffpuppet check failed
-        (False, Reason.WORKER, [], Result.FAILURE, 1),
+        (False, Reason.WORKER, [], Result.FOUND, 1),
         # ffpuppet check ignored (memory)
         (False, Reason.WORKER, ["memory"], Result.IGNORED, 1),
         # ffpuppet check ignored (log-limit)
@@ -92,7 +92,7 @@ def test_puppet_target_02(mocker, tmp_path):
     ],
 )
 def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, closes):
-    """test PuppetTarget.detect_failure()"""
+    """test PuppetTarget.check_result()"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
@@ -103,7 +103,7 @@ def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, clo
         fake_ffp.return_value.available_logs.return_value = "ffp_worker_log_size"
     fake_ffp.return_value.is_healthy.return_value = healthy
     fake_ffp.return_value.reason = reason
-    assert target.detect_failure(ignore) == result
+    assert target.check_result(ignore) == result
     assert fake_ffp.return_value.close.call_count == closes
 
 
