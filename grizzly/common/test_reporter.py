@@ -582,13 +582,7 @@ def test_fuzzmanager_reporter_07(mocker, tmp_path):
     fake_collector.return_value.submit.assert_not_called()
 
 
-def test_fuzzmanager_reporter_08():
-    """test FuzzManagerReporter.quality_name()"""
-    assert FuzzManagerReporter.quality_name(0) == "QUAL_REDUCED_RESULT"
-    assert FuzzManagerReporter.quality_name(-1) == "unknown quality (-1)"
-
-
-def test_fuzzmanager_reporter_09(mocker, tmp_path):
+def test_fuzzmanager_reporter_08(mocker, tmp_path):
     """test FuzzManagerReporter._ignored()"""
     log_file = tmp_path / "test.log"
     log_file.touch()

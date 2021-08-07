@@ -18,7 +18,7 @@ from sapphire import Sapphire
 
 from ..common.fuzzmanager import CrashEntry
 from ..common.plugins import load as load_plugin
-from ..common.reporter import FilesystemReporter, FuzzManagerReporter
+from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Quality
 from ..common.storage import TestCaseLoadFailure
 from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp
 from ..replay import ReplayManager
@@ -617,15 +617,12 @@ class ReduceManager:
             if self._report_to_fuzzmanager and last_reports:
                 for crash_id in last_reports:
                     LOG.info(
-                        "Updating crash %d to quality %s",
+                        "Updating crash %d to %s (Q%d)",
                         crash_id,
-                        FuzzManagerReporter.quality_name(
-                            FuzzManagerReporter.QUAL_REDUCED_RESULT
-                        ),
+                        Quality.REDUCED.name,
+                        Quality.REDUCED.value,
                     )
-                    CrashEntry(
-                        crash_id
-                    ).testcase_quality = FuzzManagerReporter.QUAL_REDUCED_RESULT
+                    CrashEntry(crash_id).testcase_quality = Quality.REDUCED.value
 
         # it's possible we made it this far without ever setting signature_desc.
         # this is only possible if --no-analysis is given

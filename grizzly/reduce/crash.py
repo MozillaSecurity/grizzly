@@ -5,7 +5,7 @@
 from logging import getLogger
 
 from ..common.fuzzmanager import Bucket, CrashEntry
-from ..common.reporter import FuzzManagerReporter
+from ..common.reporter import Quality
 from ..common.utils import Exit
 from ..main import configure_logging
 from .args import ReduceFuzzManagerIDArgs
@@ -41,22 +41,27 @@ def main(args):
         result = ReduceManager.main(args)
 
         # update quality
-        # map Exit.* -> FuzzManagerReporter.QUAL_*
+        # map Exit.* -> Quality.*
         # default back to UNREDUCED
         # most errors will not be related to the testcase
         # so they should be retried later
         if args.fuzzmanager:
             quality = {
-                Exit.ERROR.value: FuzzManagerReporter.QUAL_REDUCER_ERROR,
+                Exit.ERROR.value: Quality.REDUCER_ERROR,
                 Exit.ABORT.value: crash.testcase_quality,
-                Exit.SUCCESS.value: FuzzManagerReporter.QUAL_REDUCED_ORIGINAL,
-                Exit.FAILURE.value: FuzzManagerReporter.QUAL_NOT_REPRODUCIBLE,
-            }.get(result, FuzzManagerReporter.QUAL_UNREDUCED)
+                Exit.SUCCESS.value: Quality.ORIGINAL,
+                Exit.FAILURE.value: Quality.NOT_REPRODUCIBLE,
+            }.get(result, Quality.UNREDUCED)
             # don't ever set things back to Q4, default to Q5 for that case.
             # Q4 is only used in automation, so ABORT should never happen.
-            if quality == FuzzManagerReporter.QUAL_REDUCING:
-                quality = FuzzManagerReporter.QUAL_UNREDUCED
-            LOG.info("reducer finished -> exit(%d) -> Q%d", result, quality)
+            if quality == Quality.REDUCING:
+                quality = Quality.UNREDUCED
+            LOG.info(
+                "reducer finished -> exit(%d) -> %s (Q%d)",
+                result,
+                quality.name,
+                quality.value,
+            )
             crash.testcase_quality = quality
     finally:
         crash.cleanup()
