@@ -9,6 +9,7 @@ from unittest.mock import Mock
 from pytest import mark, raises
 
 from ..common.storage import TestCase, TestCaseLoadFailure
+from ..common.utils import Exit
 from ..target import AssetManager, TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
@@ -81,49 +82,50 @@ def test_args_04(capsys, tmp_path):
 
 
 @mark.parametrize(
-    "patch_func, side_effect, return_value, kwargs, result",
+    "patch_func, side_effect, return_value, kwargs, exit_code",
     [
         (
             "grizzly.reduce.core.ReduceManager.run",
             TargetLaunchError("error", None),
             None,
             {},
-            1,
+            Exit.ERROR,
         ),
-        ("grizzly.reduce.core.ReduceManager.run", TargetLaunchTimeout, None, {}, 1),
-        ("grizzly.reduce.core.load_plugin", KeyboardInterrupt, None, {}, 1),
+        (
+            "grizzly.reduce.core.ReduceManager.run",
+            TargetLaunchTimeout,
+            None,
+            {},
+            Exit.ERROR,
+        ),
+        ("grizzly.reduce.core.load_plugin", KeyboardInterrupt, None, {}, Exit.ERROR),
         (
             "grizzly.reduce.core.load_plugin",
             GrizzlyReduceBaseException(""),
             None,
             {},
-            1,
+            Exit.ERROR,
         ),
         (
             "grizzly.reduce.core.ReplayManager.load_testcases",
             TestCaseLoadFailure,
             None,
             {},
-            1,
+            Exit.ERROR,
         ),
-        ("grizzly.reduce.core.ReplayManager.load_testcases", None, [], {}, 1),
+        ("grizzly.reduce.core.ReplayManager.load_testcases", None, [], {}, Exit.ERROR),
         (
             "grizzly.reduce.core.ReplayManager.load_testcases",
             None,
             ([Mock(hang=False), Mock(hang=False)], Mock(spec_set=AssetManager), dict()),
             {"no_harness": True},
-            2,
+            Exit.ARGS,
         ),
     ],
 )
-def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result):
+def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, exit_code):
     """test ReduceManager.main() failure cases"""
-    mocker.patch(
-        "grizzly.reduce.core.FuzzManagerReporter",
-        autospec=True,
-        QUAL_NO_TESTCASE=7,
-        QUAL_REDUCER_ERROR=9,
-    )
+    mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
     # setup args
@@ -138,7 +140,7 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, result
     )
 
     mocker.patch(patch_func, side_effect=side_effect, return_value=return_value)
-    assert ReduceManager.main(args) == result
+    assert ReduceManager.main(args) == exit_code.value
 
 
 @mark.parametrize(

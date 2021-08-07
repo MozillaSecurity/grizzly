@@ -8,6 +8,7 @@ from logging import getLogger
 
 import pytest
 
+from ..common.reporter import Quality
 from ..common.utils import Exit
 from .bucket import main as bucket_main
 from .crash import main as crash_main
@@ -55,13 +56,13 @@ def test_crash_main(mocker, arg_sig, arg_tool, crash_bucket, result_sig, result_
 @pytest.mark.parametrize(
     "mgr_exit_code, pre_quality, post_quality",
     [
-        (Exit.SUCCESS, 5, 1),
-        (Exit.ERROR, 5, 9),
-        (Exit.ARGS, 6, 5),
-        (Exit.ABORT, 4, 5),
-        (Exit.ABORT, 0, 0),
-        (Exit.LAUNCH_FAILURE, 6, 5),
-        (Exit.FAILURE, 5, 10),
+        (Exit.SUCCESS, Quality.UNREDUCED, Quality.ORIGINAL),
+        (Exit.ERROR, Quality.UNREDUCED, Quality.REDUCER_ERROR),
+        (Exit.ARGS, Quality.REQUEST_SPECIFIC, Quality.UNREDUCED),
+        (Exit.ABORT, Quality.REDUCING, Quality.UNREDUCED),
+        (Exit.ABORT, Quality.REDUCED, Quality.REDUCED),
+        (Exit.LAUNCH_FAILURE, Quality.REQUEST_SPECIFIC, Quality.UNREDUCED),
+        (Exit.FAILURE, Quality.UNREDUCED, Quality.NOT_REPRODUCIBLE),
     ],
 )
 def test_crash_main_quality(mocker, mgr_exit_code, pre_quality, post_quality):

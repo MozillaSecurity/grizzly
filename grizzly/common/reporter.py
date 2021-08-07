@@ -5,6 +5,7 @@
 
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
+from enum import Enum, unique
 from hashlib import sha1
 from json import dump, dumps, loads
 from logging import WARNING, getLogger
@@ -46,6 +47,7 @@ from .utils import grz_tmp
 __all__ = (
     "FilesystemReporter",
     "FuzzManagerReporter",
+    "Quality",
     "Report",
     "S3FuzzManagerReporter",
 )
@@ -56,6 +58,30 @@ LOG = getLogger(__name__)
 
 # NOTE: order matters, aux -> stderr -> stdout
 LogMap = namedtuple("LogMap", "aux stderr stdout")
+
+
+@unique
+class Quality(Enum):
+    """testcase quality values"""
+
+    # final reduced testcase
+    REDUCED = 0
+    # original used for reduction (a reduced version exists)
+    ORIGINAL = 1
+    # the testcase is currently being reduced
+    REDUCING = 4
+    # haven't attempted reduction yet (1st attempt, generic reducer)
+    UNREDUCED = 5
+    # platform specific reduction requested (2nd attempt)
+    REQUEST_SPECIFIC = 6
+    # testcase not detected ("testcase" not a testcase?)
+    NO_TESTCASE = 7
+    # the testcase was reproducible, but broke during reduction
+    REDUCER_BROKE = 8
+    # reducer error
+    REDUCER_ERROR = 9
+    # could not reproduce the testcase
+    NOT_REPRODUCIBLE = 10
 
 
 class Report:
@@ -518,23 +544,11 @@ class FuzzManagerReporter(Reporter):
     # max number of times to report a non-frequent signature to FuzzManager
     MAX_REPORTS = 10
 
-    # TODO: Use enum?
-    # testcase quality values
-    QUAL_REDUCED_RESULT = 0  # the final reduced testcase
-    QUAL_REDUCED_ORIGINAL = 1  # the original used for successful reduction
-    QUAL_REDUCING = 4  # the testcase is currently being reduced
-    QUAL_UNREDUCED = 5  # haven't attempted reduction yet (1st attempt, generic reducer)
-    QUAL_REQUEST_SPECIFIC = 6  # platform specific reduction requested (2nd attempt)
-    QUAL_NO_TESTCASE = 7  # testcase not detected ("testcase" not a testcase?)
-    QUAL_REDUCER_BROKE = 8  # the testcase was reproducible, but broke during reduction
-    QUAL_REDUCER_ERROR = 9  # reducer error
-    QUAL_NOT_REPRODUCIBLE = 10  # could not reproduce the testcase
-
     def __init__(self, tool=None):
         self._extra_metadata = {}
         self.force_report = False
         self.max_reports = FuzzManagerReporter.MAX_REPORTS
-        self.quality = self.QUAL_UNREDUCED
+        self.quality = Quality.UNREDUCED
         self.tool = tool  # optional tool name
 
     def _post_submit(self):
@@ -571,13 +585,6 @@ class FuzzManagerReporter(Reporter):
         assert key not in self._extra_metadata
         # deep copy and ensure that value is JSON serializable
         self._extra_metadata[key] = loads(dumps(value))
-
-    @classmethod
-    def quality_name(cls, value):
-        for name in dir(cls):
-            if name.startswith("QUAL_") and getattr(cls, name) == value:
-                return name
-        return "unknown quality (%r)" % (value,)
 
     def _pre_submit(self, report):
         self._process_rr_trace(report)
@@ -688,7 +695,7 @@ class FuzzManagerReporter(Reporter):
                 {"recorded_envvars": environ_string}
             )
         else:
-            self.quality = self.QUAL_NO_TESTCASE
+            self.quality = Quality.NO_TESTCASE
         report.crash_info.configuration.addMetadata(self._extra_metadata)
 
         # grab screen log (used in automation)
@@ -722,9 +729,9 @@ class FuzzManagerReporter(Reporter):
                 LOG.info("Submitting new crash %r", cache_metadata["shortDescription"])
             # submit results to the FuzzManager server
             new_entry = collector.submit(
-                report.crash_info, testCase=zip_name, testCaseQuality=self.quality
+                report.crash_info, testCase=zip_name, testCaseQuality=self.quality.value
             )
-        LOG.info("Logged %d with quality %d", new_entry["id"], self.quality)
+        LOG.info("Logged %d (%s)", new_entry["id"], self.quality.name)
 
         return new_entry["id"]
 

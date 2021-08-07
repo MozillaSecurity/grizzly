@@ -14,7 +14,7 @@ from pytest import mark, raises
 
 from sapphire import Sapphire
 
-from ..common.reporter import Report
+from ..common.reporter import Quality, Report
 from ..common.storage import TestCase
 from ..replay import ReplayResult
 from ..target import AssetManager, Target
@@ -762,7 +762,6 @@ def test_quality_update(mocker, tmp_path):
 
     mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     reporter = mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
-    reporter.QUAL_REDUCED_RESULT = 0
     update_coll = mocker.patch("grizzly.common.fuzzmanager.Collector")
     target = mocker.Mock(spec_set=Target, environ={})
     target.assets = mocker.Mock(spec_set=AssetManager)
@@ -792,7 +791,7 @@ def test_quality_update(mocker, tmp_path):
     assert update_coll.call_count == 1
     assert update_coll.return_value.patch.call_count == 1
     assert update_coll.return_value.patch.call_args[1] == {
-        "data": {"testcase_quality": reporter.QUAL_REDUCED_RESULT},
+        "data": {"testcase_quality": Quality.REDUCED.value},
     }
 
 
