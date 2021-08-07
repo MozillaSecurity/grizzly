@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from enum import Enum, unique
 from logging import DEBUG, basicConfig
 from os import getenv, makedirs
 from os.path import join as pathjoin
@@ -11,6 +12,7 @@ from tempfile import gettempdir
 __all__ = (
     "ConfigError",
     "configure_logging",
+    "Exit",
     "grz_tmp",
     "split_sanitizer_opts",
     "TIMEOUT_DELAY",
@@ -29,6 +31,23 @@ class ConfigError(Exception):
     def __init__(self, message, exit_code):
         super().__init__(message)
         self.exit_code = exit_code
+
+
+@unique
+class Exit(Enum):
+    """Exit codes"""
+
+    SUCCESS = 0
+    # unexpected error occurred (invalid input, unhanded exception, etc)
+    ERROR = 1
+    # invalid argument
+    ARGS = 2
+    # run aborted (ctrl+c, etc)
+    ABORT = 3
+    # unrelated Target failure (browser startup crash, etc)
+    LAUNCH_FAILURE = 4
+    # expected results not reproduced (opposite of SUCCESS)
+    FAILURE = 5
 
 
 def configure_logging(log_level):

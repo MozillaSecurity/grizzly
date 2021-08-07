@@ -518,6 +518,7 @@ class FuzzManagerReporter(Reporter):
     # max number of times to report a non-frequent signature to FuzzManager
     MAX_REPORTS = 10
 
+    # TODO: Use enum?
     # testcase quality values
     QUAL_REDUCED_RESULT = 0  # the final reduced testcase
     QUAL_REDUCED_ORIGINAL = 1  # the original used for successful reduction

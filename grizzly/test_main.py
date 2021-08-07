@@ -8,8 +8,8 @@ from pytest import mark
 from sapphire import Sapphire
 
 from .adapter import Adapter
+from .common.utils import Exit
 from .main import main
-from .session import Session
 from .target import AssetManager, Target, TargetLaunchError
 
 
@@ -77,7 +77,6 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec_set=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
-    fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs()
     args.asset = [
         ["fake", "fake"],
@@ -93,7 +92,7 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     if not verbose:
         args.log_level = 20
     args.coverage = cov
-    assert main(args) == Session.EXIT_SUCCESS
+    assert main(args) == Exit.SUCCESS.value
     assert fake_session.mock_calls[0][-1]["coverage"] == cov
     if adpt_relaunch:
         assert fake_session.mock_calls[0][-1]["relaunch"] == adpt_relaunch
@@ -128,7 +127,6 @@ def test_main_02(mocker, reporter):
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
-    fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs()
     args.adapter = "fake"
     if reporter == "FuzzManager":
@@ -141,7 +139,7 @@ def test_main_02(mocker, reporter):
         )
         fake_reporter.sanity_check.return_value = True
         args.s3_fuzzmanager = True
-    assert main(args) == Session.EXIT_SUCCESS
+    assert main(args) == Exit.SUCCESS.value
     assert fake_target.cleanup.call_count == 1
 
 
@@ -149,9 +147,9 @@ def test_main_02(mocker, reporter):
     "exit_code, to_raise",
     [
         # test user abort
-        (Session.EXIT_ABORT, KeyboardInterrupt()),
+        (Exit.ABORT, KeyboardInterrupt()),
         # test launch failure
-        (Session.EXIT_LAUNCH_FAILURE, TargetLaunchError("test", None)),
+        (Exit.LAUNCH_FAILURE, TargetLaunchError("test", None)),
     ],
 )
 def test_main_03(mocker, exit_code, to_raise):
@@ -166,16 +164,12 @@ def test_main_03(mocker, exit_code, to_raise):
         mocker.Mock(spec_set=Target, return_value=fake_target),
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
-    fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
-    fake_session.EXIT_ABORT = Session.EXIT_ABORT
-    fake_session.EXIT_ARGS = fake_session.EXIT_ARGS = Session.EXIT_ARGS
-    fake_session.EXIT_LAUNCH_FAILURE = Session.EXIT_LAUNCH_FAILURE
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
     args = FakeArgs()
     args.adapter = "fake"
     args.input = "fake"
     fake_session.return_value.run.side_effect = to_raise
-    assert main(args) == exit_code
+    assert main(args) == exit_code.value
     assert fake_target.cleanup.call_count == 1
 
 
@@ -183,15 +177,15 @@ def test_main_03(mocker, exit_code, to_raise):
     "arg_testlimit, arg_timeout, exit_code",
     [
         # use default test time limit and timeout values
-        (None, None, Session.EXIT_SUCCESS),
+        (None, None, Exit.SUCCESS),
         # set test time limit
-        (10, None, Session.EXIT_SUCCESS),
+        (10, None, Exit.SUCCESS),
         # set both test time limit and timeout to the same value
-        (10, 10, Session.EXIT_SUCCESS),
+        (10, 10, Exit.SUCCESS),
         # set timeout greater than test time limit
-        (10, 11, Session.EXIT_SUCCESS),
+        (10, 11, Exit.SUCCESS),
         # set test time limit greater than timeout
-        (11, 10, Session.EXIT_ARGS),
+        (11, 10, Exit.ARGS),
     ],
 )
 def test_main_04(mocker, arg_testlimit, arg_timeout, exit_code):
@@ -207,13 +201,11 @@ def test_main_04(mocker, arg_testlimit, arg_timeout, exit_code):
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
-    fake_session.EXIT_ARGS = Session.EXIT_ARGS
-    fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs()
     args.adapter = "fake"
     args.time_limit = arg_testlimit
     args.timeout = arg_timeout
-    assert main(args) == exit_code
+    assert main(args) == exit_code.value
 
 
 @mark.parametrize(
@@ -242,7 +234,6 @@ def test_main_05(mocker, pernosco, rr, valgrind):
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
-    fake_session.EXIT_SUCCESS = Session.EXIT_SUCCESS
     args = FakeArgs()
     args.adapter = "fake"
     # maximum one debugger allowed at a time
@@ -250,7 +241,7 @@ def test_main_05(mocker, pernosco, rr, valgrind):
     args.pernosco = pernosco
     args.rr = rr
     args.valgrind = valgrind
-    assert main(args) == Session.EXIT_SUCCESS
+    assert main(args) == Exit.SUCCESS.value
     assert fake_target.call_args[-1]["pernosco"] == pernosco
     assert fake_target.call_args[-1]["rr"] == rr
     assert fake_target.call_args[-1]["valgrind"] == valgrind

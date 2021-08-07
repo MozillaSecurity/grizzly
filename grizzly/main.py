@@ -15,7 +15,7 @@ from .common.reporter import (
     FuzzManagerReporter,
     S3FuzzManagerReporter,
 )
-from .common.utils import TIMEOUT_DELAY, configure_logging
+from .common.utils import TIMEOUT_DELAY, Exit, configure_logging
 from .session import Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -65,7 +65,7 @@ def main(args):
         LOG.info("Using test time limit: %ds, timeout: %ds", time_limit, timeout)
         if timeout < time_limit:
             LOG.error("Timeout must be at least test time limit if not greater")
-            return Session.EXIT_ARGS
+            return Exit.ARGS.value
         if adapter.HARNESS_FILE and time_limit == timeout:
             LOG.warning(
                 "To avoid relaunches due to tests failing to close"
@@ -144,11 +144,11 @@ def main(args):
 
     except KeyboardInterrupt:
         LOG.info("Ctrl+C detected.")
-        return Session.EXIT_ABORT
+        return Exit.ABORT.value
 
     except (TargetLaunchError, TargetLaunchTimeout) as exc:
         LOG.error(str(exc))
-        return Session.EXIT_LAUNCH_FAILURE
+        return Exit.LAUNCH_FAILURE.value
 
     finally:
         LOG.info("Shutting down...")
@@ -163,4 +163,4 @@ def main(args):
             adapter.cleanup()
         LOG.info("Done.")
 
-    return Session.EXIT_SUCCESS
+    return Exit.SUCCESS.value

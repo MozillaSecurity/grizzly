@@ -18,8 +18,7 @@ from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner
 from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..common.utils import TIMEOUT_DELAY, ConfigError, configure_logging, grz_tmp
-from ..session import Session
+from ..common.utils import TIMEOUT_DELAY, ConfigError, Exit, configure_logging, grz_tmp
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -129,11 +128,11 @@ class ReplayManager:
         if is_hang:
             if signature is None:
                 raise ConfigError(
-                    "Hangs require a signature to replay", Session.EXIT_ERROR
+                    "Hangs require a signature to replay", Exit.ERROR.value
                 )
             if "timeout" in ignore:
                 raise ConfigError(
-                    "Cannot ignore 'timeout' when detecting hangs", Session.EXIT_ERROR
+                    "Cannot ignore 'timeout' when detecting hangs", Exit.ERROR.value
                 )
         return is_hang
 
@@ -546,7 +545,7 @@ class ReplayManager:
             raise ConfigError(
                 "Timeout (%d) cannot be less than time limit (%d)"
                 % (timeout, time_limit),
-                Session.EXIT_ARGS,
+                Exit.ARGS.value,
             )
         return time_limit, timeout
 
@@ -581,7 +580,7 @@ class ReplayManager:
             )
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
-            return Session.EXIT_ERROR
+            return Exit.ERROR.value
 
         results = None
         target = None
@@ -591,7 +590,7 @@ class ReplayManager:
                     "'--no-harness' cannot be used with multiple testcases. "
                     "Perhaps '--test-index' can help."
                 )
-                return Session.EXIT_ARGS
+                return Exit.ARGS.value
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)
             # check test time limit and timeout
@@ -674,14 +673,14 @@ class ReplayManager:
                     args.logs, results, testcases if args.include_test else None
                 )
             # TODO: add fuzzmanager reporting
-            return Session.EXIT_SUCCESS if success else Session.EXIT_FAILURE
+            return Exit.SUCCESS.value if success else Exit.FAILURE.value
 
         except ConfigError as exc:
             LOG.error(str(exc))
             return exc.exit_code
 
         except KeyboardInterrupt:
-            return Session.EXIT_ABORT
+            return Exit.ABORT.value
 
         except (TargetLaunchError, TargetLaunchTimeout) as exc:
             LOG.error(str(exc))
@@ -690,7 +689,7 @@ class ReplayManager:
                 LOG.error("Logs can be found here %r", path)
                 reporter = FilesystemReporter(path, major_bucket=False)
                 reporter.submit([], exc.report)
-            return Session.EXIT_LAUNCH_FAILURE
+            return Exit.LAUNCH_FAILURE.value
 
         finally:
             LOG.info("Shutting down...")

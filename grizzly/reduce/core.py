@@ -20,9 +20,8 @@ from ..common.fuzzmanager import CrashEntry
 from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter
 from ..common.storage import TestCaseLoadFailure
-from ..common.utils import ConfigError, configure_logging, grz_tmp
+from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp
 from ..replay import ReplayManager
-from ..session import Session
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
 from .stats import ReductionStats
@@ -417,7 +416,7 @@ class ReduceManager:
                                be considered successful.
 
         Returns:
-            int: One of the `Session.EXIT_*` constants.
+            int: One of the Exit enum values.
         """
         any_success = False
         sig_given = self._signature is not None
@@ -648,8 +647,8 @@ class ReduceManager:
         )
 
         if any_success:
-            return Session.EXIT_SUCCESS
-        return Session.EXIT_FAILURE
+            return Exit.SUCCESS.value
+        return Exit.FAILURE.value
 
     def report(self, results, testcases, stats=None):
         """Report results, either to FuzzManager or to filesystem.
@@ -744,7 +743,7 @@ class ReduceManager:
                 )
             except TestCaseLoadFailure as exc:
                 LOG.error("Error: %s", str(exc))
-                return Session.EXIT_ERROR
+                return Exit.ERROR.value
 
             if args.tool is None and testcases[0].adapter_name is not None:
                 LOG.warning(
@@ -761,7 +760,7 @@ class ReduceManager:
                         "Error: '--no-harness' cannot be used with multiple "
                         "testcases. Perhaps '--test-index' can help."
                     )
-                    return Session.EXIT_ARGS
+                    return Exit.ARGS.value
                 LOG.debug("--no-harness specified relaunch set to 1")
                 args.relaunch = 1
 
@@ -828,7 +827,7 @@ class ReduceManager:
 
         except KeyboardInterrupt as exc:
             LOG.error("Exception: %r", exc)
-            return Session.EXIT_ABORT
+            return Exit.ABORT.value
 
         except (TargetLaunchError, TargetLaunchTimeout) as exc:
             LOG.error("Exception: %s", exc)
@@ -837,7 +836,7 @@ class ReduceManager:
                 LOG.error("Logs can be found here %r", path)
                 reporter = FilesystemReporter(path, major_bucket=False)
                 reporter.submit([], exc.report)
-            return Session.EXIT_LAUNCH_FAILURE
+            return Exit.LAUNCH_FAILURE.value
 
         except GrizzlyReduceBaseException as exc:
             LOG.error(exc.msg)
@@ -845,7 +844,7 @@ class ReduceManager:
 
         except Exception:  # pylint: disable=broad-except
             LOG.exception("Exception during reduction!")
-            return Session.EXIT_ERROR
+            return Exit.ERROR.value
 
         finally:
             LOG.info("Shutting down...")
