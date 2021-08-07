@@ -61,12 +61,6 @@ class LogOutputLimiter:
 class Session:
     DISPLAY_VERBOSE = 0  # display status every iteration
     DISPLAY_NORMAL = 1  # quickly reduce the amount of output
-    EXIT_SUCCESS = 0
-    EXIT_ERROR = 1  # unexpected error occurred (invalid input, unhanded exception, etc)
-    EXIT_ARGS = 2  # invalid argument
-    EXIT_ABORT = 3  # run aborted (ctrl+c, etc)
-    EXIT_LAUNCH_FAILURE = 4  # unrelated Target failure (browser startup crash, etc)
-    EXIT_FAILURE = 5  # expected results not reproduced (opposite of EXIT_SUCCESS)
 
     # display warning when target log files exceed limit (25MB)
     TARGET_LOG_SIZE_WARN = 0x1900000

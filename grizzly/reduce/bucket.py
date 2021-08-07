@@ -5,8 +5,8 @@
 from logging import getLogger
 
 from ..common.fuzzmanager import Bucket
+from ..common.utils import Exit
 from ..main import configure_logging
-from ..session import Session
 from .args import ReduceFuzzManagerIDQualityArgs
 from .crash import main as crash_main
 
@@ -29,7 +29,7 @@ def main(args):
     orig_tool = args.tool
 
     # if no crashes in bucket, return success
-    result = Session.EXIT_SUCCESS
+    result = Exit.SUCCESS.value
 
     bucket = Bucket(args.input)
     try:
@@ -42,7 +42,7 @@ def main(args):
 
             # call grizzly.reduce.crash
             result = crash_main(args)
-            if result in {Session.EXIT_SUCCESS, Session.EXIT_ABORT}:
+            if result in {Exit.SUCCESS.value, Exit.ABORT.value}:
                 break
 
     finally:
