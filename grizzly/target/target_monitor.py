@@ -29,14 +29,15 @@ class TargetMonitor(metaclass=ABCMeta):
         pass
 
     def log_data(self, log_id, offset=0):
+        data = None
         log_file = self.clone_log(log_id, offset=offset)
-        if log_file is None:
-            return None
-        try:
-            with open(log_file, "rb") as log_fp:
-                return log_fp.read()
-        finally:
-            remove(log_file)
+        if log_file:
+            try:
+                with open(log_file, "rb") as log_fp:
+                    data = log_fp.read()
+            finally:
+                remove(log_file)
+        return data
 
     @abstractmethod
     def log_length(self, log_id):
