@@ -5,7 +5,7 @@
 
 import pytest
 
-from .stack_hasher import Stack, StackFrame
+from .stack_hasher import Mode, Stack, StackFrame
 
 
 def test_stack_01():
@@ -109,7 +109,7 @@ def test_stack_06():
     stack = Stack.from_text(input_txt)
     assert len(stack.frames) == 6
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
+    assert stack.frames[0].mode == Mode.SANITIZER
 
 
 def test_stack_07():
@@ -126,7 +126,7 @@ def test_stack_07():
     stack = Stack.from_text(input_txt)
     assert len(stack.frames) == 4
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
+    assert stack.frames[0].mode == Mode.SANITIZER
 
 
 def test_stack_08():
@@ -143,7 +143,7 @@ def test_stack_08():
     assert stack.frames[0].function == "good::frame0"
     assert stack.frames[1].function == "good::frame1"
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
+    assert stack.frames[0].mode == Mode.SANITIZER
 
 
 def test_stack_09():
@@ -168,7 +168,7 @@ def test_stack_10():
     assert stack.frames[1].location == "libdbus-1.so.3"
     assert stack.frames[2].location == "<unknown module>"
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
+    assert stack.frames[0].mode == Mode.SANITIZER
 
 
 def test_stack_11():
@@ -187,7 +187,7 @@ def test_stack_11():
     assert stack.frames[2].function == "fSasd"
     assert stack.frames[3].function == "mz::as::asdf::SB"
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_SANITIZER
+    assert stack.frames[0].mode == Mode.SANITIZER
 
 
 def test_stack_12():
@@ -212,7 +212,7 @@ def test_stack_12():
     assert stack.frames[3].function == "FooBar"
     assert stack.frames[4].function == "main"
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_VALGRIND
+    assert stack.frames[0].mode == Mode.VALGRIND
 
 
 def test_stack_13():
@@ -266,7 +266,7 @@ def test_stack_13():
     )
     assert stack.frames[8].function == "Servo_Element_IsDisplayContents"
     assert stack.minor != stack.major
-    assert stack.frames[0].mode == StackFrame.MODE_RUST
+    assert stack.frames[0].mode == Mode.RUST
 
 
 def test_stack_14():
@@ -329,7 +329,7 @@ def test_sanitizer_stackframe_01():
     assert frame.function == "Abort"
     assert frame.location == "nsDebugImpl.cpp"
     assert frame.offset == "472"
-    assert frame.mode == StackFrame.MODE_SANITIZER
+    assert frame.mode == Mode.SANITIZER
 
 
 def test_sanitizer_stackframe_02():
@@ -341,7 +341,7 @@ def test_sanitizer_stackframe_02():
     assert frame.function == "main"
     assert frame.location == "nsBrowserApp.cpp"
     assert frame.offset == "399"
-    assert frame.mode == StackFrame.MODE_SANITIZER
+    assert frame.mode == Mode.SANITIZER
 
 
 def test_sanitizer_stackframe_03():
@@ -353,7 +353,7 @@ def test_sanitizer_stackframe_03():
     assert frame.function is None
     assert frame.location == "libpthread.so.0"
     assert frame.offset == "0x1033f"
-    assert frame.mode == StackFrame.MODE_SANITIZER
+    assert frame.mode == Mode.SANITIZER
 
 
 def test_sanitizer_stackframe_04():
@@ -365,7 +365,7 @@ def test_sanitizer_stackframe_04():
     assert frame.function == "start_thread"
     assert frame.location == "libpthread.so.0"
     assert frame.offset == "0x8181"
-    assert frame.mode == StackFrame.MODE_SANITIZER
+    assert frame.mode == Mode.SANITIZER
 
 
 def test_sanitizer_stackframe_05():
@@ -377,7 +377,7 @@ def test_sanitizer_stackframe_05():
     assert frame.function == "Call"
     assert frame.location == "b.cpp"
     assert frame.offset == "356"
-    assert frame.mode == StackFrame.MODE_SANITIZER
+    assert frame.mode == Mode.SANITIZER
 
 
 def test_sanitizer_stackframe_06():
@@ -387,7 +387,7 @@ def test_sanitizer_stackframe_06():
     assert frame.function is None
     assert frame.location == "<unknown module>"
     assert frame.offset is None
-    assert frame.mode == StackFrame.MODE_SANITIZER
+    assert frame.mode == Mode.SANITIZER
 
 
 def test_sanitizer_stackframe_07():
@@ -399,7 +399,7 @@ def test_sanitizer_stackframe_07():
     assert frame.function is None
     assert frame.location == "syscall-template.S"
     assert frame.offset == "84"
-    assert frame.mode == StackFrame.MODE_SANITIZER
+    assert frame.mode == Mode.SANITIZER
 
 
 def test_sanitizer_stackframe_08():
@@ -411,7 +411,7 @@ def test_sanitizer_stackframe_08():
     assert frame.function == "Call"
     assert frame.location == "file name.c"
     assert frame.offset == "1"
-    assert frame.mode == StackFrame.MODE_SANITIZER
+    assert frame.mode == Mode.SANITIZER
 
 
 def test_gdb_stackframe_01():
@@ -423,7 +423,7 @@ def test_gdb_stackframe_01():
     assert frame.function == "__memmove_ssse3_back"
     assert frame.location == "memcpy-ssse3-back.S"
     assert frame.offset == "1654"
-    assert frame.mode == StackFrame.MODE_GDB
+    assert frame.mode == Mode.GDB
 
 
 def test_gdb_stackframe_02():
@@ -433,7 +433,7 @@ def test_gdb_stackframe_02():
     assert frame.function == "main"
     assert frame.location is None
     assert frame.offset is None
-    assert frame.mode == StackFrame.MODE_GDB
+    assert frame.mode == Mode.GDB
 
 
 def test_gdb_stackframe_03():
@@ -443,7 +443,7 @@ def test_gdb_stackframe_03():
     assert frame.function == "main"
     assert frame.location == "test.c"
     assert frame.offset == "5"
-    assert frame.mode == StackFrame.MODE_GDB
+    assert frame.mode == Mode.GDB
 
 
 def test_minidump_stackframe_01():
@@ -455,7 +455,7 @@ def test_minidump_stackframe_01():
     assert frame.function == "main"
     assert frame.location == "file.cpp"
     assert frame.offset == "114"
-    assert frame.mode == StackFrame.MODE_MINIDUMP
+    assert frame.mode == Mode.MINIDUMP
 
 
 def test_minidump_stackframe_02():
@@ -465,7 +465,7 @@ def test_minidump_stackframe_02():
     assert frame.function is None
     assert frame.location == "libpthread-2.26.so"
     assert frame.offset == "0x10588"
-    assert frame.mode == StackFrame.MODE_MINIDUMP
+    assert frame.mode == Mode.MINIDUMP
 
 
 def test_minidump_stackframe_03():
@@ -477,7 +477,7 @@ def test_minidump_stackframe_03():
     assert frame.function == "foo"
     assert frame.location == "/usr/x86_64-linux-gnu/test.h"
     assert frame.offset == "85"
-    assert frame.mode == StackFrame.MODE_MINIDUMP
+    assert frame.mode == Mode.MINIDUMP
 
 
 def test_tsan_stackframe_01():
@@ -487,7 +487,7 @@ def test_tsan_stackframe_01():
     assert frame.function == "main"
     assert frame.location == "race.c"
     assert frame.offset == "10"
-    assert frame.mode == StackFrame.MODE_TSAN
+    assert frame.mode == Mode.TSAN
 
 
 def test_tsan_stackframe_02():
@@ -499,7 +499,7 @@ def test_tsan_stackframe_02():
     assert frame.function == "test1"
     assert frame.location == "c.h"
     assert frame.offset == "51"
-    assert frame.mode == StackFrame.MODE_TSAN
+    assert frame.mode == Mode.TSAN
 
 
 def test_tsan_stackframe_03():
@@ -509,7 +509,7 @@ def test_tsan_stackframe_03():
     assert frame.function is None
     assert frame.location is None
     assert frame.offset == "0xbad"
-    assert frame.mode == StackFrame.MODE_TSAN
+    assert frame.mode == Mode.TSAN
 
 
 def test_tsan_stackframe_04():
@@ -519,7 +519,7 @@ def test_tsan_stackframe_04():
     assert frame.function == "func"
     assert frame.location == "mod"
     assert frame.offset == "0x123ac"
-    assert frame.mode == StackFrame.MODE_TSAN
+    assert frame.mode == Mode.TSAN
 
 
 def test_valgrind_stackframe_01():
@@ -528,7 +528,7 @@ def test_valgrind_stackframe_01():
     assert frame.function == "FuncName"
     assert frame.location == "decode.c"
     assert frame.offset == "123"
-    assert frame.mode == StackFrame.MODE_VALGRIND
+    assert frame.mode == Mode.VALGRIND
 
 
 def test_valgrind_stackframe_02():
@@ -537,7 +537,7 @@ def test_valgrind_stackframe_02():
     assert frame.function == "main"
     assert frame.location == "foo.cc"
     assert frame.offset == "71"
-    assert frame.mode == StackFrame.MODE_VALGRIND
+    assert frame.mode == Mode.VALGRIND
 
 
 def test_valgrind_stackframe_03():
@@ -548,7 +548,7 @@ def test_valgrind_stackframe_03():
     assert frame.function == "malloc"
     assert frame.location == "blah-linux.so"
     assert frame.offset is None
-    assert frame.mode == StackFrame.MODE_VALGRIND
+    assert frame.mode == Mode.VALGRIND
 
 
 def test_valgrind_stackframe_04():
@@ -559,7 +559,7 @@ def test_valgrind_stackframe_04():
     assert frame.function == "(anon ns)::test(b2::a&, int)"
     assert frame.location == "main.cpp"
     assert frame.offset == "49"
-    assert frame.mode == StackFrame.MODE_VALGRIND
+    assert frame.mode == Mode.VALGRIND
 
 
 def test_valgrind_stackframe_05():
@@ -570,7 +570,7 @@ def test_valgrind_stackframe_05():
     assert frame.function == "Foo::Foo(char *, int, bool)"
     assert frame.location == "File.h"
     assert frame.offset == "37"
-    assert frame.mode == StackFrame.MODE_VALGRIND
+    assert frame.mode == Mode.VALGRIND
 
 
 def test_rr_stackframe_01():
@@ -579,7 +579,7 @@ def test_rr_stackframe_01():
     assert frame.function is None
     assert frame.location == "main"
     assert frame.offset == "0x244"
-    assert frame.mode == StackFrame.MODE_RR
+    assert frame.mode == Mode.RR
 
 
 def test_rust_stackframe_01():
@@ -589,7 +589,7 @@ def test_rust_stackframe_01():
     assert frame.function == "__libc_start_main"
     assert frame.location is None
     assert frame.offset is None
-    assert frame.mode == StackFrame.MODE_RUST
+    assert frame.mode == Mode.RUST
 
 
 def test_rust_stackframe_02():
@@ -601,4 +601,4 @@ def test_rust_stackframe_02():
     assert frame.location is None
     assert frame.function == "unwind::begin_unwind_fmt"
     assert frame.offset is None
-    assert frame.mode == StackFrame.MODE_RUST
+    assert frame.mode == Mode.RUST

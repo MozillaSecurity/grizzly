@@ -12,6 +12,7 @@ entries on the top of the stack with the offsets removed. This returns a unique
 crash id (1st hash) and a bug id (2nd hash). This is not perfect but works very
 well in most cases.
 """
+from enum import Enum, unique
 from hashlib import sha1
 from logging import DEBUG, INFO, basicConfig, getLogger
 from os.path import basename
@@ -28,15 +29,20 @@ MAJOR_DEPTH = 5
 MAJOR_DEPTH_RUST = 10
 
 
-class StackFrame:
-    MODE_GDB = 0
-    MODE_MINIDUMP = 1
-    MODE_RR = 2
-    MODE_RUST = 3
-    MODE_SANITIZER = 4
-    MODE_TSAN = 5
-    MODE_VALGRIND = 6
+@unique
+class Mode(Enum):
+    """Parse mode for detected stack type"""
 
+    GDB = 0
+    MINIDUMP = 1
+    RR = 2
+    RUST = 3
+    SANITIZER = 4
+    TSAN = 5
+    VALGRIND = 6
+
+
+class StackFrame:
     _re_func_name = re_compile(r"(?P<func>.+?)[\(|\s|\<]{1}")
     # regexs for supported stack trace lines
     _re_gdb = re_compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
@@ -84,19 +90,19 @@ class StackFrame:
     def from_line(cls, input_line, parse_mode=None):
         assert "\n" not in input_line, "Input contains unexpected new line(s)"
         sframe = None
-        if parse_mode is None or parse_mode == cls.MODE_SANITIZER:
+        if parse_mode is None or parse_mode == Mode.SANITIZER:
             sframe = cls._parse_sanitizer(input_line)
-        if not sframe and parse_mode is None or parse_mode == cls.MODE_GDB:
+        if not sframe and parse_mode is None or parse_mode == Mode.GDB:
             sframe = cls._parse_gdb(input_line)
-        if not sframe and parse_mode is None or parse_mode == cls.MODE_MINIDUMP:
+        if not sframe and parse_mode is None or parse_mode == Mode.MINIDUMP:
             sframe = cls._parse_minidump(input_line)
-        if not sframe and parse_mode is None or parse_mode == cls.MODE_RR:
+        if not sframe and parse_mode is None or parse_mode == Mode.RR:
             sframe = cls._parse_rr(input_line)
-        if not sframe and parse_mode is None or parse_mode == cls.MODE_RUST:
+        if not sframe and parse_mode is None or parse_mode == Mode.RUST:
             sframe = cls._parse_rust(input_line)
-        if not sframe and parse_mode is None or parse_mode == cls.MODE_TSAN:
+        if not sframe and parse_mode is None or parse_mode == Mode.TSAN:
             sframe = cls._parse_tsan(input_line)
-        if not sframe and parse_mode is None or parse_mode == cls.MODE_VALGRIND:
+        if not sframe and parse_mode is None or parse_mode == Mode.VALGRIND:
             sframe = cls._parse_valgrind(input_line)
         return sframe
 
@@ -110,7 +116,7 @@ class StackFrame:
         input_line = match.group("line").strip()
         if not input_line:
             return None
-        sframe = cls(mode=cls.MODE_GDB, stack_line=match.group("num"))
+        sframe = cls(mode=Mode.GDB, stack_line=match.group("num"))
         # sframe.offset = m.group("off")  # ignore binary offset for now
         # find function/method name
         match = cls._re_func_name.match(input_line)
@@ -142,7 +148,7 @@ class StackFrame:
                 return None
         except ValueError:
             return None
-        sframe = cls(mode=cls.MODE_MINIDUMP, stack_line=stack_line)
+        sframe = cls(mode=Mode.MINIDUMP, stack_line=stack_line)
         if func_name:
             sframe.function = func_name.strip()
         if file_name:
@@ -166,23 +172,21 @@ class StackFrame:
         match = cls._re_rr.match(input_line)
         if match is None:
             return None
-        return cls(
-            location=match.group("loc"), mode=cls.MODE_RR, offset=match.group("off")
-        )
+        return cls(location=match.group("loc"), mode=Mode.RR, offset=match.group("off"))
 
     @classmethod
     def _parse_rust(cls, input_line):
         match = cls._re_rust_frame.match(input_line)
         if match is None:
             return None
-        sframe = cls(mode=cls.MODE_RUST, stack_line=match.group("num"))
+        sframe = cls(mode=Mode.RUST, stack_line=match.group("num"))
         sframe.function = match.group("line").strip().rsplit("::h", 1)[0]
         # Don't bother with the file offset stuff atm
         # match = cls._re_rust_file.match(input_line) if frame is None else None
         # if match is not None:
         #    frame = {
         #        "function": None,
-        #        "mode": cls.MODE_RUST,
+        #        "mode": Mode.RUST,
         #        "offset": None,
         #        "stack_line": None,
         #    }
@@ -200,7 +204,7 @@ class StackFrame:
         match = cls._re_sanitizer.match(input_line)
         if match is None:
             return None
-        sframe = cls(mode=cls.MODE_SANITIZER, stack_line=match.group("num"))
+        sframe = cls(mode=Mode.SANITIZER, stack_line=match.group("num"))
         input_line = match.group("line")
         # check if line is symbolized
         if match.group("in"):
@@ -226,7 +230,7 @@ class StackFrame:
         match = cls._re_tsan.match(input_line)
         if match is None:
             return None
-        sframe = cls(mode=cls.MODE_TSAN, stack_line=match.group("num"))
+        sframe = cls(mode=Mode.TSAN, stack_line=match.group("num"))
         input_line = match.group("line")
         location = basename(input_line)
         # try to parse file name and line number
@@ -261,7 +265,7 @@ class StackFrame:
             # this should not happen
             LOG.warning("failure in _parse_valgrind()")
             return None
-        sframe = cls(function=match.group("func"), mode=cls.MODE_VALGRIND)
+        sframe = cls(function=match.group("func"), mode=Mode.VALGRIND)
         try:
             location, sframe.offset = input_line.split(":")
             sframe.location = location.strip()
@@ -340,6 +344,7 @@ class Stack:
             # avoid issues with mixed stack types
             if parse_mode is None:
                 parse_mode = frame.mode
+                LOG.debug("parser mode: %s", parse_mode.name)
             elif parse_mode != frame.mode:
                 # don't mix parse modes!
                 continue
@@ -368,11 +373,7 @@ class Stack:
                     len(frames) - 1,
                 )
 
-        if (
-            frames
-            and frames[0].mode == StackFrame.MODE_RUST
-            and major_depth < MAJOR_DEPTH_RUST
-        ):
+        if frames and frames[0].mode == Mode.RUST and major_depth < MAJOR_DEPTH_RUST:
             major_depth = MAJOR_DEPTH_RUST
 
         return cls(frames=frames, major_depth=major_depth)
