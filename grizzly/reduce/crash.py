@@ -25,7 +25,8 @@ def main(args):
     """
     configure_logging(args.log_level)
     crash = CrashEntry(args.input)
-    LOG.info("Loaded crash %d", crash.crash_id)
+    initial_quality = Quality(crash.testcase_quality)
+    LOG.info("Loaded crash %d (%s)", crash.crash_id, initial_quality.name)
     bucket = None
     try:
         # download the crash
@@ -48,7 +49,7 @@ def main(args):
         if args.fuzzmanager:
             quality = {
                 Exit.ERROR: Quality.REDUCER_ERROR,
-                Exit.ABORT: Quality(crash.testcase_quality),
+                Exit.ABORT: initial_quality,
                 Exit.SUCCESS: Quality.ORIGINAL,
                 Exit.FAILURE: Quality.NOT_REPRODUCIBLE,
             }.get(Exit(result), Quality.UNREDUCED)
