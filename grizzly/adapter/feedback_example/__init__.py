@@ -4,6 +4,7 @@
 
 from enum import Enum, unique
 from random import randint
+from string import Template
 
 from grizzly.adapter import Adapter
 
@@ -100,27 +101,29 @@ class FeedbackAdapter(Adapter):
         self.fuzz["mode"] = Mode.FUZZ
 
 
+TEST_TEMPLATE = Template(
+    """<!DOCTYPE html>
+<html>
+<head>
+<script src="helpers.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  if ($randint === 0) {
+    // pretend we found a result
+    await fetch("/found")
+  }
+  finish_test()
+})
+</script>
+</head>
+<body><h1>RUNNING</h1></body>
+</html>
+"""
+)
+
+
 def external_generate():
-    test_data = (
-        "<!DOCTYPE html>\n"
-        "<html>\n"
-        "<head>\n"
-        "<script src='helpers.js'></script>"
-        "<script>\n"
-        "window.onload = async () => {\n"
-        "  if (%d == 0) {\n"
-        "    // pretend we found a result\n"
-        '    await fetch("/found")\n'
-        "  }\n"
-        "  finish_test()\n"
-        "}\n"
-        "</script>\n"
-        "</head>\n"
-        "<body><h1>RUNNING</h1></body>\n"
-        "</html>"
-    ) % (
-        randint(0, 20),
-    )
+    test_data = TEST_TEMPLATE.safe_substitute(randint=randint(0, 20))
     return test_data
 
 
