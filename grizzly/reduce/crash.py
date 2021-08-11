@@ -47,11 +47,11 @@ def main(args):
         # so they should be retried later
         if args.fuzzmanager:
             quality = {
-                Exit.ERROR.value: Quality.REDUCER_ERROR,
-                Exit.ABORT.value: crash.testcase_quality,
-                Exit.SUCCESS.value: Quality.ORIGINAL,
-                Exit.FAILURE.value: Quality.NOT_REPRODUCIBLE,
-            }.get(result, Quality.UNREDUCED)
+                Exit.ERROR: Quality.REDUCER_ERROR,
+                Exit.ABORT: Quality(crash.testcase_quality),
+                Exit.SUCCESS: Quality.ORIGINAL,
+                Exit.FAILURE: Quality.NOT_REPRODUCIBLE,
+            }.get(Exit(result), Quality.UNREDUCED)
             # don't ever set things back to Q4, default to Q5 for that case.
             # Q4 is only used in automation, so ABORT should never happen.
             if quality == Quality.REDUCING:
@@ -62,7 +62,7 @@ def main(args):
                 quality.name,
                 quality.value,
             )
-            crash.testcase_quality = quality
+            crash.testcase_quality = quality.value
     finally:
         crash.cleanup()
         if bucket is not None:
