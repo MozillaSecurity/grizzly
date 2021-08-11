@@ -29,6 +29,7 @@ class FeedbackAdapter(Adapter):
     def setup(self, _input, server_map):
         # indicates if a result was found
         self.fuzz["found"] = False
+        self.fuzz["best"] = None
         # current operation mode
         self.fuzz["mode"] = Mode.FUZZ
         self.enable_harness()
@@ -53,40 +54,71 @@ class FeedbackAdapter(Adapter):
         if self.fuzz["mode"] == Mode.REPORT:
             # here we should force crash the browser so grizzly detects a result
             # see bug https://bugzilla.mozilla.org/show_bug.cgi?id=1725008
-            # finish_op = "FuzzingFunctions.moz_crash()"
-            finish_op = "setTimeout(window.close, 10)"
-            # return to fuzzing mode
-            self.fuzz["mode"] = Mode.FUZZ
+            # jslib = "function finish_test() { FuzzingFunctions.moz_crash(sig) }\n"
+            # but for now...
+            jslib = "function finish_test() { setTimeout(window.close, 10) }\n"
         else:
-            finish_op = "setTimeout(window.close, 10)"
+            jslib = "function finish_test() { setTimeout(window.close, 10) }\n"
+        # add a non required file
+        testcase.add_from_data(jslib, "helpers.js", required=False)
 
         # generate a test
-        test_data = (
-            "<!DOCTYPE html>\n"
-            "<html>\n"
-            "<head>\n"
-            "<script>\n"
-            "window.onload = async () => {\n"
-            "  if (Math.floor((Math.random() * 30) + 1) == 1) {\n"
-            '    await fetch("/found")\n'
-            "  }\n"
-            "  %s\n"
-            "}\n"
-            "</script>\n"
-            "</head>\n"
-            "<body><h1>%s</h1></body>\n"
-            "</html>"
-        ) % (finish_op, self.fuzz["mode"].name)
+        if self.fuzz["mode"] == Mode.REDUCE:
+            self.fuzz["test"] = external_reduce(self.fuzz["test"])
+        elif self.fuzz["mode"] == Mode.REPORT:
+            # report "best"
+            self.fuzz["test"] = self.fuzz["best"]
+        else:
+            # this could use Popen and imported module or read from disk
+            # it's up to you how test data is created
+            # for this demo we call external_generate()
+            self.fuzz["test"] = external_generate()
+
         # add to testcase as entry point
-        testcase.add_from_data(test_data, testcase.landing_page)
+        testcase.add_from_data(self.fuzz["test"], testcase.landing_page)
 
     def on_served(self, _test, _served):
-        # check if a result was detected
-        if self.fuzz["found"]:
+        # check if a result was detected and switch generation modes
+        if self.fuzz["mode"] == Mode.REPORT:
+            assert self.fuzz["best"]
+            # return to fuzzing mode
+            self.fuzz["mode"] = Mode.FUZZ
+            self.fuzz["best"] = None
+        elif self.fuzz["found"]:
             # enable reduction mode
             if self.fuzz["mode"] == Mode.FUZZ:
                 self.fuzz["mode"] = Mode.REDUCE
+            self.fuzz["best"] = self.fuzz["test"]
             self.fuzz["found"] = False
 
     def on_timeout(self, _test, _served):
         self.fuzz["found"] = False
+        self.fuzz["best"] = None
+        self.fuzz["mode"] = Mode.FUZZ
+
+
+def external_generate():
+    test_data = (
+        "<!DOCTYPE html>\n"
+        "<html>\n"
+        "<head>\n"
+        "<script src='helpers.js'></script>"
+        "<script>\n"
+        "window.onload = async () => {\n"
+        "  if (%d == 0) {\n"
+        '    await fetch("/found")\n'
+        "  }\n"
+        "  finish_test()\n"
+        "}\n"
+        "</script>\n"
+        "</head>\n"
+        "<body><h1>RUNNING</h1></body>\n"
+        "</html>"
+    ) % (
+        randint(0, 20),
+    )
+    return test_data
+
+
+def external_reduce(testcase):
+    return testcase.replace("RUNNING", "REDUCING")
