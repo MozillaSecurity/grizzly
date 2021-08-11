@@ -41,6 +41,15 @@ class FeedbackAdapter(Adapter):
         return b""
 
     def generate(self, testcase, _server_map):
+        if self.fuzz["mode"] == Mode.REDUCE:
+            # are we done reduction?
+            if randint(0, 10) == 5:
+                # let's say we are done
+                self.fuzz["mode"] = Mode.REPORT
+            else:
+                # generate next reduced version to test
+                pass
+
         if self.fuzz["mode"] == Mode.REPORT:
             # here we should force crash the browser so grizzly detects a result
             # see bug https://bugzilla.mozilla.org/show_bug.cgi?id=1725008
@@ -50,8 +59,6 @@ class FeedbackAdapter(Adapter):
             self.fuzz["mode"] = Mode.FUZZ
         else:
             finish_op = "setTimeout(window.close, 10)"
-
-        # depending on the mode this is where the test case will be generated
 
         # generate a test
         test_data = (
@@ -80,10 +87,6 @@ class FeedbackAdapter(Adapter):
             if self.fuzz["mode"] == Mode.FUZZ:
                 self.fuzz["mode"] = Mode.REDUCE
             self.fuzz["found"] = False
-        # handle reduction results...
-        if self.fuzz["mode"] == Mode.REDUCE and randint(0, 10) == 5:
-            # reduction complete
-            self.fuzz["mode"] = Mode.REPORT
 
     def on_timeout(self, _test, _served):
         self.fuzz["found"] = False
