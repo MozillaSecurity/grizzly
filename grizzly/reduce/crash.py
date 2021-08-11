@@ -53,8 +53,8 @@ def main(args):
                 Exit.SUCCESS: Quality.ORIGINAL,
                 Exit.FAILURE: Quality.NOT_REPRODUCIBLE,
             }.get(Exit(result), Quality.UNREDUCED)
-            # don't ever set things back to Q4, default to Q5 for that case.
-            # Q4 is only used in automation, so ABORT should never happen.
+            # don't ever set things back to REDUCING, default to UNREDUCED in that case.
+            # REDUCING is only used in automation, so ABORT should never happen.
             if quality == Quality.REDUCING:
                 quality = Quality.UNREDUCED
             LOG.info(
