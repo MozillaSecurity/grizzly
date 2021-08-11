@@ -29,7 +29,7 @@ def main(args):
     orig_tool = args.tool
 
     # if no crashes in bucket, return success
-    result = Exit.SUCCESS.value
+    result = Exit.SUCCESS
 
     bucket = Bucket(args.input)
     try:
@@ -41,13 +41,13 @@ def main(args):
             args.tool = orig_tool
 
             # call grizzly.reduce.crash
-            result = crash_main(args)
-            if result in {Exit.SUCCESS.value, Exit.ABORT.value}:
+            result = Exit(crash_main(args))
+            if result in {Exit.SUCCESS, Exit.ABORT}:
                 break
 
     finally:
         bucket.cleanup()
-    return result
+    return result.value
 
 
 if __name__ == "__main__":
