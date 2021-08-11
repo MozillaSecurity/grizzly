@@ -735,7 +735,7 @@ def test_report_02(mocker, tmp_path):
 
 
 def test_quality_update(mocker, tmp_path):
-    """test that the final result gets changed to Q0 with --fuzzmanager"""
+    """test that the final result gets changed to REDUCED with --fuzzmanager"""
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
