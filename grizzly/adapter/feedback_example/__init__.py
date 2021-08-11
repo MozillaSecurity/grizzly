@@ -29,6 +29,7 @@ class FeedbackAdapter(Adapter):
     def setup(self, _input, server_map):
         # indicates if a result was found
         self.fuzz["found"] = False
+        # track most recent version of test (for reduction)
         self.fuzz["best"] = None
         # current operation mode
         self.fuzz["mode"] = Mode.FUZZ
@@ -38,10 +39,12 @@ class FeedbackAdapter(Adapter):
         server_map.set_dynamic_response("found", self._found)
 
     def _found(self):
+        # callback attached to '/found'
         self.fuzz["found"] = True
         return b""
 
     def generate(self, testcase, _server_map):
+        self.fuzz["found"] = False
         if self.fuzz["mode"] == Mode.REDUCE:
             # are we done reduction?
             if randint(0, 10) == 5:
@@ -69,7 +72,7 @@ class FeedbackAdapter(Adapter):
             # report "best"
             self.fuzz["test"] = self.fuzz["best"]
         else:
-            # this could use Popen and imported module or read from disk
+            # this could use Popen or an imported module and read from disk
             # it's up to you how test data is created
             # for this demo we call external_generate()
             self.fuzz["test"] = external_generate()
@@ -88,11 +91,11 @@ class FeedbackAdapter(Adapter):
             # enable reduction mode
             if self.fuzz["mode"] == Mode.FUZZ:
                 self.fuzz["mode"] = Mode.REDUCE
+            # update "best" with latest test
             self.fuzz["best"] = self.fuzz["test"]
-            self.fuzz["found"] = False
 
     def on_timeout(self, _test, _served):
-        self.fuzz["found"] = False
+        # browser likely hung, reset everything
         self.fuzz["best"] = None
         self.fuzz["mode"] = Mode.FUZZ
 
@@ -106,6 +109,7 @@ def external_generate():
         "<script>\n"
         "window.onload = async () => {\n"
         "  if (%d == 0) {\n"
+        "    // pretend we found a result\n"
         '    await fetch("/found")\n'
         "  }\n"
         "  finish_test()\n"
