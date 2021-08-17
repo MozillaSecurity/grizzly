@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from enum import Enum, unique
+from enum import IntEnum, unique
 from logging import DEBUG, basicConfig
 from os import getenv, makedirs
 from os.path import join as pathjoin
@@ -32,7 +32,7 @@ class ConfigError(Exception):
 
 
 @unique
-class Exit(Enum):
+class Exit(IntEnum):
     """Exit codes"""
 
     SUCCESS = 0

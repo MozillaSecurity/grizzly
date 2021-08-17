@@ -140,7 +140,7 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, exit_c
     )
 
     mocker.patch(patch_func, side_effect=side_effect, return_value=return_value)
-    assert ReduceManager.main(args) == exit_code.value
+    assert ReduceManager.main(args) == exit_code
 
 
 @mark.parametrize(

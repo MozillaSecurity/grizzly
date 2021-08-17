@@ -127,12 +127,10 @@ class ReplayManager:
         is_hang = any(x.hang for x in tests)
         if is_hang:
             if signature is None:
-                raise ConfigError(
-                    "Hangs require a signature to replay", Exit.ERROR.value
-                )
+                raise ConfigError("Hangs require a signature to replay", Exit.ERROR)
             if "timeout" in ignore:
                 raise ConfigError(
-                    "Cannot ignore 'timeout' when detecting hangs", Exit.ERROR.value
+                    "Cannot ignore 'timeout' when detecting hangs", Exit.ERROR
                 )
         return is_hang
 
@@ -545,7 +543,7 @@ class ReplayManager:
             raise ConfigError(
                 "Timeout (%d) cannot be less than time limit (%d)"
                 % (timeout, time_limit),
-                Exit.ARGS.value,
+                Exit.ARGS,
             )
         return time_limit, timeout
 
@@ -580,7 +578,7 @@ class ReplayManager:
             )
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
-            return Exit.ERROR.value
+            return Exit.ERROR
 
         results = None
         target = None
@@ -590,7 +588,7 @@ class ReplayManager:
                     "'--no-harness' cannot be used with multiple testcases. "
                     "Perhaps '--test-index' can help."
                 )
-                return Exit.ARGS.value
+                return Exit.ARGS
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)
             # check test time limit and timeout
@@ -673,14 +671,14 @@ class ReplayManager:
                     args.logs, results, testcases if args.include_test else None
                 )
             # TODO: add fuzzmanager reporting
-            return Exit.SUCCESS.value if success else Exit.FAILURE.value
+            return Exit.SUCCESS if success else Exit.FAILURE
 
         except ConfigError as exc:
             LOG.error(str(exc))
             return exc.exit_code
 
         except KeyboardInterrupt:
-            return Exit.ABORT.value
+            return Exit.ABORT
 
         except (TargetLaunchError, TargetLaunchTimeout) as exc:
             LOG.error(str(exc))
@@ -689,7 +687,7 @@ class ReplayManager:
                 LOG.error("Logs can be found here %r", path)
                 reporter = FilesystemReporter(path, major_bucket=False)
                 reporter.submit([], exc.report)
-            return Exit.LAUNCH_FAILURE.value
+            return Exit.LAUNCH_FAILURE
 
         finally:
             LOG.info("Shutting down...")

@@ -47,7 +47,7 @@ def main(args):
 
     finally:
         bucket.cleanup()
-    return result.value
+    return result
 
 
 if __name__ == "__main__":

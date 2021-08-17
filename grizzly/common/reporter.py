@@ -5,7 +5,7 @@
 
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
-from enum import Enum, unique
+from enum import IntEnum, unique
 from hashlib import sha1
 from json import dump, dumps, loads
 from logging import WARNING, getLogger
@@ -61,7 +61,7 @@ LogMap = namedtuple("LogMap", "aux stderr stdout")
 
 
 @unique
-class Quality(Enum):
+class Quality(IntEnum):
     """testcase quality values"""
 
     # final reduced testcase
@@ -729,7 +729,7 @@ class FuzzManagerReporter(Reporter):
                 LOG.info("Submitting new crash %r", cache_metadata["shortDescription"])
             # submit results to the FuzzManager server
             new_entry = collector.submit(
-                report.crash_info, testCase=zip_name, testCaseQuality=self.quality.value
+                report.crash_info, testCase=zip_name, testCaseQuality=self.quality
             )
         LOG.info("Logged %d (%s)", new_entry["id"], self.quality.name)
 

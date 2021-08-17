@@ -73,7 +73,7 @@ def test_main_01(mocker, tmp_path):
         timeout=None,
         valgrind=False,
     )
-    assert ReplayManager.main(args) == Exit.SUCCESS.value
+    assert ReplayManager.main(args) == Exit.SUCCESS
     assert target.reverse.call_count == 1
     assert target.launch.call_count == 3
     assert target.check_result.call_count == 3
@@ -126,7 +126,7 @@ def test_main_02(mocker, tmp_path):
         timeout=None,
         valgrind=False,
     )
-    assert ReplayManager.main(args) == Exit.FAILURE.value
+    assert ReplayManager.main(args) == Exit.FAILURE
     assert target.check_result.call_count == 1
     assert not target.environ
     assert target.close.call_count == 2
@@ -159,35 +159,35 @@ def test_main_03(mocker):
     )
     # user abort
     fake_load_target.side_effect = KeyboardInterrupt
-    assert ReplayManager.main(args) == Exit.ABORT.value
+    assert ReplayManager.main(args) == Exit.ABORT
     fake_load_target.reset_mock()
     # invalid test case
     fake_tc.load.side_effect = TestCaseLoadFailure
-    assert ReplayManager.main(args) == Exit.ERROR.value
+    assert ReplayManager.main(args) == Exit.ERROR
     assert fake_load_target.call_count == 0
     # no test cases
     fake_tc.load.side_effect = None
     fake_tc.load.return_value = list()
-    assert ReplayManager.main(args) == Exit.ERROR.value
+    assert ReplayManager.main(args) == Exit.ERROR
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # multiple test cases with --no-harness
     fake_tc.load.return_value = [
         mocker.Mock(spec_set=TestCase, env_vars={}, hang=False) for _ in range(2)
     ]
-    assert ReplayManager.main(args) == Exit.ARGS.value
+    assert ReplayManager.main(args) == Exit.ARGS
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # signature required replaying hang
     fake_tc.load.return_value = [mocker.Mock(spec_set=TestCase, env_vars={}, hang=True)]
-    assert ReplayManager.main(args) == Exit.ERROR.value
+    assert ReplayManager.main(args) == Exit.ERROR
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # can't ignore timeout replaying hang
     args.ignore = ["timeout"]
     args.sig = "sig"
     fake_tc.load.return_value = [mocker.Mock(spec_set=TestCase, env_vars={}, hang=True)]
-    assert ReplayManager.main(args) == Exit.ERROR.value
+    assert ReplayManager.main(args) == Exit.ERROR
     assert fake_sig.fromFile.call_count == 1
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
@@ -234,14 +234,14 @@ def test_main_04(mocker, tmp_path):
         "grizzly.replay.replay.ReplayManager.run",
         side_effect=TargetLaunchError("", report),
     )
-    assert ReplayManager.main(args) == Exit.LAUNCH_FAILURE.value
+    assert ReplayManager.main(args) == Exit.LAUNCH_FAILURE
     assert not fake_logs.is_dir()
     assert "fake_report_logs" in (x.name for x in fake_tmp.iterdir())
     # target launch timeout
     mocker.patch(
         "grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchTimeout
     )
-    assert ReplayManager.main(args) == Exit.LAUNCH_FAILURE.value
+    assert ReplayManager.main(args) == Exit.LAUNCH_FAILURE
 
 
 def test_main_05(mocker, tmp_path):
@@ -296,7 +296,7 @@ def test_main_05(mocker, tmp_path):
     args.input = str(input_path)
     with AssetManager(base_path=str(tmp_path)) as assets:
         target.assets = assets
-        assert ReplayManager.main(args) == Exit.SUCCESS.value
+        assert ReplayManager.main(args) == Exit.SUCCESS
         assert "from_cmdline" in target.assets.assets
     assert target.launch.call_count == 1
     assert target.check_result.call_count == 1
@@ -369,7 +369,7 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         timeout=arg_timeout,
         valgrind=False,
     )
-    assert ReplayManager.main(args) == result.value
+    assert ReplayManager.main(args) == result
 
 
 @mark.parametrize(
@@ -427,7 +427,7 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
     )
     # maximum one debugger allowed at a time
     assert sum((pernosco, rr, valgrind)) < 2, "test broken!"
-    assert ReplayManager.main(args) == Exit.FAILURE.value
+    assert ReplayManager.main(args) == Exit.FAILURE
     assert target.check_result.call_count == 1
     assert target.close.call_count == 2
     assert target.cleanup.call_count == 1

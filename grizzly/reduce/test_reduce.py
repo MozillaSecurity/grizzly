@@ -795,7 +795,7 @@ def test_quality_update(mocker, tmp_path):
     assert update_coll.call_count == 1
     assert update_coll.return_value.patch.call_count == 1
     assert update_coll.return_value.patch.call_args[1] == {
-        "data": {"testcase_quality": Quality.REDUCED.value},
+        "data": {"testcase_quality": Quality.REDUCED},
     }
 
 
