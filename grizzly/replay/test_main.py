@@ -40,6 +40,7 @@ def test_main_01(mocker, tmp_path):
     target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
     target.assets = mocker.Mock(spec_set=AssetManager)
     target.check_result.side_effect = (Result.FOUND, Result.NONE, Result.FOUND)
+    target.filtered_environ.return_value = {"ENV": "123"}
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
     with TestCase("test.html", None, "adpt") as src:
@@ -80,6 +81,7 @@ def test_main_01(mocker, tmp_path):
     assert serve_path.call_count == 3
     assert load_target.call_count == 1
     assert target.close.call_count == 4
+    assert target.filtered_environ.call_count == 2
     assert target.cleanup.call_count == 1
     assert target.assets.add.call_count == 0
     assert target.assets.is_empty.call_count == 1
@@ -250,10 +252,9 @@ def test_main_05(mocker, tmp_path):
         return_value=(None, ["test.html"]),  # passed to Target.check_result
     )
     # setup Target
-    target = mocker.NonCallableMock(
-        spec_set=Target, binary="bin", environ={}, launch_timeout=30
-    )
+    target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
     target.check_result.return_value = Result.FOUND
+    target.filtered_environ.return_value = dict()
     target.monitor.is_healthy.return_value = False
     target.save_logs = _fake_save_logs
     mocker.patch(
@@ -299,6 +300,7 @@ def test_main_05(mocker, tmp_path):
         assert "from_cmdline" in target.assets.assets
     assert target.launch.call_count == 1
     assert target.check_result.call_count == 1
+    assert target.filtered_environ.call_count == 1
     assert serve_path.call_count == 1
     assert log_path.is_dir()
     assert any(log_path.glob("**/sample_asset"))

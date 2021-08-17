@@ -6,7 +6,7 @@ from logging import DEBUG, INFO
 
 from pytest import mark
 
-from .utils import configure_logging, grz_tmp, split_sanitizer_opts
+from .utils import configure_logging, grz_tmp
 
 
 def test_grz_tmp_01(mocker, tmp_path):
@@ -50,38 +50,3 @@ def test_configure_logging_01(mocker, env, log_level):
         assert config.call_args[-1]["level"] == DEBUG
     else:
         assert config.call_args[-1]["level"] == log_level
-
-
-@mark.parametrize(
-    "to_parse, expected",
-    [
-        # test empty string
-        ("", {}),
-        # test single value
-        ("test_value=true", {"test_value": "true"}),
-        # test multiple values
-        ("a=1:b=-2:C=3", {"a": "1", "b": "-2", "C": "3"}),
-        # path parsing
-        (
-            "p1='z:/a':p2='x:\\a.1':p3='/test/path/':p4='':p5=\"x:/a.a\"",
-            {
-                "p1": "'z:/a'",
-                "p2": "'x:\\a.1'",
-                "p3": "'/test/path/'",
-                "p4": "''",
-                "p5": '"x:/a.a"',
-            },
-        ),
-        # test platform specific parsing
-        (
-            "bar=1:file='%s':foo=2" % (__file__,),
-            {"bar": "1", "file": "'%s'" % (__file__,), "foo": "2"},
-        ),
-    ],
-)
-def test_sanitizer_opts_01(to_parse, expected):
-    """test split_sanitizer_opts()"""
-    parsed = split_sanitizer_opts(to_parse)
-    assert len(parsed) == len(expected)
-    for key in expected:
-        assert expected[key] == parsed[key]

@@ -17,11 +17,12 @@ from tempfile import TemporaryDirectory, mkdtemp
 from time import sleep, time
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
+from ffpuppet.sanitizer_util import SanitizerOptions
 from prefpicker import PrefPicker
 from psutil import AccessDenied, NoSuchProcess, Process, process_iter
 
 from ..common.reporter import Report
-from ..common.utils import grz_tmp, split_sanitizer_opts
+from ..common.utils import grz_tmp
 from .target import Result, Target, TargetError, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
@@ -105,16 +106,34 @@ class PuppetTarget(Target):
     def closed(self):
         return self._puppet.reason is not None
 
+    def create_report(self, is_hang=False):
+        logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
+        self.save_logs(logs)
+        return Report(logs, self.binary, is_hang=is_hang)
+
+    def filtered_environ(self):
+        # remove context specific entries from environment
+        filtered = dict(self.environ)
+        opts = SanitizerOptions()
+        if "ASAN_OPTIONS" in filtered:
+            opts.load_options(filtered["ASAN_OPTIONS"])
+            opts.pop("external_symbolizer_path")
+            opts.pop("strip_path_prefix")
+            opts.pop("suppressions")
+            filtered["ASAN_OPTIONS"] = opts.options
+        for san_opts in ("LSAN_OPTIONS", "TSAN_OPTIONS", "UBSAN_OPTIONS"):
+            if san_opts in filtered:
+                opts.load_options(filtered[san_opts])
+                opts.pop("suppressions")
+                filtered[san_opts] = opts.options
+        # remove empty entries
+        return {k: v for k, v in filtered.items() if v}
+
     def is_idle(self, threshold):
         for _, cpu in self._puppet.cpu_usage():
             if cpu >= threshold:
                 return False
         return True
-
-    def create_report(self, is_hang=False):
-        logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
-        self.save_logs(logs)
-        return Report(logs, self.binary, is_hang=is_hang)
 
     @property
     def monitor(self):
@@ -167,7 +186,7 @@ class PuppetTarget(Target):
                 LOG.debug("log size limit exceeded")
             else:
                 # crash or hang (forced SIGABRT) has been detected
-                LOG.debug("failure detected, ffpuppet %s", self._puppet.reason)
+                LOG.debug("result detected (%s)", self._puppet.reason.name)
                 result = Result.FOUND
         return result
 
@@ -318,30 +337,37 @@ class PuppetTarget(Target):
                         self._puppet.add_abort_token(line)
 
         # configure sanitizer suppressions
-        for sanitizer in ("lsan", "tsan", "ubsan"):
-            var_name = "%s_OPTIONS" % (sanitizer.upper(),)
-            # load existing sanitizer options from environment
-            if var_name in self.environ:
-                opts = split_sanitizer_opts(self.environ[var_name])
-            else:
-                opts = dict()
+        opts = SanitizerOptions()
+        for sanitizer in ["lsan", "tsan", "ubsan"]:
             asset = "%s-suppressions" % (sanitizer,)
-            supp_file = opts.pop("suppressions", "").strip("'")
+            # load existing sanitizer options from environment
+            var_name = "%s_OPTIONS" % (sanitizer.upper(),)
+            opts.load_options(self.environ.get(var_name, ""))
             if self.assets.get(asset):
                 # use suppression file if provided as asset
-                opts["suppressions"] = "%r" % (self.assets.get(asset),)
-            elif isfile(supp_file):
-                # use environment specified suppression file
-                LOG.debug("using %r from environment", asset)
-                opts["suppressions"] = "%r" % (self.assets.add(asset, supp_file),)
-            elif supp_file:
-                LOG.warning("Missing %s suppressions file %r", sanitizer, supp_file)
-            # update sanitized *SAN_OPTIONS
-            if "suppressions" in opts:
-                LOG.debug("updating suppressions in %r", var_name)
-                self.environ[var_name] = ":".join(
-                    "=".join((k, v)) for k, v in opts.items()
+                opts.add(
+                    "suppressions", "%r" % (self.assets.get(asset),), overwrite=True
                 )
+            elif opts.get("suppressions"):
+                supp_file = opts.pop("suppressions")
+                if SanitizerOptions.is_quoted(supp_file):
+                    supp_file = supp_file[1:-1]
+                if isfile(supp_file):
+                    # use environment specified suppression file
+                    LOG.debug("using %r from environment", asset)
+                    opts.add(
+                        "suppressions",
+                        "%r" % (self.assets.add(asset, supp_file),),
+                        overwrite=True,
+                    )
+                else:
+                    LOG.warning("Missing %s suppressions file %r", sanitizer, supp_file)
+            else:
+                # nothing to do
+                continue
+            # update sanitized *SAN_OPTIONS
+            LOG.debug("updating suppressions in %r", var_name)
+            self.environ[var_name] = opts.options
 
     def save_logs(self, *args, **kwargs):
         self._puppet.save_logs(*args, **kwargs)

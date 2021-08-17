@@ -211,7 +211,7 @@ class Session:
                 )
             current_test.duration = result.duration
             current_test.assets = self.target.assets
-            current_test.env_vars = dict(self.target.environ)
+            current_test.env_vars = self.target.filtered_environ()
             # adapter callbacks
             if result.timeout:
                 current_test.hang = True
