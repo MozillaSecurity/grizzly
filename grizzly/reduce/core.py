@@ -622,9 +622,9 @@ class ReduceManager:
                         "Updating crash %d to %s (Q%d)",
                         crash_id,
                         Quality.REDUCED.name,
-                        Quality.REDUCED.value,
+                        Quality.REDUCED,
                     )
-                    CrashEntry(crash_id).testcase_quality = Quality.REDUCED.value
+                    CrashEntry(crash_id).testcase_quality = Quality.REDUCED
 
         # it's possible we made it this far without ever setting signature_desc.
         # this is only possible if --no-analysis is given
@@ -646,8 +646,8 @@ class ReduceManager:
         )
 
         if any_success:
-            return Exit.SUCCESS.value
-        return Exit.FAILURE.value
+            return Exit.SUCCESS
+        return Exit.FAILURE
 
     def report(self, results, testcases, stats=None):
         """Report results, either to FuzzManager or to filesystem.
@@ -742,7 +742,7 @@ class ReduceManager:
                 )
             except TestCaseLoadFailure as exc:
                 LOG.error("Error: %s", str(exc))
-                return Exit.ERROR.value
+                return Exit.ERROR
 
             if args.tool is None and testcases[0].adapter_name is not None:
                 LOG.warning(
@@ -759,7 +759,7 @@ class ReduceManager:
                         "Error: '--no-harness' cannot be used with multiple "
                         "testcases. Perhaps '--test-index' can help."
                     )
-                    return Exit.ARGS.value
+                    return Exit.ARGS
                 LOG.debug("--no-harness specified relaunch set to 1")
                 args.relaunch = 1
 
@@ -826,7 +826,7 @@ class ReduceManager:
 
         except KeyboardInterrupt as exc:
             LOG.error("Exception: %r", exc)
-            return Exit.ABORT.value
+            return Exit.ABORT
 
         except (TargetLaunchError, TargetLaunchTimeout) as exc:
             LOG.error("Exception: %s", exc)
@@ -835,7 +835,7 @@ class ReduceManager:
                 LOG.error("Logs can be found here %r", path)
                 reporter = FilesystemReporter(path, major_bucket=False)
                 reporter.submit([], exc.report)
-            return Exit.LAUNCH_FAILURE.value
+            return Exit.LAUNCH_FAILURE
 
         except GrizzlyReduceBaseException as exc:
             LOG.error(exc.msg)
@@ -843,7 +843,7 @@ class ReduceManager:
 
         except Exception:  # pylint: disable=broad-except
             LOG.exception("Exception during reduction!")
-            return Exit.ERROR.value
+            return Exit.ERROR
 
         finally:
             LOG.info("Shutting down...")

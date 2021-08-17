@@ -92,7 +92,7 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     if not verbose:
         args.log_level = 20
     args.coverage = cov
-    assert main(args) == Exit.SUCCESS.value
+    assert main(args) == Exit.SUCCESS
     assert fake_session.mock_calls[0][-1]["coverage"] == cov
     if adpt_relaunch:
         assert fake_session.mock_calls[0][-1]["relaunch"] == adpt_relaunch
@@ -139,7 +139,7 @@ def test_main_02(mocker, reporter):
         )
         fake_reporter.sanity_check.return_value = True
         args.s3_fuzzmanager = True
-    assert main(args) == Exit.SUCCESS.value
+    assert main(args) == Exit.SUCCESS
     assert fake_target.cleanup.call_count == 1
 
 
@@ -169,7 +169,7 @@ def test_main_03(mocker, exit_code, to_raise):
     args.adapter = "fake"
     args.input = "fake"
     fake_session.return_value.run.side_effect = to_raise
-    assert main(args) == exit_code.value
+    assert main(args) == exit_code
     assert fake_target.cleanup.call_count == 1
 
 
@@ -205,7 +205,7 @@ def test_main_04(mocker, arg_testlimit, arg_timeout, exit_code):
     args.adapter = "fake"
     args.time_limit = arg_testlimit
     args.timeout = arg_timeout
-    assert main(args) == exit_code.value
+    assert main(args) == exit_code
 
 
 @mark.parametrize(
@@ -241,7 +241,7 @@ def test_main_05(mocker, pernosco, rr, valgrind):
     args.pernosco = pernosco
     args.rr = rr
     args.valgrind = valgrind
-    assert main(args) == Exit.SUCCESS.value
+    assert main(args) == Exit.SUCCESS
     assert fake_target.call_args[-1]["pernosco"] == pernosco
     assert fake_target.call_args[-1]["rr"] == rr
     assert fake_target.call_args[-1]["valgrind"] == valgrind

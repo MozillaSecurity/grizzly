@@ -65,7 +65,7 @@ def main(args):
         LOG.info("Using test time limit: %ds, timeout: %ds", time_limit, timeout)
         if timeout < time_limit:
             LOG.error("Timeout must be at least test time limit if not greater")
-            return Exit.ARGS.value
+            return Exit.ARGS
         if adapter.HARNESS_FILE and time_limit == timeout:
             LOG.warning(
                 "To avoid relaunches due to tests failing to close"
@@ -144,11 +144,11 @@ def main(args):
 
     except KeyboardInterrupt:
         LOG.info("Ctrl+C detected.")
-        return Exit.ABORT.value
+        return Exit.ABORT
 
     except (TargetLaunchError, TargetLaunchTimeout) as exc:
         LOG.error(str(exc))
-        return Exit.LAUNCH_FAILURE.value
+        return Exit.LAUNCH_FAILURE
 
     finally:
         LOG.info("Shutting down...")
@@ -163,4 +163,4 @@ def main(args):
             adapter.cleanup()
         LOG.info("Done.")
 
-    return Exit.SUCCESS.value
+    return Exit.SUCCESS

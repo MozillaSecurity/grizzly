@@ -9,7 +9,7 @@ from ..common.utils import Exit
 class GrizzlyReduceBaseException(Exception):
     """Base for other Grizzly Reducer specific exceptions."""
 
-    def __init__(self, msg, code=Exit.ERROR.value):
+    def __init__(self, msg, code=Exit.ERROR):
         super().__init__()
         self.msg = msg
         self.code = code
@@ -19,4 +19,4 @@ class NotReproducible(GrizzlyReduceBaseException):
     """Crash was not observed when expected during reduction."""
 
     def __init__(self, msg):
-        super().__init__(msg, code=Exit.FAILURE.value)
+        super().__init__(msg, code=Exit.FAILURE)

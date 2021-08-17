@@ -35,12 +35,10 @@ def test_crash_main(mocker, arg_sig, arg_tool, crash_bucket, result_sig, result_
     mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     crash = mocker.patch("grizzly.reduce.crash.CrashEntry", autospec=True)
     bucket = mocker.patch("grizzly.reduce.crash.Bucket", autospec=True)
-    mocker.patch(
-        "grizzly.reduce.crash.ReduceManager.main", return_value=Exit.SUCCESS.value
-    )
+    mocker.patch("grizzly.reduce.crash.ReduceManager.main", return_value=Exit.SUCCESS)
     crash.return_value.testcase_path.return_value = "test_path.zip"
     crash.return_value.bucket = crash_bucket
-    crash.return_value.testcase_quality = 5
+    crash.return_value.testcase_quality = Quality.UNREDUCED
     crash.return_value.tool = "test-tool"
     bucket.return_value.signature_path.return_value = "test_sig.json"
 
@@ -77,15 +75,15 @@ def test_crash_main_quality(mocker, mgr_exit_code, pre_quality, post_quality):
     crash.return_value.testcase_quality = pre_quality
     crash.return_value.bucket = None
     crash.return_value.tool = "test-tool"
-    mgr.main.return_value = mgr_exit_code.value
+    mgr.main.return_value = mgr_exit_code
 
     args = mocker.Mock(
         input=12345,
         sig=None,
         tool=None,
     )
-    assert crash_main(args) == mgr_exit_code.value
-    assert crash.return_value.testcase_quality == post_quality.value
+    assert crash_main(args) == mgr_exit_code
+    assert crash.return_value.testcase_quality == post_quality
 
 
 @pytest.mark.parametrize(
@@ -117,7 +115,7 @@ def test_bucket_main(mocker, crashes, main_exit_codes, result, arg_sig, arg_tool
 
     def copy_args(args):
         call_args.append(deepcopy(args))
-        return main_exit_codes[main.call_count - 1].value
+        return main_exit_codes[main.call_count - 1]
 
     mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     bucket = mocker.patch("grizzly.reduce.bucket.Bucket", autospec=True)
@@ -134,7 +132,7 @@ def test_bucket_main(mocker, crashes, main_exit_codes, result, arg_sig, arg_tool
         sig=arg_sig,
         tool=arg_tool,
     )
-    assert bucket_main(args) == result.value
+    assert bucket_main(args) == result
     assert main.call_count == len(main_exit_codes)
     for idx, (crash, _tool) in enumerate(crashes[: main.call_count]):
         assert call_args[idx].input == crash

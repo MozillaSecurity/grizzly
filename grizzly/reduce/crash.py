@@ -52,7 +52,7 @@ def main(args):
                 Exit.ABORT: initial_quality,
                 Exit.SUCCESS: Quality.ORIGINAL,
                 Exit.FAILURE: Quality.NOT_REPRODUCIBLE,
-            }.get(Exit(result), Quality.UNREDUCED)
+            }.get(result, Quality.UNREDUCED)
             # don't ever set things back to REDUCING, default to UNREDUCED in that case.
             # REDUCING is only used in automation, so ABORT should never happen.
             if quality == Quality.REDUCING:
@@ -61,9 +61,9 @@ def main(args):
                 "reducer finished -> exit(%d) -> %s (Q%d)",
                 result,
                 quality.name,
-                quality.value,
+                quality,
             )
-            crash.testcase_quality = quality.value
+            crash.testcase_quality = quality
     finally:
         crash.cleanup()
         if bucket is not None:
