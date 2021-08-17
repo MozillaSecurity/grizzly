@@ -550,7 +550,8 @@ def test_repro(
     tests = [test]
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target, environ={})
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = dict()
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -633,7 +634,8 @@ def test_report_01(mocker, tmp_path):
     fake_strat.return_value.__iter__.side_effect = fake_iter
     mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
 
-    target = mocker.Mock(spec_set=Target, environ={})
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = dict()
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -704,7 +706,8 @@ def test_report_02(mocker, tmp_path):
     fake_strat.return_value.__iter__.side_effect = fake_iter
     mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
 
-    target = mocker.Mock(spec_set=Target, environ={})
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = dict()
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -763,7 +766,8 @@ def test_quality_update(mocker, tmp_path):
     mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     reporter = mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     update_coll = mocker.patch("grizzly.common.fuzzmanager.Collector")
-    target = mocker.Mock(spec_set=Target, environ={})
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = dict()
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -833,7 +837,8 @@ def test_include_assets_and_environ(mocker, tmp_path):
 
     reporter.return_value.submit.side_effect = submit
 
-    target = mocker.Mock(spec_set=Target, environ={"test": "abc"})
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = {"test": "abc"}
     with AssetManager(base_path=str(tmp_path)) as assets:
         (tmp_path / "example_asset").touch()
         assets.add("example", str(tmp_path / "example_asset"), copy=False)
@@ -956,7 +961,8 @@ def test_timeout_update(
     tests = [test]
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target, environ={})
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = dict()
     target.assets = mocker.Mock(spec_set=AssetManager)
     server = mocker.Mock(spec_set=Sapphire, timeout=iter_input)
     try:

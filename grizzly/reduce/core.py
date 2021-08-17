@@ -537,9 +537,11 @@ class ReduceManager:
                                         for test in reduction:
                                             test.assets = self.target.assets
                                     # add target environment variables
-                                    if self.target.environ:
+                                    if self.target.filtered_environ():
                                         for test in reduction:
-                                            test.env_vars = dict(self.target.environ)
+                                            test.env_vars = (
+                                                self.target.filtered_environ()
+                                            )
                                     self.testcases = reduction
                                     keep_reduction = True
                                     # cleanup old best results

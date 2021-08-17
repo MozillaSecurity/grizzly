@@ -175,7 +175,8 @@ def test_list(
         tests.append(test)
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target, environ={})
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = dict()
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -355,7 +356,8 @@ def test_purge_unserved(
         tests.append(test)
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target, environ={})
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = dict()
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -414,7 +416,8 @@ def test_dd_only(mocker, tmp_path):
     tests = [test]
     log_path = tmp_path / "logs"
 
-    target = mocker.Mock(spec_set=Target, environ={})
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = dict()
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(

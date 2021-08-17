@@ -118,6 +118,10 @@ class Target(metaclass=ABCMeta):
     def dump_coverage(self, _timeout=0):  # pylint: disable=no-self-use
         LOG.warning("dump_coverage() is not supported!")
 
+    def filtered_environ(self):
+        """Used to collect the environment to add to a testcase"""
+        return dict(self.environ)
+
     @abstractmethod
     def handle_hang(self, ignore_idle=True):
         pass

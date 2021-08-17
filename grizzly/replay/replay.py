@@ -666,9 +666,9 @@ class ReplayManager:
                     for test in testcases:
                         test.assets = target.assets
                 # add target environment variables
-                if target.environ:
+                if target.filtered_environ():
                     for test in testcases:
-                        test.env_vars = dict(target.environ)
+                        test.env_vars = target.filtered_environ()
                 cls.report_to_filesystem(
                     args.logs, results, testcases if args.include_test else None
                 )

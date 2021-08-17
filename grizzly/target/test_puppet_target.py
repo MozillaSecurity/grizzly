@@ -398,3 +398,20 @@ def test_puppet_target_10(tmp_path, asset, env):
                 assert assets.get("lsan-suppressions")
             else:
                 assert not assets.get("lsan-suppressions")
+
+
+def test_puppet_target_11(tmp_path):
+    """test PuppetTarget.filtered_environ()"""
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+        target.environ = {
+            "TRACKED": "1",
+            "ASAN_OPTIONS": "external_symbolizer_path='a':no_remove='b'",
+            "LSAN_OPTIONS": "suppressions='a'",
+            "EMPTY": "",
+        }
+        assert "EMPTY" not in target.filtered_environ()
+        assert "TRACKED" in target.filtered_environ()
+        assert "ASAN_OPTIONS" in target.filtered_environ()
+        assert "LSAN_OPTIONS" not in target.filtered_environ()
