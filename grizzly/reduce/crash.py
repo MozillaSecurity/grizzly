@@ -63,7 +63,7 @@ def main(args):
                 quality.name,
                 quality,
             )
-            crash.testcase_quality = quality
+            crash.testcase_quality = quality.value
     finally:
         crash.cleanup()
         if bucket is not None:

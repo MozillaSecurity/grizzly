@@ -38,7 +38,7 @@ def test_crash_main(mocker, arg_sig, arg_tool, crash_bucket, result_sig, result_
     mocker.patch("grizzly.reduce.crash.ReduceManager.main", return_value=Exit.SUCCESS)
     crash.return_value.testcase_path.return_value = "test_path.zip"
     crash.return_value.bucket = crash_bucket
-    crash.return_value.testcase_quality = Quality.UNREDUCED
+    crash.return_value.testcase_quality = 5
     crash.return_value.tool = "test-tool"
     bucket.return_value.signature_path.return_value = "test_sig.json"
 
