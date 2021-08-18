@@ -52,6 +52,7 @@ def test_target_01(tmp_path):
         target.assets = AssetManager(base_path=str(tmp_path))
         assert target.assets.path != org_path
         assert not target.environ
+        assert not target.filtered_environ()
         assert not target.is_idle(0)
         assert target.launch_timeout == 321
         assert target.log_size() == 0
