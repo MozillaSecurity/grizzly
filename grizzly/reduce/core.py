@@ -624,7 +624,7 @@ class ReduceManager:
                         Quality.REDUCED.name,
                         Quality.REDUCED,
                     )
-                    CrashEntry(crash_id).testcase_quality = Quality.REDUCED
+                    CrashEntry(crash_id).testcase_quality = Quality.REDUCED.value
 
         # it's possible we made it this far without ever setting signature_desc.
         # this is only possible if --no-analysis is given

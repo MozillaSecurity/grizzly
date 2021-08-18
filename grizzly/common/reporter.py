@@ -729,7 +729,7 @@ class FuzzManagerReporter(Reporter):
                 LOG.info("Submitting new crash %r", cache_metadata["shortDescription"])
             # submit results to the FuzzManager server
             new_entry = collector.submit(
-                report.crash_info, testCase=zip_name, testCaseQuality=self.quality
+                report.crash_info, testCase=zip_name, testCaseQuality=self.quality.value
             )
         LOG.info("Logged %d (%s)", new_entry["id"], self.quality.name)
 
