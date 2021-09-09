@@ -73,6 +73,10 @@ def test_target_02(mocker, tmp_path):
         assert target.environ
         assert "SKIP" not in target.environ
         assert target.environ["TEST_INC"] == "1"
+        filtered = target.filtered_environ()
+        assert filtered
+        assert "SKIP" not in filtered
+        assert filtered["TEST_INC"] == "1"
 
 
 def test_target_03():

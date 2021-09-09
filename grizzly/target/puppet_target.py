@@ -115,17 +115,15 @@ class PuppetTarget(Target):
         # remove context specific entries from environment
         filtered = dict(self.environ)
         opts = SanitizerOptions()
-        if "ASAN_OPTIONS" in filtered:
-            opts.load_options(filtered["ASAN_OPTIONS"])
+        # iterate over *SAN_OPTIONS entries
+        for san in (x for x in filtered if x.endswith("SAN_OPTIONS")):
+            opts.load_options(filtered[san])
+            # remove entries specific to the current environment
             opts.pop("external_symbolizer_path")
+            opts.pop("log_path")
             opts.pop("strip_path_prefix")
             opts.pop("suppressions")
-            filtered["ASAN_OPTIONS"] = opts.options
-        for san_opts in ("LSAN_OPTIONS", "TSAN_OPTIONS", "UBSAN_OPTIONS"):
-            if san_opts in filtered:
-                opts.load_options(filtered[san_opts])
-                opts.pop("suppressions")
-                filtered[san_opts] = opts.options
+            filtered[san] = opts.options
         # remove empty entries
         return {k: v for k, v in filtered.items() if v}
 
