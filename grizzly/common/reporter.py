@@ -26,7 +26,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from Collector.Collector import Collector
 from fasteners.process_lock import InterProcessLock
 from FTB.ProgramConfiguration import ProgramConfiguration
-from FTB.Signatures.CrashInfo import CrashInfo
+from FTB.Signatures.CrashInfo import CrashInfo, CrashSignature
 from psutil import disk_usage
 
 # check if boto is available for S3FuzzManager reporter
@@ -227,9 +227,18 @@ class Report:
             CrashSignature: CrashSignature based on log data.
         """
         if self._signature is None:
-            self._signature = self.crash_info.createCrashSignature(
-                maxFrames=self.crash_signature_max_frames(self.crash_info)
-            )
+            collector = Collector()
+            with InterProcessLock(pathjoin(grz_tmp(), "fm_sigcache.lock")):
+                if collector.sigCacheDir:
+                    cache_sig, _ = collector.search(self.crash_info)
+                    if cache_sig:
+                        LOG.debug("signature loaded from cache file %r", cache_sig)
+                        self._signature = CrashSignature.fromFile(cache_sig)
+            # if cache lookup failed generate a crash signature
+            if self._signature is None:
+                self._signature = self.crash_info.createCrashSignature(
+                    maxFrames=self.crash_signature_max_frames(self.crash_info)
+                )
         return self._signature
 
     @staticmethod

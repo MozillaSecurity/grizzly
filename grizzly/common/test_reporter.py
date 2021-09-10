@@ -314,9 +314,27 @@ def test_report_12(tmp_path):
     assert report._crash_info is not None
 
 
-def test_report_13(mocker, tmp_path):
+@pytest.mark.parametrize(
+    "sig_data",
+    [
+        # signature exists in cache
+        '{"symptoms": [{"functionNames": ["a"],"type": "stackFrames"}]}',
+        # no signature
+        None,
+    ],
+)
+def test_report_13(mocker, tmp_path, sig_data):
     """test Report.crash_signature and Report.crash_hash"""
     mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
+    collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
+    if sig_data:
+        sig_file = tmp_path / "cache.sig"
+        sig_file.write_text(sig_data)
+        collector.return_value.search.return_value = (str(sig_file), None)
+        collector.return_value.sigCacheDir = str(sig_file)
+    else:
+        collector.return_value.sigCacheDir = None
+        collector.return_value.search.return_value = (None, None)
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     _create_crash_log(tmp_path / "log_asan_blah.txt")
