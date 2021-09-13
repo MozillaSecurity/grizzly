@@ -191,9 +191,9 @@ class Session:
                         exc.report.major[:8],
                         exc.report.minor[:8],
                     )
+                    self.status.count_result(exc.report.crash_hash, short_sig)
                     self.reporter.submit([], exc.report)
                     exc.report.cleanup()
-                    self.status.count_result(short_sig)
                     raise TargetLaunchError(str(exc), None) from None
 
             # create and populate a test case
@@ -246,18 +246,24 @@ class Session:
                 LOG.debug("result detected")
                 report = self.target.create_report(is_hang=result.timeout)
                 if result.timeout:
+                    report_uid = "hang"
                     short_sig = "Potential hang detected"
                 else:
+                    report_uid = report.crash_hash
                     short_sig = report.crash_info.createShortSignature()
+                seen = self.status.count_result(report_uid, short_sig)
                 LOG.info(
-                    "Result: %s (%s:%s)", short_sig, report.major[:8], report.minor[:8]
+                    "Result: %s (%s:%s) - %d",
+                    short_sig,
+                    report.major[:8],
+                    report.minor[:8],
+                    seen,
                 )
                 self.reporter.submit(self.iomanager.tests, report)
                 report.cleanup()
-                self.status.count_result(short_sig)
             elif result.status == Result.IGNORED:
                 self.status.ignored += 1
-                LOG.info("Ignored (%d)", self.status.ignored)
+                LOG.info("Ignored - %d", self.status.ignored)
 
             if startup_error:
                 raise SessionError("Please check Adapter and Target")

@@ -200,7 +200,7 @@ def test_status_reporter_06(mocker, tmp_path):
     status = Status.start(path=str(tmp_path), enable_profiling=True)
     status.ignored = 1
     status.iteration = 432422
-    status._results = {"sig": 123}
+    status.count_result("uid1", "sig1")
     status.record("test1", 0.91)
     status.record("test1", 1.0)
     status.record("test1", 1.23456)
@@ -246,14 +246,14 @@ def test_status_reporter_07(tmp_path):
     # multiple reports with results
     status = Status.start(path=str(tmp_path))
     status.iteration = 1
-    status.count_result("[@ test1]")
-    status.count_result("[@ test2]")
-    status.count_result("[@ test1]")
+    status.count_result("uid1", "[@ test1]")
+    status.count_result("uid2", "[@ test2]")
+    status.count_result("uid1", "[@ test1]")
     status.report(force=True)
     status = Status.start(path=str(tmp_path))
     status.iteration = 1
-    status.count_result("[@ test1]")
-    status.count_result("[@ longsignature123]")
+    status.count_result("uid1", "[@ test1]")
+    status.count_result("uid3", "[@ longsignature123]")
     status.report(force=True)
     rptr = StatusReporter.load(str(tmp_path))
     assert rptr.has_results
@@ -331,13 +331,15 @@ def test_status_reporter_10(tmp_path):
     status.ignored = 100
     status.iteration = 1000
     status.log_size = 9999999999
-    status._results = {"sig": 123}
+    status.count_result("uid1", "[@ sig1]")
+    status._results["uid1"]["count"] = 123
     status.report(force=True)
     status = Status.start(path=str(status_path))
     status.ignored = 9
     status.iteration = 192938
     status.log_size = 0
-    status._results = {"sig": 3}
+    status.count_result("uid2", "[@ sig2]")
+    status._results["uid2"]["count"] = 3
     status.report(force=True)
     # create screenlogs with tracebacks
     for i in range(10):
@@ -554,7 +556,7 @@ def test_main_02(tmp_path):
     StatusReporter.CPU_POLL_INTERVAL = 0.01
     status = Status.start(path=str(tmp_path))
     status.iteration = 1
-    status.count_result("[@ test]")
+    status.count_result("uid", "[@ test]")
     status.report(force=True)
     assert main(["--reports", str(tmp_path)]) == 0
 

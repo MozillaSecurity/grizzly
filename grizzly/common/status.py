@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 from contextlib import contextmanager
 from json import dump, load
 from logging import getLogger
@@ -34,7 +34,7 @@ class Status:
         _enable_profiling (bool): Profiling support status.
         _lock (InterProcessLock): Lock used with data_file.
         _profiles (dict): Profiling data.
-        _results (dict): Results data. Used to count occurrences of a signature.
+        _results (dict): Results data. Used to count occurrences of results.
         data_file (str): File to save data to. None in read-only mode.
         ignored (int): Ignored result count.
         iteration (int): Iteration count.
@@ -75,7 +75,7 @@ class Status:
             self._lock = InterProcessLock(self.lock_file(data_file))
             self._enable_profiling = enable_profiling
         self._profiles = dict()
-        self._results = defaultdict(int)
+        self._results = dict()
         self.data_file = data_file
         self.ignored = 0
         self.iteration = 0
@@ -106,16 +106,26 @@ class Status:
                 pass
             self.data_file = None
 
-    def count_result(self, signature):
-        """Increment counter that matches `signature`.
+    def count_result(self, uid, description):
+        """Increment counter that matches `uid`.
 
         Args:
-            signature (str): Signature to increment.
+            uid (str): Unique identifier.
+            description (str): User friendly name (short signature).
 
         Returns:
-            None
+            int: Current count.
         """
-        self._results[signature] += 1
+        if uid not in self._results:
+            assert isinstance(uid, str)
+            assert isinstance(description, str)
+            # create result entry
+            self._results[uid] = {
+                "count": 0,
+                "desc": description,
+            }
+        self._results[uid]["count"] += 1
+        return self._results[uid]["count"]
 
     @property
     def _data(self):
@@ -312,7 +322,19 @@ class Status:
         Returns:
             int: Total number of results.
         """
-        return sum(self._results.values())
+        return sum(x["count"] for x in self._results.values())
+
+    def result_entries(self):
+        """Provide unique result entries.
+
+        Args:
+            None
+
+        Yields:
+            dict: Result entry.
+        """
+        for uid, result in self._results.items():
+            yield uid, result
 
     @property
     def runtime(self):
@@ -328,19 +350,6 @@ class Status:
         if self.data_file is None:
             return self.timestamp - self.start_time
         return max(time() - self.start_time, 0)
-
-    def signatures(self):
-        """Provide the signature and the number of times it has been found for
-        each result.
-
-        Args:
-            None
-
-        Yields:
-            tuple: Signature and count.
-        """
-        for sig, count in self._results.items():
-            yield (sig, count)
 
     @classmethod
     def start(cls, path=PATH, enable_profiling=False):
