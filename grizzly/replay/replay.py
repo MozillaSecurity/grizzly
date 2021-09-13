@@ -385,18 +385,18 @@ class ReplayManager:
                         self._any_crash
                         or self.check_match(self._signature, report, expect_hang)
                     ):
-                        self.status.count_result(short_sig)
+                        if sig_hash:
+                            LOG.debug("using provided signature (hash) to bucket")
+                            bucket_hash = sig_hash
+                        else:
+                            bucket_hash = report.crash_hash
+                        self.status.count_result(bucket_hash, short_sig)
                         LOG.info(
                             "Result: %s (%s:%s)",
                             short_sig,
                             report.major[:8],
                             report.minor[:8],
                         )
-                        if sig_hash:
-                            LOG.debug("using provided signature (hash) to bucket")
-                            bucket_hash = sig_hash
-                        else:
-                            bucket_hash = report.crash_hash
                         if bucket_hash not in reports:
                             reports[bucket_hash] = ReplayResult(
                                 report, served, durations, True

@@ -194,7 +194,9 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters):
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
-    report = mocker.Mock(spec_set=Report, major="major123", minor="minor456")
+    report = mocker.Mock(
+        spec_set=Report, major="major123", minor="minor456", crash_hash="123"
+    )
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
@@ -283,7 +285,9 @@ def test_session_06(mocker, tmp_path, harness, report_size):
     """test Session - handle Target delayed failures"""
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
     reporter = mocker.Mock(spec_set=Reporter)
-    report = mocker.Mock(spec_set=Report, major="major123", minor="minor456")
+    report = mocker.Mock(
+        spec_set=Report, major="major123", minor="minor456", crash_hash="1234"
+    )
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
@@ -327,7 +331,9 @@ def test_session_06(mocker, tmp_path, harness, report_size):
 def test_session_07(mocker, tmp_path, srv_results, target_result, ignored, results):
     """test Session.run() - initial test case was not served"""
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
-    report = mocker.Mock(spec_set=Report, major="major123", minor="minor456")
+    report = mocker.Mock(
+        spec_set=Report, major="major123", minor="minor456", crash_hash="123"
+    )
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     reporter = mocker.Mock(spec_set=Reporter)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
@@ -381,7 +387,10 @@ def test_session_08(tmp_path, mocker):
 def test_session_09(tmp_path, mocker):
     """test Session.run() handle TargetLaunchError"""
     mocker.patch("grizzly.session.Status.PATH", return_value=str(tmp_path))
-    report = mocker.Mock(spec_set=Report, major="major123", minor="minor456")
+    report = mocker.Mock(
+        spec_set=Report, major="major123", minor="minor456", crash_hash="123"
+    )
+    report.crash_info.createShortSignature.return_value = "[@ sig]"
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
     runner.return_value.launch.side_effect = TargetLaunchError("test", report)
     adapter = mocker.Mock(spec_set=Adapter, remaining=None)

@@ -133,22 +133,24 @@ class StatusReporter:
         print(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
     def _results(self, max_len=85):
-        signatures = defaultdict(int)
+        descs = dict()
+        counts = defaultdict(int)
         exp = int(time()) - self.EXP_LIMIT
         # calculate totals
         for report in self.reports:
             # filter expired reports
             if report.timestamp > exp:
                 # count results in report
-                for sig, count in report.signatures():
-                    signatures[sig] += count
+                for uid, result in report.result_entries():
+                    descs[uid] = result["desc"]
+                    counts[uid] += result["count"]
         # generate output
         txt = list()
-        for sig, count in sorted(signatures.items(), key=lambda x: x[1], reverse=True):
-            if len(sig) > max_len:
-                txt.append("%d: '%s...'\n" % (count, sig[:max_len]))
+        for uid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
+            if len(descs[uid]) > max_len:
+                txt.append("%d: '%s...'\n" % (count, descs[uid][:max_len]))
             else:
-                txt.append("%d: %r\n" % (count, sig))
+                txt.append("%d: %r\n" % (count, descs[uid]))
         if not txt:
             txt.append("No results available\n")
         return "".join(txt)

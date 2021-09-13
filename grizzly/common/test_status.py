@@ -52,7 +52,7 @@ def test_status_02(tmp_path):
 def test_status_03(tmp_path):
     """test Status.report()"""
     status = Status.start(path=str(tmp_path))
-    status.count_result("sig1")
+    status.count_result("uid1", "sig1")
     # try to report before REPORT_FREQ elapses
     assert not status.report()
     # REPORT_FREQ elapses
@@ -85,7 +85,7 @@ def test_status_05(mocker, tmp_path):
     mocker.patch("grizzly.common.status.time", return_value=1.0)
     # create simple entry
     status = Status.start(path=str(tmp_path), enable_profiling=True)
-    status.count_result("sig1")
+    status.count_result("uid1", "sig1")
     status.record("test", 123.45)
     status.report(force=True)
     assert status.results == 1
@@ -197,16 +197,16 @@ def test_status_08(tmp_path):
 
 
 def test_status_09(tmp_path):
-    """test Status.count_result() and Status.signatures()"""
+    """test Status.count_result() and Status.result_entries()"""
     status = Status.start(path=str(tmp_path))
-    status.count_result("sig1")
-    status.count_result("sig2")
-    status.count_result("sig1")
-    status.count_result("sig3")
+    assert status.count_result("uid1", "sig1") == 1
+    assert status.count_result("uid2", "sig2") == 1
+    assert status.count_result("uid1", "sig1") == 2
+    assert status.count_result("uid3", "sig3") == 1
     assert status.results == 4
     found = dict()
-    for sig, count in status.signatures():
-        found[sig] = count
+    for _, result in status.result_entries():
+        found[result["desc"]] = result["count"]
     assert "sig1" in found
     assert found["sig1"] == 2
     assert "sig2" in found
