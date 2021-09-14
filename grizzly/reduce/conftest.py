@@ -26,7 +26,7 @@ def reporter_sequential_strftime(mocker):
     """Make `strftime` in `FilesystemReporter` return sequential values.
     This ensures ever report gets a unique folder and won't overwrite another.
     """
-    prefix = mocker.patch("grizzly.common.reporter.strftime")
+    prefix = mocker.patch("grizzly.common.report.strftime")
 
     def report_prefix(_):
         return "%04d" % (prefix.call_count,)
