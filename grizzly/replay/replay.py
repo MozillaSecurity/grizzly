@@ -41,6 +41,7 @@ class ReplayResult:
 class ReplayManager:
     HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
     DEFAULT_TIME_LIMIT = 30
+    STATUS_DB = pathjoin(grz_tmp(), "replay-status.db")
 
     __slots__ = (
         "ignore",
@@ -107,8 +108,7 @@ class ReplayManager:
         Returns:
             None
         """
-        if self.status is not None:
-            self.status.cleanup()
+        # TODO: Do we need this anymore?
 
     @staticmethod
     def expect_hang(ignore, signature, tests):
@@ -253,10 +253,7 @@ class ReplayManager:
         assert self._harness is not None or len(testcases) == 1
         assert not expect_hang or self._signature is not None
 
-        if self.status is not None:
-            LOG.debug("clearing previous status data")
-            self.status.cleanup()
-        self.status = Status.start()
+        self.status = Status.start(db_file=self.STATUS_DB)
 
         server_map = ServerMap()
         if self._harness is not None:

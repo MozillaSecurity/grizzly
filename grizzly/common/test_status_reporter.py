@@ -6,7 +6,6 @@
 # pylint: disable=protected-access
 
 from itertools import count
-from os.path import isfile
 from re import match
 from unittest.mock import Mock
 
@@ -45,10 +44,10 @@ def test_status_reporter_01(tmp_path):
 def test_status_reporter_02(tmp_path):
     """test StatusReporter.load()"""
     # missing reports path
-    st_rpt = StatusReporter.load(str(tmp_path / "missing"))
+    st_rpt = StatusReporter.load(str(tmp_path / "status.db"))
     assert not st_rpt.reports
     # empty reports and tb paths
-    st_rpt = StatusReporter.load(str(tmp_path), tb_path=str(tmp_path))
+    st_rpt = StatusReporter.load(str(tmp_path / "status.db"), tb_path=str(tmp_path))
     assert isinstance(st_rpt.reports, list)
     assert not st_rpt.reports
     assert isinstance(st_rpt.tracebacks, list)
@@ -127,15 +126,16 @@ def test_status_reporter_04(tmp_path):
 
 def test_status_reporter_05(mocker, tmp_path):
     """test StatusReporter._summary()"""
+    mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
     mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
-    mocker.patch("grizzly.common.status_reporter.time", side_effect=(1.0, 2.0))
+    db_file = str(tmp_path / "status.db")
     # single report
-    status = Status.start(path=str(tmp_path))
+    status = Status.start(db_file=db_file)
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.report(force=True)
-    rptr = StatusReporter.load(str(tmp_path))
+    rptr = StatusReporter.load(db_file)
     rptr._sys_info = _fake_sys_info
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
@@ -149,12 +149,12 @@ def test_status_reporter_05(mocker, tmp_path):
     assert "Timestamp" not in output
     assert len(output.split("\n")) == 3
     # multiple reports
-    status = Status.start(path=str(tmp_path))
+    status = Status.start(db_file=db_file)
     status.ignored = 1
     status.iteration = 8
     status.log_size = 86900000
     status.report(force=True)
-    rptr = StatusReporter.load(str(tmp_path))
+    rptr = StatusReporter.load(db_file)
     rptr._sys_info = _fake_sys_info
     assert len(rptr.reports) == 2
     output = rptr._summary(sysinfo=True, timestamp=True)
@@ -175,29 +175,23 @@ def test_status_reporter_05(mocker, tmp_path):
 
 def test_status_reporter_06(mocker, tmp_path):
     """test StatusReporter._specific()"""
-    mocker.patch("grizzly.common.status_reporter.time", return_value=3661.0)
+    mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
+    db_file = str(tmp_path / "status.db")
     # single report
-    mocker.patch(
-        "grizzly.common.status.time", side_effect=count(start=0.0, step=3600.0)
-    )
-    status = Status.start(path=str(tmp_path))
+    status = Status.start(db_file=db_file)
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.report(force=True)
-    rptr = StatusReporter.load(str(tmp_path))
+    rptr = StatusReporter.load(db_file)
     assert rptr.reports is not None
     output = rptr._specific()
     assert len(output.split("\n")[:-1]) == 2
     assert "Ignored" in output
     assert "Iteration" in output
     assert "Results" in output
-    assert "EXPIRED" not in output
     # multiple reports
-    mocker.patch(
-        "grizzly.common.status.time", side_effect=count(start=0.0, step=3661.0)
-    )
-    status = Status.start(path=str(tmp_path), enable_profiling=True)
+    status = Status.start(db_file=db_file, enable_profiling=True)
     status.ignored = 1
     status.iteration = 432422
     status.count_result("uid1", "sig1")
@@ -206,7 +200,7 @@ def test_status_reporter_06(mocker, tmp_path):
     status.record("test1", 1.23456)
     status.record("test2", 1201.1)
     status.report(force=True)
-    rptr = StatusReporter.load(str(tmp_path))
+    rptr = StatusReporter.load(db_file)
     assert len(rptr.reports) == 2
     output = rptr._specific()
     assert len(output.split("\n")[:-1]) == 7
@@ -216,46 +210,36 @@ def test_status_reporter_06(mocker, tmp_path):
     assert "Profiling entries" in output
     assert "> test1:" in output
     assert "> test2:" in output
-    assert "EXPIRED" not in output
-    # expired report
-    mocker.patch("grizzly.common.status.time", return_value=1.0)
-    status = Status.start(path=str(tmp_path))
-    status.ignored = 1
-    status.iteration = 1
-    status.report(force=True)
-    rptr = StatusReporter.load(str(tmp_path))
-    assert len(rptr.reports) == 3
-    output = rptr._specific()
-    assert len(output.split("\n")[:-1]) == 8
-    assert "EXPIRED" in output
 
 
-def test_status_reporter_07(tmp_path):
+def test_status_reporter_07(mocker, tmp_path):
     """test StatusReporter._results()"""
+    mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2, 3))
+    db_file = str(tmp_path / "status.db")
     # single report without results
-    status = Status.start(path=str(tmp_path))
+    status = Status.start(db_file=db_file)
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
     status.report(force=True)
-    rptr = StatusReporter.load(str(tmp_path))
+    rptr = StatusReporter.load(db_file)
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     assert not rptr.has_results
     assert rptr._results() == "No results available\n"
     # multiple reports with results
-    status = Status.start(path=str(tmp_path))
+    status = Status.start(db_file=db_file)
     status.iteration = 1
     status.count_result("uid1", "[@ test1]")
     status.count_result("uid2", "[@ test2]")
     status.count_result("uid1", "[@ test1]")
     status.report(force=True)
-    status = Status.start(path=str(tmp_path))
+    status = Status.start(db_file=db_file)
     status.iteration = 1
     status.count_result("uid1", "[@ test1]")
     status.count_result("uid3", "[@ longsignature123]")
     status.report(force=True)
-    rptr = StatusReporter.load(str(tmp_path))
+    rptr = StatusReporter.load(db_file)
     assert rptr.has_results
     assert len(rptr.reports) == 3
     output = rptr._results(max_len=16)
@@ -267,9 +251,8 @@ def test_status_reporter_07(tmp_path):
 
 def test_status_reporter_08(tmp_path):
     """test StatusReporter.load() with traceback"""
-    status_path = tmp_path / "status"
-    status_path.mkdir()
-    status = Status.start(path=str(status_path))
+    db_file = str(tmp_path / "status.db")
+    status = Status.start(db_file=db_file)
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
@@ -281,21 +264,21 @@ def test_status_reporter_08(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(str(status_path), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 1
     # create second screenlog
     with (tmp_path / "screenlog.1234").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"foo.bar.error: blah\n")
-    rptr = StatusReporter.load(str(status_path), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
     # create third screenlog
     with (tmp_path / "screenlog.3").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"KeyboardInterrupt\n")
-    rptr = StatusReporter.load(str(status_path), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
     merged_log = rptr._summary()
     assert len(merged_log.splitlines()) == 14
@@ -313,7 +296,7 @@ def test_status_reporter_09(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(str(tmp_path), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(str(tmp_path / "status.db"), tb_path=str(tmp_path))
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 1
     output = rptr._summary()
@@ -322,19 +305,19 @@ def test_status_reporter_09(tmp_path):
     assert "IndexError" in output
 
 
-def test_status_reporter_10(tmp_path):
+def test_status_reporter_10(mocker, tmp_path):
     """test StatusReporter.summary() limit with traceback"""
-    status_path = tmp_path / "status"
-    status_path.mkdir()
+    mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
+    db_file = str(tmp_path / "status.db")
     # create reports
-    status = Status.start(path=str(status_path))
+    status = Status.start(db_file=db_file)
     status.ignored = 100
     status.iteration = 1000
     status.log_size = 9999999999
     status.count_result("uid1", "[@ sig1]")
     status._results["uid1"]["count"] = 123
     status.report(force=True)
-    status = Status.start(path=str(status_path))
+    status = Status.start(db_file=db_file)
     status.ignored = 9
     status.iteration = 192938
     status.log_size = 0
@@ -351,27 +334,11 @@ def test_status_reporter_10(tmp_path):
                 )
                 test_fp.write(b"    some_long_name_for_a_func_%04d()\n" % (j,))
             test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(str(status_path), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 10
     merged_log = rptr._summary(runtime=True, sysinfo=True, timestamp=True)
     assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
-
-
-def test_status_reporter_11(mocker, tmp_path):
-    """test StatusReporter.delete_expired()"""
-    # test not expired
-    mocker.patch("grizzly.common.status.time", return_value=1.0)
-    mocker.patch("grizzly.common.status_reporter.time", return_value=1.0)
-    status = Status.start(path=str(tmp_path))
-    status.report(force=True)
-    StatusReporter.delete_expired(str(tmp_path))
-    assert isfile(status.data_file)
-    # test expired
-    mocker.patch("grizzly.common.status_reporter.time", return_value=2.0)
-    status.report(force=True)
-    StatusReporter.delete_expired(str(tmp_path), exp_limit=1)
-    assert not isfile(status.data_file)
 
 
 def test_traceback_report_01():
@@ -547,41 +514,40 @@ def test_traceback_report_08(tmp_path):
 
 def test_main_01(tmp_path):
     """test main() with no reports"""
+    db_file = str(tmp_path / "status.db")
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    assert main(["--reports", str(tmp_path)]) == 0
+    assert main([], modes={"fuzz": db_file}) == 0
 
 
 def test_main_02(tmp_path):
     """test main() with a report"""
+    db_file = str(tmp_path / "status.db")
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    status = Status.start(path=str(tmp_path))
+    status = Status.start(db_file=db_file)
     status.iteration = 1
     status.count_result("uid", "[@ test]")
     status.report(force=True)
-    assert main(["--reports", str(tmp_path)]) == 0
+    assert main([], modes={"fuzz": db_file}) == 0
 
 
 def test_main_03(tmp_path):
     """test main() --dump"""
+    db_file = str(tmp_path / "status.db")
     StatusReporter.CPU_POLL_INTERVAL = 0.01
-    status = Status.start(path=str(tmp_path))
+    status = Status.start(db_file=db_file)
     status.iteration = 1
     status.report(force=True)
     dump_file = tmp_path / "output.txt"
-    assert main(["--dump", str(dump_file), "--reports", str(tmp_path)]) == 0
+    assert main(["--dump", str(dump_file)], modes={"fuzz": db_file}) == 0
     assert dump_file.is_file()
     assert b"Runtime" not in dump_file.read_bytes()
     # assert False, dump_file.read_bytes()
 
 
-def test_main_04():
+def test_main_04(tmp_path):
     """test main() with invalid args"""
+    db_file = str(tmp_path / "status.db")
     with raises(SystemExit):
-        main(["--mode", "invalid"])
+        main(["--mode", "invalid"], modes={"fuzz": db_file})
     with raises(SystemExit):
-        main(["--tracebacks", "missing"])
-
-
-def test_main_05(tmp_path):
-    """test main() cleanup mode"""
-    assert main(["--mode", "cleanup", "--reports", str(tmp_path)]) == 0
+        main(["--tracebacks", "missing"], modes={"fuzz": db_file})

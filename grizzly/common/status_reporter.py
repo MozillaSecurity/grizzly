@@ -15,13 +15,14 @@ try:
 except ImportError:  # pragma: no cover
     # os.getloadavg() is not available on all platforms
     getloadavg = None
-from os import SEEK_CUR, getenv, remove, scandir
+from os import SEEK_CUR, getenv, scandir
 from os.path import isdir
 from re import match
-from time import gmtime, strftime, time
+from time import gmtime, strftime
 
 from psutil import cpu_count, cpu_percent, disk_usage, virtual_memory
 
+from ..session import Session
 from .status import Status
 
 __all__ = ("StatusReporter",)
@@ -36,45 +37,13 @@ class StatusReporter:
 
     CPU_POLL_INTERVAL = 1
     DISPLAY_LIMIT_LOG = 10  # don't include log results unless size exceeds 10MBs
-    EXP_LIMIT = 600  # expiration limit, ignore older reports
     READ_BUF_SIZE = 0x10000  # 64KB
     SUMMARY_LIMIT = 4095  # summary output must be no more than 4KB
+    TIME_LIMIT = 600  # ignore older reports
 
     def __init__(self, reports, tracebacks=None):
-        assert all(x.data_file is None for x in reports)
         self.reports = reports
         self.tracebacks = tracebacks
-
-    @staticmethod
-    def delete_expired(path, exp_limit=EXP_LIMIT):
-        """Remove expired reports from the filesystem.
-
-        Args:
-            path (str): Path to scan for status report files.
-            exp_limit (int): Age limit of report in seconds before it is considered
-                             expired.
-
-        Returns:
-            None
-        """
-        exp = int(time()) - exp_limit
-        expired = 0
-        for entry in scandir(path):
-            if entry.name.endswith(".json") and entry.is_file():
-                report = Status.load(entry.path)
-                if report and report.timestamp <= exp:
-                    # remove lock file
-                    try:
-                        remove(Status.lock_file(entry.path))
-                    except OSError:  # pragma: no cover
-                        pass
-                    # remove data file
-                    try:
-                        remove(entry.path)
-                        expired += 1
-                    except OSError:  # pragma: no cover
-                        pass
-        print("%d expired report(s) removed" % (expired,))
 
     def dump_specific(self, filename):
         """Write out merged reports.
@@ -110,18 +79,23 @@ class StatusReporter:
         return any(x.results for x in self.reports)
 
     @classmethod
-    def load(cls, path, tb_path=None):
+    def load(cls, db_file, tb_path=None, time_limit=TIME_LIMIT):
         """Read Grizzly status reports and create a StatusReporter object.
 
         Args:
             path (str): Path to scan for status data files.
             tb_path (str): Directory to scan for files containing Python tracebacks.
+            time_limit (int): Only include entries with a timestamp that is within the
+                              given number of seconds.
 
         Returns:
             StatusReporter: Contains available status reports and traceback reports.
         """
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
-        return cls(list(Status.loadall(path)), tracebacks=tracebacks)
+        return cls(
+            list(Status.loadall(db_file=db_file, time_limit=time_limit)),
+            tracebacks=tracebacks,
+        )
 
     def print_results(self):
         print(self._results())
@@ -135,15 +109,12 @@ class StatusReporter:
     def _results(self, max_len=85):
         descs = dict()
         counts = defaultdict(int)
-        exp = int(time()) - self.EXP_LIMIT
         # calculate totals
         for report in self.reports:
-            # filter expired reports
-            if report.timestamp > exp:
-                # count results in report
-                for uid, result in report.result_entries():
-                    descs[uid] = result["desc"]
-                    counts[uid] += result["count"]
+            # count results in report
+            for uid, result in report.result_entries():
+                descs[uid] = result["desc"]
+                counts[uid] += result["count"]
         # generate output
         txt = list()
         for uid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
@@ -176,15 +147,10 @@ class StatusReporter:
         """
         if not self.reports:
             return "No status reports available"
-        exp = int(time()) - self.EXP_LIMIT
         self.reports.sort(key=lambda x: x.runtime, reverse=True)
-        self.reports.sort(key=lambda x: x.timestamp < exp)
         txt = list()
         for num, report in enumerate(self.reports, start=1):
             txt.append("#%02d - %d -" % (num, report.pid))
-            if report.timestamp < exp:
-                txt.append(" (EXPIRED)\n")
-                continue
             txt.append(" Runtime %s\n" % (timedelta(seconds=int(report.runtime)),))
             txt.append(" * Iterations: %d" % (report.iteration,))
             txt.append(" @ %0.2f," % (round(report.rate, 2),))
@@ -224,16 +190,14 @@ class StatusReporter:
         """
         txt = list()
         # Job specific status
-        exp = int(time()) - self.EXP_LIMIT
-        reports = tuple(x for x in self.reports if x.timestamp > exp)
-        if reports:
+        if self.reports:
             # calculate totals
-            iterations = tuple(x.iteration for x in reports)
-            log_sizes = tuple(x.log_size for x in reports)
-            rates = tuple(x.rate for x in reports)
-            results = tuple(x.results for x in reports)
-            count = len(reports)
-            total_ignored = sum(x.ignored for x in reports)
+            iterations = tuple(x.iteration for x in self.reports)
+            log_sizes = tuple(x.log_size for x in self.reports)
+            rates = tuple(x.rate for x in self.reports)
+            results = tuple(x.results for x in self.reports)
+            count = len(self.reports)
+            total_ignored = sum(x.ignored for x in self.reports)
             total_iters = sum(iterations)
             # Iterations
             txt.append("Iterations : %d" % (total_iters,))
@@ -257,7 +221,7 @@ class StatusReporter:
             # Runtime
             if runtime:
                 txt.append("\n")
-                total_runtime = sum(x.runtime for x in reports)
+                total_runtime = sum(x.runtime for x in self.reports)
                 txt.append("   Runtime : %s" % (timedelta(seconds=int(total_runtime)),))
             # Log size
             log_usage = sum(log_sizes) / 1_048_576.0
@@ -464,7 +428,7 @@ class TracebackReport:
         return "\n".join(["Log: %r" % self.file_name] + self.prev_lines + self.lines)
 
 
-def main(args=None):
+def main(args=None, modes=None):
     """Merge Grizzly status files into a single report (main entrypoint).
 
     Args:
@@ -481,19 +445,14 @@ def main(args=None):
         log_fmt = "[%(asctime)s] %(message)s"
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    modes = ("status", "cleanup")
+    if not modes:
+        modes = {"fuzz": Session.STATUS_DB}
     parser = ArgumentParser(description="Grizzly status report generator")
     parser.add_argument("--dump", help="File to write report to")
     parser.add_argument(
         "--mode",
-        default="status",
-        help="Report mode. Available modes: %s (default: 'status')"
-        % (", ".join(modes),),
-    )
-    parser.add_argument(
-        "--reports",
-        default=Status.PATH,
-        help="Scan path for status report json files (default: %(default)s)",
+        default="fuzz",
+        help="Report mode. Available modes: %s (default: 'fuzz')" % (", ".join(modes),),
     )
     parser.add_argument(
         "--system-report",
@@ -510,15 +469,12 @@ def main(args=None):
     if args.tracebacks and not isdir(args.tracebacks):
         parser.error("--tracebacks must be a directory")
 
-    if args.mode == "cleanup":
-        print("Removing expired reports from disk...")
-        StatusReporter.delete_expired(args.reports)
-        return 0
-
-    reporter = StatusReporter.load(args.reports, tb_path=args.tracebacks)
+    status_db = modes.get(args.mode)
+    reporter = StatusReporter.load(db_file=status_db, tb_path=args.tracebacks)
     if args.dump:
         reporter.dump_summary(args.dump)
         return 0
+
     if not reporter.reports:
         print("Grizzly Status - No status reports to display")
         return 0
