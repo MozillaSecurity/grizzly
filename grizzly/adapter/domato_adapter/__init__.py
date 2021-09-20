@@ -6,10 +6,10 @@ from grizzly.adapter import Adapter
 from grizzly.common import storage
 
 DOMATO_PATH = input("Enter full path to your domato directory : ")
+FILES = input("Enter number of files to be generated for each adaptyer testcase : ")
 
 class DomatoAdapter(Adapter):
     NAME = "domato"
-    FILES = input("Enter number of files to be generated for each adaptyer testcase : ")
 
     def setup(self, _):
         self.enable_harness()
@@ -37,7 +37,7 @@ class DomatoAdapter(Adapter):
 
         # lookup the name of the newly generated file on disk
 
-        os.system("python3 {} --no_of_files {} --output_dir {}".format(DOMATO_PATH, self.fuzz["tmp"]))
+        os.system("python3 {} --no_of_files {} --output_dir {}".format(DOMATO_PATH, FILES, self.fuzz["tmp"]))
         time.sleep(3)
 
         gen_file = os.path.join(self.fuzz["tmp"], os.listdir(self.fuzz["tmp"])[0])
