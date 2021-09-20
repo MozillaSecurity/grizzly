@@ -5,16 +5,11 @@
 """Manage Grizzly status reports."""
 from collections import namedtuple
 from contextlib import contextmanager
-from json import dump, load
+from json import dumps, loads
 from logging import getLogger
-from os import close, getpid, scandir, unlink
-from os.path import isdir, isfile
-from tempfile import mkstemp
+from os import getpid
+from sqlite3 import connect
 from time import time
-
-from fasteners.process_lock import InterProcessLock
-
-from .utils import grz_tmp
 
 __all__ = ("Status",)
 __author__ = "Tyson Smith"
@@ -27,33 +22,33 @@ ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
 
 class Status:
     """Status holds status information for the Grizzly session.
-    There can be multiple readers (read-only) but only a single writer of data.
-    Read-only mode is implied if `data_file` is None.
+    Read-only mode is implied if `_db_file` is None.
 
     Attributes:
+        _db_file (str): Database file containing data. None in read-only mode.
         _enable_profiling (bool): Profiling support status.
-        _lock (InterProcessLock): Lock used with data_file.
         _profiles (dict): Profiling data.
         _results (dict): Results data. Used to count occurrences of results.
-        data_file (str): File to save data to. None in read-only mode.
         ignored (int): Ignored result count.
         iteration (int): Iteration count.
         log_size (int): Log size in bytes.
         pid (int): Python process ID.
         start_time (float): Start time of session.
         test_name (str): Current test name.
-        timestamp (float): Last time data was saved to data_file. Set by report().
+        timestamp (float): Last time data was saved to database.
     """
 
-    PATH = grz_tmp("status")
+    DB_VERSION = 1
+    # entries older than 'EXP_LIMIT' seconds will be removed.
+    EXP_LIMIT = 86400
+    # database will be updated no more than every 'REPORT_FREQ' seconds.
     REPORT_FREQ = 60
 
     __slots__ = (
+        "_db_file",
         "_enable_profiling",
-        "_lock",
         "_profiles",
         "_results",
-        "data_file",
         "ignored",
         "iteration",
         "log_size",
@@ -63,20 +58,19 @@ class Status:
         "timestamp",
     )
 
-    def __init__(self, data_file, enable_profiling=False, start_time=None):
-        if data_file is None:
+    def __init__(
+        self, db_file=None, enable_profiling=False, start_time=None, exp_limit=EXP_LIMIT
+    ):
+        if db_file is None:
             # read-only mode
             assert start_time is None
-            self._lock = None
             self._enable_profiling = False
         else:
-            assert data_file.endswith(".json")
             assert isinstance(start_time, float)
-            self._lock = InterProcessLock(self.lock_file(data_file))
             self._enable_profiling = enable_profiling
         self._profiles = dict()
         self._results = dict()
-        self.data_file = data_file
+        self._db_file = db_file
         self.ignored = 0
         self.iteration = 0
         self.log_size = 0
@@ -85,26 +79,44 @@ class Status:
         self.test_name = None
         self.timestamp = start_time
 
-    def cleanup(self):
-        """Remove data and lock files from disk.
-
-        Args:
-            None
-
-        Returns:
-            None
-        """
-        if self.data_file is not None:
+        # prepare database
+        if self._db_file:
+            LOG.debug("using status db %r", self._db_file)
+            con = connect(self._db_file)
             try:
-                with self._lock:
-                    unlink(self.data_file)
-            except OSError:  # pragma: no cover
-                LOG.warning("Failed to delete %r", self.data_file)
-            try:
-                unlink(self.lock_file(self.data_file))
-            except OSError:  # pragma: no cover
-                pass
-            self.data_file = None
+                cur = con.cursor()
+                # check db version
+                cur.execute("PRAGMA user_version;")
+                version = cur.fetchone()[0]
+                if version < self.DB_VERSION:
+                    LOG.debug("db version %d < %d", version, self.DB_VERSION)
+                    cur.execute("DROP TABLE IF EXISTS status;")
+                    cur.execute("PRAGMA user_version = %d;" % (self.DB_VERSION,))
+                    con.commit()
+                else:
+                    assert version == self.DB_VERSION
+                # create tables if needed
+                con.execute(
+                    """CREATE TABLE IF NOT EXISTS status (
+                       _profiles TEXT NOT NULL,
+                       _results TEXT NOT NULL,
+                       ignored INTEGER NOT NULL,
+                       iteration INTEGER NOT NULL,
+                       log_size INTEGER NOT NULL,
+                       pid INTEGER UNIQUE NOT NULL,
+                       start_time REAL NOT NULL,
+                       timestamp REAL NOT NULL);"""
+                )
+                con.commit()
+                # remove inactive status data
+                if exp_limit > 0:
+                    con.execute(
+                        """DELETE FROM status WHERE timestamp <= ?;""",
+                        (time() - exp_limit,),
+                    )
+                con.commit()
+            finally:
+                con.close()
 
     def count_result(self, uid, description):
         """Increment counter that matches `uid`.
@@ -127,89 +139,64 @@ class Status:
         self._results[uid]["count"] += 1
         return self._results[uid]["count"]
 
-    @property
-    def _data(self):
-        return {
-            "_profiles": self._profiles,
-            "_results": self._results,
-            "ignored": self.ignored,
-            "iteration": self.iteration,
-            "log_size": self.log_size,
-            "pid": self.pid,
-            "start_time": self.start_time,
-            "test_name": self.test_name,
-            "timestamp": self.timestamp,
-        }
-
     @classmethod
-    def load(cls, data_file):
-        """Load status report from a file. This will create a read-only status report.
+    def loadall(cls, db_file, time_limit=300):
+        """Load all status reports found in `db_file`.
 
         Args:
-            data_file (str): JSON file that contains status data.
-
-        Returns:
-            Status: Loaded status object (read-only) or None
-        """
-        assert data_file
-        status = cls(None)
-        data = None
-        try:
-            with InterProcessLock(cls.lock_file(data_file)):
-                with open(data_file, "r") as out_fp:
-                    data = load(out_fp)
-        except OSError:
-            LOG.debug("failed to open %r", data_file)
-            # if data_file exists the lock will be removed by the active session
-            if not isfile(data_file):
-                # attempt to remove potentially leaked lock file
-                try:
-                    unlink(cls.lock_file(data_file))
-                except OSError:  # pragma: no cover
-                    pass
-        except ValueError:
-            LOG.debug("failed to load json data from %r", data_file)
-        else:
-            LOG.debug("no such file %r", data_file)
-        if data is None:
-            return None
-        if "start_time" not in data:
-            LOG.debug("invalid status json file")
-            return None
-        for attr, value in data.items():
-            setattr(status, attr, value)
-        assert status.start_time <= status.timestamp
-        assert status.data_file is None
-        return status
-
-    @classmethod
-    def loadall(cls, path):
-        """Load all status reports found in `path`.
-
-        Args:
-            path (str): Path to scan for files containing status data.
+            db_file (str): Path to database containing status data.
+            time_limit (int): Only include entries with a timestamp that is within the
+                              given number of seconds.
 
         Yields:
             Status: Successfully loaded read-only status objects.
         """
-        if isdir(path):
-            for entry in scandir(path):
-                if entry.is_file() and entry.name.endswith(".json"):
-                    status = cls.load(entry.path)
-                    if status is not None:
-                        yield status
+        assert time_limit >= 0
+        con = connect(db_file)
+        try:
+            cur = con.cursor()
+            # check db version
+            cur.execute("PRAGMA user_version;")
+            assert cur.fetchone()[0] <= cls.DB_VERSION
+            # check table exists
+            cur.execute(
+                """SELECT name
+                           FROM sqlite_master
+                           WHERE type='table'
+                           AND name='status';"""
+            )
+            if cur.fetchone():
+                # collect entries
+                cur.execute(
+                    """SELECT pid,
+                             _profiles,
+                             _results,
+                             ignored,
+                             iteration,
+                             log_size,
+                             start_time,
+                             timestamp
+                       FROM status
+                       WHERE timestamp > ?;""",
+                    (time() - time_limit,),
+                )
+                entries = cur.fetchall()
+            else:
+                entries = ()
+        finally:
+            con.close()
 
-    @staticmethod
-    def lock_file(data_file):
-        """Name of lock file to use with data_file.
-
-        Args:
-            data_file (str): Name of data file.
-
-        Returns:
-            str: Lock file name.
-        """
-        return "%s.lock" % (data_file,)
+        for entry in entries:
+            status = cls()
+            status.pid = entry[0]
+            status._profiles = loads(entry[1])
+            status._results = loads(entry[2])
+            status.ignored = entry[3]
+            status.iteration = entry[4]
+            status.log_size = entry[5]
+            status.start_time = entry[6]
+            status.timestamp = entry[7]
+            yield status
 
     @contextmanager
     def measure(self, name):
@@ -290,7 +277,7 @@ class Status:
                 }
 
     def report(self, force=False, report_freq=REPORT_FREQ):
-        """Write status report to disk. Reports are only written periodically.
+        """Write status report to database. Reports are only written periodically.
         It is limited by `report_freq`. The specified number of seconds must
         elapse before another write will be performed unless `force` is True.
 
@@ -301,15 +288,66 @@ class Status:
         Returns:
             bool: Returns true if the report was successful otherwise false.
         """
-        assert self.data_file is not None
         now = time()
         if not force and now < (self.timestamp + report_freq):
             return False
+        assert self._db_file
         assert self.start_time <= now
         self.timestamp = now
-        with self._lock:
-            with open(self.data_file, "w") as out_fp:
-                dump(self._data, out_fp)
+
+        profiles = dumps(self._profiles)
+        results = dumps(self._results)
+        con = connect(self._db_file)
+        try:
+            cur = con.cursor()
+            cur.execute(
+                """UPDATE status
+                   SET _profiles = ?,
+                       _results = ?,
+                       ignored = ?,
+                       iteration = ?,
+                       log_size = ?,
+                       start_time = ?,
+                       timestamp = ?
+                   WHERE pid = ?;""",
+                (
+                    profiles,
+                    results,
+                    self.ignored,
+                    self.iteration,
+                    self.log_size,
+                    self.start_time,
+                    self.timestamp,
+                    self.pid,
+                ),
+            )
+            if cur.rowcount < 1:
+                cur.execute(
+                    """INSERT INTO status(
+                       pid,
+                       _profiles,
+                       _results,
+                       ignored,
+                       iteration,
+                       log_size,
+                       start_time,
+                       timestamp)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?);""",
+                    (
+                        self.pid,
+                        profiles,
+                        results,
+                        self.ignored,
+                        self.iteration,
+                        self.log_size,
+                        self.start_time,
+                        self.timestamp,
+                    ),
+                )
+            con.commit()
+        finally:
+            con.close()
+
         return True
 
     @property
@@ -347,29 +385,26 @@ class Status:
         Returns:
             int: Total runtime in seconds.
         """
-        if self.data_file is None:
+        if self._db_file is None:
             return self.timestamp - self.start_time
         return max(time() - self.start_time, 0)
 
     @classmethod
-    def start(cls, path=PATH, enable_profiling=False):
+    def start(cls, db_file, enable_profiling=False):
         """Create a unique Status object.
 
         Args:
-            path (str): Location to save files containing status data.
+            db_file (str): Path to database containing status data.
             enable_profiling (bool): Record profiling data.
 
         Returns:
             Status: Active status report.
         """
+        assert db_file
         pid = getpid()
-        tfd, filepath = mkstemp(
-            dir=path,
-            prefix="grzstatus_%d_" % (pid,),
-            suffix=".json",
+        status = cls(
+            db_file=db_file, enable_profiling=enable_profiling, start_time=time()
         )
-        close(tfd)
-        status = cls(filepath, enable_profiling=enable_profiling, start_time=time())
         status.pid = pid
         status.report(force=True)
         return status

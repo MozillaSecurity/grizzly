@@ -22,6 +22,8 @@ from ..target import (
 from .replay import ReplayManager
 from .test_replay import _fake_save_logs
 
+pytestmark = mark.usefixtures("tmp_path_grz_tmp", "tmp_path_status_db")
+
 
 def test_main_01(mocker, tmp_path):
     """test ReplayManager.main()"""
