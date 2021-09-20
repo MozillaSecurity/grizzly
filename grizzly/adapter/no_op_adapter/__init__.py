@@ -15,7 +15,7 @@ class NoOpAdapter(Adapter):
 
     NAME = "no-op"
 
-    def setup(self, _input, _server_map):
+    def setup(self, _input, *_):
         """Generate a static test case that calls `window.close()` when run.
         Normally this is done in generate() but since the test is static only
         do it once. Use the default harness to allow running multiple test cases
@@ -38,7 +38,7 @@ class NoOpAdapter(Adapter):
             "</html>"
         )
 
-    def generate(self, testcase, _server_map):
+    def generate(self, testcase, *_):
         """Since the test case has already been created just add the data to the
         TestCase.
 

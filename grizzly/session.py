@@ -148,7 +148,7 @@ class Session:
         assert time_limit > 0
 
         LOG.debug("calling adapter.setup()")
-        self.adapter.setup(input_path, self.iomanager.server_map)
+        self.adapter.setup(input_path)
         LOG.debug("configuring harness")
         self.iomanager.harness = self.adapter.get_harness()
 
