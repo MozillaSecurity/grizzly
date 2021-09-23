@@ -387,7 +387,7 @@ class ReplayManager:
                             bucket_hash = sig_hash
                         else:
                             bucket_hash = report.crash_hash
-                        self.status.count_result(bucket_hash, short_sig)
+                        self.status.results.count(bucket_hash, short_sig)
                         LOG.info(
                             "Result: %s (%s:%s)",
                             short_sig,
@@ -431,7 +431,7 @@ class ReplayManager:
                 if exit_early:
                     # failed to meet minimum number of results
                     if (
-                        repeat - self.status.iteration + self.status.results
+                        repeat - self.status.iteration + self.status.results.total
                         < min_results
                     ):
                         if self.status.iteration < repeat:
@@ -439,7 +439,7 @@ class ReplayManager:
                         # failed to reproduce issue
                         LOG.debug(
                             "results (%d) < minimum (%d), after %d attempts",
-                            self.status.results,
+                            self.status.results.total,
                             min_results,
                             self.status.iteration,
                         )
@@ -448,8 +448,8 @@ class ReplayManager:
                         # is an issue for now use relaunch=1
                         break
                     # check if complete (minimum number of results found)
-                    if self.status.results >= min_results:
-                        assert self.status.results == min_results
+                    if self.status.results.total >= min_results:
+                        assert self.status.results.total == min_results
                         assert (
                             sum(x.count for x in reports.values() if x.expected)
                             >= min_results
@@ -472,7 +472,7 @@ class ReplayManager:
                 else:
                     LOG.debug(
                         "%d (any_crash) less than minimum %d",
-                        self.status.results,
+                        self.status.results.total,
                         min_results,
                     )
                     for report in reports.values():

@@ -123,11 +123,11 @@ class Session:
                 "[I%04d-L%02d-R%02d] %s",
                 self.status.iteration,
                 self.adapter.remaining,
-                self.status.results,
+                self.status.results.total,
                 self.status.test_name,
             )
         elif log_limiter.ready(self.status.iteration, self.target.monitor.launches):
-            LOG.info("I%04d-R%02d ", self.status.iteration, self.status.results)
+            LOG.info("I%04d-R%02d ", self.status.iteration, self.status.results.total)
 
     def generate_testcase(self, time_limit):
         LOG.debug("calling iomanager.create_testcase()")
@@ -195,7 +195,7 @@ class Session:
                         exc.report.major[:8],
                         exc.report.minor[:8],
                     )
-                    self.status.count_result(exc.report.crash_hash, short_sig)
+                    self.status.results.count(exc.report.crash_hash, short_sig)
                     self.reporter.submit([], exc.report)
                     exc.report.cleanup()
                     raise TargetLaunchError(str(exc), None) from None
@@ -204,7 +204,6 @@ class Session:
             current_test = self.generate_testcase(time_limit)
             # display status
             self.display_status(log_limiter=log_limiter)
-
             # run test case
             with self.status.measure("execute"):
                 result = runner.run(
@@ -250,12 +249,13 @@ class Session:
                 LOG.debug("result detected")
                 report = self.target.create_report(is_hang=result.timeout)
                 if result.timeout:
-                    report_uid = "hang"
+                    # TODO: we cannot create a unique bucket hash for hangs atm
+                    bucket_hash = "hang"
                     short_sig = "Potential hang detected"
                 else:
-                    report_uid = report.crash_hash
+                    bucket_hash = report.crash_hash
                     short_sig = report.crash_info.createShortSignature()
-                seen = self.status.count_result(report_uid, short_sig)
+                seen = self.status.results.count(bucket_hash, short_sig)
                 LOG.info(
                     "Result: %s (%s:%s) - %d",
                     short_sig,

@@ -39,7 +39,7 @@ class StatusReporter:
     DISPLAY_LIMIT_LOG = 10  # don't include log results unless size exceeds 10MBs
     READ_BUF_SIZE = 0x10000  # 64KB
     SUMMARY_LIMIT = 4095  # summary output must be no more than 4KB
-    TIME_LIMIT = 600  # ignore older reports
+    TIME_LIMIT = 120  # ignore older reports
 
     def __init__(self, reports, tracebacks=None):
         self.reports = reports
@@ -76,7 +76,7 @@ class StatusReporter:
 
     @property
     def has_results(self):
-        return any(x.results for x in self.reports)
+        return any(x.results.total for x in self.reports)
 
     @classmethod
     def load(cls, db_file, tb_path=None, time_limit=TIME_LIMIT):
@@ -110,18 +110,17 @@ class StatusReporter:
         descs = dict()
         counts = defaultdict(int)
         # calculate totals
-        for report in self.reports:
-            # count results in report
-            for uid, result in report.result_entries():
-                descs[uid] = result["desc"]
-                counts[uid] += result["count"]
+        for entry in self.reports:
+            for rid, count, desc in entry.results.all():
+                descs[rid] = desc
+                counts[rid] += count
         # generate output
         txt = list()
-        for uid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
-            if len(descs[uid]) > max_len:
-                txt.append("%d: '%s...'\n" % (count, descs[uid][:max_len]))
+        for rid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
+            if len(descs[rid]) > max_len:
+                txt.append("%d: '%s...'\n" % (count, descs[rid][:max_len]))
             else:
-                txt.append("%d: %r\n" % (count, descs[uid]))
+                txt.append("%d: %r\n" % (count, descs[rid]))
         if not txt:
             txt.append("No results available\n")
         return "".join(txt)
@@ -155,7 +154,7 @@ class StatusReporter:
             txt.append(" * Iterations: %d" % (report.iteration,))
             txt.append(" @ %0.2f," % (round(report.rate, 2),))
             txt.append(" Ignored: %d," % (report.ignored,))
-            txt.append(" Results: %d" % (report.results,))
+            txt.append(" Results: %d" % (report.results.total,))
             txt.append("\n")
             # add profiling data if it exists
             if any(report.profile_entries()):
@@ -195,7 +194,7 @@ class StatusReporter:
             iterations = tuple(x.iteration for x in self.reports)
             log_sizes = tuple(x.log_size for x in self.reports)
             rates = tuple(x.rate for x in self.reports)
-            results = tuple(x.results for x in self.reports)
+            results = tuple(x.results.total for x in self.reports)
             count = len(self.reports)
             total_ignored = sum(x.ignored for x in self.reports)
             total_iters = sum(iterations)

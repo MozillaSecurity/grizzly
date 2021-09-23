@@ -345,7 +345,7 @@ def test_session_07(mocker, srv_results, target_result, ignored, results):
         with raises(SessionError, match="Please check Adapter and Target"):
             session.run([], 10, iteration_limit=2)
         assert session.status.iteration == 1
-        assert session.status.results == results
+        assert session.status.results.total == results
         assert session.status.ignored == ignored
         assert reporter.submit.call_count == results
         assert target.check_result.call_count == results
@@ -372,7 +372,7 @@ def test_session_08(mocker):
         assert adapter.on_timeout.call_count == 0
         assert target.create_report.call_count == 0
         assert session.status.iteration == 1
-        assert session.status.results == 0
+        assert session.status.results.total == 0
         assert session.status.ignored == 1
 
 
@@ -392,7 +392,7 @@ def test_session_09(mocker):
         with raises(TargetLaunchError, match="test"):
             session.run([], 10, iteration_limit=2)
         assert session.status.iteration == 1
-        assert session.status.results == 1
+        assert session.status.results.total == 1
         assert session.status.ignored == 0
 
 
@@ -421,7 +421,7 @@ def test_session_10(mocker):
         assert target.create_report.call_count == 1
         assert reporter.submit.call_count == 1
         assert session.status.iteration == 1
-        assert session.status.results == 1
+        assert session.status.results.total == 1
         assert session.status.ignored == 0
 
 
