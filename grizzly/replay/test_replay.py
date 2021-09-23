@@ -47,7 +47,7 @@ def test_replay_01(mocker):
             assert replay.signature is None
             assert replay.status.ignored == 0
             assert replay.status.iteration == 1
-            assert replay.status.results == 0
+            assert replay.status.results.total == 0
             assert target.monitor.is_healthy.call_count == 1
             assert target.close.call_count == 2
             assert target.close.mock_calls[0] == mocker.call()
@@ -69,7 +69,7 @@ def test_replay_02(mocker):
             assert replay.signature is None
             assert replay.status.ignored == 0
             assert replay.status.iteration == 10
-            assert replay.status.results == 0
+            assert replay.status.results.total == 0
             assert target.handle_hang.call_count == 0
             assert target.monitor.is_healthy.call_count == 1
             assert target.close.call_count == 2
@@ -95,7 +95,7 @@ def test_replay_03(mocker):
             assert not replay.run([testcase], 10, repeat=10, min_results=1)
             assert replay.status.ignored == 0
             assert replay.status.iteration == 10
-            assert replay.status.results == 0
+            assert replay.status.results.total == 0
             assert target.handle_hang.call_count == 0
             assert target.monitor.is_healthy.call_count == 0
             assert target.close.call_count == 1
@@ -117,7 +117,7 @@ def test_replay_04(mocker):
             assert replay.signature is not None
             assert replay.status.ignored == 0
             assert replay.status.iteration == 1
-            assert replay.status.results == 1
+            assert replay.status.results.total == 1
             assert target.handle_hang.call_count == 0
             assert target.monitor.is_healthy.call_count == 1
             assert target.close.call_count == 2
@@ -145,7 +145,7 @@ def test_replay_05(mocker):
         assert not replay.run(testcases, 10, repeat=1)
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
-        assert replay.status.results == 0
+        assert replay.status.results.total == 0
         # target.close() called once in runner and once by ReplayManager.run()
         assert target.close.call_count == 2
     target.reset_mock()
@@ -156,7 +156,7 @@ def test_replay_05(mocker):
         results = replay.run(testcases, 10, repeat=1)
         assert replay.status.ignored == 1
         assert replay.status.iteration == 1
-        assert replay.status.results == 0
+        assert replay.status.results.total == 0
         assert replay._signature is None
         # target.close() called once in runner and once by ReplayManager.run()
         assert target.close.call_count == 2
@@ -185,7 +185,7 @@ def test_replay_06(mocker):
         assert replay.run(testcases, 10, repeat=2)
         assert replay.status.ignored == 0
         assert replay.status.iteration == 2
-        assert replay.status.results == 1
+        assert replay.status.results.total == 1
         # target.close() called once in runner and once by ReplayManager.run()
         assert target.close.call_count == 2
 
@@ -206,7 +206,7 @@ def test_replay_07(mocker):
         assert target.close.call_count == 2
         assert replay.status.ignored == 1
         assert replay.status.iteration == 1
-        assert replay.status.results == 0
+        assert replay.status.results.total == 0
 
 
 def test_replay_08(mocker):
@@ -230,7 +230,7 @@ def test_replay_08(mocker):
         assert not replay.run(testcases, 10, repeat=4, min_results=3)
         assert target.close.call_count == 4
         assert replay.status.iteration == 3
-        assert replay.status.results == 1
+        assert replay.status.results.total == 1
         assert replay.status.ignored == 1
     # early success
     target.reset_mock()
@@ -244,7 +244,7 @@ def test_replay_08(mocker):
         results = replay.run(testcases, 10, repeat=4, min_results=2)
         assert target.close.call_count == 4
         assert replay.status.iteration == 3
-        assert replay.status.results == 2
+        assert replay.status.results.total == 2
         assert replay.status.ignored == 1
     assert len(results) == 1
     assert sum(x.count for x in results) == 2
@@ -258,7 +258,7 @@ def test_replay_08(mocker):
         assert not replay.run(testcases, 10, repeat=4, min_results=4, exit_early=False)
         assert target.close.call_count == 5
         assert replay.status.iteration == 4
-        assert replay.status.results == 0
+        assert replay.status.results.total == 0
         assert replay.status.ignored == 0
     target.reset_mock()
     # ignore early success (perform all repeats)
@@ -268,7 +268,7 @@ def test_replay_08(mocker):
         results = replay.run(testcases, 10, repeat=4, min_results=1, exit_early=False)
         assert target.close.call_count == 5
         assert replay.status.iteration == 4
-        assert replay.status.results == 4
+        assert replay.status.results.total == 4
         assert replay.status.ignored == 0
     assert len(results) == 1
     assert sum(x.count for x in results) == 4
@@ -310,7 +310,7 @@ def test_replay_09(mocker):
         assert target.close.call_count == 5
         assert replay.signature == signature
         assert replay.status.iteration == 4
-        assert replay.status.results == 1
+        assert replay.status.results.total == 1
         assert replay.status.ignored == 2
     assert fake_report.call_count == 4
     assert len(results) == 1
@@ -353,7 +353,7 @@ def test_replay_10(mocker):
         assert target.close.call_count == 3
         assert replay.signature == signature
         assert replay.status.iteration == 2
-        assert replay.status.results == 2
+        assert replay.status.results.total == 2
         assert replay.status.ignored == 0
     assert fake_report.call_count == 2
     assert len(results) == 1
@@ -391,7 +391,7 @@ def test_replay_11(mocker):
         assert target.close.call_count == 4
         assert replay.signature is None
         assert replay.status.iteration == 3
-        assert replay.status.results == 2
+        assert replay.status.results.total == 2
         assert replay.status.ignored == 0
     assert fake_report.call_count == 3
     assert len(results) == 2
@@ -431,7 +431,7 @@ def test_replay_12(mocker):
         assert target.close.call_count == 5
         assert replay.signature is None
         assert replay.status.iteration == 4
-        assert replay.status.results == 2
+        assert replay.status.results.total == 2
         assert replay.status.ignored == 0
     assert fake_report.call_count == 4
     assert report_0.cleanup.call_count == 1
@@ -472,7 +472,7 @@ def test_replay_13(mocker):
         assert target.close.call_count == 4
         assert replay.signature == auto_sig
         assert replay.status.iteration == 3
-        assert replay.status.results == 2
+        assert replay.status.results.total == 2
         assert replay.status.ignored == 1
     assert fake_report.call_count == 3
     assert len(results) == 2
@@ -505,7 +505,7 @@ def test_replay_14(mocker):
             replay.run(testcases, 10, repeat=3, min_results=2)
         assert replay.signature is None
         assert replay.status.iteration == 2
-        assert replay.status.results == 1
+        assert replay.status.results.total == 1
         assert replay.status.ignored == 0
     assert target.close.call_count == 1
     assert target.monitor.is_healthy.call_count == 0
@@ -528,7 +528,7 @@ def test_replay_15(mocker):
         assert not replay.run(testcases, 10)
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
-        assert replay.status.results == 0
+        assert replay.status.results.total == 0
     assert target.close.call_count == 2
     assert all(x.dump.call_count == 1 for x in testcases)
 
@@ -553,7 +553,7 @@ def test_replay_16(mocker):
         assert target.launch.call_count == 5
         assert replay.status.ignored == 0
         assert replay.status.iteration == 10
-        assert replay.status.results == 0
+        assert replay.status.results.total == 0
     assert target.monitor.is_healthy.call_count == 5
     assert all(x.dump.call_count == 1 for x in testcases)
 
@@ -584,7 +584,7 @@ def test_replay_17(mocker):
         assert target.close.call_count == 2
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
-        assert replay.status.results == 1
+        assert replay.status.results.total == 1
     assert len(results) == 1
     assert len(results[0].served) == len(testcases)
     assert results[0].served[0][0] == "a.html"
@@ -751,7 +751,7 @@ def test_replay_21(mocker, is_hang, use_sig, match_sig, ignored, results):
             found = replay.run([testcase], 10, expect_hang=is_hang)
             assert replay.status.iteration == 1
             assert replay.status.ignored == ignored
-            assert replay.status.results == results
+            assert replay.status.results.total == results
             assert target.handle_hang.call_count == 1
             assert target.monitor.is_healthy.call_count == 0
             assert target.close.call_count == 1

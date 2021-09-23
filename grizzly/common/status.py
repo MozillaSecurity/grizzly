@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 from contextlib import contextmanager
 from json import dumps, loads
 from logging import getLogger
@@ -15,6 +15,10 @@ __all__ = ("Status",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
+# used to track changes to the database layout
+DB_VERSION = 1
+# default expiration limit for entries in the database
+EXP_LIMIT = 86400
 LOG = getLogger(__name__)
 
 ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
@@ -38,9 +42,6 @@ class Status:
         timestamp (float): Last time data was saved to database.
     """
 
-    DB_VERSION = 1
-    # entries older than 'EXP_LIMIT' seconds will be removed.
-    EXP_LIMIT = 86400
     # database will be updated no more than every 'REPORT_FREQ' seconds.
     REPORT_FREQ = 60
 
@@ -48,7 +49,7 @@ class Status:
         "_db_file",
         "_enable_profiling",
         "_profiles",
-        "_results",
+        "results",
         "ignored",
         "iteration",
         "log_size",
@@ -59,47 +60,54 @@ class Status:
     )
 
     def __init__(
-        self, db_file=None, enable_profiling=False, start_time=None, exp_limit=EXP_LIMIT
+        self,
+        db_file=None,
+        enable_profiling=False,
+        start_time=None,
+        exp_limit=EXP_LIMIT,
+        pid=None,
     ):
         if db_file is None:
             # read-only mode
             assert start_time is None
             self._enable_profiling = False
+            self.results = None
         else:
             assert isinstance(start_time, float)
+            assert exp_limit >= 0
+            assert pid >= 0
             self._enable_profiling = enable_profiling
+            self.results = ResultCounter(pid, db_file=db_file, exp_limit=EXP_LIMIT)
         self._profiles = dict()
-        self._results = dict()
         self._db_file = db_file
         self.ignored = 0
         self.iteration = 0
         self.log_size = 0
-        self.pid = None
+        self.pid = pid
         self.start_time = start_time
         self.test_name = None
         self.timestamp = start_time
 
         # prepare database
         if self._db_file:
-            LOG.debug("using status db %r", self._db_file)
+            LOG.debug("status using db %r", self._db_file)
             con = connect(self._db_file)
             try:
                 cur = con.cursor()
                 # check db version
                 cur.execute("PRAGMA user_version;")
                 version = cur.fetchone()[0]
-                if version < self.DB_VERSION:
-                    LOG.debug("db version %d < %d", version, self.DB_VERSION)
+                if version < DB_VERSION:
+                    LOG.debug("db version %d < %d", version, DB_VERSION)
                     cur.execute("DROP TABLE IF EXISTS status;")
-                    cur.execute("PRAGMA user_version = %d;" % (self.DB_VERSION,))
+                    cur.execute("PRAGMA user_version = %d;" % (DB_VERSION,))
                     con.commit()
                 else:
-                    assert version == self.DB_VERSION
+                    assert version == DB_VERSION
                 # create tables if needed
                 con.execute(
                     """CREATE TABLE IF NOT EXISTS status (
                        _profiles TEXT NOT NULL,
-                       _results TEXT NOT NULL,
                        ignored INTEGER NOT NULL,
                        iteration INTEGER NOT NULL,
                        log_size INTEGER NOT NULL,
@@ -108,7 +116,7 @@ class Status:
                        timestamp REAL NOT NULL);"""
                 )
                 con.commit()
-                # remove inactive status data
+                # remove expired status data
                 if exp_limit > 0:
                     con.execute(
                         """DELETE FROM status WHERE timestamp <= ?;""",
@@ -117,27 +125,6 @@ class Status:
                 con.commit()
             finally:
                 con.close()
-
-    def count_result(self, uid, description):
-        """Increment counter that matches `uid`.
-
-        Args:
-            uid (str): Unique identifier.
-            description (str): User friendly name (short signature).
-
-        Returns:
-            int: Current count.
-        """
-        if uid not in self._results:
-            assert isinstance(uid, str)
-            assert isinstance(description, str)
-            # create result entry
-            self._results[uid] = {
-                "count": 0,
-                "desc": description,
-            }
-        self._results[uid]["count"] += 1
-        return self._results[uid]["count"]
 
     @classmethod
     def loadall(cls, db_file, time_limit=300):
@@ -151,26 +138,26 @@ class Status:
         Yields:
             Status: Successfully loaded read-only status objects.
         """
+        assert db_file
         assert time_limit >= 0
         con = connect(db_file)
         try:
             cur = con.cursor()
             # check db version
             cur.execute("PRAGMA user_version;")
-            assert cur.fetchone()[0] <= cls.DB_VERSION
+            assert cur.fetchone()[0] <= DB_VERSION
             # check table exists
             cur.execute(
                 """SELECT name
-                           FROM sqlite_master
-                           WHERE type='table'
-                           AND name='status';"""
+                   FROM sqlite_master
+                   WHERE type='table'
+                   AND name='status';"""
             )
             if cur.fetchone():
                 # collect entries
                 cur.execute(
                     """SELECT pid,
                              _profiles,
-                             _results,
                              ignored,
                              iteration,
                              log_size,
@@ -190,12 +177,12 @@ class Status:
             status = cls()
             status.pid = entry[0]
             status._profiles = loads(entry[1])
-            status._results = loads(entry[2])
-            status.ignored = entry[3]
-            status.iteration = entry[4]
-            status.log_size = entry[5]
-            status.start_time = entry[6]
-            status.timestamp = entry[7]
+            status.ignored = entry[2]
+            status.iteration = entry[3]
+            status.log_size = entry[4]
+            status.start_time = entry[5]
+            status.timestamp = entry[6]
+            status.results = ResultCounter.load(db_file, status.pid, time_limit)
             yield status
 
     @contextmanager
@@ -296,14 +283,12 @@ class Status:
         self.timestamp = now
 
         profiles = dumps(self._profiles)
-        results = dumps(self._results)
         con = connect(self._db_file)
         try:
             cur = con.cursor()
             cur.execute(
                 """UPDATE status
                    SET _profiles = ?,
-                       _results = ?,
                        ignored = ?,
                        iteration = ?,
                        log_size = ?,
@@ -312,7 +297,6 @@ class Status:
                    WHERE pid = ?;""",
                 (
                     profiles,
-                    results,
                     self.ignored,
                     self.iteration,
                     self.log_size,
@@ -326,17 +310,15 @@ class Status:
                     """INSERT INTO status(
                        pid,
                        _profiles,
-                       _results,
                        ignored,
                        iteration,
                        log_size,
                        start_time,
                        timestamp)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?);""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?);""",
                     (
                         self.pid,
                         profiles,
-                        results,
                         self.ignored,
                         self.iteration,
                         self.log_size,
@@ -349,30 +331,6 @@ class Status:
             con.close()
 
         return True
-
-    @property
-    def results(self):
-        """Calculate the total number of results.
-
-        Args:
-            None
-
-        Returns:
-            int: Total number of results.
-        """
-        return sum(x["count"] for x in self._results.values())
-
-    def result_entries(self):
-        """Provide unique result entries.
-
-        Args:
-            None
-
-        Yields:
-            dict: Result entry.
-        """
-        for uid, result in self._results.items():
-            yield uid, result
 
     @property
     def runtime(self):
@@ -401,10 +359,250 @@ class Status:
             Status: Active status report.
         """
         assert db_file
-        pid = getpid()
         status = cls(
-            db_file=db_file, enable_profiling=enable_profiling, start_time=time()
+            db_file=db_file,
+            enable_profiling=enable_profiling,
+            start_time=time(),
+            pid=getpid(),
         )
-        status.pid = pid
         status.report(force=True)
         return status
+
+
+class ResultCounter:
+    __slots__ = (
+        "_count",
+        "_desc",
+        "_db_file",
+        "_frequent",
+        "_limit",
+        "_pid",
+    )
+
+    def __init__(self, pid, db_file=None, exp_limit=EXP_LIMIT, freq_limit=5):
+        assert exp_limit >= 0
+        assert freq_limit >= 0
+        assert pid >= 0
+        self._count = defaultdict(int)
+        self._desc = dict()
+        self._db_file = db_file
+        self._frequent = set()
+        self._limit = freq_limit
+        self._pid = pid
+
+        # prepare database
+        if self._db_file:
+            LOG.debug("resultcounter using db %r", self._db_file)
+            con = connect(self._db_file)
+            try:
+                cur = con.cursor()
+                cur.execute("PRAGMA user_version;")
+                version = cur.fetchone()[0]
+                if version < DB_VERSION:
+                    LOG.debug("db version %d < %d", version, DB_VERSION)
+                    cur.execute("DROP TABLE IF EXISTS results;")
+                    cur.execute("PRAGMA user_version = %d;" % (DB_VERSION,))
+                    con.commit()
+                else:
+                    assert version == DB_VERSION
+                # create tables if needed
+                con.execute(
+                    """CREATE TABLE IF NOT EXISTS results (
+                       count INTEGER NOT NULL,
+                       description TEXT NOT NULL,
+                       pid INTEGER NOT NULL,
+                       result_id TEXT NOT NULL,
+                       timestamp INTEGER NOT NULL);"""
+                )
+                con.commit()
+                # remove expired entries
+                if exp_limit > 0:
+                    con.execute(
+                        """DELETE FROM results WHERE timestamp <= ?;""",
+                        (int(time() - exp_limit),),
+                    )
+                con.commit()
+            finally:
+                con.close()
+
+    def all(self):
+        """Yield all result data.
+
+        Args:
+            None
+
+        Yields:
+            tuple: Contains result_id, count and description for each entry.
+        """
+        for result_id, count in self._count.items():
+            if count > 0:
+                yield (result_id, count, self._desc.get(result_id, None))
+
+    def count(self, result_id, desc):
+        """
+
+        Args:
+            result_id (str): Result ID.
+            desc (str): User friendly description.
+
+        Returns:
+            int: Current count for given result_id.
+        """
+        assert isinstance(result_id, str)
+        self._count[result_id] += 1
+        if result_id not in self._desc:
+            self._desc[result_id] = desc
+        if self._db_file:
+            con = connect(self._db_file)
+            try:
+                timestamp = int(time())
+                cur = con.cursor()
+                cur.execute(
+                    """UPDATE results
+                       SET timestamp = ?,
+                           count = ?
+                       WHERE pid = ?
+                       AND result_id = ?;""",
+                    (timestamp, self._count[result_id], self._pid, result_id),
+                )
+                if cur.rowcount < 1:
+                    cur.execute(
+                        """INSERT INTO results(
+                           pid,
+                           result_id,
+                           description,
+                           timestamp,
+                           count)
+                           VALUES (?, ?, ?, ?, ?);""",
+                        (
+                            self._pid,
+                            result_id,
+                            desc,
+                            timestamp,
+                            self._count[result_id],
+                        ),
+                    )
+                con.commit()
+            finally:
+                con.close()
+        return self._count[result_id]
+
+    @classmethod
+    def load(cls, db_file, pid, time_limit):
+        """Load existing entries for database and populate a ResultCounter.
+
+        Args:
+            db_file (str): Database file.
+            pid (int): PID of process that created the entries.
+            time_limit (int): Used to filter older entries.
+
+        Returns:
+            ResultCounter: ResultCounter loaded with data that matches given pid.
+        """
+        assert db_file
+        assert pid >= 0
+        assert time_limit >= 0
+        con = connect(db_file)
+        try:
+            cur = con.cursor()
+            # check db version
+            cur.execute("PRAGMA user_version;")
+            assert cur.fetchone()[0] <= DB_VERSION
+            # check table exists
+            cur.execute(
+                """SELECT name
+                   FROM sqlite_master
+                   WHERE type='table'
+                   AND name='results';"""
+            )
+            if cur.fetchone():
+                # collect entries
+                cur.execute(
+                    """SELECT result_id,
+                              description,
+                              count
+                       FROM results
+                       WHERE pid = ?
+                       AND timestamp > ?;""",
+                    (pid, int(time()) - time_limit),
+                )
+                entries = cur.fetchall()
+            else:
+                entries = ()
+        finally:
+            con.close()
+
+        loaded = cls(pid)
+        for result_id, desc, count in entries:
+            loaded._desc[result_id] = desc
+            loaded._count[result_id] = count
+        return loaded
+
+    def get(self, result_id):
+        """Get count and description for given result id.
+
+        Args:
+            result_id (str): Result ID.
+
+        Returns:
+            tuple: Count and description.
+        """
+        assert isinstance(result_id, str)
+        return (self._count.get(result_id, 0), self._desc.get(result_id, None))
+
+    def is_frequent(self, result_id):
+        """Scan all results including results from other running instances
+        to determine if the results limit has been reached.
+
+        Args:
+            result_id (str): Result ID.
+
+        Returns:
+            bool: True if limit has been reached otherwise False.
+        """
+        assert isinstance(result_id, str)
+        if result_id in self._frequent:
+            return True
+        if self._db_file:
+            # look up count from all sources
+            con = connect(self._db_file)
+            try:
+                cur = con.cursor()
+                cur.execute(
+                    """SELECT SUM(count) FROM results WHERE result_id = ?;""",
+                    (result_id,),
+                )
+                total = cur.fetchone()[0] or 0
+            finally:
+                con.close()
+        else:
+            total = self._count.get(result_id, 0)
+        if total >= self._limit:
+            self._frequent.add(result_id)
+            return True
+        return False
+
+    def mark_frequent(self, result_id):
+        """Mark given results ID as frequent locally.
+
+        Args:
+            result_id (str): Result ID.
+
+        Returns:
+            None
+        """
+        assert isinstance(result_id, str)
+        if result_id not in self._frequent:
+            self._frequent.add(result_id)
+
+    @property
+    def total(self):
+        """Get total count of all results.
+
+        Args:
+            None
+
+        Returns:
+            int: Total result count.
+        """
+        return sum(x for x in self._count.values())

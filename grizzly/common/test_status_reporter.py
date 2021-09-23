@@ -194,7 +194,7 @@ def test_status_reporter_06(mocker, tmp_path):
     status = Status.start(db_file=db_file, enable_profiling=True)
     status.ignored = 1
     status.iteration = 432422
-    status.count_result("uid1", "sig1")
+    status.results.count("uid1", "sig1")
     status.record("test1", 0.91)
     status.record("test1", 1.0)
     status.record("test1", 1.23456)
@@ -230,14 +230,14 @@ def test_status_reporter_07(mocker, tmp_path):
     # multiple reports with results
     status = Status.start(db_file=db_file)
     status.iteration = 1
-    status.count_result("uid1", "[@ test1]")
-    status.count_result("uid2", "[@ test2]")
-    status.count_result("uid1", "[@ test1]")
+    status.results.count("uid1", "[@ test1]")
+    status.results.count("uid2", "[@ test2]")
+    status.results.count("uid1", "[@ test1]")
     status.report(force=True)
     status = Status.start(db_file=db_file)
     status.iteration = 1
-    status.count_result("uid1", "[@ test1]")
-    status.count_result("uid3", "[@ longsignature123]")
+    status.results.count("uid1", "[@ test1]")
+    status.results.count("uid3", "[@ longsignature123]")
     status.report(force=True)
     rptr = StatusReporter.load(db_file)
     assert rptr.has_results
@@ -314,15 +314,15 @@ def test_status_reporter_10(mocker, tmp_path):
     status.ignored = 100
     status.iteration = 1000
     status.log_size = 9999999999
-    status.count_result("uid1", "[@ sig1]")
-    status._results["uid1"]["count"] = 123
+    status.results.count("uid1", "[@ sig1]")
+    status.results._count["uid1"] = 123
     status.report(force=True)
     status = Status.start(db_file=db_file)
     status.ignored = 9
     status.iteration = 192938
     status.log_size = 0
-    status.count_result("uid2", "[@ sig2]")
-    status._results["uid2"]["count"] = 3
+    status.results.count("uid2", "[@ sig2]")
+    status.results._count["uid2"] = 3
     status.report(force=True)
     # create screenlogs with tracebacks
     for i in range(10):
@@ -525,7 +525,7 @@ def test_main_02(tmp_path):
     StatusReporter.CPU_POLL_INTERVAL = 0.01
     status = Status.start(db_file=db_file)
     status.iteration = 1
-    status.count_result("uid", "[@ test]")
+    status.results.count("uid", "[@ test]")
     status.report(force=True)
     assert main([], modes={"fuzz": db_file}) == 0
 
