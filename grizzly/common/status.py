@@ -24,6 +24,40 @@ LOG = getLogger(__name__)
 ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
 
 
+def _db_version_check(db_file, expected=DB_VERSION):
+    """Perform version check and remove obsolete tables if required.
+
+    Args:
+        db_file (str): Database file containing data.
+        expected (int): The latest database version.
+
+    Returns:
+        None
+    """
+    assert expected > 0
+    with connect(db_file, isolation_level=None) as con:
+        cur = con.cursor()
+        cur.execute("BEGIN")
+        # check db version
+        cur.execute("PRAGMA user_version;")
+        version = cur.fetchone()[0]
+        if version < expected:
+            LOG.debug("db version %d < %d", version, expected)
+            # remove ALL tables from the database
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            for entry in cur.fetchall():
+                LOG.debug("dropping table %r", entry[0])
+                cur.execute("DROP TABLE IF EXISTS %s;" % (entry[0],))
+            # try to detect if there is a race
+            cur.execute("PRAGMA user_version;")
+            assert version == cur.fetchone()[0]
+            # update db version number
+            cur.execute("PRAGMA user_version = %d;" % (expected,))
+            con.commit()
+        else:
+            cur.execute("ROLLBACK")
+
+
 class Status:
     """Status holds status information for the Grizzly session.
     Read-only mode is implied if `_db_file` is None.
@@ -66,24 +100,25 @@ class Status:
         start_time=None,
         exp_limit=EXP_LIMIT,
         pid=None,
+        report_limit=0,
     ):
         if db_file is None:
             # read-only mode
             assert start_time is None
             self._enable_profiling = False
-            self.results = None
         else:
             assert isinstance(start_time, float)
             assert exp_limit >= 0
+            assert report_limit >= 0
             assert pid >= 0
             self._enable_profiling = enable_profiling
-            self.results = ResultCounter(pid, db_file=db_file, exp_limit=EXP_LIMIT)
         self._profiles = dict()
         self._db_file = db_file
         self.ignored = 0
         self.iteration = 0
         self.log_size = 0
         self.pid = pid
+        self.results = None
         self.start_time = start_time
         self.test_name = None
         self.timestamp = start_time
@@ -91,20 +126,9 @@ class Status:
         # prepare database
         if self._db_file:
             LOG.debug("status using db %r", self._db_file)
-            con = connect(self._db_file)
-            try:
-                cur = con.cursor()
-                # check db version
-                cur.execute("PRAGMA user_version;")
-                version = cur.fetchone()[0]
-                if version < DB_VERSION:
-                    LOG.debug("db version %d < %d", version, DB_VERSION)
-                    cur.execute("DROP TABLE IF EXISTS status;")
-                    cur.execute("PRAGMA user_version = %d;" % (DB_VERSION,))
-                    con.commit()
-                else:
-                    assert version == DB_VERSION
-                # create tables if needed
+            _db_version_check(self._db_file)
+            with connect(self._db_file) as con:
+                # create table if needed
                 con.execute(
                     """CREATE TABLE IF NOT EXISTS status (
                        _profiles TEXT NOT NULL,
@@ -115,7 +139,6 @@ class Status:
                        start_time REAL NOT NULL,
                        timestamp REAL NOT NULL);"""
                 )
-                con.commit()
                 # remove expired status data
                 if exp_limit > 0:
                     con.execute(
@@ -123,8 +146,13 @@ class Status:
                         (time() - exp_limit,),
                     )
                 con.commit()
-            finally:
-                con.close()
+
+            self.results = ResultCounter(
+                pid,
+                db_file=db_file,
+                exp_limit=EXP_LIMIT,
+                freq_limit=report_limit,
+            )
 
     @classmethod
     def loadall(cls, db_file, time_limit=300):
@@ -140,8 +168,7 @@ class Status:
         """
         assert db_file
         assert time_limit >= 0
-        con = connect(db_file)
-        try:
+        with connect(db_file) as con:
             cur = con.cursor()
             # check db version
             cur.execute("PRAGMA user_version;")
@@ -170,8 +197,6 @@ class Status:
                 entries = cur.fetchall()
             else:
                 entries = ()
-        finally:
-            con.close()
 
         for entry in entries:
             status = cls()
@@ -283,8 +308,7 @@ class Status:
         self.timestamp = now
 
         profiles = dumps(self._profiles)
-        con = connect(self._db_file)
-        try:
+        with connect(self._db_file) as con:
             cur = con.cursor()
             cur.execute(
                 """UPDATE status
@@ -327,8 +351,6 @@ class Status:
                     ),
                 )
             con.commit()
-        finally:
-            con.close()
 
         return True
 
@@ -348,7 +370,7 @@ class Status:
         return max(time() - self.start_time, 0)
 
     @classmethod
-    def start(cls, db_file, enable_profiling=False):
+    def start(cls, db_file, enable_profiling=False, report_limit=0):
         """Create a unique Status object.
 
         Args:
@@ -364,6 +386,7 @@ class Status:
             enable_profiling=enable_profiling,
             start_time=time(),
             pid=getpid(),
+            report_limit=report_limit,
         )
         status.report(force=True)
         return status
@@ -372,14 +395,14 @@ class Status:
 class ResultCounter:
     __slots__ = (
         "_count",
-        "_desc",
         "_db_file",
+        "_desc",
         "_frequent",
         "_limit",
         "_pid",
     )
 
-    def __init__(self, pid, db_file=None, exp_limit=EXP_LIMIT, freq_limit=5):
+    def __init__(self, pid, db_file=None, exp_limit=EXP_LIMIT, freq_limit=0):
         assert exp_limit >= 0
         assert freq_limit >= 0
         assert pid >= 0
@@ -393,19 +416,9 @@ class ResultCounter:
         # prepare database
         if self._db_file:
             LOG.debug("resultcounter using db %r", self._db_file)
-            con = connect(self._db_file)
-            try:
-                cur = con.cursor()
-                cur.execute("PRAGMA user_version;")
-                version = cur.fetchone()[0]
-                if version < DB_VERSION:
-                    LOG.debug("db version %d < %d", version, DB_VERSION)
-                    cur.execute("DROP TABLE IF EXISTS results;")
-                    cur.execute("PRAGMA user_version = %d;" % (DB_VERSION,))
-                    con.commit()
-                else:
-                    assert version == DB_VERSION
-                # create tables if needed
+            _db_version_check(self._db_file)
+            with connect(self._db_file) as con:
+                # create table if needed
                 con.execute(
                     """CREATE TABLE IF NOT EXISTS results (
                        count INTEGER NOT NULL,
@@ -414,7 +427,6 @@ class ResultCounter:
                        result_id TEXT NOT NULL,
                        timestamp INTEGER NOT NULL);"""
                 )
-                con.commit()
                 # remove expired entries
                 if exp_limit > 0:
                     con.execute(
@@ -422,8 +434,6 @@ class ResultCounter:
                         (int(time() - exp_limit),),
                     )
                 con.commit()
-            finally:
-                con.close()
 
     def all(self):
         """Yield all result data.
@@ -453,8 +463,7 @@ class ResultCounter:
         if result_id not in self._desc:
             self._desc[result_id] = desc
         if self._db_file:
-            con = connect(self._db_file)
-            try:
+            with connect(self._db_file) as con:
                 timestamp = int(time())
                 cur = con.cursor()
                 cur.execute(
@@ -483,8 +492,6 @@ class ResultCounter:
                         ),
                     )
                 con.commit()
-            finally:
-                con.close()
         return self._count[result_id]
 
     @classmethod
@@ -502,8 +509,7 @@ class ResultCounter:
         assert db_file
         assert pid >= 0
         assert time_limit >= 0
-        con = connect(db_file)
-        try:
+        with connect(db_file) as con:
             cur = con.cursor()
             # check db version
             cur.execute("PRAGMA user_version;")
@@ -529,8 +535,6 @@ class ResultCounter:
                 entries = cur.fetchall()
             else:
                 entries = ()
-        finally:
-            con.close()
 
         loaded = cls(pid)
         for result_id, desc, count in entries:
@@ -561,20 +565,19 @@ class ResultCounter:
             bool: True if limit has been reached otherwise False.
         """
         assert isinstance(result_id, str)
+        if self._limit < 1:
+            return False
         if result_id in self._frequent:
             return True
         if self._db_file:
             # look up count from all sources
-            con = connect(self._db_file)
-            try:
+            with connect(self._db_file) as con:
                 cur = con.cursor()
                 cur.execute(
                     """SELECT SUM(count) FROM results WHERE result_id = ?;""",
                     (result_id,),
                 )
                 total = cur.fetchone()[0] or 0
-            finally:
-                con.close()
         else:
             total = self._count.get(result_id, 0)
         if total >= self._limit:

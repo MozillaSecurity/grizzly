@@ -10,7 +10,7 @@ from time import sleep, time
 
 from pytest import mark
 
-from .status import ResultCounter, Status
+from .status import ResultCounter, Status, _db_version_check
 
 
 def test_status_01(mocker, tmp_path):
@@ -111,7 +111,7 @@ def test_status_05(mocker, tmp_path):
 
 
 def _client_writer(done, reported, db_file):
-    """Used by test_status_08"""
+    """Used by test_status_06"""
     # NOTE: this must be at the top level to work on Windows
     status = Status.start(db_file)
     while not done.is_set():
@@ -138,8 +138,8 @@ def test_status_06(tmp_path):
             )
             procs[-1].start()
         # wait for processes to launch and report
-        for has_reported in report_events:
-            assert has_reported.wait(timeout=60)
+        for event in report_events:
+            assert event.wait(timeout=60)
         # collect reports
         reports = tuple(Status.loadall(db_file))
         assert len(reports) == len(procs)
@@ -231,6 +231,9 @@ def test_status_07(tmp_path):
         # single record (frequent)
         (["a"], [1], 1, True),
         (["a"], [1], 1, False),
+        # single record no limit
+        (["a"], [1], 0, True),
+        (["a"], [1], 0, False),
         # multiple records
         (["a", "b", "c"], [1, 2, 10], 5, True),
         (["a", "b", "c"], [1, 2, 10], 5, False),
@@ -250,12 +253,12 @@ def test_report_counter_01(tmp_path, keys, counts, limit, local_only):
             assert counter.get(report_id) == (count, "desc")
         else:
             assert counter.get(report_id) == (count, None)
-        if count >= limit:
+        if count >= limit > 0:
             assert counter.is_frequent(report_id)
         else:
             assert not counter.is_frequent(report_id)
             counter.mark_frequent(report_id)
-            assert counter.is_frequent(report_id)
+            assert counter.is_frequent(report_id) or limit == 0
     for _report_id, count, _desc in counter.all():
         assert count > 0
     assert counter.total == sum(counts)
@@ -305,6 +308,9 @@ def test_report_counter_03(mocker, tmp_path):
     fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
     fake_time.return_value = 1
     db_path = str(tmp_path / "storage.db")
+    # load empty db
+    ResultCounter.load(db_path, 123, 10)
+    # create counter
     counter = ResultCounter(123, db_file=db_path, exp_limit=1)
     counter.count("a", "desc_a")
     fake_time.return_value = 2
@@ -351,3 +357,17 @@ def test_report_counter_04(mocker, tmp_path):
     ResultCounter(123, db_file=db_path, exp_limit=10)
     loaded = ResultCounter.load(db_path, counter._pid, 100)
     assert loaded.total == 1
+
+
+def test_db_version_check_01(tmp_path):
+    """test _db_version_check()"""
+    db_path = str(tmp_path / "storage.db")
+    # empty db
+    _db_version_check(db_path, expected=1)
+    # no update needed
+    Status.start(db_path)
+    _db_version_check(db_path, expected=1)
+    # force update
+    _db_version_check(db_path, expected=2)
+    # verify everything works after update
+    Status.start(db_path)
