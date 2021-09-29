@@ -556,20 +556,23 @@ class ResultCounter:
 
     def is_frequent(self, result_id):
         """Scan all results including results from other running instances
-        to determine if the results limit has been reached.
+        to determine if the limit has been exceeded. Local count must be >1 before
+        limit is checked.
 
         Args:
             result_id (str): Result ID.
 
         Returns:
-            bool: True if limit has been reached otherwise False.
+            bool: True if limit has been exceeded otherwise False.
         """
         assert isinstance(result_id, str)
         if self._limit < 1:
             return False
         if result_id in self._frequent:
             return True
-        if self._db_file:
+        total = self._count.get(result_id, 0)
+        # only count for parallel results if more than 1 local result has been found
+        if total > 1 and self._db_file:
             # look up count from all sources
             with connect(self._db_file) as con:
                 cur = con.cursor()
@@ -578,9 +581,7 @@ class ResultCounter:
                     (result_id,),
                 )
                 total = cur.fetchone()[0] or 0
-        else:
-            total = self._count.get(result_id, 0)
-        if total >= self._limit:
+        if total > self._limit:
             self._frequent.add(result_id)
             return True
         return False

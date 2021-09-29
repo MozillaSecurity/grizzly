@@ -249,16 +249,21 @@ def test_report_counter_01(tmp_path, keys, counts, limit, local_only):
         # call count() with report_id 'count' times
         for current in range(1, count + 1):
             assert counter.count(report_id, "desc") == current
+        # test get()
         if sum(counts) > 0:
             assert counter.get(report_id) == (count, "desc")
         else:
             assert counter.get(report_id) == (count, None)
-        if count >= limit > 0:
+        # test is_frequent()
+        if count > limit > 0:
+            assert counter.is_frequent(report_id)
+        elif limit > 0:
+            assert not counter.is_frequent(report_id)
+            # test mark_frequent()
+            counter.mark_frequent(report_id)
             assert counter.is_frequent(report_id)
         else:
-            assert not counter.is_frequent(report_id)
-            counter.mark_frequent(report_id)
-            assert counter.is_frequent(report_id) or limit == 0
+            assert limit == 0
     for _report_id, count, _desc in counter.all():
         assert count > 0
     assert counter.total == sum(counts)
@@ -268,27 +273,39 @@ def test_report_counter_02(mocker, tmp_path):
     """test ResultCounter multi instance functionality"""
     mocker.patch("grizzly.common.status.time", autospec=True, return_value=1)
     db_path = str(tmp_path / "storage.db")
-    counter_a = ResultCounter(1, db_file=db_path, freq_limit=2)
-    counter_b = ResultCounter(2, db_file=db_path, freq_limit=2)
+    counter_a = ResultCounter(1, db_file=db_path, freq_limit=0)
+    counter_b = ResultCounter(2, db_file=db_path, freq_limit=1)
     counter_c = ResultCounter(3, db_file=db_path, freq_limit=2)
-    # local (counter_a, bucket a) count is 0, global (all counters) count is 0
+    # local counts are 0, global (all counters) count is 0
     assert not counter_a.is_frequent("a")
     assert not counter_b.is_frequent("a")
     assert not counter_c.is_frequent("a")
-    assert counter_a.count("a", "desc") == 1
     # local (counter_a, bucket a) count is 1, global (all counters) count is 1
+    assert counter_a.count("a", "desc") == 1
     assert not counter_a.is_frequent("a")
     assert not counter_b.is_frequent("a")
     assert not counter_c.is_frequent("a")
-    assert counter_b.count("a", "desc") == 1
     # local (counter_b, bucket a) count is 1, global (all counters) count is 2
-    assert counter_a.is_frequent("a")
+    assert counter_b.count("a", "desc") == 1
+    assert not counter_a.is_frequent("a")
+    assert not counter_b.is_frequent("a")
+    assert not counter_c.is_frequent("a")
+    # local (counter_b, bucket a) count is 2, global (all counters) count is 3
+    # locally exceeded
+    assert counter_b.count("a", "desc") == 2
     assert counter_b.is_frequent("a")
-    assert counter_c.is_frequent("a")
+    # local (counter_c, bucket a) count is 1, global (all counters) count is 4
     assert counter_c.count("a", "desc") == 1
-    # local (counter_c, bucket a) count is 1, global (all counters) count is 3
-    assert counter_a.is_frequent("a")
+    assert not counter_a.is_frequent("a")
     assert counter_b.is_frequent("a")
+    assert not counter_c.is_frequent("a")
+    # local (counter_a, bucket a) count is 2, global (all counters) count is 5
+    # no limit
+    assert counter_a.count("a", "desc") == 2
+    assert not counter_a.is_frequent("a")
+    # local (counter_c, bucket a) count is 2, global (all counters) count is 6
+    # locally not exceeded, globally exceeded
+    assert counter_c.count("a", "desc") == 2
     assert counter_c.is_frequent("a")
     # local (counter_a, bucket x) count is 0, global (all counters) count is 0
     assert not counter_a.is_frequent("x")
@@ -297,9 +314,9 @@ def test_report_counter_02(mocker, tmp_path):
     counter_d = ResultCounter(4, db_file=db_path, freq_limit=2, exp_limit=10)
     # local (counter_d, bucket a) count is 0, global (all counters) count is 0
     assert not counter_d.is_frequent("a")
-    assert counter_a.total == 1
-    assert counter_b.total == 1
-    assert counter_c.total == 1
+    assert counter_a.total == 2
+    assert counter_b.total == 2
+    assert counter_c.total == 2
     assert counter_d.total == 0
 
 
