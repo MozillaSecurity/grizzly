@@ -311,6 +311,16 @@ class GrizzlyArgs(CommonArgs):
             " (default: %(default)s)",
         )
         self.reporter_grp.add_argument(
+            "--limit-reports",
+            type=int,
+            default=0,
+            help="Maximum number of times a unique result will be submitted."
+            " This includes results submitted by parallel and previously run"
+            " (within 24h) processes. This can help avoid spamming duplicate results."
+            " The first time a result is seen it will always be submitted."
+            " (default: %(default)s) - Use 0 for 'no limit'",
+        )
+        self.reporter_grp.add_argument(
             "--s3-fuzzmanager",
             action="store_true",
             help="Report large attachments (if any) to S3 and then the crash &"
@@ -339,6 +349,9 @@ class GrizzlyArgs(CommonArgs):
 
         if args.limit < 0:
             self.parser.error("--limit must be >= 0")
+
+        if args.limit_reports < 0:
+            self.parser.error("--limit-reports must be >= 0")
 
         if args.runtime < 0:
             self.parser.error("--runtime must be >= 0")

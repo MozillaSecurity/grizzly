@@ -127,6 +127,7 @@ def main(args):
                 coverage=args.coverage,
                 enable_profiling=args.enable_profiling,
                 relaunch=relaunch,
+                report_limit=args.limit_reports,
                 report_size=args.collect,
             )
             if args.log_level == DEBUG or args.verbose:
