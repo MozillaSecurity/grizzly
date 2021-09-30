@@ -89,23 +89,24 @@ class Session:
         coverage=False,
         enable_profiling=False,
         relaunch=1,
+        report_limit=0,
         report_size=1,
     ):
         assert relaunch > 0
+        assert report_limit >= 0
         assert report_size > 0
         self._coverage = coverage
         self._relaunch = relaunch
         self.adapter = adapter
-        self.iomanager = None
+        self.iomanager = IOManager(report_size=report_size)
         self.reporter = reporter
         self.server = server
-        self.target = target
-        self.status = None
-        self.iomanager = IOManager(report_size=report_size)
         self.status = Status.start(
             db_file=self.STATUS_DB,
             enable_profiling=enable_profiling,
+            report_limit=report_limit,
         )
+        self.target = target
 
     def __enter__(self):
         return self
@@ -263,7 +264,12 @@ class Session:
                     report.minor[:8],
                     seen,
                 )
-                self.reporter.submit(self.iomanager.tests, report)
+                if not self.status.results.is_frequent(bucket_hash):
+                    self.reporter.submit(self.iomanager.tests, report)
+                else:
+                    # we should always submit the first instance of a result
+                    assert seen > 1
+                    LOG.info("Result is frequent, skipping submission")
                 report.cleanup()
             elif result.status == Result.IGNORED:
                 self.status.ignored += 1

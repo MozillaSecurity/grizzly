@@ -27,6 +27,7 @@ class FakeArgs:
         self.ignore = list()
         self.launch_timeout = 300
         self.limit = 0
+        self.limit_reports = 0
         self.log_level = 10  # 10 = DEBUG, 20 = INFO
         self.log_limit = 0
         self.memory = 0

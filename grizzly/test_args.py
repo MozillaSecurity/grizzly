@@ -155,6 +155,8 @@ def test_grizzly_args_03(capsys, mocker, tmp_path):
         (["--input", "missing"], "error: 'missing' does not exist"),
         # test invalid limit value
         (["--limit", "-1"], "error: --limit must be >= 0"),
+        # test invalid limit value
+        (["--limit-reports", "-1"], "error: --limit-reports must be >= 0"),
         # test runtime limit value
         (["--runtime", "-1"], "error: --runtime must be >= 0"),
         # test tool

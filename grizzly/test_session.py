@@ -425,6 +425,51 @@ def test_session_10(mocker):
         assert session.status.ignored == 0
 
 
+@mark.parametrize(
+    "harness, report_size, relaunch, iters, report_limit",
+    [
+        # no limit, always submit reports
+        (True, 1, 1, 10, 0),
+        # limit, only submit initial reports
+        (True, 1, 1, 10, 5),
+    ],
+)
+def test_session_11(mocker, harness, report_size, relaunch, iters, report_limit):
+    """test Session - limit result submission"""
+    adapter = SimpleAdapter(harness)
+    reporter = mocker.Mock(spec_set=Reporter)
+    report = mocker.Mock(spec_set=Report, major="abc", minor="def", crash_hash="123")
+    report.crash_info.createShortSignature.return_value = "[@ sig]"
+    server = mocker.Mock(spec_set=Sapphire, port=0x1337)
+    target = mocker.Mock(
+        spec_set=Target,
+        assets=mocker.Mock(spec_set=AssetManager),
+        environ=dict(),
+        launch_timeout=30,
+    )
+    target.monitor.launches = 1
+    # avoid shutdown delay
+    target.monitor.is_healthy.return_value = False
+    type(target).closed = mocker.PropertyMock(return_value=True)
+    target.check_result.return_value = Result.FOUND
+    target.log_size.return_value = 1
+    target.create_report.return_value = report
+    with Session(
+        adapter, reporter, server, target, report_limit=report_limit, relaunch=1
+    ) as session:
+        server.serve_path = lambda *a, **kv: (
+            Served.ALL,
+            [session.iomanager.page_name(offset=-1)],
+        )
+        session.run([], 10, input_path="file.bin", iteration_limit=iters)
+        if report_limit > 0:
+            assert reporter.submit.call_count == report_limit
+        else:
+            assert reporter.submit.call_count == iters
+        assert len(reporter.submit.call_args[0][0]) == min(report_size, relaunch)
+        assert reporter.submit.call_args[0][1].major == "abc"
+
+
 def test_log_output_limiter_01(mocker):
     """test LogOutputLimiter.ready() not ready"""
     fake_time = mocker.patch("grizzly.session.time", autospec=True)
