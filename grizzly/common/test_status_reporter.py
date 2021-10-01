@@ -17,11 +17,11 @@ GBYTES = 1_073_741_824
 
 
 def _fake_sys_info():
-    return (
-        "CPU & Load : 64 @ 93.1% (85.25, 76.21, 51.06)\n"
-        "    Memory : 183.9GB of 251.9GB free\n"
-        "      Disk : 22.2GB of 28.7GB free"
-    )
+    return [
+        ("CPU & Load", "64 @ 93.1% (85.25, 76.21, 51.06)"),
+        ("Memory", "183.9GB of 251.9GB free"),
+        ("Disk", "22.2GB of 28.7GB free"),
+    ]
 
 
 def test_status_reporter_01(tmp_path):
@@ -94,21 +94,18 @@ def test_status_reporter_03(mocker, disk, memory, getloadavg):
             "grizzly.common.status_reporter.getloadavg", side_effect=getloadavg
         )
     sysinfo = StatusReporter._sys_info()
-    if disk.free < GBYTES or memory.available < GBYTES:
-        assert "MB" in sysinfo
-    else:
-        assert "MB" not in sysinfo
-    lines = sysinfo.split("\n")
-    assert len(lines) == 3
-    assert "CPU & Load : " in lines[0]
+    assert len(sysinfo) == 3
+    assert sysinfo[0][0] == "CPU & Load"
+    assert sysinfo[1][0] == "Memory"
+    assert sysinfo[2][0] == "Disk"
     if getloadavg is not None:
-        assert lines[0].endswith("(0.12, 0.34, 0.56)")
-    assert "Memory : " in lines[1]
-    assert "Disk : " in lines[2]
-    # verify alignment
-    position = len(lines[0].split(":")[0])
-    for line in lines:
-        assert line[position] == ":"
+        assert sysinfo[0][-1].endswith("(0.12, 0.34, 0.56)")
+    if disk.free < GBYTES or memory.available < GBYTES:
+        assert "MB" in sysinfo[1][-1]
+        assert "MB" in sysinfo[2][-1]
+    else:
+        assert "MB" not in sysinfo[1][-1]
+        assert "MB" not in sysinfo[2][-1]
 
 
 def test_status_reporter_04(tmp_path):
