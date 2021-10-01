@@ -313,7 +313,7 @@ class GrizzlyArgs(CommonArgs):
         self.reporter_grp.add_argument(
             "--limit-reports",
             type=int,
-            default=0,
+            default=5,
             help="Maximum number of times a unique result will be submitted."
             " This includes results submitted by parallel and previously run"
             " (within 24h) processes. This can help avoid spamming duplicate results."
