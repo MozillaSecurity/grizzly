@@ -179,7 +179,6 @@ class StatusReporter:
         """Merge and generate a summary of status reports.
 
         Args:
-            filename (str): Path where output should be written.
             runtime (bool): Include total runtime in output
             sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output
             timestamp (bool): Include time stamp in output
@@ -187,7 +186,7 @@ class StatusReporter:
         Returns:
             str: A summary of merged reports
         """
-        txt = list()
+        entries = list()
         # Job specific status
         if self.reports:
             # calculate totals
@@ -198,49 +197,73 @@ class StatusReporter:
             count = len(self.reports)
             total_ignored = sum(x.ignored for x in self.reports)
             total_iters = sum(iterations)
+
             # Iterations
-            txt.append("Iterations : %d" % (total_iters,))
+            disp = list()
+            disp.append(str(total_iters))
             if count > 1:
-                txt.append(" (%d, %d)" % (max(iterations), min(iterations)))
-            txt.append("\n")
+                disp.append(" (%d, %d)" % (max(iterations), min(iterations)))
+            entries.append(("Iterations", "".join(disp)))
+
             # Rate
-            txt.append("      Rate : %d @ %0.2f" % (count, round(sum(rates), 2)))
+            disp = list()
+            disp.append("%d @ %0.2f" % (count, round(sum(rates), 2)))
             if count > 1:
-                txt.append(
+                disp.append(
                     " (%0.2f, %0.2f)" % (round(max(rates), 2), round(min(rates), 2))
                 )
-            txt.append("\n")
-            # Results / Signature mismatch
-            txt.append("   Results : %d" % (sum(results),))
+            entries.append(("Rate", "".join(disp)))
+
+            # Results
+            disp = list()
+            disp.append(str(sum(results)))
             if total_ignored:
                 ignore_pct = total_ignored / float(total_iters) * 100
-                txt.append(
+                disp.append(
                     " (%d ignored @ %0.2f%%)" % (total_ignored, round(ignore_pct, 2))
                 )
+            entries.append(("Results", "".join(disp)))
+
             # Runtime
             if runtime:
-                txt.append("\n")
                 total_runtime = sum(x.runtime for x in self.reports)
-                txt.append("   Runtime : %s" % (timedelta(seconds=int(total_runtime)),))
+                entries.append(("Runtime", str(timedelta(seconds=int(total_runtime)))))
+
             # Log size
             log_usage = sum(log_sizes) / 1_048_576.0
             if log_usage > self.DISPLAY_LIMIT_LOG:
-                txt.append("\n")
-                txt.append("      Logs : %0.1fMB" % (log_usage,))
+                disp = list()
+                disp.append("%0.1fMB" % (log_usage,))
                 if count > 1:
-                    txt.append(
+                    disp.append(
                         " (%0.2fMB, %0.2fMB)"
                         % (max(log_sizes) / 1_048_576.0, min(log_sizes) / 1_048_576.0)
                     )
+                entries.append(("Logs", "".join(disp)))
         else:
-            txt.append("No status reports available")
+            entries.append(("No status reports available", None))
+
+        # System information
         if sysinfo:
-            txt.append("\n")
-            txt.append(self._sys_info())
+            entries.extend(self._sys_info())
+
+        # Timestamp
         if timestamp:
-            txt.append("\n")
-            txt.append(strftime(" Timestamp : %Y/%m/%d %X %z", gmtime()))
-        msg = "".join(txt)
+            entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
+
+        # Format output
+        label_lengths = tuple(len(x[0]) for x in entries if x[1])
+        max_len = max(label_lengths) if label_lengths else 0
+        msg = list()
+        for label, body in entries:
+            if body:
+                msg.append(
+                    "%s%s : %s" % ((" " * max(max_len - len(label), 0), label, body))
+                )
+            else:
+                msg.append(label)
+        msg = "\n".join(msg)
+
         if self.tracebacks:
             txt = self._merge_tracebacks(self.tracebacks, self.SUMMARY_LIMIT - len(msg))
             msg = "".join((msg, txt))
@@ -269,41 +292,50 @@ class StatusReporter:
 
     @staticmethod
     def _sys_info():
-        """Collect and format system information.
+        """Collect system information.
 
         Args:
             None
 
         Returns:
-            str: System information formatted to match output from _summary()
+            list(tuple): System information in tuples (label, display data).
         """
-        txt = list()
-        txt.append(
-            "CPU & Load : %d @ %0.1f%%"
+        entries = list()
+
+        # CPU and load
+        disp = list()
+        disp.append(
+            "%d @ %d%%"
             % (
-                cpu_count(),
-                cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL),
+                cpu_count(logical=False),
+                round(cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL)),
             )
         )
         if getloadavg is not None:
-            txt.append(" %s\n" % (str(getloadavg()),))
-        else:
-            txt.append("\n")
+            disp.append(" %s" % (str(getloadavg()),))
+        entries.append(("CPU & Load", "".join(disp)))
+
+        # memory usage
+        disp = list()
         mem_usage = virtual_memory()
-        txt.append("    Memory : ")
         if mem_usage.available < 1_073_741_824:  # < 1GB
-            txt.append("%dMB" % (mem_usage.available / 1_048_576,))
+            disp.append("%dMB" % (mem_usage.available / 1_048_576,))
         else:
-            txt.append("%0.1fGB" % (mem_usage.available / 1_073_741_824.0,))
-        txt.append(" of %0.1fGB free\n" % (mem_usage.total / 1_073_741_824.0,))
+            disp.append("%0.1fGB" % (mem_usage.available / 1_073_741_824.0,))
+        disp.append(" of %0.1fGB free" % (mem_usage.total / 1_073_741_824.0,))
+        entries.append(("Memory", "".join(disp)))
+
+        # disk usage
+        disp = list()
         usage = disk_usage("/")
-        txt.append("      Disk : ")
         if usage.free < 1_073_741_824:  # < 1GB
-            txt.append("%dMB" % (usage.free / 1_048_576,))
+            disp.append("%dMB" % (usage.free / 1_048_576,))
         else:
-            txt.append("%0.1fGB" % (usage.free / 1_073_741_824.0,))
-        txt.append(" of %0.1fGB free" % (usage.total / 1_073_741_824.0,))
-        return "".join(txt)
+            disp.append("%0.1fGB" % (usage.free / 1_073_741_824.0,))
+        disp.append(" of %0.1fGB free" % (usage.total / 1_073_741_824.0,))
+        entries.append(("Disk", "".join(disp)))
+
+        return entries
 
     @staticmethod
     def _tracebacks(path, ignore_kbi=True, max_preceeding=5):
