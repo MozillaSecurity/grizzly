@@ -665,8 +665,6 @@ class ReduceManager:
         for result in results:
             if self._report_to_fuzzmanager:
                 reporter = FuzzManagerReporter(self._report_tool)
-                if result.expected:
-                    reporter.force_report = True
             else:
                 report_dir = "reports" if result.expected else "other_reports"
                 reporter = FilesystemReporter(
