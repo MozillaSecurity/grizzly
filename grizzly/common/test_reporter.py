@@ -4,11 +4,11 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly Reporter"""
 # pylint: disable=protected-access
-import sys
-import tarfile
+from sys import platform
+from tarfile import open as tar_open
 
-import pytest
 from FTB.ProgramConfiguration import ProgramConfiguration
+from pytest import importorskip, mark, raises
 
 from .report import Report
 from .reporter import (
@@ -102,7 +102,7 @@ def test_filesystem_reporter_03(tmp_path):
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     reporter = FilesystemReporter(str(tmp_path / "reports"))
     reporter.min_space = 2 ** 50
-    with pytest.raises(RuntimeError, match="Running low on disk space"):
+    with raises(RuntimeError, match="Running low on disk space"):
         reporter.submit([], Report(str(log_path), "fake_bin"))
 
 
@@ -124,7 +124,7 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
     fake_reporter.fromBinary.return_value = mocker.Mock(spec_set=ProgramConfiguration)
     # missing global FM config file
     FuzzManagerReporter.FM_CONFIG = "no_file"
-    with pytest.raises(IOError, match="Missing: no_file"):
+    with raises(IOError, match="Missing: no_file"):
         FuzzManagerReporter.sanity_check("fake")
     # missing binary FM config file
     fake_fmc = tmp_path / ".fuzzmanagerconf"
@@ -132,7 +132,7 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
     fake_bin = tmp_path / "bin"
     fake_bin.touch()
     FuzzManagerReporter.FM_CONFIG = str(fake_fmc)
-    with pytest.raises(IOError, match="bin.fuzzmanagerconf"):
+    with raises(IOError, match="bin.fuzzmanagerconf"):
         FuzzManagerReporter.sanity_check(str(fake_bin))
     # success
     (tmp_path / "bin.fuzzmanagerconf").touch()
@@ -140,20 +140,29 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
     assert fake_reporter.fromBinary.call_count == 1
 
 
-def test_fuzzmanager_reporter_02(mocker, tmp_path):
+@mark.parametrize(
+    "tests, frequent, ignored",
+    [
+        # report - without test
+        (False, False, False),
+        # report - with test
+        (True, False, False),
+        # report - frequent
+        (True, True, False),
+        # report - ignored
+        (True, False, True),
+    ],
+)
+def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored):
     """test FuzzManagerReporter.submit()"""
     mocker.patch(
         "grizzly.common.reporter.getcwd", autospec=True, return_value=str(tmp_path)
     )
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="0")
-    fake_crashinfo = mocker.patch("grizzly.common.report.CrashInfo", autospec=True)
-    fake_crashinfo.fromRawCrashData.return_value.createShortSignature.return_value = (
-        "test [@ test]"
-    )
     fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
-    fake_collector.return_value.search.return_value = (None, None)
-    fake_collector.return_value.generate.return_value = str(
-        tmp_path / "fm_file.signature"
+    fake_collector.return_value.search.return_value = (
+        None,
+        {"frequent": frequent, "shortDescription": "[@ test]"},
     )
     log_path = tmp_path / "log_path"
     log_path.mkdir()
@@ -162,116 +171,29 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path):
     (log_path / "log_stdout.txt").touch()
     (log_path / "rr-traces").mkdir()
     (tmp_path / "screenlog.0").touch()
-    fake_test = mocker.Mock(
-        spec_set=TestCase,
-        adapter_name="adapter",
-        env_vars={"TEST": "1"},
-        input_fname="input",
-    )
+    test_cases = list()
+    if tests:
+        fake_test = mocker.Mock(
+            spec_set=TestCase,
+            adapter_name="adapter",
+            env_vars={"TEST": "1"},
+            input_fname="input",
+        )
+        test_cases.append(fake_test)
     reporter = FuzzManagerReporter("fake_bin")
-    reporter.submit([fake_test], Report(str(log_path), "fake_bin", is_hang=True))
+    reporter._ignored = lambda x: ignored
+    reporter.submit(test_cases, Report(str(log_path), "fake_bin", is_hang=True))
     assert not log_path.is_dir()
-    assert fake_test.dump.call_count == 1
-    assert fake_collector.return_value.submit.call_count == 1
-    meta_data = (tmp_path / "fm_file.metadata").read_text()
-    assert '"frequent": false' in meta_data
-    assert '"_grizzly_seen_count": 1' in meta_data
-    assert '"shortDescription": "test [@ test]"' in meta_data
+    if frequent or ignored:
+        assert fake_collector.return_value.submit.call_count == 0
+        assert fake_test.dump.call_count == 0
+    else:
+        assert fake_collector.return_value.submit.call_count == 1
+        if tests:
+            assert fake_test.dump.call_count == 1
 
 
 def test_fuzzmanager_reporter_03(mocker, tmp_path):
-    """test FuzzManagerReporter.submit() - no test / mark as frequent"""
-    mocker.patch(
-        "grizzly.common.reporter.getcwd", autospec=True, return_value=str(tmp_path)
-    )
-    fake_crashinfo = mocker.patch("grizzly.common.report.CrashInfo", autospec=True)
-    fake_crashinfo.fromRawCrashData.return_value.createShortSignature.return_value = (
-        "test [@ test]"
-    )
-    fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
-    fake_collector.return_value.search.return_value = (None, None)
-    fake_collector.return_value.generate.return_value = str(
-        tmp_path / "fm_file.signature"
-    )
-    log_path = tmp_path / "log_path"
-    log_path.mkdir()
-    (log_path / "log_stderr.txt").touch()
-    (log_path / "log_stdout.txt").touch()
-    reporter = FuzzManagerReporter("fake_bin")
-    reporter.max_reports = 1
-    reporter.submit([], Report(str(log_path), "fake_bin"))
-    assert fake_collector.return_value.submit.call_count == 1
-    meta_data = (tmp_path / "fm_file.metadata").read_text()
-    assert '"frequent": true' in meta_data
-    assert '"_grizzly_seen_count": 1' in meta_data
-    assert '"shortDescription": "test [@ test]"' in meta_data
-
-
-def test_fuzzmanager_reporter_04(mocker, tmp_path):
-    """test FuzzManagerReporter.submit() hit frequent crash"""
-    mocker.patch("grizzly.common.report.CrashInfo", autospec=True)
-    fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
-    fake_collector.return_value.search.return_value = (
-        None,
-        {"frequent": True, "shortDescription": "[@ test]"},
-    )
-    log_path = tmp_path / "log_path"
-    log_path.mkdir()
-    (log_path / "log_stderr.txt").touch()
-    (log_path / "log_stdout.txt").touch()
-    reporter = FuzzManagerReporter("fake_bin")
-    reporter.submit([], Report(str(log_path), "fake_bin"))
-    fake_collector.return_value.submit.assert_not_called()
-
-
-def test_fuzzmanager_reporter_05(mocker, tmp_path):
-    """test FuzzManagerReporter.submit() hit existing crash"""
-    mocker.patch("grizzly.common.report.CrashInfo", autospec=True)
-    fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
-    fake_collector.return_value.search.return_value = (
-        None,
-        {"bug__id": 1, "frequent": False, "shortDescription": "[@ test]"},
-    )
-    log_path = tmp_path / "log_path"
-    log_path.mkdir()
-    (log_path / "log_stderr.txt").touch()
-    (log_path / "log_stdout.txt").touch()
-    reporter = FuzzManagerReporter("fake_bin")
-    reporter._ignored = lambda x: True
-    reporter.submit([], Report(str(log_path), "fake_bin"))
-    fake_collector.return_value.submit.assert_not_called()
-
-
-def test_fuzzmanager_reporter_06(mocker, tmp_path):
-    """test FuzzManagerReporter.submit() no signature"""
-    fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
-    fake_collector.return_value.search.return_value = (None, None)
-    fake_collector.return_value.generate.return_value = None
-    log_path = tmp_path / "log_path"
-    log_path.mkdir()
-    (log_path / "log_stderr.txt").touch()
-    (log_path / "log_stdout.txt").touch()
-    reporter = FuzzManagerReporter("fake_bin")
-    with pytest.raises(RuntimeError, match="Failed to create FM signature"):
-        reporter.submit([], Report(str(log_path), "fake_bin"))
-
-
-def test_fuzzmanager_reporter_07(mocker, tmp_path):
-    """test FuzzManagerReporter.submit() unsymbolized crash"""
-    fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
-    fake_collector.return_value.search.return_value = (None, None)
-    fake_collector.return_value.generate.return_value = None
-    log_path = tmp_path / "log_path"
-    log_path.mkdir()
-    (log_path / "log_stderr.txt").touch()
-    (log_path / "log_stdout.txt").touch()
-    reporter = FuzzManagerReporter("fake_bin")
-    reporter._ignored = lambda x: True
-    reporter.submit([], Report(str(log_path), "fake_bin"))
-    fake_collector.return_value.submit.assert_not_called()
-
-
-def test_fuzzmanager_reporter_08(mocker, tmp_path):
     """test FuzzManagerReporter._ignored()"""
     log_file = tmp_path / "test.log"
     log_file.touch()
@@ -296,20 +218,18 @@ def test_s3fuzzmanager_reporter_01(mocker, tmp_path):
     mocker.patch("grizzly.common.reporter.FuzzManagerReporter", autospec=True)
     fake_bin = tmp_path / "bin"
     # test GRZ_S3_BUCKET missing
-    with pytest.raises(
-        EnvironmentError, match="'GRZ_S3_BUCKET' is not set in environment"
-    ):
+    with raises(EnvironmentError, match="'GRZ_S3_BUCKET' is not set in environment"):
         S3FuzzManagerReporter.sanity_check(str(fake_bin))
     # test GRZ_S3_BUCKET set
-    pytest.importorskip("boto3")
+    importorskip("boto3")
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="test")
     S3FuzzManagerReporter.sanity_check(str(fake_bin))
 
 
 def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     """test S3FuzzManagerReporter._pre_submit()"""
-    pytest.importorskip("boto3")
-    pytest.importorskip("botocore")
+    importorskip("boto3")
+    importorskip("botocore")
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="test")
     fake_resource = mocker.patch("grizzly.common.reporter.resource", autospec=True)
 
@@ -352,9 +272,7 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     assert fake_resource.return_value.meta.client.upload_file.call_count == 1
 
 
-@pytest.mark.skipif(
-    not sys.platform.startswith("linux"), reason="RR only supported on Linux"
-)
+@mark.skipif(not platform.startswith("linux"), reason="RR only supported on Linux")
 def test_s3fuzzmanager_reporter_03(tmp_path):
     """test S3FuzzManagerReporter.compress_rr_trace()"""
     # create fake trace
@@ -378,7 +296,7 @@ def test_s3fuzzmanager_reporter_03(tmp_path):
     S3FuzzManagerReporter.compress_rr_trace(str(src), str(dest))
     assert not src.is_dir()
     assert (dest / "rr.tar.bz2").is_file()
-    with tarfile.open(str(dest / "rr.tar.bz2"), "r:bz2") as arc_fp:
+    with tar_open(str(dest / "rr.tar.bz2"), "r:bz2") as arc_fp:
         entries = arc_fp.getnames()
     assert "echo-1" in entries
     assert "echo-0" not in entries

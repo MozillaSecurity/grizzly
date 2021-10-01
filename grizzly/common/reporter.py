@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod
 from enum import IntEnum, unique
-from json import dump, dumps, loads
+from json import dumps, loads
 from logging import WARNING, getLogger
 from os import getcwd, getenv, makedirs, mkdir, unlink, walk
 from os.path import basename, expanduser, isdir, isfile
@@ -153,13 +153,11 @@ class FilesystemReporter(Reporter):
 
 class FuzzManagerReporter(Reporter):
     FM_CONFIG = pathjoin(expanduser("~"), ".fuzzmanagerconf")
-    # max number of times to report a non-frequent signature to FuzzManager
-    MAX_REPORTS = 10
+
+    __slots__ = ("_extra_metadata", "quality", "tool")
 
     def __init__(self, tool=None):
         self._extra_metadata = {}
-        self.force_report = False
-        self.max_reports = FuzzManagerReporter.MAX_REPORTS
         self.quality = Quality.UNREDUCED
         self.tool = tool  # optional tool name
 
@@ -234,56 +232,22 @@ class FuzzManagerReporter(Reporter):
         return False
 
     def _submit_report(self, report, test_cases):
-        # search for a cached signature match and if the signature
-        # is already in the cache and marked as frequent, don't bother submitting
+        # search for a cached signature match
         with InterProcessLock(pathjoin(grz_tmp(), "fm_sigcache.lock")):
             collector = Collector()
-            cache_sig_file, cache_metadata = collector.search(report.crash_info)
-            if cache_metadata is not None:
-                if cache_metadata["frequent"]:
-                    LOG.info(
-                        "Frequent crash matched existing signature: %s",
-                        cache_metadata["shortDescription"],
-                    )
-                    if not self.force_report:
-                        return None
-                elif "bug__id" in cache_metadata:
-                    LOG.info(
-                        "Crash matched existing signature (bug %s): %s",
-                        cache_metadata["bug__id"],
-                        cache_metadata["shortDescription"],
-                    )
-                    # we will still report this one, but no more
-                    cache_metadata["frequent"] = True
-                # there is already a signature, initialize count
-                cache_metadata.setdefault("_grizzly_seen_count", 0)
-            else:
-                # there is no signature, create one locally so we can count
-                # the number of times we've seen it
-                max_frames = report.crash_signature_max_frames(report.crash_info)
-                cache_sig_file = collector.generate(
-                    report.crash_info, numFrames=max_frames
-                )
-                cache_metadata = {
-                    "_grizzly_seen_count": 0,
-                    "frequent": False,
-                    "shortDescription": report.crash_info.createShortSignature(),
-                }
-            if cache_sig_file is None:
-                if self._ignored(report):
-                    LOG.info("Report is unsupported and is in ignore list")
-                    return None
-                LOG.warning("Report is unsupported by FM, saved to %r", report.path)
-                # TODO: we should check if stackhasher failed too
-                raise RuntimeError("Failed to create FM signature")
-            # limit the number of times we report per cycle
-            cache_metadata["_grizzly_seen_count"] += 1
-            if cache_metadata["_grizzly_seen_count"] >= self.max_reports:
-                # we will still report this one, but no more
-                cache_metadata["frequent"] = True
-            metadata_file = cache_sig_file.replace(".signature", ".metadata")
-            with open(metadata_file, "w") as meta_fp:
-                dump(cache_metadata, meta_fp)
+            _, cache_metadata = collector.search(report.crash_info)
+
+        # check if signature has been marked as frequent in FM
+        if cache_metadata is not None and cache_metadata["frequent"]:
+            LOG.info(
+                "Frequent crash matched existing signature: %s",
+                cache_metadata["shortDescription"],
+            )
+            return None
+
+        if self._ignored(report):
+            LOG.info("Report is in ignore list")
+            return None
 
         if report.is_hang:
             self.add_extra_metadata("is_hang", True)
@@ -310,9 +274,10 @@ class FuzzManagerReporter(Reporter):
             self.quality = Quality.NO_TESTCASE
         report.crash_info.configuration.addMetadata(self._extra_metadata)
 
+        # TODO: this should likely move to ffpuppet
         # grab screen log (used in automation)
         if getenv("WINDOW") is not None:
-            screen_log = pathjoin(getcwd(), ".".join(["screenlog", getenv("WINDOW")]))
+            screen_log = pathjoin(getcwd(), "screenlog.%s" % (getenv("WINDOW"),))
             if isfile(screen_log):
                 target_log = pathjoin(report.path, "screenlog.txt")
                 copyfile(screen_log, target_log)
@@ -333,12 +298,7 @@ class FuzzManagerReporter(Reporter):
             # override tool name if specified
             if self.tool is not None:
                 collector.tool = self.tool
-            # announce shortDescription if crash is not in a bucket
-            if (
-                cache_metadata["_grizzly_seen_count"] == 1
-                and not cache_metadata["frequent"]
-            ):
-                LOG.info("Submitting new crash %r", cache_metadata["shortDescription"])
+
             # submit results to the FuzzManager server
             new_entry = collector.submit(
                 report.crash_info, testCase=zip_name, testCaseQuality=self.quality.value
