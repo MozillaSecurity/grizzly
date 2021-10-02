@@ -18,7 +18,7 @@ GBYTES = 1_073_741_824
 
 def _fake_sys_info():
     return [
-        ("CPU & Load", "64 @ 93.1% (85.25, 76.21, 51.06)"),
+        ("CPU & Load", "64 @ 93% (85.25, 76.21, 51.06)"),
         ("Memory", "183.9GB of 251.9GB free"),
         ("Disk", "22.2GB of 28.7GB free"),
     ]
@@ -140,7 +140,7 @@ def test_status_reporter_05(mocker, tmp_path):
     assert "Iteration" in output
     assert "Rate" in output
     assert "Results" in output
-    assert "ignored" not in output
+    assert "Ignored" not in output
     assert "Logs" not in output
     assert "Runtime" not in output
     assert "Timestamp" not in output
@@ -158,12 +158,12 @@ def test_status_reporter_05(mocker, tmp_path):
     assert "Iteration" in output
     assert "Rate" in output
     assert "Results" in output
-    assert "ignored" in output
+    assert "Ignored" in output
     assert "Logs" in output
     assert "Runtime" in output
     assert "Timestamp" in output
     lines = output.split("\n")
-    assert len(lines) == 9
+    assert len(lines) == 10
     # verify alignment
     position = len(lines[0].split(":")[0])
     for line in lines:
@@ -334,7 +334,9 @@ def test_status_reporter_10(mocker, tmp_path):
     rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 10
-    merged_log = rptr._summary(runtime=True, sysinfo=True, timestamp=True)
+    merged_log = rptr._summary(
+        runtime=True, sysinfo=True, timestamp=True, iters_per_result=1
+    )
     assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
 
 
