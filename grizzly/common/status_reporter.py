@@ -175,13 +175,16 @@ class StatusReporter:
                 txt.append("\n")
         return "".join(txt)
 
-    def _summary(self, runtime=True, sysinfo=False, timestamp=False):
+    def _summary(
+        self, runtime=True, sysinfo=False, timestamp=False, iters_per_result=100
+    ):
         """Merge and generate a summary of status reports.
 
         Args:
             runtime (bool): Include total runtime in output
             sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output
             timestamp (bool): Include time stamp in output
+            iters_per_result (int): Threshold for warning of potential blockers
 
         Returns:
             str: A summary of merged reports
@@ -215,14 +218,23 @@ class StatusReporter:
             entries.append(("Rate", "".join(disp)))
 
             # Results
-            disp = list()
-            disp.append(str(sum(results)))
+            if total_iters:
+                total_results = sum(results)
+                result_pct = total_results / float(total_iters) * 100
+                disp = list()
+                disp.append("%d @ %0.1f%%" % (total_results, round(result_pct, 1)))
+                if any(
+                    x.blockers(iters_per_result=iters_per_result) for x in self.reports
+                ):
+                    disp.append(" (Blockers)")
+                entries.append(("Results", "".join(disp)))
+
+            # Ignored
             if total_ignored:
                 ignore_pct = total_ignored / float(total_iters) * 100
-                disp.append(
-                    " (%d ignored @ %0.2f%%)" % (total_ignored, round(ignore_pct, 2))
+                entries.append(
+                    ("Ignored", "%d @ %0.1f%%" % (total_ignored, round(ignore_pct, 1)))
                 )
-            entries.append(("Results", "".join(disp)))
 
             # Runtime
             if runtime:
