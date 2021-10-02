@@ -30,6 +30,7 @@ def test_status_01(mocker, tmp_path):
     assert status.pid is not None
     assert not status._enable_profiling
     assert not status._profiles
+    assert not any(status.blockers())
 
 
 def test_status_02(tmp_path):
@@ -50,7 +51,7 @@ def test_status_02(tmp_path):
 
 
 def test_status_03(tmp_path):
-    """test Status.load()"""
+    """test Status.loadall()"""
     db_file = str(tmp_path / "status.db")
     # create simple entry
     status = Status.start(db_file, enable_profiling=True)
@@ -217,6 +218,23 @@ def test_status_07(tmp_path):
     assert len(status._profiles) == 3
     assert "no-op" in status._profiles
     assert len(tuple(status.profile_entries())) == 3
+
+
+def test_status_08(tmp_path):
+    """test Status.blockers()"""
+    status = Status.start(str(tmp_path / "status.db"))
+    status.iteration = 10
+    assert not any(status.blockers())
+    status.results.count("uid1", "sig1")
+    assert not any(status.blockers(iters_per_result=3))
+    status.results.count("uid2", "sig2")
+    status.results.count("uid2", "sig2")
+    assert not any(status.blockers(iters_per_result=2))
+    blockers = tuple(status.blockers(iters_per_result=5))
+    assert len(blockers) == 1
+    assert blockers[0] == (2, "sig2")
+    blockers = tuple(status.blockers(iters_per_result=10))
+    assert len(blockers) == 2
 
 
 @mark.parametrize(
