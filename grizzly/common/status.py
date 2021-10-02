@@ -154,6 +154,22 @@ class Status:
                 freq_limit=report_limit,
             )
 
+    def blockers(self, iters_per_result=100):
+        """Any result with an iterations-per-result ratio of less than or equal the
+        given limit are considered 'blockers'.
+
+        Args:
+            iters_per_result (int): Iterations-per-result threshold.
+
+        Yields:
+            tuple(int, str): Count and description of result.
+        """
+        assert iters_per_result > 0
+        if self.results:
+            for _, count, desc in self.results.all():
+                if self.iteration / count <= iters_per_result:
+                    yield count, desc
+
     @classmethod
     def loadall(cls, db_file, time_limit=300):
         """Load all status reports found in `db_file`.
