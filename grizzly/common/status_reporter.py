@@ -222,9 +222,12 @@ class StatusReporter:
                 total_results = sum(results)
                 result_pct = total_results / float(total_iters) * 100
                 disp = list()
-                disp.append("%d @ %0.1f%%" % (total_results, round(result_pct, 1)))
+                disp.append("%d" % (total_results,))
+                if total_results:
+                    disp.append(" @ %0.1f%%" % (round(result_pct, 1),))
                 if any(
-                    x.blockers(iters_per_result=iters_per_result) for x in self.reports
+                    any(x.blockers(iters_per_result=iters_per_result))
+                    for x in self.reports
                 ):
                     disp.append(" (Blockers)")
                 entries.append(("Results", "".join(disp)))
@@ -471,7 +474,7 @@ class TracebackReport:
         return "\n".join(["Log: %r" % self.file_name] + self.prev_lines + self.lines)
 
 
-def main(args=None, modes=None):
+def main(args=None):
     """Merge Grizzly status files into a single report (main entrypoint).
 
     Args:
@@ -488,14 +491,34 @@ def main(args=None, modes=None):
         log_fmt = "[%(asctime)s] %(message)s"
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    if not modes:
-        modes = {"fuzz": Session.STATUS_DB}
+    # TODO: add support for reducer
+    modes = {"fuzzing": Session.STATUS_DB}
+
+    # report types: define name and time range of scan
+    report_types = {
+        # include status reports from the last 2 minutes
+        "active": 120,
+        # include status reports from the last 8 hours
+        "complete": 28800,
+    }
+
     parser = ArgumentParser(description="Grizzly status report generator")
-    parser.add_argument("--dump", help="File to write report to")
     parser.add_argument(
-        "--mode",
-        default="fuzz",
-        help="Report mode. Available modes: %s (default: 'fuzz')" % (", ".join(modes),),
+        "--dump", help="File to write report to, existing files will be overwritten."
+    )
+    parser.add_argument(
+        "--type",
+        choices=report_types.keys(),
+        default="active",
+        help="Report type. active: Current snapshot of activity, complete: "
+        "Aggregate summary of all jobs over a longer duration (8h). "
+        "(default: active)",
+    )
+    parser.add_argument(
+        "--scan-mode",
+        choices=modes.keys(),
+        default="fuzzing",
+        help="Report mode. (default: fuzzing)",
     )
     parser.add_argument(
         "--system-report",
@@ -507,20 +530,30 @@ def main(args=None, modes=None):
         help="Scan path for Python tracebacks found in screenlog.# files",
     )
     args = parser.parse_args(args)
-    if args.mode not in modes:
-        parser.error("Invalid mode %r" % args.mode)
     if args.tracebacks and not isdir(args.tracebacks):
         parser.error("--tracebacks must be a directory")
 
-    status_db = modes.get(args.mode)
-    reporter = StatusReporter.load(db_file=status_db, tb_path=args.tracebacks)
+    status_db = modes.get(args.scan_mode)
+    reporter = StatusReporter.load(
+        db_file=status_db,
+        tb_path=args.tracebacks,
+        time_limit=report_types[args.type],
+    )
     if args.dump:
-        reporter.dump_summary(args.dump)
+        if args.type == "active":
+            reporter.dump_summary(
+                args.dump, runtime=False, sysinfo=True, timestamp=True
+            )
+        else:
+            reporter.dump_summary(
+                args.dump, runtime=True, sysinfo=False, timestamp=False
+            )
         return 0
 
     if not reporter.reports:
         print("Grizzly Status - No status reports to display")
         return 0
+
     print(
         "Grizzly Status - %s - Instance report frequency: %ds\n"
         % (strftime("%Y/%m/%d %X"), Status.REPORT_FREQ)

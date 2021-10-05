@@ -140,6 +140,7 @@ def test_status_reporter_05(mocker, tmp_path):
     assert "Iteration" in output
     assert "Rate" in output
     assert "Results" in output
+    assert "Blockers" not in output
     assert "Ignored" not in output
     assert "Logs" not in output
     assert "Runtime" not in output
@@ -511,42 +512,59 @@ def test_traceback_report_08(tmp_path):
     assert "AssertionError" in output
 
 
-def test_main_01(tmp_path):
+def test_main_01(mocker, tmp_path):
     """test main() with no reports"""
-    db_file = str(tmp_path / "status.db")
-    StatusReporter.CPU_POLL_INTERVAL = 0.01
-    assert main([], modes={"fuzz": db_file}) == 0
+    mocker.patch("grizzly.session.Session.STATUS_DB", str(tmp_path / "status.db"))
+    mocker.patch(
+        "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
+    )
+    assert main([]) == 0
 
 
-def test_main_02(tmp_path):
+def test_main_02(mocker, tmp_path):
     """test main() with a report"""
     db_file = str(tmp_path / "status.db")
-    StatusReporter.CPU_POLL_INTERVAL = 0.01
+    mocker.patch("grizzly.session.Session.STATUS_DB", db_file)
+    mocker.patch(
+        "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
+    )
     status = Status.start(db_file=db_file)
     status.iteration = 1
     status.results.count("uid", "[@ test]")
     status.report(force=True)
-    assert main([], modes={"fuzz": db_file}) == 0
+    assert main([]) == 0
 
 
-def test_main_03(tmp_path):
+@mark.parametrize(
+    "report_type",
+    [
+        "active",
+        "complete",
+    ],
+)
+def test_main_03(mocker, tmp_path, report_type):
     """test main() --dump"""
     db_file = str(tmp_path / "status.db")
-    StatusReporter.CPU_POLL_INTERVAL = 0.01
+    mocker.patch("grizzly.session.Session.STATUS_DB", db_file)
+    mocker.patch(
+        "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
+    )
     status = Status.start(db_file=db_file)
     status.iteration = 1
     status.report(force=True)
     dump_file = tmp_path / "output.txt"
-    assert main(["--dump", str(dump_file)], modes={"fuzz": db_file}) == 0
+    assert main(["--dump", str(dump_file), "--type", report_type]) == 0
     assert dump_file.is_file()
-    assert b"Runtime" not in dump_file.read_bytes()
-    # assert False, dump_file.read_bytes()
+    if report_type == "active":
+        assert b"Runtime" not in dump_file.read_bytes()
+    else:
+        assert b"Timestamp" not in dump_file.read_bytes()
 
 
-def test_main_04(tmp_path):
+def test_main_04(capsys, mocker, tmp_path):
     """test main() with invalid args"""
-    db_file = str(tmp_path / "status.db")
+    mocker.patch("grizzly.session.Session.STATUS_DB", str(tmp_path / "status.db"))
+
     with raises(SystemExit):
-        main(["--mode", "invalid"], modes={"fuzz": db_file})
-    with raises(SystemExit):
-        main(["--tracebacks", "missing"], modes={"fuzz": db_file})
+        main(["--tracebacks", "missing"])
+    assert "--tracebacks must be a directory" in capsys.readouterr()[-1]
