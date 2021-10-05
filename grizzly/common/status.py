@@ -32,7 +32,7 @@ def _db_version_check(db_file, expected=DB_VERSION):
         expected (int): The latest database version.
 
     Returns:
-        None
+        bool: True if database was reset other False.
     """
     assert expected > 0
     with connect(db_file, isolation_level=None) as con:
@@ -51,9 +51,9 @@ def _db_version_check(db_file, expected=DB_VERSION):
             # update db version number
             cur.execute("PRAGMA user_version = %d;" % (expected,))
             con.commit()
-        elif version > expected:
-            # this can only happen is old code is run after a db update
-            LOG.error("db version %d > expected %d", version, expected)
+            return True
+        assert version == expected, "code out of date?"
+        return False
 
 
 class Status:
@@ -184,9 +184,6 @@ class Status:
         assert time_limit >= 0
         with connect(db_file) as con:
             cur = con.cursor()
-            # check db version
-            cur.execute("PRAGMA user_version;")
-            assert cur.fetchone()[0] <= DB_VERSION
             # check table exists
             cur.execute(
                 """SELECT name
@@ -195,6 +192,9 @@ class Status:
                    AND name='status';"""
             )
             if cur.fetchone():
+                # check db version
+                cur.execute("PRAGMA user_version;")
+                assert cur.fetchone()[0] == DB_VERSION, "code out of date?"
                 # collect entries
                 cur.execute(
                     """SELECT pid,
@@ -525,9 +525,6 @@ class ResultCounter:
         assert time_limit >= 0
         with connect(db_file) as con:
             cur = con.cursor()
-            # check db version
-            cur.execute("PRAGMA user_version;")
-            assert cur.fetchone()[0] <= DB_VERSION
             # check table exists
             cur.execute(
                 """SELECT name
@@ -536,6 +533,9 @@ class ResultCounter:
                    AND name='results';"""
             )
             if cur.fetchone():
+                # check db version
+                cur.execute("PRAGMA user_version;")
+                assert cur.fetchone()[0] == DB_VERSION, "code out of date?"
                 # collect entries
                 cur.execute(
                     """SELECT result_id,
