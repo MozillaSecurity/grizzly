@@ -37,7 +37,7 @@ def _db_version_check(db_file, expected=DB_VERSION):
     assert expected > 0
     with connect(db_file, isolation_level=None) as con:
         cur = con.cursor()
-        cur.execute("BEGIN")
+        cur.execute("BEGIN EXCLUSIVE;")
         # check db version
         cur.execute("PRAGMA user_version;")
         version = cur.fetchone()[0]
@@ -48,14 +48,12 @@ def _db_version_check(db_file, expected=DB_VERSION):
             for entry in cur.fetchall():
                 LOG.debug("dropping table %r", entry[0])
                 cur.execute("DROP TABLE IF EXISTS %s;" % (entry[0],))
-            # try to detect if there is a race
-            cur.execute("PRAGMA user_version;")
-            assert version == cur.fetchone()[0]
             # update db version number
             cur.execute("PRAGMA user_version = %d;" % (expected,))
             con.commit()
-        else:
-            cur.execute("ROLLBACK")
+        elif version > expected:
+            # this can only happen is old code is run after a db update
+            LOG.error("db version %d > expected %d", version, expected)
 
 
 class Status:
