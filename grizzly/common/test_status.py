@@ -111,45 +111,49 @@ def test_status_05(mocker, tmp_path):
     assert loaded.rate == 1.0
 
 
-def _client_writer(done, reported, db_file):
+# NOTE: this function must be at the top level to work on Windows
+def _client_writer(db_file, begin, count):
     """Used by test_status_06"""
-    # NOTE: this must be at the top level to work on Windows
+    begin.wait(timeout=45)
     status = Status.start(db_file)
-    while not done.is_set():
+    for _ in range(count):
         status.iteration += 1
         status.report(force=True)
-        # perform two reports before setting flag
-        if not reported.is_set() and status.iteration > 1:
-            reported.set()
         sleep(0.01)
 
 
 def test_status_06(tmp_path):
-    """test Status.loadall() with multiple active reporters"""
+    """test Status.loadall() with multiple active clients in parallel"""
+    begin = Event()
+    clients = 10
     db_file = str(tmp_path / "status.db")
-    done = Event()
+    iter_count = 2
     procs = list()
-    report_events = list()
     try:
-        # launch processes
-        for _ in range(10):
-            report_events.append(Event())
+        # create and launch client processes
+        for _ in range(clients):
             procs.append(
-                Process(target=_client_writer, args=(done, report_events[-1], db_file))
+                Process(target=_client_writer, args=(db_file, begin, iter_count))
             )
             procs[-1].start()
-        # wait for processes to launch and report
-        for event in report_events:
-            assert event.wait(timeout=60)
+        # synchronize client processes (not perfect but good enough)
+        begin.set()
+        # wait for processes to report and exit
+        for proc in procs:
+            proc.join(timeout=60)
+            assert proc.exitcode == 0
         # collect reports
         reports = tuple(Status.loadall(db_file))
-        assert len(reports) == len(procs)
+        # check that each process created a report
+        assert len(reports) == clients
+        # check reported data
         assert max(x.rate for x in reports) > 0
+        assert sum(x.iteration for x in reports) == iter_count * clients
     finally:
-        done.set()
         for proc in procs:
-            if proc.pid is not None:
-                proc.join()
+            if proc.exitcode is None:
+                proc.terminate()
+            proc.join()
 
 
 def test_status_07(tmp_path):
