@@ -10,7 +10,7 @@ from time import sleep, time
 
 from pytest import mark
 
-from .status import ResultCounter, Status, _db_version_check
+from .status import DB_VERSION, ResultCounter, Status, _db_version_check
 
 
 def test_status_01(mocker, tmp_path):
@@ -402,11 +402,10 @@ def test_db_version_check_01(tmp_path):
     """test _db_version_check()"""
     db_path = str(tmp_path / "storage.db")
     # empty db
-    _db_version_check(db_path, expected=1)
+    assert _db_version_check(db_path, expected=DB_VERSION)
     # no update needed
+    assert not _db_version_check(db_path, expected=DB_VERSION)
+    # add db contents
     Status.start(db_path)
-    _db_version_check(db_path, expected=1)
     # force update
-    _db_version_check(db_path, expected=2)
-    # verify everything works after update
-    Status.start(db_path)
+    assert _db_version_check(db_path, expected=DB_VERSION + 1)
