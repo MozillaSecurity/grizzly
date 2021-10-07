@@ -37,23 +37,28 @@ def _db_version_check(db_file, expected=DB_VERSION):
     assert expected > 0
     with connect(db_file, isolation_level=None) as con:
         cur = con.cursor()
-        cur.execute("BEGIN EXCLUSIVE;")
-        # check db version
+        # collect db version
         cur.execute("PRAGMA user_version;")
         version = cur.fetchone()[0]
+        # check if an update is required
         if version < expected:
-            LOG.debug("db version %d < %d", version, expected)
-            # remove ALL tables from the database
-            cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            for entry in cur.fetchall():
-                LOG.debug("dropping table %r", entry[0])
-                cur.execute("DROP TABLE IF EXISTS %s;" % (entry[0],))
-            # update db version number
-            cur.execute("PRAGMA user_version = %d;" % (expected,))
-            con.commit()
-            return True
-        assert version == expected, "code out of date?"
-        return False
+            cur.execute("BEGIN EXCLUSIVE;")
+            # check db version while locked to avoid race
+            cur.execute("PRAGMA user_version;")
+            version = cur.fetchone()[0]
+            if version < expected:
+                LOG.debug("db version %d < %d", version, expected)
+                # remove ALL tables from the database
+                cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                for entry in cur.fetchall():
+                    LOG.debug("dropping table %r", entry[0])
+                    cur.execute("DROP TABLE IF EXISTS %s;" % (entry[0],))
+                # update db version number
+                cur.execute("PRAGMA user_version = %d;" % (expected,))
+                con.commit()
+                return True
+    assert version == expected, "code out of date?"
+    return False
 
 
 class Status:
