@@ -122,12 +122,21 @@ def _client_writer(db_file, begin, count):
         sleep(0.01)
 
 
-def test_status_06(tmp_path):
+@mark.parametrize(
+    "loads_in_parallel",
+    [
+        # only test reporting in parallel
+        0,
+        # test reporting and loading in parallel
+        5,
+    ],
+)
+def test_status_06(tmp_path, loads_in_parallel):
     """test Status.loadall() with multiple active clients in parallel"""
     begin = Event()
     clients = 10
     db_file = str(tmp_path / "status.db")
-    iter_count = 2
+    iter_count = 5
     procs = list()
     try:
         # create and launch client processes
@@ -138,6 +147,9 @@ def test_status_06(tmp_path):
             procs[-1].start()
         # synchronize client processes (not perfect but good enough)
         begin.set()
+        # attempt parallel loads
+        for _ in range(loads_in_parallel):
+            tuple(Status.loadall(db_file))
         # wait for processes to report and exit
         for proc in procs:
             proc.join(timeout=60)
