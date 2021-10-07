@@ -320,8 +320,9 @@ class StatusReporter:
         # CPU and load
         disp = list()
         disp.append(
-            "%d @ %d%%"
+            "%d (%d) @ %d%%"
             % (
+                cpu_count(logical=True),
                 cpu_count(logical=False),
                 round(cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL)),
             )
