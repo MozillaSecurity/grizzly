@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-"""test Grizzly Reporter"""
+"""test Grizzly Report"""
 # pylint: disable=protected-access
 
 import os
@@ -311,21 +311,21 @@ def test_report_12(tmp_path):
         ('{"symptoms": [{"functionNames": ["a"],"type": "stackFrames"}]}', True),
         # no signature
         (None, True),
+        # FM failed to generate signature
         (None, False),
     ],
 )
 def test_report_13(mocker, tmp_path, sig_cache, has_sig):
     """test Report.crash_signature and Report.crash_hash"""
-    mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
-    collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
+    mocker.patch("grizzly.common.report.ProgramConfiguration", autospec=True)
+    collector = mocker.patch("grizzly.common.report.Collector", autospec=True)
     if sig_cache:
         sig_file = tmp_path / "cache.sig"
         sig_file.write_text(sig_cache)
         collector.return_value.search.return_value = (str(sig_file), None)
-        collector.return_value.sigCacheDir = str(sig_file)
+        collector.return_value.sigCacheDir = str(tmp_path)
     else:
         collector.return_value.sigCacheDir = None
-        collector.return_value.search.return_value = (None, None)
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     if has_sig:
