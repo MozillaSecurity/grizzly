@@ -171,30 +171,28 @@ def test_session_02(mocker, harness, relaunch, remaining):
 
 
 @mark.parametrize(
-    "harness, report_size, relaunch, iters",
+    "harness, report_size, relaunch, iters, has_sig",
     [
         # with harness, collect 1 test case
-        (True, 1, 1, 1),
+        (True, 1, 1, 1, True),
         # with harness, collect 2 test cases
-        (True, 2, 2, 2),
+        (True, 2, 2, 2, True),
         # with harness, collect 2 test cases,
-        (True, 2, 3, 3),
+        (True, 2, 3, 3, True),
         # with harness, collect 3 test cases, relaunch 1
-        (True, 3, 1, 3),
+        (True, 3, 1, 3, True),
         # without harness, collect 1 test case
-        (False, 1, 1, 1),
+        (False, 1, 1, 1, True),
         # without harness, collect 1 test case, 3 iterations
-        (False, 1, 1, 3),
+        (False, 1, 1, 3, True),
+        # with harness, collect 1 test case, failed to generate FM signature
+        (True, 1, 1, 1, False),
     ],
 )
-def test_session_03(mocker, harness, report_size, relaunch, iters):
+def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters, has_sig):
     """test Session - detecting failure"""
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
-    report = mocker.Mock(
-        spec_set=Report, major="major123", minor="minor456", crash_hash="123"
-    )
-    report.crash_info.createShortSignature.return_value = "[@ sig]"
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
@@ -214,6 +212,18 @@ def test_session_03(mocker, harness, report_size, relaunch, iters):
         Result.FOUND
     ]
     target.log_size.return_value = 1
+    # create Report
+    log_path = tmp_path / "logs"
+    log_path.mkdir()
+    (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    if has_sig:
+        with (log_path / "log_asan_blah.txt").open("w") as log_fp:
+            log_fp.write("==1==ERROR: AddressSanitizer: ")
+            log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+            log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
+            log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19\n")
+    report = Report(str(log_path), "bin")
     target.create_report.return_value = report
     with Session(
         adapter, reporter, server, target, relaunch=relaunch, report_size=report_size
@@ -225,7 +235,6 @@ def test_session_03(mocker, harness, report_size, relaunch, iters):
         session.run([], 10, input_path="file.bin", iteration_limit=iters)
         assert reporter.submit.call_count == 1
         assert len(reporter.submit.call_args[0][0]) == min(report_size, relaunch)
-        assert reporter.submit.call_args[0][1].major == "major123"
 
 
 def test_session_04(mocker):

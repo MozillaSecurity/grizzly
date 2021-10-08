@@ -255,7 +255,11 @@ class Session:
                     short_sig = "Potential hang detected"
                 else:
                     bucket_hash = report.crash_hash
-                    short_sig = report.crash_info.createShortSignature()
+                    if report.crash_signature is not None:
+                        short_sig = report.crash_info.createShortSignature()
+                    else:
+                        # FM crash signature creation failed
+                        short_sig = "Signature creation failed"
                 seen = self.status.results.count(bucket_hash, short_sig)
                 LOG.info(
                     "Result: %s (%s:%s) - %d",
