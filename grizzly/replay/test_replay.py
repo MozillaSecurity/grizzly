@@ -7,7 +7,7 @@
 unit tests for grizzly.replay
 """
 from itertools import cycle
-from os.path import join as pathjoin
+from pathlib import Path
 
 from pytest import mark, raises
 
@@ -23,11 +23,10 @@ pytestmark = mark.usefixtures("tmp_path_grz_tmp", "tmp_path_status_db")
 
 def _fake_save_logs(result_logs, _meta=False):
     """write fake log data to disk"""
-    with open(pathjoin(result_logs, "log_stderr.txt"), "w") as log_fp:
-        log_fp.write("STDERR log\n")
-    with open(pathjoin(result_logs, "log_stdout.txt"), "w") as log_fp:
-        log_fp.write("STDOUT log\n")
-    with open(pathjoin(result_logs, "log_asan_blah.txt"), "w") as log_fp:
+    log_path = Path(result_logs)
+    (log_path / "log_stderr.txt").write_text("STDERR log\n")
+    (log_path / "log_stdout.txt").write_text("STDOUT log\n")
+    with (log_path / "log_asan_blah.txt").open("w") as log_fp:
         log_fp.write("==1==ERROR: AddressSanitizer: ")
         log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
         log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
@@ -101,7 +100,16 @@ def test_replay_03(mocker):
             assert target.close.call_count == 1
 
 
-def test_replay_04(mocker):
+@mark.parametrize(
+    "good_sig",
+    [
+        # success - FM parsed signature
+        True,
+        # signature could not be parsed
+        False,
+    ],
+)
+def test_replay_04(mocker, good_sig):
     """test ReplayManager.run() - successful repro"""
     served = ["index.html"]
     server = mocker.Mock(spec_set=Sapphire, port=0x1337, timeout=10)
@@ -109,12 +117,25 @@ def test_replay_04(mocker):
     target = mocker.Mock(spec_set=Target, binary="C:\\fake_bin", launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
-    target.save_logs = _fake_save_logs
+    if good_sig:
+        target.save_logs = _fake_save_logs
+    else:
+
+        def _save_logs(result_logs, _meta=False):
+            """create uninteresting logs"""
+            log_path = Path(result_logs)
+            (log_path / "log_stderr.txt").write_text("STDERR log\n")
+            (log_path / "log_stdout.txt").write_text("STDOUT log\n")
+
+        target.save_logs = _save_logs
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, relaunch=10) as replay:
             assert replay.signature is None
             results = replay.run([testcase], 10)
-            assert replay.signature is not None
+            if good_sig:
+                assert replay.signature is not None
+            else:
+                assert replay.signature is None
             assert replay.status.ignored == 0
             assert replay.status.iteration == 1
             assert replay.status.results.total == 1
@@ -277,8 +298,6 @@ def test_replay_08(mocker):
 def test_replay_09(mocker):
     """test ReplayManager.run() - test signatures - fail to meet minimum"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    report_0 = mocker.Mock(spec_set=Report)
-    report_0.crash_info.createShortSignature.return_value = "No crash detected"
     report_1 = mocker.Mock(
         spec_set=Report, crash_hash="hash1", major="0123abcd", minor="01239999"
     )
@@ -292,7 +311,7 @@ def test_replay_09(mocker):
     )
     report_3.crash_info.createShortSignature.return_value = "[@ test2]"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    fake_report.side_effect = (report_0, report_1, report_2, report_3)
+    fake_report.side_effect = (report_1, report_2, report_3)
     fake_report.calc_hash.return_value = "bucketHASH"
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     server.serve_path.return_value = (Served.ALL, ["a.html"])
@@ -306,17 +325,16 @@ def test_replay_09(mocker):
     with ReplayManager(
         [], server, target, signature=signature, use_harness=False
     ) as replay:
-        results = replay.run(testcases, 10, repeat=4, min_results=2)
-        assert target.close.call_count == 5
+        results = replay.run(testcases, 10, repeat=3, min_results=2)
+        assert target.close.call_count == 4
         assert replay.signature == signature
-        assert replay.status.iteration == 4
+        assert replay.status.iteration == 3
         assert replay.status.results.total == 1
         assert replay.status.ignored == 2
-    assert fake_report.call_count == 4
+    assert fake_report.call_count == 3
     assert len(results) == 1
     assert not results[0].expected
     assert results[0].count == 2
-    assert report_0.cleanup.call_count == 1
     assert report_1.cleanup.call_count == 1
     assert report_2.cleanup.call_count == 0
     assert report_3.cleanup.call_count == 1
@@ -366,8 +384,6 @@ def test_replay_10(mocker):
 
 def test_replay_11(mocker):
     """test ReplayManager.run() - any crash - success"""
-    report_0 = mocker.Mock(spec_set=Report)
-    report_0.crash_info.createShortSignature.return_value = "No crash detected"
     report_1 = mocker.Mock(
         spec_set=Report, crash_hash="hash1", major="0123abcd", minor="01239999"
     )
@@ -377,7 +393,7 @@ def test_replay_11(mocker):
     )
     report_2.crash_info.createShortSignature.return_value = "[@ test2]"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    fake_report.side_effect = (report_0, report_1, report_2)
+    fake_report.side_effect = (report_1, report_2)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     server.serve_path.return_value = (Served.ALL, ["a.html"])
     target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
@@ -387,25 +403,22 @@ def test_replay_11(mocker):
         mocker.Mock(spec_set=TestCase, env_vars={}, landing_page="a.html", optional=[])
     ]
     with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
-        results = replay.run(testcases, 10, repeat=3, min_results=2)
-        assert target.close.call_count == 4
+        results = replay.run(testcases, 10, repeat=2, min_results=2)
+        assert target.close.call_count == 3
         assert replay.signature is None
-        assert replay.status.iteration == 3
+        assert replay.status.iteration == 2
         assert replay.status.results.total == 2
         assert replay.status.ignored == 0
-    assert fake_report.call_count == 3
+    assert fake_report.call_count == 2
     assert len(results) == 2
     assert all(x.expected for x in results)
     assert sum(x.count for x in results if x.expected) == 2
-    assert report_0.cleanup.call_count == 1
     assert report_1.cleanup.call_count == 0
     assert report_2.cleanup.call_count == 0
 
 
 def test_replay_12(mocker):
     """test ReplayManager.run() - any crash - fail to meet minimum"""
-    report_0 = mocker.Mock(spec_set=Report)
-    report_0.crash_info.createShortSignature.return_value = "No crash detected"
     report_1 = mocker.Mock(
         spec_set=Report, crash_hash="hash1", major="0123abcd", minor="01239999"
     )
@@ -414,14 +427,17 @@ def test_replay_12(mocker):
         spec_set=Report, crash_hash="hash2", major="0123abcd", minor="abcd9876"
     )
     report_2.crash_info.createShortSignature.return_value = "[@ test2]"
-    report_3 = mocker.Mock(spec_set=Report)
-    report_3.crash_info.createShortSignature.return_value = "No crash detected"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    fake_report.side_effect = (report_0, report_1, report_2, report_3)
+    fake_report.side_effect = (report_1, report_2)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337, timeout=10)
     server.serve_path.return_value = (Served.ALL, ["a.html"])
     target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
-    target.check_result.return_value = Result.FOUND
+    target.check_result.side_effect = (
+        Result.NONE,
+        Result.FOUND,
+        Result.FOUND,
+        Result.NONE,
+    )
     target.monitor.is_healthy.return_value = False
     testcases = [
         mocker.Mock(spec_set=TestCase, env_vars={}, landing_page="a.html", optional=[])
@@ -433,11 +449,9 @@ def test_replay_12(mocker):
         assert replay.status.iteration == 4
         assert replay.status.results.total == 2
         assert replay.status.ignored == 0
-    assert fake_report.call_count == 4
-    assert report_0.cleanup.call_count == 1
+    assert fake_report.call_count == 2
     assert report_1.cleanup.call_count == 1
     assert report_2.cleanup.call_count == 1
-    assert report_3.cleanup.call_count == 1
 
 
 def test_replay_13(mocker):
@@ -714,25 +728,30 @@ def test_replay_20(mocker, tmp_path):
 
 
 @mark.parametrize(
-    "is_hang, use_sig, match_sig, ignored, results",
+    "expect_hang, is_hang, use_sig, match_sig, ignored, results",
     [
         # reproduce expected hang
-        (True, True, True, 0, 1),
-        # expected hang (signature, no match)
-        (True, True, False, 1, 0),
-        # unexpected hang (signature, match)
-        (False, True, True, 0, 1),
+        (True, True, True, True, 0, 1),
+        # expected hang (signature, hang - no match)
+        (True, True, True, False, 1, 0),
+        # expected hang got crash (signature)
+        (True, False, True, False, 1, 0),
         # unexpected hang (signature, no match)
-        (False, True, False, 1, 0),
+        (False, True, True, False, 1, 0),
         # unexpected hang (no signature)
-        (False, False, False, 1, 0),
+        (False, True, False, False, 1, 0),
+        # unexpected crash (signature)
+        (False, False, True, False, 1, 0),
     ],
 )
-def test_replay_21(mocker, is_hang, use_sig, match_sig, ignored, results):
+def test_replay_21(mocker, expect_hang, is_hang, use_sig, match_sig, ignored, results):
     """test ReplayManager.run() - detect hangs"""
     served = ["index.html"]
     server = mocker.Mock(spec_set=Sapphire, port=0x1337, timeout=10)
-    server.serve_path.return_value = (Served.TIMEOUT, served)
+    server.serve_path.return_value = (
+        Served.TIMEOUT if is_hang else Served.ALL,
+        served,
+    )
     if use_sig:
         signature = mocker.Mock()
         signature.matches.return_value = match_sig
@@ -743,23 +762,24 @@ def test_replay_21(mocker, is_hang, use_sig, match_sig, ignored, results):
     target.check_result.return_value = Result.FOUND
     target.handle_hang.return_value = False
     target.save_logs = _fake_save_logs
+    target.monitor.is_healthy.return_value = False
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         testcase.hang = is_hang
         with ReplayManager(
             [], server, target, signature=signature, relaunch=10
         ) as replay:
-            found = replay.run([testcase], 10, expect_hang=is_hang)
+            found = replay.run([testcase], 10, expect_hang=expect_hang)
             assert replay.status.iteration == 1
             assert replay.status.ignored == ignored
             assert replay.status.results.total == results
-            assert target.handle_hang.call_count == 1
-            assert target.monitor.is_healthy.call_count == 0
-            assert target.close.call_count == 1
+            assert target.handle_hang.call_count == (1 if is_hang else 0)
+            assert target.monitor.is_healthy.call_count == (0 if is_hang else 1)
+            assert target.close.call_count == (1 if is_hang else 2)
         assert len(found) == 1
         assert found[0].count == 1
         assert found[0].expected == results
         assert found[0].report
-        assert found[0].report.is_hang
+        assert found[0].report.is_hang == is_hang
         assert len(found[0].served) == 1
         assert found[0].served[0] == served
         assert len(found[0].durations) == 1

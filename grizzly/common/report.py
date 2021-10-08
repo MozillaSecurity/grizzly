@@ -93,6 +93,8 @@ class Report:
         Returns:
             str: Hash of the raw signature.
         """
+        if signature is None:
+            return "NO_SIGNATURE"
         return sha1(signature.rawSignature.encode("utf-8")).hexdigest()[:16]
 
     def cleanup(self):
@@ -189,6 +191,8 @@ class Report:
                 self._signature = self.crash_info.createCrashSignature(
                     maxFrames=self.crash_signature_max_frames(self.crash_info)
                 )
+            if self._signature is None:
+                LOG.debug("failed to create FM signature")
         return self._signature
 
     @staticmethod

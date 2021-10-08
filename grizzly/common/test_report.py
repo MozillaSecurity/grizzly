@@ -305,21 +305,22 @@ def test_report_12(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "sig_data",
+    "sig_cache, has_sig",
     [
         # signature exists in cache
-        '{"symptoms": [{"functionNames": ["a"],"type": "stackFrames"}]}',
+        ('{"symptoms": [{"functionNames": ["a"],"type": "stackFrames"}]}', True),
         # no signature
-        None,
+        (None, True),
+        (None, False),
     ],
 )
-def test_report_13(mocker, tmp_path, sig_data):
+def test_report_13(mocker, tmp_path, sig_cache, has_sig):
     """test Report.crash_signature and Report.crash_hash"""
     mocker.patch("grizzly.common.reporter.ProgramConfiguration", autospec=True)
     collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
-    if sig_data:
+    if sig_cache:
         sig_file = tmp_path / "cache.sig"
-        sig_file.write_text(sig_data)
+        sig_file.write_text(sig_cache)
         collector.return_value.search.return_value = (str(sig_file), None)
         collector.return_value.sigCacheDir = str(sig_file)
     else:
@@ -327,11 +328,15 @@ def test_report_13(mocker, tmp_path, sig_data):
         collector.return_value.search.return_value = (None, None)
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    _create_crash_log(tmp_path / "log_asan_blah.txt")
+    if has_sig:
+        _create_crash_log(tmp_path / "log_asan_blah.txt")
     report = Report(str(tmp_path), "bin")
     assert report._signature is None
-    assert report.crash_signature
-    assert report.crash_info.createShortSignature() == "[@ foo]"
+    if has_sig:
+        assert report.crash_signature
+        assert report.crash_info.createShortSignature() == "[@ foo]"
+    else:
+        assert not report.crash_signature
     assert report.crash_hash
 
 

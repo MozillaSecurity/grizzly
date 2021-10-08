@@ -93,7 +93,8 @@ class ReplayManager:
     @staticmethod
     def check_match(signature, report, expect_hang):
         if signature is None:
-            return False
+            # Treat 'None' signature as a bucket if it's not a hang
+            return not report.is_hang
         if expect_hang and not report.is_hang:
             # avoid catching other crashes with forgiving hang signatures
             return False
@@ -359,30 +360,29 @@ class ReplayManager:
                     # check signatures
                     if run_result.timeout:
                         short_sig = "Potential hang detected"
-                    else:
+                    elif report.crash_signature is not None:
                         short_sig = report.crash_info.createShortSignature()
+                    else:
+                        # FM crash signature creation failed
+                        short_sig = "Signature creation failed"
+
                     # set active signature
                     if (
                         not startup_error
                         and not self._any_crash
                         and not run_result.timeout
                         and self._signature is None
-                        and short_sig != "No crash detected"
                     ):
                         assert not expect_hang
                         LOG.debug("no signature given, using %r", short_sig)
                         self._signature = report.crash_signature
+
                     # bucket result
-                    if short_sig == "No crash detected":
-                        # TODO: verify report.major == "NO_STACK"
-                        # otherwise FM failed to parse the logs
-                        # TODO: change this to support hangs/timeouts, etc
-                        LOG.info("Result: No crash detected")
-                    elif not startup_error and (
+                    if not startup_error and (
                         self._any_crash
                         or self.check_match(self._signature, report, expect_hang)
                     ):
-                        if sig_hash:
+                        if sig_hash is not None:
                             LOG.debug("using provided signature (hash) to bucket")
                             bucket_hash = sig_hash
                         else:
@@ -428,15 +428,14 @@ class ReplayManager:
                     self.status.ignored += 1
                     LOG.info("Result: Ignored (%d)", self.status.ignored)
 
-                if exit_early:
-                    # failed to meet minimum number of results
+                if exit_early and self.status.iteration < repeat:
+                    # check if failed to meet minimum number of results
                     if (
                         repeat - self.status.iteration + self.status.results.total
                         < min_results
                     ):
-                        if self.status.iteration < repeat:
-                            LOG.debug("skipping remaining attempts")
                         # failed to reproduce issue
+                        LOG.debug("skipping remaining attempts")
                         LOG.debug(
                             "results (%d) < minimum (%d), after %d attempts",
                             self.status.results.total,
