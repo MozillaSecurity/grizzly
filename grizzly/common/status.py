@@ -163,7 +163,8 @@ class Status:
 
     def blockers(self, iters_per_result=100):
         """Any result with an iterations-per-result ratio of less than or equal the
-        given limit are considered 'blockers'.
+        given limit are considered 'blockers'. Results with a count <= 1 are not
+        included.
 
         Args:
             iters_per_result (int): Iterations-per-result threshold.
@@ -174,7 +175,7 @@ class Status:
         assert iters_per_result > 0
         if self.results:
             for _, count, desc in self.results.all():
-                if self.iteration / count <= iters_per_result:
+                if count > 1 and self.iteration / count <= iters_per_result:
                     yield count, desc
 
     @classmethod
@@ -587,8 +588,8 @@ class ResultCounter:
         for pid, result_id, desc, count in entries:
             if pid not in loaded:
                 loaded[pid] = cls(pid)
-            loaded[pid]._desc[result_id] = desc
-            loaded[pid]._count[result_id] = count
+            loaded[pid]._desc[result_id] = desc  # pylint: disable=protected-access
+            loaded[pid]._count[result_id] = count  # pylint: disable=protected-access
 
         return list(loaded.values())
 
