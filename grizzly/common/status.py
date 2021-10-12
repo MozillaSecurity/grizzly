@@ -217,16 +217,23 @@ class Status:
             else:
                 entries = ()
 
+        results = ResultCounter.load(db_file, time_limit)
+
         for entry in entries:
-            status = cls()
-            status.pid = entry[0]
+            status = cls(pid=entry[0])
             status._profiles = loads(entry[1])
             status.ignored = entry[2]
             status.iteration = entry[3]
             status.log_size = entry[4]
             status.start_time = entry[5]
             status.timestamp = entry[6]
-            status.results = ResultCounter.load(db_file, status.pid, time_limit)
+            for counter in results:
+                if counter.pid == status.pid:
+                    status.results = counter
+                    break
+            else:
+                # no existing ResultCounter with matching pid found
+                status.results = ResultCounter(status.pid)
             yield status
 
     @contextmanager
@@ -418,7 +425,7 @@ class ResultCounter:
         "_desc",
         "_frequent",
         "_limit",
-        "_pid",
+        "pid",
     )
 
     def __init__(self, pid, db_file=None, exp_limit=EXP_LIMIT, freq_limit=0):
@@ -430,7 +437,7 @@ class ResultCounter:
         self._db_file = db_file
         self._frequent = set()
         self._limit = freq_limit
-        self._pid = pid
+        self.pid = pid
 
         # prepare database
         if self._db_file:
@@ -491,7 +498,7 @@ class ResultCounter:
                            count = ?
                        WHERE pid = ?
                        AND result_id = ?;""",
-                    (timestamp, self._count[result_id], self._pid, result_id),
+                    (timestamp, self._count[result_id], self.pid, result_id),
                 )
                 if cur.rowcount < 1:
                     cur.execute(
@@ -503,7 +510,7 @@ class ResultCounter:
                            count)
                            VALUES (?, ?, ?, ?, ?);""",
                         (
-                            self._pid,
+                            self.pid,
                             result_id,
                             desc,
                             timestamp,
@@ -514,19 +521,17 @@ class ResultCounter:
         return self._count[result_id]
 
     @classmethod
-    def load(cls, db_file, pid, time_limit):
+    def load(cls, db_file, time_limit):
         """Load existing entries for database and populate a ResultCounter.
 
         Args:
             db_file (str): Database file.
-            pid (int): PID of process that created the entries.
             time_limit (int): Used to filter older entries.
 
         Returns:
-            ResultCounter: ResultCounter loaded with data that matches given pid.
+            list: Loaded ResultCounters.
         """
         assert db_file
-        assert pid >= 0
         assert time_limit >= 0
         with connect(db_file) as con:
             cur = con.cursor()
@@ -543,23 +548,26 @@ class ResultCounter:
                 assert cur.fetchone()[0] == DB_VERSION, "code out of date?"
                 # collect entries
                 cur.execute(
-                    """SELECT result_id,
+                    """SELECT pid,
+                              result_id,
                               description,
                               count
                        FROM results
-                       WHERE pid = ?
-                       AND timestamp > ?;""",
-                    (pid, int(time()) - time_limit),
+                       WHERE timestamp > ?;""",
+                    (int(time()) - time_limit,),
                 )
                 entries = cur.fetchall()
             else:
                 entries = ()
 
-        loaded = cls(pid)
-        for result_id, desc, count in entries:
-            loaded._desc[result_id] = desc
-            loaded._count[result_id] = count
-        return loaded
+        loaded = dict()
+        for pid, result_id, desc, count in entries:
+            if pid not in loaded:
+                loaded[pid] = cls(pid)
+            loaded[pid]._desc[result_id] = desc
+            loaded[pid]._count[result_id] = count
+
+        return list(loaded.values())
 
     def get(self, result_id):
         """Get count and description for given result id.
