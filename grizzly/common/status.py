@@ -139,7 +139,7 @@ class Status:
                            ignored INTEGER NOT NULL,
                            iteration INTEGER NOT NULL,
                            log_size INTEGER NOT NULL,
-                           pid INTEGER UNIQUE NOT NULL,
+                           pid INTEGER NOT NULL PRIMARY KEY,
                            start_time REAL NOT NULL,
                            timestamp REAL NOT NULL);"""
                     )
@@ -464,7 +464,8 @@ class ResultCounter:
                            description TEXT NOT NULL,
                            pid INTEGER NOT NULL,
                            result_id TEXT NOT NULL,
-                           timestamp INTEGER NOT NULL);"""
+                           timestamp INTEGER NOT NULL,
+                           PRIMARY KEY(pid, result_id));"""
                     )
                     # remove expired entries
                     if exp_limit > 0:
