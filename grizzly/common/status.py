@@ -24,42 +24,37 @@ LOG = getLogger(__name__)
 ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
 
 
-def _db_version_check(db_file, expected=DB_VERSION):
+def _db_version_check(con, expected=DB_VERSION):
     """Perform version check and remove obsolete tables if required.
 
     Args:
-        db_file (str): Database file containing data.
+        con (sqlite3.Connection): An open database connection.
         expected (int): The latest database version.
 
     Returns:
         bool: True if database was reset otherwise False.
     """
     assert expected > 0
-    try:
-        con = connect(db_file)
-        cur = con.cursor()
-        # collect db version
+    cur = con.cursor()
+    # collect db version and check if an update is required
+    cur.execute("PRAGMA user_version;")
+    version = cur.fetchone()[0]
+    if version < expected:
+        cur.execute("BEGIN EXCLUSIVE;")
+        # check db version again while locked to avoid race
         cur.execute("PRAGMA user_version;")
         version = cur.fetchone()[0]
-        # check if an update is required
         if version < expected:
-            cur.execute("BEGIN EXCLUSIVE;")
-            # check db version while locked to avoid race
-            cur.execute("PRAGMA user_version;")
-            version = cur.fetchone()[0]
-            if version < expected:
-                LOG.debug("db version %d < %d", version, expected)
-                # remove ALL tables from the database
-                cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
-                with con:
-                    for entry in cur.fetchall():
-                        LOG.debug("dropping table %r", entry[0])
-                        cur.execute("DROP TABLE IF EXISTS %s;" % (entry[0],))
-                    # update db version number
-                    cur.execute("PRAGMA user_version = %d;" % (expected,))
-                return True
-    finally:
-        con.close()
+            LOG.debug("db version %d < %d", version, expected)
+            # remove ALL tables from the database
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            with con:
+                for entry in cur.fetchall():
+                    LOG.debug("dropping table %r", entry[0])
+                    cur.execute("DROP TABLE IF EXISTS %s;" % (entry[0],))
+                # update db version number
+                cur.execute("PRAGMA user_version = %d;" % (expected,))
+            return True
     assert version == expected, "code out of date?"
     return False
 
@@ -132,9 +127,9 @@ class Status:
         # prepare database
         if self._db_file:
             LOG.debug("status using db %r", self._db_file)
-            _db_version_check(self._db_file)
             try:
                 con = connect(self._db_file)
+                _db_version_check(con)
                 cur = con.cursor()
                 with con:
                     # create table if needed
@@ -457,9 +452,9 @@ class ResultCounter:
         # prepare database
         if self._db_file:
             LOG.debug("resultcounter using db %r", self._db_file)
-            _db_version_check(self._db_file)
             try:
                 con = connect(self._db_file)
+                _db_version_check(con)
                 cur = con.cursor()
                 with con:
                     # create table if needed
