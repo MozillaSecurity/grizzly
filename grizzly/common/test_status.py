@@ -6,6 +6,7 @@
 # pylint: disable=protected-access
 
 from multiprocessing import Event, Process
+from sqlite3 import connect
 from time import sleep, time
 
 from pytest import mark
@@ -415,11 +416,15 @@ def test_report_counter_04(mocker, tmp_path):
 def test_db_version_check_01(tmp_path):
     """test _db_version_check()"""
     db_path = str(tmp_path / "storage.db")
-    # empty db
-    assert _db_version_check(db_path, expected=DB_VERSION)
-    # no update needed
-    assert not _db_version_check(db_path, expected=DB_VERSION)
-    # add db contents
-    Status.start(db_path)
-    # force update
-    assert _db_version_check(db_path, expected=DB_VERSION + 1)
+    try:
+        con = connect(db_path)
+        # empty db
+        assert _db_version_check(con, expected=DB_VERSION)
+        # no update needed
+        assert not _db_version_check(con, expected=DB_VERSION)
+        # add db contents
+        Status.start(db_path)
+        # force update
+        assert _db_version_check(con, expected=DB_VERSION + 1)
+    finally:
+        con.close()
