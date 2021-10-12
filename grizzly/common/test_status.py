@@ -360,7 +360,7 @@ def test_report_counter_03(mocker, tmp_path):
     fake_time.return_value = 1
     db_path = str(tmp_path / "storage.db")
     # load empty db
-    ResultCounter.load(db_path, 123, 10)
+    assert not ResultCounter.load(db_path, 10)
     # create counter
     counter = ResultCounter(123, db_file=db_path, exp_limit=1)
     counter.count("a", "desc_a")
@@ -371,19 +371,18 @@ def test_report_counter_03(mocker, tmp_path):
     # filter out reports by time
     fake_time.return_value = 4
     # last 1 second
-    loaded = ResultCounter.load(db_path, counter._pid, 1)
-    assert loaded.total == 0
+    assert not ResultCounter.load(db_path, 1)
     # last 2 seconds
-    loaded = ResultCounter.load(db_path, counter._pid, 2)
+    loaded = ResultCounter.load(db_path, 2)[0]
     assert loaded.total == 1
     assert loaded.get("b") == (1, "desc_b")
     # last 3 seconds
-    loaded = ResultCounter.load(db_path, counter._pid, 3)
+    loaded = ResultCounter.load(db_path, 3)[0]
     assert loaded.get("a") == (2, "desc_a")
     assert loaded.total == 3
     # increase time limit
     fake_time.return_value = 4
-    loaded = ResultCounter.load(db_path, counter._pid, 10)
+    loaded = ResultCounter.load(db_path, 10)[0]
     assert loaded.total == counter.total == 3
     assert loaded.get("a") == (2, "desc_a")
     assert loaded.get("b") == (1, "desc_b")
@@ -398,15 +397,15 @@ def test_report_counter_04(mocker, tmp_path):
     counter.count("a", "desc_a")
     fake_time.return_value = 100
     counter.count("b", "desc_b")
-    loaded = ResultCounter.load(db_path, counter._pid, 100)
+    loaded = ResultCounter.load(db_path, 100)[0]
     assert loaded.total == 2
     # set exp_limit to zero to skip removing expired results
-    ResultCounter(123, db_file=db_path, exp_limit=0)
-    loaded = ResultCounter.load(db_path, counter._pid, 100)
+    ResultCounter(124, db_file=db_path, exp_limit=0)
+    loaded = ResultCounter.load(db_path, 100)[0]
     assert loaded.total == 2
     # clear expired records from database by setting exp_limit
-    ResultCounter(123, db_file=db_path, exp_limit=10)
-    loaded = ResultCounter.load(db_path, counter._pid, 100)
+    ResultCounter(125, db_file=db_path, exp_limit=10)
+    loaded = ResultCounter.load(db_path, 100)[0]
     assert loaded.total == 1
 
 
