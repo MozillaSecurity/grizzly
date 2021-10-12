@@ -407,6 +407,9 @@ def test_report_counter_04(mocker, tmp_path):
     ResultCounter(125, db_file=db_path, exp_limit=10)
     loaded = ResultCounter.load(db_path, 100)[0]
     assert loaded.total == 1
+    # clear expired records from database by using duplicate pid
+    ResultCounter(123, db_file=db_path, exp_limit=1000)
+    assert not ResultCounter.load(db_path, 100)
 
 
 def test_db_version_check_01(tmp_path):
