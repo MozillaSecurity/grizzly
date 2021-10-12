@@ -32,7 +32,7 @@ def _db_version_check(db_file, expected=DB_VERSION):
         expected (int): The latest database version.
 
     Returns:
-        bool: True if database was reset other False.
+        bool: True if database was reset otherwise False.
     """
     assert expected > 0
     with connect(db_file, isolation_level=None) as con:
@@ -148,6 +148,8 @@ class Status:
                         """DELETE FROM status WHERE timestamp <= ?;""",
                         (time() - exp_limit,),
                     )
+                # avoid (unlikely) pid reuse collision
+                con.execute("""DELETE FROM status WHERE pid = ?;""", (pid,))
                 con.commit()
 
             self.results = ResultCounter(
@@ -459,6 +461,8 @@ class ResultCounter:
                         """DELETE FROM results WHERE timestamp <= ?;""",
                         (int(time() - exp_limit),),
                     )
+                # avoid (unlikely) pid reuse collision
+                con.execute("""DELETE FROM results WHERE pid = ?;""", (pid,))
                 con.commit()
 
     def all(self):
