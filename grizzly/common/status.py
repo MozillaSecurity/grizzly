@@ -35,7 +35,8 @@ def _db_version_check(db_file, expected=DB_VERSION):
         bool: True if database was reset otherwise False.
     """
     assert expected > 0
-    with connect(db_file, isolation_level=None) as con:
+    try:
+        con = connect(db_file)
         cur = con.cursor()
         # collect db version
         cur.execute("PRAGMA user_version;")
@@ -50,13 +51,15 @@ def _db_version_check(db_file, expected=DB_VERSION):
                 LOG.debug("db version %d < %d", version, expected)
                 # remove ALL tables from the database
                 cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
-                for entry in cur.fetchall():
-                    LOG.debug("dropping table %r", entry[0])
-                    cur.execute("DROP TABLE IF EXISTS %s;" % (entry[0],))
-                # update db version number
-                cur.execute("PRAGMA user_version = %d;" % (expected,))
-                con.commit()
+                with con:
+                    for entry in cur.fetchall():
+                        LOG.debug("dropping table %r", entry[0])
+                        cur.execute("DROP TABLE IF EXISTS %s;" % (entry[0],))
+                    # update db version number
+                    cur.execute("PRAGMA user_version = %d;" % (expected,))
                 return True
+    finally:
+        con.close()
     assert version == expected, "code out of date?"
     return False
 
@@ -130,27 +133,31 @@ class Status:
         if self._db_file:
             LOG.debug("status using db %r", self._db_file)
             _db_version_check(self._db_file)
-            with connect(self._db_file) as con:
-                # create table if needed
-                con.execute(
-                    """CREATE TABLE IF NOT EXISTS status (
-                       _profiles TEXT NOT NULL,
-                       ignored INTEGER NOT NULL,
-                       iteration INTEGER NOT NULL,
-                       log_size INTEGER NOT NULL,
-                       pid INTEGER UNIQUE NOT NULL,
-                       start_time REAL NOT NULL,
-                       timestamp REAL NOT NULL);"""
-                )
-                # remove expired status data
-                if exp_limit > 0:
-                    con.execute(
-                        """DELETE FROM status WHERE timestamp <= ?;""",
-                        (time() - exp_limit,),
+            try:
+                con = connect(self._db_file)
+                cur = con.cursor()
+                with con:
+                    # create table if needed
+                    cur.execute(
+                        """CREATE TABLE IF NOT EXISTS status (
+                           _profiles TEXT NOT NULL,
+                           ignored INTEGER NOT NULL,
+                           iteration INTEGER NOT NULL,
+                           log_size INTEGER NOT NULL,
+                           pid INTEGER UNIQUE NOT NULL,
+                           start_time REAL NOT NULL,
+                           timestamp REAL NOT NULL);"""
                     )
-                # avoid (unlikely) pid reuse collision
-                con.execute("""DELETE FROM status WHERE pid = ?;""", (pid,))
-                con.commit()
+                    # remove expired status data
+                    if exp_limit > 0:
+                        cur.execute(
+                            """DELETE FROM status WHERE timestamp <= ?;""",
+                            (time() - exp_limit,),
+                        )
+                    # avoid (unlikely) pid reuse collision
+                    cur.execute("""DELETE FROM status WHERE pid = ?;""", (pid,))
+            finally:
+                con.close()
 
             self.results = ResultCounter(
                 pid,
@@ -189,7 +196,8 @@ class Status:
         """
         assert db_file
         assert time_limit >= 0
-        with connect(db_file) as con:
+        try:
+            con = connect(db_file)
             cur = con.cursor()
             # check table exists
             cur.execute(
@@ -218,6 +226,8 @@ class Status:
                 entries = cur.fetchall()
             else:
                 entries = ()
+        finally:
+            con.close()
 
         results = ResultCounter.load(db_file, time_limit)
 
@@ -336,49 +346,52 @@ class Status:
         self.timestamp = now
 
         profiles = dumps(self._profiles)
-        with connect(self._db_file) as con:
+        try:
+            con = connect(self._db_file)
             cur = con.cursor()
-            cur.execute(
-                """UPDATE status
-                   SET _profiles = ?,
-                       ignored = ?,
-                       iteration = ?,
-                       log_size = ?,
-                       start_time = ?,
-                       timestamp = ?
-                   WHERE pid = ?;""",
-                (
-                    profiles,
-                    self.ignored,
-                    self.iteration,
-                    self.log_size,
-                    self.start_time,
-                    self.timestamp,
-                    self.pid,
-                ),
-            )
-            if cur.rowcount < 1:
+            with con:
                 cur.execute(
-                    """INSERT INTO status(
-                       pid,
-                       _profiles,
-                       ignored,
-                       iteration,
-                       log_size,
-                       start_time,
-                       timestamp)
-                       VALUES (?, ?, ?, ?, ?, ?, ?);""",
+                    """UPDATE status
+                       SET _profiles = ?,
+                           ignored = ?,
+                           iteration = ?,
+                           log_size = ?,
+                           start_time = ?,
+                           timestamp = ?
+                       WHERE pid = ?;""",
                     (
-                        self.pid,
                         profiles,
                         self.ignored,
                         self.iteration,
                         self.log_size,
                         self.start_time,
                         self.timestamp,
+                        self.pid,
                     ),
                 )
-            con.commit()
+                if cur.rowcount < 1:
+                    cur.execute(
+                        """INSERT INTO status(
+                               pid,
+                               _profiles,
+                               ignored,
+                               iteration,
+                               log_size,
+                               start_time,
+                               timestamp)
+                           VALUES (?, ?, ?, ?, ?, ?, ?);""",
+                        (
+                            self.pid,
+                            profiles,
+                            self.ignored,
+                            self.iteration,
+                            self.log_size,
+                            self.start_time,
+                            self.timestamp,
+                        ),
+                    )
+        finally:
+            con.close()
 
         return True
 
@@ -445,25 +458,29 @@ class ResultCounter:
         if self._db_file:
             LOG.debug("resultcounter using db %r", self._db_file)
             _db_version_check(self._db_file)
-            with connect(self._db_file) as con:
-                # create table if needed
-                con.execute(
-                    """CREATE TABLE IF NOT EXISTS results (
-                       count INTEGER NOT NULL,
-                       description TEXT NOT NULL,
-                       pid INTEGER NOT NULL,
-                       result_id TEXT NOT NULL,
-                       timestamp INTEGER NOT NULL);"""
-                )
-                # remove expired entries
-                if exp_limit > 0:
-                    con.execute(
-                        """DELETE FROM results WHERE timestamp <= ?;""",
-                        (int(time() - exp_limit),),
+            try:
+                con = connect(self._db_file)
+                cur = con.cursor()
+                with con:
+                    # create table if needed
+                    cur.execute(
+                        """CREATE TABLE IF NOT EXISTS results (
+                           count INTEGER NOT NULL,
+                           description TEXT NOT NULL,
+                           pid INTEGER NOT NULL,
+                           result_id TEXT NOT NULL,
+                           timestamp INTEGER NOT NULL);"""
                     )
-                # avoid (unlikely) pid reuse collision
-                con.execute("""DELETE FROM results WHERE pid = ?;""", (pid,))
-                con.commit()
+                    # remove expired entries
+                    if exp_limit > 0:
+                        cur.execute(
+                            """DELETE FROM results WHERE timestamp <= ?;""",
+                            (int(time() - exp_limit),),
+                        )
+                    # avoid (unlikely) pid reuse collision
+                    cur.execute("""DELETE FROM results WHERE pid = ?;""", (pid,))
+            finally:
+                con.close()
 
     def all(self):
         """Yield all result data.
@@ -493,35 +510,38 @@ class ResultCounter:
         if result_id not in self._desc:
             self._desc[result_id] = desc
         if self._db_file:
-            with connect(self._db_file) as con:
-                timestamp = int(time())
+            try:
+                con = connect(self._db_file)
                 cur = con.cursor()
-                cur.execute(
-                    """UPDATE results
-                       SET timestamp = ?,
-                           count = ?
-                       WHERE pid = ?
-                       AND result_id = ?;""",
-                    (timestamp, self._count[result_id], self.pid, result_id),
-                )
-                if cur.rowcount < 1:
+                timestamp = int(time())
+                with con:
                     cur.execute(
-                        """INSERT INTO results(
-                           pid,
-                           result_id,
-                           description,
-                           timestamp,
-                           count)
-                           VALUES (?, ?, ?, ?, ?);""",
-                        (
-                            self.pid,
-                            result_id,
-                            desc,
-                            timestamp,
-                            self._count[result_id],
-                        ),
+                        """UPDATE results
+                           SET timestamp = ?,
+                               count = ?
+                           WHERE pid = ?
+                           AND result_id = ?;""",
+                        (timestamp, self._count[result_id], self.pid, result_id),
                     )
-                con.commit()
+                    if cur.rowcount < 1:
+                        cur.execute(
+                            """INSERT INTO results(
+                                   pid,
+                                   result_id,
+                                   description,
+                                   timestamp,
+                                   count)
+                               VALUES (?, ?, ?, ?, ?);""",
+                            (
+                                self.pid,
+                                result_id,
+                                desc,
+                                timestamp,
+                                self._count[result_id],
+                            ),
+                        )
+            finally:
+                con.close()
         return self._count[result_id]
 
     @classmethod
@@ -537,7 +557,8 @@ class ResultCounter:
         """
         assert db_file
         assert time_limit >= 0
-        with connect(db_file) as con:
+        try:
+            con = connect(db_file)
             cur = con.cursor()
             # check table exists
             cur.execute(
@@ -563,6 +584,8 @@ class ResultCounter:
                 entries = cur.fetchall()
             else:
                 entries = ()
+        finally:
+            con.close()
 
         loaded = dict()
         for pid, result_id, desc, count in entries:
@@ -604,14 +627,17 @@ class ResultCounter:
         total = self._count.get(result_id, 0)
         # only count for parallel results if more than 1 local result has been found
         if total > 1 and self._db_file:
-            # look up count from all sources
-            with connect(self._db_file) as con:
+            try:
+                con = connect(self._db_file)
                 cur = con.cursor()
+                # look up count from all sources
                 cur.execute(
                     """SELECT SUM(count) FROM results WHERE result_id = ?;""",
                     (result_id,),
                 )
                 total = cur.fetchone()[0] or 0
+            finally:
+                con.close()
         if total > self._limit:
             self._frequent.add(result_id)
             return True
