@@ -237,21 +237,37 @@ def test_status_07(tmp_path):
     assert len(tuple(status.profile_entries())) == 3
 
 
-def test_status_08(tmp_path):
+@mark.parametrize(
+    "buckets, ratio, iterations, blockers",
+    [
+        # no results
+        ([], 1, 1, 0),
+        # one result seen once (not blocker since count == 1)
+        ([("uid1", "sig1", 1)], 1, 1, 0),
+        # one result seen 10x (not blocker)
+        ([("uid1", "sig1", 10)], 100, 10000, 0),
+        # one result seen 10x (blocker)
+        ([("uid1", "sig1", 10)], 100, 1000, 1),
+        # one result seen 95x (blocker)
+        ([("uid1", "sig1", 95)], 100, 1000, 1),
+        # multiple results seen once (not blocker since count == 1)
+        ([("uid1", "sig1", 1), ("uid2", "sig2", 1)], 1, 1, 0),
+        # multiple results seen once (one blockers)
+        ([("uid1", "sig1", 1), ("uid2", "sig2", 10)], 1000, 100, 1),
+        # multiple results seen once (two blockers)
+        ([("uid1", "sig1", 99), ("uid2", "sig2", 10)], 1000, 100, 2),
+    ],
+)
+def test_status_08(tmp_path, buckets, ratio, iterations, blockers):
     """test Status.blockers()"""
     status = Status.start(str(tmp_path / "status.db"))
-    status.iteration = 10
-    assert not any(status.blockers())
-    status.results.count("uid1", "sig1")
-    assert not any(status.blockers(iters_per_result=3))
-    status.results.count("uid2", "sig2")
-    status.results.count("uid2", "sig2")
-    assert not any(status.blockers(iters_per_result=2))
-    blockers = tuple(status.blockers(iters_per_result=5))
-    assert len(blockers) == 1
-    assert blockers[0] == (2, "sig2")
-    blockers = tuple(status.blockers(iters_per_result=10))
-    assert len(blockers) == 2
+    status.iteration = iterations
+    # populate counter
+    for report_id, desc, count in buckets:
+        for _ in range(count):
+            status.results.count(report_id, desc)
+    # check for blockers
+    assert len(tuple(status.blockers(iters_per_result=ratio))) == blockers
 
 
 @mark.parametrize(
