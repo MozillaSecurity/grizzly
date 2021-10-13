@@ -151,6 +151,8 @@ def test_status_reporter_05(mocker, tmp_path):
     status.ignored = 1
     status.iteration = 8
     status.log_size = 86900000
+    status.results.count("test", "test")
+    status.results.count("test", "test")
     status.report(force=True)
     rptr = StatusReporter.load(db_file)
     rptr._sys_info = _fake_sys_info
