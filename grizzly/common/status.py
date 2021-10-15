@@ -15,6 +15,8 @@ __all__ = ("Status",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
+# time in seconds for db connection to wait before raising an exception
+DB_TIMEOUT = 30
 # used to track changes to the database layout
 DB_VERSION = 1
 # default expiration limit for entries in the database
@@ -128,7 +130,7 @@ class Status:
         if self._db_file:
             LOG.debug("status using db %r", self._db_file)
             try:
-                con = connect(self._db_file)
+                con = connect(self._db_file, timeout=DB_TIMEOUT)
                 _db_version_check(con)
                 cur = con.cursor()
                 with con:
@@ -193,7 +195,7 @@ class Status:
         assert db_file
         assert time_limit >= 0
         try:
-            con = connect(db_file)
+            con = connect(db_file, timeout=DB_TIMEOUT)
             cur = con.cursor()
             # check table exists
             cur.execute(
@@ -343,7 +345,7 @@ class Status:
 
         profiles = dumps(self._profiles)
         try:
-            con = connect(self._db_file)
+            con = connect(self._db_file, timeout=DB_TIMEOUT)
             cur = con.cursor()
             with con:
                 cur.execute(
@@ -454,7 +456,7 @@ class ResultCounter:
         if self._db_file:
             LOG.debug("resultcounter using db %r", self._db_file)
             try:
-                con = connect(self._db_file)
+                con = connect(self._db_file, timeout=DB_TIMEOUT)
                 _db_version_check(con)
                 cur = con.cursor()
                 with con:
@@ -508,7 +510,7 @@ class ResultCounter:
             self._desc[result_id] = desc
         if self._db_file:
             try:
-                con = connect(self._db_file)
+                con = connect(self._db_file, timeout=DB_TIMEOUT)
                 cur = con.cursor()
                 timestamp = int(time())
                 with con:
@@ -555,7 +557,7 @@ class ResultCounter:
         assert db_file
         assert time_limit >= 0
         try:
-            con = connect(db_file)
+            con = connect(db_file, timeout=DB_TIMEOUT)
             cur = con.cursor()
             # check table exists
             cur.execute(
@@ -625,7 +627,7 @@ class ResultCounter:
         # only count for parallel results if more than 1 local result has been found
         if total > 1 and self._db_file:
             try:
-                con = connect(self._db_file)
+                con = connect(self._db_file, timeout=DB_TIMEOUT)
                 cur = con.cursor()
                 # look up count from all sources
                 cur.execute(
