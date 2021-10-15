@@ -765,6 +765,7 @@ def test_quality_update(mocker, tmp_path):
 
     mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     reporter = mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
+    reporter.return_value.submit.return_value = 1234
     update_coll = mocker.patch("grizzly.common.fuzzmanager.Collector")
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = dict()

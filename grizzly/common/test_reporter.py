@@ -141,19 +141,21 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
 
 
 @mark.parametrize(
-    "tests, frequent, ignored",
+    "tests, frequent, ignored, force",
     [
         # report - without test
-        (False, False, False),
+        (False, False, False, False),
         # report - with test
-        (True, False, False),
+        (True, False, False, False),
         # report - frequent
-        (True, True, False),
+        (True, True, False, False),
+        # report - forced frequent
+        (True, True, False, True),
         # report - ignored
-        (True, False, True),
+        (True, False, True, False),
     ],
 )
-def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored):
+def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored, force):
     """test FuzzManagerReporter.submit()"""
     mocker.patch(
         "grizzly.common.reporter.getcwd", autospec=True, return_value=str(tmp_path)
@@ -181,10 +183,11 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored):
         )
         test_cases.append(fake_test)
     reporter = FuzzManagerReporter("fake_bin")
+    reporter.force_report = force
     reporter._ignored = lambda x: ignored
     reporter.submit(test_cases, Report(str(log_path), "fake_bin", is_hang=True))
     assert not log_path.is_dir()
-    if frequent or ignored:
+    if (frequent and not force) or ignored:
         assert fake_collector.return_value.submit.call_count == 0
         assert fake_test.dump.call_count == 0
     else:
