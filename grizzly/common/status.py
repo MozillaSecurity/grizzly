@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
 from collections import defaultdict, namedtuple
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
@@ -129,8 +129,7 @@ class Status:
         # prepare database
         if self._db_file:
             LOG.debug("status using db %r", self._db_file)
-            try:
-                con = connect(self._db_file, timeout=DB_TIMEOUT)
+            with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
                 _db_version_check(con)
                 cur = con.cursor()
                 with con:
@@ -153,8 +152,6 @@ class Status:
                         )
                     # avoid (unlikely) pid reuse collision
                     cur.execute("""DELETE FROM status WHERE pid = ?;""", (pid,))
-            finally:
-                con.close()
 
             self.results = ResultCounter(
                 pid,
@@ -194,8 +191,7 @@ class Status:
         """
         assert db_file
         assert time_limit >= 0
-        try:
-            con = connect(db_file, timeout=DB_TIMEOUT)
+        with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
             cur = con.cursor()
             # check table exists
             cur.execute(
@@ -224,8 +220,6 @@ class Status:
                 entries = cur.fetchall()
             else:
                 entries = ()
-        finally:
-            con.close()
 
         results = ResultCounter.load(db_file, time_limit)
 
@@ -344,8 +338,7 @@ class Status:
         self.timestamp = now
 
         profiles = dumps(self._profiles)
-        try:
-            con = connect(self._db_file, timeout=DB_TIMEOUT)
+        with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
             cur = con.cursor()
             with con:
                 cur.execute(
@@ -388,8 +381,6 @@ class Status:
                             self.timestamp,
                         ),
                     )
-        finally:
-            con.close()
 
         return True
 
@@ -455,8 +446,7 @@ class ResultCounter:
         # prepare database
         if self._db_file:
             LOG.debug("resultcounter using db %r", self._db_file)
-            try:
-                con = connect(self._db_file, timeout=DB_TIMEOUT)
+            with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
                 _db_version_check(con)
                 cur = con.cursor()
                 with con:
@@ -478,8 +468,6 @@ class ResultCounter:
                         )
                     # avoid (unlikely) pid reuse collision
                     cur.execute("""DELETE FROM results WHERE pid = ?;""", (pid,))
-            finally:
-                con.close()
 
     def all(self):
         """Yield all result data.
@@ -509,8 +497,7 @@ class ResultCounter:
         if result_id not in self._desc:
             self._desc[result_id] = desc
         if self._db_file:
-            try:
-                con = connect(self._db_file, timeout=DB_TIMEOUT)
+            with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
                 cur = con.cursor()
                 timestamp = int(time())
                 with con:
@@ -539,8 +526,6 @@ class ResultCounter:
                                 self._count[result_id],
                             ),
                         )
-            finally:
-                con.close()
         return self._count[result_id]
 
     @classmethod
@@ -556,8 +541,7 @@ class ResultCounter:
         """
         assert db_file
         assert time_limit >= 0
-        try:
-            con = connect(db_file, timeout=DB_TIMEOUT)
+        with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
             cur = con.cursor()
             # check table exists
             cur.execute(
@@ -583,8 +567,6 @@ class ResultCounter:
                 entries = cur.fetchall()
             else:
                 entries = ()
-        finally:
-            con.close()
 
         loaded = dict()
         for pid, result_id, desc, count in entries:
@@ -626,8 +608,7 @@ class ResultCounter:
         total = self._count.get(result_id, 0)
         # only count for parallel results if more than 1 local result has been found
         if total > 1 and self._db_file:
-            try:
-                con = connect(self._db_file, timeout=DB_TIMEOUT)
+            with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
                 cur = con.cursor()
                 # look up count from all sources
                 cur.execute(
@@ -635,8 +616,6 @@ class ResultCounter:
                     (result_id,),
                 )
                 total = cur.fetchone()[0] or 0
-            finally:
-                con.close()
         if total > self._limit:
             self._frequent.add(result_id)
             return True
