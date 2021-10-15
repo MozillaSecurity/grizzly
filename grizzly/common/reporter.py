@@ -154,10 +154,11 @@ class FilesystemReporter(Reporter):
 class FuzzManagerReporter(Reporter):
     FM_CONFIG = pathjoin(expanduser("~"), ".fuzzmanagerconf")
 
-    __slots__ = ("_extra_metadata", "quality", "tool")
+    __slots__ = ("_extra_metadata", "force_report", "quality", "tool")
 
     def __init__(self, tool=None):
         self._extra_metadata = {}
+        self.force_report = False
         self.quality = Quality.UNREDUCED
         self.tool = tool  # optional tool name
 
@@ -232,18 +233,20 @@ class FuzzManagerReporter(Reporter):
         return False
 
     def _submit_report(self, report, test_cases):
-        # search for a cached signature match
-        with InterProcessLock(pathjoin(grz_tmp(), "fm_sigcache.lock")):
-            collector = Collector()
-            _, cache_metadata = collector.search(report.crash_info)
+        collector = Collector()
 
-        # check if signature has been marked as frequent in FM
-        if cache_metadata is not None and cache_metadata["frequent"]:
-            LOG.info(
-                "Frequent crash matched existing signature: %s",
-                cache_metadata["shortDescription"],
-            )
-            return None
+        if not self.force_report:
+            # search for a cached signature match
+            with InterProcessLock(pathjoin(grz_tmp(), "fm_sigcache.lock")):
+                _, cache_metadata = collector.search(report.crash_info)
+
+            # check if signature has been marked as frequent in FM
+            if cache_metadata is not None and cache_metadata["frequent"]:
+                LOG.info(
+                    "Frequent crash matched existing signature: %s",
+                    cache_metadata["shortDescription"],
+                )
+                return None
 
         if self._ignored(report):
             LOG.info("Report is in ignore list")

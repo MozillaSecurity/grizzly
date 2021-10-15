@@ -26,6 +26,7 @@ class Bucket:
         Arguments:
             bucket_id (int): ID of the requested bucket on the server side
         """
+        assert isinstance(bucket_id, int)
         self._bucket_id = bucket_id
         self._sig_filename = None
         self._coll = Collector()
@@ -198,6 +199,7 @@ class CrashEntry:
         Arguments:
             crash_id (int): ID of the requested crash on the server side
         """
+        assert isinstance(crash_id, int)
         self._crash_id = crash_id
         self._coll = Collector()
         self._url = "%s://%s:%d/crashmanager/rest/crashes/%d/" % (
