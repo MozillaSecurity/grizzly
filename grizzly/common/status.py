@@ -8,7 +8,7 @@ from contextlib import closing, contextmanager
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
-from sqlite3 import connect
+from sqlite3 import OperationalError, connect
 from time import time
 
 __all__ = ("Status",)
@@ -193,18 +193,8 @@ class Status:
         assert time_limit >= 0
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
             cur = con.cursor()
-            # check table exists
-            cur.execute(
-                """SELECT name
-                   FROM sqlite_master
-                   WHERE type='table'
-                   AND name='status';"""
-            )
-            if cur.fetchone():
-                # check db version
-                cur.execute("PRAGMA user_version;")
-                assert cur.fetchone()[0] == DB_VERSION, "code out of date?"
-                # collect entries
+            # collect entries
+            try:
                 cur.execute(
                     """SELECT pid,
                              _profiles,
@@ -218,7 +208,9 @@ class Status:
                     (time() - time_limit,),
                 )
                 entries = cur.fetchall()
-            else:
+            except OperationalError as exc:
+                if not str(exc).startswith("no such table:"):
+                    raise  # pragma: no cover
                 entries = ()
 
         results = ResultCounter.load(db_file, time_limit)
@@ -543,17 +535,7 @@ class ResultCounter:
         assert time_limit >= 0
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
             cur = con.cursor()
-            # check table exists
-            cur.execute(
-                """SELECT name
-                   FROM sqlite_master
-                   WHERE type='table'
-                   AND name='results';"""
-            )
-            if cur.fetchone():
-                # check db version
-                cur.execute("PRAGMA user_version;")
-                assert cur.fetchone()[0] == DB_VERSION, "code out of date?"
+            try:
                 # collect entries
                 cur.execute(
                     """SELECT pid,
@@ -565,7 +547,9 @@ class ResultCounter:
                     (int(time()) - time_limit,),
                 )
                 entries = cur.fetchall()
-            else:
+            except OperationalError as exc:
+                if not str(exc).startswith("no such table:"):
+                    raise  # pragma: no cover
                 entries = ()
 
         loaded = dict()
