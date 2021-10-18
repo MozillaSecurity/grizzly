@@ -166,9 +166,9 @@ class Session:
         runner = Runner(self.server, self.target, relaunch=relaunch)
         startup_error = False
         while True:
-            LOG.debug("- iteration %d -", self.status.iteration + 1)
             self.status.report()
             self.status.iteration += 1
+            LOG.debug("- iteration %d -", self.status.iteration)
 
             if self.target.closed:
                 # (re-)launch target
@@ -301,3 +301,6 @@ class Session:
                 LOG.warning(
                     "Large browser logs: %dMBs", (self.status.log_size / 0x100000)
                 )
+
+        # perform final status report
+        self.status.report(force=True)
