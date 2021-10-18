@@ -589,12 +589,16 @@ class ResultCounter:
             return False
         if result_id in self._frequent:
             return True
+        # get local total
         total = self._count.get(result_id, 0)
-        # only count for parallel results if more than 1 local result has been found
-        if total > 1 and self._db_file:
+        # only check the db for parallel results if
+        # - result has been found locally more than once
+        # - limit has not been exceeded locally
+        # - a db file is given
+        if self._limit >= total > 1 and self._db_file:
             with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
                 cur = con.cursor()
-                # look up count from all sources
+                # look up total count from all processes
                 cur.execute(
                     """SELECT SUM(count) FROM results WHERE result_id = ?;""",
                     (result_id,),
