@@ -24,21 +24,13 @@ def _fake_sys_info():
     ]
 
 
-def test_status_reporter_01(tmp_path):
+def test_status_reporter_01():
     """test basic StatusReporter"""
     st_rpt = StatusReporter(list())
     assert not st_rpt.has_results
     st_rpt._sys_info = _fake_sys_info
-    assert "No status reports available" in st_rpt._specific()
-    report = tmp_path / "output.txt"
-    st_rpt.dump_specific(str(report))
-    assert report.is_file()
-    st_rpt.print_specific()
-    assert "No status reports available" in st_rpt._summary()
-    report.unlink()
-    st_rpt.dump_summary(str(report))
-    assert report.is_file()
-    st_rpt.print_summary()
+    assert "No status reports available" in st_rpt.specific()
+    assert "No status reports available" in st_rpt.summary()
 
 
 def test_status_reporter_02(tmp_path):
@@ -122,7 +114,7 @@ def test_status_reporter_04(tmp_path):
 
 
 def test_status_reporter_05(mocker, tmp_path):
-    """test StatusReporter._summary()"""
+    """test StatusReporter.summary()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
     mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
     db_file = str(tmp_path / "status.db")
@@ -136,7 +128,7 @@ def test_status_reporter_05(mocker, tmp_path):
     rptr._sys_info = _fake_sys_info
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
-    output = rptr._summary(runtime=False)
+    output = rptr.summary(runtime=False)
     assert "Iteration" in output
     assert "Rate" in output
     assert "Results" in output
@@ -157,7 +149,7 @@ def test_status_reporter_05(mocker, tmp_path):
     rptr = StatusReporter.load(db_file)
     rptr._sys_info = _fake_sys_info
     assert len(rptr.reports) == 2
-    output = rptr._summary(sysinfo=True, timestamp=True)
+    output = rptr.summary(sysinfo=True, timestamp=True)
     assert "Iteration" in output
     assert "Rate" in output
     assert "Results" in output
@@ -174,7 +166,7 @@ def test_status_reporter_05(mocker, tmp_path):
 
 
 def test_status_reporter_06(mocker, tmp_path):
-    """test StatusReporter._specific()"""
+    """test StatusReporter.specific()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
     db_file = str(tmp_path / "status.db")
     # single report
@@ -185,16 +177,19 @@ def test_status_reporter_06(mocker, tmp_path):
     status.report(force=True)
     rptr = StatusReporter.load(db_file)
     assert rptr.reports is not None
-    output = rptr._specific()
+    output = rptr.specific()
     assert len(output.strip().split("\n")) == 4
     assert "Ignored:" not in output
     assert "Iterations:" in output
     assert "Results:" in output
+    assert "(Blockers)" not in output
     assert "Runtime:" in output
     # multiple reports
     status = Status.start(db_file=db_file, enable_profiling=True)
     status.ignored = 1
-    status.iteration = 432422
+    status.iteration = 50
+    status.results.count("uid1", "sig1")
+    status.results.count("uid1", "sig1")
     status.results.count("uid1", "sig1")
     status.record("test1", 0.91)
     status.record("test1", 1.0)
@@ -203,19 +198,20 @@ def test_status_reporter_06(mocker, tmp_path):
     status.report(force=True)
     rptr = StatusReporter.load(db_file)
     assert len(rptr.reports) == 2
-    output = rptr._specific()
+    output = rptr.specific()
     assert len(output.strip().split("\n")) == 13
     assert "Ignored:" in output
     assert "Iterations:" in output
     assert "Results:" in output
     assert "Runtime:" in output
+    assert "(Blockers)" in output
     assert "Profiling entries:" in output
     assert "test1:" in output
     assert "test2:" in output
 
 
 def test_status_reporter_07(mocker, tmp_path):
-    """test StatusReporter._results()"""
+    """test StatusReporter.results()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2, 3))
     db_file = str(tmp_path / "status.db")
     # single report without results
@@ -228,7 +224,7 @@ def test_status_reporter_07(mocker, tmp_path):
     assert rptr.reports is not None
     assert len(rptr.reports) == 1
     assert not rptr.has_results
-    assert rptr._results() == "No results available\n"
+    assert rptr.results() == "No results available\n"
     # multiple reports with results
     status = Status.start(db_file=db_file)
     status.iteration = 1
@@ -244,7 +240,7 @@ def test_status_reporter_07(mocker, tmp_path):
     rptr = StatusReporter.load(db_file)
     assert rptr.has_results
     assert len(rptr.reports) == 3
-    output = rptr._results(max_len=16)
+    output = rptr.results(max_len=16)
     assert "3: '[@ test1]'" in output
     assert "1: '[@ test2]'" in output
     assert "1: '[@ longsignature...'" in output
@@ -283,7 +279,7 @@ def test_status_reporter_08(tmp_path):
         test_fp.write(b"KeyboardInterrupt\n")
     rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
     assert len(rptr.tracebacks) == 2
-    merged_log = rptr._summary()
+    merged_log = rptr.summary()
     assert len(merged_log.splitlines()) == 14
     assert "screenlog.1" in merged_log
     assert "screenlog.1234" in merged_log
@@ -302,7 +298,7 @@ def test_status_reporter_09(tmp_path):
     rptr = StatusReporter.load(str(tmp_path / "status.db"), tb_path=str(tmp_path))
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 1
-    output = rptr._summary()
+    output = rptr.summary()
     assert len(output.splitlines()) == 7
     assert "No status reports available" in output
     assert "IndexError" in output
@@ -340,7 +336,7 @@ def test_status_reporter_10(mocker, tmp_path):
     rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 10
-    merged_log = rptr._summary(
+    merged_log = rptr.summary(
         runtime=True, sysinfo=True, timestamp=True, iters_per_result=1
     )
     assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
