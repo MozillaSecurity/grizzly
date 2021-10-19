@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover
 from os import SEEK_CUR, getenv, scandir
 from os.path import isdir
 from re import match
-from time import gmtime, strftime
+from time import gmtime, localtime, strftime
 
 from psutil import cpu_count, cpu_percent, disk_usage, virtual_memory
 
@@ -101,26 +101,32 @@ class StatusReporter:
         print(self._results())
 
     def print_specific(self):
-        print(self._specific())
+        print(self._specific(), end="")
 
     def print_summary(self, runtime=True, sysinfo=False, timestamp=False):
         print(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
 
     def _results(self, max_len=85):
-        descs = dict()
+        blockers = set()
         counts = defaultdict(int)
+        descs = dict()
         # calculate totals
         for entry in self.reports:
             for rid, count, desc in entry.results.all():
                 descs[rid] = desc
                 counts[rid] += count
+            blockers.update(x[0] for x in entry.blockers())
         # generate output
         txt = list()
         for rid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
+            desc = descs[rid]
+            # trim long descriptions
             if len(descs[rid]) > max_len:
-                txt.append("%d: '%s...'\n" % (count, descs[rid][:max_len]))
-            else:
-                txt.append("%d: %r\n" % (count, descs[rid]))
+                desc = "%s..." % (desc[:max_len],)
+            blocker = "*" if rid in blockers else ""
+            txt.append("%s%d: %r\n" % (blocker, count, desc))
+        if blockers:
+            txt.append("(* = Blocker)\n")
         if not txt:
             txt.append("No results available\n")
         return "".join(txt)
@@ -135,35 +141,46 @@ class StatusReporter:
             if entry.stat().st_size:
                 yield entry.path
 
-    def _specific(self):
+    def _specific(self, iters_per_result=100):
         """Merged and generate formatted output of status reports.
 
         Args:
-            None
+            iters_per_result (int): Threshold for warning of potential blockers.
 
         Returns:
-            str: A formatted report
+            str: A formatted report.
         """
         if not self.reports:
             return "No status reports available"
-        self.reports.sort(key=lambda x: x.runtime, reverse=True)
+        self.reports.sort(key=lambda x: x.start_time)
         txt = list()
-        for num, report in enumerate(self.reports, start=1):
-            txt.append("#%02d - %d -" % (num, report.pid))
-            txt.append(" Runtime %s\n" % (timedelta(seconds=int(report.runtime)),))
-            txt.append(" * Iterations: %d" % (report.iteration,))
-            txt.append(" @ %0.2f," % (round(report.rate, 2),))
-            txt.append(" Ignored: %d," % (report.ignored,))
-            txt.append(" Results: %d" % (report.results.total,))
+        for report in self.reports:
+            txt.append(strftime("%Y/%m/%d %X", localtime(report.start_time)))
+            txt.append(" - %d\n" % (report.pid,))
+            txt.append("  Iterations: %d" % (report.iteration,))
+            txt.append(" @ %0.2f\n" % (round(report.rate, 2),))
+            if report.ignored:
+                ignore_pct = report.ignored / float(report.iteration) * 100
+                txt.append(
+                    "  Ignored: %d @ %0.1f%%\n" % (report.ignored, round(ignore_pct, 1))
+                )
+            txt.append("  Results: %d" % (report.results.total,))
+            if report.results.total:
+                result_pct = report.results.total / float(report.iteration) * 100
+                txt.append(" @ %0.1f%%" % (round(result_pct, 1),))
+                if any(report.blockers(iters_per_result=iters_per_result)):
+                    txt.append(" (Blockers)")
             txt.append("\n")
+            txt.append("  Runtime: %s\n" % (timedelta(seconds=int(report.runtime)),))
+
             # add profiling data if it exists
             if any(report.profile_entries()):
-                txt.append(" * Profiling entries *\n")
+                txt.append("  Profiling entries:\n")
             for entry in sorted(
                 report.profile_entries(), key=lambda x: x.total, reverse=True
             ):
                 avg = entry.total / float(entry.count)
-                txt.append(" > %s: %dx " % (entry.name, entry.count))
+                txt.append("    %s: %dx " % (entry.name, entry.count))
                 if entry.total > 300:
                     txt.append(str(timedelta(seconds=int(entry.total))))
                 else:
@@ -173,6 +190,7 @@ class StatusReporter:
                 txt.append(" %0.3f max," % (round(entry.max, 3),))
                 txt.append(" %0.3f min)" % (round(entry.min, 3),))
                 txt.append("\n")
+            txt.append("\n")
         return "".join(txt)
 
     def _summary(

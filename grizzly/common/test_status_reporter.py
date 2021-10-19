@@ -186,10 +186,11 @@ def test_status_reporter_06(mocker, tmp_path):
     rptr = StatusReporter.load(db_file)
     assert rptr.reports is not None
     output = rptr._specific()
-    assert len(output.split("\n")[:-1]) == 2
-    assert "Ignored" in output
-    assert "Iteration" in output
-    assert "Results" in output
+    assert len(output.strip().split("\n")) == 4
+    assert "Ignored:" not in output
+    assert "Iterations:" in output
+    assert "Results:" in output
+    assert "Runtime:" in output
     # multiple reports
     status = Status.start(db_file=db_file, enable_profiling=True)
     status.ignored = 1
@@ -203,13 +204,14 @@ def test_status_reporter_06(mocker, tmp_path):
     rptr = StatusReporter.load(db_file)
     assert len(rptr.reports) == 2
     output = rptr._specific()
-    assert len(output.split("\n")[:-1]) == 7
-    assert "Ignored" in output
-    assert "Iteration" in output
-    assert "Results" in output
-    assert "Profiling entries" in output
-    assert "> test1:" in output
-    assert "> test2:" in output
+    assert len(output.strip().split("\n")) == 13
+    assert "Ignored:" in output
+    assert "Iterations:" in output
+    assert "Results:" in output
+    assert "Runtime:" in output
+    assert "Profiling entries:" in output
+    assert "test1:" in output
+    assert "test2:" in output
 
 
 def test_status_reporter_07(mocker, tmp_path):
@@ -246,7 +248,8 @@ def test_status_reporter_07(mocker, tmp_path):
     assert "3: '[@ test1]'" in output
     assert "1: '[@ test2]'" in output
     assert "1: '[@ longsignature...'" in output
-    assert len(output.split("\n")[:-1]) == 3
+    assert "(* = Blocker)" in output
+    assert len(output.strip().split("\n")) == 4
 
 
 def test_status_reporter_08(tmp_path):
