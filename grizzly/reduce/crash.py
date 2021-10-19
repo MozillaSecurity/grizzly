@@ -30,6 +30,7 @@ def main(args):
     bucket = None
     try:
         # download the crash
+        args.reducer_crash_id = args.input
         args.input = str(crash.testcase_path())
         if args.sig is None and crash.bucket is not None:
             bucket = Bucket(crash.bucket)
