@@ -169,13 +169,13 @@ class Status:
             iters_per_result (int): Iterations-per-result threshold.
 
         Yields:
-            tuple(int, str): Count and description of result.
+            3-tuple(str, int, str): ID, count and description of blocking result.
         """
         assert iters_per_result > 0
         if self.results:
-            for _, count, desc in self.results.all():
+            for result_id, count, desc in self.results.all():
                 if count > 1 and self.iteration / count <= iters_per_result:
-                    yield count, desc
+                    yield result_id, count, desc
 
     @classmethod
     def loadall(cls, db_file, time_limit=300):
@@ -468,7 +468,7 @@ class ResultCounter:
             None
 
         Yields:
-            tuple: Contains result_id, count and description for each entry.
+            3-tuple: Contains ID, count and description for each result entry.
         """
         for result_id, count in self._count.items():
             if count > 0:
@@ -568,7 +568,7 @@ class ResultCounter:
             result_id (str): Result ID.
 
         Returns:
-            tuple: Count and description.
+            2-tuple: Count and description.
         """
         assert isinstance(result_id, str)
         return (self._count.get(result_id, 0), self._desc.get(result_id, None))
