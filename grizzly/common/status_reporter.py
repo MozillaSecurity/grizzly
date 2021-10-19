@@ -111,11 +111,11 @@ class StatusReporter:
         counts = defaultdict(int)
         descs = dict()
         # calculate totals
-        for entry in self.reports:
-            for rid, count, desc in entry.results.all():
-                descs[rid] = desc
-                counts[rid] += count
-            blockers.update(x[0] for x in entry.blockers())
+        for report in self.reports:
+            for result in report.results.all():
+                descs[result.rid] = result.desc
+                counts[result.rid] += result.count
+            blockers.update(x.rid for x in report.blockers())
         # generate output
         txt = list()
         for rid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):

@@ -25,6 +25,8 @@ LOG = getLogger(__name__)
 
 ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
 
+ResultEntry = namedtuple("ResultEntry", "rid count desc")
+
 
 def _db_version_check(con, expected=DB_VERSION):
     """Perform version check and remove obsolete tables if required.
@@ -169,13 +171,13 @@ class Status:
             iters_per_result (int): Iterations-per-result threshold.
 
         Yields:
-            3-tuple(str, int, str): ID, count and description of blocking result.
+            ResultEntry: ID, count and description of blocking result.
         """
         assert iters_per_result > 0
         if self.results:
-            for result_id, count, desc in self.results.all():
-                if count > 1 and self.iteration / count <= iters_per_result:
-                    yield result_id, count, desc
+            for entry in self.results.all():
+                if entry.count > 1 and self.iteration / entry.count <= iters_per_result:
+                    yield entry
 
     @classmethod
     def loadall(cls, db_file, time_limit=300):
@@ -468,11 +470,11 @@ class ResultCounter:
             None
 
         Yields:
-            3-tuple: Contains ID, count and description for each result entry.
+            ResultEntry: Contains ID, count and description for each result entry.
         """
         for result_id, count in self._count.items():
             if count > 0:
-                yield (result_id, count, self._desc.get(result_id, None))
+                yield ResultEntry(result_id, count, self._desc.get(result_id, None))
 
     def count(self, result_id, desc):
         """
@@ -568,10 +570,12 @@ class ResultCounter:
             result_id (str): Result ID.
 
         Returns:
-            2-tuple: Count and description.
+            ResultEntry: Count and description.
         """
         assert isinstance(result_id, str)
-        return (self._count.get(result_id, 0), self._desc.get(result_id, None))
+        return ResultEntry(
+            result_id, self._count.get(result_id, 0), self._desc.get(result_id, None)
+        )
 
     def is_frequent(self, result_id):
         """Scan all results including results from other running instances

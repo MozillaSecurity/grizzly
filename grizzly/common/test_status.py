@@ -68,7 +68,7 @@ def test_status_03(tmp_path):
     assert status.iteration == loaded.iteration
     assert status.log_size == loaded.log_size
     assert status.pid == loaded.pid
-    assert loaded.results.get("uid1") == (1, "sig1")
+    assert loaded.results.get("uid1") == ("uid1", 1, "sig1")
     assert not loaded._enable_profiling
     assert "test" in loaded._profiles
 
@@ -295,16 +295,16 @@ def test_report_counter_01(tmp_path, keys, counts, limit, local_only):
     db_path = None if local_only else str(tmp_path / "storage.db")
     counter = ResultCounter(1, db_file=db_path, freq_limit=limit)
     for report_id, count in zip(keys, counts):
-        assert counter.get(report_id) == (0, None)
+        assert counter.get(report_id) == (report_id, 0, None)
         assert not counter.is_frequent(report_id)
         # call count() with report_id 'count' times
         for current in range(1, count + 1):
             assert counter.count(report_id, "desc") == current
         # test get()
         if sum(counts) > 0:
-            assert counter.get(report_id) == (count, "desc")
+            assert counter.get(report_id) == (report_id, count, "desc")
         else:
-            assert counter.get(report_id) == (count, None)
+            assert counter.get(report_id) == (report_id, count, None)
         # test is_frequent()
         if count > limit > 0:
             assert counter.is_frequent(report_id)
@@ -392,17 +392,17 @@ def test_report_counter_03(mocker, tmp_path):
     # last 2 seconds
     loaded = ResultCounter.load(db_path, 2)[0]
     assert loaded.total == 1
-    assert loaded.get("b") == (1, "desc_b")
+    assert loaded.get("b") == ("b", 1, "desc_b")
     # last 3 seconds
     loaded = ResultCounter.load(db_path, 3)[0]
-    assert loaded.get("a") == (2, "desc_a")
+    assert loaded.get("a") == ("a", 2, "desc_a")
     assert loaded.total == 3
     # increase time limit
     fake_time.return_value = 4
     loaded = ResultCounter.load(db_path, 10)[0]
     assert loaded.total == counter.total == 3
-    assert loaded.get("a") == (2, "desc_a")
-    assert loaded.get("b") == (1, "desc_b")
+    assert loaded.get("a") == ("a", 2, "desc_a")
+    assert loaded.get("b") == ("b", 1, "desc_b")
 
 
 def test_report_counter_04(mocker, tmp_path):
