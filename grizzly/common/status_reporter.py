@@ -45,35 +45,6 @@ class StatusReporter:
         self.reports = reports
         self.tracebacks = tracebacks
 
-    def dump_specific(self, filename):
-        """Write out merged reports.
-
-        Args:
-            filename (str): Path where output should be written.
-
-        Returns:
-            None
-        """
-        with open(filename, "w") as ofp:
-            ofp.write(self._specific())
-
-    def dump_summary(self, filename, runtime=False, sysinfo=True, timestamp=True):
-        """Write out summary merged reports.
-
-        Args:
-            filename (str): Path where output should be written.
-            runtime (bool): Include total runtime in output
-            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output
-            timestamp (bool): Include time stamp in output
-
-        Returns:
-            None
-        """
-        with open(filename, "w") as ofp:
-            ofp.write(
-                self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp)
-            )
-
     @property
     def has_results(self):
         return any(x.results.total for x in self.reports)
@@ -97,16 +68,15 @@ class StatusReporter:
             tracebacks=tracebacks,
         )
 
-    def print_results(self):
-        print(self._results())
+    def results(self, max_len=85):
+        """Merged and generate formatted output from results.
 
-    def print_specific(self):
-        print(self._specific(), end="")
+        Args:
+            max_len (int): Maximum length of result description.
 
-    def print_summary(self, runtime=True, sysinfo=False, timestamp=False):
-        print(self._summary(runtime=runtime, sysinfo=sysinfo, timestamp=timestamp))
-
-    def _results(self, max_len=85):
+        Returns:
+            str: A formatted report.
+        """
         blockers = set()
         counts = defaultdict(int)
         descs = dict()
@@ -141,8 +111,8 @@ class StatusReporter:
             if entry.stat().st_size:
                 yield entry.path
 
-    def _specific(self, iters_per_result=100):
-        """Merged and generate formatted output of status reports.
+    def specific(self, iters_per_result=100):
+        """Merged and generate formatted output from status reports.
 
         Args:
             iters_per_result (int): Threshold for warning of potential blockers.
@@ -193,19 +163,19 @@ class StatusReporter:
             txt.append("\n")
         return "".join(txt)
 
-    def _summary(
+    def summary(
         self, runtime=True, sysinfo=False, timestamp=False, iters_per_result=100
     ):
-        """Merge and generate a summary of status reports.
+        """Merge and generate a summary from status reports.
 
         Args:
-            runtime (bool): Include total runtime in output
-            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output
-            timestamp (bool): Include time stamp in output
-            iters_per_result (int): Threshold for warning of potential blockers
+            runtime (bool): Include total runtime in output.
+            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output.
+            timestamp (bool): Include time stamp in output.
+            iters_per_result (int): Threshold for warning of potential blockers.
 
         Returns:
-            str: A summary of merged reports
+            str: A summary of merged reports.
         """
         entries = list()
         # Job specific status
@@ -558,15 +528,15 @@ def main(args=None):
         tb_path=args.tracebacks,
         time_limit=report_types[args.type],
     )
+
     if args.dump:
-        if args.type == "active":
-            reporter.dump_summary(
-                args.dump, runtime=False, sysinfo=True, timestamp=True
-            )
-        else:
-            reporter.dump_summary(
-                args.dump, runtime=True, sysinfo=False, timestamp=False
-            )
+        with open(args.dump, "w") as ofp:
+            if args.type == "active":
+                ofp.write(reporter.summary(runtime=False, sysinfo=True, timestamp=True))
+            else:
+                ofp.write(
+                    reporter.summary(runtime=True, sysinfo=False, timestamp=False)
+                )
         return 0
 
     if not reporter.reports:
@@ -578,12 +548,12 @@ def main(args=None):
         % (strftime("%Y/%m/%d %X"), Status.REPORT_FREQ)
     )
     print("[Reports]")
-    reporter.print_specific()
+    print(reporter.specific(), end="")
     if reporter.has_results:
         print("[Result Signatures]")
-        reporter.print_results()
+        print(reporter.results())
     print("[Summary]")
-    reporter.print_summary(sysinfo=args.system_report)
+    print(reporter.summary(sysinfo=args.system_report))
     return 0
 
 
