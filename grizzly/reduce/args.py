@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """CLI argument parsing for Grizzly reduction.
 """
+from argparse import SUPPRESS
 from logging import getLogger
 from pathlib import Path
 
@@ -54,6 +55,12 @@ class ReduceArgs(ReplayArgs):
             dest="strategies",
             help="One or more strategies (space-separated). Available: %s (default: %s)"
             % (" ".join(sorted(STRATEGIES)), " ".join(DEFAULT_STRATEGIES)),
+        )
+        # hidden argument to add original crash ID as metadata when reported
+        reduce_args.add_argument(
+            "--reducer-crash-id",
+            type=int,
+            help=SUPPRESS,
         )
 
     def sanity_check(self, args):

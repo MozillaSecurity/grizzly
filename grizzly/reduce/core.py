@@ -74,6 +74,7 @@ class ReduceManager:
         expect_hang=False,
         idle_delay=0,
         idle_threshold=0,
+        reducer_crash_id=None,
         relaunch=1,
         report_period=None,
         report_to_fuzzmanager=False,
@@ -129,6 +130,7 @@ class ReduceManager:
         # these parameters may be overwritten during analysis, so keep a copy of them
         self._original_relaunch = relaunch
         self._original_use_harness = use_harness
+        self._reducer_crash_id = reducer_crash_id
         self._report_to_fuzzmanager = report_to_fuzzmanager
         self._report_periodically = report_period
         self._report_tool = tool
@@ -667,6 +669,9 @@ class ReduceManager:
                 reporter = FuzzManagerReporter(self._report_tool)
                 if result.expected:
                     reporter.force_report = True
+                # add original-crash
+                if self._reducer_crash_id is not None:
+                    reporter.add_extra_metadata("reducer-input", self._reducer_crash_id)
             else:
                 report_dir = "reports" if result.expected else "other_reports"
                 reporter = FilesystemReporter(
@@ -809,6 +814,7 @@ class ReduceManager:
                     expect_hang=expect_hang,
                     idle_delay=args.idle_delay,
                     idle_threshold=args.idle_threshold,
+                    reducer_crash_id=args.reducer_crash_id,
                     relaunch=relaunch,
                     report_period=args.report_period,
                     report_to_fuzzmanager=args.fuzzmanager,
