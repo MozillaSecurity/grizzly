@@ -68,6 +68,42 @@ class StatusReporter:
             tracebacks=tracebacks,
         )
 
+    @staticmethod
+    def format_entries(entries):
+        """Generate formatted output from (label, body) pairs.
+        Each entry must have a label and an optional body.
+
+        Example:
+        entries = (
+            ("Test data output", None),
+            ("first", "1"),
+            ("second", "2"),
+            ("third", "3.0"),
+        )
+        Will generate...
+        Test data output
+         first : 1
+        second : 2
+         third : 3.0
+
+        Args:
+            entries list(2-tuple(str, str)): Data to merge.
+
+        Returns:
+            str: Formatted output.
+        """
+        label_lengths = tuple(len(x[0]) for x in entries if x[1])
+        max_len = max(label_lengths) if label_lengths else 0
+        out = list()
+        for label, body in entries:
+            if body:
+                out.append(
+                    "%s%s : %s" % ((" " * max(max_len - len(label), 0), label, body))
+                )
+            else:
+                out.append(label)
+        return "\n".join(out)
+
     def results(self, max_len=85):
         """Merged and generate formatted output from results.
 
@@ -87,19 +123,20 @@ class StatusReporter:
                 counts[result.rid] += result.count
             blockers.update(x.rid for x in report.blockers())
         # generate output
-        txt = list()
+        entries = list()
         for rid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
             desc = descs[rid]
             # trim long descriptions
             if len(descs[rid]) > max_len:
-                desc = "%s..." % (desc[:max_len],)
-            blocker = "*" if rid in blockers else ""
-            txt.append("%s%d: %r\n" % (blocker, count, desc))
-        if blockers:
-            txt.append("(* = Blocker)\n")
-        if not txt:
-            txt.append("No results available\n")
-        return "".join(txt)
+                desc = "%s..." % (desc[: max_len - 3],)
+            label = "%s%d" % ("*" if rid in blockers else "", count)
+            entries.append((label, desc))
+        if not entries:
+            entries.append(("No results available", None))
+        elif blockers:
+            entries.append(("(* = Blocker)", None))
+        entries.append(("", None))
+        return self.format_entries(entries)
 
     @staticmethod
     def _scan(path, fname_pattern):
@@ -123,45 +160,68 @@ class StatusReporter:
         if not self.reports:
             return "No status reports available"
         self.reports.sort(key=lambda x: x.start_time)
-        txt = list()
+        entries = list()
         for report in self.reports:
-            txt.append(strftime("%Y/%m/%d %X", localtime(report.start_time)))
-            txt.append(" - %d\n" % (report.pid,))
-            txt.append("  Iterations: %d" % (report.iteration,))
-            txt.append(" @ %0.2f\n" % (round(report.rate, 2),))
+            label = "PID %d started at %s" % (
+                report.pid,
+                strftime("%Y/%m/%d %X", localtime(report.start_time)),
+            )
+            entries.append((label, None))
+            # iterations
+            entries.append(
+                ("Iterations", "%d @ %0.2f" % (report.iteration, round(report.rate, 2)))
+            )
+            # ignored
             if report.ignored:
                 ignore_pct = report.ignored / float(report.iteration) * 100
-                txt.append(
-                    "  Ignored: %d @ %0.1f%%\n" % (report.ignored, round(ignore_pct, 1))
+                entries.append(
+                    (
+                        "Ignored",
+                        "%d @ %0.1f%%" % (report.ignored, round(ignore_pct, 1)),
+                    )
                 )
-            txt.append("  Results: %d" % (report.results.total,))
+            # results
             if report.results.total:
-                result_pct = report.results.total / float(report.iteration) * 100
-                txt.append(" @ %0.1f%%" % (round(result_pct, 1),))
+                # avoid divide by zero if results are found before first update
+                iters = report.iteration if report.iteration else report.results.total
+                result_pct = report.results.total / float(iters) * 100
                 if any(report.blockers(iters_per_result=iters_per_result)):
-                    txt.append(" (Blockers)")
-            txt.append("\n")
-            txt.append("  Runtime: %s\n" % (timedelta(seconds=int(report.runtime)),))
-
+                    blk_str = " (Blockers detected)"
+                else:
+                    blk_str = ""
+                entries.append(
+                    (
+                        "Results",
+                        "%d @ %0.1f%% %s"
+                        % (report.results.total, round(result_pct, 1), blk_str),
+                    )
+                )
+            else:
+                entries.append(("Results", "0"))
+            # runtime
+            entries.append(("Runtime", str(timedelta(seconds=int(report.runtime)))))
             # add profiling data if it exists
             if any(report.profile_entries()):
-                txt.append("  Profiling entries:\n")
-            for entry in sorted(
-                report.profile_entries(), key=lambda x: x.total, reverse=True
-            ):
-                avg = entry.total / float(entry.count)
-                txt.append("    %s: %dx " % (entry.name, entry.count))
-                if entry.total > 300:
-                    txt.append(str(timedelta(seconds=int(entry.total))))
-                else:
-                    txt.append("%0.3fs" % (round(entry.total, 3),))
-                txt.append(" %0.2f%%" % (round(entry.total / report.runtime * 100, 2),))
-                txt.append(" (%0.3f avg," % (round(avg, 3),))
-                txt.append(" %0.3f max," % (round(entry.max, 3),))
-                txt.append(" %0.3f min)" % (round(entry.min, 3),))
-                txt.append("\n")
-            txt.append("\n")
-        return "".join(txt)
+                entries.append(("Profiling entries", None))
+                for entry in sorted(
+                    report.profile_entries(), key=lambda x: x.total, reverse=True
+                ):
+                    avg = entry.total / float(entry.count)
+                    body = list()
+                    body.append("%dx " % (entry.count,))
+                    if entry.total > 300:
+                        body.append(str(timedelta(seconds=int(entry.total))))
+                    else:
+                        body.append("%0.3fs" % (round(entry.total, 3),))
+                    body.append(
+                        " %0.2f%%" % (round(entry.total / report.runtime * 100, 2),)
+                    )
+                    body.append(" (%0.3f avg," % (round(avg, 3),))
+                    body.append(" %0.3f max," % (round(entry.max, 3),))
+                    body.append(" %0.3f min)" % (round(entry.min, 3),))
+                    entries.append((entry.name, "".join(body)))
+            entries.append(("", None))
+        return self.format_entries(entries)
 
     def summary(
         self, runtime=True, sysinfo=False, timestamp=False, iters_per_result=100
@@ -255,17 +315,7 @@ class StatusReporter:
             entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
 
         # Format output
-        label_lengths = tuple(len(x[0]) for x in entries if x[1])
-        max_len = max(label_lengths) if label_lengths else 0
-        msg = list()
-        for label, body in entries:
-            if body:
-                msg.append(
-                    "%s%s : %s" % ((" " * max(max_len - len(label), 0), label, body))
-                )
-            else:
-                msg.append(label)
-        msg = "\n".join(msg)
+        msg = self.format_entries(entries)
 
         if self.tracebacks:
             txt = self._merge_tracebacks(self.tracebacks, self.SUMMARY_LIMIT - len(msg))
@@ -548,7 +598,7 @@ def main(args=None):
         % (strftime("%Y/%m/%d %X"), Status.REPORT_FREQ)
     )
     print("[Reports]")
-    print(reporter.specific(), end="")
+    print(reporter.specific())
     if reporter.has_results:
         print("[Result Signatures]")
         print(reporter.results())
