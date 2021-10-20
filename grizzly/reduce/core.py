@@ -677,8 +677,8 @@ class ReduceManager:
                 reporter = FilesystemReporter(
                     report_path=str(self._log_path / report_dir), major_bucket=False
                 )
-            # write reduction stats
-            if stats is not None:
+            # write reduction stats for expected results
+            if stats is not None and result.expected:
                 report_path = Path(result.report.path)
                 with (report_path / "reduce_stats.txt").open("w") as out:
                     for line in stats.format_lines():
