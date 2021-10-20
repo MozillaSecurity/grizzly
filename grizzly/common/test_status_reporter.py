@@ -179,11 +179,11 @@ def test_status_reporter_06(mocker, tmp_path):
     assert rptr.reports is not None
     output = rptr.specific()
     assert len(output.strip().split("\n")) == 4
-    assert "Ignored:" not in output
-    assert "Iterations:" in output
-    assert "Results:" in output
-    assert "(Blockers)" not in output
-    assert "Runtime:" in output
+    assert "Ignored" not in output
+    assert "Iterations" in output
+    assert "Results" in output
+    assert "(Blockers detected)" not in output
+    assert "Runtime" in output
     # multiple reports
     status = Status.start(db_file=db_file, enable_profiling=True)
     status.ignored = 1
@@ -200,14 +200,14 @@ def test_status_reporter_06(mocker, tmp_path):
     assert len(rptr.reports) == 2
     output = rptr.specific()
     assert len(output.strip().split("\n")) == 13
-    assert "Ignored:" in output
-    assert "Iterations:" in output
-    assert "Results:" in output
-    assert "Runtime:" in output
-    assert "(Blockers)" in output
-    assert "Profiling entries:" in output
-    assert "test1:" in output
-    assert "test2:" in output
+    assert "Ignored" in output
+    assert "Iterations" in output
+    assert "Results" in output
+    assert "Runtime" in output
+    assert "(Blockers detected)" in output
+    assert "Profiling entries" in output
+    assert "test1" in output
+    assert "test2" in output
 
 
 def test_status_reporter_07(mocker, tmp_path):
@@ -240,10 +240,10 @@ def test_status_reporter_07(mocker, tmp_path):
     rptr = StatusReporter.load(db_file)
     assert rptr.has_results
     assert len(rptr.reports) == 3
-    output = rptr.results(max_len=16)
-    assert "3: '[@ test1]'" in output
-    assert "1: '[@ test2]'" in output
-    assert "1: '[@ longsignature...'" in output
+    output = rptr.results(max_len=19)
+    assert "3 : [@ test1]" in output
+    assert "1 : [@ test2]" in output
+    assert "1 : [@ longsignature..." in output
     assert "(* = Blocker)" in output
     assert len(output.strip().split("\n")) == 4
 
@@ -340,6 +340,17 @@ def test_status_reporter_10(mocker, tmp_path):
         runtime=True, sysinfo=True, timestamp=True, iters_per_result=1
     )
     assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
+
+
+def test_status_reporter_11():
+    """test StatusReporter.format_entries()"""
+    assert StatusReporter.format_entries([]) == ""
+    assert StatusReporter.format_entries([("test", None)]) == "test"
+    assert StatusReporter.format_entries([("test", "1")]) == "test : 1"
+    out = StatusReporter.format_entries(
+        [("first", "1"), ("second", "2"), ("third", "3")]
+    )
+    assert out == " first : 1\nsecond : 2\n third : 3"
 
 
 def test_traceback_report_01():
