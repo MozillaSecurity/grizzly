@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from inspect import signature
 from logging import getLogger
 from os.path import abspath, isdir, relpath
 from re import search as re_search
@@ -59,6 +60,8 @@ class ServerMap:
         url = self._check_url(url)
         if not callable(callback):
             raise TypeError("callback must be callable")
+        if len(signature(callback).parameters) != 1:
+            raise TypeError("callback requires 1 argument")
         if not isinstance(mime_type, str):
             raise TypeError("mime_type must be of type 'str'")
         if url in self.include or url in self.redirect:

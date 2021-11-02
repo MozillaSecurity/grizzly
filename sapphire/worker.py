@@ -119,6 +119,10 @@ class Worker:
                 return
 
             request = unquote_plus(request.group("request").decode("ascii"))
+            if "?" in request:
+                request, query = request.split("?", 1)
+            else:
+                query = ""
             LOG.debug("check_request(%r)", request)
             resource = serv_job.check_request(request)
             if resource is None:
@@ -170,7 +174,8 @@ class Worker:
                 )
                 return
             elif resource.type == Resource.URL_DYNAMIC:
-                data = resource.target()
+                # pass query string to callback
+                data = resource.target(query)
                 if not isinstance(data, bytes):
                     LOG.debug("dynamic request: %r", request)
                     raise TypeError("dynamic request callback must return 'bytes'")

@@ -259,7 +259,7 @@ class ReplayManager:
         server_map = ServerMap()
         if self._harness is not None:
             server_map.set_dynamic_response(
-                "grz_harness", lambda: self._harness, mime_type="text/html"
+                "grz_harness", lambda _: self._harness, mime_type="text/html"
             )
 
         # track unprocessed results
