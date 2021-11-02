@@ -28,8 +28,20 @@ def _create_crash_log(log_path):
         log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19")
 
 
-def test_reporter_01(mocker):
+@mark.parametrize(
+    "diplay_report, is_hang",
+    [
+        # do not display report
+        ("0", False),
+        # display report
+        ("1", False),
+        # display report (hang)
+        ("1", True),
+    ],
+)
+def test_reporter_01(mocker, tmp_path, diplay_report, is_hang):
     """test creating a simple Reporter"""
+    mocker.patch("grizzly.common.reporter.getenv", return_value=diplay_report)
 
     class SimpleReporter(Reporter):
         def _pre_submit(self, report):
@@ -41,8 +53,13 @@ def test_reporter_01(mocker):
         def _submit_report(self, report, test_cases):
             pass
 
+    (tmp_path / "log_stderr.txt").write_bytes(b"log msg")
+    report = mocker.Mock(
+        spec_set=Report, is_hang=is_hang, preferred=str(tmp_path / "log_stderr.txt")
+    )
     reporter = SimpleReporter()
-    reporter.submit([], report=mocker.Mock(spec_set=Report))
+    reporter.submit([], report=report)
+    assert report.cleanup.call_count == 1
 
 
 def test_filesystem_reporter_01(tmp_path):

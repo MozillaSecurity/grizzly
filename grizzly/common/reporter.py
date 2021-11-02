@@ -100,6 +100,17 @@ class Reporter(metaclass=ABCMeta):
         assert isinstance(report, Report)
         assert report.path is not None
         self._pre_submit(report)
+        # output report contents to console
+        if getenv("GRZ_DISPLAY_REPORT") == "1":
+            if not report.is_hang:
+                with open(report.preferred, "rb") as log_fp:
+                    LOG.info(
+                        "=== BEGIN REPORT ===\n%s",
+                        log_fp.read().decode("utf-8", errors="ignore"),
+                    )
+            else:
+                LOG.info("=== BEGIN REPORT ===\nBrowser hang detected")
+            LOG.info("=== END REPORT ===")
         result = self._submit_report(report, test_cases)
         if report is not None:
             report.cleanup()
