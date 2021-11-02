@@ -136,8 +136,6 @@ class Job:
         return mime
 
     def check_request(self, request):
-        if "?" in request:
-            request = request.split("?", 1)[0]
         to_serve = normpath(pathjoin(self.base_path, request))
         if "\x00" not in to_serve and isfile(to_serve):
             res = Resource(Resource.URL_FILE, to_serve, mime=self.lookup_mime(to_serve))

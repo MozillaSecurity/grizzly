@@ -199,7 +199,7 @@ class Runner:
         if self._tests_run == self._relaunch - 1:
             # overwrite instead of replace 'grz_next_test' for consistency
             server_map.set_redirect("grz_next_test", "grz_empty", required=True)
-            server_map.set_dynamic_response("grz_empty", lambda: b"", required=True)
+            server_map.set_dynamic_response("grz_empty", lambda _: b"", required=True)
         try:
             # unpack test case
             if test_path is None:

@@ -84,7 +84,7 @@ def test_job_03(tmp_path):
     assert job.status == Served.NONE
     resource = job.check_request("one")
     assert resource.type == Resource.URL_REDIRECT
-    resource = job.check_request("two?q=123")
+    resource = job.check_request("two")
     assert resource is not None
     assert resource.type == Resource.URL_REDIRECT
     assert job.pending == 1
@@ -130,7 +130,7 @@ def test_job_04(mocker, tmp_path):
         assert resource.type == Resource.URL_INCLUDE
         assert resource.target == str(inc_1)
     # test nested include path pointing to a different include
-    resource = job.check_request("testinc/inc2/test_file_2.txt?q=123")
+    resource = job.check_request("testinc/inc2/test_file_2.txt")
     assert resource.type == Resource.URL_INCLUDE
     assert resource.target == str(inc_2)
     # test redirect root without leading '/'
@@ -195,8 +195,8 @@ def test_job_05(tmp_path):
 def test_job_06(tmp_path):
     """test Job dynamic"""
     smap = ServerMap()
-    smap.set_dynamic_response("cb1", lambda: 0, mime_type="mime_type")
-    smap.set_dynamic_response("cb2", lambda: 1)
+    smap.set_dynamic_response("cb1", lambda _: 0, mime_type="mime_type")
+    smap.set_dynamic_response("cb2", lambda _: 1)
     job = Job(str(tmp_path), server_map=smap)
     assert job.status == Served.ALL
     assert job.pending == 0
@@ -204,7 +204,7 @@ def test_job_06(tmp_path):
     assert resource.type == Resource.URL_DYNAMIC
     assert callable(resource.target)
     assert isinstance(resource.mime, str)
-    resource = job.check_request("cb2?q=123")
+    resource = job.check_request("cb2")
     assert resource is not None
     assert resource.type == Resource.URL_DYNAMIC
     assert callable(resource.target)

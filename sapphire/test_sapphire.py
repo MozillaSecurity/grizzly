@@ -423,46 +423,70 @@ def test_sapphire_18(client, tmp_path):
     assert inc403.code == 403
 
 
-def test_sapphire_19(client, tmp_path):
-    """test dynamic response - not required"""
+@pytest.mark.parametrize(
+    "query, required",
+    [
+        # dynamic response not required
+        (None, False),
+        # dynamic response is required
+        (None, True),
+        # dynamic response with query string
+        ("test123", True),
+        # dynamic response with empty query string
+        ("", True),
+    ],
+)
+def test_sapphire_19(client, tmp_path, query, required):
+    """test dynamic response"""
     _data = b"dynamic response -- TEST DATA!"
-    test_dr = _TestFile("dyn_test")
-    test_dr.len_org = len(_data)
-    test_dr.md5_org = hashlib.md5(_data).hexdigest()
-    smap = ServerMap()
-    smap.set_dynamic_response("dyn_test", lambda: _data, mime_type="text/plain")
-    test = _create_test("test_case.html", tmp_path)
-    with Sapphire(timeout=10) as serv:
-        client.launch("127.0.0.1", serv.port, [test_dr, test], in_order=True)
-        assert serv.serve_path(str(tmp_path), server_map=smap)[0] == Served.ALL
-    assert client.wait(timeout=10)
-    assert test.code == 200
-    assert test.len_srv == test.len_org
-    assert test_dr.code == 200
-    assert test_dr.len_srv == test_dr.len_org
-    assert test_dr.md5_srv == test_dr.md5_org
+    # build request
+    path = "dyn_test"
+    if query is not None:
+        request = "?".join([path, query])
+    else:
+        request = path
 
+    # setup custom callback
+    def dr_callback(data):
+        if query:
+            assert data == query
+        else:
+            assert data == ""
+        return _data
 
-def test_sapphire_20(client, tmp_path):
-    """test dynamic response - required"""
-    _data = b"dynamic response -- TEST DATA!"
-    test_dr = _TestFile("dyn_test")
-    test_dr.len_org = len(_data)
-    test_dr.md5_org = hashlib.md5(_data).hexdigest()
     smap = ServerMap()
     smap.set_dynamic_response(
-        "dyn_test", lambda: _data, mime_type="text/plain", required=True
+        path, dr_callback, mime_type="text/plain", required=required
     )
+    # create files
+    test_dr = _TestFile(request)
+    test_dr.len_org = len(_data)
+    test_dr.md5_org = hashlib.md5(_data).hexdigest()
+    if required:
+        test = None
+        optional = []
+        files = [test_dr]
+    else:
+        test = _create_test("test_case.html", tmp_path)
+        optional = [test_dr.url]
+        files = [test_dr, test]
+    # test request
     with Sapphire(timeout=10) as serv:
-        client.launch("127.0.0.1", serv.port, [test_dr], in_order=True)
-        assert serv.serve_path(str(tmp_path), server_map=smap)[0] == Served.ALL
+        client.launch("127.0.0.1", serv.port, files, in_order=True)
+        assert (
+            serv.serve_path(str(tmp_path), optional_files=optional, server_map=smap)[0]
+            == Served.ALL
+        )
     assert client.wait(timeout=10)
+    if not required:
+        assert test.code == 200
+        assert test.len_srv == test.len_org
     assert test_dr.code == 200
     assert test_dr.len_srv == test_dr.len_org
     assert test_dr.md5_srv == test_dr.md5_org
 
 
-def test_sapphire_21(client_factory, tmp_path):
+def test_sapphire_20(client_factory, tmp_path):
     """test pending_files == 0 in worker thread"""
     client_defer = client_factory(rx_size=2)
     # server should shutdown while this file is being served
@@ -484,7 +508,7 @@ def test_sapphire_21(client_factory, tmp_path):
     assert test_defer.code == 0
 
 
-def test_sapphire_22(client, tmp_path):
+def test_sapphire_21(client, tmp_path):
     """test handling an invalid request"""
     bad_test = _TestFile("bad.html")
     bad_test.custom_request = b"a bad request...0+%\xef\xb7\xba\r\n"
@@ -498,7 +522,7 @@ def test_sapphire_22(client, tmp_path):
     assert bad_test.code == 400
 
 
-def test_sapphire_23(client, tmp_path):
+def test_sapphire_22(client, tmp_path):
     """test handling an empty request"""
     bad_test = _TestFile("bad.html")
     bad_test.custom_request = b""
@@ -518,7 +542,7 @@ def test_sapphire_23(client, tmp_path):
     assert bad_test.code == 0
 
 
-def test_sapphire_24(client_factory, tmp_path):
+def test_sapphire_23(client_factory, tmp_path):
     """test requesting multiple files via multiple connections"""
     to_serve = list()
     for i in range(2):
@@ -547,10 +571,10 @@ def test_sapphire_24(client_factory, tmp_path):
         assert t_file.len_srv == t_file.len_org
 
 
-def test_sapphire_25(client_factory, tmp_path):
+def test_sapphire_24(client_factory, tmp_path):
     """test all request types via multiple connections"""
 
-    def _dyn_test_cb():
+    def _dyn_test_cb(_):
         return b"A" if random.getrandbits(1) else b"AA"
 
     smap = ServerMap()
@@ -586,11 +610,11 @@ def test_sapphire_25(client_factory, tmp_path):
         assert serv.serve_path(str(tmp_path), server_map=smap)[0] == Served.ALL
 
 
-def test_sapphire_26(client, tmp_path):
+def test_sapphire_25(client, tmp_path):
     """test dynamic response with bad callbacks"""
     test_dr = _TestFile("dynm_test")
     smap = ServerMap()
-    smap.set_dynamic_response("dynm_test", lambda: None, mime_type="text/plain")
+    smap.set_dynamic_response("dynm_test", lambda _: None, mime_type="text/plain")
     test = _create_test("test_case.html", tmp_path)
     with Sapphire(timeout=10) as serv:
         client.launch("127.0.0.1", serv.port, [test_dr, test], in_order=True)
@@ -598,7 +622,7 @@ def test_sapphire_26(client, tmp_path):
             serv.serve_path(str(tmp_path), server_map=smap)
 
 
-def test_sapphire_27(client, tmp_path):
+def test_sapphire_26(client, tmp_path):
     """test serving to a slow client"""
     t_data = "".join(random.choice("ABCD1234") for _ in range(0x19000))  # 100KB
     t_file = _create_test(
@@ -617,7 +641,7 @@ def test_sapphire_27(client, tmp_path):
     assert t_file.md5_srv == t_file.md5_org
 
 
-def test_sapphire_28(client, tmp_path):
+def test_sapphire_27(client, tmp_path):
     """test timeout while requesting multiple files"""
     files_to_serve = list()
     t_data = "".join(random.choice("ABCD1234") for _ in range(1024)).encode("ascii")
@@ -635,7 +659,7 @@ def test_sapphire_28(client, tmp_path):
     assert len(files_served) < len(files_to_serve)
 
 
-def test_sapphire_29(client_factory, tmp_path):
+def test_sapphire_28(client_factory, tmp_path):
     """test Sapphire.serve_path() with forever=True"""
     clients = list()
     with Sapphire(timeout=10) as serv:
@@ -662,7 +686,7 @@ def test_sapphire_29(client_factory, tmp_path):
     assert test.len_srv == test.len_org
 
 
-def test_sapphire_30(client, tmp_path):
+def test_sapphire_29(client, tmp_path):
     """test interesting file names"""
     to_serve = [
         # space in file name
@@ -677,7 +701,7 @@ def test_sapphire_30(client, tmp_path):
     assert all(t_file.code == 200 for t_file in to_serve)
 
 
-def test_sapphire_31(client, tmp_path):
+def test_sapphire_30(client, tmp_path):
     """test interesting path string"""
     all_bytes = "".join(chr(i) for i in range(256))
     to_serve = [
@@ -695,7 +719,7 @@ def test_sapphire_31(client, tmp_path):
     assert all(t_file.code is not None for t_file in to_serve)
 
 
-def test_sapphire_32(mocker):
+def test_sapphire_31(mocker):
     """test Sapphire._create_listening_socket()"""
     fake_sleep = mocker.patch("sapphire.core.sleep", autospec=True)
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
@@ -724,7 +748,7 @@ def test_sapphire_32(mocker):
     assert fake_sleep.call_count == 1
 
 
-def test_sapphire_33(mocker):
+def test_sapphire_32(mocker):
     """test Sapphire.clear_backlog()"""
     mocker.patch("sapphire.core.socket", autospec=True)
     mocker.patch("sapphire.core.time", autospec=True, return_value=1)

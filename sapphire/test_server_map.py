@@ -19,20 +19,22 @@ def test_servermap_01():
 def test_servermap_02(tmp_path):
     """test ServerMap dynamic responses"""
     srv_map = ServerMap()
-    srv_map.set_dynamic_response("url_01", lambda: 0, mime_type="test/type")
+    srv_map.set_dynamic_response("url_01", lambda _: 0, mime_type="test/type")
     assert len(srv_map.dynamic) == 1
     assert "url_01" in srv_map.dynamic
     assert srv_map.dynamic["url_01"].mime == "test/type"
     assert callable(srv_map.dynamic["url_01"].target)
     assert srv_map.dynamic["url_01"].type == Resource.URL_DYNAMIC
-    srv_map.set_dynamic_response("url_02", lambda: 0, mime_type="foo")
+    srv_map.set_dynamic_response("url_02", lambda _: 0, mime_type="foo")
     assert len(srv_map.dynamic) == 2
     assert not srv_map.include
     assert not srv_map.redirect
     with pytest.raises(TypeError, match="callback must be callable"):
         srv_map.set_dynamic_response("x", None)
+    with pytest.raises(TypeError, match="callback requires 1 argument"):
+        srv_map.set_dynamic_response("x", lambda: 0)
     with pytest.raises(TypeError, match="mime_type must be of type 'str'"):
-        srv_map.set_dynamic_response("x", lambda: 0, None)
+        srv_map.set_dynamic_response("x", lambda _: 0, None)
     # test detecting collisions
     with pytest.raises(MapCollisionError):
         srv_map.set_include("url_01", str(tmp_path))
@@ -66,7 +68,7 @@ def test_servermap_03(tmp_path):
     with pytest.raises(MapCollisionError, match="URL collision on 'url_01'"):
         srv_map.set_redirect("url_01", "test_file")
     with pytest.raises(MapCollisionError):
-        srv_map.set_dynamic_response("url_01", lambda: 0, mime_type="test/type")
+        srv_map.set_dynamic_response("url_01", lambda _: 0, mime_type="test/type")
     # test overlapping includes
     with pytest.raises(MapCollisionError, match=r"'url_01' and '\w+' include"):
         srv_map.set_include("url_01", str(tmp_path))
@@ -97,7 +99,7 @@ def test_servermap_04(tmp_path):
     with pytest.raises(MapCollisionError):
         srv_map.set_include("url_01", str(tmp_path))
     with pytest.raises(MapCollisionError):
-        srv_map.set_dynamic_response("url_01", lambda: 0, mime_type="test/type")
+        srv_map.set_dynamic_response("url_01", lambda _: 0, mime_type="test/type")
 
 
 def test_servermap_05():
