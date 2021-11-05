@@ -6,7 +6,7 @@
 from copy import deepcopy
 from logging import getLogger
 
-import pytest
+from pytest import mark
 
 from ..common.reporter import Quality
 from ..common.utils import Exit
@@ -14,10 +14,14 @@ from .bucket import main as bucket_main
 from .crash import main as crash_main
 
 LOG = getLogger(__name__)
-pytestmark = pytest.mark.usefixtures("tmp_path_fm_config")
+pytestmark = mark.usefixtures(
+    "tmp_path_fm_config",
+    "tmp_path_replay_status_db",
+    "tmp_path_reduce_status_db",
+)
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     "arg_sig, arg_tool, crash_bucket, result_sig, result_tool",
     [
         # crash id is downloaded and core.main is called with the path
@@ -53,7 +57,7 @@ def test_crash_main(mocker, arg_sig, arg_tool, crash_bucket, result_sig, result_
     assert args.tool == result_tool
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     "mgr_exit_code, pre_quality, post_quality",
     [
         (Exit.SUCCESS, Quality.UNREDUCED, Quality.ORIGINAL),
@@ -86,7 +90,7 @@ def test_crash_main_quality(mocker, mgr_exit_code, pre_quality, post_quality):
     assert crash.return_value.testcase_quality == post_quality
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     "crashes, main_exit_codes, result, arg_sig, arg_tool",
     [
         # no crashes -> success

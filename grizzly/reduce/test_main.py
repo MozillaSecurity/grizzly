@@ -16,7 +16,11 @@ from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualit
 from .exceptions import GrizzlyReduceBaseException
 
 LOG = getLogger(__name__)
-pytestmark = mark.usefixtures("tmp_path_fm_config")
+pytestmark = mark.usefixtures(
+    "tmp_path_fm_config",
+    "tmp_path_replay_status_db",
+    "tmp_path_reduce_status_db",
+)
 
 
 def test_args_01(capsys, tmp_path, mocker):
@@ -151,6 +155,7 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, exit_c
     ],
 )
 def test_main_launch_error(mocker, exc_type):
+    mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
     mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)

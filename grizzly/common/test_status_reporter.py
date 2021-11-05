@@ -11,7 +11,14 @@ from unittest.mock import Mock
 
 from pytest import mark, raises
 
-from .status_reporter import Status, StatusReporter, TracebackReport, main
+from .status_reporter import (
+    ReductionStatus,
+    ReductionStatusReporter,
+    Status,
+    StatusReporter,
+    TracebackReport,
+    main,
+)
 
 GBYTES = 1_073_741_824
 
@@ -22,6 +29,166 @@ def _fake_sys_info():
         ("Memory", "183.9GB of 251.9GB free"),
         ("Disk", "22.2GB of 28.7GB free"),
     ]
+
+
+def test_reduce_status_reporter_01():
+    """test basic ReductionStatusReporter"""
+    st_rpt = ReductionStatusReporter(None)
+    assert not st_rpt.has_results
+    st_rpt._sys_info = _fake_sys_info
+    assert "No status reports available" in st_rpt.specific()
+    assert "No status reports available" in st_rpt.summary()
+
+
+def test_reduce_status_reporter_02(mocker, tmp_path):
+    """test ReductionStatusReporter.load()"""
+    # missing reports path
+    st_rpt = ReductionStatusReporter.load(str(tmp_path / "status.db"))
+    assert not st_rpt.reports
+
+    # empty reports and tb paths
+    st_rpt = ReductionStatusReporter.load(
+        str(tmp_path / "status.db"), tb_path=str(tmp_path)
+    )
+    assert not st_rpt.reports
+    assert isinstance(st_rpt.tracebacks, list)
+    assert not st_rpt.tracebacks
+
+    # multiple reports
+    size_cb = mocker.Mock(side_effect=count(start=1000, step=-100))
+    db_file = str(tmp_path / "status.db")
+    ReductionStatus.start(
+        db_file=db_file,
+        testcase_size_cb=size_cb,
+    )
+    status2 = ReductionStatus(
+        db_file=db_file,
+        pid=1,
+        testcase_size_cb=size_cb,
+    )
+    status2.report(force=True)
+    st_rpt = ReductionStatusReporter.load(db_file)
+    assert len(st_rpt.reports) > 1
+
+
+def test_reduce_status_reporter_03(mocker, tmp_path):
+    """test ReductionStatusReporter.summary()"""
+    mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
+    mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
+    size_cb = mocker.Mock(side_effect=count(start=1000, step=-100))
+    db_file = str(tmp_path / "status.db")
+    # single report
+    status = ReductionStatus.start(
+        db_file=db_file,
+        testcase_size_cb=size_cb,
+    )
+    status.analysis["ran"] = True
+    status.run_params["speed"] = 123.0
+    status.signature_info["info"] = "crash"
+    status.record("init")
+    with status.measure("total"):
+        with status.measure("strategy_0"):
+            status.attempts += 1
+            status.successes += 1
+            status.iterations += 1
+        with status.measure("strategy_1"):
+            status.attempts += 3
+            status.successes += 1
+            status.iterations += 3
+    status.report(force=True)
+
+    rptr = ReductionStatusReporter.load(db_file)
+    rptr._sys_info = _fake_sys_info
+    assert rptr.reports
+    output = rptr.summary(sysinfo=True, timestamp=True)
+    assert "duration" in output
+    assert "successes" in output
+    assert "attempts" in output
+    assert "init" in output
+    assert "strategy_0" in output
+    assert "strategy_1" in output
+    assert "total" in output
+    assert "Timestamp" in output
+    assert len(output.splitlines()) == 14
+
+
+def test_reduce_status_reporter_04(mocker, tmp_path):
+    """test ReductionStatusReporter.specific()"""
+    mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
+    db_file = str(tmp_path / "status.db")
+    # single report
+    status = ReductionStatus.start(
+        db_file=db_file,
+        strategies=["strategy_0"],
+        testcase_size_cb=lambda: 47,
+        crash_id=12,
+    )
+    assert status.original is None
+    rptr = ReductionStatusReporter.load(db_file)
+    assert rptr.reports
+    output = rptr.specific()
+    assert len(output.splitlines()) == 1
+    status.analysis["ran"] = True
+    status.run_params["splines"] = "reticulated"
+    status.record("init")
+    with status.measure("total"):
+        with status.measure("strategy_0"):
+            status.iterations = 1
+            status.attempts = 1
+            status.successes = 1
+    status.report(force=True)
+    rptr = ReductionStatusReporter.load(db_file)
+    assert rptr.reports
+    output = rptr.specific()
+    assert len(output.splitlines()) == 7
+    assert "Analysis" in output
+    assert "Run Parameters" in output
+    assert "Current Strategy" in output
+    assert "Current/Original" in output
+    assert "Results" in output
+    assert "Time Elapsed" in output
+
+
+def test_reduce_status_reporter_05(tmp_path):
+    """test ReductionStatusReporter.load() with traceback"""
+    db_file = str(tmp_path / "status.db")
+    status = ReductionStatus.start(
+        db_file=db_file,
+        testcase_size_cb=lambda: 47,
+    )
+    with status.measure("total"):
+        status.iteration = 1
+    status.report(force=True)
+    # create boring screenlog
+    (tmp_path / "screenlog.0").write_bytes(b"boring\ntest\n123\n")
+    # create first screenlog
+    with (tmp_path / "screenlog.1").open("wb") as test_fp:
+        test_fp.write(b"Traceback (most recent call last):\n")
+        test_fp.write(b"  blah\n")
+        test_fp.write(b"IndexError: list index out of range\n")
+    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
+    assert len(rptr.tracebacks) == 1
+    # create second screenlog
+    with (tmp_path / "screenlog.1234").open("wb") as test_fp:
+        test_fp.write(b"Traceback (most recent call last):\n")
+        test_fp.write(b"  blah\n")
+        test_fp.write(b"foo.bar.error: blah\n")
+    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
+    assert len(rptr.tracebacks) == 2
+    # create third screenlog
+    with (tmp_path / "screenlog.3").open("wb") as test_fp:
+        test_fp.write(b"Traceback (most recent call last):\n")
+        test_fp.write(b"  blah\n")
+        test_fp.write(b"KeyboardInterrupt\n")
+    rptr = ReductionStatusReporter.load(db_file, tb_path=str(tmp_path))
+    assert len(rptr.tracebacks) == 2
+    merged_log = rptr.summary()
+    assert len(merged_log.splitlines()) == 13
+    assert "screenlog.1" in merged_log
+    assert "screenlog.1234" in merged_log
+    assert "IndexError" in merged_log
+    assert "foo.bar.error" in merged_log
+    assert "screenlog.3" not in merged_log
 
 
 def test_status_reporter_01():
@@ -547,23 +714,51 @@ def test_main_02(mocker):
 
 
 @mark.parametrize(
+    "report_mode",
+    [
+        "fuzzing",
+        "reducing",
+    ],
+)
+@mark.parametrize(
     "report_type",
     [
         "active",
         "complete",
     ],
 )
-@mark.usefixtures("tmp_path_status_db")
-def test_main_03(mocker, tmp_path, report_type):
+@mark.usefixtures("tmp_path_status_db", "tmp_path_reduce_status_db")
+def test_main_03(mocker, tmp_path, report_type, report_mode):
     """test main() --dump"""
     mocker.patch(
         "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
     )
-    status = Status.start()
-    status.iteration = 1
-    status.report(force=True)
+    if report_mode == "reducing":
+        status = ReductionStatus.start(
+            testcase_size_cb=lambda: 47,
+            strategies=[],
+        )
+        with status.measure("total"):
+            status.iteration = 1
+        status.report(force=True)
+    else:
+        status = Status.start()
+        status.iteration = 1
+        status.report(force=True)
     dump_file = tmp_path / "output.txt"
-    assert main(["--dump", str(dump_file), "--type", report_type]) == 0
+    assert (
+        main(
+            [
+                "--dump",
+                str(dump_file),
+                "--type",
+                report_type,
+                "--scan-mode",
+                report_mode,
+            ]
+        )
+        == 0
+    )
     assert dump_file.is_file()
     if report_type == "active":
         assert b"Runtime" not in dump_file.read_bytes()
@@ -577,3 +772,44 @@ def test_main_04(capsys):
     with raises(SystemExit):
         main(["--tracebacks", "missing"])
     assert "--tracebacks must be a directory" in capsys.readouterr()[-1]
+
+
+@mark.parametrize(
+    "report_type",
+    [
+        "active",
+        "complete",
+    ],
+)
+@mark.usefixtures("tmp_path_reduce_status_db")
+def test_main_05(mocker, tmp_path, report_type):
+    """test main() --dump"""
+    mocker.patch(
+        "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
+    )
+    status = ReductionStatus.start(
+        testcase_size_cb=lambda: 47,
+        strategies=[],
+    )
+    with status.measure("total"):
+        status.iteration = 1
+        status.report(force=True)
+    dump_file = tmp_path / "output.txt"
+    assert (
+        main(
+            [
+                "--dump",
+                str(dump_file),
+                "--type",
+                report_type,
+                "--scan-mode",
+                "reducing",
+            ]
+        )
+        == 0
+    )
+    assert dump_file.is_file()
+    if report_type == "active":
+        assert b"Runtime" not in dump_file.read_bytes()
+    else:
+        assert b"Timestamp" not in dump_file.read_bytes()

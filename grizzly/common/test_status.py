@@ -11,7 +11,15 @@ from time import sleep, time
 
 from pytest import mark
 
-from .status import DB_VERSION, ResultCounter, Status, _db_version_check
+from .reporter import FuzzManagerReporter
+from .status import (
+    DB_VERSION,
+    ReductionStatus,
+    ReductionStep,
+    ResultCounter,
+    Status,
+    _db_version_check,
+)
 
 
 def test_status_01(mocker, tmp_path):
@@ -268,6 +276,230 @@ def test_status_08(tmp_path, buckets, ratio, iterations, blockers):
             status.results.count(report_id, desc)
     # check for blockers
     assert len(tuple(status.blockers(iters_per_result=ratio))) == blockers
+
+
+def test_reduce_status_01(mocker, tmp_path):
+    """test ReductionStatus()"""
+    mocker.patch("grizzly.common.status.time", autospec=True, return_value=1.0)
+    strategies = ["strategy_%d" % (idx,) for idx in range(5)]
+
+    def fake_tc_size():
+        return 47
+
+    status = ReductionStatus.start(
+        str(tmp_path / "status.db"),
+        strategies=strategies,
+        testcase_size_cb=fake_tc_size,
+    )
+    assert status is not None
+    assert status.analysis == {}
+    assert status.attempts == 0
+    assert status.iterations == 0
+    assert status.run_params == {}
+    assert status.signature_info == {}
+    assert status.successes == 0
+    assert status.current_strategy_idx is None
+    assert status._testcase_size_cb is fake_tc_size
+    assert status.crash_id is None
+    assert status.finished_steps == []
+    assert status._in_progress_steps == []
+    assert status.strategies == strategies
+    assert status._db_file is not None
+    assert status.pid is not None
+    assert status.timestamp > 0.0
+    assert status._current_size is None
+
+
+def test_reduce_status_02(tmp_path):
+    """test ReductionStatus.report()"""
+    status = ReductionStatus.start(
+        str(tmp_path / "status.db"),
+        testcase_size_cb=lambda: 47,
+    )
+    # try to report before REPORT_FREQ elapses
+    assert not status.report()
+    # REPORT_FREQ elapses
+    status.timestamp = 0
+    assert status.report()
+    assert status.timestamp > 0
+    # force report
+    future = int(time()) + 1000
+    status.timestamp = future
+    assert status.report(force=True)
+    assert status.timestamp < future
+
+
+def test_reduce_status_03(tmp_path):
+    """test ReductionStatus.loadall()"""
+    db_file = str(tmp_path / "status.db")
+    strategies = ["strategy_%d" % (idx,) for idx in range(5)]
+    # create simple entry
+    status = ReductionStatus.start(
+        str(tmp_path / "status.db"),
+        strategies=strategies,
+        testcase_size_cb=lambda: 47,
+    )
+    loaded = tuple(ReductionStatus.loadall(db_file))
+    assert len(loaded) == 1
+    loaded = loaded[0]
+    assert status.analysis == loaded.analysis
+    assert status.attempts == loaded.attempts
+    assert status.iterations == loaded.iterations
+    assert status.run_params == loaded.run_params
+    assert status.signature_info == loaded.signature_info
+    assert status.successes == loaded.successes
+    assert status.current_strategy_idx == loaded.current_strategy_idx
+    assert loaded._testcase_size_cb is None
+    assert status.crash_id == loaded.crash_id
+    assert status.finished_steps == loaded.finished_steps
+    assert status._in_progress_steps == loaded._in_progress_steps
+    assert status.strategies == loaded.strategies
+    assert status._db_file is not None
+    assert status.pid == loaded.pid
+    assert status.timestamp == loaded.timestamp
+    assert loaded._current_size == 47
+    assert loaded._testcase_size() == 47
+
+
+def test_reduce_status_04(mocker, tmp_path):
+    """test ReductionStatus.loadall()"""
+    getpid = mocker.patch("grizzly.common.status.getpid", autospec=True)
+    db_file = str(tmp_path / "status.db")
+    for pid in range(5):
+        getpid.return_value = pid
+        ReductionStatus.start(
+            db_file,
+            testcase_size_cb=lambda: 47,
+        )
+    assert len(tuple(ReductionStatus.loadall(db_file))) == 5
+
+
+def test_reduce_status_05(mocker, tmp_path):
+    """test ReductionStatus milestone measurements"""
+    strategies = ["strategy_%d" % (idx,) for idx in range(5)]
+
+    # (time, testcase_size) steps to manually advance through
+    ticks = [
+        (0, 1000),
+        (1, 900),
+        (2, 800),
+        (3, 700),
+        (4, 600),
+        (5, 500),
+    ]
+
+    mocker.patch(
+        "grizzly.common.status.time",
+        autospec=True,
+        side_effect=lambda: ticks[0][0],
+    )
+    testcase_size_cb = mocker.Mock(side_effect=lambda: ticks[0][1])
+    status = ReductionStatus.start(
+        str(tmp_path / "status.db"),
+        strategies=strategies,
+        testcase_size_cb=testcase_size_cb,
+    )
+    status.record("begin")
+    assert status.original.name == "begin"
+    assert status.total.name == "begin"
+    assert status.current_strategy.name == "begin"
+    with status.measure("overall"):
+        assert status.original.name == "begin"
+        assert status.total.name == "overall"
+        assert status.current_strategy.name == "overall"
+        for idx in range(5):
+            with status.measure(strategies[idx]):
+                ticks.pop(0)
+                status.attempts += 2
+                status.successes += 1
+                status.iterations += 10
+                assert status.original.name == "begin"
+                assert status.total.name == "overall"
+                assert status.current_strategy.name == "strategy_%d" % (idx,)
+    assert status.finished_steps == [
+        ReductionStep("begin", None, None, None, 1000, None),
+        ReductionStep("strategy_0", 1, 1, 2, 900, 10),
+        ReductionStep("strategy_1", 1, 1, 2, 800, 10),
+        ReductionStep("strategy_2", 1, 1, 2, 700, 10),
+        ReductionStep("strategy_3", 1, 1, 2, 600, 10),
+        ReductionStep("strategy_4", 1, 1, 2, 500, 10),
+        ReductionStep("overall", 5, 5, 10, 500, 50),
+    ]
+    assert status.original.name == "begin"
+    assert status.total.name == "overall"
+    assert status.current_strategy.name == "overall"
+
+
+def test_reduce_status_06(mocker, tmp_path):
+    """test ReductionStatus in-progress milestones"""
+    mocker.patch("grizzly.common.status.time", autospec=True, return_value=1.0)
+    status = ReductionStatus.start(
+        str(tmp_path / "status.db"),
+        testcase_size_cb=lambda: 47,
+    )
+    with status.measure("milestone"):
+        assert len(status.finished_steps) == 0
+        status2 = status.copy()
+        assert len(status2.finished_steps) == 1
+
+    assert status.analysis == status2.analysis
+    assert status.attempts == status2.attempts
+    assert status.iterations == status2.iterations
+    assert status.run_params == status2.run_params
+    assert status.signature_info == status2.signature_info
+    assert status.successes == status2.successes
+    assert status.current_strategy_idx == status2.current_strategy_idx
+    assert status._testcase_size_cb is status2._testcase_size_cb
+    assert status.crash_id == status2.crash_id
+    assert status.finished_steps == status2.finished_steps
+    assert status._in_progress_steps == status2._in_progress_steps
+    assert status.strategies == status2.strategies
+    assert status._db_file is not None
+    assert status2._db_file is not None
+    assert status.pid == status2.pid
+    assert status.timestamp == status2.timestamp
+
+    with status.measure("milestone2"):
+        status.report(force=True)
+
+    loaded_status = tuple(ReductionStatus.loadall(str(tmp_path / "status.db")))
+    assert len(loaded_status) == 1
+    loaded_status = loaded_status[0]
+
+    assert loaded_status.finished_steps == status.finished_steps[:1]
+    assert len(loaded_status._in_progress_steps) == 1
+
+    loaded_status = loaded_status.copy()
+    assert len(loaded_status.finished_steps) == 2
+    assert len(loaded_status._in_progress_steps) == 0
+    assert loaded_status.original == status.original
+    for field in ReductionStep._fields:
+        if field == "size":
+            continue
+        assert getattr(loaded_status.total, field) == getattr(status.total, field)
+    assert loaded_status.total.size is None
+
+
+def test_reduce_status_07(mocker, tmp_path):
+    """test ReductionStatus metadata"""
+    reporter = mocker.Mock(spec_set=FuzzManagerReporter)
+    status = ReductionStatus.start(
+        str(tmp_path / "status.db"),
+        testcase_size_cb=lambda: 47,
+        crash_id=123,
+    )
+    status.analysis["thing"] = "done"
+    status.record("init")
+    status.run_params["knob"] = "turned"
+    status.signature_info["dumb"] = True
+    status.add_to_reporter(reporter)
+    assert reporter.add_extra_metadata.call_args_list == [
+        mocker.call("reducer-stats", status.finished_steps),
+        mocker.call("reducer-analysis", status.analysis),
+        mocker.call("reducer-params", status.run_params),
+        mocker.call("reducer-sig", status.signature_info),
+        mocker.call("reducer-input", status.crash_id),
+    ]
 
 
 @mark.parametrize(

@@ -19,7 +19,12 @@ from . import ReduceManager
 from .strategies import Strategy, _load_strategies
 
 LOG = getLogger(__name__)
-pytestmark = mark.usefixtures("tmp_path_fm_config", "reporter_sequential_strftime")
+pytestmark = mark.usefixtures(
+    "reporter_sequential_strftime",
+    "tmp_path_fm_config",
+    "tmp_path_replay_status_db",
+    "tmp_path_reduce_status_db",
+)
 
 
 @mark.parametrize("is_hang", [True, False])

@@ -5,6 +5,7 @@
 """Manage Grizzly status reports."""
 from collections import defaultdict, namedtuple
 from contextlib import closing, contextmanager
+from copy import deepcopy
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
@@ -643,3 +644,481 @@ class ResultCounter:
             int: Total result count.
         """
         return sum(x for x in self._count.values())
+
+
+ReductionStep = namedtuple(
+    "ReductionStep", "name, duration, successes, attempts, size, iterations"
+)
+
+
+class ReductionStatus:
+    """Status for a single grizzly reduction"""
+
+    # database will be updated no more than every 'REPORT_FREQ' seconds.
+    REPORT_FREQ = 60
+
+    STATUS_DB = str(Path(grz_tmp()) / "reduce-status.db")
+
+    def __init__(
+        self,
+        strategies=None,
+        testcase_size_cb=None,
+        crash_id=None,
+        db_file=None,
+        pid=None,
+        exp_limit=EXP_LIMIT,
+    ):
+        """Initialize a ReductionStatus instance.
+
+        Arguments:
+            strategies (list(str)): List of strategies to be run.
+            testcase_size_cb (callable): Callback to get testcase size
+            crash_id (int): CrashManager ID of original testcase
+            db_file (str): Database file containing data. None in read-only mode.
+        """
+        self.analysis = {}
+        self.attempts = 0
+        self.iterations = 0
+        self.run_params = {}
+        self.signature_info = {}
+        self.successes = 0
+        self.current_strategy_idx = None
+        self._testcase_size_cb = testcase_size_cb
+        self.crash_id = crash_id
+        self.finished_steps = []
+        self._in_progress_steps = []
+        self.strategies = strategies
+        self._db_file = db_file
+        self.pid = pid
+        self.timestamp = time()
+        self._current_size = None
+
+        # prepare database
+        if self._db_file:
+            LOG.debug("status using db %r", self._db_file)
+            with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
+                _db_version_check(con)
+                cur = con.cursor()
+                with con:
+                    # create table if needed
+                    cur.execute(
+                        """CREATE TABLE IF NOT EXISTS reduce_status (
+                           pid INTEGER NOT NULL PRIMARY KEY,
+                           analysis TEXT NOT NULL,
+                           attempts INTEGER NOT NULL,
+                           iterations INTEGER NOT NULL,
+                           run_params TEXT NOT NULL,
+                           signature_info TEXT NOT NULL,
+                           successes INTEGER NOT NULL,
+                           crash_id INTEGER,
+                           finished_steps TEXT NOT NULL,
+                           _in_progress_steps TEXT NOT NULL,
+                           strategies TEXT NOT NULL,
+                           _current_size INTEGER NOT NULL,
+                           current_strategy_idx INTEGER,
+                           timestamp REAL NOT NULL);"""
+                    )
+                    # remove expired status data
+                    if exp_limit > 0:
+                        cur.execute(
+                            """DELETE FROM reduce_status WHERE timestamp <= ?;""",
+                            (time() - exp_limit,),
+                        )
+                    # avoid (unlikely) pid reuse collision
+                    cur.execute("""DELETE FROM reduce_status WHERE pid = ?;""", (pid,))
+
+    @classmethod
+    def start(
+        cls,
+        db_file=None,
+        strategies=None,
+        testcase_size_cb=None,
+        crash_id=None,
+    ):
+        """Create a unique ReductionStatus object.
+
+        Args:
+            db_file (str): Path to database containing status data.
+            strategies (list(str)): List of strategies to be run.
+            testcase_size_cb (callable): Callback to get testcase size
+            crash_id (int): CrashManager ID of original testcase
+
+        Returns:
+            ReductionStatus: Active status report.
+        """
+        if db_file is None:
+            db_file = cls.STATUS_DB
+        status = cls(
+            crash_id=crash_id,
+            db_file=db_file,
+            pid=getpid(),
+            strategies=strategies,
+            testcase_size_cb=testcase_size_cb,
+        )
+        status.report(force=True)
+        return status
+
+    def report(self, force=False, report_freq=REPORT_FREQ):
+        """Write status report to database. Reports are only written periodically.
+        It is limited by `report_freq`. The specified number of seconds must
+        elapse before another write will be performed unless `force` is True.
+
+        Args:
+            force (bool): Ignore report frequently limiting.
+            report_freq (int): Minimum number of seconds between writes.
+
+        Returns:
+            bool: Returns true if the report was successful otherwise false.
+        """
+        now = time()
+        if not force and now < (self.timestamp + report_freq):
+            return False
+        assert self._db_file
+        self.timestamp = now
+
+        with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
+            cur = con.cursor()
+            with con:
+                analysis = dumps(self.analysis)
+                run_params = dumps(self.run_params)
+                sig_info = dumps(self.signature_info)
+                finished = dumps(self.finished_steps)
+                in_prog = dumps([step.serialize() for step in self._in_progress_steps])
+                strategies = dumps(self.strategies)
+
+                cur.execute(
+                    """UPDATE reduce_status
+                       SET analysis = ?,
+                           attempts = ?,
+                           iterations = ?,
+                           run_params = ?,
+                           signature_info = ?,
+                           successes = ?,
+                           crash_id = ?,
+                           finished_steps = ?,
+                           _in_progress_steps = ?,
+                           strategies = ?,
+                           _current_size = ?,
+                           current_strategy_idx = ?,
+                           timestamp = ?
+                       WHERE pid = ?;""",
+                    (
+                        analysis,
+                        self.attempts,
+                        self.iterations,
+                        run_params,
+                        sig_info,
+                        self.successes,
+                        self.crash_id,
+                        finished,
+                        in_prog,
+                        strategies,
+                        self._testcase_size(),
+                        self.current_strategy_idx,
+                        self.timestamp,
+                        self.pid,
+                    ),
+                )
+                if cur.rowcount < 1:
+                    cur.execute(
+                        """INSERT INTO reduce_status(
+                               pid,
+                               analysis,
+                               attempts,
+                               iterations,
+                               run_params,
+                               signature_info,
+                               successes,
+                               crash_id,
+                               finished_steps,
+                               _in_progress_steps,
+                               strategies,
+                               _current_size,
+                               current_strategy_idx,
+                               timestamp)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""",
+                        (
+                            self.pid,
+                            analysis,
+                            self.attempts,
+                            self.iterations,
+                            run_params,
+                            sig_info,
+                            self.successes,
+                            self.crash_id,
+                            finished,
+                            in_prog,
+                            strategies,
+                            self._testcase_size(),
+                            self.current_strategy_idx,
+                            self.timestamp,
+                        ),
+                    )
+
+        return True
+
+    @classmethod
+    def loadall(cls, db_file=STATUS_DB, time_limit=300):
+        """Load all reduction status reports found in `db_file`.
+
+        Args:
+            db_file (str): Path to database containing status data.
+            time_limit (int): Only include entries with a timestamp that is within the
+                              given number of seconds.
+
+        Yields:
+            Status: Successfully loaded read-only status objects.
+        """
+        assert db_file
+        assert time_limit >= 0
+        with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
+            cur = con.cursor()
+            # collect entries
+            try:
+                cur.execute(
+                    """SELECT pid,
+                              analysis,
+                              attempts,
+                              iterations,
+                              run_params,
+                              signature_info,
+                              successes,
+                              crash_id,
+                              finished_steps,
+                              _in_progress_steps,
+                              strategies,
+                              _current_size,
+                              current_strategy_idx,
+                              timestamp
+                       FROM reduce_status
+                       WHERE timestamp > ?
+                       ORDER BY timestamp DESC;""",
+                    (time() - time_limit,),
+                )
+                entries = cur.fetchall()
+            except OperationalError as exc:
+                if not str(exc).startswith("no such table:"):
+                    raise  # pragma: no cover
+                entries = ()
+
+        for entry in entries:
+            pid = entry[0]
+
+            status = cls(
+                strategies=loads(entry[10]),
+                crash_id=entry[7],
+                pid=pid,
+            )
+            status.analysis = loads(entry[1])
+            status.attempts = entry[2]
+            status.iterations = entry[3]
+            status.run_params = loads(entry[4])
+            status.signature_info = loads(entry[5])
+            status.successes = entry[6]
+            status.finished_steps = [
+                ReductionStep._make(step) for step in loads(entry[8])
+            ]
+            status._in_progress_steps = [
+                status._construct_milestone(*step) for step in loads(entry[9])
+            ]
+            status._current_size = entry[11]
+            status.current_strategy_idx = entry[12]
+            status.timestamp = entry[13]
+            yield status
+
+    def _testcase_size(self):
+        if self._db_file is None:
+            return self._current_size
+        return self._testcase_size_cb()
+
+    def __deepcopy__(self, memo):
+        """Return a deep copy of this instance."""
+        # pylint: disable=protected-access
+        result = type(self)(
+            strategies=deepcopy(self.strategies, memo),
+            crash_id=self.crash_id,
+            testcase_size_cb=self._testcase_size_cb,
+            pid=self.pid,
+        )
+        # assign after construction to avoid DB access
+        result._db_file = self._db_file
+        result.analysis = deepcopy(self.analysis, memo)
+        result.attempts = self.attempts
+        result.iterations = self.iterations
+        result.run_params = deepcopy(self.run_params, memo)
+        result.signature_info = deepcopy(self.signature_info, memo)
+        result.successes = self.successes
+        result.finished_steps = deepcopy(self.finished_steps, memo)
+        # finish open timers
+        for step in reversed(self._in_progress_steps):
+            result.record(
+                step.name,
+                attempts=step.attempts,
+                duration=step.duration,
+                iterations=step.iterations,
+                successes=step.successes,
+            )
+        return result
+
+    @property
+    def current_strategy(self):
+        if self._in_progress_steps:
+            return self._in_progress_steps[-1]
+        if self.finished_steps:
+            return self.finished_steps[-1]
+        return None
+
+    @property
+    def total(self):
+        if self._in_progress_steps:
+            return self._in_progress_steps[0]
+        if self.finished_steps:
+            return self.finished_steps[-1]
+        return None
+
+    @property
+    def original(self):
+        if self.finished_steps:
+            return self.finished_steps[0]
+        return None
+
+    def record(
+        self,
+        name,
+        duration=None,
+        iterations=None,
+        attempts=None,
+        successes=None,
+    ):
+        """Record reduction status for a given point in time:
+
+        - name of the milestone (eg. init, strategy name completed)
+        - elapsed time (seconds)
+        - # of iterations
+        - # of total attempts
+        - # of successful attempts
+
+        Arguments:
+            name (str): name of milestone
+            duration (float or None): seconds elapsed for period recorded
+            iterations (int or None): # of iterations performed
+            attempts (int or None): # of attempts performed
+            successes (int or None): # of attempts successful
+
+        Returns:
+            None
+        """
+        self.finished_steps.append(
+            ReductionStep(
+                name=name,
+                size=self._testcase_size(),
+                duration=duration,
+                iterations=iterations,
+                attempts=attempts,
+                successes=successes,
+            )
+        )
+
+    def _construct_milestone(self, name, start, attempts, iterations, successes):
+        # pylint: disable=no-self-argument
+        class _MilestoneTimer:
+            def __init__(sub):
+                sub.name = name
+                sub._start_time = start
+                sub._start_attempts = attempts
+                sub._start_iterations = iterations
+                sub._start_successes = successes
+
+            @property
+            def size(sub):
+                return self._testcase_size()  # pylint: disable=protected-access
+
+            @property
+            def attempts(sub):
+                return self.attempts - sub._start_attempts
+
+            @property
+            def iterations(sub):
+                return self.iterations - sub._start_iterations
+
+            @property
+            def successes(sub):
+                return self.successes - sub._start_successes
+
+            @property
+            def duration(sub):
+                if self._db_file is None:  # pylint: disable=protected-access
+                    return self.timestamp - sub._start_time
+                return time() - sub._start_time
+
+            def serialize(sub):
+                return (
+                    sub.name,
+                    sub._start_time,
+                    sub._start_attempts,
+                    sub._start_iterations,
+                    sub._start_successes,
+                )
+
+        return _MilestoneTimer()
+
+    @contextmanager
+    def measure(self, name):
+        """Time and record the period leading up to a reduction milestone.
+        eg. a strategy being run.
+
+        Arguments:
+            name (str): name of milestone
+
+        Yields:
+            None
+        """
+
+        tmr = self._construct_milestone(
+            name, time(), self.attempts, self.iterations, self.successes
+        )
+        self._in_progress_steps.append(tmr)
+        yield
+        assert self._in_progress_steps.pop() is tmr
+        self.record(
+            name,
+            attempts=tmr.attempts,
+            duration=tmr.duration,
+            iterations=tmr.iterations,
+            successes=tmr.successes,
+        )
+
+    def copy(self):
+        """Create a deep copy of this instance.
+
+        Arguments:
+            None
+
+        Returns:
+            ReductionStatus: Clone of self
+        """
+        return deepcopy(self)
+
+    def add_to_reporter(self, reporter, expected=True):
+        """Add the reducer status to reported metadata for the given reporter.
+
+        Arguments:
+            reporter (FuzzManagerReporter): Reporter to update.
+            expected (bool): Add detailed stats.
+
+        Returns:
+            None
+        """
+        # only add detailed stats for expected results
+        if expected:
+            reporter.add_extra_metadata("reducer-stats", self.finished_steps)
+        # other parameters
+        if self.analysis:
+            reporter.add_extra_metadata("reducer-analysis", self.analysis)
+        if self.run_params:
+            reporter.add_extra_metadata("reducer-params", self.run_params)
+        if self.signature_info:
+            reporter.add_extra_metadata("reducer-sig", self.signature_info)
+        # if input was an existing crash-id, record the original
+        if self.crash_id:
+            reporter.add_extra_metadata("reducer-input", self.crash_id)

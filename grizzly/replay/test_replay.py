@@ -18,7 +18,7 @@ from ..common.storage import TestCase, TestCaseLoadFailure
 from ..target import AssetManager, Result, Target
 from .replay import ReplayManager, ReplayResult
 
-pytestmark = mark.usefixtures("tmp_path_grz_tmp", "tmp_path_status_db")
+pytestmark = mark.usefixtures("tmp_path_grz_tmp", "tmp_path_replay_status_db")
 
 
 def _fake_save_logs(result_logs, _meta=False):

@@ -23,7 +23,12 @@ from .exceptions import NotReproducible
 from .strategies import Strategy
 
 LOG = getLogger(__name__)
-pytestmark = mark.usefixtures("tmp_path_fm_config", "reporter_sequential_strftime")
+pytestmark = mark.usefixtures(
+    "reporter_sequential_strftime",
+    "tmp_path_fm_config",
+    "tmp_path_replay_status_db",
+    "tmp_path_reduce_status_db",
+)
 
 
 def _fake_save_logs_foo(result_logs, meta=False):  # pylint: disable=unused-argument
@@ -279,18 +284,6 @@ def test_analysis(
         tests.append(test.clone())
     log_path = tmp_path / "logs"
 
-    class _ReduceStats:
-        def __init__(self):
-            self._iters = 0
-
-        def add_iterations(self, iters):
-            self._iters += iters
-
-        @staticmethod
-        def _stop_early(_):
-            pass
-
-    stats = _ReduceStats()
     try:
         mgr = ReduceManager(
             None,
@@ -301,7 +294,7 @@ def test_analysis(
             log_path,
             use_harness=use_harness,
         )
-        repeat, min_crashes, _ = mgr.run_reliability_analysis(stats)
+        repeat, min_crashes = mgr.run_reliability_analysis()
     finally:
         for test in tests:
             test.cleanup()
@@ -310,7 +303,7 @@ def test_analysis(
     assert repeat == expected_repeat
     assert min_crashes == expected_min_crashes
     assert mgr._use_harness == result_harness
-    assert stats._iters == expected_iters * 11
+    assert mgr._status.iterations == expected_iters * 11
 
 
 def _ignore_arg(func):

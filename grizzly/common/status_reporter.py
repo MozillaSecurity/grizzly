@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 from collections import defaultdict
 from datetime import timedelta
 from functools import partial
+from itertools import zip_longest
 from logging import DEBUG, INFO, basicConfig
 
 try:
@@ -18,11 +19,12 @@ except ImportError:  # pragma: no cover
 from os import SEEK_CUR, getenv, scandir
 from os.path import isdir
 from re import match
+from re import sub as re_sub
 from time import gmtime, localtime, strftime
 
 from psutil import cpu_count, cpu_percent, disk_usage, virtual_memory
 
-from .status import Status
+from .status import ReductionStatus, ReductionStep, Status
 
 __all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"
@@ -512,6 +514,316 @@ class TracebackReport:
         return "\n".join(["Log: %r" % self.file_name] + self.prev_lines + self.lines)
 
 
+class _TableFormatter:
+    """Format data in a table."""
+
+    def __init__(self, columns, formatters, vsep=" | ", hsep="-"):
+        """Initialize a TableFormatter instance.
+
+        Arguments:
+            columns (iterable(str)): List of column names for the table header.
+            formatters (iterable(callable)): List of format functions for each column.
+                                             None will result in hiding that column.
+            vsep (str): Vertical separation between columns.
+            hsep (str): Horizontal separation between header and data.
+        """
+        assert len(columns) == len(formatters)
+        self._columns = tuple(
+            column for (column, fmt) in zip(columns, formatters) if fmt is not None
+        )
+        self._formatters = formatters
+        self._vsep = vsep
+        self._hsep = hsep
+
+    def format_rows(self, rows):
+        """Format rows as a table and return a line generator.
+
+        Arguments:
+            rows (list(list(str))): Tabular data. Each row must be the same length as
+                                    `columns` passed to `__init__`.
+
+        Yields:
+            str: Each line of formatted tabular data.
+        """
+        max_width = [len(col) for col in self._columns]
+        formatted = []
+        for row in rows:
+            assert len(row) == len(self._formatters)
+            formatted.append([])
+            offset = 0
+            for idx, (data, formatter) in enumerate(zip(row, self._formatters)):
+                if formatter is None:
+                    offset += 1
+                    continue
+                data = formatter(data)
+                max_width[idx - offset] = max(max_width[idx - offset], len(data))
+                formatted[-1].append(data)
+
+        # build a format_str to space out the columns with separators using `max_width`
+        # the first column is left-aligned, and other fields are right-aligned.
+        format_str = self._vsep.join(
+            field % (width,)
+            for field, width in zip_longest(["%%-%ds"], max_width, fillvalue="%%%ds")
+        )
+        yield format_str % self._columns
+        yield self._hsep * (len(self._vsep) * (len(self._columns) - 1) + sum(max_width))
+        for row in formatted:
+            yield format_str % tuple(row)
+
+
+def _format_seconds(duration):
+    # format H:M:S, and then remove all leading zeros with regex
+    minutes, seconds = divmod(int(duration), 60)
+    hours, minutes = divmod(minutes, 60)
+    result = re_sub("^[0:]*", "", "%d:%02d:%02d" % (hours, minutes, seconds))
+    # if the result is all zeroes, ensure one zero is output
+    if not result:
+        result = "0"
+    # a bare number is ambiguous. output 's' for seconds
+    if ":" not in result:
+        result += "s"
+    return result
+
+
+def _format_duration(duration, total=0):
+    result = ""
+    if duration is not None:
+        if total == 0:
+            percent = 0  # pragma: no cover
+        else:
+            percent = int(100 * duration / total)
+        result = _format_seconds(duration)
+        result += " (%3d%%)" % (percent,)
+    return result
+
+
+def _format_number(number, total=0):
+    result = ""
+    if number is not None:
+        if total == 0:
+            percent = 0
+        else:
+            percent = int(100 * number / total)
+        result = "{:n} ({:3d}%)".format(number, percent)
+    return result
+
+
+class ReductionStatusReporter(StatusReporter):
+    """Create a status report for a reducer instance.
+    Merging multiple reports is not possible. This is intended for automated use only.
+    """
+
+    TIME_LIMIT = 120  # ignore older reports
+
+    # pylint: disable=super-init-not-called
+    def __init__(self, reports, tracebacks=None):
+        self.reports = reports
+        self.tracebacks = tracebacks
+
+    @property
+    def has_results(self):
+        return False  # TODO
+
+    @classmethod
+    def load(cls, db_file, tb_path=None, time_limit=TIME_LIMIT):
+        """Read Grizzly reduction status reports and create a ReductionStatusReporter
+        object.
+
+        Args:
+            path (str): Path to scan for status data files.
+            tb_path (str): Directory to scan for files containing Python tracebacks.
+            time_limit (int): Only include entries with a timestamp that is within the
+                              given number of seconds.
+
+        Returns:
+            ReductionStatusReporter: Contains available status reports and traceback
+                                     reports.
+        """
+        tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
+        return cls(
+            list(ReductionStatus.loadall(db_file=db_file, time_limit=time_limit)),
+            tracebacks=tracebacks,
+        )
+
+    @staticmethod
+    def _analysis_entry(report):
+        return (
+            "Analysis",
+            ", ".join(
+                ("%s: %d%%" % (desc, 100 * reliability))
+                for desc, reliability in report.analysis.items()
+            ),
+        )
+
+    @staticmethod
+    def _run_params_entry(report):
+        return (
+            "Run Parameters",
+            ", ".join(
+                ("%s: %r" % (desc, value)) for desc, value in report.run_params.items()
+            ),
+        )
+
+    @staticmethod
+    def _signature_info_entry(report):
+        return (
+            "Signature",
+            ", ".join(
+                ("%s: %r" % (desc, value))
+                for desc, value in report.signature_info.items()
+            ),
+        )
+
+    def specific(  # pylint: disable=arguments-differ
+        self,
+        sysinfo=False,
+        timestamp=False,
+    ):
+        """Generate formatted output from status report.
+
+        Args:
+            None
+
+        Returns:
+            str: A formatted report.
+        """
+        if not self.reports:
+            return "No status reports available"
+
+        reports = []
+        for report in self.reports:
+            entries = []
+            if report.crash_id:
+                entries.append(("Crash ID", str(report.crash_id)))
+            if report.analysis:
+                entries.append(self._analysis_entry(report))
+            if report.run_params:
+                entries.append(self._run_params_entry(report))
+            if report.current_strategy:
+                entries.append(
+                    (
+                        "Current Strategy",
+                        "%s (%r of %d)"
+                        % (
+                            report.current_strategy.name,
+                            report.current_strategy_idx,
+                            len(report.strategies),
+                        ),
+                    )
+                )
+            if report.current_strategy and report.original:
+                # TODO: lines/tokens?
+                entries.append(
+                    (
+                        "Current/Original",
+                        "%dB / %dB"
+                        % (report.current_strategy.size, report.original.size),
+                    )
+                )
+            if report.total:
+                # TODO: other results
+                entries.append(
+                    (
+                        "Results",
+                        "%d successes, %d attempts"
+                        % (report.total.successes, report.total.attempts),
+                    )
+                )
+            if report.total and report.current_strategy:
+                entries.append(
+                    (
+                        "Time Elapsed",
+                        "%s in strategy, %s total"
+                        % (
+                            _format_seconds(report.current_strategy.duration),
+                            _format_seconds(report.total.duration),
+                        ),
+                    )
+                )
+
+            # System information
+            if sysinfo:
+                entries.extend(self._sys_info())
+
+            # Timestamp
+            if timestamp:
+                entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
+
+            reports.append(self.format_entries(entries))
+        return "\n\n".join(reports)
+
+    def summary(
+        self,
+        runtime=False,
+        sysinfo=False,
+        timestamp=False,
+    ):  # pylint: disable=arguments-differ
+        """Merge and generate a summary from status reports.
+
+        Args:
+            runtime (bool): Ignored (compatibility).
+            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output.
+            timestamp (bool): Include time stamp in output.
+
+        Returns:
+            str: A summary of merged reports.
+        """
+        if not self.reports:
+            return "No status reports available"
+
+        reports = []
+        for report in self.reports:
+            entries = []
+            lines = []
+            if report.analysis:
+                entries.append(self._analysis_entry(report))
+            if report.signature_info:
+                entries.append(self._signature_info_entry(report))
+            if report.run_params:
+                entries.append(self._run_params_entry(report))
+            if report.total and report.original:
+                tabulator = _TableFormatter(
+                    ReductionStep._fields,
+                    ReductionStep(
+                        name=str,
+                        # duration and attempts are % of total/last, size % of init/1st
+                        duration=partial(_format_duration, total=report.total.duration),
+                        attempts=partial(_format_number, total=report.total.attempts),
+                        successes=partial(_format_number, total=report.total.successes),
+                        iterations=None,  # hide
+                        size=partial(_format_number, total=report.original.size),
+                    ),
+                )
+                lines.extend(tabulator.format_rows(report.finished_steps))
+            # Format output
+            if entries:
+                lines.append(self.format_entries(entries))
+            if lines:
+                reports.append("\n".join(lines))
+
+        entries = []
+
+        # System information
+        if sysinfo:
+            entries.extend(self._sys_info())
+
+        # Timestamp
+        if timestamp:
+            entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
+
+        if entries:
+            reports.append(self.format_entries(entries))
+
+        msg = "\n\n".join(reports)
+
+        if self.tracebacks:
+            msg += self._merge_tracebacks(
+                self.tracebacks, self.SUMMARY_LIMIT - len(msg)
+            )
+
+        return msg
+
+
 def main(args=None):
     """Merge Grizzly status files into a single report (main entrypoint).
 
@@ -529,8 +841,10 @@ def main(args=None):
         log_fmt = "[%(asctime)s] %(message)s"
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    # TODO: add support for reducer
-    modes = {"fuzzing": Status.STATUS_DB}
+    modes = {
+        "fuzzing": (StatusReporter, Status.STATUS_DB),
+        "reducing": (ReductionStatusReporter, ReductionStatus.STATUS_DB),
+    }
 
     # report types: define name and time range of scan
     report_types = {
@@ -571,8 +885,8 @@ def main(args=None):
     if args.tracebacks and not isdir(args.tracebacks):
         parser.error("--tracebacks must be a directory")
 
-    status_db = modes.get(args.scan_mode)
-    reporter = StatusReporter.load(
+    reporter_cls, status_db = modes.get(args.scan_mode)
+    reporter = reporter_cls.load(
         db_file=status_db,
         tb_path=args.tracebacks,
         time_limit=report_types[args.type],
@@ -580,8 +894,11 @@ def main(args=None):
 
     if args.dump:
         with open(args.dump, "w") as ofp:
-            if args.type == "active":
+            if args.type == "active" and args.scan_mode == "fuzzing":
                 ofp.write(reporter.summary(runtime=False, sysinfo=True, timestamp=True))
+            elif args.type == "active":
+                # reducer only has one instance, so show specific report while running
+                ofp.write(reporter.specific(sysinfo=True, timestamp=True))
             else:
                 ofp.write(
                     reporter.summary(runtime=True, sysinfo=False, timestamp=False)

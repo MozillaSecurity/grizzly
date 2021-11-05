@@ -19,12 +19,13 @@ from sapphire import Sapphire
 from ..common.fuzzmanager import CrashEntry
 from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Quality
+from ..common.status import ReductionStatus
+from ..common.status_reporter import ReductionStatusReporter
 from ..common.storage import TestCaseLoadFailure
 from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp
 from ..replay import ReplayManager
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
-from .stats import ReductionStats
 from .strategies import STRATEGIES
 
 __author__ = "Jesse Schwartzentruber"
@@ -130,14 +131,17 @@ class ReduceManager:
         # these parameters may be overwritten during analysis, so keep a copy of them
         self._original_relaunch = relaunch
         self._original_use_harness = use_harness
-        self._reducer_crash_id = reducer_crash_id
         self._report_to_fuzzmanager = report_to_fuzzmanager
         self._report_periodically = report_period
         self._report_tool = tool
         self._signature = signature
         self._signature_desc = signature_desc
         self._static_timeout = expect_hang or static_timeout
-        self._stats = ReductionStats()
+        self._status = ReductionStatus.start(
+            strategies=strategies,
+            testcase_size_cb=self.testcase_size,
+            crash_id=reducer_crash_id,
+        )
         self._use_analysis = use_analysis
         self._use_harness = use_harness
 
@@ -203,25 +207,23 @@ class ReduceManager:
             LOG.info("Updating max timeout to: %r", new_iter_timeout)
             self.server.timeout = new_iter_timeout
 
-    def run_reliability_analysis(self, stats):
+    def run_reliability_analysis(self):
         """Run several analysis passes of the current testcase to find `run` parameters.
 
         The number of repetitions and minimum number of crashes are calculated to
         maximize the chances of observing the expected crash.
 
         Arguments:
-            stats (object): Open stats timer (from `ReductionStats.add_timed`).
-                            Pass to `ReductionStats.copy` to properly terminate
-                            the timer for reporting.
+            None
 
         Returns:
-            tuple(int, int, dict): Values for `repeat` and `min_crashes` resulting from
-                                   analysis, and info to include in stats.
+            tuple(int, int): Values for `repeat` and `min_crashes` resulting from
+                             analysis.
         """
+        self._status.report(force=True)
         harness_last_crashes = 0
         harness_crashes = 0
         non_harness_crashes = 0
-        info = {}
 
         # Reset parameters.
         # Use repeat=1 & relaunch=ITERATIONS because this is closer to how we will run
@@ -296,7 +298,8 @@ class ReduceManager:
                     idle_threshold=self._idle_threshold,
                 )
                 try:
-                    stats.add_iterations(replay.status.iteration)
+                    self._status.iterations += replay.status.iteration
+                    self._status.report()
                     crashes = sum(x.count for x in results if x.expected)
                     if crashes and not self._any_crash and self._signature_desc is None:
                         first_expected = next(
@@ -308,7 +311,6 @@ class ReduceManager:
                     self.report(
                         [result for result in results if not result.expected],
                         testcases,
-                        self._stats.copy(stats),
                     )
                     if use_harness:
                         # set harness_crashes in both cases (last_test True/False)
@@ -332,7 +334,7 @@ class ReduceManager:
                     self.ANALYSIS_ITERATIONS,
                     key,
                 )
-                info[key] = reliability
+                self._status.analysis[key] = reliability
                 # ensure same signature is always used
                 self._signature = replay.signature
 
@@ -399,7 +401,7 @@ class ReduceManager:
                 "* testcase was %s reliable with the harness",
                 "more" if harness_crashes > non_harness_crashes else "less",
             )
-        return (repeat, min_crashes, info)
+        return (repeat, min_crashes)
 
     def testcase_size(self):
         """Calculate the current testcase size.
@@ -424,18 +426,14 @@ class ReduceManager:
         sig_given = self._signature is not None
         last_reports = None
         last_tried = None
-        self._stats.add("init", self.testcase_size())
+        self._status.record("init")
+        self._status.report(force=True)
         # record total stats overall so that any time missed by individual milestones
         # will still be included in the total
-        with self._stats.add_timed("final", self.testcase_size) as total_stats:
+        with self._status.measure("final"):
             if self._use_analysis:
-                with total_stats.add_timed("analysis") as stats:
-                    (
-                        repeat,
-                        min_results,
-                        reliability_info,
-                    ) = self.run_reliability_analysis(stats)
-                self._stats.add_info("Analysis", reliability_info)
+                with self._status.measure("analysis"):
+                    (repeat, min_results) = self.run_reliability_analysis()
                 any_success = True  # analysis ran and didn't raise
             # multi part test cases should always use relaunch == 1
             # since that can mean a delay is required
@@ -449,22 +447,18 @@ class ReduceManager:
                 min_results,
                 relaunch,
             )
-            self._stats.add_info(
-                "Run Parameters",
-                {
-                    "Repeat": repeat,
-                    "Min Crashes": min_results,
-                    "Relaunch": relaunch,
-                    "Harness": self._use_harness,
-                },
-            )
+            self._status.run_params["harness"] = self._use_harness
+            self._status.run_params["min crashes"] = min_results
+            self._status.run_params["relaunch"] = relaunch
+            self._status.run_params["repeat"] = repeat
 
-            for strategy_no, strategy in enumerate(self.strategies):
+            for strategy_no, strategy in enumerate(self.strategies, start=1):
+                self._status.current_strategy_idx = strategy_no
                 LOG.info("")
                 LOG.info(
                     "Using strategy %s (%d/%d)",
                     strategy,
-                    strategy_no + 1,
+                    strategy_no,
                     len(self.strategies),
                 )
                 replay = ReplayManager(
@@ -482,10 +476,11 @@ class ReduceManager:
                     last_tried = None
 
                 strategy_last_report = time()
-                strategy_stats = total_stats.add_timed(strategy.name)
+                strategy_stats = self._status.measure(strategy.name)
                 best_results = []
                 try:
                     with replay, strategy, strategy_stats:
+                        self._status.report(force=True)
                         for reduction in strategy:
                             keep_reduction = False
                             results = []
@@ -501,8 +496,8 @@ class ReduceManager:
                                     min_results=min_results,
                                     repeat=repeat,
                                 )
-                                strategy_stats.add_iterations(replay.status.iteration)
-                                strategy_stats.add_attempts(1)
+                                self._status.iterations += replay.status.iteration
+                                self._status.attempts += 1
                                 self.update_timeout(results)
                                 # get the first expected result (if any),
                                 #   and update the strategy
@@ -512,7 +507,7 @@ class ReduceManager:
                                 )
                                 success = first_expected is not None
                                 if success:
-                                    strategy_stats.add_successes(1)
+                                    self._status.successes += 1
                                     if (
                                         not self._any_crash
                                         and self._signature_desc is None
@@ -521,6 +516,7 @@ class ReduceManager:
                                             # pylint: disable=line-too-long
                                             first_expected.report.crash_info.createShortSignature()  # noqa: E501
                                         )
+                                self._status.report()
                                 served = None
                                 if success and not self._any_crash:
                                     served = first_expected.served
@@ -562,9 +558,7 @@ class ReduceManager:
                                     LOG.info("Attempt failed")
                                 # if the reduction found other crashes,
                                 #   report those immediately
-                                self.report(
-                                    results, reduction, self._stats.copy(strategy_stats)
-                                )
+                                self.report(results, reduction)
 
                                 now = time()
                                 if (
@@ -576,7 +570,6 @@ class ReduceManager:
                                     last_reports = self.report(
                                         best_results,
                                         self.testcases,
-                                        self._stats.copy(strategy_stats),
                                     )
                                     for result in best_results:
                                         result.report.cleanup()
@@ -596,15 +589,11 @@ class ReduceManager:
                         self._signature = replay.signature
 
                     if best_results:
-                        last_reports = self.report(
-                            best_results, self.testcases, self._stats.copy(total_stats)
-                        )
+                        last_reports = self.report(best_results, self.testcases)
 
                 except KeyboardInterrupt:
                     if best_results:
-                        last_reports = self.report(
-                            best_results, self.testcases, self._stats.copy(total_stats)
-                        )
+                        last_reports = self.report(best_results, self.testcases)
                         LOG.warning(
                             "Ctrl+C detected, best reduction so far " "reported as %r",
                             last_reports,
@@ -613,6 +602,7 @@ class ReduceManager:
                 finally:
                     for result in best_results:
                         result.report.cleanup()
+                    self._status.report(force=True)
 
                 # store "tried" cache to pass to next strategy
                 last_tried = strategy.get_tried()
@@ -631,61 +621,51 @@ class ReduceManager:
         # it's possible we made it this far without ever setting signature_desc.
         # this is only possible if --no-analysis is given
         # just give None instead of trying to format the CrashSignature
-        self._stats.add_info(
-            "Signature",
-            {
-                "given": sig_given,
-                "any": self._any_crash,
-                "description": self._signature_desc,
-            },
-        )
+        self._status.signature_info["any"] = self._any_crash
+        self._status.signature_info["description"] = self._signature_desc
+        self._status.signature_info["given"] = sig_given
 
         # log a summary of what was done.
         LOG.info(
             "Reduction summary:%s%s",
             os.linesep,
-            os.linesep.join(self._stats.format_lines()),
+            ReductionStatusReporter([self._status]).summary(),
         )
+        self._status.report(force=True)
 
         if any_success:
             return Exit.SUCCESS
         return Exit.FAILURE
 
-    def report(self, results, testcases, stats=None):
+    def report(self, results, testcases):
         """Report results, either to FuzzManager or to filesystem.
 
         Arguments:
             results (list(ReplayResult)): Results observed during reduction.
             testcases (list(TestCase)): Testcases used to trigger results.
-            stats (ReductionStats): Statistics for reduction of these results.
-                                    (may be different than `self._stats`)
 
         Returns:
             list(*): List of return values from `reporter.submit()`.
         """
         ret_values = []
+        status = self._status.copy()  # copy implicitly closes open counters
         for result in results:
             if self._report_to_fuzzmanager:
                 reporter = FuzzManagerReporter(self._report_tool)
                 if result.expected:
                     reporter.force_report = True
-                # add original-crash
-                if self._reducer_crash_id is not None:
-                    reporter.add_extra_metadata("reducer-input", self._reducer_crash_id)
             else:
                 report_dir = "reports" if result.expected else "other_reports"
                 reporter = FilesystemReporter(
                     report_path=str(self._log_path / report_dir), major_bucket=False
                 )
             # write reduction stats for expected results
-            if stats is not None and result.expected:
-                report_path = Path(result.report.path)
-                with (report_path / "reduce_stats.txt").open("w") as out:
-                    for line in stats.format_lines():
-                        print(line, file=out)
-                (report_path / "reduce_stats.json").write_text(stats.json())
-                if self._report_to_fuzzmanager:
-                    stats.add_to_reporter(reporter)
+            if result.expected:
+                (Path(result.report.path) / "reduce_stats.txt").write_text(
+                    ReductionStatusReporter([status]).summary()
+                )
+            if self._report_to_fuzzmanager:
+                status.add_to_reporter(reporter, expected=result.expected)
             # clone the tests so we can safely call purge_optional here for each report
             # (report.served may be different for non-expected or any-crash results)
             clones = [test.clone() for test in testcases]
