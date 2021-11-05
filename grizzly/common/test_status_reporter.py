@@ -524,23 +524,22 @@ def test_traceback_report_08(tmp_path):
     assert "AssertionError" in output
 
 
-def test_main_01(mocker, tmp_path):
+@mark.usefixtures("tmp_path_status_db")
+def test_main_01(mocker):
     """test main() with no reports"""
-    mocker.patch("grizzly.session.Session.STATUS_DB", str(tmp_path / "status.db"))
     mocker.patch(
         "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
     )
     assert main([]) == 0
 
 
-def test_main_02(mocker, tmp_path):
+@mark.usefixtures("tmp_path_status_db")
+def test_main_02(mocker):
     """test main() with a report"""
-    db_file = str(tmp_path / "status.db")
-    mocker.patch("grizzly.session.Session.STATUS_DB", db_file)
     mocker.patch(
         "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
     )
-    status = Status.start(db_file=db_file)
+    status = Status.start()
     status.iteration = 1
     status.results.count("uid", "[@ test]")
     status.report(force=True)
@@ -554,14 +553,13 @@ def test_main_02(mocker, tmp_path):
         "complete",
     ],
 )
+@mark.usefixtures("tmp_path_status_db")
 def test_main_03(mocker, tmp_path, report_type):
     """test main() --dump"""
-    db_file = str(tmp_path / "status.db")
-    mocker.patch("grizzly.session.Session.STATUS_DB", db_file)
     mocker.patch(
         "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
     )
-    status = Status.start(db_file=db_file)
+    status = Status.start()
     status.iteration = 1
     status.report(force=True)
     dump_file = tmp_path / "output.txt"
@@ -573,10 +571,9 @@ def test_main_03(mocker, tmp_path, report_type):
         assert b"Timestamp" not in dump_file.read_bytes()
 
 
-def test_main_04(capsys, mocker, tmp_path):
+@mark.usefixtures("tmp_path_status_db")
+def test_main_04(capsys):
     """test main() with invalid args"""
-    mocker.patch("grizzly.session.Session.STATUS_DB", str(tmp_path / "status.db"))
-
     with raises(SystemExit):
         main(["--tracebacks", "missing"])
     assert "--tracebacks must be a directory" in capsys.readouterr()[-1]

@@ -8,8 +8,11 @@ from contextlib import closing, contextmanager
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
+from pathlib import Path
 from sqlite3 import OperationalError, connect
 from time import time
+
+from ..common.utils import grz_tmp
 
 __all__ = ("Status",)
 __author__ = "Tyson Smith"
@@ -83,6 +86,8 @@ class Status:
 
     # database will be updated no more than every 'REPORT_FREQ' seconds.
     REPORT_FREQ = 60
+
+    STATUS_DB = str(Path(grz_tmp()) / "fuzz-status.db")
 
     __slots__ = (
         "_db_file",
@@ -180,7 +185,7 @@ class Status:
                     yield entry
 
     @classmethod
-    def loadall(cls, db_file, time_limit=300):
+    def loadall(cls, db_file=STATUS_DB, time_limit=300):
         """Load all status reports found in `db_file`.
 
         Args:
@@ -394,7 +399,7 @@ class Status:
         return max(time() - self.start_time, 0)
 
     @classmethod
-    def start(cls, db_file, enable_profiling=False, report_limit=0):
+    def start(cls, db_file=None, enable_profiling=False, report_limit=0):
         """Create a unique Status object.
 
         Args:
@@ -404,7 +409,8 @@ class Status:
         Returns:
             Status: Active status report.
         """
-        assert db_file
+        if db_file is None:
+            db_file = cls.STATUS_DB
         status = cls(
             db_file=db_file,
             enable_profiling=enable_profiling,

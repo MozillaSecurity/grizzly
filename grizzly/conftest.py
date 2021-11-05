@@ -7,8 +7,10 @@
 
 from pytest import fixture
 
+from grizzly.common.status import Status
+
 
 @fixture
 def tmp_path_status_db(tmp_path, mocker):
     """Use a temporary database file for testing."""
-    mocker.patch("grizzly.session.Session.STATUS_DB", new=str(tmp_path / "tmp.db"))
+    mocker.patch.object(Status, "STATUS_DB", new=str(tmp_path / "status-tmp.db"))

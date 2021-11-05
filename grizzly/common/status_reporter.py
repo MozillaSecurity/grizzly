@@ -22,7 +22,6 @@ from time import gmtime, localtime, strftime
 
 from psutil import cpu_count, cpu_percent, disk_usage, virtual_memory
 
-from ..session import Session
 from .status import Status
 
 __all__ = ("StatusReporter",)
@@ -531,7 +530,7 @@ def main(args=None):
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
     # TODO: add support for reducer
-    modes = {"fuzzing": Session.STATUS_DB}
+    modes = {"fuzzing": Status.STATUS_DB}
 
     # report types: define name and time range of scan
     report_types = {

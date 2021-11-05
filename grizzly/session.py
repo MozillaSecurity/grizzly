@@ -3,13 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
-from pathlib import Path
 from time import time
 
 from .common.iomanager import IOManager
 from .common.runner import Runner
 from .common.status import Status
-from .common.utils import grz_tmp
 from .target import Result, TargetLaunchError
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
@@ -63,7 +61,6 @@ class LogOutputLimiter:
 class Session:
     DISPLAY_VERBOSE = 0  # display status every iteration
     DISPLAY_NORMAL = 1  # quickly reduce the amount of output
-    STATUS_DB = str(Path(grz_tmp()) / "fuzz-status.db")
 
     # display warning when target log files exceed limit (25MB)
     TARGET_LOG_SIZE_WARN = 0x1900000
@@ -102,7 +99,6 @@ class Session:
         self.reporter = reporter
         self.server = server
         self.status = Status.start(
-            db_file=self.STATUS_DB,
             enable_profiling=enable_profiling,
             report_limit=report_limit,
         )
