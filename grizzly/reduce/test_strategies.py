@@ -37,7 +37,7 @@ def test_strategy_tc_load(is_hang):
     with TestCase("a.htm", None, "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
         src.hang = is_hang
-        src.add_from_data("123", "a.htm")
+        src.add_from_bytes(b"123", "a.htm")
         strategy = _TestStrategy([src])
     for attempt in strategy:
         assert len(attempt) == 1
@@ -106,7 +106,7 @@ ListStrategyParams = namedtuple(
     [
         # "list" is a no-op with a single testcase
         ListStrategyParams(
-            test_data=["123"],
+            test_data=[b"123"],
             strategies=["check", "list"],
             required_first=False,
             expected_run_calls=1,
@@ -115,7 +115,7 @@ ListStrategyParams = namedtuple(
         ),
         # "list" reduces a list of testcases down to one required
         ListStrategyParams(
-            test_data=["", "", "123", ""],
+            test_data=[b"", b"", b"123", b""],
             strategies=["list"],
             required_first=False,
             expected_run_calls=4,
@@ -124,7 +124,7 @@ ListStrategyParams = namedtuple(
         ),
         # "list" reduces a list of testcases down to two required
         ListStrategyParams(
-            test_data=["", "required", "123", ""],
+            test_data=[b"", b"required", b"123", b""],
             strategies=["list"],
             required_first=True,
             expected_run_calls=4,
@@ -152,7 +152,7 @@ def test_list(
     def replay_run(testcases, _time_limit, **_):
         required_seen = False
         for test in testcases:
-            contents = test.get_file("test.html").data.decode("ascii")
+            contents = test.get_file("test.html").data_file.read_text()
             LOG.debug("interesting if %r == '123'", contents)
             if contents == "required" and required_first:
                 required_seen = True
@@ -171,7 +171,7 @@ def test_list(
     tests = []
     for data in test_data:
         test = TestCase("test.html", None, "test-adapter")
-        test.add_from_data(data, "test.html")
+        test.add_from_bytes(data, "test.html")
         tests.append(test)
     log_path = tmp_path / "logs"
 
@@ -215,7 +215,7 @@ PurgeUnservedTestParams = namedtuple(
         # single test, first reduction uses 2 files, second uses only target file.
         PurgeUnservedTestParams(
             strategies=["chars"],
-            test_data=[{"test.html": "123", "opt.html": "456"}],
+            test_data=[{"test.html": b"123", "opt.html": b"456"}],
             served=[[["test.html", "opt.html"]], [["test.html"]], [["test.html"]]],
             expected_results={"1"},
             expected_run_calls=5,
@@ -225,7 +225,7 @@ PurgeUnservedTestParams = namedtuple(
         # single test, first reduction uses target only
         PurgeUnservedTestParams(
             strategies=["chars"],
-            test_data=[{"test.html": "123", "opt.html": "456"}],
+            test_data=[{"test.html": b"123", "opt.html": b"456"}],
             served=[[["test.html"]], [["test.html"]]],
             expected_results={"1"},
             expected_run_calls=3,
@@ -236,7 +236,7 @@ PurgeUnservedTestParams = namedtuple(
         # (no results -> Assertion)
         PurgeUnservedTestParams(
             strategies=["chars"],
-            test_data=[{"test.html": "123", "opt.html": "456"}],
+            test_data=[{"test.html": b"123", "opt.html": b"456"}],
             served=[[["test.html", "opt.html"]], [["opt.html"]]],
             expected_results=set(),
             expected_run_calls=4,
@@ -248,8 +248,8 @@ PurgeUnservedTestParams = namedtuple(
         PurgeUnservedTestParams(
             strategies=["chars"],
             test_data=[
-                {"test.html": "123", "opt.html": "456"},
-                {"test.html": "789", "opt.html": "abc"},
+                {"test.html": b"123", "opt.html": b"456"},
+                {"test.html": b"789", "opt.html": b"abc"},
             ],
             served=[
                 [["test.html", "opt.html"], ["test.html", "opt.html"]],
@@ -266,8 +266,8 @@ PurgeUnservedTestParams = namedtuple(
         PurgeUnservedTestParams(
             strategies=["chars"],
             test_data=[
-                {"test.html": "123", "opt.html": "456"},
-                {"test.html": "789", "opt.html": "abc"},
+                {"test.html": b"123", "opt.html": b"456"},
+                {"test.html": b"789", "opt.html": b"abc"},
             ],
             served=[
                 [["test.html", "opt.html"], ["test.html", "opt.html"]],
@@ -283,9 +283,9 @@ PurgeUnservedTestParams = namedtuple(
         PurgeUnservedTestParams(
             strategies=["list"],
             test_data=[
-                {"test.html": "123"},
-                {"test.html": "456"},
-                {"test.html": "789"},
+                {"test.html": b"123"},
+                {"test.html": b"456"},
+                {"test.html": b"789"},
             ],
             served=[[["test.html"]], [["test.html"]], [["test.html"]]],
             expected_results={"456"},
@@ -297,9 +297,9 @@ PurgeUnservedTestParams = namedtuple(
         PurgeUnservedTestParams(
             strategies=["list"],
             test_data=[
-                {"test.html": "123"},
-                {"test.html": "456"},
-                {"test.html": "789"},
+                {"test.html": b"123"},
+                {"test.html": b"456"},
+                {"test.html": b"789"},
             ],
             served=[None, None, None],
             expected_results={"789"},
@@ -332,10 +332,10 @@ def test_purge_unserved(
         has_any = False
         for test in testcases:
             for file in ("test.html", "opt.html"):
-                if test.contains(file):
+                if file in test.contents:
                     LOG.debug("testcase contains %s", file)
                     has_any = True
-                    contents = test.get_file(file).data.decode("ascii")
+                    contents = test.get_file(file).data_file.read_text()
                     if not contents.strip():
                         return []
         if not has_any:
@@ -352,7 +352,7 @@ def test_purge_unserved(
     for testcase in test_data:
         test = TestCase("test.html", None, "test-adapter")
         for filename, data in testcase.items():
-            test.add_from_data(data, filename)
+            test.add_from_bytes(data, filename)
         tests.append(test)
     log_path = tmp_path / "logs"
 
@@ -397,7 +397,7 @@ def test_dd_only(mocker, tmp_path):
 
     def replay_run(testcases, _time_limit, **_):
         for test in testcases:
-            contents = test.get_file("test.html").data.decode("ascii")
+            contents = test.get_file("test.html").data_file.read_text()
             LOG.debug("interesting if 'required' in %r", contents)
             interesting = "required" in contents
             if interesting:
@@ -411,8 +411,8 @@ def test_dd_only(mocker, tmp_path):
     replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
-    test.add_from_data("DDBEGIN\n123\nrequired\nDDEND\n", "test.html")
-    test.add_from_data("blah\n", "other.html")
+    test.add_from_bytes(b"DDBEGIN\n123\nrequired\nDDEND\n", "test.html")
+    test.add_from_bytes(b"blah\n", "other.html")
     tests = [test]
     log_path = tmp_path / "logs"
 

@@ -227,7 +227,7 @@ class Session:
             if not result.attempted:
                 LOG.warning("Test case was not served")
                 LOG.debug("ignoring test case since nothing was served")
-                if not current_test.contains(current_test.landing_page):
+                if current_test.landing_page not in current_test.contents:
                     raise SessionError("Test case is missing landing page")
                 if result.initial:
                     # since this is the first iteration since the Target launched

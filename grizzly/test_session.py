@@ -35,7 +35,7 @@ class SimpleAdapter(Adapter):
     def generate(self, testcase, _server_map):
         assert testcase.adapter_name == self.name
         testcase.input_fname = self.fuzz["input"]
-        testcase.add_from_data("test", testcase.landing_page)
+        testcase.add_from_bytes(b"test", testcase.landing_page)
         if self.remaining is not None:
             assert self.remaining > 0
             self.remaining -= 1

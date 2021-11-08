@@ -30,12 +30,12 @@ class NoOpAdapter(Adapter):
         """
         self.enable_harness()
         self.fuzz["test"] = (
-            "<!DOCTYPE html>\n"
-            "<html>\n"
-            "<head>\n"
-            "<script>window.close()</script>\n"
-            "</head>\n"
-            "</html>"
+            b"<!DOCTYPE html>\n"
+            b"<html>\n"
+            b"<head>\n"
+            b"<script>window.close()</script>\n"
+            b"</head>\n"
+            b"</html>"
         )
 
     def generate(self, testcase, _server_map):
@@ -53,4 +53,4 @@ class NoOpAdapter(Adapter):
         Returns:
             None
         """
-        testcase.add_from_data(self.fuzz["test"], testcase.landing_page)
+        testcase.add_from_bytes(self.fuzz["test"], testcase.landing_page)

@@ -5,13 +5,14 @@
 
 import json
 from collections import namedtuple
-from itertools import chain
-from os import SEEK_END, listdir, makedirs, walk
+from itertools import chain, product
+from os import listdir, walk
 from os.path import abspath, basename, dirname, isdir, isfile
 from os.path import join as pathjoin
-from os.path import normpath, relpath
+from os.path import normpath, relpath, split
+from pathlib import Path
 from shutil import copyfileobj, rmtree
-from tempfile import SpooledTemporaryFile, mkdtemp
+from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
 from zipfile import BadZipfile, ZipFile
 from zlib import error as zlib_error
@@ -48,7 +49,7 @@ class TestCase:
         "redirect_page",
         "time_limit",
         "timestamp",
-        "_existing_paths",
+        "_data_path",
         "_files",
     )
 
@@ -67,12 +68,15 @@ class TestCase:
         self.env_vars = dict()
         self.hang = False
         self.input_fname = input_fname  # file that was used to create the test case
-        self.landing_page = landing_page
-        self.redirect_page = redirect_page
+        self.landing_page = TestFile.sanitize_path(landing_page)
+        if redirect_page is not None:
+            self.redirect_page = TestFile.sanitize_path(redirect_page)
+        else:
+            self.redirect_page = None
         self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
-        self._existing_paths = list()  # file paths in use
         self._files = TestFileMap(optional=list(), required=list())
+        self._data_path = Path(mkdtemp(prefix="testcase_", dir=grz_tmp("storage")))
 
     def __enter__(self):
         return self
@@ -80,23 +84,7 @@ class TestCase:
     def __exit__(self, *exc):
         self.cleanup()
 
-    def _add(self, target, test_file):
-        """Add a test file to test case and perform sanity checks.
-
-        Args:
-            target (list): Specific list of files to append target test_file to.
-            test_file (TestFile): TestFile to append.
-
-        Returns:
-            None
-        """
-        assert isinstance(test_file, TestFile), "only accepts TestFiles"
-        if test_file.file_name in self._existing_paths:
-            raise TestFileExists("%r exists in test" % (test_file.file_name,))
-        self._existing_paths.append(test_file.file_name)
-        target.append(test_file)
-
-    def add_batch(self, path, include_files, prefix=None):
+    def add_batch(self, path, include_files, prefix=None, copy=True):
         """Iterate over files in include_files and attach the files that are
         located in path to TestCase.
 
@@ -106,6 +94,7 @@ class TestCase:
                                            TestCase if they exist in path.
             prefix (str): Path prefix to prepend to file when adding to
                           the TestCase.
+            copy (bool): File will be copied if True otherwise the file will be moved.
 
         Returns:
             None
@@ -117,64 +106,64 @@ class TestCase:
                 continue
             if prefix:
                 test_path = "/".join((prefix, test_path))
-            self.add_from_file(fname, file_name=test_path)
+            self.add_from_file(fname, file_name=test_path, copy=copy)
 
-    def add_file(self, test_file, required=True):
-        """Add a TestFile to TestCase.
+    def add_from_bytes(self, data, file_name, required=True):
+        """Create a file and add it to the TestCase.
 
         Args:
-            test_file (TestFile): TestFile to add to TestCase.
-            required (bool): Indicates if test file must be served.
+            data (bytes): Data to write to file.
+            file_name (str): Used as file path on disk and URI. Relative to wwwroot.
+            required (bool): Indicates whether the file must be served.
 
         Returns:
             None
         """
-        if required:
-            self._add(self._files.required, test_file)
+        assert isinstance(data, bytes)
+        with NamedTemporaryFile(delete=False, dir=grz_tmp("storage")) as in_fp:
+            in_fp.write(data)
+            datafile = in_fp.name
+
+        self.add_from_file(datafile, file_name=file_name, required=required, copy=False)
+
+    def add_from_file(self, src_file, file_name=None, required=True, copy=False):
+        """Add a file to the TestCase by either copying or moving an existing file.
+
+        Args:
+            src_file (str): Path to existing file to use.
+            file_name (str): Used as file path on disk and URI. Relative to wwwroot.
+                             If file_name is not given the name of the src_file
+                             will be used.
+            required (bool): Indicates whether the file must be served.
+            copy (bool): File will be copied if True otherwise the file will be moved.
+
+        Returns:
+            None
+        """
+        assert src_file
+        src_file = Path(src_file)
+        if file_name is None:
+            file_name = src_file.name
+
+        test_file = TestFile(file_name, self._data_path)
+        if test_file.file_name in self.contents:
+            raise TestFileExists("%r exists in test" % (test_file.file_name,))
+
+        if copy:
+            TestFile.copy_file(src_file, test_file.data_file)
         else:
-            self._add(self._files.optional, test_file)
+            test_file.data_file.parent.mkdir(exist_ok=True, parents=True)
+            src_file.rename(str(test_file.data_file))
 
-    def add_from_data(self, data, file_name, encoding="UTF-8", required=True):
-        """Create a TestFile and add it to the TestCase.
-
-        Args:
-            data (bytes or str): Data to write to file. If data is of type str
-                                 encoding must be given.
-            file_name (str): Name for the TestFile.
-            encoding (str): Encoding to be used.
-            required (bool): Indicates whether the TestFile must be served.
-
-        Returns:
-            None
-        """
-        tfile = TestFile.from_data(data, file_name, encoding=encoding)
-        try:
-            self.add_file(tfile, required=required)
-        except TestFileExists:
-            tfile.close()
-            raise
-
-    def add_from_file(self, input_file, file_name=None, required=True):
-        """Create a TestFile from an existing file and add it to the TestCase.
-
-        Args:
-            input_file (str): Path to existing file to use.
-            file_name (str): Name for the TestFile. If file_name is not given
-                             the name of the input_file will be used.
-            required (bool): Indicates whether the TestFile must be served.
-
-        Returns:
-            None
-        """
-        tfile = TestFile.from_file(input_file, file_name=file_name)
-        try:
-            self.add_file(tfile, required=required)
-        except TestFileExists:
-            tfile.close()
-            raise
+        # TODO: set 'required=False' by default
+        # landing_page is always 'required'
+        if required or test_file.file_name == self.landing_page:
+            self._files.required.append(test_file)
+        else:
+            self._files.optional.append(test_file)
 
     def cleanup(self):
-        """Close all the test files.
+        """Remove all the test files.
 
         Args:
             None
@@ -182,9 +171,10 @@ class TestCase:
         Returns:
             None
         """
-        for file_group in self._files:
-            for test_file in file_group:
-                test_file.close()
+        # TODO: can this be replaced with a single rmtree()?
+        for test_file in chain(self._files.required, self._files.optional):
+            test_file.unlink()
+        rmtree(str(self._data_path), ignore_errors=True)
 
     def clone(self):
         """Make a copy of the TestCase.
@@ -207,37 +197,61 @@ class TestCase:
         result.duration = self.duration
         result.env_vars = dict(self.env_vars)
         result.hang = self.hang
-        for entry in self._files.optional:
-            result.add_file(entry.clone(), required=False)
-        for entry in self._files.required:
-            result.add_file(entry.clone(), required=True)
+
+        # copy test data files
+        for entry, required in chain(
+            product(self._files.required, [True]),
+            product(self._files.optional, [False]),
+        ):
+            # pylint: disable=protected-access
+            data_file = result._data_path / entry.file_name
+            TestFile.copy_file(entry.data_file, data_file)
+            result.add_from_file(
+                str(data_file),
+                file_name=entry.file_name,
+                required=required,
+                copy=False,
+            )
         return result
 
-    def contains(self, file_name):
-        """Check TestCase contains the TestFile with name matching `file_name`.
+    @property
+    def contents(self):
+        """All files in TestCase.
 
         Args:
-            file_name (str): File name to search for in TestCase.
+            None
 
-        Returns:
-            bool: True if file exists in the TestCase otherwise False.
+        Yields:
+            str: File path (relative to wwwroot).
         """
-        return file_name in self._existing_paths
+        for tfile in chain(self._files.required, self._files.optional):
+            yield tfile.file_name
 
     @property
-    def data_size(self):
-        """The total amount of data used (bytes) by the TestFiles in the
-        TestCase.
+    def data_path(self):
+        """Location test data is stored on disk. This is intended to be used as wwwroot.
 
         Args:
             None
 
         Returns:
-            int: Total size of the test case in byte.
+            str: Path to directory containing test case files.
+        """
+        return str(self._data_path)
+
+    @property
+    def data_size(self):
+        """Total amount of data used (bytes) by the files in the TestCase.
+
+        Args:
+            None
+
+        Returns:
+            int: Total size of the TestCase in bytes.
         """
         total = 0
         for group in self._files:
-            total += sum(x.size for x in group)
+            total += sum(x.data_file.stat().st_size for x in group)
         return total
 
     def dump(self, dst_path, include_details=False):
@@ -250,9 +264,10 @@ class TestCase:
         Returns:
             None
         """
+        dst_path = Path(dst_path)
         # save test files to dst_path
         for test_file in chain(self._files.required, self._files.optional):
-            test_file.dump(dst_path)
+            TestFile.copy_file(test_file.data_file, dst_path / test_file.file_name)
         # save test case files and meta data including:
         # adapter used, input file, environment info and files
         if include_details:
@@ -270,8 +285,10 @@ class TestCase:
             # save target assets and update meta data
             if self.assets and not self.assets.is_empty():
                 info["assets_path"] = "_assets_"
-                info["assets"] = self.assets.dump(dst_path, subdir=info["assets_path"])
-            with open(pathjoin(dst_path, "test_info.json"), "w") as out_fp:
+                info["assets"] = self.assets.dump(
+                    str(dst_path), subdir=info["assets_path"]
+                )
+            with (dst_path / "test_info.json").open("w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
 
     def get_file(self, file_name):
@@ -325,6 +342,7 @@ class TestCase:
             elif isdir(path):
                 tests = list()
                 assets = None
+                # TODO: move (don't copy) 'unpacked' files
                 for tc_path in TestCase.scan_path(path):
                     tests.append(cls.load_single(tc_path, load_assets=assets is None))
                     # only load assets once
@@ -384,7 +402,7 @@ class TestCase:
             raise TestCaseLoadFailure("Missing or invalid TestCase %r" % (path,))
         # create testcase and add data
         test = cls(
-            None,
+            entry_point,
             None,
             info.get("adapter", None),
             input_fname=info.get("input", None),
@@ -393,8 +411,7 @@ class TestCase:
         )
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
-        test.add_from_file(pathjoin(path, entry_point))
-        test.landing_page = entry_point
+        test.add_from_file(pathjoin(path, entry_point), copy=True)
         if info:
             # load assets
             try:
@@ -404,19 +421,18 @@ class TestCase:
                         pathjoin(path, info.get("assets_path", "")),
                     )
             except (AssetError, OSError) as exc:
+                test.cleanup()
                 raise TestCaseLoadFailure(str(exc)) from None
             # load environment variables
-            try:
-                test.env_vars = info.get("env", dict())
-                assert isinstance(test.env_vars, dict)
-                # sanity check environment variable data
-                for name, value in test.env_vars.items():
-                    if not isinstance(name, str) or not isinstance(value, str):
-                        raise TestCaseLoadFailure("'env' contains invalid entries")
-            except TestCaseLoadFailure:
-                if test.assets:
-                    test.assets.cleanup()
-                raise
+            test.env_vars = info.get("env", dict())
+            assert isinstance(test.env_vars, dict)
+            # sanity check environment variable data
+            for name, value in test.env_vars.items():
+                if not isinstance(name, str) or not isinstance(value, str):
+                    test.cleanup()
+                    if test.assets:
+                        test.assets.cleanup()
+                    raise TestCaseLoadFailure("'env' contains invalid entries")
         # load all adjacent data from directory
         if adjacent:
             asset_path = info.get("assets_path", None)
@@ -430,19 +446,22 @@ class TestCase:
                         continue
                     location = "/".join((dpath.split(path, 1)[-1], fname))
                     test.add_from_file(
-                        pathjoin(dpath, fname), file_name=location, required=False
+                        pathjoin(dpath, fname),
+                        file_name=location,
+                        required=False,
+                        copy=True,
                     )
         return test
 
     @property
     def optional(self):
-        """Get file names of optional TestFiles.
+        """Get file paths of optional files.
 
         Args:
             None
 
         Yields:
-            str: File names of optional files.
+            str: File path of each optional file.
         """
         for test in self._files.optional:
             yield test.file_name
@@ -489,7 +508,7 @@ class TestCase:
             if fname not in keep_opt:
                 to_remove.append(idx)
         for idx in reversed(to_remove):
-            self._files.optional.pop(idx).close()
+            self._files.optional.pop(idx).unlink()
 
     @staticmethod
     def scan_path(path):
@@ -512,169 +531,63 @@ class TestCase:
 
 
 class TestFile:
-    CACHE_LIMIT = 0x80000  # data cache limit per file: 512KB
-    XFER_BUF = 0x10000  # transfer buffer size: 64KB
+    __slots__ = ("data_file", "file_name")
 
-    __slots__ = ("_file_name", "_fp")
-
-    def __init__(self, file_name):
-        # This is a naive fix for a larger path issue. This is a simple sanity
-        # check and does not check if invalid characters are used. If an invalid
-        # file name is used an exception will be raised when trying to write
-        # that file to the file system.
-        if "\\" in file_name:
-            file_name = file_name.replace("\\", "/")
-        if file_name.startswith("/"):
-            file_name = file_name.lstrip("/")
-        if file_name.endswith("."):
-            file_name = file_name.rstrip(".")
-        if (
-            not file_name
-            or ("/" in file_name and not file_name.rsplit("/", 1)[-1])
-            or file_name.startswith("../")
-        ):
-            raise TypeError("file_name is invalid %r" % (file_name,))
-        # name including path relative to wwwroot
-        self._file_name = normpath(file_name)
-        # pylint: disable=consider-using-with
-        self._fp = SpooledTemporaryFile(
-            dir=grz_tmp("storage"), max_size=self.CACHE_LIMIT, prefix="testfile_"
-        )
+    def __init__(self, file_name, data_path):
+        self.file_name = self.sanitize_path(file_name)
+        self.data_file = data_path / self.file_name
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
-        self.close()
+        self.unlink()
 
-    def clone(self):
-        """Make a copy of the TestFile.
+    @staticmethod
+    def copy_file(src_file, dst_file):
+        """Copy data to file.
+
+        Args:
+            src_file (Path): File to read data from.
+            dst_file (Path): File to write data to.
+
+        Returns:
+            None
+        """
+        with src_file.open("rb") as src_fp:
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            with dst_file.open("wb") as dst_fp:
+                copyfileobj(src_fp, dst_fp, 1_048_576)
+
+    @staticmethod
+    def sanitize_path(path):
+        """Sanitize given path for use as a URI path.
+
+        Args:
+            path (str): Path to sanitize. Must be relative to wwwroot.
+
+        Returns:
+            str: Sanitized path.
+        """
+        assert isinstance(path, str)
+        # check for missing filename or path containing drive letter (Windows)
+        if split(path)[-1] in ("", ".", "..") or ":" in path:
+            raise ValueError("invalid path %r" % (path,))
+        # normalize path
+        path = normpath(path).replace("\\", "/")
+        # check normalized path does not resolve to location outside of '.'
+        if path.startswith("../"):
+            raise ValueError("invalid path %r" % (path,))
+        return path.lstrip("/")
+
+    def unlink(self):
+        """Delete the TestFile data file.
 
         Args:
             None
 
         Returns:
-            TestFile: A copy of the TestFile instance
-        """
-        cloned = type(self)(self._file_name)
-        self._fp.seek(0)
-        copyfileobj(
-            self._fp, cloned._fp, self.XFER_BUF  # pylint: disable=protected-access
-        )
-        return cloned
-
-    def close(self):
-        """Close the TestFile.
-
-        Args:
-            None
-
-        Returns:
             None
         """
-        self._fp.close()
-
-    @property
-    def data(self):
-        """Get the data from the TestFile. Not recommenced for large files.
-
-        Args:
-            None
-
-        Returns:
-            bytes: Data from the TestFile
-        """
-        pos = self._fp.tell()
-        self._fp.seek(0)
-        data = self._fp.read()
-        self._fp.seek(pos)
-        return data
-
-    def dump(self, path):
-        """Write TestFile data to the filesystem.
-
-        Args:
-            path (str): Path to output data.
-
-        Returns:
-            None
-        """
-        target_path = pathjoin(path, dirname(self._file_name))
-        if not isdir(target_path):
-            makedirs(target_path)
-        self._fp.seek(0)
-        with open(pathjoin(path, self._file_name), "wb") as dst_fp:
-            copyfileobj(self._fp, dst_fp, self.XFER_BUF)
-
-    @property
-    def file_name(self):
-        return self._file_name
-
-    @classmethod
-    def from_data(cls, data, file_name, encoding="UTF-8"):
-        """Create a TestFile and add it to the test case.
-
-        Args:
-            data (bytes or str): Data to write to file. If data is of type str
-                                 encoding must be given.
-            file_name (str): Name for the TestFile.
-            encoding (str): Encoding to be used.
-
-        Returns:
-            TestFile: A TestFile.
-        """
-        t_file = cls(file_name)
-        if data:
-            if isinstance(data, bytes) or not encoding:
-                t_file.write(data)
-            else:
-                t_file.write(data.encode(encoding))
-        return t_file
-
-    @classmethod
-    def from_file(cls, input_file, file_name=None):
-        """Create a TestFile from an existing file.
-
-        Args:
-            input_file (str): Path to existing file to use.
-            file_name (str): Name for the TestFile. If file_name is not given
-                             the name of the input_file will be used.
-
-        Returns:
-            TestFile: A TestFile.
-        """
-        if file_name is None:
-            file_name = basename(input_file)
-        t_file = cls(file_name)
-        with open(input_file, "rb") as src_fp:
-            copyfileobj(
-                src_fp, t_file._fp, cls.XFER_BUF  # pylint: disable=protected-access
-            )
-        return t_file
-
-    @property
-    def size(self):
-        """Size of the file in bytes.
-
-        Args:
-            None
-
-        Returns:
-            int: Size in bytes.
-        """
-        pos = self._fp.tell()
-        self._fp.seek(0, SEEK_END)
-        size = self._fp.tell()
-        self._fp.seek(pos)
-        return size
-
-    def write(self, data):
-        """Add data to the TestFile.
-
-        Args:
-            data (bytes): Data to add to the TestFile.
-
-        Returns:
-            None
-        """
-        self._fp.write(data)
+        if self.data_file.exists():
+            self.data_file.unlink()

@@ -47,7 +47,7 @@ def test_main_01(mocker, tmp_path):
     load_target.return_value.return_value = target
     with TestCase("test.html", None, "adpt") as src:
         src.env_vars["TEST_VAR"] = "100"
-        src.add_from_data("test", "test.html")
+        src.add_from_bytes(b"test", "test.html")
         src.dump(str(tmp_path / "testcase"), include_details=True)
     # setup args
     log_path = tmp_path / "logs"
