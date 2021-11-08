@@ -19,12 +19,12 @@ def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker):
     mocker.patch("grizzly.reduce.strategies.beautify._contains_dd", return_value=True)
 
     best_test = TestCase(test_name, None, "test-adapter")
-    best_test.add_from_data(test_data, test_name)
+    best_test.add_from_bytes(test_data.encode("ascii"), test_name)
     best_tests = [best_test]
 
     def _interesting(testcases):
         for test in testcases:
-            contents = test.get_file(test_name).data.decode("ascii")
+            contents = test.get_file(test_name).data_file.read_bytes().decode("ascii")
             if interesting(contents):
                 return True
         return False
@@ -44,7 +44,9 @@ def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker):
                     for test in tests:
                         test.cleanup()
         assert len(best_tests) == 1
-        contents = best_tests[0].get_file(test_name).data.decode("ascii")
+        contents = (
+            best_tests[0].get_file(test_name).data_file.read_bytes().decode("ascii")
+        )
         assert contents == reduced
     finally:
         for test in best_tests:

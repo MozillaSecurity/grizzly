@@ -14,6 +14,6 @@ def test_no_op_01():
     adapter.setup(None, None)
     test = TestCase("a", "b", adapter.name)
     assert not test.data_size
-    assert not test.contains("a")
+    assert "a" not in test.contents
     adapter.generate(test, None)
-    assert test.contains("a")
+    assert "a" in test.contents

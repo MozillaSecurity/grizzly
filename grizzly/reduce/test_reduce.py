@@ -271,11 +271,11 @@ def test_analysis(
     replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
-    test.add_from_data("1", "test.html")
+    test.add_from_bytes(b"1", "test.html")
     tests = [test]
     if harness_last_crashes is not None:
         test = TestCase("test.html", None, "test-adapter")
-        test.add_from_data("2", "test.html")
+        test.add_from_bytes(b"2", "test.html")
         tests.append(test.clone())
     log_path = tmp_path / "logs"
 
@@ -335,7 +335,7 @@ ReproTestParams = namedtuple(
     [
         # no repro
         ReproTestParams(
-            original="123456\n",
+            original=b"123456\n",
             strategies=["check"],
             detect_failure=lambda _: False,
             interesting_str="%r",
@@ -349,7 +349,7 @@ ReproTestParams = namedtuple(
         ),
         # reproduces, one strategy, no reduction works
         ReproTestParams(
-            original="1\n2\n3\n",
+            original=b"1\n2\n3\n",
             strategies=["check", "lines"],
             detect_failure=lambda contents: contents == "1\n2\n3\n",
             interesting_str="%r == '1\n2\n3\n'",
@@ -363,7 +363,7 @@ ReproTestParams = namedtuple(
         ),
         # reproduces, one strategy, some reduction works
         ReproTestParams(
-            original="odd\neven\n" * 3,
+            original=b"odd\neven\n" * 3,
             strategies=["check", "lines"],
             detect_failure=lambda contents: sum(
                 1 for line in contents.splitlines() if line == "odd"
@@ -380,7 +380,7 @@ ReproTestParams = namedtuple(
         ),
         # reproduces, one strategy, reduction only finds other
         ReproTestParams(
-            original="1\n2\n3\n",
+            original=b"1\n2\n3\n",
             strategies=["check", "lines"],
             detect_failure=bool,
             interesting_str="%r != ''",
@@ -394,7 +394,7 @@ ReproTestParams = namedtuple(
         ),
         # reproduces, 50% iterations work, 1 iteration produces other sig
         ReproTestParams(
-            original="1\n2\n3\n4\n5\n6\n",
+            original=b"1\n2\n3\n4\n5\n6\n",
             strategies=["check", "lines"],
             detect_failure=lambda contents: set(contents.splitlines()) >= set("135"),
             interesting_str="%r contains {'1', '3', '5'}",
@@ -408,7 +408,7 @@ ReproTestParams = namedtuple(
         ),
         # reproduces, two strategies, 1st no reduction, 2nd 50% reduction
         ReproTestParams(
-            original="A1\nA2\nA3\nA4\nA5\nA6\n",
+            original=b"A1\nA2\nA3\nA4\nA5\nA6\n",
             strategies=["check", "lines", "chars"],
             detect_failure=(
                 lambda contents: (
@@ -428,7 +428,7 @@ ReproTestParams = namedtuple(
         ),
         # reproduces, two strategies, 1st 50% reduction, 2nd no reduction
         ReproTestParams(
-            original="A1\nA2\nA3\nA4\nA5\nA6\n",
+            original=b"A1\nA2\nA3\nA4\nA5\nA6\n",
             strategies=["check", "lines", "chars"],
             detect_failure=(
                 lambda contents: (
@@ -447,7 +447,7 @@ ReproTestParams = namedtuple(
         ),
         # reproduces, two strategies, reduce only produces other sig
         ReproTestParams(
-            original="1\n2\n3\n",
+            original=b"1\n2\n3\n",
             strategies=["check", "lines", "chars"],
             detect_failure=bool,
             interesting_str="%r != ''",
@@ -473,7 +473,7 @@ ReproTestParams = namedtuple(
         ),
         # reproduces, one strategy, testcase reduces to 0
         ReproTestParams(
-            original="1\n2\n3\n",
+            original=b"1\n2\n3\n",
             strategies=["check", "lines"],
             detect_failure=lambda _: True,
             interesting_str="%r is anything, incl. empty",
@@ -487,7 +487,7 @@ ReproTestParams = namedtuple(
         ),
         # reproduces, two strategies, 1st no reduce, 2nd testcase reduces to 0
         ReproTestParams(
-            original="1\n2\n3\n",
+            original=b"1\n2\n3\n",
             strategies=["check", "lines", "lines"],
             detect_failure=_ignore_arg(
                 partial([True, False, False, False, False, False, True, True].pop, 0)
@@ -528,7 +528,7 @@ def test_repro(
 
     def replay_run(testcases, _time_limit, **_):
         for test in testcases:
-            contents = test.get_file("test.html").data.decode("ascii")
+            contents = test.get_file("test.html").data_file.read_text()
             # pylint: disable=logging-not-lazy
             LOG.debug("interesting if " + interesting_str, contents)
             if detect_failure(contents):
@@ -546,7 +546,7 @@ def test_repro(
     replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
-    test.add_from_data(original, "test.html")
+    test.add_from_bytes(original, "test.html")
     tests = [test]
     log_path = tmp_path / "logs"
 
@@ -746,7 +746,7 @@ def test_quality_update(mocker, tmp_path):
 
     def replay_run(testcases, _time_limit, **_kw):
         for test in testcases:
-            contents = test.get_file("test.html").data.decode("ascii")
+            contents = test.get_file("test.html").data_file.read_text()
             if not contents.strip():
                 continue
             log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
@@ -809,7 +809,7 @@ def test_include_assets_and_environ(mocker, tmp_path):
 
     def replay_run(testcases, _time_limit, **_kw):
         for test in testcases:
-            contents = test.get_file("test.html").data.decode("ascii")
+            contents = test.get_file("test.html").data_file.read_text()
             if not contents.strip():
                 continue
             log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
@@ -958,7 +958,7 @@ def test_timeout_update(
     replayer.run.side_effect = replay_run
 
     test = TestCase("test.html", None, "test-adapter")
-    test.add_from_data("123\n", "test.html")
+    test.add_from_bytes(b"123\n", "test.html")
     tests = [test]
     log_path = tmp_path / "logs"
 

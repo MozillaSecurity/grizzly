@@ -4,7 +4,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 from itertools import count
-from os.path import join as pathjoin
 
 from pytest import mark, raises
 
@@ -338,9 +337,9 @@ def test_runner_10(mocker, tmp_path):
         result = runner.run([], smap, tcase)
         assert result.attempted
         assert result.status == Result.NONE
-        assert "inc_file.bin" in tcase._existing_paths
-        assert pathjoin("nested", "nested_inc.bin") in tcase._existing_paths
-        assert pathjoin("test", "inc_file3.txt") in tcase._existing_paths
+        assert "inc_file.bin" in tcase.contents
+        assert "nested/nested_inc.bin" in tcase.contents
+        assert "test/inc_file3.txt" in tcase.contents
 
 
 def test_idle_check_01(mocker):
