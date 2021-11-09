@@ -544,7 +544,6 @@ def test_replay_15(mocker):
         assert replay.status.iteration == 1
         assert replay.status.results.total == 0
     assert target.close.call_count == 2
-    assert all(x.dump.call_count == 1 for x in testcases)
 
 
 def test_replay_16(mocker):
@@ -569,7 +568,6 @@ def test_replay_16(mocker):
         assert replay.status.iteration == 10
         assert replay.status.results.total == 0
     assert target.monitor.is_healthy.call_count == 5
-    assert all(x.dump.call_count == 1 for x in testcases)
 
 
 def test_replay_17(mocker):
@@ -605,7 +603,6 @@ def test_replay_17(mocker):
     assert results[0].served[1][0] == "b.html"
     assert results[0].served[2][0] == "c.html"
     assert len(results[0].durations) == len(testcases)
-    assert all(x.dump.call_count == 1 for x in testcases)
 
 
 def test_replay_18(mocker):

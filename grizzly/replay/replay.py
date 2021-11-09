@@ -6,7 +6,6 @@
 from logging import getLogger
 from os.path import dirname
 from os.path import join as pathjoin
-from shutil import rmtree
 from tempfile import mkdtemp
 
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -264,16 +263,9 @@ class ReplayManager:
 
         # track unprocessed results
         reports = dict()
-        # track unpacked testcases
-        unpacked = list()
         try:
             sig_hash = Report.calc_hash(self._signature) if self._signature else None
             test_count = len(testcases)
-            LOG.debug("unpacking testcases (%d)...", test_count)
-            for test in testcases:
-                dst_path = mkdtemp(prefix="tc_", dir=grz_tmp("serve"))
-                unpacked.append(dst_path)
-                test.dump(dst_path)
             relaunch = min(self._relaunch, repeat)
             runner = Runner(
                 self.server,
@@ -333,7 +325,6 @@ class ReplayManager:
                         self.ignore,
                         server_map,
                         testcases[test_idx],
-                        test_path=unpacked[test_idx],
                         wait_for_callback=self._harness is None,
                     )
                     durations.append(run_result.duration)
@@ -505,9 +496,6 @@ class ReplayManager:
             return results
 
         finally:
-            # remove unpacked testcase data
-            for tc_path in unpacked:
-                rmtree(tc_path)
             # we don't want to clean up but we are not checking results
             self.target.close(force_close=True)
             # remove unprocessed reports
