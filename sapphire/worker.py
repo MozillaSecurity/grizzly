@@ -8,6 +8,7 @@ Sapphire HTTP server worker
 from logging import getLogger
 from os import stat
 from os.path import isfile
+from pathlib import Path
 from re import compile as re_compile
 from socket import error as sock_error
 from socket import timeout as sock_timeout
@@ -199,7 +200,7 @@ class Worker:
                     conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
                     offset = in_fp.tell()
             LOG.debug("200 %r (%d to go)", resource.target, serv_job.pending)
-            serv_job.increment_served(resource.target)
+            serv_job.mark_served(Path(resource.target))
 
         except (sock_error, sock_timeout):
             _, exc_obj, exc_tb = exc_info()
