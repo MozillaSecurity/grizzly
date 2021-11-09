@@ -3,14 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
-from shutil import rmtree
-from tempfile import mkdtemp
 from time import sleep, time
 
 from sapphire import Served
 
 from ..target import Result, TargetLaunchError, TargetLaunchTimeout
-from .utils import grz_tmp
 
 __all__ = ("Runner", "RunResult")
 __author__ = "Tyson Smith"
@@ -176,7 +173,6 @@ class Runner:
         ignore,
         server_map,
         testcase,
-        test_path=None,
         coverage=False,
         wait_for_callback=False,
     ):
@@ -186,7 +182,6 @@ class Runner:
             ignore (list): List of failure types to ignore.
             server_map (sapphire.ServerMap): A ServerMap.
             testcase (grizzly.TestCase): The test case that will be served.
-            test_path (str): Location of test case data on the filesystem.
             coverage (bool): Trigger coverage dump.
             wait_for_callback: (bool): Use `_keep_waiting()` to indicate when
                                        framework should move on.
@@ -200,27 +195,16 @@ class Runner:
             # overwrite instead of replace 'grz_next_test' for consistency
             server_map.set_redirect("grz_next_test", "grz_empty", required=True)
             server_map.set_dynamic_response("grz_empty", lambda _: b"", required=True)
-        try:
-            # unpack test case
-            if test_path is None:
-                wwwdir = mkdtemp(prefix="test_", dir=grz_tmp("serve"))
-                testcase.dump(wwwdir)
-            else:
-                wwwdir = test_path
-            # serve the test case
-            serve_start = time()
-            server_status, served = self._server.serve_path(
-                wwwdir,
-                continue_cb=self._keep_waiting,
-                forever=wait_for_callback,
-                optional_files=tuple(testcase.optional),
-                server_map=server_map,
-            )
-            duration = time() - serve_start
-        finally:
-            # remove temporary files
-            if test_path is None:
-                rmtree(wwwdir)
+        # serve the test case
+        serve_start = time()
+        server_status, served = self._server.serve_path(
+            testcase.data_path,
+            continue_cb=self._keep_waiting,
+            forever=wait_for_callback,
+            optional_files=tuple(testcase.optional),
+            server_map=server_map,
+        )
+        duration = time() - serve_start
         result = RunResult(served, duration, timeout=server_status == Served.TIMEOUT)
         result.attempted = testcase.landing_page in result.served
         result.initial = self._tests_run == 0

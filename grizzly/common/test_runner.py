@@ -15,7 +15,7 @@ from .runner import Runner, _IdleChecker
 from .storage import TestCase
 
 
-def test_runner_01(mocker, tmp_path):
+def test_runner_01(mocker):
     """test Runner()"""
     mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
     server = mocker.Mock(spec_set=Sapphire)
@@ -42,7 +42,6 @@ def test_runner_01(mocker, tmp_path):
     assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 0
     assert target.handle_hang.call_count == 0
-    assert testcase.dump.call_count == 1
     # dump coverage
     serv_map = ServerMap()
     server.serve_path.return_value = (Served.ALL, serv_files)
@@ -57,21 +56,6 @@ def test_runner_01(mocker, tmp_path):
     assert target.close.call_count == 0
     assert target.dump_coverage.call_count == 1
     assert target.handle_hang.call_count == 0
-    # existing test path
-    testcase.reset_mock()
-    tc_path = tmp_path / "tc"
-    tc_path.mkdir()
-    serv_map = ServerMap()
-    server.serve_path.return_value = (Served.ALL, serv_files)
-    result = runner.run([], serv_map, testcase, test_path=str(tc_path))
-    assert result.attempted
-    assert runner._tests_run == 3
-    assert not result.initial
-    assert result.status == Result.NONE
-    assert not serv_map.dynamic
-    assert target.close.call_count == 0
-    assert testcase.dump.call_count == 0
-    tc_path.is_dir()
 
 
 def test_runner_02(mocker):
