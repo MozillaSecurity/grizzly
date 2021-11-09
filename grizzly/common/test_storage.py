@@ -136,17 +136,17 @@ def test_testcase_06(tmp_path):
     """test TestCase.load_single() using a directory - fail cases"""
     # missing test_info.json
     with raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
-        TestCase.load_single(str(tmp_path))
+        TestCase.load_single(tmp_path)
     # invalid test_info.json
     (tmp_path / "test_info.json").write_bytes(b"X")
     with raises(TestCaseLoadFailure, match="Invalid 'test_info.json'"):
-        TestCase.load_single(str(tmp_path))
+        TestCase.load_single(tmp_path)
     # test_info.json missing 'target' entry
     (tmp_path / "test_info.json").write_bytes(b"{}")
     with raises(
         TestCaseLoadFailure, match="'test_info.json' has invalid 'target' entry"
     ):
-        TestCase.load_single(str(tmp_path))
+        TestCase.load_single(tmp_path)
     # build a test case
     src_dir = tmp_path / "src"
     src_dir.mkdir()
@@ -158,7 +158,7 @@ def test_testcase_06(tmp_path):
     # bad 'target' entry in test_info.json
     entry_point.unlink()
     with raises(TestCaseLoadFailure, match="Entry point 'target.bin' not found in"):
-        TestCase.load_single(str(src_dir))
+        TestCase.load_single(src_dir)
     # bad 'env' entry in test_info.json
     entry_point.touch()
     with AssetManager(base_path=str(tmp_path)) as assets:
@@ -171,7 +171,7 @@ def test_testcase_06(tmp_path):
     test_info["env"] = {"bad": 1}
     (src_dir / "test_info.json").write_text(dumps(test_info))
     with raises(TestCaseLoadFailure, match="'env' contains invalid entries"):
-        TestCase.load_single(str(src_dir))
+        TestCase.load_single(src_dir)
 
 
 def test_testcase_07(mocker, tmp_path):
@@ -206,7 +206,7 @@ def test_testcase_07(mocker, tmp_path):
             src.assets = assets
             src.dump(str(dst_dir), include_details=True)
     # test loading test case from test_info.json
-    with TestCase.load_single(str(dst_dir)) as dst:
+    with TestCase.load_single(dst_dir) as dst:
         asset = dst.pop_assets()
         assert asset
         with asset:
@@ -221,14 +221,14 @@ def test_testcase_07(mocker, tmp_path):
     # test load with missing asset
     mocker.patch("grizzly.common.storage.AssetManager.load", side_effect=OSError)
     with raises(TestCaseLoadFailure):
-        TestCase.load_single(str(dst_dir))
+        TestCase.load_single(dst_dir)
 
 
 def test_testcase_08(tmp_path):
     """test TestCase.load_single() using a file"""
     # invalid entry_point specified
     with raises(TestCaseLoadFailure, match="Missing or invalid TestCase"):
-        TestCase.load_single(str(tmp_path / "missing_file"), adjacent=False)
+        TestCase.load_single(tmp_path / "missing_file", adjacent=False)
     # valid test case
     src_dir = tmp_path / "src"
     src_dir.mkdir()
@@ -236,7 +236,7 @@ def test_testcase_08(tmp_path):
     entry_point.touch()
     (src_dir / "optional.bin").touch()
     # load single file test case
-    with TestCase.load_single(str(entry_point), adjacent=False) as tcase:
+    with TestCase.load_single(entry_point, adjacent=False) as tcase:
         assert tcase.assets is None
         assert not tcase.env_vars
         assert tcase.landing_page == "target.bin"
@@ -244,7 +244,7 @@ def test_testcase_08(tmp_path):
         assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
         assert tcase.timestamp == 0
     # load full test case
-    with TestCase.load_single(str(entry_point), adjacent=True) as tcase:
+    with TestCase.load_single(entry_point, adjacent=True) as tcase:
         assert tcase.landing_page == "target.bin"
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
@@ -269,7 +269,7 @@ def test_testcase_09(tmp_path):
             org.assets = assets
             org.dump(str(working), include_details=True)
         org.assets = None
-        with TestCase.load_single(str(working), adjacent=False) as loaded:
+        with TestCase.load_single(working, adjacent=False) as loaded:
             try:
                 for prop in TestCase.__slots__:
                     if prop.startswith("_") or prop in ("assets", "redirect_page"):
@@ -424,17 +424,17 @@ def test_testcase_16(tmp_path):
     """test TestCase.scan_path()"""
     # empty path
     (tmp_path / "not-test").mkdir()
-    assert not any(TestCase.scan_path(str(tmp_path)))
+    assert not any(TestCase.scan_path(tmp_path))
     # multiple test case directories
-    paths = [str(tmp_path / ("test-%d" % i)) for i in range(3)]
+    paths = [tmp_path / ("test-%d" % i) for i in range(3)]
     with TestCase("test.htm", None, "test-adapter") as src:
         src.add_from_bytes(b"test", "test.htm")
         for path in paths:
-            src.dump(path, include_details=True)
-    tc_paths = list(TestCase.scan_path(str(tmp_path)))
+            src.dump(str(path), include_details=True)
+    tc_paths = list(TestCase.scan_path(tmp_path))
     assert len(tc_paths) == 3
     # single test case directory
-    tc_paths = list(TestCase.scan_path(str(paths[0])))
+    tc_paths = list(TestCase.scan_path(paths[0]))
     assert len(tc_paths) == 1
 
 
