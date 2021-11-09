@@ -5,7 +5,7 @@
 """
 Sapphire HTTP server job
 """
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 from enum import Enum, unique
 from logging import getLogger
 from mimetypes import guess_type
@@ -13,6 +13,7 @@ from os import walk
 from os.path import abspath, isdir, isfile
 from os.path import join as pathjoin
 from os.path import normpath, relpath, splitext
+from pathlib import Path
 from queue import Queue
 from threading import Event, Lock
 
@@ -76,7 +77,7 @@ class Job:
     ):
         self._complete = Event()
         self._pending = Tracker(files=set(), lock=Lock())
-        self._served = Tracker(files=defaultdict(int), lock=Lock())
+        self._served = Tracker(files=set(), lock=Lock())
         self.accepting = Event()
         self.accepting.set()
         self.auto_close = auto_close
@@ -190,10 +191,11 @@ class Job:
     def finish(self):
         self._complete.set()
 
-    def increment_served(self, target):
+    def mark_served(self, path):
         # update list of served files
+        assert isinstance(path, Path)
         with self._served.lock:
-            self._served.files[target] += 1
+            self._served.files.add(path)
 
     def is_complete(self, wait=None):
         if wait is not None:
@@ -227,18 +229,19 @@ class Job:
     @property
     def served(self):
         # served files
-        # files served from www root will have a path relative to www root
+        # files served from wwwroot will have a relative path
         # include files will have an absolute path
         with self._served.lock:
             # make a copy of what is available (maybe a copy not necessary?)
-            served = tuple(self._served.files.keys())
-        for fname in served:
-            if fname.startswith(self.base_path):
-                # file is in www root
-                yield relpath(fname, self.base_path)
-            else:
+            served = tuple(self._served.files)
+        wwwroot = Path(self.base_path)
+        for path in served:
+            try:
+                # file is in wwwroot
+                yield path.relative_to(wwwroot).as_posix()
+            except ValueError:
                 # include file
-                yield fname
+                yield path.as_posix()
 
     @property
     def status(self):

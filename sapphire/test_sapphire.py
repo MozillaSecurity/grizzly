@@ -410,9 +410,9 @@ def test_sapphire_18(client, tmp_path):
         status, files_served = serv.serve_path(str(root_path), server_map=smap)
     assert status == Served.ALL
     assert "test_case.html" in files_served
-    assert str(inc1_path / "included_file1.html") in files_served
-    assert str(inc2_path / "included_file2.html") in files_served
-    assert str(nest_path / "nested_file.html") in files_served
+    assert (inc1_path / "included_file1.html").as_posix() in files_served
+    assert (inc2_path / "included_file2.html").as_posix() in files_served
+    assert (nest_path / "nested_file.html").as_posix() in files_served
     assert client.wait(timeout=10)
     assert inc1.code == 200
     assert inc2.code == 200

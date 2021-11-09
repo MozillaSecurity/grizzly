@@ -5,6 +5,7 @@ Job unit tests
 # pylint: disable=protected-access
 
 import platform
+from pathlib import Path
 
 import pytest
 
@@ -248,12 +249,14 @@ def test_job_09():
 
 
 def test_job_10(tmp_path):
-    """test Job.increment_served() and Job.served"""
+    """test Job.mark_served() and Job.served"""
     job = Job(str(tmp_path))
     assert not any(job.served)
-    job.increment_served(str(tmp_path / "file.bin"))
-    assert "file.bin" in job.served
-    job.increment_served("/some/include/path/inc.bin")
+    job.mark_served(tmp_path / "a.bin")
+    assert "a.bin" in job.served
+    job.mark_served(tmp_path / "nested" / "b.bin")
+    assert "nested/b.bin" in job.served
+    job.mark_served(Path("/some/include/path/inc.bin"))
     assert "/some/include/path/inc.bin" in job.served
 
 
