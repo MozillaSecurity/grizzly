@@ -6,10 +6,8 @@
 import json
 from collections import namedtuple
 from itertools import chain, product
-from os import listdir, walk
-from os.path import abspath, basename, dirname, isdir, isfile
-from os.path import join as pathjoin
-from os.path import normpath, relpath, split
+from os import walk
+from os.path import normpath, split
 from pathlib import Path
 from shutil import copyfileobj, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
@@ -99,14 +97,17 @@ class TestCase:
         Returns:
             None
         """
-        path = abspath(path)
-        for fname in (x for x in include_files if x.startswith(path)):
-            test_path = relpath(fname, path)
-            if test_path.startswith(".."):
+        path = Path(path)
+        for fname in include_files:
+            file = Path(fname)
+            try:
+                relative = file.relative_to(path)
+            except ValueError:
+                # cannot add files outside path
                 continue
             if prefix:
-                test_path = "/".join((prefix, test_path))
-            self.add_from_file(fname, file_name=test_path, copy=copy)
+                relative = prefix / relative
+            self.add_from_file(file, file_name=relative.as_posix(), copy=copy)
 
     def add_from_bytes(self, data, file_name, required=True):
         """Create a file and add it to the TestCase.
@@ -140,7 +141,6 @@ class TestCase:
         Returns:
             None
         """
-        assert src_file
         src_file = Path(src_file)
         if file_name is None:
             file_name = src_file.name
@@ -153,7 +153,7 @@ class TestCase:
             TestFile.copy_file(src_file, test_file.data_file)
         else:
             test_file.data_file.parent.mkdir(exist_ok=True, parents=True)
-            src_file.rename(str(test_file.data_file))
+            src_file.replace(test_file.data_file)
 
         # TODO: set 'required=False' by default
         # landing_page is always 'required'
@@ -207,7 +207,7 @@ class TestCase:
             data_file = result._data_path / entry.file_name
             TestFile.copy_file(entry.data_file, data_file)
             result.add_from_file(
-                str(data_file),
+                data_file,
                 file_name=entry.file_name,
                 required=required,
                 copy=False,
@@ -277,7 +277,7 @@ class TestCase:
                 "duration": self.duration,
                 "env": self.env_vars,
                 "hang": self.hang,
-                "input": basename(self.input_fname) if self.input_fname else None,
+                "input": Path(self.input_fname).name if self.input_fname else None,
                 "target": self.landing_page,
                 "time_limit": self.time_limit,
                 "timestamp": self.timestamp,
@@ -291,17 +291,17 @@ class TestCase:
             with (dst_path / "test_info.json").open("w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
 
-    def get_file(self, file_name):
+    def get_file(self, path):
         """Lookup and return the TestFile with the specified file name.
 
         Args:
-            file_name (str): Name of file to retrieve.
+            path (str): Path (relative to wwwroot) of TestFile to retrieve.
 
         Returns:
-            TestFile: TestFile with matching file name otherwise None.
+            TestFile: TestFile with matching path otherwise None.
         """
         for tfile in chain(self._files.optional, self._files.required):
-            if tfile.file_name == file_name:
+            if tfile.file_name == path:
                 return tfile
         return None
 
@@ -323,8 +323,9 @@ class TestCase:
         Returns:
             list: TestCases successfully loaded from path.
         """
+        path = Path(path)
         # unpack archive if needed
-        if path.lower().endswith(".zip"):
+        if path.name.lower().endswith(".zip"):
             unpacked = mkdtemp(prefix="unpack_", dir=grz_tmp("storage"))
             try:
                 with ZipFile(path) as zip_fp:
@@ -332,14 +333,14 @@ class TestCase:
             except (BadZipfile, zlib_error):
                 rmtree(unpacked, ignore_errors=True)
                 raise TestCaseLoadFailure("Testcase archive is corrupted") from None
-            path = unpacked
+            path = Path(unpacked)
         else:
             unpacked = None
         # load testcase data from disk
         try:
-            if isfile(path):
+            if path.is_file():
                 tests = [cls.load_single(path, adjacent=adjacent)]
-            elif isdir(path):
+            elif path.is_dir():
                 tests = list()
                 assets = None
                 # TODO: move (don't copy) 'unpacked' files
@@ -367,7 +368,7 @@ class TestCase:
         contain a valid 'test_info.json' file.
 
         Args:
-            path (str): Path to the directory or file to load.
+            path (Path): Path to the directory or file to load.
             adjacent (bool): Load adjacent files as part of the TestCase.
                              This is always true when loading a directory.
                              WARNING: This should be used with caution!
@@ -375,11 +376,11 @@ class TestCase:
         Returns:
             TestCase: A TestCase.
         """
-        path = abspath(path)
-        if isdir(path):
+        path = Path(path)
+        if path.is_dir():
             # load using test_info.json
             try:
-                with open(pathjoin(path, "test_info.json"), "r") as in_fp:
+                with (path / "test_info.json").open("r") as in_fp:
                     info = json.load(in_fp)
             except IOError:
                 raise TestCaseLoadFailure("Missing 'test_info.json'") from None
@@ -387,22 +388,21 @@ class TestCase:
                 raise TestCaseLoadFailure("Invalid 'test_info.json'") from None
             if not isinstance(info.get("target"), str):
                 raise TestCaseLoadFailure("'test_info.json' has invalid 'target' entry")
-            entry_point = basename(info["target"])
-            if not isfile(pathjoin(path, entry_point)):
+            entry_point = Path(path / info["target"])
+            if not entry_point.is_file():
                 raise TestCaseLoadFailure(
-                    "Entry point %r not found in '%s'" % (entry_point, path)
+                    "Entry point %r not found in %r" % (info["target"], str(path))
                 )
             # always load all contents of a directory if a 'test_info.json' is loaded
             adjacent = True
-        elif isfile(path):
-            entry_point = basename(path)
+        elif path.is_file():
+            entry_point = path
             info = dict()
-            path = dirname(path)
         else:
-            raise TestCaseLoadFailure("Missing or invalid TestCase %r" % (path,))
+            raise TestCaseLoadFailure("Missing or invalid TestCase %r" % (str(path),))
         # create testcase and add data
         test = cls(
-            entry_point,
+            entry_point.relative_to(entry_point.parent).as_posix(),
             None,
             info.get("adapter", None),
             input_fname=info.get("input", None),
@@ -411,14 +411,16 @@ class TestCase:
         )
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
-        test.add_from_file(pathjoin(path, entry_point), copy=True)
+        test.add_from_file(
+            entry_point, file_name=test.landing_page, required=True, copy=True
+        )
         if info:
             # load assets
             try:
                 if load_assets and info.get("assets", None):
                     test.assets = AssetManager.load(
                         info.get("assets"),
-                        pathjoin(path, info.get("assets_path", "")),
+                        str(entry_point.parent / info.get("assets_path", "")),
                     )
             except (AssetError, OSError) as exc:
                 test.cleanup()
@@ -436,17 +438,19 @@ class TestCase:
         # load all adjacent data from directory
         if adjacent:
             asset_path = info.get("assets_path", None)
-            for dpath, _, files in walk(path):
+            for dpath, _, files in walk(entry_point.parent):
                 # ignore asset path
-                if asset_path and dpath == pathjoin(path, asset_path):
+                dpath = Path(dpath)
+                if asset_path and dpath.samefile(entry_point.parent / asset_path):
                     continue
                 for fname in files:
+                    file = dpath / fname
+                    location = file.relative_to(entry_point.parent).as_posix()
                     # ignore files that have been previously loaded
-                    if fname in (entry_point, "test_info.json"):
+                    if location in (test.landing_page, "test_info.json"):
                         continue
-                    location = "/".join((dpath.split(path, 1)[-1], fname))
                     test.add_from_file(
-                        pathjoin(dpath, fname),
+                        file,
                         file_name=location,
                         required=False,
                         copy=True,
@@ -515,19 +519,17 @@ class TestCase:
         """Check path and subdirectories for potential test cases.
 
         Args:
-            path (str): Path to scan.
+            path (Path): Path to scan.
 
         Yields:
             str: Path to what appears to be a valid testcase.
         """
-        contents = listdir(path)
-        if "test_info.json" in contents:
+        if "test_info.json" in (x.name for x in path.iterdir()):
             yield path
         else:
-            for entry in contents:
-                tc_path = pathjoin(path, entry)
-                if isfile(pathjoin(tc_path, "test_info.json")):
-                    yield tc_path
+            for entry in path.iterdir():
+                if entry.is_dir() and (entry / "test_info.json").is_file():
+                    yield entry
 
 
 class TestFile:
