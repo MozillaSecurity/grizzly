@@ -343,9 +343,12 @@ class TestCase:
             elif path.is_dir():
                 tests = list()
                 assets = None
-                # TODO: move (don't copy) 'unpacked' files
                 for tc_path in TestCase.scan_path(path):
-                    tests.append(cls.load_single(tc_path, load_assets=assets is None))
+                    tests.append(
+                        cls.load_single(
+                            tc_path, load_assets=assets is None, copy=unpacked is None
+                        )
+                    )
                     # only load assets once
                     if not assets and tests[-1].assets:
                         assets = tests[-1].assets
@@ -363,7 +366,7 @@ class TestCase:
         return tests
 
     @classmethod
-    def load_single(cls, path, adjacent=False, load_assets=True):
+    def load_single(cls, path, adjacent=False, load_assets=True, copy=True):
         """Load contents of a TestCase from disk. If `path` is a directory it must
         contain a valid 'test_info.json' file.
 
@@ -372,6 +375,8 @@ class TestCase:
             adjacent (bool): Load adjacent files as part of the TestCase.
                              This is always true when loading a directory.
                              WARNING: This should be used with caution!
+            load_assets (bool): Load assets files.
+            copy (bool): Files will be copied if True otherwise the they will be moved.
 
         Returns:
             TestCase: A TestCase.
@@ -412,7 +417,7 @@ class TestCase:
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
         test.add_from_file(
-            entry_point, file_name=test.landing_page, required=True, copy=True
+            entry_point, file_name=test.landing_page, required=True, copy=copy
         )
         if info:
             # load assets
@@ -453,7 +458,7 @@ class TestCase:
                         file,
                         file_name=location,
                         required=False,
-                        copy=True,
+                        copy=copy,
                     )
         return test
 
