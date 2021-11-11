@@ -18,7 +18,7 @@ from zlib import error as zlib_error
 from ..target import AssetError, AssetManager
 from .utils import grz_tmp
 
-__all__ = ("TestCase", "TestFile", "TestCaseLoadFailure", "TestFileExists")
+__all__ = ("TestCase", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -32,6 +32,7 @@ class TestFileExists(Exception):
     TestFile with the same name"""
 
 
+TestFile = namedtuple("TestFile", "file_name data_file")
 TestFileMap = namedtuple("TestFileMap", "optional required")
 
 
@@ -66,9 +67,9 @@ class TestCase:
         self.env_vars = dict()
         self.hang = False
         self.input_fname = input_fname  # file that was used to create the test case
-        self.landing_page = TestFile.sanitize_path(landing_page)
+        self.landing_page = self.sanitize_path(landing_page)
         if redirect_page is not None:
-            self.redirect_page = TestFile.sanitize_path(redirect_page)
+            self.redirect_page = self.sanitize_path(redirect_page)
         else:
             self.redirect_page = None
         self.time_limit = time_limit
@@ -123,9 +124,17 @@ class TestCase:
         assert isinstance(data, bytes)
         with NamedTemporaryFile(delete=False, dir=grz_tmp("storage")) as in_fp:
             in_fp.write(data)
-            datafile = in_fp.name
+            data_file = Path(in_fp.name)
 
-        self.add_from_file(datafile, file_name=file_name, required=required, copy=False)
+        try:
+            self.add_from_file(
+                data_file, file_name=file_name, required=required, copy=False
+            )
+        finally:
+            # the temporary file should have been moved to the data path of the TestCase
+            # unless an exception occurred so remove it if needed
+            if data_file.is_file():
+                data_file.unlink()
 
     def add_from_file(self, src_file, file_name=None, required=True, copy=False):
         """Add a file to the TestCase by either copying or moving an existing file.
@@ -144,13 +153,14 @@ class TestCase:
         src_file = Path(src_file)
         if file_name is None:
             file_name = src_file.name
+        file_name = self.sanitize_path(file_name)
 
-        test_file = TestFile(file_name, self._data_path)
+        test_file = TestFile(file_name, self._data_path / file_name)
         if test_file.file_name in self.contents:
             raise TestFileExists("%r exists in test" % (test_file.file_name,))
 
         if copy:
-            TestFile.copy_file(src_file, test_file.data_file)
+            self.copy_file(src_file, test_file.data_file)
         else:
             test_file.data_file.parent.mkdir(exist_ok=True, parents=True)
             src_file.replace(test_file.data_file)
@@ -171,10 +181,7 @@ class TestCase:
         Returns:
             None
         """
-        # TODO: can this be replaced with a single rmtree()?
-        for test_file in chain(self._files.required, self._files.optional):
-            test_file.unlink()
-        rmtree(str(self._data_path), ignore_errors=True)
+        rmtree(self._data_path, ignore_errors=True)
 
     def clone(self):
         """Make a copy of the TestCase.
@@ -203,14 +210,8 @@ class TestCase:
             product(self._files.required, [True]),
             product(self._files.optional, [False]),
         ):
-            # pylint: disable=protected-access
-            data_file = result._data_path / entry.file_name
-            TestFile.copy_file(entry.data_file, data_file)
             result.add_from_file(
-                data_file,
-                file_name=entry.file_name,
-                required=required,
-                copy=False,
+                entry.data_file, file_name=entry.file_name, required=required, copy=True
             )
         return result
 
@@ -226,6 +227,22 @@ class TestCase:
         """
         for tfile in chain(self._files.required, self._files.optional):
             yield tfile.file_name
+
+    @staticmethod
+    def copy_file(src_file, dst_file):
+        """Copy data from src_file to dst_file.
+
+        Args:
+            src_file (Path): File to read data from.
+            dst_file (Path): File to write data to.
+
+        Returns:
+            None
+        """
+        with src_file.open("rb") as src_fp:
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            with dst_file.open("wb") as dst_fp:
+                copyfileobj(src_fp, dst_fp, 1_048_576)
 
     @property
     def data_path(self):
@@ -267,7 +284,7 @@ class TestCase:
         dst_path = Path(dst_path)
         # save test files to dst_path
         for test_file in chain(self._files.required, self._files.optional):
-            TestFile.copy_file(test_file.data_file, dst_path / test_file.file_name)
+            self.copy_file(test_file.data_file, dst_path / test_file.file_name)
         # save test case files and meta data including:
         # adapter used, input file, environment info and files
         if include_details:
@@ -444,8 +461,8 @@ class TestCase:
         if adjacent:
             asset_path = info.get("assets_path", None)
             for dpath, _, files in walk(entry_point.parent):
-                # ignore asset path
                 dpath = Path(dpath)
+                # ignore asset path
                 if asset_path and dpath.samefile(entry_point.parent / asset_path):
                     continue
                 for fname in files:
@@ -517,54 +534,7 @@ class TestCase:
             if fname not in keep_opt:
                 to_remove.append(idx)
         for idx in reversed(to_remove):
-            self._files.optional.pop(idx).unlink()
-
-    @staticmethod
-    def scan_path(path):
-        """Check path and subdirectories for potential test cases.
-
-        Args:
-            path (Path): Path to scan.
-
-        Yields:
-            str: Path to what appears to be a valid testcase.
-        """
-        if "test_info.json" in (x.name for x in path.iterdir()):
-            yield path
-        else:
-            for entry in path.iterdir():
-                if entry.is_dir() and (entry / "test_info.json").is_file():
-                    yield entry
-
-
-class TestFile:
-    __slots__ = ("data_file", "file_name")
-
-    def __init__(self, file_name, data_path):
-        self.file_name = self.sanitize_path(file_name)
-        self.data_file = data_path / self.file_name
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        self.unlink()
-
-    @staticmethod
-    def copy_file(src_file, dst_file):
-        """Copy data to file.
-
-        Args:
-            src_file (Path): File to read data from.
-            dst_file (Path): File to write data to.
-
-        Returns:
-            None
-        """
-        with src_file.open("rb") as src_fp:
-            dst_file.parent.mkdir(parents=True, exist_ok=True)
-            with dst_file.open("wb") as dst_fp:
-                copyfileobj(src_fp, dst_fp, 1_048_576)
+            self._files.optional.pop(idx).data_file.unlink()
 
     @staticmethod
     def sanitize_path(path):
@@ -587,14 +557,19 @@ class TestFile:
             raise ValueError("invalid path %r" % (path,))
         return path.lstrip("/")
 
-    def unlink(self):
-        """Delete the TestFile data file.
+    @staticmethod
+    def scan_path(path):
+        """Check path and subdirectories for potential test cases.
 
         Args:
-            None
+            path (Path): Path to scan.
 
-        Returns:
-            None
+        Yields:
+            str: Path to what appears to be a valid testcase.
         """
-        if self.data_file.exists():
-            self.data_file.unlink()
+        if "test_info.json" in (x.name for x in path.iterdir()):
+            yield path
+        else:
+            for entry in path.iterdir():
+                if entry.is_dir() and (entry / "test_info.json").is_file():
+                    yield entry

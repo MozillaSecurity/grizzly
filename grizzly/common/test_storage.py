@@ -12,7 +12,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from pytest import mark, raises
 
 from ..target import AssetManager
-from .storage import TestCase, TestCaseLoadFailure, TestFile, TestFileExists
+from .storage import TestCase, TestCaseLoadFailure, TestFileExists
 
 
 def test_testcase_01(tmp_path):
@@ -95,6 +95,18 @@ def test_testcase_03(tmp_path, file_paths):
 
 
 def test_testcase_04():
+    """test TestCase.add_from_bytes()"""
+    with TestCase("a.html", None, "adpt") as tcase:
+        tcase.add_from_bytes(b"foo", "a.html", required=True)
+        tcase.add_from_bytes(b"foo", "b.html", required=False)
+        assert "a.html" in (x.file_name for x in tcase._files.required)
+        assert "b.html" in (x.file_name for x in tcase._files.optional)
+        # add file with invalid file name
+        with raises(ValueError, match="invalid path ''"):
+            tcase.add_from_bytes(b"foo", "", required=False)
+
+
+def test_testcase_05():
     """test TestCase.purge_optional()"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         # no optional files
@@ -122,7 +134,7 @@ def test_testcase_04():
         assert not any(tcase.optional)
 
 
-def test_testcase_05():
+def test_testcase_06():
     """test TestCase.data_size"""
     with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
         assert tcase.data_size == 0
@@ -132,7 +144,7 @@ def test_testcase_05():
         assert tcase.data_size == 3
 
 
-def test_testcase_06(tmp_path):
+def test_testcase_07(tmp_path):
     """test TestCase.load_single() using a directory - fail cases"""
     # missing test_info.json
     with raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
@@ -174,7 +186,7 @@ def test_testcase_06(tmp_path):
         TestCase.load_single(src_dir)
 
 
-def test_testcase_07(mocker, tmp_path):
+def test_testcase_08(mocker, tmp_path):
     """test TestCase.load_single() using a directory"""
     # build a valid test case
     src_dir = tmp_path / "src"
@@ -224,7 +236,7 @@ def test_testcase_07(mocker, tmp_path):
         TestCase.load_single(dst_dir)
 
 
-def test_testcase_08(tmp_path):
+def test_testcase_09(tmp_path):
     """test TestCase.load_single() using a file"""
     # invalid entry_point specified
     with raises(TestCaseLoadFailure, match="Missing or invalid TestCase"):
@@ -250,7 +262,7 @@ def test_testcase_08(tmp_path):
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
 
 
-def test_testcase_09(tmp_path):
+def test_testcase_10(tmp_path):
     """test TestCase - dump, load and compare"""
     working = tmp_path / "working"
     working.mkdir()
@@ -283,7 +295,7 @@ def test_testcase_09(tmp_path):
                     loaded.assets.cleanup()
 
 
-def test_testcase_10(tmp_path):
+def test_testcase_11(tmp_path):
     """test TestCase.load() - missing file and empty directory"""
     # missing file
     with raises(TestCaseLoadFailure, match="Invalid TestCase path"):
@@ -292,7 +304,7 @@ def test_testcase_10(tmp_path):
     assert not TestCase.load(str(tmp_path), adjacent=True)
 
 
-def test_testcase_11(tmp_path):
+def test_testcase_12(tmp_path):
     """test TestCase.load() - single file"""
     tfile = tmp_path / "testcase.html"
     tfile.touch()
@@ -304,7 +316,7 @@ def test_testcase_11(tmp_path):
         any(x.cleanup() for x in testcases)
 
 
-def test_testcase_12(tmp_path):
+def test_testcase_13(tmp_path):
     """test TestCase.load() - single directory"""
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_from_bytes(b"test", "target.bin")
@@ -317,7 +329,7 @@ def test_testcase_12(tmp_path):
         any(x.cleanup() for x in testcases)
 
 
-def test_testcase_13(tmp_path):
+def test_testcase_14(tmp_path):
     """test TestCase.load() - multiple directories (with assets)"""
     nested = tmp_path / "nested"
     nested.mkdir()
@@ -347,7 +359,7 @@ def test_testcase_13(tmp_path):
     assert not TestCase.load(str(tmp_path))
 
 
-def test_testcase_14(tmp_path):
+def test_testcase_15(tmp_path):
     """test TestCase.load() - archive"""
     archive = tmp_path / "testcase.zip"
     # bad archive
@@ -380,7 +392,7 @@ def test_testcase_14(tmp_path):
         any(x.cleanup() for x in testcases)
 
 
-def test_testcase_15(tmp_path):
+def test_testcase_16(tmp_path):
     """test TestCase.add_batch()"""
     include = tmp_path / "inc_path"
     include.mkdir()
@@ -420,7 +432,7 @@ def test_testcase_15(tmp_path):
             tcase.add_batch(str(include), [str(inc_1)])
 
 
-def test_testcase_16(tmp_path):
+def test_testcase_17(tmp_path):
     """test TestCase.scan_path()"""
     # empty path
     (tmp_path / "not-test").mkdir()
@@ -438,7 +450,7 @@ def test_testcase_16(tmp_path):
     assert len(tc_paths) == 1
 
 
-def test_testcase_17():
+def test_testcase_18():
     """test TestCase.get_file()"""
     with TestCase("test.htm", None, "test-adapter") as src:
         src.add_from_bytes(b"test", "test.htm")
@@ -446,7 +458,7 @@ def test_testcase_17():
         assert src.get_file("test.htm")
 
 
-def test_testcase_18():
+def test_testcase_19():
     """test TestCase.clone()"""
     with TestCase("a.htm", "b.htm", "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
@@ -464,30 +476,24 @@ def test_testcase_18():
                 ("test.htm", b"123"),
                 ("opt.htm", b"456"),
             ):
-                assert src.get_file(file).data_file.read_bytes() == data
-                assert dst.get_file(file).data_file.read_bytes() == data
+                src_file = src.get_file(file).data_file
+                dst_file = dst.get_file(file).data_file
+                assert src_file.read_bytes() == data
+                assert dst_file.read_bytes() == data
+                assert not dst_file.samefile(src_file)
             assert dst.env_vars == {"foo": "bar"}
             assert not set(src.optional) ^ set(dst.optional)
 
 
-def test_testfile_01(tmp_path):
-    """test simple TestFile"""
-    data_file = tmp_path / "file.txt"
-    data_file.write_text("test")
-    with TestFile(data_file.name, tmp_path) as tfile:
-        assert tfile.file_name == "file.txt"
-    assert not data_file.exists()
-
-
-def test_testfile_02(tmp_path):
-    """test TestFile.copy_file()"""
+def test_testcase_20(tmp_path):
+    """test TestCase.copy_file()"""
     src_file = tmp_path / "src" / "file.txt"
     src_file.parent.mkdir(parents=True)
     src_file.write_bytes(b"test\n123\r\n")
     dst_path = tmp_path / "dst"
     dst_file = dst_path / "file.txt"
     assert not dst_file.is_file()
-    TestFile.copy_file(src_file, dst_file)
+    TestCase.copy_file(src_file, dst_file)
     assert dst_file.is_file()
     assert dst_file.read_bytes() == b"test\n123\r\n"
     assert src_file.exists()
@@ -516,10 +522,10 @@ def test_testfile_02(tmp_path):
         ".",
     ],
 )
-def test_testfile_03(path):
+def test_testcase_21(path):
     """test TestCase.sanitize_path() with invalid paths"""
     with raises(ValueError, match="invalid path"):
-        TestFile.sanitize_path(path)
+        TestCase.sanitize_path(path)
 
 
 @mark.parametrize(
@@ -537,6 +543,6 @@ def test_testfile_03(path):
         ("./a/./b/../c", "a/c"),
     ],
 )
-def test_testfile_04(path, expected_result):
+def test_testcase_22(path, expected_result):
     """test TestCase.sanitize_path()"""
-    assert TestFile.sanitize_path(path) == expected_result
+    assert TestCase.sanitize_path(path) == expected_result
