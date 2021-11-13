@@ -96,14 +96,14 @@ def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, clo
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), 300, 25, 5000)
     if "memory" in ignore:
         fake_ffp.return_value.available_logs.return_value = "ffp_worker_memory_usage"
     elif "log-limit" in ignore:
         fake_ffp.return_value.available_logs.return_value = "ffp_worker_log_size"
     fake_ffp.return_value.is_healthy.return_value = healthy
     fake_ffp.return_value.reason = reason
-    assert target.check_result(ignore) == result
+    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+        assert target.check_result(ignore) == result
     assert fake_ffp.return_value.close.call_count == closes
 
 
@@ -131,10 +131,10 @@ def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed):
     fake_kill.side_effect = OSError
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), 300, 25, 5000)
     fake_ffp.return_value.cpu_usage.return_value = usage
     fake_ffp.return_value.is_healthy.return_value = healthy
-    target.handle_hang()
+    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+        target.handle_hang()
     assert fake_ffp.return_value.is_healthy.call_count == 1
     assert fake_ffp.return_value.close.call_count == 1
     assert fake_ffp.return_value.cpu_usage.call_count == (1 if usage else 0)
@@ -259,6 +259,7 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_ffp.reset_mock()
     fake_kill.reset_mock()
     fake_proc_iter.reset_mock()
+    target.cleanup()
 
 
 def test_puppet_target_06(mocker, tmp_path):
