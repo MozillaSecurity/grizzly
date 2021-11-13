@@ -4,9 +4,10 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 
-import os
 from itertools import chain
 from json import dumps, loads
+from os import walk
+from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from pytest import mark, raises
@@ -36,9 +37,9 @@ def test_testcase_01(tmp_path):
         assert not any(tcase.contents)
         assert tcase.pop_assets() is None
         assert not any(tcase.optional)
-        tcase.dump(str(tmp_path))
+        tcase.dump(tmp_path)
         assert not any(tmp_path.iterdir())
-        tcase.dump(str(tmp_path), include_details=True)
+        tcase.dump(tmp_path, include_details=True)
         assert (tmp_path / "test_info.json").is_file()
 
 
@@ -56,7 +57,7 @@ def test_testcase_02(tmp_path, copy, required):
     with TestCase("land_page.html", "a.html", "adpt", input_fname="in.bin") as tcase:
         in_file = tmp_path / "file.bin"
         in_file.write_text("data")
-        tcase.add_from_file(str(in_file), copy=copy, required=required)
+        tcase.add_from_file(in_file, copy=copy, required=required)
         assert tcase.data_size == 4
         assert "file.bin" in tcase.contents
         if required:
@@ -67,7 +68,7 @@ def test_testcase_02(tmp_path, copy, required):
         # try overwriting existing file
         if copy:
             with raises(TestFileExists, match="'file.bin' exists in test"):
-                tcase.add_from_file(str(in_file), copy=True)
+                tcase.add_from_file(in_file, copy=True)
             assert in_file.exists()
         else:
             assert not in_file.exists()
@@ -89,7 +90,7 @@ def test_testcase_03(tmp_path, file_paths):
             src_file = tmp_path / file_path
             src_file.parent.mkdir(exist_ok=True, parents=True)
             src_file.write_text("data")
-            tcase.add_from_file(str(src_file), file_name=file_path, required=True)
+            tcase.add_from_file(src_file, file_name=file_path, required=True)
             assert file_path in tcase.contents
             assert file_path not in tcase.optional
 
@@ -165,8 +166,8 @@ def test_testcase_07(tmp_path):
     entry_point = src_dir / "target.bin"
     entry_point.touch()
     with TestCase("target.bin", None, "test-adapter") as src:
-        src.add_from_file(str(entry_point))
-        src.dump(str(src_dir), include_details=True)
+        src.add_from_file(entry_point)
+        src.dump(src_dir, include_details=True)
     # bad 'target' entry in test_info.json
     entry_point.unlink()
     with raises(TestCaseLoadFailure, match="Entry point 'target.bin' not found in"):
@@ -178,7 +179,7 @@ def test_testcase_07(tmp_path):
         assets.add("example", str(tmp_path / "example_asset"), copy=False)
         with TestCase("target.bin", None, "test-adapter") as src:
             src.assets = assets
-            src.dump(str(src_dir), include_details=True)
+            src.dump(src_dir, include_details=True)
     test_info = loads((src_dir / "test_info.json").read_text())
     test_info["env"] = {"bad": 1}
     (src_dir / "test_info.json").write_text(dumps(test_info))
@@ -197,7 +198,7 @@ def test_testcase_08(mocker, tmp_path):
     asset_file.touch()
     (src_dir / "optional.bin").touch()
     (src_dir / "x.bin").touch()
-    nested = tmp_path / "src" / "nested"
+    nested = src_dir / "nested"
     nested.mkdir()
     # overlap file name in different directories
     (nested / "x.bin").touch()
@@ -207,16 +208,16 @@ def test_testcase_08(mocker, tmp_path):
         assets.add("example", str(asset_file))
         with TestCase("target.bin", None, "test-adapter") as src:
             src.env_vars["TEST_ENV_VAR"] = "100"
-            src.add_from_file(str(entry_point))
-            src.add_from_file(str(src_dir / "optional.bin"), required=False)
-            src.add_from_file(str(src_dir / "x.bin"), required=False)
+            src.add_from_file(entry_point)
+            src.add_from_file(src_dir / "optional.bin", required=False)
+            src.add_from_file(src_dir / "x.bin", required=False)
             src.add_from_file(
-                str(nested / "x.bin"),
-                file_name=os.path.join("nested", "x.bin"),
+                nested / "x.bin",
+                file_name=str((nested / "x.bin").relative_to(src_dir)),
                 required=False,
             )
             src.assets = assets
-            src.dump(str(dst_dir), include_details=True)
+            src.dump(dst_dir, include_details=True)
     # test loading test case from test_info.json
     with TestCase.load_single(dst_dir) as dst:
         asset = dst.pop_assets()
@@ -279,7 +280,7 @@ def test_testcase_10(tmp_path):
             fake.touch()
             assets.add("fake", str(fake))
             org.assets = assets
-            org.dump(str(working), include_details=True)
+            org.dump(working, include_details=True)
         org.assets = None
         with TestCase.load_single(working, adjacent=False) as loaded:
             try:
@@ -301,14 +302,14 @@ def test_testcase_11(tmp_path):
     with raises(TestCaseLoadFailure, match="Invalid TestCase path"):
         TestCase.load("missing")
     # empty path
-    assert not TestCase.load(str(tmp_path), adjacent=True)
+    assert not TestCase.load(tmp_path, adjacent=True)
 
 
 def test_testcase_12(tmp_path):
     """test TestCase.load() - single file"""
     tfile = tmp_path / "testcase.html"
     tfile.touch()
-    testcases = TestCase.load(str(tfile), adjacent=False)
+    testcases = TestCase.load(tfile, adjacent=False)
     try:
         assert len(testcases) == 1
         assert all(x.assets is None for x in testcases)
@@ -320,8 +321,8 @@ def test_testcase_13(tmp_path):
     """test TestCase.load() - single directory"""
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_from_bytes(b"test", "target.bin")
-        src.dump(str(tmp_path), include_details=True)
-    testcases = TestCase.load(str(tmp_path))
+        src.dump(tmp_path, include_details=True)
+    testcases = TestCase.load(tmp_path)
     try:
         assert len(testcases) == 1
         assert all(x.assets is None for x in testcases)
@@ -340,10 +341,10 @@ def test_testcase_14(tmp_path):
         with TestCase("target.bin", None, "test-adapter") as src:
             src.assets = assets
             src.add_from_bytes(b"test", "target.bin")
-            src.dump(str(nested / "test-1"), include_details=True)
-            src.dump(str(nested / "test-2"), include_details=True)
-            src.dump(str(nested / "test-3"), include_details=True)
-    testcases = TestCase.load(str(nested))
+            src.dump(nested / "test-1", include_details=True)
+            src.dump(nested / "test-2", include_details=True)
+            src.dump(nested / "test-3", include_details=True)
+    testcases = TestCase.load(nested)
     try:
         assert len(testcases) == 3
         assert all(x.assets is not None for x in testcases)
@@ -354,9 +355,9 @@ def test_testcase_14(tmp_path):
         any(x.cleanup() for x in testcases)
         for test in testcases:
             if test.assets:
-                test.cleanup()
+                test.assets.cleanup()
     # try loading testcases that are nested too deep
-    assert not TestCase.load(str(tmp_path))
+    assert not TestCase.load(tmp_path)
 
 
 def test_testcase_15(tmp_path):
@@ -365,29 +366,29 @@ def test_testcase_15(tmp_path):
     # bad archive
     archive.write_bytes(b"x")
     with raises(TestCaseLoadFailure, match="Testcase archive is corrupted"):
-        TestCase.load(str(archive))
+        TestCase.load(archive)
     # build archive containing multiple testcases
     with TestCase("target.bin", None, "test-adapter") as src:
         src.add_from_bytes(b"test", "target.bin")
-        src.dump(str(tmp_path / "test-0"), include_details=True)
-        src.dump(str(tmp_path / "test-1"), include_details=True)
-        src.dump(str(tmp_path / "test-2"), include_details=True)
-    (tmp_path / "test-1" / "prefs.js").write_bytes(b"fake_prefs")
+        src.dump(tmp_path / "test-0", include_details=True)
+        src.dump(tmp_path / "test-1", include_details=True)
+        src.dump(tmp_path / "test-2", include_details=True)
     (tmp_path / "log_dummy.txt").touch()
     (tmp_path / "not_a_tc").mkdir()
     (tmp_path / "not_a_tc" / "file.txt").touch()
-    with ZipFile(str(archive), mode="w", compression=ZIP_DEFLATED) as zfp:
-        for dir_name, _, dir_files in os.walk(str(tmp_path)):
-            arc_path = os.path.relpath(dir_name, str(tmp_path))
+    with ZipFile(archive, mode="w", compression=ZIP_DEFLATED) as zfp:
+        for dir_name, _, dir_files in walk(tmp_path):
             for file_name in dir_files:
+                file_path = Path(dir_name) / file_name
                 zfp.write(
-                    os.path.join(dir_name, file_name),
-                    arcname=os.path.join(arc_path, file_name),
+                    str(file_path),
+                    arcname=str(file_path.relative_to(tmp_path)),
                 )
-    testcases = TestCase.load(str(archive))
+    testcases = TestCase.load(archive)
     try:
         assert len(testcases) == 3
         assert all(x.assets is None for x in testcases)
+        assert all("target.bin" in x.contents for x in testcases)
     finally:
         any(x.cleanup() for x in testcases)
 
@@ -410,26 +411,23 @@ def test_testcase_16(tmp_path):
         assert not any(tcase.contents)
         # missing file
         with raises(IOError):
-            tcase.add_batch(str(tmp_path), [str(tmp_path / "missing.bin")])
+            tcase.add_batch(tmp_path, [tmp_path / "missing.bin"])
         assert not any(tcase.contents)
         # relative file name
-        tcase.add_batch(str(include), ["file.bin"])
+        tcase.add_batch(include, ["file.bin"])
         assert not any(tcase.contents)
         # valid list
-        tcase.add_batch(
-            str(include),
-            [str(inc_1), str(inc_2), str(tmp_path / "inc_path2" / "extra.bin")],
-        )
+        tcase.add_batch(include, [inc_1, inc_2, tmp_path / "inc_path2" / "extra.bin"])
         assert "file.bin" in tcase.contents
         assert "nested/nested.js" in tcase.contents
         assert len(list(tcase.contents)) == 2
         # nested url
-        tcase.add_batch(str(include), [str(inc_1)], prefix="test")
+        tcase.add_batch(include, [inc_1], prefix="test")
         assert "test/file.bin" in tcase.contents
         assert len(list(tcase.contents)) == 3
         # collision
         with raises(TestFileExists, match="'file.bin' exists in test"):
-            tcase.add_batch(str(include), [str(inc_1)])
+            tcase.add_batch(include, [inc_1])
 
 
 def test_testcase_17(tmp_path):
@@ -442,7 +440,7 @@ def test_testcase_17(tmp_path):
     with TestCase("test.htm", None, "test-adapter") as src:
         src.add_from_bytes(b"test", "test.htm")
         for path in paths:
-            src.dump(str(path), include_details=True)
+            src.dump(path, include_details=True)
     tc_paths = list(TestCase.scan_path(tmp_path))
     assert len(tc_paths) == 3
     # single test case directory
