@@ -9,7 +9,7 @@ from itertools import chain, product
 from os import walk
 from os.path import normpath, split
 from pathlib import Path
-from shutil import copyfileobj, rmtree
+from shutil import copyfile, move, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
 from zipfile import BadZipfile, ZipFile
@@ -159,11 +159,11 @@ class TestCase:
         if test_file.file_name in self.contents:
             raise TestFileExists("%r exists in test" % (test_file.file_name,))
 
+        test_file.data_file.parent.mkdir(parents=True, exist_ok=True)
         if copy:
-            self.copy_file(src_file, test_file.data_file)
+            copyfile(src_file, test_file.data_file)
         else:
-            test_file.data_file.parent.mkdir(exist_ok=True, parents=True)
-            src_file.replace(test_file.data_file)
+            move(src_file, test_file.data_file)
 
         # TODO: set 'required=False' by default
         # landing_page is always 'required'
@@ -228,22 +228,6 @@ class TestCase:
         for tfile in chain(self._files.required, self._files.optional):
             yield tfile.file_name
 
-    @staticmethod
-    def copy_file(src_file, dst_file):
-        """Copy data from src_file to dst_file.
-
-        Args:
-            src_file (Path): File to read data from.
-            dst_file (Path): File to write data to.
-
-        Returns:
-            None
-        """
-        with src_file.open("rb") as src_fp:
-            dst_file.parent.mkdir(parents=True, exist_ok=True)
-            with dst_file.open("wb") as dst_fp:
-                copyfileobj(src_fp, dst_fp, 1_048_576)
-
     @property
     def data_path(self):
         """Location test data is stored on disk. This is intended to be used as wwwroot.
@@ -284,7 +268,9 @@ class TestCase:
         dst_path = Path(dst_path)
         # save test files to dst_path
         for test_file in chain(self._files.required, self._files.optional):
-            self.copy_file(test_file.data_file, dst_path / test_file.file_name)
+            dst_file = dst_path / test_file.file_name
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            copyfile(test_file.data_file, dst_file)
         # save test case files and meta data including:
         # adapter used, input file, environment info and files
         if include_details:
@@ -343,8 +329,8 @@ class TestCase:
         path = Path(path)
         # unpack archive if needed
         if path.name.lower().endswith(".zip"):
-            unpacked = mkdtemp(prefix="unpack_", dir=grz_tmp("storage"))
             try:
+                unpacked = mkdtemp(prefix="unpack_", dir=grz_tmp("storage"))
                 with ZipFile(path) as zip_fp:
                     zip_fp.extractall(path=unpacked)
             except (BadZipfile, zlib_error):

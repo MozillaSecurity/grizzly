@@ -483,20 +483,6 @@ def test_testcase_19():
             assert not set(src.optional) ^ set(dst.optional)
 
 
-def test_testcase_20(tmp_path):
-    """test TestCase.copy_file()"""
-    src_file = tmp_path / "src" / "file.txt"
-    src_file.parent.mkdir(parents=True)
-    src_file.write_bytes(b"test\n123\r\n")
-    dst_path = tmp_path / "dst"
-    dst_file = dst_path / "file.txt"
-    assert not dst_file.is_file()
-    TestCase.copy_file(src_file, dst_file)
-    assert dst_file.is_file()
-    assert dst_file.read_bytes() == b"test\n123\r\n"
-    assert src_file.exists()
-
-
 @mark.parametrize(
     "path",
     [
@@ -520,7 +506,7 @@ def test_testcase_20(tmp_path):
         ".",
     ],
 )
-def test_testcase_21(path):
+def test_testcase_20(path):
     """test TestCase.sanitize_path() with invalid paths"""
     with raises(ValueError, match="invalid path"):
         TestCase.sanitize_path(path)
@@ -541,6 +527,6 @@ def test_testcase_21(path):
         ("./a/./b/../c", "a/c"),
     ],
 )
-def test_testcase_22(path, expected_result):
+def test_testcase_21(path, expected_result):
     """test TestCase.sanitize_path()"""
     assert TestCase.sanitize_path(path) == expected_result
