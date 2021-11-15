@@ -110,7 +110,7 @@ class TestCase:
                 relative = prefix / relative
             self.add_from_file(file, file_name=relative.as_posix(), copy=copy)
 
-    def add_from_bytes(self, data, file_name, required=True):
+    def add_from_bytes(self, data, file_name, required=False):
         """Create a file and add it to the TestCase.
 
         Args:
@@ -136,7 +136,7 @@ class TestCase:
             if data_file.is_file():
                 data_file.unlink()
 
-    def add_from_file(self, src_file, file_name=None, required=True, copy=False):
+    def add_from_file(self, src_file, file_name=None, required=False, copy=False):
         """Add a file to the TestCase by either copying or moving an existing file.
 
         Args:
@@ -165,7 +165,6 @@ class TestCase:
         else:
             move(src_file, test_file.data_file)
 
-        # TODO: set 'required=False' by default
         # landing_page is always 'required'
         if required or test_file.file_name == self.landing_page:
             self._files.required.append(test_file)
@@ -457,6 +456,8 @@ class TestCase:
                     # ignore files that have been previously loaded
                     if location in (test.landing_page, "test_info.json"):
                         continue
+                    # NOTE: when loading all files except the entry point are
+                    # marked as `required=False`
                     test.add_from_file(
                         file,
                         file_name=location,
