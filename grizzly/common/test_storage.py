@@ -113,7 +113,7 @@ def test_testcase_05():
         # no optional files
         tcase.purge_optional(["foo"])
         # setup
-        tcase.add_from_bytes(b"foo", "testfile1.bin")
+        tcase.add_from_bytes(b"foo", "testfile1.bin", required=True)
         tcase.add_from_bytes(b"foo", "testfile2.bin", required=False)
         tcase.add_from_bytes(b"foo", "testfile3.bin", required=False)
         tcase.add_from_bytes(b"foo", "not_served.bin", required=False)
@@ -461,7 +461,7 @@ def test_testcase_19():
     with TestCase("a.htm", "b.htm", "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
         src.hang = True
-        src.add_from_bytes(b"123", "test.htm")
+        src.add_from_bytes(b"123", "test.htm", required=True)
         src.add_from_bytes(b"456", "opt.htm", required=False)
         src.env_vars["foo"] = "bar"
         with src.clone() as dst:
