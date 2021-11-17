@@ -207,6 +207,10 @@ class ReduceManager:
             LOG.info("Updating max timeout to: %r", new_iter_timeout)
             self.server.timeout = new_iter_timeout
 
+    def _on_replay_iteration(self):
+        self._status.iterations += 1
+        self._status.report()
+
     def run_reliability_analysis(self):
         """Run several analysis passes of the current testcase to find `run` parameters.
 
@@ -296,10 +300,9 @@ class ReduceManager:
                     exit_early=False,
                     idle_delay=self._idle_delay,
                     idle_threshold=self._idle_threshold,
+                    on_iteration_cb=self._on_replay_iteration,
                 )
                 try:
-                    self._status.iterations += replay.status.iteration
-                    self._status.report()
                     crashes = sum(x.count for x in results if x.expected)
                     if crashes and not self._any_crash and self._signature_desc is None:
                         first_expected = next(
@@ -495,8 +498,8 @@ class ReduceManager:
                                     idle_threshold=self._idle_threshold,
                                     min_results=min_results,
                                     repeat=repeat,
+                                    on_iteration_cb=self._on_replay_iteration,
                                 )
-                                self._status.iterations += replay.status.iteration
                                 self._status.attempts += 1
                                 self.update_timeout(results)
                                 # get the first expected result (if any),

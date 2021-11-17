@@ -222,6 +222,7 @@ class ReplayManager:
         expect_hang=False,
         idle_delay=0,
         idle_threshold=0,
+        on_iteration_cb=None,
     ):
         """Run testcase replay.
 
@@ -239,6 +240,7 @@ class ReplayManager:
                                performed.
             idle_delay (int): Number of seconds to wait before polling for idle.
             idle_threshold (int): CPU usage threshold to mark the process as idle.
+            on_iteration_cb (callable): called every time a single iteration is run
 
         Returns:
             list: ReplayResults that were found running testcases.
@@ -277,6 +279,8 @@ class ReplayManager:
             # perform iterations
             for _ in range(repeat):
                 self.status.iteration += 1
+                if on_iteration_cb is not None:
+                    on_iteration_cb()
                 if self.target.closed:
                     if self._harness is None:
                         location = runner.location(

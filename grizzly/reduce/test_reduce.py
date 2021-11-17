@@ -245,7 +245,6 @@ def test_analysis(
     """test that analysis sets reasonable params"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value.__enter__.return_value
-    replayer.status.iteration = 11
     crashes = []
     expected_iters = 0
     if harness_last_crashes is not None:
@@ -264,6 +263,7 @@ def test_analysis(
         assert repeat <= len(crashes)
         assert not kw["exit_early"]
         for _ in range(repeat):
+            kw["on_iteration_cb"]()
             LOG.debug("interesting: %r", crashes[0])
             if crashes.pop(0):
                 log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
@@ -517,9 +517,9 @@ def test_repro(
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
-    replayer.status.iteration = 1
 
-    def replay_run(testcases, _time_limit, **_):
+    def replay_run(testcases, _time_limit, **kw):
+        kw["on_iteration_cb"]()
         for test in testcases:
             contents = test.get_file("test.html").data_file.read_text()
             # pylint: disable=logging-not-lazy
@@ -595,9 +595,9 @@ def test_report_01(mocker, tmp_path):
 
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
-    replayer.status.iteration = 1
 
-    def replay_run(_tests, _time_limit, **_kw):
+    def replay_run(_tests, _time_limit, **kw):
+        kw["on_iteration_cb"]()
         if replayer.run.call_count in {20, 40}:
             log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
             log_path.mkdir()
@@ -666,9 +666,9 @@ def test_report_02(mocker, tmp_path):
 
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
-    replayer.status.iteration = 1
 
-    def replay_run(_tests, _time_limit, **_kw):
+    def replay_run(_tests, _time_limit, **kw):
+        kw["on_iteration_cb"]()
         if replayer.run.call_count in {10, 20}:
             log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
             log_path.mkdir()
@@ -735,9 +735,9 @@ def test_quality_update(mocker, tmp_path):
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
-    replayer.status.iteration = 1
 
-    def replay_run(testcases, _time_limit, **_kw):
+    def replay_run(testcases, _time_limit, **kw):
+        kw["on_iteration_cb"]()
         for test in testcases:
             contents = test.get_file("test.html").data_file.read_text()
             if not contents.strip():
@@ -798,9 +798,9 @@ def test_include_assets_and_environ(mocker, tmp_path):
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
-    replayer.status.iteration = 1
 
-    def replay_run(testcases, _time_limit, **_kw):
+    def replay_run(testcases, _time_limit, **kw):
+        kw["on_iteration_cb"]()
         for test in testcases:
             contents = test.get_file("test.html").data_file.read_text()
             if not contents.strip():
@@ -938,9 +938,9 @@ def test_timeout_update(
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
-    replayer.status.iteration = 1
 
-    def replay_run(_testcases, _time_limit, **_):
+    def replay_run(_testcases, _time_limit, **kw):
+        kw["on_iteration_cb"]()
         LOG.debug("interesting true")
         log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
         log_path.mkdir()

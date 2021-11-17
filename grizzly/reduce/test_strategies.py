@@ -152,9 +152,9 @@ def test_list(
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
-    replayer.status.iteration = 1
 
-    def replay_run(testcases, _time_limit, **_):
+    def replay_run(testcases, _time_limit, **kw):
+        kw["on_iteration_cb"]()
         required_seen = False
         for test in testcases:
             contents = test.get_file("test.html").data_file.read_text()
@@ -329,9 +329,9 @@ def test_purge_unserved(
     mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
-    replayer.status.iteration = 1
 
-    def replay_run(testcases, _time_limit, **_):
+    def replay_run(testcases, _time_limit, **kw):
+        kw["on_iteration_cb"]()
         # test.html and opt.html should always contain one line.
         # return [] (no result) if either of them exist and are empty
         has_any = False
@@ -398,9 +398,9 @@ def test_dd_only(mocker, tmp_path):
     """test that only files containing DDBEGIN/END are reduced"""
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
-    replayer.status.iteration = 1
 
-    def replay_run(testcases, _time_limit, **_):
+    def replay_run(testcases, _time_limit, **kw):
+        kw["on_iteration_cb"]()
         for test in testcases:
             contents = test.get_file("test.html").data_file.read_text()
             LOG.debug("interesting if 'required' in %r", contents)
