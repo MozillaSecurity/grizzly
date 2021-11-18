@@ -141,6 +141,7 @@ class ReduceManager:
             strategies=strategies,
             testcase_size_cb=self.testcase_size,
             crash_id=reducer_crash_id,
+            tool=tool,
         )
         self._use_analysis = use_analysis
         self._use_harness = use_harness

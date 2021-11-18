@@ -22,7 +22,7 @@ __credits__ = ["Tyson Smith"]
 # time in seconds for db connection to wait before raising an exception
 DB_TIMEOUT = 30
 # used to track changes to the database layout
-DB_VERSION = 1
+DB_VERSION = 2
 # default expiration limit for entries in the database
 EXP_LIMIT = 86400
 LOG = getLogger(__name__)
@@ -666,6 +666,7 @@ class ReductionStatus:
         crash_id=None,
         db_file=None,
         pid=None,
+        tool=None,
         exp_limit=EXP_LIMIT,
     ):
         """Initialize a ReductionStatus instance.
@@ -675,6 +676,7 @@ class ReductionStatus:
             testcase_size_cb (callable): Callback to get testcase size
             crash_id (int): CrashManager ID of original testcase
             db_file (str): Database file containing data. None in read-only mode.
+            tool (str): The tool name used for reporting to FuzzManager.
         """
         self.analysis = {}
         self.attempts = 0
@@ -691,6 +693,7 @@ class ReductionStatus:
         self._db_file = db_file
         self.pid = pid
         self.timestamp = time()
+        self.tool = tool
         self._current_size = None
 
         # prepare database
@@ -716,7 +719,8 @@ class ReductionStatus:
                            strategies TEXT NOT NULL,
                            _current_size INTEGER NOT NULL,
                            current_strategy_idx INTEGER,
-                           timestamp REAL NOT NULL);"""
+                           timestamp REAL NOT NULL,
+                           tool TEXT);"""
                     )
                     # remove expired status data
                     if exp_limit > 0:
@@ -734,6 +738,7 @@ class ReductionStatus:
         strategies=None,
         testcase_size_cb=None,
         crash_id=None,
+        tool=None,
     ):
         """Create a unique ReductionStatus object.
 
@@ -742,6 +747,7 @@ class ReductionStatus:
             strategies (list(str)): List of strategies to be run.
             testcase_size_cb (callable): Callback to get testcase size
             crash_id (int): CrashManager ID of original testcase
+            tool (str): The tool name used for reporting to FuzzManager.
 
         Returns:
             ReductionStatus: Active status report.
@@ -754,6 +760,7 @@ class ReductionStatus:
             pid=getpid(),
             strategies=strategies,
             testcase_size_cb=testcase_size_cb,
+            tool=tool,
         )
         status.report(force=True)
         return status
@@ -800,7 +807,8 @@ class ReductionStatus:
                            strategies = ?,
                            _current_size = ?,
                            current_strategy_idx = ?,
-                           timestamp = ?
+                           timestamp = ?,
+                           tool = ?
                        WHERE pid = ?;""",
                     (
                         analysis,
@@ -816,6 +824,7 @@ class ReductionStatus:
                         self._testcase_size(),
                         self.current_strategy_idx,
                         self.timestamp,
+                        self.tool,
                         self.pid,
                     ),
                 )
@@ -835,8 +844,9 @@ class ReductionStatus:
                                strategies,
                                _current_size,
                                current_strategy_idx,
-                               timestamp)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""",
+                               timestamp,
+                               tool)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""",
                         (
                             self.pid,
                             analysis,
@@ -852,6 +862,7 @@ class ReductionStatus:
                             self._testcase_size(),
                             self.current_strategy_idx,
                             self.timestamp,
+                            self.tool,
                         ),
                     )
 
@@ -889,7 +900,8 @@ class ReductionStatus:
                               strategies,
                               _current_size,
                               current_strategy_idx,
-                              timestamp
+                              timestamp,
+                              tool
                        FROM reduce_status
                        WHERE timestamp > ?
                        ORDER BY timestamp DESC;""",
@@ -908,6 +920,7 @@ class ReductionStatus:
                 strategies=loads(entry[10]),
                 crash_id=entry[7],
                 pid=pid,
+                tool=entry[14],
             )
             status.analysis = loads(entry[1])
             status.attempts = entry[2]
@@ -939,6 +952,7 @@ class ReductionStatus:
             crash_id=self.crash_id,
             testcase_size_cb=self._testcase_size_cb,
             pid=self.pid,
+            tool=self.tool,
         )
         # assign after construction to avoid DB access
         result._db_file = self._db_file
