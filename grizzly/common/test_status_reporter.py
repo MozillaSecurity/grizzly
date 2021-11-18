@@ -87,6 +87,7 @@ def test_reduce_status_reporter_03(mocker, tmp_path):
     status.analysis["ran"] = True
     status.run_params["speed"] = 123.0
     status.signature_info["info"] = "crash"
+    status.last_reports.append(45678)
     status.record("init")
     with status.measure("total"):
         with status.measure("strategy_0"):
@@ -111,7 +112,7 @@ def test_reduce_status_reporter_03(mocker, tmp_path):
     assert "strategy_1" in output
     assert "total" in output
     assert "Timestamp" in output
-    assert len(output.splitlines()) == 15
+    assert len(output.splitlines()) == 16
 
 
 def test_reduce_status_reporter_04(mocker, tmp_path):
@@ -133,6 +134,7 @@ def test_reduce_status_reporter_04(mocker, tmp_path):
     assert len(output.splitlines()) == 1
     status.analysis["ran"] = True
     status.run_params["splines"] = "reticulated"
+    status.last_reports.append(45678)
     status.record("init")
     with status.measure("total"):
         with status.measure("strategy_0"):
@@ -143,7 +145,7 @@ def test_reduce_status_reporter_04(mocker, tmp_path):
     rptr = ReductionStatusReporter.load(db_file)
     assert rptr.reports
     output = rptr.specific()
-    assert len(output.splitlines()) == 7
+    assert len(output.splitlines()) == 8
     assert "Analysis" in output
     assert "Run Parameters" in output
     assert "Current Strategy" in output

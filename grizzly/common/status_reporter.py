@@ -663,6 +663,10 @@ class ReductionStatusReporter(StatusReporter):
         return ("Crash ID", crash_str)
 
     @staticmethod
+    def _last_reports_entry(report):
+        return ("Latest Reports", ", ".join(str(r) for r in report.last_reports))
+
+    @staticmethod
     def _run_params_entry(report):
         return (
             "Run Parameters",
@@ -706,6 +710,8 @@ class ReductionStatusReporter(StatusReporter):
                 entries.append(self._analysis_entry(report))
             if report.run_params:
                 entries.append(self._run_params_entry(report))
+            if report.last_reports:
+                entries.append(self._last_reports_entry(report))
             if report.current_strategy:
                 entries.append(
                     (
@@ -790,6 +796,8 @@ class ReductionStatusReporter(StatusReporter):
                 entries.append(self._signature_info_entry(report))
             if report.run_params:
                 entries.append(self._run_params_entry(report))
+            if report.last_reports:
+                entries.append(self._last_reports_entry(report))
             if report.total and report.original:
                 tabulator = _TableFormatter(
                     ReductionStep._fields,
