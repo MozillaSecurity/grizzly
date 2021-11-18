@@ -695,6 +695,7 @@ class ReductionStatus:
         self.timestamp = time()
         self.tool = tool
         self._current_size = None
+        self.last_reports = []
 
         # prepare database
         if self._db_file:
@@ -720,7 +721,8 @@ class ReductionStatus:
                            _current_size INTEGER NOT NULL,
                            current_strategy_idx INTEGER,
                            timestamp REAL NOT NULL,
-                           tool TEXT);"""
+                           tool TEXT,
+                           last_reports TEXT NOT NULL);"""
                     )
                     # remove expired status data
                     if exp_limit > 0:
@@ -792,6 +794,7 @@ class ReductionStatus:
                 finished = dumps(self.finished_steps)
                 in_prog = dumps([step.serialize() for step in self._in_progress_steps])
                 strategies = dumps(self.strategies)
+                last_reports = dumps(self.last_reports)
 
                 cur.execute(
                     """UPDATE reduce_status
@@ -808,7 +811,8 @@ class ReductionStatus:
                            _current_size = ?,
                            current_strategy_idx = ?,
                            timestamp = ?,
-                           tool = ?
+                           tool = ?,
+                           last_reports = ?
                        WHERE pid = ?;""",
                     (
                         analysis,
@@ -825,6 +829,7 @@ class ReductionStatus:
                         self.current_strategy_idx,
                         self.timestamp,
                         self.tool,
+                        last_reports,
                         self.pid,
                     ),
                 )
@@ -845,8 +850,9 @@ class ReductionStatus:
                                _current_size,
                                current_strategy_idx,
                                timestamp,
-                               tool)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""",
+                               tool,
+                               last_reports)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""",
                         (
                             self.pid,
                             analysis,
@@ -863,6 +869,7 @@ class ReductionStatus:
                             self.current_strategy_idx,
                             self.timestamp,
                             self.tool,
+                            last_reports,
                         ),
                     )
 
@@ -901,7 +908,8 @@ class ReductionStatus:
                               _current_size,
                               current_strategy_idx,
                               timestamp,
-                              tool
+                              tool,
+                              last_reports
                        FROM reduce_status
                        WHERE timestamp > ?
                        ORDER BY timestamp DESC;""",
@@ -937,6 +945,7 @@ class ReductionStatus:
             status._current_size = entry[11]
             status.current_strategy_idx = entry[12]
             status.timestamp = entry[13]
+            status.last_reports = loads(entry[15])
             yield status
 
     def _testcase_size(self):
@@ -963,6 +972,7 @@ class ReductionStatus:
         result.signature_info = deepcopy(self.signature_info, memo)
         result.successes = self.successes
         result.finished_steps = deepcopy(self.finished_steps, memo)
+        result.last_reports = deepcopy(self.last_reports, memo)
         # finish open timers
         for step in reversed(self._in_progress_steps):
             result.record(

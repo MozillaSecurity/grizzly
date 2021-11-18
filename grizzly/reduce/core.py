@@ -436,7 +436,6 @@ class ReduceManager:
         """
         any_success = False
         sig_given = self._signature is not None
-        last_reports = None
         last_tried = None
         self._status.record("init")
         # record total stats overall so that any time missed by individual milestones
@@ -578,7 +577,7 @@ class ReduceManager:
                                     and now - strategy_last_report
                                     > self._report_periodically
                                 ):
-                                    last_reports = self.report(
+                                    self._status.last_reports = self.report(
                                         best_results,
                                         self.testcases,
                                     )
@@ -600,14 +599,18 @@ class ReduceManager:
                         self._signature = replay.signature
 
                     if best_results:
-                        last_reports = self.report(best_results, self.testcases)
+                        self._status.last_reports = self.report(
+                            best_results, self.testcases
+                        )
 
                 except KeyboardInterrupt:
                     if best_results:
-                        last_reports = self.report(best_results, self.testcases)
+                        self._status.last_reports = self.report(
+                            best_results, self.testcases
+                        )
                         LOG.warning(
                             "Ctrl+C detected, best reduction so far " "reported as %r",
-                            last_reports,
+                            self._status.last_reports,
                         )
                     raise
                 finally:
@@ -618,8 +621,8 @@ class ReduceManager:
                 last_tried = strategy.get_tried()
 
             # if we complete all strategies, mark the last reported crashes as reduced
-            if self._report_to_fuzzmanager and last_reports:
-                for crash_id in last_reports:
+            if self._report_to_fuzzmanager and self._status.last_reports:
+                for crash_id in self._status.last_reports:
                     LOG.info(
                         "Updating crash %d to %s (Q%d)",
                         crash_id,
