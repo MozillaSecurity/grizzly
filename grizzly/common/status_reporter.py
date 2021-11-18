@@ -657,7 +657,10 @@ class ReductionStatusReporter(StatusReporter):
 
     @staticmethod
     def _crash_id_entry(report):
-        return ("Crash ID", str(report.crash_id))
+        crash_str = str(report.crash_id)
+        if report.tool:
+            crash_str += " (%s)" % (report.tool,)
+        return ("Crash ID", crash_str)
 
     @staticmethod
     def _run_params_entry(report):

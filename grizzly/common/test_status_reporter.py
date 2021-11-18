@@ -82,6 +82,7 @@ def test_reduce_status_reporter_03(mocker, tmp_path):
         db_file=db_file,
         testcase_size_cb=size_cb,
         crash_id=123,
+        tool="fuzzmatic",
     )
     status.analysis["ran"] = True
     status.run_params["speed"] = 123.0
@@ -123,6 +124,7 @@ def test_reduce_status_reporter_04(mocker, tmp_path):
         strategies=["strategy_0"],
         testcase_size_cb=lambda: 47,
         crash_id=12,
+        tool="fuzzmatic",
     )
     assert status.original is None
     rptr = ReductionStatusReporter.load(db_file)
