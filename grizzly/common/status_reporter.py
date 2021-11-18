@@ -656,6 +656,10 @@ class ReductionStatusReporter(StatusReporter):
         )
 
     @staticmethod
+    def _crash_id_entry(report):
+        return ("Crash ID", str(report.crash_id))
+
+    @staticmethod
     def _run_params_entry(report):
         return (
             "Run Parameters",
@@ -694,7 +698,7 @@ class ReductionStatusReporter(StatusReporter):
         for report in self.reports:
             entries = []
             if report.crash_id:
-                entries.append(("Crash ID", str(report.crash_id)))
+                entries.append(self._crash_id_entry(report))
             if report.analysis:
                 entries.append(self._analysis_entry(report))
             if report.run_params:
@@ -775,6 +779,8 @@ class ReductionStatusReporter(StatusReporter):
         for report in self.reports:
             entries = []
             lines = []
+            if report.crash_id:
+                entries.append(self._crash_id_entry(report))
             if report.analysis:
                 entries.append(self._analysis_entry(report))
             if report.signature_info:
