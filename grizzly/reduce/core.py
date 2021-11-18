@@ -328,15 +328,23 @@ class ReduceManager:
                     for result in results:
                         result.report.cleanup()
                 reliability = crashes / self.ANALYSIS_ITERATIONS
-                key = ("using" if use_harness else "without") + " harness"
+                desc = ("using" if use_harness else "without") + " harness"
                 if last_test_only:
-                    key += "/last test only"
+                    desc += "/last test only"
+                else:
+                    desc += "/all tests"
                 LOG.info(
                     "Testcase was interesting %0.1f%% of %d attempts %s.",
                     100.0 * reliability,
                     self.ANALYSIS_ITERATIONS,
-                    key,
+                    desc,
                 )
+                if use_harness and last_test_only:
+                    key = "last test"
+                elif use_harness:
+                    key = "all tests"
+                else:
+                    key = "no harness"
                 self._status.analysis[key] = reliability
                 # ensure same signature is always used
                 self._signature = replay.signature
