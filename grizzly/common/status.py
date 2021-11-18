@@ -957,6 +957,7 @@ class ReductionStatus:
                 duration=step.duration,
                 iterations=step.iterations,
                 successes=step.successes,
+                report=False,
             )
         return result
 
@@ -989,6 +990,7 @@ class ReductionStatus:
         iterations=None,
         attempts=None,
         successes=None,
+        report=True,
     ):
         """Record reduction status for a given point in time:
 
@@ -1004,6 +1006,7 @@ class ReductionStatus:
             iterations (int or None): # of iterations performed
             attempts (int or None): # of attempts performed
             successes (int or None): # of attempts successful
+            report (bool): Automatically force a report.
 
         Returns:
             None
@@ -1018,6 +1021,8 @@ class ReductionStatus:
                 successes=successes,
             )
         )
+        if report:
+            self.report(force=True)
 
     def _construct_milestone(self, name, start, attempts, iterations, successes):
         # pylint: disable=no-self-argument
@@ -1063,12 +1068,13 @@ class ReductionStatus:
         return _MilestoneTimer()
 
     @contextmanager
-    def measure(self, name):
+    def measure(self, name, report=True):
         """Time and record the period leading up to a reduction milestone.
         eg. a strategy being run.
 
         Arguments:
             name (str): name of milestone
+            report (bool): Automatically force a report.
 
         Yields:
             None
@@ -1086,6 +1092,7 @@ class ReductionStatus:
             duration=tmr.duration,
             iterations=tmr.iterations,
             successes=tmr.successes,
+            report=report,
         )
 
     def copy(self):

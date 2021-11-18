@@ -462,9 +462,9 @@ def test_reduce_status_06(mocker, tmp_path):
     with status.measure("milestone2"):
         status.report(force=True)
 
-    loaded_status = tuple(ReductionStatus.loadall(str(tmp_path / "status.db")))
-    assert len(loaded_status) == 1
-    loaded_status = loaded_status[0]
+        loaded_status = tuple(ReductionStatus.loadall(str(tmp_path / "status.db")))
+        assert len(loaded_status) == 1
+        loaded_status = loaded_status[0]
 
     assert loaded_status.finished_steps == status.finished_steps[:1]
     assert len(loaded_status._in_progress_steps) == 1

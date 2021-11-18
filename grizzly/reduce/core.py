@@ -438,7 +438,6 @@ class ReduceManager:
         last_reports = None
         last_tried = None
         self._status.record("init")
-        self._status.report(force=True)
         # record total stats overall so that any time missed by individual milestones
         # will still be included in the total
         with self._status.measure("final"):
@@ -613,7 +612,6 @@ class ReduceManager:
                 finally:
                     for result in best_results:
                         result.report.cleanup()
-                    self._status.report(force=True)
 
                 # store "tried" cache to pass to next strategy
                 last_tried = strategy.get_tried()
