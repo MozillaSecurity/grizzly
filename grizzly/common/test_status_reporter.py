@@ -81,6 +81,7 @@ def test_reduce_status_reporter_03(mocker, tmp_path):
     status = ReductionStatus.start(
         db_file=db_file,
         testcase_size_cb=size_cb,
+        crash_id=123,
     )
     status.analysis["ran"] = True
     status.run_params["speed"] = 123.0
@@ -109,7 +110,7 @@ def test_reduce_status_reporter_03(mocker, tmp_path):
     assert "strategy_1" in output
     assert "total" in output
     assert "Timestamp" in output
-    assert len(output.splitlines()) == 14
+    assert len(output.splitlines()) == 15
 
 
 def test_reduce_status_reporter_04(mocker, tmp_path):
