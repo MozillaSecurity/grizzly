@@ -6,9 +6,6 @@
 Sapphire HTTP server worker
 """
 from logging import getLogger
-from os import stat
-from os.path import isfile
-from pathlib import Path
 from re import compile as re_compile
 from socket import error as sock_error
 from socket import timeout as sock_timeout
@@ -124,12 +121,12 @@ class Worker:
                 request, query = request.split("?", 1)
             else:
                 query = ""
-            LOG.debug("check_request(%r)", request)
-            resource = serv_job.check_request(request)
+            LOG.debug("lookup_resource(%r)", request)
+            resource = serv_job.lookup_resource(request)
             if resource is None:
                 LOG.debug("resource is None")  # 404
             elif resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
-                finish_job = serv_job.remove_pending(resource.target)
+                finish_job = serv_job.remove_pending(str(resource.target))
             elif resource.type in (Resource.URL_DYNAMIC, Resource.URL_REDIRECT):
                 finish_job = serv_job.remove_pending(request)
             else:  # pragma: no cover
@@ -150,15 +147,8 @@ class Worker:
                 LOG.debug("404 %r (%d to go)", request, serv_job.pending)
                 return
             if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
-                LOG.debug("target %r", resource.target)
-                # isfile() check for Resource.URL_FILE done by serv_job.check_request()
-                if resource.type == Resource.URL_INCLUDE and not isfile(
-                    resource.target
-                ):
-                    conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
-                    LOG.debug("404 %r (%d to go)", request, serv_job.pending)
-                    return
-                if serv_job.is_forbidden(resource.target):
+                LOG.debug("target %r", str(resource.target))
+                if serv_job.is_forbidden(str(resource.target)):
                     # NOTE: this does info leak if files exist on disk.
                     # We could replace 403 with 404 if it turns out we care but this
                     # is meant to run locally and only be accessible from localhost
@@ -189,18 +179,18 @@ class Worker:
 
             # at this point we know "resource.target" maps to a file on disk
             # serve the file
-            data_size = stat(resource.target).st_size
+            data_size = resource.target.stat().st_size
             LOG.debug(
                 "sending: %s bytes, mime: %r", format(data_size, ","), resource.mime
             )
-            with open(resource.target, "rb") as in_fp:
+            with resource.target.open("rb") as in_fp:
                 conn.sendall(cls._200_header(data_size, resource.mime))
                 offset = 0
                 while offset < data_size:
                     conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
                     offset = in_fp.tell()
-            LOG.debug("200 %r (%d to go)", resource.target, serv_job.pending)
-            serv_job.mark_served(Path(resource.target))
+            LOG.debug("200 %r (%d to go)", str(resource.target), serv_job.pending)
+            serv_job.mark_served(resource.target)
 
         except (sock_error, sock_timeout):
             _, exc_obj, exc_tb = exc_info()

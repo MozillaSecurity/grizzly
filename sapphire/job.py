@@ -10,9 +10,9 @@ from enum import Enum, unique
 from logging import getLogger
 from mimetypes import guess_type
 from os import walk
-from os.path import abspath, isdir, isfile
+from os.path import abspath, isdir
 from os.path import join as pathjoin
-from os.path import normpath, relpath, splitext
+from os.path import relpath, splitext
 from pathlib import Path
 from queue import Queue
 from threading import Event, Lock
@@ -136,56 +136,44 @@ class Job:
             mime = guess_type(url)[0] or "application/octet-stream"
         return mime
 
-    def check_request(self, request):
-        to_serve = normpath(pathjoin(self.base_path, request))
-        if "\x00" not in to_serve and isfile(to_serve):
-            res = Resource(Resource.URL_FILE, to_serve, mime=self.lookup_mime(to_serve))
-            with self._pending.lock:
-                res.required = to_serve in self._pending.files
-            return res
+    def lookup_resource(self, path):
+        # check if path is a file in wwwroot
+        try:
+            local = Path(self.base_path) / path
+            if local.is_file():
+                local = local.resolve()
+                with self._pending.lock:
+                    required = str(local) in self._pending.files
+                return Resource(
+                    Resource.URL_FILE,
+                    local,
+                    mime=self.lookup_mime(path),
+                    required=required,
+                )
+        except OSError:  # pragma: no cover
+            # this is for compatibility with python versions < 3.8
+            # is_file() will raise if the path contains characters unsupported
+            # at the OS level
+            pass
+        # look for path in server map
         if self.server_map is not None:
-            if request in self.server_map.redirect:
-                return self.server_map.redirect[request]
-            if request in self.server_map.dynamic:
-                return self.server_map.dynamic[request]
-            # collect possible include matches
-            includes = tuple(
-                x for x in self.server_map.include if request.startswith(x)
-            )
-            if includes:
-                LOG.debug("potential include matches %r", includes)
-                # attempt to find match
-                url = request
-                while True:
-                    if url in includes:
-                        LOG.debug("found include match %r", url)
-                        location = (
-                            request.split(url, 1)[-1].lstrip("/") if url else request
-                        )
-                        # check location points to something
-                        if location:
-                            target = pathjoin(
-                                self.server_map.include[url].target, location
-                            )
-                            # if the mapping url is empty check the file exists
-                            if url or isfile(target):
-                                mime = self.server_map.include[url].mime
-                                if mime is None:
-                                    mime = self.lookup_mime(to_serve)
-                                return Resource(
-                                    Resource.URL_INCLUDE,
-                                    normpath(target),
-                                    mime=mime,
-                                    required=self.server_map.include[url].required,
-                                )
-                    if "/" in url:
-                        url = url.rsplit("/", 1)[0]
-                    elif url:
-                        # try empty mount point
-                        url = ""
-                    else:
-                        # include does not exist
-                        break
+            if path in self.server_map.redirect:
+                return self.server_map.redirect[path]
+            if path in self.server_map.dynamic:
+                return self.server_map.dynamic[path]
+            # search include paths for a match
+            for inc in (x for x in self.server_map.include if path.startswith(x)):
+                LOG.debug("checking include %r", inc)
+                file = path[len(inc) :].lstrip("/")
+                local = Path(self.server_map.include[inc].target) / file
+                if local.is_file():
+                    mime = self.server_map.include[inc].mime or self.lookup_mime(file)
+                    return Resource(
+                        Resource.URL_INCLUDE,
+                        local,
+                        mime=mime,
+                        required=self.server_map.include[inc].required,
+                    )
         return None
 
     def finish(self):
