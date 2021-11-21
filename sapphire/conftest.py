@@ -12,7 +12,6 @@ import threading
 import time
 from http.client import BadStatusLine
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
 from urllib.request import urlopen
 
 import pytest
@@ -97,11 +96,10 @@ def client_factory():
                     # if t_file.md5_org is set to anything but None the test client
                     # will calculate the md5 hash
                     data_hash = hashlib.md5() if t_file.md5_org is not None else None
-                    target_url = quote(t_file.url)
                 try:
                     if t_file.custom_request is None:
                         with urlopen(
-                            "http://%s:%d/%s" % (addr, port, target_url), timeout=10
+                            "http://%s:%d/%s" % (addr, port, t_file.url), timeout=10
                         ) as cli:
                             resp_code = cli.getcode()
                             content_type = cli.info().get("Content-Type")
@@ -170,7 +168,7 @@ def client_factory():
                             exc_type.__name__,
                             exc_obj,
                             exc_tb.tb_lineno,
-                            t_file.url,
+                            t_file.file,
                         )
                         if indicate_failure:
                             if not skip_served or t_file.code is None:
