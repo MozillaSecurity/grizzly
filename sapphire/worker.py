@@ -12,7 +12,7 @@ from socket import timeout as sock_timeout
 from sys import exc_info
 from threading import Thread, ThreadError, active_count
 from time import sleep
-from urllib.parse import unquote_plus
+from urllib.parse import quote, unquote, urlparse
 
 from .server_map import Resource
 
@@ -29,7 +29,7 @@ class WorkerError(Exception):
 class Worker:
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
-    REQ_PATTERN = re_compile(b"^GET\\s/(?P<request>\\S*)\\sHTTP/1")
+    REQ_PATTERN = re_compile(b"^GET\\s/(?P<url>\\S*)\\sHTTP/1")
 
     __slots__ = ("_conn", "_thread")
 
@@ -105,8 +105,9 @@ class Worker:
                 serv_job.accepting.set()
                 return
 
-            request = cls.REQ_PATTERN.match(raw_request)
-            if request is None:
+            # check if request can be handled
+            raw_url = cls.REQ_PATTERN.match(raw_request)
+            if raw_url is None:
                 serv_job.accepting.set()
                 conn.sendall(cls._4xx_page(400, "Bad Request", serv_job.auto_close))
                 LOG.debug(
@@ -116,35 +117,30 @@ class Worker:
                 )
                 return
 
-            request = unquote_plus(request.group("request").decode("ascii"))
-            if "?" in request:
-                request, query = request.split("?", 1)
-            else:
-                query = ""
-            LOG.debug("lookup_resource(%r)", request)
-            resource = serv_job.lookup_resource(request)
-            if resource is None:
-                LOG.debug("resource is None")  # 404
-            elif resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
-                finish_job = serv_job.remove_pending(str(resource.target))
-            elif resource.type in (Resource.URL_DYNAMIC, Resource.URL_REDIRECT):
-                finish_job = serv_job.remove_pending(request)
-            else:  # pragma: no cover
-                # this should never happen
-                raise WorkerError("Unknown resource type %r" % (resource.type,))
-
-            if finish_job and serv_job.forever:
-                LOG.debug("serv_job.forever is set, resetting finish_job")
-                finish_job = False
+            # lookup resource
+            url = urlparse(unquote(raw_url.group("url").decode("ascii")))
+            LOG.debug("lookup_resource(%r)", url.path)
+            resource = serv_job.lookup_resource(url.path)
+            if resource:
+                if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
+                    finish_job = serv_job.remove_pending(str(resource.target))
+                elif resource.type in (Resource.URL_DYNAMIC, Resource.URL_REDIRECT):
+                    finish_job = serv_job.remove_pending(url.path)
+                else:  # pragma: no cover
+                    # this should never happen
+                    raise WorkerError("Unknown resource type %r" % (resource.type,))
+                if serv_job.forever:
+                    finish_job = False
 
             if not finish_job:
                 serv_job.accepting.set()
             else:
                 LOG.debug("expecting to finish")
 
+            # send response
             if resource is None:
                 conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
-                LOG.debug("404 %r (%d to go)", request, serv_job.pending)
+                LOG.debug("404 %r (%d to go)", url.path, serv_job.pending)
                 return
             if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                 LOG.debug("target %r", str(resource.target))
@@ -153,27 +149,27 @@ class Worker:
                     # We could replace 403 with 404 if it turns out we care but this
                     # is meant to run locally and only be accessible from localhost
                     conn.sendall(cls._4xx_page(403, "Forbidden", serv_job.auto_close))
-                    LOG.debug("403 %r (%d to go)", request, serv_job.pending)
+                    LOG.debug("403 %r (%d to go)", url.path, serv_job.pending)
                     return
             elif resource.type == Resource.URL_REDIRECT:
-                conn.sendall(cls._307_redirect(resource.target))
+                conn.sendall(cls._307_redirect(quote(resource.target)))
                 LOG.debug(
                     "307 %r -> %r (%d to go)",
-                    request,
+                    url.path,
                     resource.target,
                     serv_job.pending,
                 )
                 return
             elif resource.type == Resource.URL_DYNAMIC:
                 # pass query string to callback
-                data = resource.target(query)
+                data = resource.target(url.query)
                 if not isinstance(data, bytes):
-                    LOG.debug("dynamic request: %r", request)
+                    LOG.debug("dynamic request: %r", url.path)
                     raise TypeError("dynamic request callback must return 'bytes'")
                 conn.sendall(cls._200_header(len(data), resource.mime))
                 conn.sendall(data)
                 LOG.debug(
-                    "200 %r - dynamic request (%d to go)", request, serv_job.pending
+                    "200 %r - dynamic request (%d to go)", url.path, serv_job.pending
                 )
                 return
 
@@ -189,7 +185,7 @@ class Worker:
                 while offset < data_size:
                     conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
                     offset = in_fp.tell()
-            LOG.debug("200 %r (%d to go)", str(resource.target), serv_job.pending)
+            LOG.debug("200 %r (%d to go)", url.path, serv_job.pending)
             serv_job.mark_served(resource.target)
 
         except (sock_error, sock_timeout):
