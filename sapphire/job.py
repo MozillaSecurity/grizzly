@@ -150,7 +150,7 @@ class Job:
                     mime=self.lookup_mime(path),
                     required=required,
                 )
-        except OSError:  # pragma: no cover
+        except ValueError:  # pragma: no cover
             # this is for compatibility with python versions < 3.8
             # is_file() will raise if the path contains characters unsupported
             # at the OS level

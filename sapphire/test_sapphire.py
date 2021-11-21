@@ -340,29 +340,33 @@ def test_sapphire_16(client, tmp_path):
     assert test.len_srv == test.len_org
 
 
-def test_sapphire_17(client, tmp_path):
+@pytest.mark.parametrize(
+    "path",
+    [
+        # simple path
+        "test.html",
+        # non-alphanumeric chars (valid characters to use on filesystem)
+        "!@$%^&(_+-=[]),'~`{}",
+        # extended ascii chars
+        "€d’é-ñÿ",
+    ],
+)
+def test_sapphire_17(client, tmp_path, path):
     """test required mapped redirects"""
     smap = ServerMap()
     with Sapphire(timeout=10) as serv:
-        files_to_serve = list()
-        # redir_target will be requested indirectly via the redirect
-        redir_target = _create_test(
-            "redir_test_case.html", tmp_path, data=b"Redirect DATA!"
-        )
-        redir_test = _TestFile("redirect_test")
-        smap.set_redirect(redir_test.file, redir_target.file, required=True)
-        files_to_serve.append(redir_test)
-        test = _create_test("test_case.html", tmp_path)
-        files_to_serve.append(test)
-        client.launch("127.0.0.1", serv.port, files_to_serve)
-        status, served_list = serv.serve_path(str(tmp_path), server_map=smap)
+        # target will be requested indirectly via the redirect
+        target = _create_test(path, tmp_path, data=b"Redirect DATA!")
+        redirect = _TestFile("redirect")
+        # point "redirect" at target
+        smap.set_redirect("redirect", target.file, required=True)
+        client.launch("127.0.0.1", serv.port, [redirect])
+        status, served = serv.serve_path(str(tmp_path), server_map=smap)
     assert status == Served.ALL
-    assert len(served_list) == len(files_to_serve)
+    assert len(served) == 1
     assert client.wait(timeout=10)
-    assert test.code == 200
-    assert test.len_srv == test.len_org
-    assert redir_test.code == 200
-    assert redir_test.len_srv == redir_target.len_org
+    assert redirect.code == 200
+    assert redirect.len_srv == target.len_org
 
 
 def test_sapphire_18(client, tmp_path):
@@ -699,6 +703,8 @@ def test_sapphire_28(client_factory, tmp_path):
         "test case.html",
         # non-alphanumeric chars (valid characters to use on filesystem)
         "!@$%^&(_+-=[]),'~`{}",
+        # extended ascii chars
+        "€d’é-ñÿ",
     ],
 )
 def test_sapphire_29(client, tmp_path, file_name):
