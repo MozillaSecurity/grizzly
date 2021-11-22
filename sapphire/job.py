@@ -195,16 +195,21 @@ class Job:
             return self._complete.wait(wait)
         return self._complete.is_set()
 
-    def is_forbidden(self, target_file):
-        target_file = abspath(target_file)
-        # check if target_file lives somewhere in wwwroot
-        if not target_file.startswith(self.base_path):
-            if self.server_map:
-                for resources in self.server_map.include.values():
-                    if target_file.startswith(resources.target):
-                        return False  # this is a valid include path
-            return True  # this is NOT a valid include path
-        return False  # this is a valid path
+    def is_forbidden(self, target, is_include=False):
+        # it is assumed that these file exists on disk
+        # and that the paths are absolute and sanitized
+        target = str(target)
+        if not is_include:
+            # check if target is in wwwroot
+            if target.startswith(self.base_path):
+                return False
+        elif self.server_map:
+            # check if target is in an included path
+            for resource in self.server_map.include.values():
+                if target.startswith(resource.target):
+                    # target is in a valid include path
+                    return False
+        return True
 
     @property
     def pending(self):
