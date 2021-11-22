@@ -22,8 +22,8 @@ def test_job_01(tmp_path):
     assert job.lookup_resource("test/test/") is None
     assert job.lookup_resource("test/../../") is None
     assert job.lookup_resource("\x00\x0B\xAD\xF0\x0D") is None
-    assert not job.is_forbidden(str(tmp_path))
-    assert not job.is_forbidden(str(tmp_path / "missing_file"))
+    assert not job.is_forbidden(tmp_path)
+    assert not job.is_forbidden(tmp_path / "missing_file")
     assert job.pending == 0
     assert not job.is_complete()
     assert job.remove_pending("no_file.test")
@@ -146,8 +146,12 @@ def test_job_04(mocker, tmp_path):
     resource = job.lookup_resource("/".join(["testinc", "nested", "nested_file.txt"]))
     assert resource.type == Resource.URL_INCLUDE
     assert resource.target == nst_1
-    assert not job.is_forbidden(str(srv_root / ".." / "test" / "test_file.txt"))
-    assert not job.is_forbidden(str(srv_include / ".." / "root" / "req_file.txt"))
+    assert not job.is_forbidden(
+        (srv_root / ".." / "test" / "test_file.txt").resolve(), is_include=True
+    )
+    assert not job.is_forbidden(
+        (srv_include / ".." / "root" / "req_file.txt").resolve(), is_include=False
+    )
 
 
 def test_job_05(tmp_path):
@@ -221,8 +225,8 @@ def test_job_07(tmp_path):
     resource = job.lookup_resource("../no_access.txt")
     assert resource.target == no_access
     assert resource.type == Resource.URL_FILE
-    assert not job.is_forbidden(str(test_1))
-    assert job.is_forbidden(str(srv_root / ".." / "no_access.txt"))
+    assert not job.is_forbidden(test_1)
+    assert job.is_forbidden((srv_root / ".." / "no_access.txt").resolve())
 
 
 @mark.skipif(system() == "Windows", reason="Unsupported on Windows")

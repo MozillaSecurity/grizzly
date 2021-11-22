@@ -95,7 +95,6 @@ class Worker:
 
     @classmethod
     def handle_request(cls, conn, serv_job):
-        # pylint: disable=too-many-return-statements
         finish_job = False  # call finish() on return
         try:
             # receive all the incoming data
@@ -160,7 +159,9 @@ class Worker:
                 LOG.debug(
                     "200 %r - dynamic request (%d to go)", url.path, serv_job.pending
                 )
-            elif serv_job.is_forbidden(str(resource.target)):
+            elif serv_job.is_forbidden(
+                resource.target, is_include=resource.type == Resource.URL_INCLUDE
+            ):
                 # NOTE: this does info leak if files exist on disk.
                 # We could replace 403 with 404 if it turns out we care.
                 # However this is meant to only be accessible via localhost.
