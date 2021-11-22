@@ -125,6 +125,8 @@ def test_job_04(mocker, tmp_path):
     assert job.status == Served.NONE
     # test include path pointing to a missing file
     assert job.lookup_resource("testinc/missing") is None
+    # test include path pointing to an invalid file name
+    assert job.lookup_resource("testinc/\x00\x0B\xAD\xF0\x0D") is None
     # test includes that map to 'srv_include'
     for incl, inc_path in smap.include.items():
         if inc_path != str(srv_include):  # only check 'srv_include' mappings

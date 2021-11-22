@@ -166,14 +166,19 @@ class Job:
                 LOG.debug("checking include %r", inc)
                 file = path[len(inc) :].lstrip("/")
                 local = Path(self.server_map.include[inc].target) / file
-                if local.is_file():
-                    mime = self.server_map.include[inc].mime or self.lookup_mime(file)
-                    return Resource(
-                        Resource.URL_INCLUDE,
-                        local,
-                        mime=mime,
-                        required=self.server_map.include[inc].required,
-                    )
+                try:
+                    if not local.is_file():
+                        continue
+                except ValueError:  # pragma: no cover
+                    # python versions < 3.8 compatibility
+                    continue
+                # file exists, look up resource
+                return Resource(
+                    Resource.URL_INCLUDE,
+                    local.resolve(),
+                    mime=self.server_map.include[inc].mime or self.lookup_mime(file),
+                    required=self.server_map.include[inc].required,
+                )
         return None
 
     def finish(self):
