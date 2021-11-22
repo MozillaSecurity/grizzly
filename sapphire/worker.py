@@ -141,16 +141,6 @@ class Worker:
             if resource is None:
                 conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
                 LOG.debug("404 %r (%d to go)", url.path, serv_job.pending)
-                return
-            if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
-                LOG.debug("target %r", str(resource.target))
-                if serv_job.is_forbidden(str(resource.target)):
-                    # NOTE: this does info leak if files exist on disk.
-                    # We could replace 403 with 404 if it turns out we care but this
-                    # is meant to run locally and only be accessible from localhost
-                    conn.sendall(cls._4xx_page(403, "Forbidden", serv_job.auto_close))
-                    LOG.debug("403 %r (%d to go)", url.path, serv_job.pending)
-                    return
             elif resource.type == Resource.URL_REDIRECT:
                 conn.sendall(cls._307_redirect(quote(resource.target)))
                 LOG.debug(
@@ -159,7 +149,6 @@ class Worker:
                     resource.target,
                     serv_job.pending,
                 )
-                return
             elif resource.type == Resource.URL_DYNAMIC:
                 # pass query string to callback
                 data = resource.target(url.query)
@@ -171,22 +160,28 @@ class Worker:
                 LOG.debug(
                     "200 %r - dynamic request (%d to go)", url.path, serv_job.pending
                 )
-                return
-
-            # at this point we know "resource.target" maps to a file on disk
-            # serve the file
-            data_size = resource.target.stat().st_size
-            LOG.debug(
-                "sending: %s bytes, mime: %r", format(data_size, ","), resource.mime
-            )
-            with resource.target.open("rb") as in_fp:
-                conn.sendall(cls._200_header(data_size, resource.mime))
-                offset = 0
-                while offset < data_size:
-                    conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
-                    offset = in_fp.tell()
-            LOG.debug("200 %r (%d to go)", url.path, serv_job.pending)
-            serv_job.mark_served(resource.target)
+            elif serv_job.is_forbidden(str(resource.target)):
+                # NOTE: this does info leak if files exist on disk.
+                # We could replace 403 with 404 if it turns out we care.
+                # However this is meant to only be accessible via localhost.
+                LOG.debug("target %r", str(resource.target))
+                conn.sendall(cls._4xx_page(403, "Forbidden", serv_job.auto_close))
+                LOG.debug("403 %r (%d to go)", url.path, serv_job.pending)
+            else:
+                # serve the file
+                LOG.debug("target %r", str(resource.target))
+                data_size = resource.target.stat().st_size
+                LOG.debug(
+                    "sending: %s bytes, mime: %r", format(data_size, ","), resource.mime
+                )
+                with resource.target.open("rb") as in_fp:
+                    conn.sendall(cls._200_header(data_size, resource.mime))
+                    offset = 0
+                    while offset < data_size:
+                        conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
+                        offset = in_fp.tell()
+                LOG.debug("200 %r (%d to go)", url.path, serv_job.pending)
+                serv_job.mark_served(resource.target)
 
         except (sock_error, sock_timeout):
             _, exc_obj, exc_tb = exc_info()
