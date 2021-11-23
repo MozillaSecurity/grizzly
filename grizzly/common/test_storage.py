@@ -121,8 +121,11 @@ def test_testcase_05():
         # nothing to remove - with required
         tcase.purge_optional(chain(["testfile1.bin"], tcase.optional))
         assert len(tuple(tcase.optional)) == 3
-        # nothing to remove - without required
-        tcase.purge_optional(tcase.optional)
+        # nothing to remove - use relative path (forced)
+        tcase.purge_optional(x.file_name for x in tcase._files.optional)
+        assert len(tuple(tcase.optional)) == 3
+        # nothing to remove - use absolute path
+        tcase.purge_optional(x.data_file.as_posix() for x in tcase._files.optional)
         assert len(tuple(tcase.optional)) == 3
         # remove not_served.bin
         tcase.purge_optional(["testfile2.bin", "testfile3.bin"])
