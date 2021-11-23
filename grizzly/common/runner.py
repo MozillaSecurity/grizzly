@@ -211,7 +211,12 @@ class Runner:
         # TODO: fix calling TestCase.add_batch() for multi-test replay
         # add all include files that were served
         for url, resource in server_map.include.items():
-            testcase.add_batch(resource.target, result.served, prefix=url)
+            testcase.add_batch(
+                resource.target,
+                # only pass files that appear to be in current include path
+                (x for x in result.served if x.startswith(resource.target)),
+                prefix=url,
+            )
         if result.timeout:
             LOG.debug("timeout detected")
             if self._target.handle_hang(ignore_idle=True) or "timeout" in ignore:
