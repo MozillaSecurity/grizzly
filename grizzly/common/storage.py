@@ -496,30 +496,22 @@ class TestCase:
         return assets
 
     def purge_optional(self, keep):
-        """Remove optional files (by name) that are not in keep.
+        """Remove optional files that are not in keep.
 
         Args:
-            keep (iterable(str)): Files that will not be removed.
+            keep (iterable(str)): Files that will not be removed. This can contain
+                                  absolute (includes) and relative paths.
 
         Returns:
             None
         """
-        opt_files = tuple(x.file_name for x in self._files.optional)
-        if not opt_files:
-            # nothing to purge
-            return
-        # filter required files from opt_files files to keep
-        keep_opt = list()
-        for fname in set(keep):
-            if fname not in (x.file_name for x in self._files.required):
-                keep_opt.append(fname)
-        # sanity check keep (cannot remove file that does not exist)
-        assert all(fname in opt_files for fname in keep_opt)
-        # purge
         to_remove = list()
-        for idx, fname in enumerate(opt_files):
-            if fname not in keep_opt:
+        # iterate over optional files
+        for idx, opt in enumerate(self._files.optional):
+            # check entries in 'keep' for a match
+            if not any(x.endswith(opt.file_name) for x in keep):
                 to_remove.append(idx)
+        # purge
         for idx in reversed(to_remove):
             self._files.optional.pop(idx).data_file.unlink()
 
