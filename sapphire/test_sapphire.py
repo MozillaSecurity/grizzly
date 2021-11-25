@@ -9,6 +9,7 @@ import os
 import random
 import socket
 import threading
+from platform import system
 from urllib.parse import quote, urlparse
 
 import pytest
@@ -774,6 +775,21 @@ def test_sapphire_32(mocker):
         assert serv._socket.accept.call_count == 3
         assert serv._socket.settimeout.call_count == 2
     assert pending.close.call_count == 1
+
+
+@pytest.mark.skipif(system() != "Windows", reason="Only supported on Windows")
+def test_sapphire_33(client, tmp_path):
+    """test serving from path using Windows short file name"""
+    wwwroot = tmp_path / "long_path_name_that_can_be_truncated_on_windows"
+    wwwroot.mkdir()
+    with Sapphire(timeout=10) as serv:
+        assert serv.timeout == 10
+        test = _create_test("test_case.html", wwwroot)
+        client.launch("127.0.0.1", serv.port, [test])
+        assert serv.serve_path(tmp_path / "LONG_P~1")[0] == Served.ALL
+    assert client.wait(timeout=10)
+    assert test.code == 200
+    assert test.len_srv == test.len_org
 
 
 def test_main_01(mocker, tmp_path):
