@@ -60,7 +60,6 @@ class Job:
         "accepting",
         "exceptions",
         "forever",
-        "initial_queue_size",
         "server_map",
         "worker_complete",
     )
@@ -82,7 +81,6 @@ class Job:
         self.auto_close = auto_close
         self.exceptions = Queue()
         self.forever = forever
-        self.initial_queue_size = 0
         self.server_map = server_map
         self.worker_complete = Event()
         self._build_queue(optional_files)
@@ -123,8 +121,7 @@ class Job:
                 if resource.required:
                     self._pending.files.add(dyn_resp)
                     LOG.debug("%s: %r -> %r", "required", dyn_resp, resource.target)
-        self.initial_queue_size = len(self._pending.files)
-        LOG.debug("%d files required to serve", self.initial_queue_size)
+        LOG.debug("%d files required to serve", len(self._pending.files))
 
     @classmethod
     def lookup_mime(cls, url):
@@ -241,9 +238,8 @@ class Job:
     @property
     def status(self):
         with self._pending.lock:
-            queue_size = len(self._pending.files)
-        if queue_size == 0:
-            return Served.ALL
-        if queue_size < self.initial_queue_size:
-            return Served.REQUEST
-        return Served.NONE
+            if not self._served.files:
+                return Served.NONE
+            if not self._pending.files:
+                return Served.ALL
+        return Served.REQUEST

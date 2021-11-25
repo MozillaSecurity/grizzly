@@ -471,12 +471,11 @@ def test_sapphire_19(client, tmp_path, query, required):
     test_dr = _TestFile(request)
     test_dr.len_org = len(_data)
     test_dr.md5_org = hashlib.md5(_data).hexdigest()
+    test = _create_test("test_case.html", tmp_path)
     if required:
-        test = None
-        optional = []
-        files = [test_dr]
+        optional = [test.file]
+        files = [test, test_dr]
     else:
-        test = _create_test("test_case.html", tmp_path)
         optional = [test_dr.file]
         files = [test_dr, test]
     # test request

@@ -16,7 +16,7 @@ def test_job_01(tmp_path):
     """test creating an empty Job"""
     job = Job(tmp_path)
     assert not job.forever
-    assert job.status == Served.ALL
+    assert job.status == Served.NONE
     assert job.lookup_resource("") is None
     assert job.lookup_resource("test") is None
     assert job.lookup_resource("test/test/") is None
@@ -53,21 +53,25 @@ def test_job_02(tmp_path):
     assert job.pending == 2
     assert resource.target == tmp_path / "req_file_1.txt"
     assert resource.type == Resource.URL_FILE
-    assert not job.is_forbidden(str(req1_path))
+    assert not job.is_forbidden(req1_path)
     assert not job.remove_pending("no_file.test")
     assert job.pending == 2
     assert not job.remove_pending(str(req1_path))
+    job.mark_served(req1_path)
     assert job.status == Served.REQUEST
     assert job.pending == 1
     assert job.remove_pending(str(req2_path))
+    job.mark_served(req2_path)
     assert job.status == Served.ALL
     assert job.pending == 0
     assert job.remove_pending(str(req1_path))
+    job.mark_served(req1_path)
     resource = job.lookup_resource("opt_file_1.txt")
     assert not resource.required
     assert resource.target == opt1_path
     assert resource.type == Resource.URL_FILE
     assert job.remove_pending(str(opt1_path))
+    job.mark_served(opt1_path)
     resource = job.lookup_resource("nested/opt_file_2.txt")
     assert resource.target == opt2_path
     assert resource.type == Resource.URL_FILE
@@ -198,7 +202,7 @@ def test_job_06(tmp_path):
     smap.set_dynamic_response("cb1", lambda _: 0, mime_type="mime_type")
     smap.set_dynamic_response("cb2", lambda _: 1)
     job = Job(tmp_path, server_map=smap)
-    assert job.status == Served.ALL
+    assert job.status == Served.NONE
     assert job.pending == 0
     resource = job.lookup_resource("cb1")
     assert resource.type == Resource.URL_DYNAMIC
