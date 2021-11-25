@@ -10,9 +10,7 @@ from enum import Enum, unique
 from logging import getLogger
 from mimetypes import guess_type
 from os import walk
-from os.path import abspath, isdir
-from os.path import join as pathjoin
-from os.path import relpath, splitext
+from os.path import splitext
 from pathlib import Path
 from queue import Queue
 from threading import Event, Lock
@@ -57,9 +55,9 @@ class Job:
         "_complete",
         "_pending",
         "_served",
+        "_wwwroot",
         "auto_close",
         "accepting",
-        "base_path",
         "exceptions",
         "forever",
         "initial_queue_size",
@@ -69,7 +67,7 @@ class Job:
 
     def __init__(
         self,
-        base_path,
+        wwwroot,
         auto_close=-1,
         forever=False,
         optional_files=None,
@@ -78,10 +76,10 @@ class Job:
         self._complete = Event()
         self._pending = Tracker(files=set(), lock=Lock())
         self._served = Tracker(files=set(), lock=Lock())
+        self._wwwroot = Path(wwwroot).resolve()
         self.accepting = Event()
         self.accepting.set()
         self.auto_close = auto_close
-        self.base_path = abspath(base_path)  # wwwroot
         self.exceptions = Queue()
         self.forever = forever
         self.initial_queue_size = 0
@@ -92,25 +90,25 @@ class Job:
     def _build_queue(self, optional_files):
         # build file list to track files that must be served
         # this is intended to only be called once by __init__()
-        for d_name, _, filenames in walk(self.base_path, followlinks=False):
+        for d_name, _, filenames in walk(self._wwwroot, followlinks=False):
+            d_path = Path(d_name)
             for f_name in filenames:
-                file_path = pathjoin(d_name, f_name)
-                location = relpath(file_path, start=self.base_path).replace("\\", "/")
+                file_path = d_path / f_name
+                location = file_path.relative_to(self._wwwroot).as_posix()
                 # do not add optional files to queue of required files
                 if optional_files and location in optional_files:
                     LOG.debug("optional: %r", location)
                     continue
-                file_path = abspath(file_path)
-                if "?" in file_path:
+                if "?" in str(file_path):
                     LOG.warning(
-                        "Cannot add files with '?' in path. Skipping %r", file_path
+                        "Cannot add files with '?' in path. Skipping %r", str(file_path)
                     )
                     continue
-                self._pending.files.add(file_path)
+                self._pending.files.add(str(file_path.resolve()))
                 LOG.debug("required: %r", location)
         # if nothing was found check if the path exists
-        if not self._pending.files and not isdir(self.base_path):
-            raise OSError("%r does not exist" % (self.base_path,))
+        if not self._pending.files and not self._wwwroot.is_dir():
+            raise OSError("%r does not exist" % (str(self._wwwroot),))
         if self.server_map:
             for redirect, resource in self.server_map.redirect.items():
                 if resource.required:
@@ -139,7 +137,7 @@ class Job:
     def lookup_resource(self, path):
         # check if path is a file in wwwroot
         try:
-            local = Path(self.base_path) / path
+            local = self._wwwroot / path
             if local.is_file():
                 local = local.resolve()
                 with self._pending.lock:
@@ -201,7 +199,7 @@ class Job:
         target = str(target)
         if not is_include:
             # check if target is in wwwroot
-            if target.startswith(self.base_path):
+            if target.startswith(str(self._wwwroot)):
                 return False
         elif self.server_map:
             # check if target is in an included path
@@ -232,11 +230,10 @@ class Job:
         with self._served.lock:
             # make a copy of what is available (maybe a copy not necessary?)
             served = tuple(self._served.files)
-        wwwroot = Path(self.base_path)
         for path in served:
             try:
                 # file is in wwwroot
-                yield path.relative_to(wwwroot).as_posix()
+                yield path.relative_to(self._wwwroot).as_posix()
             except ValueError:
                 # include file
                 yield path.as_posix()
