@@ -7,7 +7,7 @@ Sapphire HTTP server
 """
 from errno import EADDRINUSE
 from logging import getLogger
-from os.path import abspath
+from pathlib import Path
 from random import randint
 from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, gethostname, socket
 from time import sleep, time
@@ -156,7 +156,8 @@ class Sapphire:
         Returns:
             tuple(int, tuple(str)): Status code and files served.
         """
-        LOG.debug("serving %r (forever=%r)", path, forever)
+        path = Path(path)
+        LOG.debug("serving %r (forever=%r)", str(path), forever)
         job = Job(
             path,
             auto_close=self._auto_close,
@@ -210,7 +211,7 @@ class Sapphire:
             ) as serv:
                 LOG.info(
                     "Serving %r @ http://%s:%d/",
-                    abspath(args.path),
+                    str(Path(args.path).resolve()),
                     gethostname() if args.remote else "127.0.0.1",
                     serv.port,
                 )
