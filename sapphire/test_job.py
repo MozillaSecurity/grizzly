@@ -14,7 +14,7 @@ from .server_map import Resource, ServerMap
 
 def test_job_01(tmp_path):
     """test creating an empty Job"""
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     assert not job.forever
     assert job.status == Served.ALL
     assert job.lookup_resource("") is None
@@ -44,7 +44,7 @@ def test_job_02(tmp_path):
     req2_path = tmp_path / "nested" / "req_file_2.txt"
     req2_path.write_bytes(b"d")
     job = Job(
-        str(tmp_path), optional_files=[opt1_path.name, "nested/%s" % (opt2_path.name,)]
+        tmp_path, optional_files=[opt1_path.name, "nested/%s" % (opt2_path.name,)]
     )
     assert job.status == Served.NONE
     assert not job.is_complete()
@@ -81,7 +81,7 @@ def test_job_03(tmp_path):
     smap = ServerMap()
     smap.set_redirect("one", "somefile.txt", required=False)
     smap.set_redirect("two", "reqfile.txt")
-    job = Job(str(tmp_path), server_map=smap)
+    job = Job(tmp_path, server_map=smap)
     assert job.status == Served.NONE
     resource = job.lookup_resource("one")
     assert resource.type == Resource.URL_REDIRECT
@@ -121,7 +121,7 @@ def test_job_04(mocker, tmp_path):
     smap.include["testinc/1/2/3"] = Resource(Resource.URL_INCLUDE, srv_include)
     smap.include[""] = Resource(Resource.URL_INCLUDE, srv_include)
     smap.set_include("testinc/inc2", str(srv_include_2))
-    job = Job(str(srv_root), server_map=smap)
+    job = Job(srv_root, server_map=smap)
     assert job.status == Served.NONE
     # test include path pointing to a missing file
     assert job.lookup_resource("testinc/missing") is None
@@ -170,7 +170,7 @@ def test_job_05(tmp_path):
     # test url matching part of the file name
     smap = ServerMap()
     smap.include["inc"] = Resource(Resource.URL_INCLUDE, str(inc_dir))
-    job = Job(str(srv_root), server_map=smap)
+    job = Job(srv_root, server_map=smap)
     resource = job.lookup_resource("inc/sub/include.js")
     assert resource.type == Resource.URL_INCLUDE
     assert resource.target == inc_file1
@@ -197,7 +197,7 @@ def test_job_06(tmp_path):
     smap = ServerMap()
     smap.set_dynamic_response("cb1", lambda _: 0, mime_type="mime_type")
     smap.set_dynamic_response("cb2", lambda _: 1)
-    job = Job(str(tmp_path), server_map=smap)
+    job = Job(tmp_path, server_map=smap)
     assert job.status == Served.ALL
     assert job.pending == 0
     resource = job.lookup_resource("cb1")
@@ -219,7 +219,7 @@ def test_job_07(tmp_path):
     test_1.write_bytes(b"a")
     no_access = tmp_path / "no_access.txt"
     no_access.write_bytes(b"a")
-    job = Job(str(srv_root))
+    job = Job(srv_root)
     assert job.status == Served.NONE
     assert job.pending == 1
     resource = job.lookup_resource("../no_access.txt")
@@ -235,21 +235,21 @@ def test_job_08(tmp_path):
     test_file = tmp_path / "test.txt"
     test_file.write_bytes(b"a")
     (tmp_path / "?_2.txt").write_bytes(b"a")
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     assert job.status == Served.NONE
     assert job.pending == 1
     assert job.lookup_resource("test.txt").target == test_file
 
 
-def test_job_09():
+def test_job_09(tmp_path):
     """test Job with missing directory"""
     with raises(OSError):
-        Job("missing")
+        Job(tmp_path / "missing")
 
 
 def test_job_10(tmp_path):
     """test Job.mark_served() and Job.served"""
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     assert not any(job.served)
     job.mark_served(tmp_path / "a.bin")
     assert "a.bin" in job.served

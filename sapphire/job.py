@@ -76,7 +76,7 @@ class Job:
         self._complete = Event()
         self._pending = Tracker(files=set(), lock=Lock())
         self._served = Tracker(files=set(), lock=Lock())
-        self._wwwroot = Path(wwwroot).resolve()
+        self._wwwroot = wwwroot.resolve()
         self.accepting = Event()
         self.accepting.set()
         self.auto_close = auto_close

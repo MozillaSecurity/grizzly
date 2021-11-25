@@ -17,7 +17,7 @@ from .job import Job
 def test_connection_manager_01(mocker, tmp_path):
     """test basic ConnectionManager"""
     (tmp_path / "testfile").write_bytes(b"test")
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     clnt_sock = mocker.Mock(spec_set=socket)
     clnt_sock.recv.return_value = b"GET /testfile HTTP/1.1"
     serv_sock = mocker.Mock(spec_set=socket)
@@ -50,7 +50,7 @@ def test_connection_manager_03(mocker, tmp_path):
     (tmp_path / "test1").touch()
     (tmp_path / "test2").touch()
     (tmp_path / "test3").touch()
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     clnt_sock = mocker.Mock(spec_set=socket)
     clnt_sock.recv.side_effect = (
         b"GET /test1 HTTP/1.1",
@@ -74,7 +74,7 @@ def test_connection_manager_03(mocker, tmp_path):
 def test_connection_manager_04(mocker, tmp_path):
     """test ConnectionManager.wait()"""
     (tmp_path / "test1").touch()
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     clnt_sock = mocker.Mock(spec_set=socket)
     clnt_sock.recv.return_value = b""
     serv_sock = mocker.Mock(spec_set=socket)
@@ -86,7 +86,7 @@ def test_connection_manager_04(mocker, tmp_path):
         # callback abort
         assert loadmgr.wait(1, continue_cb=lambda: False, poll=0.01)
     # timeout
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     fake_time = mocker.patch("sapphire.connection_manager.time", autospec=True)
     fake_time.side_effect = count()
     with ConnectionManager(job, serv_sock, max_workers=10) as loadmgr:
@@ -96,7 +96,7 @@ def test_connection_manager_04(mocker, tmp_path):
 def test_connection_manager_05(mocker, tmp_path):
     """test ConnectionManager re-raise worker exceptions"""
     (tmp_path / "test1").touch()
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     clnt_sock = mocker.Mock(spec_set=socket)
     clnt_sock.recv.side_effect = Exception("worker exception")
     serv_sock = mocker.Mock(spec_set=socket)
@@ -112,7 +112,7 @@ def test_connection_manager_05(mocker, tmp_path):
 def test_connection_manager_06(mocker, tmp_path):
     """test ConnectionManager re-raise launcher exceptions"""
     (tmp_path / "test1").touch()
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     serv_sock = mocker.Mock(spec_set=socket)
     serv_sock.accept.side_effect = Exception("launcher exception")
     with raises(Exception, match="launcher exception"):

@@ -69,7 +69,7 @@ def test_worker_03(mocker):
 def test_worker_04(mocker, tmp_path):
     """test Worker.launch()"""
     (tmp_path / "testfile").touch()
-    job = Job(str(tmp_path))
+    job = Job(tmp_path)
     clnt_sock = mocker.Mock(spec_set=socket.socket)
     clnt_sock.recv.return_value = b"GET /testfile HTTP/1.1"
     serv_sock = mocker.Mock(spec_set=socket.socket)
