@@ -106,6 +106,7 @@ def main(args):
         else:
             reporter = FilesystemReporter(pathjoin(getcwd(), "results"))
             LOG.info("Results will be stored in %r", reporter.report_path)
+        reporter.display_logs = args.smoke_test or reporter.display_logs
 
         # make sure an iteration limit is set if smoke_test is True
         iteration_limit = (args.limit or 10) if args.smoke_test else args.limit

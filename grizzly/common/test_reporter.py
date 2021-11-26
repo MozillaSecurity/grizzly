@@ -29,19 +29,18 @@ def _create_crash_log(log_path):
 
 
 @mark.parametrize(
-    "diplay_report, is_hang",
+    "display_logs, is_hang",
     [
         # do not display report
-        ("0", False),
+        (False, False),
         # display report
-        ("1", False),
+        (True, False),
         # display report (hang)
-        ("1", True),
+        (True, True),
     ],
 )
-def test_reporter_01(mocker, tmp_path, diplay_report, is_hang):
+def test_reporter_01(mocker, tmp_path, display_logs, is_hang):
     """test creating a simple Reporter"""
-    mocker.patch("grizzly.common.reporter.getenv", return_value=diplay_report)
 
     class SimpleReporter(Reporter):
         def _pre_submit(self, report):
@@ -58,6 +57,7 @@ def test_reporter_01(mocker, tmp_path, diplay_report, is_hang):
         spec_set=Report, is_hang=is_hang, preferred=str(tmp_path / "log_stderr.txt")
     )
     reporter = SimpleReporter()
+    reporter.display_logs = display_logs
     reporter.submit([], report=report)
     assert report.cleanup.call_count == 1
 
@@ -175,6 +175,11 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
 def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored, force):
     """test FuzzManagerReporter.submit()"""
     mocker.patch(
+        "grizzly.common.reporter.FuzzManagerReporter._ignored",
+        new_callable=mocker.MagicMock,
+        return_value=ignored,
+    )
+    mocker.patch(
         "grizzly.common.reporter.getcwd", autospec=True, return_value=str(tmp_path)
     )
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="0")
@@ -201,7 +206,6 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored, for
         test_cases.append(fake_test)
     reporter = FuzzManagerReporter("fake_bin")
     reporter.force_report = force
-    reporter._ignored = lambda x: ignored
     reporter.submit(test_cases, Report(str(log_path), "fake_bin", is_hang=True))
     assert not log_path.is_dir()
     if (frequent and not force) or ignored:
