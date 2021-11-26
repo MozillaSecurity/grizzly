@@ -73,6 +73,11 @@ class Quality(IntEnum):
 
 
 class Reporter(metaclass=ABCMeta):
+    __slots__ = ("display_logs",)
+
+    def __init__(self):
+        self.display_logs = getenv("GRZ_DISPLAY_REPORT") == "1"
+
     @abstractmethod
     def _post_submit(self):
         pass
@@ -101,7 +106,7 @@ class Reporter(metaclass=ABCMeta):
         assert report.path is not None
         self._pre_submit(report)
         # output report contents to console
-        if getenv("GRZ_DISPLAY_REPORT") == "1":
+        if self.display_logs:
             if not report.is_hang:
                 with open(report.preferred, "rb") as log_fp:
                     LOG.info(
@@ -121,9 +126,10 @@ class Reporter(metaclass=ABCMeta):
 class FilesystemReporter(Reporter):
     DISK_SPACE_ABORT = 512 * 1024 * 1024  # 512 MB
 
-    __slots__ = ("major_bucket", "report_path")
+    __slots__ = ("major_bucket", "min_space", "report_path")
 
     def __init__(self, report_path, major_bucket=True):
+        super().__init__()
         self.major_bucket = major_bucket
         self.min_space = FilesystemReporter.DISK_SPACE_ABORT
         assert isinstance(report_path, str) and report_path
@@ -168,6 +174,7 @@ class FuzzManagerReporter(Reporter):
     __slots__ = ("_extra_metadata", "force_report", "quality", "tool")
 
     def __init__(self, tool=None):
+        super().__init__()
         self._extra_metadata = {}
         self.force_report = False
         self.quality = Quality.UNREDUCED
