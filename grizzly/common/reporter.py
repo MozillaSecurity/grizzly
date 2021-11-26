@@ -56,6 +56,8 @@ class Quality(IntEnum):
     REDUCED = 0
     # original used for reduction (a reduced version exists)
     ORIGINAL = 1
+    # used to manually mark a report as unreducible
+    IGNORED = 3
     # the testcase is currently being reduced
     REDUCING = 4
     # haven't attempted reduction yet (1st attempt, generic reducer)
