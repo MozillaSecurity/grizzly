@@ -141,6 +141,7 @@ class Session:
         time_limit,
         input_path=None,
         iteration_limit=0,
+        result_limit=0,
         runtime_limit=0,
         display_mode=DISPLAY_NORMAL,
     ):
@@ -285,6 +286,10 @@ class Session:
 
             if iteration_limit and self.status.iteration >= iteration_limit:
                 LOG.info("Hit iteration limit (%d)", iteration_limit)
+                break
+
+            if result_limit and self.status.results.total >= result_limit:
+                LOG.info("Hit result limit (%ds)", result_limit)
                 break
 
             if runtime_limit and self.status.runtime >= runtime_limit:

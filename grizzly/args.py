@@ -282,6 +282,12 @@ class GrizzlyArgs(CommonArgs):
             help="Maximum number of iterations to be performed. (default: no limit)",
         )
         self.parser.add_argument(
+            "--smoke-test",
+            action="store_true",
+            help="Perform a small number of iterations to check if everything is"
+            " working as expected. Exit immediately if a result is found.",
+        )
+        self.parser.add_argument(
             "-v",
             "--verbose",
             action="store_true",

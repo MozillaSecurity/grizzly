@@ -38,6 +38,7 @@ class FakeArgs:
         self.relaunch = 1000
         self.runtime = 0
         self.s3_fuzzmanager = False
+        self.smoke_test = False
         self.time_limit = None
         self.timeout = None
         self.tool = None
@@ -47,23 +48,25 @@ class FakeArgs:
 
 
 @mark.parametrize(
-    "cov, adpt_relaunch, limit, runtime, verbose",
+    "cov, adpt_relaunch, limit, runtime, smoke_test, verbose",
     [
         # successful run
-        (False, 0, 0, 0, True),
+        (False, 0, 0, 0, False, True),
         # successful run (with iteration limit)
-        (False, 0, 10, 0, True),
+        (False, 0, 10, 0, False, True),
         # successful run (with runtime limit)
-        (False, 0, 0, 10, True),
+        (False, 0, 0, 10, False, True),
         # successful run (with coverage)
-        (True, 0, 0, 0, False),
+        (True, 0, 0, 0, False, False),
         # relaunch 1
-        (False, 1, 0, 0, False),
+        (False, 1, 0, 0, False, False),
         # relaunch 10
-        (False, 10, 0, 0, False),
+        (False, 10, 0, 0, False, False),
+        # smoke test detects result
+        (False, 0, 0, 0, True, False),
     ],
 )
-def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
+def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, smoke_test, verbose):
     """test main()"""
     fake_adapter = mocker.NonCallableMock(spec_set=Adapter)
     fake_adapter.RELAUNCH = adpt_relaunch
@@ -78,6 +81,7 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec_set=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
+    fake_session.return_value.status.results.total = 1 if smoke_test else 0
     args = FakeArgs()
     args.asset = [
         ["fake", "fake"],
@@ -87,13 +91,14 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, verbose):
     args.limit = limit
     args.runtime = runtime
     args.rr = True
+    args.smoke_test = smoke_test
     args.valgrind = True
     args.xvfb = True
     args.verbose = verbose
     if not verbose:
         args.log_level = 20
     args.coverage = cov
-    assert main(args) == Exit.SUCCESS
+    assert main(args) == (Exit.ERROR if smoke_test else Exit.SUCCESS)
     assert fake_session.mock_calls[0][-1]["coverage"] == cov
     if adpt_relaunch:
         assert fake_session.mock_calls[0][-1]["relaunch"] == adpt_relaunch
@@ -128,6 +133,7 @@ def test_main_02(mocker, reporter):
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
+    fake_session.return_value.status.results.total = 0
     args = FakeArgs()
     args.adapter = "fake"
     if reporter == "FuzzManager":
@@ -166,6 +172,7 @@ def test_main_03(mocker, exit_code, to_raise):
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
+    fake_session.return_value.status.results.total = 0
     args = FakeArgs()
     args.adapter = "fake"
     args.input = "fake"
@@ -202,6 +209,7 @@ def test_main_04(mocker, arg_testlimit, arg_timeout, exit_code):
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
+    fake_session.return_value.status.results.total = 0
     args = FakeArgs()
     args.adapter = "fake"
     args.time_limit = arg_testlimit
@@ -235,6 +243,7 @@ def test_main_05(mocker, pernosco, rr, valgrind):
     )
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
+    fake_session.return_value.status.results.total = 0
     args = FakeArgs()
     args.adapter = "fake"
     # maximum one debugger allowed at a time

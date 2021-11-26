@@ -6,7 +6,7 @@
 """
 unit tests for grizzly.Session
 """
-from itertools import count
+from itertools import chain, count, repeat
 
 from pytest import mark, raises
 
@@ -191,6 +191,9 @@ def test_session_02(mocker, harness, relaunch, remaining):
 )
 def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters, has_sig):
     """test Session - detecting failure"""
+    collector = mocker.patch("grizzly.common.report.Collector", autospec=True)
+    # don't search for signatures locally
+    collector.return_value.sigCacheDir = None
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
@@ -208,9 +211,9 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters, has
         side_effect=((x % relaunch == 0) for x in range(iters))
     )
     # failure is on final iteration
-    target.check_result.side_effect = [Result.NONE for x in range(iters - 1)] + [
-        Result.FOUND
-    ]
+    target.check_result.side_effect = chain(
+        repeat(Result.NONE, iters - 1), (Result.FOUND,)
+    )
     target.log_size.return_value = 1
     # create Report
     log_path = tmp_path / "logs"
@@ -444,7 +447,7 @@ def test_session_10(mocker):
     ],
 )
 def test_session_11(mocker, harness, report_size, relaunch, iters, report_limit):
-    """test Session - limit result submission"""
+    """test Session - limit report submission"""
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
     report = mocker.Mock(spec_set=Report, major="abc", minor="def", crash_hash="123")
@@ -477,6 +480,54 @@ def test_session_11(mocker, harness, report_size, relaunch, iters, report_limit)
             assert reporter.submit.call_count == iters
         assert len(reporter.submit.call_args[0][0]) == min(report_size, relaunch)
         assert reporter.submit.call_args[0][1].major == "abc"
+
+
+@mark.parametrize(
+    "harness, iters, result_limit, results",
+    [
+        # hit result limit
+        (True, 0, 1, 1),
+        # don't hit result limit (one result)
+        (True, 10, 5, 1),
+        # don't hit result limit (no results)
+        (True, 2, 1, 0),
+    ],
+)
+def test_session_12(mocker, harness, iters, result_limit, results):
+    """test Session - limit results"""
+    adapter = SimpleAdapter(harness)
+    reporter = mocker.Mock(spec_set=Reporter)
+    report = mocker.Mock(spec_set=Report, major="abc", minor="def", crash_hash="123")
+    report.crash_info.createShortSignature.return_value = "[@ sig]"
+    server = mocker.Mock(spec_set=Sapphire, port=0x1337)
+    target = mocker.Mock(
+        spec_set=Target,
+        assets=mocker.Mock(spec_set=AssetManager),
+        environ=dict(),
+        launch_timeout=30,
+    )
+    target.monitor.launches = 1
+    # avoid shutdown delay
+    target.monitor.is_healthy.return_value = False
+    type(target).closed = mocker.PropertyMock(return_value=True)
+    target.check_result.side_effect = chain(
+        repeat(Result.FOUND, results), repeat(Result.NONE, iters - results)
+    )
+    target.log_size.return_value = 1
+    target.create_report.return_value = report
+    with Session(adapter, reporter, server, target, relaunch=1) as session:
+        server.serve_path = lambda *a, **kv: (
+            Served.ALL,
+            [session.iomanager.page_name(offset=-1)],
+        )
+        session.run(
+            [], 10, input_path="a.bin", iteration_limit=iters, result_limit=result_limit
+        )
+    if results >= result_limit > iters:
+        # limited by result_limit
+        assert session.status.iteration == result_limit
+    else:
+        assert session.status.iteration == iters
 
 
 def test_log_output_limiter_01(mocker):

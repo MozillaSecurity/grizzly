@@ -107,8 +107,10 @@ def main(args):
             reporter = FilesystemReporter(pathjoin(getcwd(), "results"))
             LOG.info("Results will be stored in %r", reporter.report_path)
 
-        if args.limit:
-            LOG.info("%r iteration(s) will be attempted", args.limit)
+        # make sure an iteration limit is set if smoke_test is True
+        iteration_limit = (args.limit or 10) if args.smoke_test else args.limit
+        if iteration_limit:
+            LOG.info("%r iteration(s) will be attempted", iteration_limit)
         if args.runtime:
             LOG.info("Runtime is limited to %rs", args.runtime)
 
@@ -138,7 +140,8 @@ def main(args):
                 args.ignore,
                 time_limit,
                 input_path=args.input,
-                iteration_limit=args.limit,
+                iteration_limit=iteration_limit,
+                result_limit=1 if args.smoke_test else 0,
                 runtime_limit=args.runtime,
                 display_mode=display_mode,
             )
@@ -164,4 +167,6 @@ def main(args):
             adapter.cleanup()
         LOG.info("Done.")
 
+    if session and session.status.results.total > 0:
+        return Exit.ERROR
     return Exit.SUCCESS
