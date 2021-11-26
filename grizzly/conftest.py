@@ -11,6 +11,14 @@ from grizzly.common.status import ReductionStatus, Status
 
 
 @fixture
+def patch_collector(mocker):
+    """Provide a mock Collector to avoid scanning for signatures on disk."""
+    collector = mocker.patch("grizzly.common.report.Collector", autospec=True)
+    # don't search for signatures locally
+    collector.return_value.sigCacheDir = None
+
+
+@fixture
 def tmp_path_status_db(tmp_path, mocker):
     """Use a temporary database file for testing."""
     mocker.patch.object(Status, "STATUS_DB", new=str(tmp_path / "status-tmp.db"))

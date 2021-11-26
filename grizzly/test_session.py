@@ -18,7 +18,7 @@ from .common.runner import RunResult
 from .session import LogOutputLimiter, Session, SessionError
 from .target import AssetManager, Result, Target, TargetLaunchError
 
-pytestmark = mark.usefixtures("tmp_path_status_db")
+pytestmark = mark.usefixtures("patch_collector", "tmp_path_status_db")
 
 
 class SimpleAdapter(Adapter):
@@ -191,9 +191,6 @@ def test_session_02(mocker, harness, relaunch, remaining):
 )
 def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters, has_sig):
     """test Session - detecting failure"""
-    collector = mocker.patch("grizzly.common.report.Collector", autospec=True)
-    # don't search for signatures locally
-    collector.return_value.sigCacheDir = None
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
