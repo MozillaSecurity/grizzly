@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Interface for getting Crash and Bucket data from CrashManager API"""
 import json
+from contextlib import contextmanager
 from logging import getLogger
 from os import unlink
 from pathlib import Path
@@ -41,6 +42,12 @@ class Bucket:
     @property
     def bucket_id(self):
         return self._bucket_id
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
 
     def __getattr__(self, name):
         if self._data is None:
@@ -215,9 +222,16 @@ class CrashEntry:
     def crash_id(self):
         return self._crash_id
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
+
     def __getattr__(self, name):
         if self._data is None or (name in self.RAW_FIELDS and name not in self._data):
             need_raw = "1" if name in self.RAW_FIELDS else "0"
+            # TODO: handle 403 and 404?
             self._data = self._coll.get(
                 self._url, params={"include_raw": need_raw}
             ).json()
@@ -283,3 +297,23 @@ class CrashEntry:
             raise
         self._tc_filename = Path(filename)
         return self._tc_filename
+
+
+@contextmanager
+def load_fm_data(crash_id, load_bucket=False):
+    """Load CrashEntry including Bucket from FuzzManager.
+
+    Arguments:
+        crash_id (int): Crash ID to load.
+        load_bucket (bool): Attempt to load bucket.
+
+    Yields:
+        2-tuple(CrashEntry, Bucket): Data loaded from FuzzManager.
+    """
+    with CrashEntry(crash_id) as crash:
+        # load signature if needed
+        if load_bucket and crash.bucket:
+            with Bucket(crash.bucket) as bucket:
+                yield crash, bucket
+        else:
+            yield crash, None

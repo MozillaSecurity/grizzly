@@ -7,7 +7,7 @@ unit tests for grizzly.replay.args
 """
 from pytest import mark, raises
 
-from .args import ReplayArgs
+from .args import ReplayArgs, ReplayFuzzManagerIDArgs, ReplayFuzzManagerIDQualityArgs
 
 
 def test_replay_args_01(capsys, mocker, tmp_path):
@@ -59,3 +59,21 @@ def test_replay_args_02(capsys, mocker, tmp_path, args, msg):
             argv=[str(fake_bin), str(fake_bin), "--platform", target] + args
         )
     assert msg in capsys.readouterr()[-1]
+
+
+def test_replay_args_03(tmp_path):
+    """test ReplayFuzzManagerIDArgs"""
+    exe = tmp_path / "binary"
+    exe.touch()
+    ReplayFuzzManagerIDArgs().parse_args([str(exe), "123"])
+
+
+def test_replay_args_04(capsys, tmp_path):
+    """test ReplayFuzzManagerIDQualityArgs"""
+    exe = tmp_path / "binary"
+    exe.touch()
+    with raises(SystemExit):
+        ReplayFuzzManagerIDQualityArgs().parse_args(
+            [str(exe), "123", "--quality", "-1"]
+        )
+    assert "error: '--quality' value cannot be negative" in capsys.readouterr()[-1]

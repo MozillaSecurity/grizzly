@@ -4,10 +4,11 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
 
-from ..common.fuzzmanager import Bucket, CrashEntry
+from ..common.fuzzmanager import load_fm_data
 from ..common.reporter import Quality
 from ..common.utils import Exit
 from ..main import configure_logging
+from ..replay.crash import modify_args
 from .args import ReduceFuzzManagerIDArgs
 from .core import ReduceManager
 
@@ -24,23 +25,14 @@ def main(args):
         int: 0 for success. non-0 indicates a problem.
     """
     configure_logging(args.log_level)
-    crash = CrashEntry(args.input)
-    initial_quality = Quality(crash.testcase_quality)
-    LOG.info("Loaded crash %d (%s)", crash.crash_id, initial_quality.name)
-    bucket = None
-    try:
-        # download the crash
-        args.reducer_crash_id = args.input
-        args.input = str(crash.testcase_path())
-        if args.sig is None and crash.bucket is not None:
-            bucket = Bucket(crash.bucket)
-            args.sig = str(bucket.signature_path())
-        if args.tool is None:
-            LOG.info("Setting default --tool=%s from CrashEntry", crash.tool)
-            args.tool = crash.tool
-
+    with load_fm_data(args.input, load_bucket=not args.sig) as (crash, bucket):
+        LOG.info(
+            "Loaded crash %d (%s) from FuzzManager",
+            crash.crash_id,
+            Quality(crash.testcase_quality).name,
+        )
         # call grizzly.reduce
-        result = ReduceManager.main(args)
+        result = ReduceManager.main(modify_args(args, crash, bucket))
 
         # update quality
         # map Exit.* -> Quality.*
@@ -50,7 +42,7 @@ def main(args):
         if args.fuzzmanager:
             quality = {
                 Exit.ERROR: Quality.REDUCER_ERROR,
-                Exit.ABORT: initial_quality,
+                Exit.ABORT: Quality(crash.testcase_quality),
                 Exit.SUCCESS: Quality.ORIGINAL,
                 Exit.FAILURE: Quality.NOT_REPRODUCIBLE,
             }.get(result, Quality.UNREDUCED)
@@ -65,10 +57,7 @@ def main(args):
                 quality,
             )
             crash.testcase_quality = quality.value
-    finally:
-        crash.cleanup()
-        if bucket is not None:
-            bucket.cleanup()
+
     return result
 
 

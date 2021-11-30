@@ -807,7 +807,7 @@ class ReduceManager:
                     expect_hang=expect_hang,
                     idle_delay=args.idle_delay,
                     idle_threshold=args.idle_threshold,
-                    reducer_crash_id=args.reducer_crash_id,
+                    reducer_crash_id=args.original_crash_id,
                     relaunch=relaunch,
                     report_period=args.report_period,
                     report_to_fuzzmanager=args.fuzzmanager,
