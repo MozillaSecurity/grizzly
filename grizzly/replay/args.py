@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from argparse import SUPPRESS
 from os.path import exists, isfile
 
 from ..args import CommonArgs
@@ -59,6 +60,12 @@ class ReplayArgs(CommonArgs):
             action="store_true",
             help="Don't use the harness for redirection. Implies '--relaunch=1'.",
         )
+        # hidden argument to add original crash ID as metadata when reported
+        replay_args.add_argument(
+            "--original-crash-id",
+            type=int,
+            help=SUPPRESS,
+        )
         replay_args.add_argument(
             "--repeat",
             type=int,
@@ -102,3 +109,50 @@ class ReplayArgs(CommonArgs):
 
         if args.sig is not None and not isfile(args.sig):
             self.parser.error("signature file not found: %r" % (args.sig,))
+
+    def update_arg(self, name, new_type, help_msg):
+        # madhax alert!
+        #
+        # We need to modify the meaning of the 'input' positional to accept an int ID
+        # instead of a local testcase.
+        # This is not possible with the public argparse API.
+        #
+        # refs: stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
+        #       bugs.python.org/issue19462
+
+        # look up the action for the positional `input` arg
+        action = None
+        for arg in self.parser._actions:  # pylint: disable=protected-access
+            if arg.dest == name and not arg.option_strings:
+                action = arg
+                break
+        assert action is not None
+
+        # modify its type and help string
+        action.type = new_type
+        action.help = help_msg
+
+        # ... and Bob's your uncle
+        self._sanity_skip.add("input")
+
+
+class ReplayFuzzManagerIDArgs(ReplayArgs):
+    def __init__(self):
+        """Initialize argument parser."""
+        super().__init__()
+        self.update_arg("input", int, "FuzzManager ID to replay")
+
+
+class ReplayFuzzManagerIDQualityArgs(ReplayFuzzManagerIDArgs):
+    def __init__(self):
+        """Initialize argument parser."""
+        super().__init__()
+        self.parser.add_argument(
+            "--quality", type=int, help="Only try crashes with a given quality value"
+        )
+
+    def sanity_check(self, args):
+        super().sanity_check(args)
+
+        if args.quality is not None and args.quality < 0:
+            self.parser.error("'--quality' value cannot be negative")

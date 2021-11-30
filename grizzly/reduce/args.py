@@ -4,7 +4,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """CLI argument parsing for Grizzly reduction.
 """
-from argparse import SUPPRESS
 from logging import getLogger
 from pathlib import Path
 
@@ -56,12 +55,6 @@ class ReduceArgs(ReplayArgs):
             help="One or more strategies (space-separated). Available: %s (default: %s)"
             % (" ".join(sorted(STRATEGIES)), " ".join(DEFAULT_STRATEGIES)),
         )
-        # hidden argument to add original crash ID as metadata when reported
-        reduce_args.add_argument(
-            "--reducer-crash-id",
-            type=int,
-            help=SUPPRESS,
-        )
 
     def sanity_check(self, args):
         """Sanity check reducer args.
@@ -108,30 +101,7 @@ class ReduceFuzzManagerIDArgs(ReduceArgs):
     def __init__(self):
         """Initialize argument parser."""
         super().__init__()
-
-        # madhax alert!
-        #
-        # We need to modify the meaning of the 'input' positional to accept an int ID
-        # instead of a local testcase.
-        # This is not possible with the public argparse API.
-        #
-        # refs: stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
-        #       bugs.python.org/issue19462
-
-        # look up the action for the positional `input` arg
-        action = None
-        for arg in self.parser._actions:
-            if arg.dest == "input" and not arg.option_strings:
-                action = arg
-                break
-        assert action is not None
-
-        # modify it's type and help string
-        action.type = int
-        action.help = "FuzzManager ID to reduce"
-
-        # ... and Bob's your uncle
-        self._sanity_skip.add("input")
+        self.update_arg("input", int, "FuzzManager ID to reduce")
 
 
 class ReduceFuzzManagerIDQualityArgs(ReduceFuzzManagerIDArgs):

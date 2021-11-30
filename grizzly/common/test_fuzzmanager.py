@@ -5,9 +5,9 @@
 """Tests for interface for getting Crash and Bucket data from CrashManager API"""
 import json
 
-from pytest import raises
+from pytest import mark, raises
 
-from .fuzzmanager import Bucket, CrashEntry
+from .fuzzmanager import Bucket, CrashEntry, load_fm_data
 
 
 def test_bucket_1(mocker):
@@ -90,8 +90,7 @@ def test_bucket_4(mocker):
         "shortDescription": "sig desc",
         "best_quality": 0,
     }
-    bucket = Bucket(123)
-    try:
+    with Bucket(123) as bucket:
         assert coll.return_value.get.call_count == 0
         sig_path = bucket.signature_path()
         assert sig_path.is_file()
@@ -106,8 +105,6 @@ def test_bucket_4(mocker):
         assert coll.return_value.get.call_count == 1
         # second call returns same path
         assert bucket.signature_path() == sig_path
-    finally:
-        bucket.cleanup()
     assert coll.return_value.get.call_count == 1
 
 
@@ -173,13 +170,12 @@ def test_crash_3(mocker):
         "id": 234,
         "testcase": "test.bz2",
     }
-    crash = CrashEntry(234)
-    assert crash.testcase == "test.bz2"  # pre-load data dict so I can re-patch get
-    coll.return_value.get.return_value = mocker.Mock(
-        content=b"\x01\x02\x03",
-        headers={"content-disposition"},
-    )
-    try:
+    with CrashEntry(234) as crash:
+        assert crash.testcase == "test.bz2"  # pre-load data dict so I can re-patch get
+        coll.return_value.get.return_value = mocker.Mock(
+            content=b"\x01\x02\x03",
+            headers={"content-disposition"},
+        )
         assert coll.return_value.get.call_count == 1
         tc_path = crash.testcase_path()
         assert tc_path.is_file()
@@ -188,6 +184,37 @@ def test_crash_3(mocker):
         assert coll.return_value.get.call_count == 2
         # second call returns same path
         assert crash.testcase_path() == tc_path
-    finally:
-        crash.cleanup()
     assert coll.return_value.get.call_count == 2
+
+
+@mark.parametrize(
+    "bucket_id, load_bucket",
+    [
+        # Nothing to load, don't try
+        (None, False),
+        # Nothing to load, try
+        (None, True),
+        # Bucket exists, don't load it
+        (111, False),
+        # Bucket exists, load it
+        (111, True),
+    ],
+)
+def test_load_fm_data_1(mocker, bucket_id, load_bucket):
+    """test load_fm_data()"""
+    coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
+    coll.return_value.serverProtocol = "http"
+    coll.return_value.serverPort = 123
+    coll.return_value.serverHost = "allizom.org"
+    coll.return_value.get.return_value = mocker.Mock(
+        content=b"\x01\x02\x03",
+        headers={"content-disposition"},
+    )
+    coll.return_value.get.return_value.json.return_value = {"bucket": bucket_id}
+
+    with load_fm_data(123, load_bucket) as (crash, bucket):
+        assert isinstance(crash, CrashEntry)
+        if load_bucket and bucket_id:
+            assert isinstance(bucket, Bucket)
+        else:
+            assert bucket is None
