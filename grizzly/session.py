@@ -289,7 +289,7 @@ class Session:
                 break
 
             if result_limit and self.status.results.total >= result_limit:
-                LOG.info("Hit result limit (%ds)", result_limit)
+                LOG.info("Hit result limit (%d)", result_limit)
                 break
 
             if runtime_limit and self.status.runtime >= runtime_limit:
