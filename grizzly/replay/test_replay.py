@@ -42,12 +42,13 @@ def test_replay_01(mocker):
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     target.check_result.return_value = Result.NONE
     target.monitor.is_healthy.return_value = False
+    iter_cb = mocker.Mock()
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, use_harness=True, relaunch=1) as replay:
-            assert not replay.run([testcase], 10)
+            assert not replay.run([testcase], 10, on_iteration_cb=iter_cb)
             assert replay.signature is None
             assert replay.status.ignored == 0
-            assert replay.status.iteration == 1
+            assert replay.status.iteration == iter_cb.call_count == 1
             assert replay.status.results.total == 0
             assert target.monitor.is_healthy.call_count == 1
             assert target.close.call_count == 2
@@ -62,14 +63,17 @@ def test_replay_02(mocker):
     target = mocker.Mock(spec_set=Target, closed=False, launch_timeout=30)
     target.check_result.return_value = Result.NONE
     target.monitor.is_healthy.return_value = False
+    iter_cb = mocker.Mock()
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager(
             [], server, target, use_harness=True, relaunch=100
         ) as replay:
-            assert not replay.run([testcase], 10, repeat=10, min_results=1)
+            assert not replay.run(
+                [testcase], 10, repeat=10, min_results=1, on_iteration_cb=iter_cb
+            )
             assert replay.signature is None
             assert replay.status.ignored == 0
-            assert replay.status.iteration == 10
+            assert replay.status.iteration == iter_cb.call_count == 10
             assert replay.status.results.total == 0
             assert target.handle_hang.call_count == 0
             assert target.monitor.is_healthy.call_count == 1
