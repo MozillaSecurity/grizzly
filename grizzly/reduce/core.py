@@ -488,6 +488,7 @@ class ReduceManager:
                 strategy_last_report = time()
                 strategy_stats = self._status.measure(strategy.name)
                 best_results = []
+                other_results = {}
                 try:
                     with replay, strategy, strategy_stats:
                         self._status.report(force=True)
@@ -566,9 +567,50 @@ class ReduceManager:
                                     ]
                                 else:
                                     LOG.info("Attempt failed")
+
                                 # if the reduction found other crashes,
-                                #   report those immediately
-                                self.report(results, reduction)
+                                # save those for reporting later
+
+                                # only save the smallest testcase that has found
+                                # each result
+                                for result in results:
+                                    other_result_exists = bool(
+                                        result.report.minor in other_results
+                                    )
+
+                                    is_smaller = None
+                                    if other_result_exists:
+                                        # we have a result already queued for this sig
+                                        # check size to see which to keep
+                                        reduction_size = sum(
+                                            tc.data_size for tc in reduction
+                                        )
+                                        _, old_reduction = other_results[
+                                            result.report.minor
+                                        ]
+                                        old_size = sum(
+                                            tc.data_size for tc in old_reduction
+                                        )
+                                        is_smaller = bool(reduction_size < old_size)
+
+                                    if not other_result_exists or is_smaller:
+                                        if other_result_exists:
+                                            # clean-up old result
+                                            old_result, old_reduction = other_results[
+                                                result.report.minor
+                                            ]
+                                            old_result.report.cleanup()
+                                            for testcase in old_reduction:
+                                                testcase.cleanup()
+                                        # store this reduction for later reporting
+                                        # as the other result
+                                        other_results[result.report.minor] = (
+                                            result,
+                                            [
+                                                testcase.clone()
+                                                for testcase in reduction
+                                            ],
+                                        )
 
                                 now = time()
                                 if (
@@ -591,8 +633,6 @@ class ReduceManager:
                                 if not keep_reduction:
                                     for testcase in reduction:
                                         testcase.cleanup()
-                                for result in results:
-                                    result.report.cleanup()
 
                         # if self._signature was already set, this will do nothing
                         # otherwise, ensure the first found signature is used throughout
@@ -602,6 +642,8 @@ class ReduceManager:
                         self._status.last_reports = self.report(
                             best_results, self.testcases
                         )
+                    for result, reduction in other_results.values():
+                        self.report([result], reduction)
 
                 except KeyboardInterrupt:
                     if best_results:
@@ -609,13 +651,17 @@ class ReduceManager:
                             best_results, self.testcases
                         )
                         LOG.warning(
-                            "Ctrl+C detected, best reduction so far " "reported as %r",
+                            "Ctrl+C detected, best reduction so far reported as %r",
                             self._status.last_reports,
                         )
                     raise
                 finally:
                     for result in best_results:
                         result.report.cleanup()
+                    for result, reduction in other_results.values():
+                        result.report.cleanup()
+                        for testcase in reduction:
+                            testcase.cleanup()
 
                 # store "tried" cache to pass to next strategy
                 last_tried = strategy.get_tried()
