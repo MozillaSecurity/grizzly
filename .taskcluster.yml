@@ -60,6 +60,11 @@ tasks:
             version: "3.8"
             env:
               TOXENV: py38
+          - name: test python 3.8 (macos)
+            version: "3.8"
+            platform: macos
+            env:
+              TOXENV: py38
           - name: test python 3.8 (windows)
             version: "3.8"
             platform: windows
@@ -67,6 +72,11 @@ tasks:
               TOXENV: py38
           - name: tests python 3.9
             version: "3.9"
+            env:
+              TOXENV: py39
+          - name: tests python 3.9 (macos)
+            version: "3.9"
+            platform: macos
             env:
               TOXENV: py39
           - name: lint
