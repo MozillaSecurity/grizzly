@@ -70,6 +70,6 @@ def configure_logging(log_level):
 
 
 def grz_tmp(*subdir):
-    path = pathjoin(gettempdir(), "grizzly", *subdir)
+    path = pathjoin(getenv("GRZ_TMP", gettempdir()), "grizzly", *subdir)
     makedirs(path, exist_ok=True)
     return path
