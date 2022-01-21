@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import DEBUG, getLogger
-from os import getcwd, getpid
+from os import getpid
 from os.path import join as pathjoin
 
 from sapphire import Sapphire
@@ -104,7 +104,7 @@ def main(args):
             )
             reporter = S3FuzzManagerReporter(tool=args.tool)
         else:
-            reporter = FilesystemReporter(pathjoin(getcwd(), "results"))
+            reporter = FilesystemReporter(pathjoin(args.logs, "results"))
             LOG.info("Results will be stored in %r", reporter.report_path)
         reporter.display_logs = args.smoke_test or reporter.display_logs
 

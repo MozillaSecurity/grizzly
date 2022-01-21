@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
+from os import getcwd
 from os.path import exists, isfile
 from platform import system
 
@@ -157,6 +158,12 @@ class CommonArgs:
             default=list(self.IGNORE),
             help="Space separated list of issue types to ignore. Valid options: %s"
             " (default: %s)" % (" ".join(self.IGNORABLE), " ".join(self.IGNORE)),
+        )
+        self.reporter_grp.add_argument(
+            "-l",
+            "--logs",
+            default=getcwd(),
+            help="Location to save logs and test cases. (default: %(default)r)",
         )
         self.reporter_grp.add_argument(
             "--tool",

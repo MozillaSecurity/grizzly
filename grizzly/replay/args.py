@@ -11,6 +11,7 @@ from ..args import CommonArgs
 class ReplayArgs(CommonArgs):
     def __init__(self):
         super().__init__()
+        self.parser.set_defaults(logs=None)
         self.parser.add_argument(
             "input",
             help="Accepted input includes: "
@@ -41,12 +42,6 @@ class ReplayArgs(CommonArgs):
             type=int,
             default=0,
             help="CPU usage threshold to mark the process as idle (default: disabled)",
-        )
-        replay_args.add_argument(
-            "-l",
-            "--logs",
-            help="Location to save logs. If the path exists it must be empty, if it "
-            "does not exist it will be created.",
         )
         replay_args.add_argument(
             "--min-crashes",
