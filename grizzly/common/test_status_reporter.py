@@ -577,7 +577,7 @@ def test_traceback_report_03(tmp_path):
         test_fp.write(b"    a = b[10]\n")
         test_fp.write(b"foo.bar.error: blah\n")
         test_fp.write(b"end junk\n")
-    tbr = TracebackReport.from_file(str(test_log), max_preceeding=0)
+    tbr = TracebackReport.from_file(str(test_log), max_preceding=0)
     assert len(tbr.lines) == 6
     assert not tbr.prev_lines
     assert not tbr.is_kbi

@@ -50,11 +50,11 @@ class Worker:
         return data.encode(encoding)
 
     @staticmethod
-    def _307_redirect(redirct_to, encoding="ascii"):
+    def _307_redirect(redirect_to, encoding="ascii"):
         data = (
             "HTTP/1.1 307 Temporary Redirect\r\n"
             "Location: %s\r\n"
-            "Connection: close\r\n\r\n" % (redirct_to,)
+            "Connection: close\r\n\r\n" % (redirect_to,)
         )
         return data.encode(encoding)
 

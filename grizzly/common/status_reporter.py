@@ -393,13 +393,13 @@ class StatusReporter:
         return entries
 
     @staticmethod
-    def _tracebacks(path, ignore_kbi=True, max_preceeding=5):
+    def _tracebacks(path, ignore_kbi=True, max_preceding=5):
         """Search screen logs for tracebacks.
 
         Args:
             path (str): Directory containing log files.
             ignore_kbi (bool): Do not include KeyboardInterupts in results
-            max_preceeding (int): Maximum number of lines preceding traceback to
+            max_preceding (int): Maximum number of lines preceding traceback to
                                   include.
 
         Returns:
@@ -407,7 +407,7 @@ class StatusReporter:
         """
         tracebacks = list()
         for screen_log in StatusReporter._scan(path, r"screenlog\.\d+"):
-            tbr = TracebackReport.from_file(screen_log, max_preceeding=max_preceeding)
+            tbr = TracebackReport.from_file(screen_log, max_preceding=max_preceding)
             if tbr is None:
                 continue
             if ignore_kbi and tbr.is_kbi:
@@ -432,14 +432,13 @@ class TracebackReport:
         self.is_kbi = is_kbi
 
     @classmethod
-    def from_file(cls, input_log, max_preceeding=5):
+    def from_file(cls, input_log, max_preceding=5):
         """Create TracebackReport from a text file containing a Python traceback.
         Only the first traceback in the file will be parsed.
 
         Args:
             input_log (str): File to parse.
-            max_preceeding (int): Number of lines to collect leading up to the
-                                  traceback.
+            max_preceding (int): Number of lines to collect leading up to the traceback.
 
         Returns:
             TracebackReport: Contains data from input_log.
@@ -489,8 +488,8 @@ class TracebackReport:
                     tb_end = min(line_num + 1, line_count)
                     break
         assert tb_start is not None
-        if max_preceeding > 0:
-            prev_start = max(tb_start - max_preceeding, 0)
+        if max_preceding > 0:
+            prev_start = max(tb_start - max_preceding, 0)
             prev_lines = data[prev_start:tb_start]
         else:
             prev_lines = None
