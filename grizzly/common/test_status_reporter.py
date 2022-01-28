@@ -230,7 +230,7 @@ def test_status_reporter_02(tmp_path):
         (
             Mock(free=12, total=GBYTES),
             Mock(available=12, total=GBYTES),
-            lambda: "(0.12, 0.34, 0.56)",
+            lambda: (0.12, 0.34, 0.56),
         ),
     ],
 )
@@ -263,7 +263,7 @@ def test_status_reporter_03(mocker, disk, memory, getloadavg):
     assert sysinfo[1][0] == "Memory"
     assert sysinfo[2][0] == "Disk"
     if getloadavg is not None:
-        assert sysinfo[0][-1].endswith("(0.12, 0.34, 0.56)")
+        assert sysinfo[0][-1].endswith("(0.1, 0.3, 0.6)")
     if disk.free < GBYTES or memory.available < GBYTES:
         assert "MB" in sysinfo[1][-1]
         assert "MB" in sysinfo[2][-1]
