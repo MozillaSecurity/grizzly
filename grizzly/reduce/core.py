@@ -716,7 +716,7 @@ class ReduceManager:
             else:
                 report_dir = "reports" if result.expected else "other_reports"
                 reporter = FilesystemReporter(
-                    report_path=str(self._log_path / report_dir), major_bucket=False
+                    report_path=self._log_path / report_dir, major_bucket=False
                 )
             # write reduction stats for expected results
             if result.expected:

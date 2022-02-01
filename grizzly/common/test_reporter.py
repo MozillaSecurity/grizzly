@@ -71,8 +71,8 @@ def test_filesystem_reporter_01(tmp_path):
     _create_crash_log(tmp_path / "log_asan_blah.txt")
     report_path = tmp_path / "reports"
     report_path.mkdir()
-    reporter = FilesystemReporter(str(report_path))
-    reporter.submit([], Report(str(log_path), "fake_bin"))
+    reporter = FilesystemReporter(report_path)
+    reporter.submit([], Report(log_path, "fake_bin"))
     buckets = tuple(report_path.iterdir())
     # check major bucket
     assert len(buckets) == 1
@@ -94,8 +94,8 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     tests = list(mocker.Mock(spec_set=TestCase) for _ in range(10))
     report_path = tmp_path / "reports"
     assert not report_path.exists()
-    reporter = FilesystemReporter(str(report_path))
-    reporter.submit(tests, Report(str(log_path), "fake_bin"))
+    reporter = FilesystemReporter(report_path)
+    reporter.submit(tests, Report(log_path, "fake_bin"))
     assert not log_path.exists()
     assert report_path.exists()
     assert len(tuple(report_path.iterdir())) == 1
@@ -105,7 +105,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     tests = list(mocker.Mock(spec_set=TestCase) for _ in range(2))
-    reporter.submit(tests, Report(str(log_path), "fake_bin"))
+    reporter.submit(tests, Report(log_path, "fake_bin"))
     assert all(x.dump.call_count == 1 for x in tests)
     assert len(tuple(report_path.iterdir())) == 2
     assert len(tuple(report_path.glob("NO_STACK"))) == 1
@@ -117,18 +117,18 @@ def test_filesystem_reporter_03(tmp_path):
     log_path.mkdir()
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    reporter = FilesystemReporter(str(tmp_path / "reports"))
+    reporter = FilesystemReporter(tmp_path / "reports")
     reporter.min_space = 2 ** 50
     with raises(RuntimeError, match="Running low on disk space"):
-        reporter.submit([], Report(str(log_path), "fake_bin"))
+        reporter.submit([], Report(log_path, "fake_bin"))
 
 
 def test_filesystem_reporter_04(mocker, tmp_path):
     """test FilesystemReporter w/o major bucket"""
     fake_report = tmp_path / "fake_report"
     fake_report.mkdir()
-    report = mocker.Mock(spec_set=Report, path=str(fake_report), prefix="test_prefix")
-    reporter = FilesystemReporter(str(tmp_path / "dst"), major_bucket=False)
+    report = mocker.Mock(spec_set=Report, path=fake_report, prefix="test_prefix")
+    reporter = FilesystemReporter(tmp_path / "dst", major_bucket=False)
     reporter.submit([], report)
     assert not fake_report.is_dir()
     assert not report.major.call_count
@@ -141,7 +141,7 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
     fake_reporter.fromBinary.return_value = mocker.Mock(spec_set=ProgramConfiguration)
     # missing global FM config file
     FuzzManagerReporter.FM_CONFIG = tmp_path / "no_file"
-    with raises(IOError, match="Missing: %s" % (FuzzManagerReporter.FM_CONFIG,)):
+    with raises(IOError, match="no_file"):
         FuzzManagerReporter.sanity_check("fake")
     # missing binary FM config file
     fake_fmc = tmp_path / ".fuzzmanagerconf"
@@ -204,7 +204,7 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored, for
         test_cases.append(fake_test)
     reporter = FuzzManagerReporter("fake_bin")
     reporter.force_report = force
-    reporter.submit(test_cases, Report(str(log_path), "fake_bin", is_hang=True))
+    reporter.submit(test_cases, Report(log_path, "fake_bin", is_hang=True))
     assert not log_path.is_dir()
     if (frequent and not force) or ignored:
         assert fake_collector.return_value.submit.call_count == 0
@@ -220,10 +220,7 @@ def test_fuzzmanager_reporter_03(mocker, tmp_path):
     log_file = tmp_path / "test.log"
     log_file.touch()
     report = mocker.Mock(
-        spec_set=Report,
-        path=str(tmp_path),
-        preferred=str(log_file),
-        stack=None,
+        spec_set=Report, path=tmp_path, preferred=str(log_file), stack=None
     )
     # not ignored
     assert not FuzzManagerReporter._ignored(report)
