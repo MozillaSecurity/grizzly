@@ -6,10 +6,8 @@ from abc import ABCMeta, abstractmethod
 from enum import IntEnum, unique
 from json import dumps, loads
 from logging import WARNING, getLogger
-from os import getcwd, getenv, makedirs, mkdir, unlink, walk
-from os.path import basename, expanduser, isdir, isfile
-from os.path import join as pathjoin
-from os.path import realpath, relpath
+from os import getenv
+from pathlib import Path
 from shutil import copyfile, move, rmtree
 from tarfile import open as tar_open
 from tempfile import TemporaryDirectory
@@ -134,8 +132,7 @@ class FilesystemReporter(Reporter):
         super().__init__()
         self.major_bucket = major_bucket
         self.min_space = FilesystemReporter.DISK_SPACE_ABORT
-        assert isinstance(report_path, str) and report_path
-        self.report_path = report_path
+        self.report_path = Path(report_path)
 
     def _pre_submit(self, report):
         pass
@@ -146,32 +143,31 @@ class FilesystemReporter(Reporter):
     def _submit_report(self, report, test_cases):
         # create major bucket directory in working directory if needed
         if self.major_bucket:
-            dest_path = pathjoin(self.report_path, report.major[:16])
+            dest = self.report_path / report.major[:16]
         else:
-            dest_path = self.report_path
-        makedirs(dest_path, exist_ok=True)
+            dest = self.report_path
+        dest.mkdir(parents=True, exist_ok=True)
         # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(test_cases):
-            dump_path = pathjoin(dest_path, "%s-%d" % (report.prefix, test_number))
-            if not isdir(dump_path):
-                mkdir(dump_path)
+            dump_path = dest / ("%s-%d" % (report.prefix, test_number))
+            dump_path.mkdir(exist_ok=True)
             test_case.dump(dump_path, include_details=True)
         # move logs into bucket directory
-        log_path = pathjoin(dest_path, "%s_%s" % (report.prefix, "logs"))
-        if isdir(log_path):
-            LOG.warning("Report log path exists %r", log_path)
-        move(report.path, log_path)
+        log_path = dest / ("%s_%s" % (report.prefix, "logs"))
+        if log_path.is_dir():
+            LOG.warning("Report log path exists %r", str(log_path))
+        move(str(report.path), str(log_path))
         # avoid filling the disk
-        free_space = disk_usage(log_path).free
+        free_space = disk_usage(str(log_path)).free
         if free_space < self.min_space:
             raise RuntimeError(
                 "Running low on disk space (%0.1fMB)" % (free_space / 1048576.0,)
             )
-        return dest_path
+        return dest
 
 
 class FuzzManagerReporter(Reporter):
-    FM_CONFIG = pathjoin(expanduser("~"), ".fuzzmanagerconf")
+    FM_CONFIG = Path.home() / ".fuzzmanagerconf"
 
     __slots__ = ("_extra_metadata", "force_report", "quality", "tool")
 
@@ -195,9 +191,9 @@ class FuzzManagerReporter(Reporter):
         Returns:
             None
         """
-        if not isfile(FuzzManagerReporter.FM_CONFIG):
+        if not FuzzManagerReporter.FM_CONFIG.is_file():
             raise IOError("Missing: %s" % (FuzzManagerReporter.FM_CONFIG,))
-        if not isfile("".join([bin_file, ".fuzzmanagerconf"])):
+        if not Path("".join([bin_file, ".fuzzmanagerconf"])).is_file():
             raise IOError("Missing: %s.fuzzmanagerconf" % (bin_file,))
         ProgramConfiguration.fromBinary(bin_file)
 
@@ -222,13 +218,13 @@ class FuzzManagerReporter(Reporter):
 
     def _process_rr_trace(self, report):
         # don't report large files to FuzzManager
-        trace_path = pathjoin(report.path, "rr-traces")
-        if isdir(trace_path):
+        trace_path = report.path / "rr-traces"
+        if trace_path.is_dir():
             LOG.info("Ignored rr trace")
             self.add_extra_metadata("rr-trace", "ignored")
             # remove traces so they are not uploaded to FM (because they are huge)
             # use S3FuzzManagerReporter instead
-            rmtree(trace_path)
+            rmtree(str(trace_path))
 
     @staticmethod
     def _ignored(report):
@@ -257,7 +253,7 @@ class FuzzManagerReporter(Reporter):
 
         if not self.force_report:
             # search for a cached signature match
-            with InterProcessLock(pathjoin(grz_tmp(), "fm_sigcache.lock")):
+            with InterProcessLock(str(Path(grz_tmp()) / "fm_sigcache.lock")):
                 _, cache_metadata = collector.search(report.crash_info)
 
             # check if signature has been marked as frequent in FM
@@ -279,9 +275,8 @@ class FuzzManagerReporter(Reporter):
         test_case_meta = []
         for test_number, test_case in enumerate(test_cases):
             test_case_meta.append([test_case.adapter_name, test_case.input_fname])
-            dump_path = pathjoin(report.path, "%s-%d" % (report.prefix, test_number))
-            if not isdir(dump_path):
-                mkdir(dump_path)
+            dump_path = report.path / ("%s-%d" % (report.prefix, test_number))
+            dump_path.mkdir(exist_ok=True)
             test_case.dump(dump_path, include_details=True)
         report.crash_info.configuration.addMetadata(
             {"grizzly_input": repr(test_case_meta)}
@@ -300,23 +295,21 @@ class FuzzManagerReporter(Reporter):
         # TODO: this should likely move to ffpuppet
         # grab screen log (used in automation)
         if getenv("WINDOW") is not None:
-            screen_log = pathjoin(getcwd(), "screenlog.%s" % (getenv("WINDOW"),))
-            if isfile(screen_log):
-                target_log = pathjoin(report.path, "screenlog.txt")
-                copyfile(screen_log, target_log)
+            screen_log = Path.cwd() / ("screenlog.%s" % (getenv("WINDOW"),))
+            if screen_log.is_file():
+                target_log = report.path / "screenlog.txt"
+                copyfile(str(screen_log), str(target_log))
                 Report.tail(target_log, 10240)  # limit to last 10K
 
         with TemporaryDirectory(prefix="fm-zip", dir=grz_tmp()) as tmp_dir:
             # add results to a zip file
-            zip_name = pathjoin(tmp_dir, "%s.zip" % (report.prefix,))
+            zip_name = Path(tmp_dir) / ("%s.zip" % (report.prefix,))
             with ZipFile(zip_name, mode="w", compression=ZIP_DEFLATED) as zip_fp:
                 # add test files
-                for dir_name, _, dir_files in walk(report.path):
-                    arc_path = relpath(dir_name, report.path)
-                    for file_name in dir_files:
+                for entry in report.path.rglob("*"):
+                    if entry.is_file():
                         zip_fp.write(
-                            pathjoin(dir_name, file_name),
-                            arcname=pathjoin(arc_path, file_name),
+                            str(entry), arcname=str(entry.relative_to(report.path))
                         )
             # override tool name if specified
             if self.tool is not None:
@@ -335,22 +328,22 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
     @staticmethod
     def compress_rr_trace(src, dest):
         # resolve symlink to latest trace available
-        latest_trace = realpath(pathjoin(src, "latest-trace"))
-        assert isdir(latest_trace), "missing latest-trace directory"
-        rr_arc = pathjoin(dest, "rr.tar.bz2")
+        latest_trace = (src / "latest-trace").resolve(strict=True)
+        assert latest_trace.is_dir(), "missing latest-trace directory"
+        rr_arc = dest / "rr.tar.bz2"
         LOG.debug("creating %r from %r", rr_arc, latest_trace)
         with tar_open(rr_arc, "w:bz2") as arc_fp:
-            arc_fp.add(latest_trace, arcname=basename(latest_trace))
+            arc_fp.add(str(latest_trace), arcname=latest_trace.name)
         # remove path containing uncompressed traces
-        rmtree(src)
+        rmtree(str(src))
         return rr_arc
 
     def _pre_submit(self, report):
         self._process_rr_trace(report)
 
     def _process_rr_trace(self, report):
-        trace_path = pathjoin(report.path, "rr-traces")
-        if not isdir(trace_path):
+        trace_path = report.path / "rr-traces"
+        if not trace_path.is_dir():
             return None
         s3_bucket = getenv("GRZ_S3_BUCKET")
         assert s3_bucket is not None
@@ -373,15 +366,15 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
             LOG.info("rr trace exists at %r", s3_url)
             self.add_extra_metadata("rr-trace", s3_url)
             # remove traces so they are not reported to FM
-            rmtree(trace_path)
+            rmtree(str(trace_path))
             return s3_url
 
         # Upload to S3
         rr_arc = self.compress_rr_trace(trace_path, report.path)
         s3_res.meta.client.upload_file(
-            rr_arc, s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"}
+            str(rr_arc), s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"}
         )
-        unlink(rr_arc)
+        rr_arc.unlink()
         self.add_extra_metadata("rr-trace", s3_url)
         return s3_url
 

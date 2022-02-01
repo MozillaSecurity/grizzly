@@ -6,8 +6,7 @@ from collections import namedtuple
 from hashlib import sha1
 from logging import getLogger
 from os import SEEK_END, scandir, stat, unlink
-from os.path import basename, isdir, isfile
-from os.path import join as pathjoin
+from pathlib import Path
 from platform import machine, system
 from re import DOTALL, VERBOSE
 from re import compile as re_compile
@@ -52,15 +51,14 @@ class Report:
     )
 
     def __init__(self, log_path, target_binary, is_hang=False, size_limit=MAX_LOG_SIZE):
-        assert isinstance(log_path, str)
         assert isinstance(target_binary, str)
         self._crash_info = None
         self._logs = self.select_logs(log_path)
         assert self._logs is not None
         self._signature = None
-        self._target_binary = target_binary
+        self._target_binary = Path(target_binary)
         self.is_hang = is_hang
-        self.path = log_path
+        self.path = Path(log_path)
         # tail files in log_path if needed
         if size_limit < 1:
             LOG.warning("No limit set on report log size!")
@@ -106,8 +104,8 @@ class Report:
         Returns:
             None
         """
-        if self.path and isdir(self.path):
-            rmtree(self.path)
+        if self.path and self.path.is_dir():
+            rmtree(str(self.path))
         self.path = None
 
     @property
@@ -143,17 +141,15 @@ class Report:
             else:
                 aux_data = None
             # create ProgramConfiguration that can be reported to a FM server
-            if isfile("%s.fuzzmanagerconf" % (self._target_binary,)):
+            if Path("%s.fuzzmanagerconf" % (self._target_binary,)).is_file():
                 # attempt to use "<target_binary>.fuzzmanagerconf"
                 fm_cfg = ProgramConfiguration.fromBinary(self._target_binary)
             else:
                 LOG.debug("'%s.fuzzmanagerconf' does not exist", self._target_binary)
-                fm_cfg = None
-            if fm_cfg is None:
                 LOG.debug("creating ProgramConfiguration")
                 cpu = machine().lower()
                 fm_cfg = ProgramConfiguration(
-                    basename(self._target_binary),
+                    self._target_binary.name,
                     "x86_64" if cpu == "amd64" else cpu,
                     system(),
                 )
@@ -180,7 +176,7 @@ class Report:
         """
         if self._signature is None:
             collector = Collector()
-            with InterProcessLock(pathjoin(grz_tmp(), "fm_sigcache.lock")):
+            with InterProcessLock(str(Path(grz_tmp()) / "fm_sigcache.lock")):
                 if collector.sigCacheDir:
                     cache_sig, _ = collector.search(self.crash_info)
                     if cache_sig:

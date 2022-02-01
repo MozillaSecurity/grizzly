@@ -734,6 +734,8 @@ class ReduceManager:
                         clone.purge_optional(served)
                 result = reporter.submit(clones, result.report)
                 if result is not None:
+                    if isinstance(result, Path):
+                        result = str(result)
                     ret_values.append(result)
             finally:
                 for clone in clones:

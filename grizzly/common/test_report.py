@@ -5,11 +5,10 @@
 """test Grizzly Report"""
 # pylint: disable=protected-access
 
-import os
 from pathlib import Path
 
-import pytest
 from FTB.Signatures.CrashInfo import CrashInfo
+from pytest import mark, raises
 
 from .report import Report
 
@@ -27,9 +26,9 @@ def test_report_01(tmp_path):
     (tmp_path / "not_a_log.txt").touch()
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    report = Report(str(tmp_path), "a.bin", size_limit=0)
-    assert report._target_binary == "a.bin"
-    assert report.path == str(tmp_path)
+    report = Report(tmp_path, "a.bin", size_limit=0)
+    assert report._target_binary.name == "a.bin"
+    assert report.path == tmp_path
     assert report._logs.aux is None
     assert report._logs.stderr.endswith("log_stderr.txt")
     assert report._logs.stdout.endswith("log_stdout.txt")
@@ -47,8 +46,8 @@ def test_report_02(tmp_path):
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     _create_crash_log(tmp_path / "log_asan_blah.txt")
-    report = Report(str(tmp_path), "bin")
-    assert report.path == str(tmp_path)
+    report = Report(tmp_path, "bin")
+    assert report.path == tmp_path
     assert report._logs.aux.endswith("log_asan_blah.txt")
     assert report._logs.stderr.endswith("log_stderr.txt")
     assert report._logs.stdout.endswith("log_stdout.txt")
@@ -66,7 +65,7 @@ def test_report_03(tmp_path):
     tmp_file.write_bytes(b"blah\ntest\n123\xEF\x00FOO")
     length = tmp_file.stat().st_size
     # no size limit
-    with pytest.raises(AssertionError):
+    with raises(AssertionError):
         Report.tail(str(tmp_file), 0)
     assert tmp_file.stat().st_size == length
     Report.tail(str(tmp_file), 3)
@@ -256,17 +255,17 @@ def test_report_10(tmp_path):
     (tmp_path / "unrelated.txt").write_bytes(b"nothing burger\n" * 200)
     (tmp_path / "rr-trace").mkdir()
     size_limit = len("STDERR log\n")
-    report = Report(str(tmp_path), "bin", size_limit=size_limit)
-    assert report.path == str(tmp_path)
+    report = Report(tmp_path, "bin", size_limit=size_limit)
+    assert report.path == tmp_path
     assert report._logs.aux is None
     assert report._logs.stderr.endswith("log_stderr.txt")
     assert report._logs.stdout.endswith("log_stdout.txt")
     assert report.preferred.endswith("log_stderr.txt")
     assert report.stack is None
     size_limit += len("[LOG TAILED]\n")
-    assert os.stat(os.path.join(report.path, report._logs.stderr)).st_size == size_limit
-    assert os.stat(os.path.join(report.path, report._logs.stdout)).st_size == size_limit
-    assert os.stat(os.path.join(report.path, "unrelated.txt")).st_size == size_limit
+    assert (report.path / report._logs.stderr).stat().st_size == size_limit
+    assert (report.path / report._logs.stdout).stat().st_size == size_limit
+    assert (report.path / "unrelated.txt").stat().st_size == size_limit
     report.cleanup()
     assert not tmp_path.is_dir()
 
@@ -288,7 +287,7 @@ def test_report_12(tmp_path):
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     _create_crash_log(tmp_path / "log_asan_blah.txt")
     # no binary.fuzzmanagerconf
-    report = Report(str(tmp_path), target_binary="fake_bin")
+    report = Report(tmp_path, target_binary="fake_bin")
     assert report._crash_info is None
     assert report.crash_info is not None
     assert report._crash_info is not None
@@ -298,13 +297,13 @@ def test_report_12(tmp_path):
         conf.write(b"platform = x86-64\n")
         conf.write(b"product = mozilla-central\n")
         conf.write(b"os = linux\n")
-    report = Report(str(tmp_path), target_binary=str(tmp_path / "fake_bin"))
+    report = Report(tmp_path, target_binary=str(tmp_path / "fake_bin"))
     assert report._crash_info is None
     assert report.crash_info is not None
     assert report._crash_info is not None
 
 
-@pytest.mark.parametrize(
+@mark.parametrize(
     "sig_cache, has_sig",
     [
         # signature exists in cache
@@ -330,7 +329,7 @@ def test_report_13(mocker, tmp_path, sig_cache, has_sig):
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     if has_sig:
         _create_crash_log(tmp_path / "log_asan_blah.txt")
-    report = Report(str(tmp_path), "bin")
+    report = Report(tmp_path, "bin")
     assert report._signature is None
     if has_sig:
         assert report.crash_signature
