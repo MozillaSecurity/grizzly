@@ -367,7 +367,7 @@ class StatusReporter:
             )
         )
         if getloadavg is not None:
-            disp.append("(")
+            disp.append(" (")
             # round the results of getloadavg(), precision varies across platforms
             disp.append(", ".join("%0.1f" % (round(x, 1),) for x in getloadavg()))
             disp.append(")")
