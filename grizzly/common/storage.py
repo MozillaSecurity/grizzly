@@ -6,7 +6,6 @@
 import json
 from collections import namedtuple
 from itertools import chain, product
-from os import walk
 from os.path import normpath, split
 from pathlib import Path
 from shutil import copyfile, move, rmtree
@@ -445,25 +444,24 @@ class TestCase:
         # load all adjacent data from directory
         if adjacent:
             asset_path = info.get("assets_path", None)
-            for dpath, _, files in walk(entry_point.parent):
-                dpath = Path(dpath)
-                # ignore asset path
-                if asset_path and dpath.samefile(entry_point.parent / asset_path):
+            for entry in Path(entry_point.parent).rglob("*"):
+                if not entry.is_file():
                     continue
-                for fname in files:
-                    file = dpath / fname
-                    location = file.relative_to(entry_point.parent).as_posix()
-                    # ignore files that have been previously loaded
-                    if location in (test.landing_page, "test_info.json"):
-                        continue
-                    # NOTE: when loading all files except the entry point are
-                    # marked as `required=False`
-                    test.add_from_file(
-                        file,
-                        file_name=location,
-                        required=False,
-                        copy=copy,
-                    )
+                location = entry.relative_to(entry_point.parent).as_posix()
+                # ignore asset path
+                if asset_path and location.startswith(asset_path):
+                    continue
+                # ignore files that have been previously loaded
+                if location in (test.landing_page, "test_info.json"):
+                    continue
+                # NOTE: when loading all files except the entry point are
+                # marked as `required=False`
+                test.add_from_file(
+                    entry,
+                    file_name=location,
+                    required=False,
+                    copy=copy,
+                )
         return test
 
     @property

@@ -6,8 +6,6 @@
 
 from itertools import chain
 from json import dumps, loads
-from os import walk
-from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from pytest import mark, raises
@@ -380,13 +378,9 @@ def test_testcase_15(tmp_path):
     (tmp_path / "not_a_tc").mkdir()
     (tmp_path / "not_a_tc" / "file.txt").touch()
     with ZipFile(archive, mode="w", compression=ZIP_DEFLATED) as zfp:
-        for dir_name, _, dir_files in walk(tmp_path):
-            for file_name in dir_files:
-                file_path = Path(dir_name) / file_name
-                zfp.write(
-                    str(file_path),
-                    arcname=str(file_path.relative_to(tmp_path)),
-                )
+        for entry in tmp_path.rglob("*"):
+            if entry.is_file():
+                zfp.write(str(entry), arcname=str(entry.relative_to(tmp_path)))
     testcases = TestCase.load(archive)
     try:
         assert len(testcases) == 3
