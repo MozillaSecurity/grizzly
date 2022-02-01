@@ -140,15 +140,15 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
     fake_reporter = mocker.patch("grizzly.common.reporter.ProgramConfiguration")
     fake_reporter.fromBinary.return_value = mocker.Mock(spec_set=ProgramConfiguration)
     # missing global FM config file
-    FuzzManagerReporter.FM_CONFIG = "no_file"
-    with raises(IOError, match="Missing: no_file"):
+    FuzzManagerReporter.FM_CONFIG = tmp_path / "no_file"
+    with raises(IOError, match="Missing: %s" % (FuzzManagerReporter.FM_CONFIG,)):
         FuzzManagerReporter.sanity_check("fake")
     # missing binary FM config file
     fake_fmc = tmp_path / ".fuzzmanagerconf"
     fake_fmc.touch()
     fake_bin = tmp_path / "bin"
     fake_bin.touch()
-    FuzzManagerReporter.FM_CONFIG = str(fake_fmc)
+    FuzzManagerReporter.FM_CONFIG = fake_fmc
     with raises(IOError, match="bin.fuzzmanagerconf"):
         FuzzManagerReporter.sanity_check(str(fake_bin))
     # success
@@ -179,9 +179,7 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored, for
         new_callable=mocker.MagicMock,
         return_value=ignored,
     )
-    mocker.patch(
-        "grizzly.common.reporter.getcwd", autospec=True, return_value=str(tmp_path)
-    )
+    mocker.patch("grizzly.common.reporter.Path.cwd", return_value=tmp_path)
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="0")
     fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
     fake_collector.return_value.search.return_value = (
@@ -258,7 +256,7 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     fake_resource = mocker.patch("grizzly.common.reporter.resource", autospec=True)
 
     fake_report = mocker.Mock(spec_set=Report)
-    fake_report.path = "no-path"
+    fake_report.path = tmp_path / "no-path"
     reporter = S3FuzzManagerReporter("fake_bin")
     # test will missing rr-trace
     assert reporter._pre_submit(fake_report) is None
@@ -268,7 +266,7 @@ def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
     trace_dir = tmp_path / "rr-traces" / "latest-trace"
     trace_dir.mkdir(parents=True)
     fake_report.minor = "1234abcd"
-    fake_report.path = str(tmp_path)
+    fake_report.path = tmp_path
     reporter._pre_submit(fake_report)
     assert not any(tmp_path.iterdir())
     assert "rr-trace" in reporter._extra_metadata
@@ -317,7 +315,7 @@ def test_s3fuzzmanager_reporter_03(tmp_path):
     src = tmp_path / "rr-traces"
     dest = tmp_path / "dest"
     dest.mkdir()
-    S3FuzzManagerReporter.compress_rr_trace(str(src), str(dest))
+    S3FuzzManagerReporter.compress_rr_trace(src, dest)
     assert not src.is_dir()
     assert (dest / "rr.tar.bz2").is_file()
     with tar_open(str(dest / "rr.tar.bz2"), "r:bz2") as arc_fp:
