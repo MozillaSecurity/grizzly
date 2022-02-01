@@ -9,7 +9,6 @@ from collections import namedtuple
 from enum import Enum, unique
 from logging import getLogger
 from mimetypes import guess_type
-from os import walk
 from os.path import splitext
 from pathlib import Path
 from queue import Queue
@@ -88,22 +87,21 @@ class Job:
     def _build_queue(self, optional_files):
         # build file list to track files that must be served
         # this is intended to only be called once by __init__()
-        for d_name, _, filenames in walk(self._wwwroot, followlinks=False):
-            d_path = Path(d_name)
-            for f_name in filenames:
-                file_path = d_path / f_name
-                location = file_path.relative_to(self._wwwroot).as_posix()
-                # do not add optional files to queue of required files
-                if optional_files and location in optional_files:
-                    LOG.debug("optional: %r", location)
-                    continue
-                if "?" in str(file_path):
-                    LOG.warning(
-                        "Cannot add files with '?' in path. Skipping %r", str(file_path)
-                    )
-                    continue
-                self._pending.files.add(str(file_path.resolve()))
-                LOG.debug("required: %r", location)
+        for entry in self._wwwroot.rglob("*"):
+            if not entry.is_file():
+                continue
+            location = entry.relative_to(self._wwwroot).as_posix()
+            # do not add optional files to queue of required files
+            if optional_files and location in optional_files:
+                LOG.debug("optional: %r", location)
+                continue
+            if "?" in str(entry):
+                LOG.warning(
+                    "Cannot add files with '?' in path. Skipping %r", str(entry)
+                )
+                continue
+            self._pending.files.add(str(entry.resolve()))
+            LOG.debug("required: %r", location)
         # if nothing was found check if the path exists
         if not self._pending.files and not self._wwwroot.is_dir():
             raise OSError("%r does not exist" % (str(self._wwwroot),))
