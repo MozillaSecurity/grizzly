@@ -3,9 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod
-from os import walk
-from os.path import abspath, dirname, isdir, isfile
-from os.path import join as pathjoin
+from pathlib import Path
 
 __all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"
@@ -36,7 +34,7 @@ class Adapter(metaclass=ABCMeta):
                          remaining to process.
     """
 
-    HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
+    HARNESS_FILE = str((Path(__file__).parent / "../common/harness.html").resolve())
     # Only report test cases with served content.
     IGNORE_UNSERVED = True
     # Maximum iterations between Target relaunches (<1 use default)
@@ -111,18 +109,18 @@ class Adapter(metaclass=ABCMeta):
         Yields:
             str: Absolute path to files.
         """
-        full_path = abspath(path)
-        if isdir(full_path):
-            for root, _, files in walk(full_path):
-                for fname in files:
-                    if fname in ignore or fname.startswith("."):
-                        # skip ignored and hidden system files
-                        continue
-                    yield pathjoin(root, fname)
-                if not recursive:
-                    break
-        elif isfile(full_path):
-            yield full_path
+        path = Path(path).resolve()
+        if path.is_dir():
+            path_iter = path.rglob("*") if recursive else path.glob("*")
+            for entry in path_iter:
+                if not entry.is_file():
+                    continue
+                if entry.name in ignore or entry.name.startswith("."):
+                    # skip ignored and hidden system files
+                    continue
+                yield str(entry)
+        elif path.is_file():
+            yield str(path)
 
     @abstractmethod
     def generate(self, testcase, server_map):
