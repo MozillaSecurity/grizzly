@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import DEBUG, getLogger
 from os import getpid
-from os.path import join as pathjoin
+from pathlib import Path
 
 from sapphire import Sapphire
 
@@ -104,8 +104,8 @@ def main(args):
             )
             reporter = S3FuzzManagerReporter(tool=args.tool)
         else:
-            reporter = FilesystemReporter(pathjoin(args.logs, "results"))
-            LOG.info("Results will be stored in %r", reporter.report_path)
+            reporter = FilesystemReporter(Path(args.logs) / "results")
+            LOG.info("Results will be stored in %r", str(reporter.report_path))
         reporter.display_logs = args.smoke_test or reporter.display_logs
 
         # make sure an iteration limit is set if smoke_test is True
