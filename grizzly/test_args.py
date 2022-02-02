@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
+from platform import system
+
 from pytest import mark, raises
 
 from .args import CommonArgs, GrizzlyArgs
@@ -173,6 +175,34 @@ def test_grizzly_args_04(capsys, mocker, tmp_path, args, msg):
         autospec=True,
         side_effect=["targ1", "adpt", "targ1", "adpt"],
     )
+    fake_bin = tmp_path / "fake.bin"
+    fake_bin.touch()
+    with raises(SystemExit):
+        GrizzlyArgs().parse_args(
+            argv=[str(fake_bin), "adpt", "--platform", "targ1"] + args
+        )
+    assert msg in capsys.readouterr()[-1]
+
+
+@mark.skipif(system() != "Linux", reason="Only supported on Linux")
+@mark.parametrize(
+    "args, msg",
+    [
+        # test checking perf_event_paranoid
+        (
+            ["--rr"],
+            "error: rr needs /proc/sys/kernel/perf_event_paranoid <= 1, but it is 99",
+        ),
+    ],
+)
+def test_grizzly_args_05(capsys, mocker, tmp_path, args, msg):
+    """test CommonArgs.parse_args() - debugger system checks"""
+    mocker.patch(
+        "grizzly.args.scan_plugins",
+        autospec=True,
+        side_effect=["targ1", "adpt", "targ1", "adpt"],
+    )
+    mocker.patch("grizzly.args.Path.read_text", autospec=True, return_value="99")
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
     with raises(SystemExit):

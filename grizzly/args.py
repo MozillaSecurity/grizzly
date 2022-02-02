@@ -6,6 +6,7 @@ from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import getcwd
 from os.path import exists, isfile
+from pathlib import Path
 from platform import system
 
 from .common.plugins import scan as scan_plugins
@@ -228,6 +229,13 @@ class CommonArgs:
 
         if args.relaunch < 1:
             self.parser.error("--relaunch must be >= 1")
+
+        if args.pernosco or args.rr:
+            # currently we only support rr on Linux
+            settings = "/proc/sys/kernel/perf_event_paranoid"
+            value = int(Path(settings).read_text())
+            if value > 1:
+                self.parser.error("rr needs %s <= 1, but it is %d" % (settings, value))
 
         if args.platform not in targets:
             self.parser.error("Platform %r not installed" % (args.platform,))
