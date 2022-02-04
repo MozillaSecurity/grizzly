@@ -4,8 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from logging import getLogger
-from os.path import dirname
-from os.path import join as pathjoin
+from pathlib import Path
 from tempfile import mkdtemp
 
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -38,9 +37,9 @@ class ReplayResult:
 
 
 class ReplayManager:
-    HARNESS_FILE = pathjoin(dirname(__file__), "..", "common", "harness.html")
+    HARNESS_FILE = str(Path(__file__).parent / ".." / "common" / "harness.html")
     DEFAULT_TIME_LIMIT = 30
-    STATUS_DB = pathjoin(grz_tmp(), "replay-status.db")
+    STATUS_DB = str(Path(grz_tmp()) / "replay-status.db")
 
     __slots__ = (
         "ignore",
@@ -193,11 +192,10 @@ class ReplayManager:
         Returns:
             None
         """
+        path = Path(path)
         others = list(x.report for x in results if not x.expected)
         if others:
-            reporter = FilesystemReporter(
-                pathjoin(path, "other_reports"), major_bucket=False
-            )
+            reporter = FilesystemReporter(path / "other_reports", major_bucket=False)
             for report in others:
                 reporter.submit(tests or [], report=report)
         expected = list(x for x in results if x.expected)
@@ -208,7 +206,7 @@ class ReplayManager:
                 for test, served in zip(tests, expected[0].served):
                     LOG.debug("calling test.purge_optional() with %r", served)
                     test.purge_optional(served)
-            reporter = FilesystemReporter(pathjoin(path, "reports"), major_bucket=False)
+            reporter = FilesystemReporter(path / "reports", major_bucket=False)
             for result in expected:
                 reporter.submit(tests or [], report=result.report)
 

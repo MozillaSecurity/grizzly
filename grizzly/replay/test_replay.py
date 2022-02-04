@@ -632,7 +632,7 @@ def test_replay_18(mocker):
 def test_replay_19(mocker, tmp_path):
     """test ReplayManager.report_to_filesystem()"""
     # no reports
-    ReplayManager.report_to_filesystem(str(tmp_path), [])
+    ReplayManager.report_to_filesystem(tmp_path, [])
     assert not any(tmp_path.iterdir())
     # with reports and tests
     (tmp_path / "report_expected").mkdir()
@@ -640,27 +640,25 @@ def test_replay_19(mocker, tmp_path):
         spec_set=ReplayResult, count=1, durations=[1], expected=True, served=[]
     )
     result0.report = mocker.Mock(
-        spec_set=Report, path=str(tmp_path / "report_expected"), prefix="expected"
+        spec_set=Report, path=tmp_path / "report_expected", prefix="expected"
     )
     (tmp_path / "report_other1").mkdir()
     result1 = mocker.Mock(
         spec_set=ReplayResult, count=1, durations=[1], expected=False, served=None
     )
     result1.report = mocker.Mock(
-        spec_set=Report, path=str(tmp_path / "report_other1"), prefix="other1"
+        spec_set=Report, path=tmp_path / "report_other1", prefix="other1"
     )
     (tmp_path / "report_other2").mkdir()
     result2 = mocker.Mock(
         spec_set=ReplayResult, count=1, durations=[1], expected=False, served=None
     )
     result2.report = mocker.Mock(
-        spec_set=Report, path=str(tmp_path / "report_other2"), prefix="other2"
+        spec_set=Report, path=tmp_path / "report_other2", prefix="other2"
     )
     test = mocker.Mock(spec_set=TestCase)
     path = tmp_path / "dest"
-    ReplayManager.report_to_filesystem(
-        str(path), [result0, result1, result2], tests=[test]
-    )
+    ReplayManager.report_to_filesystem(path, [result0, result1, result2], tests=[test])
     assert test.dump.call_count == 3  # called once per report
     assert not (tmp_path / "report_expected").is_dir()
     assert not (tmp_path / "report_other1").is_dir()
@@ -675,7 +673,7 @@ def test_replay_19(mocker, tmp_path):
     (tmp_path / "report_expected").mkdir()
     result0.reset_mock()
     path = tmp_path / "dest2"
-    ReplayManager.report_to_filesystem(str(path), [result0])
+    ReplayManager.report_to_filesystem(path, [result0])
     assert not (tmp_path / "report_expected").is_dir()
     assert path.is_dir()
     assert (path / "reports" / "expected_logs").is_dir()
