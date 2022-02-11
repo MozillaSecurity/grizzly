@@ -141,7 +141,11 @@ class Worker:
                 conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
                 LOG.debug("404 %r (%d to go)", url.path, serv_job.pending)
             elif resource.type == Resource.URL_REDIRECT:
-                conn.sendall(cls._307_redirect(quote(resource.target)))
+                redirect_to = [quote(resource.target)]
+                if url.query:
+                    LOG.debug("appending query %r", url.query)
+                    redirect_to.append(url.query)
+                conn.sendall(cls._307_redirect("?".join(redirect_to)))
                 LOG.debug(
                     "307 %r -> %r (%d to go)",
                     url.path,
