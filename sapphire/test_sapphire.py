@@ -340,23 +340,26 @@ def test_sapphire_16(client, tmp_path):
 
 
 @mark.parametrize(
-    "path",
+    "path, query",
     [
         # simple path
-        "test.html",
+        ("test.html", None),
+        # simple path with query
+        ("test.html", "foo=1&bar=2"),
         # non-alphanumeric chars (valid characters to use on filesystem)
-        "!@$%^&(_+-=[]),'~`{}",
+        ("!@$%^&(_+-=[]),'~`{}", None),
         # extended ascii chars
-        "€d’é-ñÿ",
+        ("€d’é-ñÿ", None),
     ],
 )
-def test_sapphire_17(client, tmp_path, path):
+def test_sapphire_17(client, tmp_path, path, query):
     """test required mapped redirects"""
     smap = ServerMap()
     with Sapphire(timeout=10) as serv:
         # target will be requested indirectly via the redirect
         target = _create_test(path, tmp_path, data=b"Redirect DATA!")
-        redirect = _TestFile("redirect")
+        request_path = "redirect" if query is None else "?".join(("redirect", query))
+        redirect = _TestFile(request_path)
         # point "redirect" at target
         smap.set_redirect("redirect", target.file, required=True)
         client.launch("127.0.0.1", serv.port, [redirect])
