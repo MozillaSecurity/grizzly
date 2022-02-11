@@ -18,14 +18,12 @@ class IOManager:
         "_generated",
         "_report_size",
         "_test",
-        "harness",
         "server_map",
         "tests",
     )
 
     def __init__(self, report_size=1):
         assert report_size > 0
-        self.harness = None
         self.server_map = ServerMap()
         self.tests = deque()
         self._generated = 0  # number of test cases generated
@@ -59,15 +57,10 @@ class IOManager:
             time_limit=time_limit,
         )
         # reset redirect map
-        self.server_map.redirect.clear()
         self.server_map.set_redirect(
             "grz_current_test", self.page_name(), required=False
         )
         self.server_map.set_redirect("grz_next_test", self.page_name(offset=1))
-        if self.harness is not None:
-            self.server_map.set_dynamic_response(
-                "grz_harness", lambda _: self.harness, mime_type="text/html"
-            )
         self._generated += 1
         return self._test
 
