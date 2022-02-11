@@ -11,7 +11,6 @@ from .iomanager import IOManager
 def test_iomanager_01():
     """test a simple IOManager"""
     with IOManager() as iom:
-        assert iom.harness is None
         assert iom.server_map is not None
         assert not iom.tests
         assert iom._generated == 0
@@ -68,7 +67,6 @@ def test_iomanager_04():
         assert not iom.server_map.dynamic
         assert not iom.server_map.include
         assert not iom.server_map.redirect
-        # without a harness, no input files
         tcase = iom.create_testcase("test-adapter", time_limit)
         assert tcase is not None
         assert not any(tcase.optional)
@@ -76,16 +74,6 @@ def test_iomanager_04():
         assert "grz_current_test" in iom.server_map.redirect
         assert iom.server_map.redirect["grz_current_test"].target == tcase.landing_page
         assert "grz_next_test" in iom.server_map.redirect
-        assert "grz_harness" not in iom.server_map.dynamic
         assert iom._test is not None
         iom.purge()
         assert iom._test is None
-        # with a harness
-        iom.harness = b"harness-data"
-        tcase = iom.create_testcase("test-adapter", time_limit)
-        assert tcase is not None
-        assert tcase.time_limit == time_limit
-        assert "grz_current_test" in iom.server_map.redirect
-        assert iom.server_map.redirect["grz_current_test"].target == tcase.landing_page
-        assert "grz_next_test" in iom.server_map.redirect
-        assert "grz_harness" in iom.server_map.dynamic

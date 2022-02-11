@@ -256,10 +256,13 @@ class ReplayManager:
         self.status = Status.start(db_file=self.STATUS_DB)
 
         server_map = ServerMap()
-        if self._harness is not None:
+        if self._harness is None:
+            server_map.set_redirect("grz_start", "grz_current_test", required=False)
+        else:
             server_map.set_dynamic_response(
                 "grz_harness", lambda _: self._harness, mime_type="text/html"
             )
+            server_map.set_redirect("grz_start", "grz_harness", required=False)
 
         # track unprocessed results
         reports = dict()
@@ -281,12 +284,10 @@ class ReplayManager:
                     on_iteration_cb()
                 if self.target.closed:
                     if self._harness is None:
-                        location = runner.location(
-                            "/grz_current_test", self.server.port
-                        )
+                        location = runner.location("/grz_start", self.server.port)
                     else:
                         location = runner.location(
-                            "/grz_harness",
+                            "/grz_start",
                             self.server.port,
                             close_after=relaunch * test_count,
                             time_limit=time_limit,

@@ -118,6 +118,7 @@ class Runner:
         assert max_retries >= 0
         assert retry_delay >= 0
         self._server.clear_backlog()
+        self._tests_run = 0
         LOG.debug("launching target (timeout %ds)", self._target.launch_timeout)
         for retries in reversed(range(max_retries)):
             try:
@@ -140,7 +141,6 @@ class Runner:
                     continue
                 raise
             break
-        self._tests_run = 0
 
     @staticmethod
     def location(srv_path, srv_port, close_after=None, time_limit=None):
@@ -161,11 +161,11 @@ class Runner:
         if close_after is not None:
             assert close_after >= 0
             args.append("close_after=%d" % (close_after,))
-        if time_limit is not None:
-            assert time_limit >= 0
+        if time_limit:
+            assert time_limit > 0
             args.append("time_limit=%d" % (time_limit * 1000,))
         if args:
-            return "?".join([location, "&".join(args)])
+            return "?".join((location, "&".join(args)))
         return location
 
     def run(
@@ -183,8 +183,8 @@ class Runner:
             server_map (sapphire.ServerMap): A ServerMap.
             testcase (grizzly.TestCase): The test case that will be served.
             coverage (bool): Trigger coverage dump.
-            wait_for_callback: (bool): Use `_keep_waiting()` to indicate when
-                                       framework should move on.
+            wait_for_callback (bool): Use `_keep_waiting()` to indicate when
+                                      framework should move on.
 
         Returns:
             RunResult: Files served, status and timeout flag from the run.

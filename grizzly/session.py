@@ -152,7 +152,18 @@ class Session:
         LOG.debug("calling adapter.setup()")
         self.adapter.setup(input_path, self.iomanager.server_map)
         LOG.debug("configuring harness")
-        self.iomanager.harness = self.adapter.get_harness()
+        harness = self.adapter.get_harness()
+        if harness is None:
+            self.iomanager.server_map.set_redirect(
+                "grz_start", "grz_current_test", required=False
+            )
+        else:
+            self.iomanager.server_map.set_dynamic_response(
+                "grz_harness", lambda _: harness, mime_type="text/html", required=False
+            )
+            self.iomanager.server_map.set_redirect(
+                "grz_start", "grz_harness", required=False
+            )
 
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         # limit relaunch to max iterations if needed
@@ -171,13 +182,13 @@ class Session:
                 # (re-)launch target
                 self.iomanager.purge()
                 self.adapter.pre_launch()
-                if self.iomanager.harness is None:
+                if harness is None:
                     # harness is not in use, open the test case
-                    location = runner.location("/grz_current_test", self.server.port)
+                    location = runner.location("/grz_start", self.server.port)
                 else:
                     # harness is in use, open it and it will open the test case.
                     location = runner.location(
-                        "/grz_harness",
+                        "/grz_start",
                         self.server.port,
                         close_after=relaunch,
                         time_limit=time_limit,
