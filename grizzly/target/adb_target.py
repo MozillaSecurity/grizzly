@@ -4,13 +4,13 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
-from tempfile import mkdtemp, mkstemp
+from tempfile import mkdtemp, TemporaryDirectory
 
 from ffpuppet import LaunchError
 from prefpicker import PrefPicker
 
 from .adb_device import ADBProcess, ADBSession
-from .target import Target
+from .target import Result, Target, TargetError
 from .target_monitor import TargetMonitor
 from ..common.reporter import Report
 from ..common.utils import grz_tmp
@@ -19,45 +19,46 @@ from ..common.utils import grz_tmp
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-log = logging.getLogger("adb_target")  # pylint: disable=invalid-name
+LOG = logging.getLogger("adb_target")  # pylint: disable=invalid-name
 
 
 class ADBTarget(Target):
-    def __init__(self, binary, extension, launch_timeout, log_limit, memory_limit, **kwds):
-        super().__init__(binary, extension, launch_timeout, log_limit, memory_limit)
+    SUPPORTED_ASSETS = ("prefs",)
+
+    def __init__(self, binary, launch_timeout, log_limit, memory_limit, **kwds):
+        super().__init__(binary, launch_timeout, log_limit, memory_limit)
         self.forced_close = True  # app will not close itself on Android
         self.use_rr = False
 
-        if kwds.pop("rr", False):
-            log.warning("ADBTarget ignoring 'rr': not supported")
-        if kwds.pop("valgrind", False):
-            log.warning("ADBTarget ignoring 'valgrind': not supported")
-        if kwds.pop("xvfb", False):
-            log.warning("ADBTarget ignoring 'xvfb': not supported")
-        if kwds:
-            log.warning("ADBTarget ignoring unsupported arguments: %s", ", ".join(kwds))
 
-        log.debug("opening a session and setting up the environment")
+        for unsupported in ("pernosco", "rr", "valgrind", "xvfb"):
+            if kwds.pop(unsupported, False):
+                LOG.warning("ADBTarget ignoring %r: not supported", unsupported)
+        if kwds:
+            LOG.warning("ADBTarget ignoring unsupported arguments: %s", ", ".join(kwds))
+
+        LOG.debug("opening a session and setting up the environment")
         self._session = ADBSession.create(as_root=True)
         if self._session is None:
             raise RuntimeError("Could not create ADB Session!")
         self._package = ADBSession.get_package_name(self.binary)
         self._prefs = None
         self._proc = ADBProcess(self._package, self._session)
-        self._remove_prefs = False
-        self._session.symbols[self._package] = os.path.join(os.path.dirname(self.binary), "symbols")
+        self._session.symbols[self._package] = os.path.join(
+            os.path.dirname(self.binary), "symbols"
+        )
 
-    def cleanup(self):
+    def _cleanup(self):
         with self._lock:
             if self._proc is not None:
                 self._proc.cleanup()
             if self._session.connected:
                 self._session.reverse_remove()
             self._session.disconnect()
-        if self._remove_prefs and self._prefs and os.path.isfile(self._prefs):
+        if self._prefs and os.path.isfile(self._prefs):
             os.remove(self._prefs)
 
-    def close(self):
+    def close(self, _force_close=False):
         with self._lock:
             if self._proc is not None:
                 self._proc.close()
@@ -66,34 +67,27 @@ class ADBTarget(Target):
     def closed(self):
         return self._proc.reason is not None
 
-    def detect_failure(self, ignored, was_timeout):
-        status = self.RESULT_NONE
-        is_healthy = self._proc.is_healthy()
-        # check if there has been a crash, hang, etc...
-        if not is_healthy or was_timeout:
-            if self._proc.is_running():
-                log.info("Terminating browser...")
+    def check_result(self, _ignored):
+        status = Result.NONE
+        if not self._proc.is_healthy():
             self._proc.close()
-        # if something has happened figure out what
-        if not is_healthy:
+            # if something has happened figure out what
             if self._proc.reason == ADBProcess.RC_CLOSED:
-                log.info("target.close() was called")
+                LOG.info("target.close() was called")
             elif self._proc.reason == ADBProcess.RC_EXITED:
-                log.info("Target closed itself")
+                LOG.info("Target closed itself")
             else:
-                log.debug("failure detected")
-                status = self.RESULT_FAILURE
-        elif was_timeout:
-            log.debug("timeout detected, potential browser hang")
-            if ignored and "timeout" in ignored:
-                status = self.RESULT_IGNORED
-                log.info("Timed out")
-            else:
-                status = self.RESULT_FAILURE
+                LOG.debug("failure detected")
+                status = Result.FOUND
         return status
 
-    def launch(self, location, env_mod=None):
-        env_mod = dict(env_mod or [])
+    def handle_hang(self, ignore_idle=True):
+        # TODO: attempt to detect idle hangs?
+        self.close()
+        return False
+
+    def launch(self, location):
+        env_mod = dict(self.environ)
         # This may be used to disabled network connections during testing, e.g.
         env_mod["MOZ_IN_AUTOMATION"] = "1"
         # prevent crash reporter from touching the dmp files
@@ -106,7 +100,7 @@ class ADBTarget(Target):
             self._proc.launch(
                 env_mod=env_mod,
                 launch_timeout=self.launch_timeout,
-                prefs_js=self.prefs,
+                prefs_js=self._prefs,
                 url=location)
         except LaunchError:
             self._proc.close()
@@ -139,41 +133,26 @@ class ADBTarget(Target):
             self._monitor = _ADBMonitor()
         return self._monitor
 
-    # TODO: prefs is identical to puppet_target.py should be cleaned up.
-    @property
-    def prefs(self):
+    def process_assets(self):
+        self._prefs = self.assets.get("prefs")
+        # generate temporary prefs.js with prefpicker
         if self._prefs is None:
-            # generate temporary prefs.js
-            for prefs_template in PrefPicker.templates():
-                if prefs_template.endswith("browser-fuzzing.yml"):
-                    log.debug("using prefpicker template %r", prefs_template)
-                    tmp_fd, self._prefs = mkstemp(prefix="prefs_", suffix=".js", dir=grz_tmp())
-                    os.close(tmp_fd)
-                    PrefPicker.load_template(prefs_template).create_prefsjs(self._prefs)
-                    log.debug("generated prefs.js %r", self._prefs)
-                    self._remove_prefs = True
+            for template in PrefPicker.templates():
+                if template.endswith("browser-fuzzing.yml"):
+                    LOG.debug("using prefpicker template %r", template)
+                    with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
+                        prefs = os.path.join(tmp_path, "prefs.js")
+                        PrefPicker.load_template(template).create_prefsjs(prefs)
+                        LOG.debug("generated %r", prefs)
+                        self._prefs = self.assets.add("prefs", prefs, copy=False)
                     break
             else:  # pragma: no cover
                 raise TargetError("Failed to generate prefs.js")
-        return self._prefs
 
-    @prefs.setter
-    def prefs(self, prefs_file):
-        if self._remove_prefs and self._prefs and os.path.isfile(self._prefs):
-            os.unlink(self._prefs)
-        if prefs_file is None:
-            self._prefs = None
-            self._remove_prefs = True
-        elif os.path.isfile(prefs_file):
-            self._prefs = os.path.abspath(prefs_file)
-            self._remove_prefs = False
-        else:
-            raise TargetError("Missing prefs.js file %r" % (prefs_file,))
-
-    def create_report(self):
+    def create_report(self, is_hang=False):
         logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
         self.save_logs(logs)
-        return Report(logs, self.binary)
+        return Report(logs, self.binary, is_hang=is_hang)
 
     def reverse(self, remote, local):
         # remote->device, local->desktop

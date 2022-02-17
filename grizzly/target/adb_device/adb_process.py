@@ -4,11 +4,10 @@ import random
 import re
 from shutil import copy, rmtree
 from time import sleep, time
-from tempfile import mkdtemp
+from tempfile import NamedTemporaryFile, mkdtemp
 from yaml import safe_dump
 
 from ffpuppet.bootstrapper import Bootstrapper
-from ffpuppet.helpers import append_prefs, create_profile
 from ffpuppet.minidump_parser import process_minidumps
 from ffpuppet.puppet_logger import PuppetLogger
 
@@ -26,12 +25,12 @@ class ADBLaunchError(ADBSessionError):
 
 
 class ADBProcess(object):
-    # TODO: reason codes match FFPuppet
+    # TODO: Use FFPuppet Reason enum
     RC_ALERT = "ALERT"  # target crashed/aborted/triggered an assertion failure etc...
     RC_CLOSED = "CLOSED"  # target was closed by call to FFPuppet close()
     RC_EXITED = "EXITED"  # target exited
     #RC_WORKER = "WORKER"  # target was closed by worker thread
-    # TODO: 
+    # TODO:
     #  def save_logs(self, *args, **kwargs):
     #  def clone_log(self, log_id, offset=0):
     #  def log_data(self, log_id, offset=0):
@@ -96,7 +95,11 @@ class ADBProcess(object):
                 self._terminate()
                 self.wait()
                 self._process_logs(crash_reports)
+                # remove remote working path
                 self._session.call(["shell", "rm", "-rf", self._working_path])
+                # remove remote config yaml
+                cfg_file = "/data/local/tmp/%s-geckoview-config.yaml" %  (self._package,)
+                self._session.call(["shell", "rm", "-rf", cfg_file])
                 # TODO: this should be temporary until ASAN_OPTIONS=log_file is working
                 if "log_asan.txt" in os.listdir(self.logs):
                     self.reason = self.RC_ALERT
@@ -174,35 +177,29 @@ class ADBProcess(object):
             break
         else:
             raise ADBLaunchError("Could not reverse port")
-        profile = None
         try:
-            profile = create_profile(extension=extension, prefs_js=prefs_js, template=self._profile_template)
-            self.profile = "/".join([self._working_path, os.path.basename(profile)])
+            # load prefs from prefs.js
+            prefs = self.prefs_to_dict(prefs_js) if prefs_js else dict()
+            # add additional prefs
+            prefs.update({
+                "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'",
+                "capability.policy.localfilelinks.sites": "'%s'" % bootstrapper.location,
+                "capability.policy.policynames": "'localfilelinks'",
+                "network.proxy.allow_bypass": "false",
+                "network.proxy.failover_direct": "false",
+                "privacy.partition.network_state": "false",
+            })
             # add environment variables
             env_mod = dict(env_mod or {})
             env_mod.setdefault("MOZ_SKIA_DISABLE_ASSERTS", "1")
             # build *-geckoview-config.yaml (https://firefox-source-docs.mozilla.org/ ...
             #   mobile/android/geckoview/consumer/automation.html#configuration-file-format)
             cfg_file = "%s-geckoview-config.yaml" % (self._package,)
-            local_cfg = os.path.join(profile, cfg_file)
-            with open(local_cfg, "w") as cfp:
-                cfp.write(safe_dump({
-                    "args": [
-                        "--profile",
-                        self.profile
-                    ],
-                    "env": env_mod
-                }))
-            if not self._session.push(local_cfg, "/data/local/tmp/%s" % (cfg_file,)):
-                raise ADBLaunchError("Could not upload %r" % (cfg_file,))
-            # add additional prefs
-            prefs = {
-                "capability.policy.policynames": "'localfilelinks'",
-                "capability.policy.localfilelinks.sites": "'%s'" % (bootstrapper.location,),
-                "capability.policy.localfilelinks.checkloaduri.enabled": "'allAccess'"}
-            append_prefs(profile, prefs)
-            if not self._session.push(profile, self.profile):
-                raise ADBLaunchError("Could not upload profile %r" % (profile,))
+            with NamedTemporaryFile("w+t") as cfp:
+                cfp.write(safe_dump({"env": env_mod, "prefs": prefs}))
+                cfp.flush()
+                if not self._session.push(cfp.name, "/data/local/tmp/%s" % (cfg_file,)):
+                    raise ADBLaunchError("Could not upload %r" % (cfg_file,))
             cmd = [
                 "shell", "am", "start", "-W", "-n", app,
                 "-a", "android.intent.action.VIEW", "-d", bootstrapper.location]
@@ -211,8 +208,6 @@ class ADBProcess(object):
             self._pid = self._session.get_pid(self._package)
             bootstrapper.wait(self.is_healthy, url=url)
         finally:
-            if profile is not None:
-                rmtree(profile, ignore_errors=True)
             self._session.reverse_remove(bootstrapper.port)
             bootstrapper.close()
         self._launches += 1
@@ -230,6 +225,26 @@ class ADBProcess(object):
 
         assert self._launches > -1, "clean_up() has been called"
         return self._launches
+
+    @staticmethod
+    def prefs_to_dict(prefs_file):
+        pattern = re.compile(r"user_pref\(\"(?P<name>.+)\",\s*(?P<value>.+)\);")
+        out = dict()
+        with open(prefs_file, "r") as in_fp:
+            for line in in_fp:
+                pref = pattern.match(line)
+                if not pref:
+                    continue
+                value = pref.group("value")
+                if value in ("false", "true"):
+                    out[pref.group("name")] = value == "true"
+                elif value.startswith("'") and value.endswith("'"):
+                    out[pref.group("name")] = value.strip("'")
+                elif value.startswith('"') or value.startswith("'"):
+                    out[pref.group("name")] = value.strip('"')
+                else:
+                    out[pref.group("name")] = int(value)
+        return out
 
     def _process_logs(self, crash_reports):
         assert self.logs is None

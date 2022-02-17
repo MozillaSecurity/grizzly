@@ -1,7 +1,6 @@
 # pylint: disable=protected-access
 import os
 import shutil
-from yaml import safe_load
 
 import pytest
 
@@ -66,29 +65,10 @@ def test_adb_process_05(mocker):
         proc.cleanup()
         assert proc.logs is None
 
-def test_adb_process_06(mocker, tmp_path):
-    """test ADBProcess.launch() check *-geckoview-config.yaml"""
-    mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
-    mocker.patch("grizzly.target.adb_device.adb_process.ADBProcess._remove_logs", autospec=True)
-    mocker.patch("grizzly.target.adb_device.adb_process.create_profile", return_value=str(tmp_path))
-    mocker.patch("grizzly.target.adb_device.adb_process.rmtree", autospec=True)
-    fake_session = mocker.Mock(spec=ADBSession)
-    fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
-    fake_session.call.return_value = (0, "Status: ok")
-    fake_session.collect_logs.return_value = b""
-    fake_session.get_pid.return_value = None
-    fake_session.listdir.return_value = ()
-    with ADBProcess("org.mozilla.fenix", fake_session) as proc:
-        proc.launch("fake.url", env_mod={"TEST_ENV": "123"})
-        cfg_file = tuple(tmp_path.glob("*-geckoview-config.yaml"))[0]
-        assert cfg_file
-        assert cfg_file.name == "%s-geckoview-config.yaml" % (proc._package,)
-        cfg_data = safe_load(cfg_file.read_text())
-        assert "args" in cfg_data
-        assert cfg_data["args"][0] == "--profile"
-        assert cfg_data["args"][1] == "%s/%s" % (proc._working_path, tmp_path.name)
-        assert "env" in cfg_data
-        assert cfg_data["env"]["TEST_ENV"] == "123"
+# TODO: check config yaml output
+#def test_adb_process_06(mocker, tmp_path):
+#    """test ADBProcess.launch() check *-geckoview-config.yaml"""
+
 
 def test_adb_process_07(mocker):
     """test ADBProcess.launch(), ADBProcess.is_running() and ADBProcess.is_healthy()"""
@@ -263,3 +243,22 @@ def test_adb_process_13(tmp_path):
     assert b"test, line2" in stderr_lines
     assert b"test, line1" not in stderr_lines
     assert len(stderr_lines) == 8
+
+@pytest.mark.parametrize(
+    "input_data, result",
+    [
+        ("", dict()),
+        ("junk\n#user_pref(\"a.b\", 0)\n", dict()),
+        ("user_pref(\"a.b.c\", false);\n", {"a.b.c": False}),
+        ("user_pref(\"a.b.c\", 0);", {"a.b.c": 0}),
+        ("user_pref(\"a.b.c\", 'test');", {"a.b.c": "test"}),
+        ("user_pref(\"a.b.c\", \"test\");", {"a.b.c": "test"}),
+        ("user_pref(\"a.b\", 1);\nuser_pref(\"a.c\", true);", {"a.b": 1, "a.c": True}),
+        ("user_pref(\"a.b\", 1);\n#\nuser_pref(\"a.c\", 1);", {"a.b": 1, "a.c": 1}),
+    ],
+)
+def test_adb_process_14(tmp_path, input_data, result):
+    """test ADBProcess.prefs_to_dict()"""
+    prefs_js = tmp_path / "prefs.js"
+    prefs_js.write_text(input_data)
+    assert ADBProcess.prefs_to_dict(str(prefs_js)) == result
