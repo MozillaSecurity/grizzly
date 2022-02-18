@@ -2,20 +2,20 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+import socket
 from collections import namedtuple
-import logging
-import os
+from logging import getLogger
+from os import getenv
 from pathlib import Path
 from platform import system
-from shutil import rmtree, which
-import socket
-from subprocess import call, CalledProcessError, check_output, Popen
-from tempfile import mkdtemp, TemporaryFile
+from shutil import which
+from subprocess import Popen, call, check_output
+from tempfile import TemporaryDirectory, TemporaryFile
 from time import sleep, time
 
 from grizzly.common.utils import grz_tmp
 
-log = logging.getLogger("adb_session")  # pylint: disable=invalid-name
+LOG = getLogger("adb_session")
 
 __all__ = ("ADBCommandError", "ADBCommunicationError", "ADBSession", "ADBSessionError")
 __author__ = "Tyson Smith"
@@ -26,40 +26,57 @@ DeviceProcessInfo = namedtuple("DeviceProcessInfo", "memory name pid ppid")
 
 
 def _get_android_sdk():
-    if os.getenv("ANDROID_HOME") is not None:
-        android_home = Path(os.getenv("ANDROID_HOME"))
+    if getenv("ANDROID_HOME") is not None:
+        android_home = Path(getenv("ANDROID_HOME"))
         if android_home.is_dir():
             return android_home
-    if os.getenv("ANDROID_SDK_ROOT") is not None:
-        return Path(os.getenv("ANDROID_SDK_ROOT"))
+    if getenv("ANDROID_SDK_ROOT") is not None:
+        return Path(getenv("ANDROID_SDK_ROOT"))
     if system() == "Windows":
-        return Path(os.getenv("LOCALAPPDATA")) / "Android" / "sdk"
+        return Path(getenv("LOCALAPPDATA")) / "Android" / "sdk"
     if system() == "Darwin":
         return Path.home() / "Library" / "Android" / "sdk"
     return Path.home() / "Android" / "Sdk"
+
+
 ANDROID_SDK_ROOT = _get_android_sdk()
 
 
 class ADBCommandError(Exception):
     """Raised when an ADB command is invalid or unrecognized"""
 
+
 class ADBCommunicationError(Exception):
     """Raised when ADB fails to communicate with the device"""
+
 
 class ADBSessionError(Exception):
     """Raised when an operation fails unexpectedly or session state is invalid"""
 
 
-class ADBSession(object):
+# pylint: disable=too-many-public-methods
+class ADBSession:
     SANITIZER_LOG_PREFIX = "/sdcard/sanitizer_logs/report.log"
 
-    __slots__ = ("_adb_bin", "_cpu_arch", "_debug_adb", "_ip_addr", "_os_version",
-                 "_os_version", "_port", "_root", "connected", "symbols")
+    __slots__ = (
+        "_adb_bin",
+        "_cpu_arch",
+        "_debug_adb",
+        "_ip_addr",
+        "_os_version",
+        "_os_version",
+        "_port",
+        "_root",
+        "connected",
+        "symbols",
+    )
 
     def __init__(self, ip_addr=None, port=5555):
         self._adb_bin = self._adb_check()
         self._cpu_arch = None  # Android CPU architecture string
-        self._debug_adb = int(os.getenv("SHOW_ADB_DEBUG", "0")) != 0  # include ADB output in debug logs
+        self._debug_adb = (
+            int(getenv("SHOW_ADB_DEBUG", "0")) != 0
+        )  # include ADB output in debug logs
         self._ip_addr = None  # target device IP address
         self._os_version = None  # Android version string
         self._port = None  # ADB listening port
@@ -68,12 +85,12 @@ class ADBSession(object):
         self.symbols = dict()
 
         if ip_addr is not None:
-            log.debug("creating IP based session")
+            LOG.debug("creating IP based session")
             try:
                 if ip_addr != "localhost":
                     socket.inet_aton(ip_addr)
             except (socket.error, TypeError):
-                raise ValueError("Invalid IP Address")
+                raise ValueError("Invalid IP Address") from None
             self._ip_addr = ip_addr
             if not isinstance(port, int) or not 0x10000 > port > 1024:
                 raise ValueError("Port must be valid integer between 1025 and 65535")
@@ -92,14 +109,14 @@ class ADBSession(object):
         """
         aapt_bin = ANDROID_SDK_ROOT / "android-9" / "aapt"
         if aapt_bin.is_file():
-            log.debug("using recommended aapt from '%s'", aapt_bin)
+            LOG.debug("using recommended aapt from '%s'", aapt_bin)
             return str(aapt_bin)
         aapt_bin = which("aapt")
         if aapt_bin is None:
             raise EnvironmentError("Please install AAPT")
         aapt_bin = Path(aapt_bin)
         # TODO: update this to check aapt version
-        log.warning("Using aapt_bin from '%s'", aapt_bin)
+        LOG.warning("Using aapt_bin from '%s'", aapt_bin)
         return str(aapt_bin)
 
     @classmethod
@@ -115,28 +132,28 @@ class ADBSession(object):
         """
         adb_bin = ANDROID_SDK_ROOT / "platform-tools" / "adb"
         if adb_bin.is_file():
-            log.debug("using recommended adb from '%s'", adb_bin)
+            LOG.debug("using recommended adb from '%s'", adb_bin)
             return str(adb_bin)
         adb_bin = which("adb")
         if adb_bin is None:
             raise EnvironmentError("Please install ADB")
         adb_bin = Path(adb_bin)
         # TODO: update this to check adb version
-        log.warning("Using adb from '%s'", adb_bin)
-        log.warning("You are not using the recommended ADB install!")
-        log.warning("Either run the setup script or proceed with caution.")
+        LOG.warning("Using adb from '%s'", adb_bin)
+        LOG.warning("You are not using the recommended ADB install!")
+        LOG.warning("Either run the setup script or proceed with caution.")
         sleep(5)
         return str(adb_bin)
 
     @staticmethod
     def _call_adb(cmd, timeout=None):
-        """Wrapper to make calls to ADB. Launches ADB in a subprocess and collects output.
-        If timeout is specified and elapses the ADB subprocess is terminated.
+        """Wrapper to make calls to ADB. Launches ADB in a subprocess and collects
+        output. If timeout is specified and elapses the ADB subprocess is terminated.
         This function is only meant to be called directly by ADBSession.call().
 
         Args:
             cmd (list): List of strings containing full ADB command.
-            timeout (float, optional): Number of seconds to wait for ADB command to complete.
+            timeout (float, optional): Seconds to wait for ADB command to complete.
 
         Returns:
             tuple: Exit code and stderr, stdout of ADB call.
@@ -145,14 +162,14 @@ class ADBSession(object):
             if timeout is not None:
                 assert timeout > 0
                 end_time = time() + timeout
-                adb_proc = Popen(cmd, stderr=out_fp, stdout=out_fp)
-                while adb_proc.poll() is None:
-                    sleep(0.05)
-                    if time() > end_time:
-                        log.warning("adb call timeout!")
-                        adb_proc.terminate()
-                        break
-                ret_code = adb_proc.wait()
+                with Popen(cmd, stderr=out_fp, stdout=out_fp) as proc:
+                    while proc.poll() is None:
+                        sleep(0.05)
+                        if time() > end_time:
+                            LOG.warning("adb call timeout!")
+                            proc.terminate()
+                            break
+                    ret_code = proc.wait()
             else:
                 ret_code = call(cmd, stderr=out_fp, stdout=out_fp)
             out_fp.seek(0)
@@ -195,7 +212,7 @@ class ADBSession(object):
             _, pid, ppid, _, memory, _, _, _, name = ps_line.split()
             return DeviceProcessInfo(int(memory), name, int(pid), int(ppid))
         except ValueError:
-            log.debug("invalid ps line %r", ps_line)
+            LOG.debug("invalid ps line %r", ps_line)
         return None
 
     @property
@@ -208,7 +225,9 @@ class ADBSession(object):
         Returns:
             bool: True if airplane mode is enabled otherwise False.
         """
-        return self.call(["shell", "settings", "get", "global", "airplane_mode_on"])[1].startswith("1")
+        return self.call(["shell", "settings", "get", "global", "airplane_mode_on"])[
+            1
+        ].startswith("1")
 
     @airplane_mode.setter
     def airplane_mode(self, mode):
@@ -221,8 +240,27 @@ class ADBSession(object):
             None
         """
         assert isinstance(mode, bool), "mode must be a bool"
-        self.call(["shell", "settings", "put", "global", "airplane_mode_on", "1" if mode else "0"])
-        self.call(["shell", "su", "root", "am", "broadcast", "-a", "android.intent.action.AIRPLANE_MODE"])
+        self.call(
+            [
+                "shell",
+                "settings",
+                "put",
+                "global",
+                "airplane_mode_on",
+                "1" if mode else "0",
+            ]
+        )
+        self.call(
+            [
+                "shell",
+                "su",
+                "root",
+                "am",
+                "broadcast",
+                "-a",
+                "android.intent.action.AIRPLANE_MODE",
+            ]
+        )
 
     def call(self, cmd, device_required=True, timeout=None):
         """Call ADB with arguments provided in cmd.
@@ -230,7 +268,7 @@ class ADBSession(object):
         Args:
             cmd (list): List of strings to pass as arguments when calling ADB.
             device_required (bool, optional): A device must be available for call.
-            timeout (float, optional): Amount of time in seconds to wait for ADB cal to complete.
+            timeout (float, optional): Seconds to wait for ADB call to complete.
 
         Returns:
             tuple: The first element is an integer containing the exit code of the
@@ -238,20 +276,24 @@ class ADBSession(object):
         """
         assert isinstance(cmd, list) and cmd
         cmd = [self._adb_bin] + cmd
-        log.debug("calling: %s", " ".join(cmd))
+        LOG.debug("calling: %s", " ".join(cmd))
         if not self.connected and cmd[1] not in ("connect", "devices", "disconnect"):
             raise ADBCommunicationError("ADB session is not connected!")
         ret_code, output = self._call_adb(cmd, timeout=timeout)
         if self._debug_adb:
-            log.debug("=== adb start ===\n%s\n=== adb end, returned %d ===", output, ret_code)
+            LOG.debug(
+                "=== adb start ===\n%s\n=== adb end, returned %d ===", output, ret_code
+            )
         if ret_code != 0:
             if output.startswith("Android Debug Bridge version"):
                 raise ADBCommandError("Invalid ADB command '%s'" % (" ".join(cmd[1:]),))
             if output.startswith("adb: usage:"):
                 raise ADBCommandError(output.strip())
-            if device_required and (output.startswith("error: closed") or
-                                    output.startswith("error: device offline") or
-                                    output.startswith("error: no devices/emulators found")):
+            if device_required and (
+                output.startswith("error: closed")
+                or output.startswith("error: device offline")
+                or output.startswith("error: no devices/emulators found")
+            ):
                 self.connected = False
                 raise ADBCommunicationError("No device detected!")
         return ret_code, output
@@ -265,7 +307,7 @@ class ADBSession(object):
         Returns:
             None
         """
-        log.debug("clear_logs()")
+        LOG.debug("clear_logs()")
         return self.call(["logcat", "--clear"], timeout=10)[0] == 0
 
     def collect_logs(self, pid=None):
@@ -278,9 +320,9 @@ class ADBSession(object):
         Returns:
             None
         """
-        log.debug("collect_logs()")
+        LOG.debug("collect_logs()")
         if not self.connected:
-            log.debug("device not connected cannot collect logs")
+            LOG.debug("device not connected cannot collect logs")
             # TODO: return None if disconnected?
             return ""
         cmd = ["logcat", "-d", "*:I"]
@@ -293,12 +335,12 @@ class ADBSession(object):
 
         Args:
             as_root (bool, optional): Attempt to enable root. Default is True.
-            boot_timeout (int, optional): Number of seconds to wait for device boot to complete.
-            max_attempts (int, optional): Number of attempts to make to try to connect to the device.
-            retry_delay (int, optional): Number of seconds to wait between connection attempts.
+            boot_timeout (int, optional): Seconds to wait for device boot to complete.
+            max_attempts (int, optional): Number of attempt to connect to the device.
+            retry_delay (int, optional): Seconds to wait between connection attempts.
 
         Returns:
-            bool: Returns True if connection was established successfully otherwise False.
+            bool: Returns True if connection was established otherwise False.
         """
         assert isinstance(boot_timeout, int) and boot_timeout > 0
         assert isinstance(max_attempts, int) and max_attempts > 0
@@ -313,31 +355,41 @@ class ADBSession(object):
             if not self.connected:
                 if self._ip_addr is not None:
                     addr = ":".join((self._ip_addr, str(self._port)))
-                    log.debug("connecting to %s", addr)
+                    LOG.debug("connecting to %s", addr)
                     if self.call(["connect", addr])[0] != 0:
-                        log.warning("connection attempt #%d failed", attempt)
+                        LOG.warning("connection attempt #%d failed", attempt)
                         sleep(retry_delay)
                         continue
                 elif not self.devices():
-                    log.warning("No device detected (attempt %d/%d)", attempt, max_attempts)
+                    LOG.warning(
+                        "No device detected (attempt %d/%d)", attempt, max_attempts
+                    )
                     sleep(retry_delay)
                     continue
                 self.connected = True
             # verify we are connected
             if not self.wait_for_boot(timeout=boot_timeout):
-                raise ADBCommunicationError("Timeout (%ds) waiting for device to boot" % (boot_timeout,))
+                raise ADBCommunicationError(
+                    "Timeout (%ds) waiting for device to boot" % (boot_timeout,)
+                )
             ret_code, user = self.call(["shell", "whoami"], device_required=False)
             if ret_code != 0 or not user:
                 self.connected = False
                 if attempt == max_attempts:
-                    raise ADBSessionError("Device in a bad state, try disconnect & reboot")
+                    raise ADBSessionError(
+                        "Device in a bad state, try disconnect & reboot"
+                    )
                 continue
             self._root = user.splitlines()[-1] == "root"
             # collect CPU and OS info
             if self._os_version is None:
-                self._os_version = self.call(["shell", "getprop", "ro.build.version.release"])[1]
+                self._os_version = self.call(
+                    ["shell", "getprop", "ro.build.version.release"]
+                )[1]
             if self._cpu_arch is None:
-                self._cpu_arch = self.call(["shell", "getprop", "ro.product.cpu.abi"])[1]
+                self._cpu_arch = self.call(["shell", "getprop", "ro.product.cpu.abi"])[
+                    1
+                ]
             # check SELinux mode
             if self._root:
                 if self.get_enforce():
@@ -354,7 +406,11 @@ class ADBSession(object):
                     attempt -= 1
                     continue
             if not as_root or self._root:
-                log.debug("connected device running Android %s (%s)", self._os_version, self._cpu_arch)
+                LOG.debug(
+                    "connected device running Android %s (%s)",
+                    self._os_version,
+                    self._cpu_arch,
+                )
                 break
             # enable root
             assert as_root, "Should not be here if root is not requested"
@@ -366,7 +422,7 @@ class ADBSession(object):
                     attempt -= 1
                     continue
             else:
-                log.warning("Failed root login attempt")
+                LOG.warning("Failed root login attempt")
         if self.connected and as_root and not self._root:
             raise ADBSessionError("Could not enable root")
         return self.connected
@@ -376,10 +432,11 @@ class ADBSession(object):
         """Create a ADBSession and connect to a device via ADB.
 
         Args:
-            ip_addr (str, optional): IP address of device to connect to if using TCP/IP. Defaults to None.
+            ip_addr (str, optional): IP address of device to connect to if using TCP/IP.
+                                     Defaults to None.
             port (int, optional): Port to use (TCP/IP only). Defaults to 5555.
             as_root (bool, optional): Attempt to enable root. Default is True.
-            max_attempt (int, optional): Number of attempts to make to try to connect to the device.
+            max_attempt (int, optional): Number of attempts to connect to the device.
 
         Returns:
             ADBSession: A connected ADBSession object otherwise None
@@ -393,7 +450,8 @@ class ADBSession(object):
         """Devices visible to ADB.
 
         Args:
-            all_devices (bool, optional): Don't filter devices using ANDROID_SERIAL environment variable.
+            all_devices (bool, optional): Don't filter devices using ANDROID_SERIAL
+                                          environment variable.
             any_state (bool, optional): Include devices in a state other than "device".
 
         Returns:
@@ -403,7 +461,7 @@ class ADBSession(object):
         devices = {}
         if ret_code != 0:
             return devices
-        target_device = os.getenv("ANDROID_SERIAL", None) if not all_devices else None
+        target_device = getenv("ANDROID_SERIAL", None) if not all_devices else None
         # skip header on the first line
         for entry in entries.splitlines()[1:]:
             try:
@@ -416,7 +474,9 @@ class ADBSession(object):
                 continue
             devices[name] = state
         if target_device is None and not all_devices and len(devices) > 1:
-            raise ADBSessionError("Multiple devices available and ANDROID_SERIAL not set")
+            raise ADBSessionError(
+                "Multiple devices available and ANDROID_SERIAL not set"
+            )
         return devices
 
     def disconnect(self, unroot=True):
@@ -429,7 +489,7 @@ class ADBSession(object):
             None
         """
         if not self.connected:
-            log.debug("already disconnected")
+            LOG.debug("already disconnected")
             return
         if self._root and unroot:
             try:
@@ -437,9 +497,9 @@ class ADBSession(object):
                     self.connected = False
                     self._root = False
                     return
-                log.warning("'unroot' failed")
+                LOG.warning("'unroot' failed")
             except ADBCommandError:
-                log.warning("'unroot' not support by ADB")
+                LOG.warning("'unroot' not support by ADB")
         elif self._ip_addr is not None:
             self.call(["disconnect", ":".join((self._ip_addr, str(self._port)))])
         self.connected = False
@@ -457,7 +517,7 @@ class ADBSession(object):
         if status == "Enforcing":
             return True
         if status != "Permissive":
-            log.warning("Unexpected SELinux state '%r'", status)
+            LOG.warning("Unexpected SELinux state '%r'", status)
         return False
 
     @classmethod
@@ -470,7 +530,7 @@ class ADBSession(object):
         Returns:
             str: String containing the package name otherwise None.
         """
-        if not os.path.isfile(apk_path):
+        if not Path(apk_path).is_file():
             raise IOError("APK path must point to a file")
         aapt = cls._aapt_check()
         apk_info = check_output((aapt, "dump", "badging", apk_path))
@@ -486,24 +546,26 @@ class ADBSession(object):
             apk_name (str): APK to to retrieve the package name from.
 
         Returns:
-            int: PID of the process with the specified package name if it exists otherwise None.
+            int: PID of the process with the specified package name if it exists
+                 otherwise None.
         """
         # TODO: _get_procs() is slow, move to pidof ASAP
-        # pidof is not supported pre-Android 6... do we care about <6? if so we could just fall back
+        # pidof is not supported pre-Android 6... do we care about <6? if so we could
+        # just fallback
         pids = [proc.pid for proc in self._get_procs() if proc.name == package_name]
         if not pids:
             return None
         count = len(pids)
         if count > 1:
-            log.debug("get_pid() %d proc(s) found", count)
+            LOG.debug("get_pid() %d proc(s) found", count)
             # TODO: get procs and use the ppid of the procs the determine the parent
             # for now we are using the lowest pid...
             pids.sort()
         return pids[0]
 
     def install(self, apk_path):
-        """Install APK on the connected device, grant R/W permissions to /sdcard and lookup
-        the name of the installed APK.
+        """Install APK on the connected device, grant R/W permissions to /sdcard and
+        lookup the name of the installed APK.
 
         Args:
             apk_name (str): APK to install.
@@ -511,8 +573,8 @@ class ADBSession(object):
         Returns:
             str: Package name of APK that has been installed.
         """
-        log.debug("installing %r", apk_path)
-        if not os.path.isfile(apk_path):
+        LOG.debug("installing %r", apk_path)
+        if not Path(apk_path).is_file():
             raise IOError("APK does not exist %r" % (apk_path,))
         # lookup package name
         pkg_name = self.get_package_name(apk_path)
@@ -521,9 +583,25 @@ class ADBSession(object):
         if self.call(["install", "-g", "-r", apk_path], timeout=120)[0] != 0:
             raise ADBSessionError("Failed to install %r" % (apk_path,))
         # set permissions
-        self.call(["shell", "pm", "grant", pkg_name, "android.permission.READ_EXTERNAL_STORAGE"])
-        self.call(["shell", "pm", "grant", pkg_name, "android.permission.WRITE_EXTERNAL_STORAGE"])
-        log.debug("installed package %r (%r)", pkg_name, apk_path)
+        self.call(
+            [
+                "shell",
+                "pm",
+                "grant",
+                pkg_name,
+                "android.permission.READ_EXTERNAL_STORAGE",
+            ]
+        )
+        self.call(
+            [
+                "shell",
+                "pm",
+                "grant",
+                pkg_name,
+                "android.permission.WRITE_EXTERNAL_STORAGE",
+            ]
+        )
+        LOG.debug("installed package %r (%r)", pkg_name, apk_path)
         return pkg_name
 
     def install_file(self, src, dst, mode=None, context=None):
@@ -538,7 +616,7 @@ class ADBSession(object):
         Returns:
             None
         """
-        full_dst = os.path.join(dst, os.path.basename(src))
+        full_dst = str(Path(dst) / Path(src).name)
         self.push(src, full_dst)
         self.call(["shell", "chown", "root.shell", full_dst])
         if mode is not None:
@@ -553,7 +631,7 @@ class ADBSession(object):
             package_name (str): Package name to look up on the device.
 
         Returns:
-            bool: Returns True if the package is installed on the device otherwise False.
+            bool: True if the package is installed on the device otherwise False.
         """
         return package_name in self.packages
 
@@ -564,9 +642,9 @@ class ADBSession(object):
             path (str): Directory to list the contents of.
 
         Returns:
-            list: list of strings containing names of all items in a directory.
+            list: Strings containing names of all items in a directory.
         """
-        log.debug("listdir(%r)", path)
+        LOG.debug("listdir(%r)", path)
         ret_val, output = self.call(["shell", "ls", "-A", path])
         if ret_val != 0:
             raise IOError("%r does not exist" % (path,))
@@ -576,21 +654,24 @@ class ADBSession(object):
         """Look up open file on the device.
 
         Args:
-            pid (int, optional): Only include files where the process with the matching PID
-                has an open file handle.
-            children (bool, optional): Include file opened by processes with a parent PID matching pid.
-                pid is required when children is set to True
+            pid (int, optional): Only include files where the process with the matching
+                                 PID has an open file handle.
+            children (bool, optional): Include file opened by processes with a parent
+                                       PID matching pid. pid is required when children
+                                       is set to True.
             files (iterable, optional): Limit results to these specific files.
 
         Yields:
-            tuple: The first element is the PID and the second is the path of the open file.
+            tuple: PID and path of the open file.
         """
-        log.debug("open_files(pid=%r, children=%r, files=%r", pid, children, files)
+        LOG.debug("open_files(pid=%r, children=%r, files=%r", pid, children, files)
         pids = list()
         if pid is not None:
             pids.append(str(pid))
         if children:
-            assert pid is not None, "Cannot request child open files without specifying pid"
+            assert (
+                pid is not None
+            ), "Cannot request child open files without specifying pid"
             for proc in self._get_procs(pid_children=pid):
                 pids.append(str(proc.pid))
         cmd = ["shell", "lsof"]
@@ -651,7 +732,7 @@ class ADBSession(object):
         Returns:
             bool: True if successful otherwise False
         """
-        log.debug("pull(%r, %r)", src, dst)
+        LOG.debug("pull(%r, %r)", src, dst)
         return self.call(["pull", src, dst])[0] == 0
 
     def push(self, src, dst):
@@ -664,8 +745,8 @@ class ADBSession(object):
         Returns:
             bool: True if successful otherwise False
         """
-        log.debug("push(%r, %r)", src, dst)
-        if not os.path.exists(src):
+        LOG.debug("push(%r, %r)", src, dst)
+        if not Path(src).exists():
             raise IOError("%r does not exist" % (src,))
         return self.call(["push", src, dst])[0] == 0
 
@@ -678,7 +759,7 @@ class ADBSession(object):
         Returns:
             str: canonical path of the specified path.
         """
-        log.debug("realpath(%r)", path)
+        LOG.debug("realpath(%r)", path)
         ret_val, output = self.call(["shell", "realpath", path])
         if ret_val != 0:
             raise IOError("%r does not exist" % (path,))
@@ -688,22 +769,23 @@ class ADBSession(object):
         """Reboot the connected device and reconnect.
 
         Args:
-            boot_timeout (int, optional): Number of seconds to wait for device boot to complete.
-            max_attempts (int, optional): Number of attempts to make to try to connect to the device.
-            retry_delay (int, optional): Number of seconds to wait between connection attempts.
+            boot_timeout (int, optional): Seconds to wait for device boot to complete.
+            max_attempts (int, optional): Number of attempts to connect to the device.
+            retry_delay (int, optional): Seconds to wait between connection attempts.
 
         Returns:
             None
         """
         was_root = self._root
-        log.debug("calling reboot...")
+        LOG.debug("calling reboot...")
         self.call(["reboot"])
         self.connected = False
         self.connect(
             as_root=was_root,
             boot_timeout=boot_timeout,
             max_attempts=max_attempts,
-            retry_delay=retry_delay)
+            retry_delay=retry_delay,
+        )
         assert self.connected, "Device did not connect after reboot"
 
     def remount(self):
@@ -764,15 +846,11 @@ class ADBSession(object):
         """
         prefix = prefix.lower()
         assert prefix == "asan", "only ASan is supported atm"
-        working_path = mkdtemp(prefix="sanopts_", dir=grz_tmp())
-        try:
-            optfile = os.path.join(working_path, "%s.options.gecko" % prefix)
-            with open(optfile, "w+") as ofp:
-                ofp.write(":".join(["%s=%s" % opt for opt in options.items()]))
+        with TemporaryDirectory(prefix="sanopts_", dir=grz_tmp()) as working_path:
+            optfile = Path(working_path) / ("%s.options.gecko" % (prefix,))
+            optfile.write_text(":".join("%s=%s" % x for x in options.items()))
             # TODO: use push() instead?
-            self.install_file(optfile, "/data/local/tmp/", mode="666")
-        finally:
-            rmtree(working_path, ignore_errors=True)
+            self.install_file(str(optfile), "/data/local/tmp/", mode="666")
 
     def set_enforce(self, value):
         """Set SELinux mode.
@@ -785,7 +863,7 @@ class ADBSession(object):
         """
         assert value in (0, 1)
         if not self._root:
-            log.warning("set_enforce requires root")
+            LOG.warning("set_enforce requires root")
         self.call(["shell", "setenforce", str(value)])
 
     def symbols_path(self, package_name):
@@ -809,7 +887,7 @@ class ADBSession(object):
             bool: True if successful otherwise False
         """
         if not self.connected:
-            log.debug("already disconnected")
+            LOG.debug("already disconnected")
             return False
         return self.call(["uninstall", package], timeout=60)[0] == 0
 
@@ -817,7 +895,7 @@ class ADBSession(object):
         """Uninstall package from the connected device.
 
         Args:
-            timeout (float or int, optional): Number of seconds to wait for device to boot.
+            timeout (float or int, optional): Seconds to wait for device to boot.
 
         Returns:
             bool: True if device booted successfully otherwise False.
@@ -827,8 +905,8 @@ class ADBSession(object):
             deadline = time() + timeout
         else:
             deadline = None
-        # first wait for the boot to complete then wait for the boot animation to complete
-        # this will help ensure the device is in a ready state
+        # first wait for the boot to complete then wait for the boot animation to
+        # complete, this will help ensure the device is in a ready state
         anim_chk = ["shell", "getprop", "init.svc.bootanim"]
         boot_chk = ["shell", "getprop", "sys.boot_completed"]
         attempts = 0
@@ -837,17 +915,18 @@ class ADBSession(object):
             if not booted:
                 booted = self.call(boot_chk, device_required=False)[1] == "1"
                 attempts += 1
-            # we need to verify that boot is complete before checking the animation is stopped because
-            # the animation can be in the stopped state early in the boot process
+            # we need to verify that boot is complete before checking the animation is
+            # stopped because the animation can be in the stopped state early in the
+            # boot process
             if booted and self.call(anim_chk)[1] == "stopped":
                 if attempts > 1:
                     # the device was booting so give it additional time
-                    log.debug("device was boot was detected")
+                    LOG.debug("device was boot was detected")
                     sleep(5)
                 return True
             if deadline and time() >= deadline:
-                log.debug("wait_for_boot() timeout %r exceeded", timeout)
+                LOG.debug("wait_for_boot() timeout %r exceeded", timeout)
                 break
-            log.debug("waiting for device to boot")
+            LOG.debug("waiting for device to boot")
             sleep(0.5)
         return False

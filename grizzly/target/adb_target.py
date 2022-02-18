@@ -2,24 +2,23 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import logging
 import os
-from tempfile import mkdtemp, TemporaryDirectory
+from logging import getLogger
+from tempfile import TemporaryDirectory, mkdtemp
 
 from ffpuppet import LaunchError
 from prefpicker import PrefPicker
 
+from ..common.reporter import Report
+from ..common.utils import grz_tmp
 from .adb_device import ADBProcess, ADBSession
 from .target import Result, Target, TargetError
 from .target_monitor import TargetMonitor
-from ..common.reporter import Report
-from ..common.utils import grz_tmp
-
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-LOG = logging.getLogger("adb_target")  # pylint: disable=invalid-name
+LOG = getLogger("adb_target")
 
 
 class ADBTarget(Target):
@@ -29,7 +28,6 @@ class ADBTarget(Target):
         super().__init__(binary, launch_timeout, log_limit, memory_limit)
         self.forced_close = True  # app will not close itself on Android
         self.use_rr = False
-
 
         for unsupported in ("pernosco", "rr", "valgrind", "xvfb"):
             if kwds.pop(unsupported, False):
@@ -101,7 +99,8 @@ class ADBTarget(Target):
                 env_mod=env_mod,
                 launch_timeout=self.launch_timeout,
                 prefs_js=self._prefs,
-                url=location)
+                url=location,
+            )
         except LaunchError:
             self._proc.close()
             raise
@@ -109,6 +108,7 @@ class ADBTarget(Target):
     @property
     def monitor(self):
         if self._monitor is None:
+
             class _ADBMonitor(TargetMonitor):
                 # pylint: disable=no-self-argument,protected-access
                 def clone_log(_, *_a, **_k):  # pylint: disable=arguments-differ
@@ -120,16 +120,21 @@ class ADBTarget(Target):
                             return log_fp.read()
                     finally:
                         os.remove(log_file)
+
                 def is_running(_):
                     return self._proc.is_running()
+
                 def is_healthy(_):
                     return self._proc.is_healthy()
+
                 @property
                 def launches(_):
                     return self._proc.launches
+
                 def log_length(_, *_a):  # pylint: disable=arguments-differ
                     # TODO: This needs to be implemented
                     return 0
+
             self._monitor = _ADBMonitor()
         return self._monitor
 

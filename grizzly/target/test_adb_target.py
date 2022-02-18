@@ -7,6 +7,7 @@ from .adb_device import ADBProcess, ADBSession
 from .adb_target import ADBTarget
 from .target import Result
 
+
 def test_adb_target_01(mocker, tmp_path):
     """test creating a simple ADBTarget"""
     fake_process = mocker.patch("grizzly.target.adb_target.ADBProcess", autospec=True)
@@ -17,7 +18,7 @@ def test_adb_target_01(mocker, tmp_path):
     fake_process.return_value.is_running.return_value = False
     fake_process.return_value.launches = 0
     fake_process.return_value.reason = fake_process.RC_CLOSED
-    fake_sess_obj = mocker.Mock(spec=ADBSession, connected=True, symbols={})
+    fake_sess_obj = mocker.Mock(spec_set=ADBSession, connected=True, symbols={})
     fake_session = mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
     fake_session.create.return_value = fake_sess_obj
     fake_session.get_package_name.return_value = "the_name"
@@ -27,7 +28,7 @@ def test_adb_target_01(mocker, tmp_path):
         assert target.closed
         assert target.forced_close
         assert target.monitor is not None
-        assert target.check_result(False) == Result.NONE
+        assert target.check_result(None) == Result.NONE
         assert not target.log_size()
         target.cleanup()
         assert fake_sess_obj.reverse_remove.call_count == 1
@@ -38,6 +39,7 @@ def test_adb_target_01(mocker, tmp_path):
     assert fake_session.create.call_count == 1
     assert fake_session.get_package_name.call_count == 1
     assert "the_name" in fake_sess_obj.symbols
+
 
 def test_adb_target_02(mocker, tmp_path):
     """test ADBTarget.launch()"""
@@ -51,6 +53,7 @@ def test_adb_target_02(mocker, tmp_path):
         assert fake_process.return_value.launch.call_count == 1
         assert target.monitor.is_running()
         assert target.monitor.is_healthy()
+
 
 @mark.parametrize(
     "healthy, reason, result, closes",
@@ -80,6 +83,7 @@ def test_adb_target_03(mocker, tmp_path, healthy, reason, result, closes):
         fake_process.return_value.reason = reason
         assert target.check_result(None) == result
         assert fake_process.return_value.close.call_count == closes
+
 
 def test_adb_target_04(mocker, tmp_path):
     """test ADBTarget.handle_hang()"""
