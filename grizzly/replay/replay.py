@@ -345,6 +345,9 @@ class ReplayManager:
                             LOG.warning("Timeout too short? System too busy?")
                 # process run results
                 if run_result.status == Result.FOUND:
+                    # processing the result may take a few minutes (rr)
+                    # update console to show progress
+                    LOG.info("Processing result...")
                     # TODO: use self.target.create_report here
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
