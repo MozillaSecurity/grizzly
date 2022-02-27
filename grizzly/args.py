@@ -4,7 +4,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
-from os import getcwd
 from os.path import exists, isfile
 from pathlib import Path
 from platform import system
@@ -34,7 +33,7 @@ class SortingHelpFormatter(HelpFormatter):
 
 class CommonArgs:
     IGNORABLE = ("log-limit", "memory", "timeout")
-    IGNORE = ("log-limit", "timeout")
+    DEFAULT_IGNORE = ("log-limit", "timeout")
 
     def __init__(self):
         # log levels for console logging
@@ -52,14 +51,16 @@ class CommonArgs:
                 formatter_class=SortingHelpFormatter, conflict_handler="resolve"
             )
 
+        targets = scan_plugins("grizzly_targets")
+        if not targets:
+            self.parser.error("No Platforms (Targets) are installed")
+
         self.parser.add_argument("binary", help="Firefox binary to run")
         self.parser.add_argument(
             "--log-level",
+            choices=sorted(self._level_map),
             default="INFO",
-            help="Configure console logging. Options: %s (default: %%(default)s)"
-            % ", ".join(
-                k for k, v in sorted(self._level_map.items(), key=lambda x: x[1])
-            ),
+            help="Configure console logging (default: %(default)s)",
         )
 
         # build 'asset' help string
@@ -109,8 +110,8 @@ class CommonArgs:
         self.launcher_grp.add_argument(
             "--platform",
             default="ffpuppet",
-            help="Installed Platforms (Targets): %s (default: %%(default)s)"
-            % ", ".join(sorted(scan_plugins("grizzly_targets"))),
+            choices=sorted(targets),
+            help="Target to use (default: %(default)s)",
         )
         self.launcher_grp.add_argument(
             "-p", "--prefs", help="DEPRECATED. prefs.js file to use"
@@ -156,15 +157,19 @@ class CommonArgs:
         self.reporter_grp.add_argument(
             "--ignore",
             nargs="*",
-            default=list(self.IGNORE),
-            help="Space separated list of issue types to ignore. Valid options: %s"
-            " (default: %s)" % (" ".join(self.IGNORABLE), " ".join(self.IGNORE)),
+            choices=self.IGNORABLE,
+            default=self.DEFAULT_IGNORE,
+            metavar="IGNORABLE",
+            help="Space-separated list of ignorable types. Pass zero args to disable."
+            " Available: %s (default: %s)"
+            % (" ".join(self.IGNORABLE), " ".join(self.DEFAULT_IGNORE)),
         )
         self.reporter_grp.add_argument(
             "-l",
             "--logs",
-            default=getcwd(),
-            help="Location to save logs and test cases. (default: %(default)r)",
+            default=Path.cwd(),
+            type=Path,
+            help="Location to save logs and test cases. (default: %(default)s)",
         )
         self.reporter_grp.add_argument(
             "--tool",
@@ -200,28 +205,18 @@ class CommonArgs:
         return args
 
     def sanity_check(self, args):
-        targets = scan_plugins("grizzly_targets")
-        if not targets:
-            self.parser.error("No Platforms (Targets) are installed")
-
         if "binary" not in self._sanity_skip and not isfile(args.binary):
             self.parser.error("file not found: %r" % (args.binary,))
 
-        # sanitize ignore list
-        args.ignore = {arg.lower() for arg in args.ignore}
-        for ignore in args.ignore:
-            if ignore not in self.IGNORABLE:
-                self.parser.error("Unrecognized ignore value %r" % (ignore,))
-
-        # check log level
-        log_level = self._level_map.get(args.log_level.upper(), None)
-        if log_level is None:
-            self.parser.error("Invalid log-level %r" % (args.log_level,))
-        args.log_level = log_level
+        args.log_level = self._level_map[args.log_level]
 
         if args.log_limit < 0:
             self.parser.error("--log-limit must be >= 0")
         args.log_limit *= 1_048_576
+
+        # if logs is specified, we need it to be a directory (whether existent or not)
+        if args.logs and args.logs.is_file():
+            self.parser.error("--logs cannot be a file")
 
         if args.memory < 0:
             self.parser.error("--memory must be >= 0")
@@ -236,9 +231,6 @@ class CommonArgs:
             value = int(Path(settings).read_text())
             if value > 1:
                 self.parser.error("rr needs %s <= 1, but it is %d" % (settings, value))
-
-        if args.platform not in targets:
-            self.parser.error("Platform %r not installed" % (args.platform,))
 
         # TODO: remove deprecated 'extension' from args
         if args.extension:  # pragma: no cover
@@ -275,11 +267,14 @@ class CommonArgs:
 class GrizzlyArgs(CommonArgs):
     def __init__(self):
         super().__init__()
+
+        adapters = scan_plugins("grizzly_adapters")
+        if not adapters:
+            self.parser.error("No Adapters are installed")
+
         self._sanity_skip.add("tool")
         self.parser.add_argument(
-            "adapter",
-            help="Installed Adapters: %s"
-            % ", ".join(sorted(scan_plugins("grizzly_adapters"))),
+            "adapter", choices=sorted(adapters), help="Adapter to use."
         )
         self.parser.add_argument(
             "--enable-profiling",
@@ -288,13 +283,16 @@ class GrizzlyArgs(CommonArgs):
             " status reporter while running Grizzly.",
         )
         self.parser.add_argument(
-            "-i", "--input", help="Test case or directory containing test cases."
+            "-i",
+            "--input",
+            type=Path,
+            help="Test case or directory containing test cases.",
         )
         self.parser.add_argument(
             "--limit",
             type=int,
             default=0,
-            help="Maximum number of iterations to be performed. (default: no limit)",
+            help="Maximum number of iterations to be performed. (default: 'no limit')",
         )
         self.parser.add_argument(
             "--smoke-test",
@@ -350,12 +348,6 @@ class GrizzlyArgs(CommonArgs):
 
     def sanity_check(self, args):
         super().sanity_check(args)
-        adapters = scan_plugins("grizzly_adapters")
-        if not adapters:
-            self.parser.error("No Adapters are installed")
-
-        if args.adapter not in adapters:
-            self.parser.error("Adapter %r is not installed" % (args.adapter,))
 
         if args.collect < 1:
             self.parser.error("--collect must be greater than 0")
@@ -365,8 +357,8 @@ class GrizzlyArgs(CommonArgs):
                 "--fuzzmanager and --s3-fuzzmanager are mutually exclusive"
             )
 
-        if args.input and not exists(args.input):
-            self.parser.error("%r does not exist" % (args.input,))
+        if args.input and not args.input.exists():
+            self.parser.error("'%s' does not exist" % (args.input,))
 
         if args.limit < 0:
             self.parser.error("--limit must be >= 0")

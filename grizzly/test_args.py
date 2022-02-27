@@ -2,7 +2,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-# pylint: disable=protected-access
 from platform import system
 
 from pytest import mark, raises
@@ -10,27 +9,31 @@ from pytest import mark, raises
 from .args import CommonArgs, GrizzlyArgs
 
 
-def test_common_args_01(capsys, mocker, tmp_path):
-    """test CommonArgs.parse_args()"""
-    scan_plugins = mocker.patch("grizzly.args.scan_plugins", autospec=True)
-    scan_plugins.return_value = []
-    # test help
-    with raises(SystemExit):
-        CommonArgs().parse_args(argv=["-h"])
-    assert "For addition help check out the wiki" in capsys.readouterr()[0]
-    # test empty args
-    with raises(SystemExit):
-        CommonArgs().parse_args(argv=[])
-    assert "the following arguments are required: binary" in capsys.readouterr()[-1]
-    # test with missing bin
-    scan_plugins.return_value = ["targ1"]
+def test_common_args_01(mocker, tmp_path):
+    """test CommonArgs.parse_args() - success"""
+    mocker.patch("grizzly.args.scan_plugins", return_value=["targ"])
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
+    CommonArgs().parse_args(argv=[str(fake_bin), "--platform", "targ"])
+
+
+@mark.parametrize(
+    "args, msg, idx",
+    [
+        # test help
+        (["-h"], "For addition help check out the wiki", 0),
+        # test without args
+        ([], "the following arguments are required: binary", -1),
+        # test with missing bin
+        (["missing-bin"], "error: file not found: 'missing-bin'", -1),
+    ],
+)
+def test_common_args_02(capsys, mocker, args, msg, idx):
+    """test CommonArgs.parse_args()"""
+    mocker.patch("grizzly.args.scan_plugins", return_value=["x"])
     with raises(SystemExit):
-        CommonArgs().parse_args(argv=["missing-bin"])
-    assert "error: file not found: 'missing-bin'" in capsys.readouterr()[-1]
-    # test success
-    CommonArgs().parse_args(argv=[str(fake_bin), "--platform", "targ1"])
+        CommonArgs().parse_args(argv=args)
+    assert msg in capsys.readouterr()[idx]
 
 
 @mark.parametrize(
@@ -38,18 +41,12 @@ def test_common_args_01(capsys, mocker, tmp_path):
     [
         # test no installed platforms
         ([], "error: No Platforms (Targets) are installed", []),
-        # test invalid ignore value
-        (["--ignore", "bad"], "error: Unrecognized ignore value 'bad'", ["targ1"]),
-        # test invalid log level
-        (["--log-level", "bad"], "error: Invalid log-level 'bad'", ["targ1"]),
         # test invalid log limit
         (["--log-limit", "-1"], "error: --log-limit must be >= 0", ["targ1"]),
         # test invalid memory limit
         (["--memory", "-1"], "error: --memory must be >= 0", ["targ1"]),
         # test invalid relaunch value
         (["--relaunch", "0"], "error: --relaunch must be >= 1", ["targ1"]),
-        # test invalid platform/target
-        (["--platform", "bad"], "error: Platform 'bad' not installed", ["targ1"]),
         # test invalid asset
         (
             ["--platform", "targ1", "--asset", "bad", "a"],
@@ -82,7 +79,7 @@ def test_common_args_01(capsys, mocker, tmp_path):
         ),
     ],
 )
-def test_common_args_02(capsys, mocker, tmp_path, args, msg, targets):
+def test_common_args_03(capsys, mocker, tmp_path, args, msg, targets):
     """test CommonArgs.parse_args()"""
     mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=targets)
     mocker.patch(
@@ -98,49 +95,54 @@ def test_common_args_02(capsys, mocker, tmp_path, args, msg, targets):
     assert msg in capsys.readouterr()[-1]
 
 
-def test_grizzly_args_01(mocker, tmp_path):
-    """test GrizzlyArgs.parse_args() - success"""
+def test_common_args_04(tmp_path):
+    """test CommonArgs.parse_args() '--logs' must be dir"""
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
+    # test with file
+    with raises(SystemExit):
+        CommonArgs().parse_args([str(fake_bin), "--logs", str(fake_bin)])
+    # test with dir
+    CommonArgs().parse_args([str(fake_bin), "--logs", str(tmp_path)])
+
+
+def test_grizzly_args_01(mocker, tmp_path):
+    """test GrizzlyArgs.parse_args() - success"""
     mocker.patch(
         "grizzly.args.scan_plugins",
         autospec=True,
-        side_effect=(["targ1"], ["adpt1"], ["targ1"], ["adpt1"]),
+        side_effect=(["targ"], ["adpt"]),
     )
-    assert GrizzlyArgs().parse_args(
-        argv=[str(fake_bin), "adpt1", "--platform", "targ1"]
-    )
-
-
-def test_grizzly_args_02(capsys, mocker):
-    """test GrizzlyArgs.parse_args() - handling binary"""
-    mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=["blah"])
-    # test missing required args
-    with raises(SystemExit):
-        GrizzlyArgs().parse_args(argv=[])
-    err = capsys.readouterr()[-1]
-    assert "the following arguments are required: binary, adapter" in err
-    # test missing binary
-    with raises(SystemExit):
-        GrizzlyArgs().parse_args(argv=["missing_bin", "adapter"])
-    assert "error: file not found: 'missing_bin'" in capsys.readouterr()[-1]
-
-
-def test_grizzly_args_03(capsys, mocker, tmp_path):
-    """test GrizzlyArgs.parse_args() - handling Adapter"""
-    scan_plugins = mocker.patch("grizzly.args.scan_plugins", autospec=True)
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
-    # no adapters installed
-    scan_plugins.side_effect = (["targ1"], [], ["targ1"], [])
+    assert GrizzlyArgs().parse_args(argv=[str(fake_bin), "adpt", "--platform", "targ"])
+
+
+@mark.parametrize(
+    "args, msg, idx",
+    [
+        # test help
+        (["-h"], "For addition help check out the wiki", 0),
+        # test without args
+        ([], "the following arguments are required: binary, adapter", -1),
+        # test missing binary
+        (["missing-bin", "x"], "error: file not found: 'missing-bin'", -1),
+    ],
+)
+def test_grizzly_args_02(capsys, mocker, args, msg, idx):
+    """test GrizzlyArgs.parse_args()"""
+    mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=["x"])
     with raises(SystemExit):
-        GrizzlyArgs().parse_args(argv=[str(fake_bin), "adpt", "--platform", "targ1"])
+        GrizzlyArgs().parse_args(argv=args)
+    assert msg in capsys.readouterr()[idx]
+
+
+def test_grizzly_args_03(capsys, mocker):
+    """test GrizzlyArgs.parse_args() - no adapters installed"""
+    mocker.patch("grizzly.args.scan_plugins", side_effect=(["t"], []))
+    with raises(SystemExit):
+        GrizzlyArgs().parse_args(argv=["b", "a"])
     assert "error: No Adapters are installed" in capsys.readouterr()[-1]
-    # invalid adapter name
-    scan_plugins.side_effect = (["targ1"], ["a1", "a2"], ["targ1"], ["a1", "a2"])
-    with raises(SystemExit):
-        GrizzlyArgs().parse_args(argv=[str(fake_bin), "missing", "--platform", "targ1"])
-    assert "error: Adapter 'missing' is not installed" in capsys.readouterr()[-1]
 
 
 @mark.parametrize(
@@ -173,13 +175,13 @@ def test_grizzly_args_04(capsys, mocker, tmp_path, args, msg):
     mocker.patch(
         "grizzly.args.scan_plugins",
         autospec=True,
-        side_effect=["targ1", "adpt", "targ1", "adpt"],
+        side_effect=(["targ"], ["adpt"]),
     )
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
     with raises(SystemExit):
         GrizzlyArgs().parse_args(
-            argv=[str(fake_bin), "adpt", "--platform", "targ1"] + args
+            argv=[str(fake_bin), "adpt", "--platform", "targ"] + args
         )
     assert msg in capsys.readouterr()[-1]
 
@@ -200,13 +202,13 @@ def test_grizzly_args_05(capsys, mocker, tmp_path, args, msg):
     mocker.patch(
         "grizzly.args.scan_plugins",
         autospec=True,
-        side_effect=["targ1", "adpt", "targ1", "adpt"],
+        side_effect=(["targ"], ["adpt"]),
     )
     mocker.patch("grizzly.args.Path.read_text", autospec=True, return_value="99")
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
     with raises(SystemExit):
         GrizzlyArgs().parse_args(
-            argv=[str(fake_bin), "adpt", "--platform", "targ1"] + args
+            argv=[str(fake_bin), "adpt", "--platform", "targ"] + args
         )
     assert msg in capsys.readouterr()[-1]

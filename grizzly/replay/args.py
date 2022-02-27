@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import SUPPRESS
-from os.path import exists, isfile
+from pathlib import Path
 
 from ..args import CommonArgs
 
@@ -14,6 +14,7 @@ class ReplayArgs(CommonArgs):
         self.parser.set_defaults(logs=None)
         self.parser.add_argument(
             "input",
+            type=Path,
             help="Accepted input includes: "
             "1) A directory containing testcase data. "
             "2) A directory with one or more subdirectories containing testcase data. "
@@ -56,11 +57,7 @@ class ReplayArgs(CommonArgs):
             help="Don't use the harness for redirection. Implies '--relaunch=1'.",
         )
         # hidden argument to add original crash ID as metadata when reported
-        replay_args.add_argument(
-            "--original-crash-id",
-            type=int,
-            help=SUPPRESS,
-        )
+        replay_args.add_argument("--original-crash-id", type=int, help=SUPPRESS)
         replay_args.add_argument(
             "--repeat",
             type=int,
@@ -68,7 +65,9 @@ class ReplayArgs(CommonArgs):
             help="Run the testcase n times."
             " Helpful for intermittent testcases (default: %(default)sx)",
         )
-        replay_args.add_argument("--sig", help="Signature (JSON) file to match.")
+        replay_args.add_argument(
+            "--sig", type=Path, help="Signature (JSON) file to match."
+        )
         replay_args.add_argument(
             "--test-index",
             type=int,
@@ -93,8 +92,8 @@ class ReplayArgs(CommonArgs):
         if args.idle_threshold and args.idle_delay <= 0:
             self.parser.error("--idle-delay value must be positive")
 
-        if "input" not in self._sanity_skip and not exists(args.input):
-            self.parser.error("%r does not exist" % (args.input,))
+        if "input" not in self._sanity_skip and not args.input.exists():
+            self.parser.error("'%s' does not exist" % (args.input,))
 
         if args.min_crashes < 1:
             self.parser.error("--min-crashes value must be positive")
@@ -102,8 +101,8 @@ class ReplayArgs(CommonArgs):
         if args.repeat < 1:
             self.parser.error("--repeat value must be positive")
 
-        if args.sig is not None and not isfile(args.sig):
-            self.parser.error("signature file not found: %r" % (args.sig,))
+        if args.sig and not args.sig.is_file():
+            self.parser.error("signature file not found: '%s'" % (args.sig,))
 
     def update_arg(self, name, new_type, help_msg):
         # madhax alert!
