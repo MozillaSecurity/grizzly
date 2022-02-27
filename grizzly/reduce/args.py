@@ -24,10 +24,7 @@ class ReduceArgs(ReplayArgs):
         super().__init__()
 
         # these arguments have other defaults vs how they are defined in ReplayArgs
-        self.parser.set_defaults(
-            include_test=True,
-            logs=".",
-        )
+        self.parser.set_defaults(include_test=True, logs=Path.cwd())
 
         reduce_args = self.parser.add_argument_group("Reduce Arguments")
         reduce_args.add_argument(
@@ -49,6 +46,7 @@ class ReduceArgs(ReplayArgs):
         reduce_args.add_argument(
             "--strategy",
             nargs="+",
+            choices=STRATEGIES,
             default=DEFAULT_STRATEGIES,
             metavar="STRATEGY",
             dest="strategies",
@@ -66,15 +64,6 @@ class ReduceArgs(ReplayArgs):
             SystemExit: on error, `ArgumentParser.error()` is called, which will exit.
         """
         super().sanity_check(args)
-
-        # if logs is specified, we need it to be a directory (whether existent or not)
-        if Path(args.logs).is_file():
-            self.parser.error("'--logs' cannot be a file")
-
-        # check that specified strategies exist
-        for strategy in args.strategies:
-            if strategy not in STRATEGIES:
-                self.parser.error("Unrecognized '--strategy': '%s'" % (strategy,))
 
         if args.report_period is not None:
             if args.report_period <= 0:

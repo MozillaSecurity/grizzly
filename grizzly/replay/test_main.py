@@ -64,7 +64,7 @@ def test_main_01(mocker, tmp_path):
         idle_threshold=0,
         ignore=["fake", "timeout"],
         input=str(tmp_path / "testcase"),
-        logs=str(log_path),
+        logs=log_path,
         min_crashes=2,
         no_harness=False,
         pernosco=False,
@@ -288,7 +288,7 @@ def test_main_05(mocker, tmp_path):
         valgrind=False,
     )
     log_path = tmp_path / "logs"
-    args.logs = str(log_path)
+    args.logs = log_path
     input_path = tmp_path / "input"
     input_path.mkdir()
     # build a test case

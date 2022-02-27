@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly main"""
+from pathlib import Path
+
 from pytest import mark
 
 from sapphire import Sapphire
@@ -28,7 +30,7 @@ class FakeArgs:
         self.launch_timeout = 300
         self.limit = 0
         self.limit_reports = 0
-        self.logs = "."
+        self.logs = Path.cwd()
         self.log_level = 10  # 10 = DEBUG, 20 = INFO
         self.log_limit = 0
         self.memory = 0

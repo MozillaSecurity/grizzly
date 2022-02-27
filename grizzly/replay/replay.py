@@ -185,14 +185,13 @@ class ReplayManager:
         known location.
 
         Args:
-            path (str): Location to write data.
+            path (Path): Location to write data.
             results (iterable): ReplayResult to output.
             tests (iterable): Testcases to output.
 
         Returns:
             None
         """
-        path = Path(path)
         others = list(x.report for x in results if not x.expected)
         if others:
             reporter = FilesystemReporter(path / "other_reports", major_bucket=False)
@@ -564,7 +563,7 @@ class ReplayManager:
 
         try:
             testcases, assets, env_vars = cls.load_testcases(
-                args.input, subset=args.test_index
+                str(args.input), subset=args.test_index
             )
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))

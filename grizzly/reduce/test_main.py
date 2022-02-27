@@ -45,14 +45,6 @@ def test_args_02(tmp_path):
     # test invalid strategy
     with raises(SystemExit):
         ReduceArgs().parse_args([str(exe), str(inp), "--strategy", "cosmic_radiation"])
-    # test --logs must be dir
-    logs_file = tmp_path / "logs1"
-    logs_file.touch()
-    with raises(SystemExit):
-        ReduceArgs().parse_args([str(exe), str(inp), "--logs", str(logs_file)])
-    logs_dir = tmp_path / "logs2"
-    logs_dir.mkdir()
-    ReduceArgs().parse_args([str(exe), str(inp), "--logs", str(logs_dir)])
     # test no-analysis
     ReduceArgs().parse_args(
         [str(exe), str(inp), "--no-analysis", "--repeat", "99", "--min-crashes", "99"]
