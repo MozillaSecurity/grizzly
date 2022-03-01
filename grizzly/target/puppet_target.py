@@ -5,7 +5,7 @@
 from logging import getLogger
 from os import kill
 from os.path import isfile
-from os.path import join as pathjoin
+from pathlib import Path
 from platform import system
 from signal import SIGABRT
 
@@ -23,7 +23,7 @@ from psutil import AccessDenied, NoSuchProcess, Process, process_iter
 
 from ..common.reporter import Report
 from ..common.utils import grz_tmp
-from .target import Result, Target, TargetError, TargetLaunchError, TargetLaunchTimeout
+from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
 __all__ = ("PuppetTarget",)
@@ -314,17 +314,12 @@ class PuppetTarget(Target):
         self._prefs = self.assets.get("prefs")
         # generate temporary prefs.js with prefpicker
         if self._prefs is None:
-            for template in PrefPicker.templates():
-                if template.endswith("browser-fuzzing.yml"):
-                    LOG.debug("using prefpicker template %r", template)
-                    with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
-                        prefs = pathjoin(tmp_path, "prefs.js")
-                        PrefPicker.load_template(template).create_prefsjs(prefs)
-                        LOG.debug("generated %r", prefs)
-                        self._prefs = self.assets.add("prefs", prefs, copy=False)
-                    break
-            else:  # pragma: no cover
-                raise TargetError("Failed to generate prefs.js")
+            LOG.debug("using prefpicker to generate prefs.js")
+            with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
+                prefs = Path(tmp_path) / "prefs.js"
+                template = PrefPicker.lookup_template("browser-fuzzing.yml")
+                PrefPicker.load_template(template).create_prefsjs(prefs)
+                self._prefs = self.assets.add("prefs", str(prefs), copy=False)
         abort_tokens = self.assets.get("abort-tokens")
         if abort_tokens:
             LOG.debug("loading 'abort tokens' from %r", abort_tokens)
@@ -336,16 +331,14 @@ class PuppetTarget(Target):
 
         # configure sanitizer suppressions
         opts = SanitizerOptions()
-        for sanitizer in ["lsan", "tsan", "ubsan"]:
+        for sanitizer in ("lsan", "tsan", "ubsan"):
             asset = "%s-suppressions" % (sanitizer,)
             # load existing sanitizer options from environment
             var_name = "%s_OPTIONS" % (sanitizer.upper(),)
             opts.load_options(self.environ.get(var_name, ""))
             if self.assets.get(asset):
                 # use suppression file if provided as asset
-                opts.add(
-                    "suppressions", "%r" % (self.assets.get(asset),), overwrite=True
-                )
+                opts.add("suppressions", repr(self.assets.get(asset)), overwrite=True)
             elif opts.get("suppressions"):
                 supp_file = opts.pop("suppressions")
                 if SanitizerOptions.is_quoted(supp_file):
@@ -355,7 +348,7 @@ class PuppetTarget(Target):
                     LOG.debug("using %r from environment", asset)
                     opts.add(
                         "suppressions",
-                        "%r" % (self.assets.add(asset, supp_file),),
+                        repr(self.assets.add(asset, supp_file)),
                         overwrite=True,
                     )
                 else:
