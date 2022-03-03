@@ -554,7 +554,8 @@ def test_report_counter_01(tmp_path, keys, counts, limit, local_only):
 
 def test_report_counter_02(mocker, tmp_path):
     """test ResultCounter multi instance functionality"""
-    mocker.patch("grizzly.common.status.time", autospec=True, return_value=1)
+    fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
+    fake_time.return_value = 1
     db_path = str(tmp_path / "storage.db")
     counter_a = ResultCounter(1, db_file=db_path, freq_limit=0)
     counter_b = ResultCounter(2, db_file=db_path, freq_limit=1)
@@ -593,7 +594,7 @@ def test_report_counter_02(mocker, tmp_path):
     # local (counter_a, bucket x) count is 0, global (all counters) count is 0
     assert not counter_a.is_frequent("x")
     # remove 'expired' reports
-    mocker.patch("grizzly.common.status.time", autospec=True, return_value=1000)
+    fake_time.return_value = 1000
     counter_d = ResultCounter(4, db_file=db_path, freq_limit=2, exp_limit=10)
     # local (counter_d, bucket a) count is 0, global (all counters) count is 0
     assert not counter_d.is_frequent("a")
