@@ -51,20 +51,15 @@ tasks:
           - name: tests python 3.6
             version: "3.6"
             env:
-              TOXENV: py36
+              TOXENV: py36,lint
           - name: tests python 3.7
             version: "3.7"
             env:
-              TOXENV: py37
+              TOXENV: py37,lint
           - name: tests python 3.8
             version: "3.8"
             env:
-              TOXENV: py38
-          - name: test python 3.8 (macos)
-            version: "3.8"
-            platform: macos
-            env:
-              TOXENV: py38
+              TOXENV: py38,lint
           - name: test python 3.8 (windows)
             version: "3.8"
             platform: windows
@@ -73,18 +68,16 @@ tasks:
           - name: tests python 3.9
             version: "3.9"
             env:
-              TOXENV: py39
+              TOXENV: py39,lint
           - name: tests python 3.9 (macos)
             version: "3.9"
             platform: macos
             env:
               TOXENV: py39
-          - name: lint
-            version: "3.9"
+          - name: tests python 3.10
+            version: "3.10"
             env:
-              TOXENV: lint
-            script:
-              - tox
+              TOXENV: py310,lint
           - name: PyPI upload
             version: "3.8"
             env:
