@@ -1,0 +1,3 @@
+codecov:
+  ci:
+    - community-tc.services.mozilla.com
