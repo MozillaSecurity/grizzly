@@ -118,7 +118,7 @@ def test_filesystem_reporter_03(tmp_path):
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     reporter = FilesystemReporter(tmp_path / "reports")
-    reporter.min_space = 2 ** 50
+    reporter.min_space = 2**50
     with raises(RuntimeError, match="Running low on disk space"):
         reporter.submit([], Report(log_path, "fake_bin"))
 
