@@ -77,10 +77,10 @@ class _BeautifyStrategy(Strategy, ABC):
         self._current_feedback = None
         tag_bytes = self.tag_name.encode("ascii")
         self._re_tag_start = re.compile(
-            br"<\s*" + tag_bytes + br".*?>", flags=re.DOTALL | re.IGNORECASE
+            rb"<\s*" + tag_bytes + rb".*?>", flags=re.DOTALL | re.IGNORECASE
         )
         self._re_tag_end = re.compile(
-            br"</\s*" + tag_bytes + br"\s*>", flags=re.IGNORECASE
+            rb"</\s*" + tag_bytes + rb"\s*>", flags=re.IGNORECASE
         )
 
     @classmethod
