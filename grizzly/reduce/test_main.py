@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Unit tests for `grizzly.reduce.main`."""
-from logging import getLogger
 from unittest.mock import Mock
 
 from pytest import mark, raises
@@ -15,7 +14,6 @@ from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
 from .exceptions import GrizzlyReduceBaseException
 
-LOG = getLogger(__name__)
 pytestmark = mark.usefixtures(
     "tmp_path_fm_config",
     "tmp_path_replay_status_db",
