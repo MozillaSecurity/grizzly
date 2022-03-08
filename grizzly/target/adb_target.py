@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import os
 from logging import getLogger
+from pathlib import Path
 from tempfile import TemporaryDirectory, mkdtemp
 
 from ffpuppet import LaunchError
@@ -12,7 +13,7 @@ from prefpicker import PrefPicker
 from ..common.reporter import Report
 from ..common.utils import grz_tmp
 from .adb_device import ADBProcess, ADBSession
-from .target import Result, Target, TargetError
+from .target import Result, Target
 from .target_monitor import TargetMonitor
 
 __author__ = "Tyson Smith"
@@ -142,17 +143,12 @@ class ADBTarget(Target):
         self._prefs = self.assets.get("prefs")
         # generate temporary prefs.js with prefpicker
         if self._prefs is None:
-            for template in PrefPicker.templates():
-                if template.endswith("browser-fuzzing.yml"):
-                    LOG.debug("using prefpicker template %r", template)
-                    with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
-                        prefs = os.path.join(tmp_path, "prefs.js")
-                        PrefPicker.load_template(template).create_prefsjs(prefs)
-                        LOG.debug("generated %r", prefs)
-                        self._prefs = self.assets.add("prefs", prefs, copy=False)
-                    break
-            else:  # pragma: no cover
-                raise TargetError("Failed to generate prefs.js")
+            LOG.debug("using prefpicker to generate prefs.js")
+            with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
+                prefs = Path(tmp_path) / "prefs.js"
+                template = PrefPicker.lookup_template("browser-fuzzing.yml")
+                PrefPicker.load_template(template).create_prefsjs(prefs)
+                self._prefs = self.assets.add("prefs", str(prefs), copy=False)
 
     def create_report(self, is_hang=False):
         logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
