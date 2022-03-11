@@ -291,7 +291,6 @@ class ReplayManager:
                             close_after=relaunch * test_count,
                             time_limit=time_limit,
                         )
-                    startup_error = False
                     runner.launch(location)
                 # run tests
                 durations = list()
@@ -335,8 +334,7 @@ class ReplayManager:
                         break
                 if not run_result.attempted:
                     LOG.warning("Test case was not served")
-                    if run_result.initial:
-                        startup_error = True
+                    if runner.initial:
                         if run_result.status == Result.FOUND:
                             # TODO: what is to best action to take in this case?
                             LOG.warning("Delayed startup failure detected")
@@ -364,7 +362,7 @@ class ReplayManager:
 
                     # set active signature
                     if (
-                        not startup_error
+                        not runner.startup_failure
                         and not self._any_crash
                         and not run_result.timeout
                         and self._signature is None
@@ -374,7 +372,7 @@ class ReplayManager:
                         self._signature = report.crash_signature
 
                     # bucket result
-                    if not startup_error and (
+                    if not runner.startup_failure and (
                         self._any_crash
                         or self.check_match(self._signature, report, expect_hang)
                     ):
@@ -459,22 +457,32 @@ class ReplayManager:
                 # TODO: should we warn about large browser logs?
 
             # process results
-            results = list()
             if self._any_crash:
-                assert all(x.expected for x in reports.values())
-                if sum(x.count for x in reports.values()) >= min_results:
+                assert (
+                    all(x.expected for x in reports.values()) or runner.startup_failure
+                )
+                # add all results if min_results was reached
+                if sum(x.count for x in reports.values() if x.expected) >= min_results:
                     results = list(reports.values())
                 else:
+                    # add only unexpected results since min_results was not reached
+                    results = list()
+                    for report in reports.values():
+                        if report.expected:
+                            report.report.cleanup()
+                        else:
+                            results.append(report)
                     LOG.debug(
                         "%d (any_crash) less than minimum %d",
                         self.status.results.total,
                         min_results,
                     )
-                    for report in reports.values():
-                        report.report.cleanup()
+
             else:
+                # there should be at most one expected bucket
                 assert sum(x.expected for x in reports.values()) <= 1
                 # filter out unreliable expected results
+                results = list()
                 for crash_hash, report in reports.items():
                     if report.expected and report.count < min_results:
                         LOG.debug(

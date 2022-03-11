@@ -461,6 +461,27 @@ def test_replay_12(mocker):
 
 
 def test_replay_13(mocker):
+    """test ReplayManager.run() - any crash - startup failure"""
+    server = mocker.Mock(spec_set=Sapphire, port=0x1337)
+    server.serve_path.return_value = (Served.NONE, [])
+    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target.check_result.return_value = Result.FOUND
+    target.save_logs = _fake_save_logs
+    target.monitor.is_healthy.return_value = False
+    testcases = [
+        mocker.Mock(spec_set=TestCase, env_vars={}, landing_page="a.html", optional=[])
+    ]
+    with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
+        results = replay.run(testcases, 10, repeat=1, min_results=1)
+        assert results
+        assert not any(x.expected for x in results)
+        assert target.close.call_count == 2
+        assert replay.status.iteration == 1
+        assert replay.status.results.total == 0
+        assert replay.status.ignored == 1
+
+
+def test_replay_14(mocker):
     """test ReplayManager.run() - no signature - use first crash"""
     report_1 = mocker.Mock(
         spec_set=Report, crash_hash="hash1", major="0123", minor="9999"
@@ -503,7 +524,7 @@ def test_replay_13(mocker):
     assert report_3.cleanup.call_count == 1
 
 
-def test_replay_14(mocker):
+def test_replay_15(mocker):
     """test ReplayManager.run() - unexpected exception"""
     report_0 = mocker.Mock(
         spec_set=Report, crash_hash="hash1", major="0123abcd", minor="01239999"
@@ -533,7 +554,7 @@ def test_replay_14(mocker):
     assert report_0.cleanup.call_count == 1
 
 
-def test_replay_15(mocker):
+def test_replay_16(mocker):
     """test ReplayManager.run() - multiple TestCases - no repro"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337, timeout=10)
@@ -552,7 +573,7 @@ def test_replay_15(mocker):
     assert target.close.call_count == 2
 
 
-def test_replay_16(mocker):
+def test_replay_17(mocker):
     """test ReplayManager.run() - multiple TestCases - no repro - with repeats"""
     server = mocker.Mock(spec_set=Sapphire, port=0x1337, timeout=10)
     server.serve_path.return_value = (Served.ALL, ["a.html"])
@@ -576,7 +597,7 @@ def test_replay_16(mocker):
     assert target.monitor.is_healthy.call_count == 5
 
 
-def test_replay_17(mocker):
+def test_replay_18(mocker):
     """test ReplayManager.run() - multiple TestCases - successful repro"""
     server = mocker.Mock(spec_set=Sapphire, port=0x1337, timeout=10)
     server.serve_path.side_effect = (
@@ -611,7 +632,7 @@ def test_replay_17(mocker):
     assert len(results[0].durations) == len(testcases)
 
 
-def test_replay_18(mocker):
+def test_replay_19(mocker):
     """test ReplayManager.run() - multiple calls"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337, timeout=10)
@@ -629,7 +650,7 @@ def test_replay_18(mocker):
     assert server.serve_path.call_count == 3
 
 
-def test_replay_19(mocker, tmp_path):
+def test_replay_20(mocker, tmp_path):
     """test ReplayManager.report_to_filesystem()"""
     # no reports
     ReplayManager.report_to_filesystem(tmp_path, [])
@@ -679,7 +700,7 @@ def test_replay_19(mocker, tmp_path):
     assert (path / "reports" / "expected_logs").is_dir()
 
 
-def test_replay_20(mocker, tmp_path):
+def test_replay_21(mocker, tmp_path):
     """test ReplayManager.load_testcases()"""
     fake_load = mocker.patch("grizzly.replay.replay.TestCase.load")
     test0 = mocker.Mock(spec_set=TestCase, env_vars={"env": "var"})
@@ -745,7 +766,7 @@ def test_replay_20(mocker, tmp_path):
         (False, False, True, False, 1, 0),
     ],
 )
-def test_replay_21(mocker, expect_hang, is_hang, use_sig, match_sig, ignored, results):
+def test_replay_22(mocker, expect_hang, is_hang, use_sig, match_sig, ignored, results):
     """test ReplayManager.run() - detect hangs"""
     served = ["index.html"]
     server = mocker.Mock(spec_set=Sapphire, port=0x1337, timeout=10)

@@ -82,6 +82,7 @@ class Runner:
         "_server",
         "_target",
         "_tests_run",
+        "startup_failure",
     )
 
     def __init__(
@@ -100,6 +101,7 @@ class Runner:
         self._server = server  # a sapphire instance to serve the test case
         self._target = target  # target to run test case
         self._tests_run = 0  # number of tests run since target (re)launched
+        self.startup_failure = False  # failure before first test was served
 
     def launch(self, location, max_retries=3, retry_delay=0):
         """Launch a target and open `location`.
@@ -119,6 +121,7 @@ class Runner:
         assert retry_delay >= 0
         self._server.clear_backlog()
         self._tests_run = 0
+        self.startup_failure = False
         LOG.debug("launching target (timeout %ds)", self._target.launch_timeout)
         for retries in reversed(range(max_retries)):
             try:
@@ -130,6 +133,7 @@ class Runner:
                     exc.report.cleanup()
                     sleep(retry_delay)
                     continue
+                self.startup_failure = True
                 raise
             except TargetLaunchTimeout:
                 # A TargetLaunchTimeout likely has nothing to do with Grizzly but is
@@ -139,6 +143,7 @@ class Runner:
                     LOG.warning("Timeout detected during launch (retries %d)", retries)
                     sleep(retry_delay)
                     continue
+                self.startup_failure = True
                 raise
             break
 
@@ -168,6 +173,18 @@ class Runner:
             return "?".join((location, "&".join(args)))
         return location
 
+    @property
+    def initial(self):
+        """Check if more than one test has been run since the previous relaunch.
+
+        Args:
+            None
+
+        Returns:
+            bool: True if at most one test has been run.
+        """
+        return self._tests_run < 2
+
     def run(
         self,
         ignore,
@@ -189,9 +206,10 @@ class Runner:
         Returns:
             RunResult: Files served, status and timeout flag from the run.
         """
+        self._tests_run += 1
         if self._idle is not None:
             self._idle.schedule_poll(initial=True)
-        if self._tests_run == self._relaunch - 1:
+        if self._tests_run == self._relaunch:
             # overwrite instead of replace 'grz_next_test' for consistency
             server_map.set_redirect("grz_next_test", "grz_empty", required=True)
             server_map.set_dynamic_response("grz_empty", lambda _: b"", required=True)
@@ -205,9 +223,12 @@ class Runner:
             server_map=server_map,
         )
         duration = time() - serve_start
-        result = RunResult(served, duration, timeout=server_status == Served.TIMEOUT)
-        result.attempted = testcase.landing_page in result.served
-        result.initial = self._tests_run == 0
+        result = RunResult(
+            served,
+            duration,
+            attempted=testcase.landing_page in served,
+            timeout=server_status == Served.TIMEOUT,
+        )
         # TODO: fix calling TestCase.add_batch() for multi-test replay
         # add all include files that were served
         for url, resource in server_map.include.items():
@@ -223,7 +244,6 @@ class Runner:
                 result.status = Result.IGNORED
             server_map.dynamic.pop("grz_empty", None)
         if result.attempted:
-            self._tests_run += 1
             if coverage and not result.timeout:
                 # dump_coverage() should be called before check_result()
                 # to help catch any coverage related issues.
@@ -257,6 +277,9 @@ class Runner:
             # previous iteration put target in a bad state?
             LOG.debug("landing page %r not served!", testcase.landing_page)
             self._target.close()
+            # detect startup failures
+            if self.initial:
+                self.startup_failure = True
         # detect results
         if result.status == Result.NONE:
             result.status = self._target.check_result(ignore)
@@ -284,18 +307,18 @@ class RunResult:
     Attributes:
         attempted (bool): Test landing page (entry point) was requested.
         duration (float): Time spent waiting for test contents to be served.
-        initial (bool): Target was (re)launched prior to run attempt.
         served (tuple(str)): Files that were served.
         status (int): Result status of test.
         timeout (bool): A timeout occurred waiting for test to complete.
     """
 
-    __slots__ = ("attempted", "duration", "initial", "served", "status", "timeout")
+    __slots__ = ("attempted", "duration", "served", "status", "timeout")
 
-    def __init__(self, served, duration, status=Result.NONE, timeout=False):
-        self.attempted = False
+    def __init__(
+        self, served, duration, attempted=False, status=Result.NONE, timeout=False
+    ):
+        self.attempted = attempted
         self.duration = duration
-        self.initial = False
         self.served = served
         self.status = status
         self.timeout = timeout

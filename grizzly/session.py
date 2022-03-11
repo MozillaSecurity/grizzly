@@ -172,7 +172,6 @@ class Session:
             assert self.adapter.remaining > 0
             relaunch = min(relaunch, self.adapter.remaining)
         runner = Runner(self.server, self.target, relaunch=relaunch)
-        startup_error = False
         while True:
             self.status.report()
             self.status.iteration += 1
@@ -237,17 +236,13 @@ class Session:
                 LOG.debug("ignoring test case since nothing was served")
                 if current_test.landing_page not in current_test.contents:
                     raise SessionError("Test case is missing landing page")
-                if result.initial:
+                if runner.initial:
                     # since this is the first iteration since the Target launched
                     # something is likely wrong with the Target or Adapter
                     if result.status == Result.FOUND:
                         LOG.warning("Delayed startup failure detected")
                     else:
                         LOG.warning("Timeout too short? System too busy?")
-                    # ignore this if it did not happen early on
-                    # to avoid aborting a fuzzing session unnecessarily
-                    if self.status.iteration < 100:
-                        startup_error = True
             else:
                 if self.adapter.IGNORE_UNSERVED:
                     LOG.debug("removing unserved files from the test case")
@@ -287,7 +282,9 @@ class Session:
                 self.status.ignored += 1
                 LOG.info("Ignored - %d", self.status.ignored)
 
-            if startup_error:
+            # ignore startup failure if it did not happen early on
+            # to avoid aborting the fuzzing session unnecessarily
+            if runner.startup_failure and self.status.iteration < 100:
                 raise SessionError("Please check Adapter and Target")
 
             if self.adapter.remaining is not None and self.adapter.remaining < 1:
