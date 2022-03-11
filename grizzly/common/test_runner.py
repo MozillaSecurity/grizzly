@@ -22,6 +22,8 @@ def test_runner_01(mocker):
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
     runner = Runner(server, target, relaunch=10)
+    assert runner.initial
+    assert not runner.startup_failure
     assert runner._idle is None
     assert runner._relaunch == 10
     assert runner._tests_run == 0
@@ -31,10 +33,10 @@ def test_runner_01(mocker):
     serv_map = ServerMap()
     server.serve_path.return_value = (Served.ALL, serv_files)
     result = runner.run([], serv_map, testcase)
-    assert result.attempted
+    assert runner.initial
     assert runner._tests_run == 1
+    assert result.attempted
     assert result.duration == 1
-    assert result.initial
     assert result.status == Result.NONE
     assert result.served == serv_files
     assert not result.timeout
@@ -46,9 +48,9 @@ def test_runner_01(mocker):
     serv_map = ServerMap()
     server.serve_path.return_value = (Served.ALL, serv_files)
     result = runner.run([], serv_map, testcase, coverage=True)
-    assert result.attempted
+    assert not runner.initial
     assert runner._tests_run == 2
-    assert not result.initial
+    assert result.attempted
     assert result.status == Result.NONE
     assert result.served == serv_files
     assert not result.timeout
@@ -74,8 +76,8 @@ def test_runner_02(mocker):
     assert runner._relaunch == 1
     smap = ServerMap()
     result = runner.run([], smap, testcase)
+    assert runner.initial
     assert result.attempted
-    assert result.initial
     assert target.close.call_count == 1
     assert target.is_idle.call_count > 0
     assert target.monitor.is_healthy.call_count > 0
@@ -96,7 +98,7 @@ def test_runner_02(mocker):
     assert target.monitor.is_healthy.call_count > 0
     target.reset_mock()
     testcase.reset_mock()
-    # multiple runs/iterations relaunch (is_healty exit)
+    # multiple runs/iterations relaunch (is_healthy exit)
     runner = Runner(server, target, relaunch=3)
     target.monitor.is_healthy.return_value = False
     for _ in range(2):
@@ -141,9 +143,10 @@ def test_runner_03(mocker, srv_result, served):
     testcase = mocker.Mock(spec_set=TestCase, landing_page="x", optional=[])
     runner = Runner(server, target)
     result = runner.run([], ServerMap(), testcase)
+    assert runner.initial
+    assert runner.startup_failure
     assert result.status == Result.NONE
     assert not result.attempted
-    assert result.initial
     assert set(result.served) == set(served)
     assert not result.timeout
     assert target.close.call_count == 1

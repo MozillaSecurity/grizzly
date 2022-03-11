@@ -367,6 +367,7 @@ def test_session_08(mocker):
     result.attempted = True
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
     runner.return_value.run.return_value = result
+    runner.return_value.startup_failure = False
     adapter = mocker.Mock(spec_set=Adapter, remaining=None)
     adapter.IGNORE_UNSERVED = False
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
@@ -393,6 +394,7 @@ def test_session_09(mocker):
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
     runner.return_value.launch.side_effect = TargetLaunchError("test", report)
+    runner.return_value.startup_failure = True
     adapter = mocker.Mock(spec_set=Adapter, remaining=None)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(spec_set=Target)
@@ -411,6 +413,7 @@ def test_session_10(mocker):
     result.attempted = True
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
     runner.return_value.run.return_value = result
+    runner.return_value.startup_failure = False
     adapter = mocker.Mock(spec_set=Adapter, remaining=None)
     report = mocker.Mock(spec_set=Report, major="major123", minor="minor456")
     reporter = mocker.Mock(spec_set=Reporter)
