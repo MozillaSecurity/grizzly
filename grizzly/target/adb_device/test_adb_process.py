@@ -84,7 +84,7 @@ def test_adb_process_07(mocker):
     fake_bs = mocker.patch(
         "grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True
     )
-    fake_bs.return_value.location.return_value = "http://localhost"
+    fake_bs.return_value.location = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec_set=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
@@ -112,7 +112,7 @@ def test_adb_process_08(mocker):
     fake_bs = mocker.patch(
         "grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True
     )
-    fake_bs.return_value.location.return_value = "http://localhost"
+    fake_bs.return_value.location = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec_set=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
@@ -129,7 +129,10 @@ def test_adb_process_08(mocker):
 
 def test_adb_process_09(mocker):
     """test ADBProcess.wait_on_files()"""
-    mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
+    fake_bs = mocker.patch(
+        "grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True
+    )
+    fake_bs.return_value.location = "http://localhost"
     fake_session = mocker.Mock(spec_set=ADBSession)
     fake_session.SANITIZER_LOG_PREFIX = "/fake/log/prefix.txt"
     fake_session.call.return_value = (0, "Status: ok")
@@ -274,13 +277,14 @@ def test_adb_process_13(tmp_path):
     "input_data, result",
     [
         ("", dict()),
-        ('junk\n#user_pref("a.b", 0)\n', dict()),
+        ('junk\n#user_pref("a.b", 0);\n', dict()),
         ('user_pref("a.b.c", false);\n', {"a.b.c": False}),
-        ('user_pref("a.b.c", 0);', {"a.b.c": 0}),
+        ("user_pref('a.b.c', 0);", {"a.b.c": 0}),
         ("user_pref(\"a.b.c\", 'test');", {"a.b.c": "test"}),
         ('user_pref("a.b.c", "test");', {"a.b.c": "test"}),
         ('user_pref("a.b", 1);\nuser_pref("a.c", true);', {"a.b": 1, "a.c": True}),
         ('user_pref("a.b", 1);\n#\nuser_pref("a.c", 1);', {"a.b": 1, "a.c": 1}),
+        ("user_pref('a.b.c', '1,2,3,');", {"a.b.c": "1,2,3,"}),
     ],
 )
 def test_adb_process_14(tmp_path, input_data, result):
@@ -288,3 +292,26 @@ def test_adb_process_14(tmp_path, input_data, result):
     prefs_js = tmp_path / "prefs.js"
     prefs_js.write_text(input_data)
     assert ADBProcess.prefs_to_dict(str(prefs_js)) == result
+
+
+@mark.parametrize(
+    "input_data",
+    [
+        # invalid value
+        'user_pref("a.b.c", asd);\n',
+        # unbalanced quotes
+        'user_pref(", 0);\n',
+        # missing value
+        'user_pref("a", );\n',
+        # empty pref name
+        'user_pref("", 0);\n',
+        # unquoted pref name
+        "user_pref(test, 0);\n",
+    ],
+)
+def test_adb_process_15(tmp_path, input_data):
+    """test ADBProcess.prefs_to_dict() - invalid prefs.js"""
+    prefs_js = tmp_path / "prefs.js"
+    prefs_js.write_text(input_data)
+    with raises(ADBLaunchError, match="Invalid prefs.js file"):
+        ADBProcess.prefs_to_dict(str(prefs_js))

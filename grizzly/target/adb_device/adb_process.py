@@ -194,14 +194,13 @@ class ADBProcess:
             prefs.update(
                 {
                     "capability.policy.localfilelinks.checkloaduri.enabled": (
-                        "'allAccess'"
+                        "allAccess"
                     ),
-                    "capability.policy.localfilelinks.sites": "'%s'"
-                    % bootstrapper.location,
-                    "capability.policy.policynames": "'localfilelinks'",
-                    "network.proxy.allow_bypass": "false",
-                    "network.proxy.failover_direct": "false",
-                    "privacy.partition.network_state": "false",
+                    "capability.policy.localfilelinks.sites": bootstrapper.location,
+                    "capability.policy.policynames": "localfilelinks",
+                    "network.proxy.allow_bypass": False,
+                    "network.proxy.failover_direct": False,
+                    "privacy.partition.network_state": False,
                 }
             )
             # add environment variables
@@ -253,22 +252,41 @@ class ADBProcess:
 
     @staticmethod
     def prefs_to_dict(prefs_file):
-        pattern = re.compile(r"user_pref\(\"(?P<name>.+)\",\s*(?P<value>.+)\);")
+        pattern = re.compile(r"user_pref\((?P<name>.+?),\s*(?P<value>.+)\);")
         out = dict()
         with open(prefs_file, "r") as in_fp:
             for line in in_fp:
                 pref = pattern.match(line)
                 if not pref:
                     continue
+                # parse name
+                name = pref.group("name")
+                if name[0] == "'" == name[-1]:
+                    name = name.strip("'")
+                elif name[0] == '"' == name[-1]:
+                    name = name.strip('"')
+                else:
+                    LOG.error("Pref name not quoted (%s)", name)
+                    raise ADBLaunchError("Invalid prefs.js file (%s)" % (prefs_file,))
+                if not name:
+                    LOG.error("Pref name missing")
+                    raise ADBLaunchError("Invalid prefs.js file (%s)" % (prefs_file,))
+                # parse value
                 value = pref.group("value")
                 if value in ("false", "true"):
-                    out[pref.group("name")] = value == "true"
-                elif value.startswith("'") and value.endswith("'"):
-                    out[pref.group("name")] = value.strip("'")
-                elif value.startswith('"') or value.startswith("'"):
-                    out[pref.group("name")] = value.strip('"')
+                    out[name] = value == "true"
+                elif value[0] == "'" == value[-1]:
+                    out[name] = value.strip("'")
+                elif value[0] == '"' == value[-1]:
+                    out[name] = value.strip('"')
                 else:
-                    out[pref.group("name")] = int(value)
+                    try:
+                        out[name] = int(value)
+                    except ValueError:
+                        LOG.error("Invalid value %r for entry %r", value, name)
+                        raise ADBLaunchError(
+                            "Invalid prefs.js file (%s)" % (prefs_file,)
+                        ) from None
         return out
 
     def _process_logs(self, crash_reports):
