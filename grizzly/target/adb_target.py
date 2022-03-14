@@ -57,7 +57,7 @@ class ADBTarget(Target):
         if self._prefs and os.path.isfile(self._prefs):
             os.remove(self._prefs)
 
-    def close(self, _force_close=False):
+    def close(self, force_close=False):
         with self._lock:
             if self._proc is not None:
                 self._proc.close()

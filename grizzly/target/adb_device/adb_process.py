@@ -58,7 +58,9 @@ class ADBProcess:
         self._pid = None  # pid of current target process
         self._profile_template = use_profile  # profile that is used as a template
         self._session = session  # ADB session with device
-        self._working_path = "/sdcard/ADBProc_%08X" % (getrandbits(32),)
+        # Note: geckview_example fails to read a profile from /sdcard/ atm
+        # self._working_path = "/sdcard/ADBProc_%08X" % (getrandbits(32),)
+        self._working_path = "/data/local/tmp/ADBProc_%08X" % (getrandbits(32),)
         self.logs = None
         self.profile = None  # profile path on device
         self.reason = self.RC_CLOSED
@@ -188,6 +190,9 @@ class ADBProcess:
         else:
             raise ADBLaunchError("Could not reverse port")
         try:
+
+            self.profile = "%s/gv_profile_%08X" % (self._working_path, getrandbits(32))
+            self._session.call(["shell", "mkdir", "-p", self.profile])
             # load prefs from prefs.js
             prefs = self.prefs_to_dict(prefs_js) if prefs_js else dict()
             # add additional prefs
@@ -211,7 +216,15 @@ class ADBProcess:
             # consumer/automation.html#configuration-file-format
             cfg_file = "%s-geckoview-config.yaml" % (self._package,)
             with NamedTemporaryFile("w+t") as cfp:
-                cfp.write(safe_dump({"env": env_mod, "prefs": prefs}))
+                cfp.write(
+                    safe_dump(
+                        {
+                            "args": ["--profile", self.profile],
+                            "env": env_mod,
+                            "prefs": prefs,
+                        }
+                    )
+                )
                 cfp.flush()
                 if not self._session.push(cfp.name, "/data/local/tmp/%s" % (cfg_file,)):
                     raise ADBLaunchError("Could not upload %r" % (cfg_file,))
