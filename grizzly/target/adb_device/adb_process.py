@@ -1,5 +1,6 @@
 import os
 import re
+from enum import Enum, unique
 from logging import getLogger
 from random import getrandbits
 from shutil import copy, rmtree
@@ -21,16 +22,24 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
+# Note: This was taken from FFPuppet.
+@unique
+class Reason(Enum):
+    """Indicates why the browser process was terminated"""
+
+    # target crashed, aborted, triggered an assertion failure, etc...
+    ALERT: int = 0
+    # target was closed by call to ADBProcess.close() or has not been launched
+    CLOSED: int = 1
+    # target exited
+    EXITED: int = 2
+
+
 class ADBLaunchError(ADBSessionError):
     pass
 
 
 class ADBProcess:
-    # TODO: Use FFPuppet Reason enum
-    RC_ALERT = "ALERT"  # target crashed/aborted/triggered an assertion failure etc...
-    RC_CLOSED = "CLOSED"  # target was closed by call to FFPuppet close()
-    RC_EXITED = "EXITED"  # target exited
-    # RC_WORKER = "WORKER"  # target was closed by worker thread
     # TODO:
     #  def save_logs(self, *args, **kwargs):
     #  def clone_log(self, log_id, offset=0):
@@ -63,7 +72,7 @@ class ADBProcess:
         self._working_path = "/data/local/tmp/ADBProc_%08X" % (getrandbits(32),)
         self.logs = None
         self.profile = None  # profile path on device
-        self.reason = self.RC_CLOSED
+        self.reason = Reason.CLOSED
 
     def __enter__(self):
         return self
@@ -98,12 +107,12 @@ class ADBProcess:
                 crash_reports = self.find_crashreports()
                 # set reason code
                 if crash_reports:
-                    self.reason = self.RC_ALERT
+                    self.reason = Reason.ALERT
                     self.wait_on_files(crash_reports)
                 elif self.is_running():
-                    self.reason = self.RC_CLOSED
+                    self.reason = Reason.CLOSED
                 else:
-                    self.reason = self.RC_EXITED
+                    self.reason = Reason.EXITED
                 self._terminate()
                 self.wait()
                 self._process_logs(crash_reports)
@@ -114,14 +123,14 @@ class ADBProcess:
                 self._session.call(["shell", "rm", "-rf", cfg_file])
                 # TODO: this should be temporary until ASAN_OPTIONS=log_file is working
                 if "log_asan.txt" in os.listdir(self.logs):
-                    self.reason = self.RC_ALERT
+                    self.reason = Reason.ALERT
 
         except ADBSessionError:
             LOG.warning("No device detected while closing process")
         self._pid = None
         self.profile = None
         if self.reason is None:
-            self.reason = self.RC_CLOSED
+            self.reason = Reason.CLOSED
 
     def find_crashreports(self):
         reports = list()
@@ -321,14 +330,11 @@ class ADBProcess:
         for fname in crash_reports:
             self._session.pull(fname, unprocessed)
 
-        logger = PuppetLogger()
-        try:
+        with PuppetLogger() as logger:
             syms_path = self._session.symbols_path(self._package)
             process_minidumps(unprocessed, syms_path, logger.add_log)
             logger.close()
             logger.save_logs(self.logs)
-        finally:
-            logger.clean_up()
 
     def _remove_logs(self):
         sanitizer_logs = os.path.dirname(self._session.SANITIZER_LOG_PREFIX)

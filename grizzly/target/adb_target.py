@@ -12,7 +12,7 @@ from prefpicker import PrefPicker
 
 from ..common.reporter import Report
 from ..common.utils import grz_tmp
-from .adb_device import ADBProcess, ADBSession
+from .adb_device import ADBProcess, ADBSession, Reason
 from .target import Result, Target
 from .target_monitor import TargetMonitor
 
@@ -71,9 +71,9 @@ class ADBTarget(Target):
         if not self._proc.is_healthy():
             self._proc.close()
             # if something has happened figure out what
-            if self._proc.reason == ADBProcess.RC_CLOSED:
+            if self._proc.reason == Reason.CLOSED:
                 LOG.info("target.close() was called")
-            elif self._proc.reason == ADBProcess.RC_EXITED:
+            elif self._proc.reason == Reason.EXITED:
                 LOG.info("Target closed itself")
             else:
                 LOG.debug("failure detected")

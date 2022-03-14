@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from pytest import mark
 
-from .adb_device import ADBProcess, ADBSession
+from .adb_device import ADBSession, Reason
 from .adb_target import ADBTarget
 from .target import Result
 
@@ -11,13 +11,10 @@ from .target import Result
 def test_adb_target_01(mocker, tmp_path):
     """test creating a simple ADBTarget"""
     fake_process = mocker.patch("grizzly.target.adb_target.ADBProcess", autospec=True)
-    fake_process.RC_ALERT = ADBProcess.RC_ALERT
-    fake_process.RC_CLOSED = ADBProcess.RC_CLOSED
-    fake_process.RC_EXITED = ADBProcess.RC_EXITED
     fake_process.return_value.is_healthy.return_value = False
     fake_process.return_value.is_running.return_value = False
     fake_process.return_value.launches = 0
-    fake_process.return_value.reason = fake_process.RC_CLOSED
+    fake_process.return_value.reason = Reason.CLOSED
     fake_sess_obj = mocker.Mock(spec_set=ADBSession, connected=True, symbols={})
     fake_session = mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
     fake_session.create.return_value = fake_sess_obj
@@ -61,19 +58,16 @@ def test_adb_target_02(mocker, tmp_path):
         # running as expected - no failures
         (True, None, Result.NONE, 0),
         # browser process closed
-        (False, ADBProcess.RC_CLOSED, Result.NONE, 1),
+        (False, Reason.CLOSED, Result.NONE, 1),
         # browser process crashed
-        (False, ADBProcess.RC_ALERT, Result.FOUND, 1),
+        (False, Reason.ALERT, Result.FOUND, 1),
         # browser exit with no crash logs
-        (False, ADBProcess.RC_EXITED, Result.NONE, 1),
+        (False, Reason.EXITED, Result.NONE, 1),
     ],
 )
 def test_adb_target_03(mocker, tmp_path, healthy, reason, result, closes):
     """test ADBTarget.check_result()"""
     fake_process = mocker.patch("grizzly.target.adb_target.ADBProcess", autospec=True)
-    fake_process.RC_ALERT = ADBProcess.RC_CLOSED
-    fake_process.RC_CLOSED = ADBProcess.RC_CLOSED
-    fake_process.RC_EXITED = ADBProcess.RC_EXITED
     mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()

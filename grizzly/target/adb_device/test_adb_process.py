@@ -5,7 +5,7 @@ from shutil import rmtree
 
 from pytest import mark, raises
 
-from .adb_process import ADBLaunchError, ADBProcess
+from .adb_process import ADBLaunchError, ADBProcess, Reason
 from .adb_session import ADBSession, ADBSessionError
 
 
@@ -20,7 +20,7 @@ def test_adb_process_01(mocker):
         assert proc._package == test_pkg
         assert proc.logs is None
         assert proc.profile is None
-        assert proc.reason == proc.RC_CLOSED
+        assert proc.reason == Reason.CLOSED
         assert proc._pid is None
         proc.close()
         assert not proc.logs  # should not have logs
@@ -100,6 +100,7 @@ def test_adb_process_07(mocker):
         assert proc.is_running()
         assert proc.is_healthy()
         assert proc.launches == 1
+        assert proc.reason is None
         proc.close()
         assert proc._pid is None
         assert proc.logs
