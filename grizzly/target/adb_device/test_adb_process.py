@@ -285,6 +285,18 @@ def test_adb_process_13(tmp_path):
         ('user_pref("a.b", 1);\nuser_pref("a.c", true);', {"a.b": 1, "a.c": True}),
         ('user_pref("a.b", 1);\n#\nuser_pref("a.c", 1);', {"a.b": 1, "a.c": 1}),
         ("user_pref('a.b.c', '1,2,3,');", {"a.b.c": "1,2,3,"}),
+        # invalid value
+        ('user_pref("a.b.c", asd);\n', None),
+        # unbalanced quotes
+        ('user_pref("a, "b");\n', None),
+        # unbalanced quotes
+        ('user_pref("a", "b);\n', None),
+        # missing value
+        ('user_pref("a", );\n', None),
+        # empty pref name
+        ('user_pref("", 0);\n', None),
+        # unquoted pref name
+        ("user_pref(test, 0);\n", None),
     ],
 )
 def test_adb_process_14(tmp_path, input_data, result):
@@ -292,26 +304,3 @@ def test_adb_process_14(tmp_path, input_data, result):
     prefs_js = tmp_path / "prefs.js"
     prefs_js.write_text(input_data)
     assert ADBProcess.prefs_to_dict(str(prefs_js)) == result
-
-
-@mark.parametrize(
-    "input_data",
-    [
-        # invalid value
-        'user_pref("a.b.c", asd);\n',
-        # unbalanced quotes
-        'user_pref(", 0);\n',
-        # missing value
-        'user_pref("a", );\n',
-        # empty pref name
-        'user_pref("", 0);\n',
-        # unquoted pref name
-        "user_pref(test, 0);\n",
-    ],
-)
-def test_adb_process_15(tmp_path, input_data):
-    """test ADBProcess.prefs_to_dict() - invalid prefs.js"""
-    prefs_js = tmp_path / "prefs.js"
-    prefs_js.write_text(input_data)
-    with raises(ADBLaunchError, match="Invalid prefs.js file"):
-        ADBProcess.prefs_to_dict(str(prefs_js))

@@ -173,6 +173,11 @@ class ADBProcess:
         if self._session.get_pid(self._package) is not None:
             raise ADBLaunchError("%r is already running" % (self._package,))
 
+        # load prefs from prefs.js
+        prefs = self.prefs_to_dict(prefs_js) if prefs_js else dict()
+        if prefs is None:
+            raise ADBLaunchError("Invalid prefs.js file (%s)" % (prefs_js,))
+
         self._session.clear_logs()
         self._remove_logs()
         self.reason = None
@@ -190,11 +195,6 @@ class ADBProcess:
         else:
             raise ADBLaunchError("Could not reverse port")
         try:
-
-            self.profile = "%s/gv_profile_%08X" % (self._working_path, getrandbits(32))
-            self._session.call(["shell", "mkdir", "-p", self.profile])
-            # load prefs from prefs.js
-            prefs = self.prefs_to_dict(prefs_js) if prefs_js else dict()
             # add additional prefs
             prefs.update(
                 {
@@ -208,6 +208,9 @@ class ADBProcess:
                     "privacy.partition.network_state": False,
                 }
             )
+            # create empty profile
+            self.profile = "%s/gv_profile_%08X" % (self._working_path, getrandbits(32))
+            self._session.call(["shell", "mkdir", "-p", self.profile])
             # add environment variables
             env_mod = dict(env_mod or {})
             env_mod.setdefault("MOZ_SKIA_DISABLE_ASSERTS", "1")
@@ -279,11 +282,11 @@ class ADBProcess:
                 elif name[0] == '"' == name[-1]:
                     name = name.strip('"')
                 else:
-                    LOG.error("Pref name not quoted (%s)", name)
-                    raise ADBLaunchError("Invalid prefs.js file (%s)" % (prefs_file,))
+                    LOG.error("Pref name is not quoted (%s)", name)
+                    return None
                 if not name:
-                    LOG.error("Pref name missing")
-                    raise ADBLaunchError("Invalid prefs.js file (%s)" % (prefs_file,))
+                    LOG.error("Pref name is missing")
+                    return None
                 # parse value
                 value = pref.group("value")
                 if value in ("false", "true"):
@@ -296,10 +299,8 @@ class ADBProcess:
                     try:
                         out[name] = int(value)
                     except ValueError:
-                        LOG.error("Invalid value %r for entry %r", value, name)
-                        raise ADBLaunchError(
-                            "Invalid prefs.js file (%s)" % (prefs_file,)
-                        ) from None
+                        LOG.error("Pref %r has invalid value %r", name, value)
+                        return None
         return out
 
     def _process_logs(self, crash_reports):
