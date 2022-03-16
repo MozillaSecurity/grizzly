@@ -2,13 +2,14 @@
 from pathlib import Path
 from zipfile import ZipFile
 
-from pytest import raises
+from pytest import mark, raises
 
 from .adb_session import (
     ADBCommandError,
     ADBCommunicationError,
     ADBSession,
     ADBSessionError,
+    _get_android_sdk,
 )
 
 
@@ -1509,3 +1510,27 @@ def test_adb_session_40(mocker):
     )
     session = ADBSession()
     session.sanitizer_options("asan", {"a": "1", "b": "2"})
+
+
+@mark.parametrize(
+    "env_var, os_name",
+    [
+        ("ANDROID_HOME", "Linux"),
+        ("ANDROID_SDK_ROOT", "Linux"),
+        ("LOCALAPPDATA", "Windows"),
+        (None, "Darwin"),
+        # default to ~/
+        (None, "Linux"),
+    ],
+)
+def test_adb_get_android_sdk_01(mocker, tmp_path, env_var, os_name):
+    """test ADBSession._get_android_sdk()"""
+
+    def _getenv(in_var):
+        if in_var == env_var:
+            return str(tmp_path)
+        return None
+
+    mocker.patch("grizzly.target.adb_device.adb_session.getenv", side_effect=_getenv)
+    mocker.patch("grizzly.target.adb_device.adb_session.system", return_value=os_name)
+    assert _get_android_sdk()

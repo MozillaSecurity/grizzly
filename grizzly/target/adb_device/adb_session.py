@@ -32,7 +32,7 @@ def _get_android_sdk():
             return android_home
     if getenv("ANDROID_SDK_ROOT") is not None:
         return Path(getenv("ANDROID_SDK_ROOT"))
-    if system() == "Windows":
+    if system() == "Windows" and getenv("LOCALAPPDATA") is not None:
         return Path(getenv("LOCALAPPDATA")) / "Android" / "sdk"
     if system() == "Darwin":
         return Path.home() / "Library" / "Android" / "sdk"
