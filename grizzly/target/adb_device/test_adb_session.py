@@ -888,6 +888,8 @@ def test_adb_session_20(mocker):
     assert len(tuple(session.open_files(pid=9990, children=True))) == 6
     with raises(AssertionError):
         tuple(session.open_files(pid=None, children=True))
+    # list open files with "files" args for coverage
+    assert any(session.open_files(files=["test"]))
 
 
 def test_adb_session_21(mocker):
@@ -1043,7 +1045,7 @@ def test_adb_session_25(mocker):
         session.listdir("missing-dir")
     dir_list = session.listdir("fake-dir")
     assert len(dir_list) == 1
-    assert "test" in session.listdir("fake-dir")
+    assert "test" in dir_list
 
 
 def test_adb_session_26(mocker):
@@ -1075,23 +1077,23 @@ def test_adb_session_26(mocker):
 
 def test_adb_session_27(mocker, tmp_path):
     """test ADBSession._aapt_check()"""
-    # use system aapt
-    mocker.patch(
-        "grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", Path("/missing")
-    )
-    mocker.patch(
-        "grizzly.target.adb_device.adb_session.which", return_value="/fake_system/aapt"
-    )
-    assert ADBSession._aapt_check() == "/fake_system/aapt"
     (tmp_path / "android-9").mkdir()
     fake_aapt = tmp_path / "android-9" / "aapt"
     fake_aapt.touch()
+    # use system aapt
+    mocker.patch(
+        "grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", tmp_path / "missing"
+    )
+    mocker.patch(
+        "grizzly.target.adb_device.adb_session.which", return_value=str(fake_aapt)
+    )
+    assert ADBSession._aapt_check() == str(fake_aapt)
     # use recommended aapt
     mocker.patch("grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", tmp_path)
     assert ADBSession._aapt_check() == str(fake_aapt)
     # aapt not installed
     mocker.patch(
-        "grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", Path("/missing")
+        "grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", tmp_path / "missing"
     )
     mocker.patch("grizzly.target.adb_device.adb_session.which", return_value=None)
     with raises(EnvironmentError, match=r"Please install AAPT"):
@@ -1100,26 +1102,26 @@ def test_adb_session_27(mocker, tmp_path):
 
 def test_adb_session_28(mocker, tmp_path):
     """test ADBSession._adb_check()"""
+    (tmp_path / "platform-tools").mkdir()
+    fake_adb = tmp_path / "platform-tools" / "adb"
+    fake_adb.touch()
     mocker.patch(
         "grizzly.target.adb_device.adb_session.sleep"
     )  # skip delay after warning message
     # use system adb
     mocker.patch(
-        "grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", Path("/missing")
+        "grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", tmp_path / "missing"
     )
     mocker.patch(
-        "grizzly.target.adb_device.adb_session.which", return_value="/fake_system/adb"
+        "grizzly.target.adb_device.adb_session.which", return_value=str(fake_adb)
     )
-    assert ADBSession._adb_check() == "/fake_system/adb"
-    (tmp_path / "platform-tools").mkdir()
-    fake_adb = tmp_path / "platform-tools" / "adb"
-    fake_adb.touch()
+    assert ADBSession._adb_check() == str(fake_adb)
     # use recommended adb
     mocker.patch("grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", tmp_path)
     assert ADBSession._adb_check() == str(fake_adb)
     # adb not installed
     mocker.patch(
-        "grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", Path("/missing")
+        "grizzly.target.adb_device.adb_session.ANDROID_SDK_ROOT", tmp_path / "missing"
     )
     mocker.patch("grizzly.target.adb_device.adb_session.which", return_value=None)
     with raises(EnvironmentError, match=r"Please install ADB"):

@@ -95,6 +95,7 @@ def test_adb_process_07(mocker):
     # fake_session.process_exists.return_value = False
     with ADBProcess("org.mozilla.geckoview_example", fake_session) as proc:
         assert not proc.is_running()
+        assert not proc.is_healthy()
         assert proc.launches == 0
         assert proc.launch("fake.url")
         assert proc.is_running()

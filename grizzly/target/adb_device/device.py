@@ -71,10 +71,9 @@ def main(args):  # pylint: disable=missing-docstring
         if args.airplane_mode is not None:
             LOG.debug("Setting airplane mode (%d)...", args.airplane_mode)
             session.airplane_mode = args.airplane_mode == 1
-            if args.airplane_mode > 0:
-                LOG.info("Enabled airplane mode.")
-            else:
-                LOG.info("Disabled airplane mode.")
+            LOG.info(
+                "Airplane mode %s.", "enabled" if args.airplane_mode else "disabled"
+            )
         if args.install is not None:
             pkg_name = ADBSession.get_package_name(args.install)
             if pkg_name is None:
@@ -100,7 +99,7 @@ def main(args):  # pylint: disable=missing-docstring
                 assert proc.is_running(), "browser not running?!"
                 LOG.info("Launched.")
                 proc.wait()
-            except KeyboardInterrupt:
+            except KeyboardInterrupt:  # pragma: no cover
                 pass
             finally:
                 proc.close()

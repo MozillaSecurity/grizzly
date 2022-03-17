@@ -1,15 +1,27 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from pytest import mark
+from pytest import mark, raises
 
 from .adb_device import ADBSession, Reason
 from .adb_target import ADBTarget
 from .target import Result
 
 
-def test_adb_target_01(mocker, tmp_path):
+@mark.parametrize(
+    "kwargs",
+    [
+        # no extra kwargs
+        {},
+        # unsupported debuggers
+        {"pernosco": True, "rr": True},
+        # unknown kwargs
+        {"unknown_kwarg": "1"},
+    ],
+)
+def test_adb_target_01(mocker, tmp_path, kwargs):
     """test creating a simple ADBTarget"""
+    # pylint: disable=protected-access
     fake_process = mocker.patch("grizzly.target.adb_target.ADBProcess", autospec=True)
     fake_process.return_value.is_healthy.return_value = False
     fake_process.return_value.is_running.return_value = False
@@ -21,12 +33,15 @@ def test_adb_target_01(mocker, tmp_path):
     fake_session.get_package_name.return_value = "the_name"
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with ADBTarget(str(fake_apk), 300, 25, 5000) as target:
+    with ADBTarget(str(fake_apk), 300, 25, 5000, **kwargs) as target:
         assert target.closed
         assert target.forced_close
         assert target.monitor is not None
         assert target.check_result(None) == Result.NONE
         assert not target.log_size()
+        assert target._prefs is None
+        target.process_assets()
+        assert target._prefs is not None
         target.cleanup()
         assert fake_sess_obj.reverse_remove.call_count == 1
         assert fake_sess_obj.disconnect.call_count == 1
@@ -39,17 +54,13 @@ def test_adb_target_01(mocker, tmp_path):
 
 
 def test_adb_target_02(mocker, tmp_path):
-    """test ADBTarget.launch()"""
-    fake_process = mocker.patch("grizzly.target.adb_target.ADBProcess", autospec=True)
-    fake_process.return_value.launches = 0
-    mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
+    """test ADBTarget fail to create session"""
+    session_cls = mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
+    session_cls.create.return_value = None
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with ADBTarget(str(fake_apk), 300, 25, 5000) as target:
-        target.launch("fake.url")
-        assert fake_process.return_value.launch.call_count == 1
-        assert target.monitor.is_running()
-        assert target.monitor.is_healthy()
+    with raises(RuntimeError, match="Could not create ADB Session!"):
+        ADBTarget(str(fake_apk), 300, 25, 5000)
 
 
 @mark.parametrize(
@@ -66,13 +77,16 @@ def test_adb_target_02(mocker, tmp_path):
     ],
 )
 def test_adb_target_03(mocker, tmp_path, healthy, reason, result, closes):
-    """test ADBTarget.check_result()"""
+    """test ADBTarget launch() and check_result()"""
     fake_process = mocker.patch("grizzly.target.adb_target.ADBProcess", autospec=True)
     mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
     with ADBTarget(str(fake_apk), 300, 25, 5000) as target:
-        # test everything is running
+        target.launch("fake.url")
+        assert fake_process.return_value.launch.call_count == 1
+        assert target.monitor.is_running()
+        assert target.monitor.is_healthy()
         fake_process.return_value.is_healthy.return_value = healthy
         fake_process.return_value.reason = reason
         assert target.check_result(None) == result
