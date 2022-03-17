@@ -109,7 +109,3 @@ def main(args):  # pylint: disable=missing-docstring
     finally:
         session.disconnect()
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(parse_args()))
