@@ -7,7 +7,7 @@
 
 from pytest import fixture
 
-from grizzly.common.status import ReductionStatus, Status
+from .common.status import ReductionStatus, Status
 
 
 @fixture

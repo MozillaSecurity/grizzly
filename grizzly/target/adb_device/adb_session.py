@@ -13,7 +13,7 @@ from subprocess import Popen, call, check_output
 from tempfile import TemporaryDirectory, TemporaryFile
 from time import sleep, time
 
-from grizzly.common.utils import grz_tmp
+from ...common.utils import grz_tmp
 
 LOG = getLogger("adb_session")
 

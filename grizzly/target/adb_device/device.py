@@ -5,8 +5,7 @@ from argparse import ArgumentParser
 from logging import DEBUG, ERROR, INFO, WARNING, getLogger
 from os.path import isfile
 
-from grizzly.common.utils import configure_logging
-
+from ...common.utils import configure_logging
 from .adb_process import ADBProcess
 from .adb_session import ADBSession
 
