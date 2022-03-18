@@ -47,16 +47,13 @@ let main = () => {
               'Warning: Any additional open tabs can block browser from closing.')
     try { window.focus() } catch(e) { }
     let xhr = new XMLHttpRequest()
-    // indicate test is complete by requesting `/grz_next_test`
-    xhr.open('GET', '/grz_next_test', true)
-    // if web server goes away don't hang (sapphire times out)
-    xhr.timeout = 250
-    // close the harness to catch crashes that are triggered when the browser closes
-    xhr.onabort = () => { window.close() }
-    xhr.onerror = () => { window.close() }
-    xhr.onload = () => { setTimeout(window.close, 100) }
-    xhr.ontimeout = () => { window.close() }
-    xhr.send()
+    // indicate the test is complete by requesting `/grz_next_test`
+    // this allows Sapphire to finish with the current test
+    xhr.open('GET', '/grz_next_test', false)
+    xhr.send(null)
+    // close the harness to help catch browser shutdown issues
+    // allow a tiny bit more time for crash logs to begin
+    setTimeout(window.close, 100)
     return
   }
 
@@ -110,7 +107,7 @@ window.addEventListener('beforeunload', () => {
   if (limit_tmr !== undefined) {
     clearTimeout(limit_tmr)
   }
-  if (!sub.closed) {
+  if (sub && !sub.closed) {
     sub.close()
   }
 })
