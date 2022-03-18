@@ -41,6 +41,12 @@ let main = () => {
     return
   }
 
+  // if limit_tmr is set, clear it before opening a new tab
+  if (limit_tmr !== undefined) {
+    clearTimeout(limit_tmr)
+    limit_tmr = undefined
+  }
+
   if ((close_after !== undefined) && (close_after-- < 1)) {
     grzDump('Iteration limit hit.')
     setBanner('Iteration limit hit. Browser should close momentarily...<br>' +
@@ -55,12 +61,6 @@ let main = () => {
     // allow a tiny bit more time for crash logs to begin
     setTimeout(window.close, 100)
     return
-  }
-
-  // if limit_tmr is set, clear it before opening a new tab
-  if (limit_tmr !== undefined) {
-    clearTimeout(limit_tmr)
-    limit_tmr = undefined
   }
 
   // open test
