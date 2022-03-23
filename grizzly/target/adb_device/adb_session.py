@@ -72,9 +72,7 @@ class ADBSession:
     def __init__(self, ip_addr=None, port=5555):
         self._adb_bin = self._adb_check()
         self._cpu_arch = None  # Android CPU architecture string
-        self._debug_adb = (
-            int(getenv("SHOW_ADB_DEBUG", "0")) != 0
-        )  # include ADB output in debug logs
+        self._debug_adb = getenv("SHOW_ADB_DEBUG", "0") != "0"  # include ADB output
         self._ip_addr = None  # target device IP address
         self._os_version = None  # Android version string
         self._port = None  # ADB listening port
