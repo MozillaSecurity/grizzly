@@ -384,6 +384,7 @@ class ADBProcess:
                     b"Gecko" not in line
                     and b"MOZ_" not in line
                     and package_name not in line
+                    and b"wrap.sh" not in line
                 ):
                     continue
                 m_id = re_id.match(line)
