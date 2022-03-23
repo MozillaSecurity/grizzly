@@ -7,13 +7,13 @@ from logging import getLogger
 from pathlib import Path
 from tempfile import TemporaryDirectory, mkdtemp
 
-from ffpuppet import LaunchError
+from ffpuppet import BrowserTimeoutError, LaunchError
 from prefpicker import PrefPicker
 
 from ..common.reporter import Report
 from ..common.utils import grz_tmp
 from .adb_device import ADBProcess, ADBSession, Reason
-from .target import Result, Target
+from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
 __author__ = "Tyson Smith"
@@ -80,6 +80,11 @@ class ADBTarget(Target):
                 status = Result.FOUND
         return status
 
+    def create_report(self, is_hang=False):
+        logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
+        self.save_logs(logs)
+        return Report(logs, self.binary, is_hang=is_hang)
+
     def handle_hang(self, ignore_idle=True):
         # TODO: attempt to detect idle hangs?
         self.close()
@@ -87,7 +92,7 @@ class ADBTarget(Target):
 
     def launch(self, location):
         env_mod = dict(self.environ)
-        # This may be used to disabled network connections during testing, e.g.
+        # disabled external network connections during testing
         env_mod["MOZ_IN_AUTOMATION"] = "1"
         # prevent crash reporter from touching the dmp files
         env_mod["MOZ_CRASHREPORTER"] = "1"
@@ -102,9 +107,12 @@ class ADBTarget(Target):
                 prefs_js=self._prefs,
                 url=location,
             )
-        except LaunchError:
-            self._proc.close()
-            raise
+        except LaunchError as exc:
+            LOG.error("ADBProcess LaunchError: %s", exc)
+            self.close()
+            if isinstance(exc, BrowserTimeoutError):
+                raise TargetLaunchTimeout(str(exc)) from None
+            raise TargetLaunchError(str(exc), self.create_report()) from None
 
     @property
     def monitor(self):
@@ -149,11 +157,6 @@ class ADBTarget(Target):
                 template = PrefPicker.lookup_template("browser-fuzzing.yml")
                 PrefPicker.load_template(template).create_prefsjs(prefs)
                 self._prefs = self.assets.add("prefs", str(prefs), copy=False)
-
-    def create_report(self, is_hang=False):
-        logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
-        self.save_logs(logs)
-        return Report(logs, self.binary, is_hang=is_hang)
 
     def reverse(self, remote, local):
         # remote->device, local->desktop
