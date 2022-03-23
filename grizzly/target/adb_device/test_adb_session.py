@@ -1499,6 +1499,7 @@ def test_adb_session_39():
 
 def test_adb_session_40(mocker):
     """test ADBSession.sanitizer_options()"""
+    mocker.patch("grizzly.target.adb_device.ADBSession.call", autospec=True)
     mocker.patch(
         "grizzly.target.adb_device.ADBSession._adb_check", return_value="/fake/adb"
     )

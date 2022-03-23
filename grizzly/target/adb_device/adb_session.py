@@ -56,8 +56,6 @@ class ADBSessionError(Exception):
 
 # pylint: disable=too-many-public-methods
 class ADBSession:
-    SANITIZER_LOG_PREFIX = "/sdcard/sanitizer_logs/report.log"
-
     __slots__ = (
         "_adb_bin",
         "_cpu_arch",
@@ -846,6 +844,7 @@ class ADBSession:
         """
         prefix = prefix.lower()
         assert prefix == "asan", "only ASan is supported atm"
+        self.call(["shell", "rm", "-f", "%s.options.gecko" % (prefix,)])
         with TemporaryDirectory(prefix="sanopts_", dir=grz_tmp()) as working_path:
             optfile = Path(working_path) / ("%s.options.gecko" % (prefix,))
             optfile.write_text(":".join("%s=%s" % x for x in options.items()))

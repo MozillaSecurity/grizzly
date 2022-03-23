@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from pytest import mark, raises
 
-from .device import main, parse_args
+from .main import main, parse_args
 
 
 @mark.parametrize(
@@ -32,7 +32,7 @@ def test_parse_02(tmp_path):
 def test_main_01(mocker):
     """test main() - create session failed"""
     session_cls = mocker.patch(
-        "grizzly.target.adb_device.device.ADBSession", autospec=True
+        "grizzly.target.adb_device.main.ADBSession", autospec=True
     )
     session_cls.create.return_value = None
     args = mocker.Mock(ip=None, non_root=False, prep=None, port=12345)
@@ -42,7 +42,7 @@ def test_main_01(mocker):
 def test_main_02(mocker):
     """test main() - airplane mode"""
     session_cls = mocker.patch(
-        "grizzly.target.adb_device.device.ADBSession", autospec=True
+        "grizzly.target.adb_device.main.ADBSession", autospec=True
     )
     args = mocker.Mock(
         airplane_mode=1,
@@ -71,18 +71,20 @@ def test_main_02(mocker):
         ("test", None, 1),
     ],
 )
-def test_main_03(mocker, pkg, install, result):
+def test_main_03(mocker, tmp_path, pkg, install, result):
     """test main() - install"""
     session_cls = mocker.patch(
-        "grizzly.target.adb_device.device.ADBSession", autospec=True
+        "grizzly.target.adb_device.main.ADBSession", autospec=True
     )
     session_cls.get_package_name.return_value = pkg
     session_obj = session_cls.create.return_value
     session_obj.install.return_value = install
+    apk = tmp_path / "fake.apk"
+    (tmp_path / "llvm-symbolizer").touch()
     args = mocker.Mock(
         airplane_mode=None,
         launch=None,
-        install="fake.apk",
+        install=str(apk),
         ip=None,
         non_root=False,
         prep=None,
@@ -90,6 +92,8 @@ def test_main_03(mocker, pkg, install, result):
     )
     assert main(args) == result
     assert session_cls.create.call_count == 1
+    assert session_obj.install.call_count == (1 if pkg else 0)
+    assert session_obj.install_file.call_count == (0 if result else 1)
     assert session_obj.disconnect.call_count == 1
 
 
@@ -104,9 +108,9 @@ def test_main_03(mocker, pkg, install, result):
 )
 def test_main_04(mocker, pkg, result):
     """test main() - launch"""
-    mocker.patch("grizzly.target.adb_device.device.ADBProcess", autospec=True)
+    mocker.patch("grizzly.target.adb_device.main.ADBProcess", autospec=True)
     session_cls = mocker.patch(
-        "grizzly.target.adb_device.device.ADBSession", autospec=True
+        "grizzly.target.adb_device.main.ADBSession", autospec=True
     )
     session_cls.get_package_name.return_value = pkg
     session_obj = session_cls.create.return_value
@@ -127,7 +131,7 @@ def test_main_04(mocker, pkg, result):
 def test_main_05(mocker):
     """test main() - prep"""
     session_cls = mocker.patch(
-        "grizzly.target.adb_device.device.ADBSession", autospec=True
+        "grizzly.target.adb_device.main.ADBSession", autospec=True
     )
     args = mocker.Mock(
         airplane_mode=None,

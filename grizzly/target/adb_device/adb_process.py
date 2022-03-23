@@ -51,6 +51,7 @@ class ADBProcess:
         "_package",
         "_pid",
         "_profile_template",
+        "_sanitizer_logs",
         "_session",
         "_working_path",
         "logs",
@@ -70,6 +71,7 @@ class ADBProcess:
         # Note: geckview_example fails to read a profile from /sdcard/ atm
         # self._working_path = "/sdcard/ADBProc_%08X" % (getrandbits(32),)
         self._working_path = "/data/local/tmp/ADBProc_%08X" % (getrandbits(32),)
+        self._sanitizer_logs = "%s/sanitizer_logs" % (self._working_path,)
         self.logs = None
         self.profile = None  # profile path on device
         self.reason = Reason.CLOSED
@@ -135,9 +137,8 @@ class ADBProcess:
     def find_crashreports(self):
         reports = list()
         # look for logs from sanitizers
-        san_path = os.path.dirname(self._session.SANITIZER_LOG_PREFIX)
-        for fname in self._session.listdir(san_path):
-            reports.append(os.path.join(san_path, fname))
+        for fname in self._session.listdir(self._sanitizer_logs):
+            reports.append(os.path.join(self._sanitizer_logs, fname))
 
         if not reports and self.profile:
             # check for minidumps
@@ -217,12 +218,25 @@ class ADBProcess:
                     "privacy.partition.network_state": False,
                 }
             )
+            # create location to store sanitizer logs
+            self._session.call(["shell", "mkdir", "-p", self._sanitizer_logs])
             # create empty profile
             self.profile = "%s/gv_profile_%08X" % (self._working_path, getrandbits(32))
             self._session.call(["shell", "mkdir", "-p", self.profile])
             # add environment variables
             env_mod = dict(env_mod or {})
             env_mod.setdefault("MOZ_SKIA_DISABLE_ASSERTS", "1")
+            self._session.sanitizer_options(
+                "asan",
+                {
+                    "abort_on_error": "1",
+                    "color": "0",
+                    "external_symbolizer_path": "'/data/local/tmp/llvm-symbolizer'",
+                    # "log_path": "'%s/log_san.txt'" % (self._sanitizer_logs,),
+                    "symbolize": "1",
+                },
+            )
+
             # build *-geckoview-config.yaml
             # https://firefox-source-docs.mozilla.org/mobile/android/geckoview/...
             # consumer/automation.html#configuration-file-format
@@ -337,10 +351,6 @@ class ADBProcess:
             logger.save_logs(self.logs)
 
     def _remove_logs(self):
-        sanitizer_logs = os.path.dirname(self._session.SANITIZER_LOG_PREFIX)
-        self._session.call(["shell", "rm", "-r", sanitizer_logs])
-        self._session.call(["shell", "mkdir", "-p", sanitizer_logs])
-        self._session.call(["shell", "chmod", "666", sanitizer_logs])
         if self.logs is not None and os.path.isdir(self.logs):
             rmtree(self.logs)
             self.logs = None

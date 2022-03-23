@@ -3,7 +3,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser
 from logging import DEBUG, ERROR, INFO, WARNING, getLogger
-from os.path import isfile
+from os.path import dirname, isfile
+from os.path import join as path_join
 
 from ...common.utils import configure_logging
 from .adb_process import ADBProcess
@@ -66,7 +67,6 @@ def main(args):  # pylint: disable=missing-docstring
             LOG.info("Preparing device...")
             args.airplane_mode = 1
             args.install = args.prep
-            session.sanitizer_options("asan", {"abort_on_error": "0"})
         if args.airplane_mode is not None:
             LOG.debug("Setting airplane mode (%d)...", args.airplane_mode)
             session.airplane_mode = args.airplane_mode == 1
@@ -85,6 +85,10 @@ def main(args):  # pylint: disable=missing-docstring
             if not package:
                 LOG.error("Could not install %r", args.install)
                 return 1
+            llvm_sym = path_join(dirname(args.install), "llvm-symbolizer")
+            if isfile(llvm_sym):
+                LOG.info("Installing llvm-symbolizer...")
+                session.install_file(llvm_sym, "/data/local/tmp/", mode="777")
             session.call(["shell", "am", "set-debug-app", "--persistent", package])
             LOG.info("Installed %s.", package)
         if args.launch:
