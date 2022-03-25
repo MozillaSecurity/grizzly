@@ -5,7 +5,9 @@
 """
 unit tests for grizzly.replay.args
 """
-from pytest import mark, raises
+from platform import system
+
+from pytest import mark, param, raises
 
 from .args import ReplayArgs, ReplayFuzzManagerIDArgs, ReplayFuzzManagerIDQualityArgs
 
@@ -44,12 +46,19 @@ def test_replay_args_01(capsys, mocker, tmp_path):
         (["--min-crashes", "0"], "error: --min-crashes value must be positive"),
         # test invalid repeat value
         (["--repeat", "-1"], "error: --repeat value must be positive"),
+        # test running with rr without --logs set
+        param(
+            ["--rr"],
+            "error: --logs must be set when using rr",
+            marks=[mark.skipif(system() != "Linux", reason="Linux only")],
+        ),
         # test missing signature file
         (["--sig", "missing"], "error: signature file not found"),
     ],
 )
 def test_replay_args_02(capsys, mocker, tmp_path, args, msg):
-    """test CommonArgs.parse_args() - sanity checks"""
+    """test ReplayArgs.parse_args() - sanity checks"""
+    mocker.patch("grizzly.args.Path.read_text", autospec=True, return_value="0")
     target = "target1"
     mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=[target])
     fake_bin = tmp_path / "fake.bin"

@@ -95,6 +95,9 @@ class ReplayArgs(CommonArgs):
         if "input" not in self._sanity_skip and not args.input.exists():
             self.parser.error("'%s' does not exist" % (args.input,))
 
+        if args.logs is None and (args.pernosco or args.rr):
+            self.parser.error("--logs must be set when using rr")
+
         if args.min_crashes < 1:
             self.parser.error("--min-crashes value must be positive")
 
