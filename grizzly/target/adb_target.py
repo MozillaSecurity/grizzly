@@ -12,7 +12,7 @@ from prefpicker import PrefPicker
 
 from ..common.reporter import Report
 from ..common.utils import grz_tmp
-from .adb_device import ADBProcess, ADBSession, Reason
+from .adb_device import ADBLaunchError, ADBProcess, ADBSession, Reason
 from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
@@ -72,9 +72,9 @@ class ADBTarget(Target):
             self._proc.close()
             # if something has happened figure out what
             if self._proc.reason == Reason.CLOSED:
-                LOG.info("target.close() was called")
+                LOG.debug("target.close() was called")
             elif self._proc.reason == Reason.EXITED:
-                LOG.info("Target closed itself")
+                LOG.debug("Target closed itself")
             else:
                 LOG.debug("failure detected")
                 status = Result.FOUND
@@ -107,7 +107,7 @@ class ADBTarget(Target):
                 prefs_js=self._prefs,
                 url=location,
             )
-        except LaunchError as exc:
+        except (ADBLaunchError, LaunchError) as exc:
             LOG.error("ADBProcess LaunchError: %s", exc)
             self.close()
             if isinstance(exc, BrowserTimeoutError):
