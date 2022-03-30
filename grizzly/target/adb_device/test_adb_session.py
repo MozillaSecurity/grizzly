@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 from pathlib import Path
+from subprocess import CompletedProcess, TimeoutExpired
 from zipfile import ZipFile
 
 from pytest import mark, raises
@@ -16,56 +17,25 @@ from .adb_session import (
 )
 
 
-def test_adb_session_01(mocker):
+@mark.parametrize(
+    "result",
+    [
+        # success
+        (CompletedProcess(["test"], stdout="test\n", returncode=0),),
+        # timeout
+        TimeoutExpired(["test"], output="test\n", timeout=1),
+    ],
+)
+def test_adb_session_01(mocker, result):
     """test ADBSession._call_adb()"""
-
-    def fake_call(cmd, stderr=None, stdout=None):
-        assert cmd[0] == "test"
-        stderr.write(b"")
-        stdout.write(b"blah_out")
-        return 0
-
-    mocker.patch("grizzly.target.adb_device.adb_session.call", side_effect=fake_call)
-    ret, output = ADBSession._call_adb(["test"])
-    assert ret == 0
-    assert "blah_out" in output
-    # test with invalid timeout
-    with raises(AssertionError):
-        ADBSession._call_adb(["test"], timeout=-1)
-
-    # test with timeout
-    class FakeProc:
-        def __init__(self, cmd, stderr=None, stdout=None):
-            assert cmd[0] == "test"
-            self.stdout = stdout
-            stderr.write(b"")
-            stdout.write(b"init\n")
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            pass
-
-        def wait(self):
-            self.stdout.write(b"wait\n")
-            return 1
-
-        def terminate(self):
-            self.stdout.write(b"terminate\n")
-
-        def poll(self):
-            self.stdout.write(b"poll\n")
-
-    mocker.patch("grizzly.target.adb_device.adb_session.Popen", new=FakeProc)
-    mocker.patch("grizzly.target.adb_device.adb_session.sleep")
-    mocker.patch("grizzly.target.adb_device.adb_session.time", side_effect=(1, 1, 2))
-    ret, output = ADBSession._call_adb(["test"], timeout=0.5)
-    assert ret == 1
-    assert "init" in output
-    assert "poll" in output
-    assert "terminate" in output
-    assert "wait" in output
+    mocker.patch(
+        "grizzly.target.adb_device.adb_session.run",
+        autospec=True,
+        side_effect=result,
+    )
+    retcode, output = ADBSession._call_adb(["test"])
+    assert retcode == (1 if isinstance(result, TimeoutExpired) else 0)
+    assert output == "test"
 
 
 @mark.parametrize(

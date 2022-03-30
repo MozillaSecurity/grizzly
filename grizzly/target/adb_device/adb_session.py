@@ -9,8 +9,8 @@ from os import getenv
 from pathlib import Path
 from platform import system
 from shutil import which
-from subprocess import Popen, call, check_output
-from tempfile import TemporaryDirectory, TemporaryFile
+from subprocess import PIPE, STDOUT, TimeoutExpired, check_output, run
+from tempfile import TemporaryDirectory
 from time import sleep, time
 
 from ...common.utils import grz_tmp
@@ -154,22 +154,19 @@ class ADBSession:
         Returns:
             tuple: Exit code and stderr, stdout of ADB call.
         """
-        with TemporaryFile() as out_fp:
-            if timeout is not None:
-                assert timeout > 0
-                end_time = time() + timeout
-                with Popen(cmd, stderr=out_fp, stdout=out_fp) as proc:
-                    while proc.poll() is None:
-                        sleep(0.05)
-                        if time() > end_time:
-                            LOG.warning("adb call timeout!")
-                            proc.terminate()
-                            break
-                    ret_code = proc.wait()
-            else:
-                ret_code = call(cmd, stderr=out_fp, stdout=out_fp)
-            out_fp.seek(0)
-            return ret_code, out_fp.read().decode("utf-8", "ignore").strip()
+        try:
+            result = run(
+                cmd,
+                encoding="utf-8",
+                errors="replace",
+                stderr=STDOUT,
+                stdout=PIPE,
+                timeout=timeout,
+            )
+        except TimeoutExpired as exc:
+            LOG.warning("ADB call timed out!")
+            return 1, exc.output.strip()
+        return result.returncode, result.stdout.strip()
 
     def _get_procs(self, pid=-1, pid_children=-1):
         """Generator function that yields a DeviceProcessInfo object for each running
