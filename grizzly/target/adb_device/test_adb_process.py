@@ -38,6 +38,7 @@ def test_adb_process_02(mocker):
 def test_adb_process_03(mocker):
     """test ADBProcess.launch() unsupported app"""
     fake_session = mocker.Mock(spec_set=ADBSession)
+    fake_session.collect_logs.return_value = b""
     with ADBProcess("org.some.app", fake_session) as proc:
         with raises(ADBLaunchError, match="Unsupported package 'org.some.app'"):
             proc.launch("fake.url")
@@ -77,7 +78,16 @@ def test_adb_process_05(mocker):
 #    """test ADBProcess.launch() check *-geckoview-config.yaml"""
 
 
-def test_adb_process_07(mocker):
+@mark.parametrize(
+    "env",
+    [
+        # no env
+        None,
+        # with environment variables
+        {"test1": "1", "test2": "2"},
+    ],
+)
+def test_adb_process_07(mocker, env):
     """test ADBProcess.launch(), ADBProcess.is_running() and ADBProcess.is_healthy()"""
     fake_bs = mocker.patch(
         "grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True
@@ -85,7 +95,7 @@ def test_adb_process_07(mocker):
     fake_bs.return_value.location = "http://localhost"
     fake_bs.return_value.port.return_value = 1234
     fake_session = mocker.Mock(spec_set=ADBSession)
-    fake_session.call.return_value = (0, "Status: ok")
+    fake_session.shell.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = b""
     fake_session.get_pid.side_effect = (None, 1337)
     fake_session.listdir.return_value = ()
@@ -94,7 +104,7 @@ def test_adb_process_07(mocker):
         assert not proc.is_running()
         assert not proc.is_healthy()
         assert proc.launches == 0
-        assert proc.launch("fake.url")
+        assert proc.launch("fake.url", env_mod=env, prefs_js=None)
         assert proc.is_running()
         assert proc.is_healthy()
         assert proc.launches == 1
@@ -107,32 +117,13 @@ def test_adb_process_07(mocker):
 
 
 def test_adb_process_08(mocker):
-    """test ADBProcess.launch() with environment variables"""
-    fake_bs = mocker.patch(
-        "grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True
-    )
-    fake_bs.return_value.location = "http://localhost"
-    fake_bs.return_value.port.return_value = 1234
-    fake_session = mocker.Mock(spec_set=ADBSession)
-    fake_session.call.return_value = (0, "Status: ok")
-    fake_session.collect_logs.return_value = b""
-    fake_session.get_pid.side_effect = (None, 1337)
-    fake_session.listdir.return_value = ()
-    env = {"test1": "1", "test2": "2"}
-    with ADBProcess("org.mozilla.geckoview_example", fake_session) as proc:
-        assert proc.launch("fake.url", env_mod=env)
-        assert proc.is_running()
-        proc.close()
-
-
-def test_adb_process_09(mocker):
     """test ADBProcess.wait_on_files()"""
     fake_bs = mocker.patch(
         "grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True
     )
     fake_bs.return_value.location = "http://localhost"
     fake_session = mocker.Mock(spec_set=ADBSession)
-    fake_session.call.return_value = (0, "Status: ok")
+    fake_session.shell.return_value = (0, "Status: ok")
     fake_session.collect_logs.return_value = b""
     fake_session.get_pid.side_effect = (None, 1337)
     fake_session.open_files.return_value = ((1, "some_file"),)
@@ -156,7 +147,7 @@ def test_adb_process_09(mocker):
         proc.close()
 
 
-def test_adb_process_10(mocker):
+def test_adb_process_09(mocker):
     """test ADBProcess.find_crashreports()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec_set=ADBSession)
@@ -165,18 +156,15 @@ def test_adb_process_10(mocker):
         # no log or minidump files
         fake_session.listdir.return_value = []
         assert not proc.find_crashreports()
-        # sanitizer logs
-        fake_session.listdir.side_effect = (["asan.log"], AssertionError())
-        assert any(x.endswith("asan.log") for x in proc.find_crashreports())
         # contains minidump file
-        fake_session.listdir.side_effect = ([], ["somefile.txt", "test.dmp"])
+        fake_session.listdir.side_effect = (["somefile.txt", "test.dmp"],)
         assert any(x.endswith("test.dmp") for x in proc.find_crashreports())
         # contains missing path
-        fake_session.listdir.side_effect = ([], IOError("test"))
+        fake_session.listdir.side_effect = (IOError("test"),)
         assert not proc.find_crashreports()
 
 
-def test_adb_process_11(mocker, tmp_path):
+def test_adb_process_10(mocker, tmp_path):
     """test ADBProcess.save_logs()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     fake_session = mocker.Mock(spec_set=ADBSession)
@@ -195,7 +183,7 @@ def test_adb_process_11(mocker, tmp_path):
     assert any(dmp_path.glob("fake.txt"))
 
 
-def test_adb_process_12(mocker):
+def test_adb_process_11(mocker):
     """test ADBProcess._process_logs()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
     mocker.patch("grizzly.target.adb_device.adb_process.PuppetLogger", autospec=True)
@@ -226,7 +214,7 @@ def test_adb_process_12(mocker):
         assert fake_session.pull.call_count == 2
 
 
-def test_adb_process_13(tmp_path):
+def test_adb_process_12(tmp_path):
     """test ADBProcess._split_logcat()"""
     log_path = tmp_path / "logs"
     log_path.mkdir()
@@ -293,7 +281,7 @@ def test_adb_process_13(tmp_path):
         ("user_pref(test, 0);\n", None),
     ],
 )
-def test_adb_process_14(tmp_path, input_data, result):
+def test_adb_process_13(tmp_path, input_data, result):
     """test ADBProcess.prefs_to_dict()"""
     prefs_js = tmp_path / "prefs.js"
     prefs_js.write_text(input_data)

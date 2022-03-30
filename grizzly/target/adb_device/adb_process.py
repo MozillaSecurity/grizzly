@@ -51,7 +51,7 @@ class ADBProcess:
         "_package",
         "_pid",
         "_profile_template",
-        "_sanitizer_logs",
+        # "_sanitizer_logs",
         "_session",
         "_working_path",
         "logs",
@@ -71,7 +71,7 @@ class ADBProcess:
         # Note: geckview_example fails to read a profile from /sdcard/ atm
         # self._working_path = "/sdcard/ADBProc_%08X" % (getrandbits(32),)
         self._working_path = "/data/local/tmp/ADBProc_%08X" % (getrandbits(32),)
-        self._sanitizer_logs = "%s/sanitizer_logs" % (self._working_path,)
+        # self._sanitizer_logs = "%s/sanitizer_logs" % (self._working_path,)
         self.logs = None
         self.profile = None  # profile path on device
         self.reason = Reason.CLOSED
@@ -119,10 +119,10 @@ class ADBProcess:
                 self.wait()
                 self._process_logs(crash_reports)
                 # remove remote working path
-                self._session.call(["shell", "rm", "-rf", self._working_path])
+                self._session.shell(["rm", "-rf", self._working_path])
                 # remove remote config yaml
                 cfg_file = "/data/local/tmp/%s-geckoview-config.yaml" % (self._package,)
-                self._session.call(["shell", "rm", "-rf", cfg_file])
+                self._session.shell(["rm", "-rf", cfg_file])
                 # TODO: this should be temporary until ASAN_OPTIONS=log_file is working
                 if "log_asan.txt" in os.listdir(self.logs):
                     self.reason = Reason.ALERT
@@ -137,10 +137,10 @@ class ADBProcess:
     def find_crashreports(self):
         reports = list()
         # look for logs from sanitizers
-        for fname in self._session.listdir(self._sanitizer_logs):
-            reports.append(os.path.join(self._sanitizer_logs, fname))
+        # for fname in self._session.listdir(self._sanitizer_logs):
+        #    reports.append(os.path.join(self._sanitizer_logs, fname))
 
-        if not reports and self.profile:
+        if self.profile:
             # check for minidumps
             md_path = os.path.join(self.profile, "minidumps")
             try:
@@ -172,6 +172,10 @@ class ADBProcess:
         assert self._pid is None, "Process is already running"
         assert self.reason is not None, "Process is already running"
 
+        self._session.clear_logs()
+        self._remove_logs()
+        self.reason = None
+
         if ".fenix" in self._package:
             app = "%s/org.mozilla.fenix.IntentReceiverActivity" % (self._package,)
         elif ".geckoview_example" in self._package:
@@ -187,10 +191,6 @@ class ADBProcess:
         prefs = self.prefs_to_dict(prefs_js) if prefs_js else dict()
         if prefs is None:
             raise ADBLaunchError("Invalid prefs.js file (%s)" % (prefs_js,))
-
-        self._session.clear_logs()
-        self._remove_logs()
-        self.reason = None
 
         # setup bootstrapper and reverse port
         # reverse does fail occasionally so use a retry loop
@@ -219,10 +219,10 @@ class ADBProcess:
                 }
             )
             # create location to store sanitizer logs
-            self._session.call(["shell", "mkdir", "-p", self._sanitizer_logs])
+            # self._session.shell(["mkdir", "-p", self._sanitizer_logs])
             # create empty profile
             self.profile = "%s/gv_profile_%08X" % (self._working_path, getrandbits(32))
-            self._session.call(["shell", "mkdir", "-p", self.profile])
+            self._session.shell(["mkdir", "-p", self.profile])
             # add environment variables
             env_mod = dict(env_mod or {})
             env_mod.setdefault("MOZ_SKIA_DISABLE_ASSERTS", "1")
@@ -255,7 +255,6 @@ class ADBProcess:
                 if not self._session.push(cfp.name, "/data/local/tmp/%s" % (cfg_file,)):
                     raise ADBLaunchError("Could not upload %r" % (cfg_file,))
             cmd = [
-                "shell",
                 "am",
                 "start",
                 "-W",
@@ -266,7 +265,7 @@ class ADBProcess:
                 "-d",
                 bootstrapper.location,
             ]
-            if "Status: ok" not in self._session.call(cmd, timeout=launch_timeout)[1]:
+            if "Status: ok" not in self._session.shell(cmd, timeout=launch_timeout)[1]:
                 raise ADBLaunchError("Could not launch %r" % (self._package,))
             self._pid = self._session.get_pid(self._package)
             bootstrapper.wait(self.is_healthy, url=url)
@@ -484,7 +483,7 @@ class ADBProcess:
         assert self._package is not None
         assert self._session, "Device not connected"
         # TODO: is this the best way???
-        self._session.call(["shell", "am", "force-stop", self._package])
+        self._session.shell(["am", "force-stop", self._package])
 
     def wait(self):
         while self.is_running():

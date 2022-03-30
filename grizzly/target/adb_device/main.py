@@ -57,7 +57,7 @@ def parse_args(argv=None):
 
 def main(args):  # pylint: disable=missing-docstring
     configure_logging(args.log_level)
-    LOG.debug("opening a session")
+    LOG.info("Connecting to device...")
     session = ADBSession.create(args.ip, args.port, as_root=not args.non_root)
     if session is None:
         LOG.error("Failed to connect to IP:%r port:%r", args.ip, args.port)
@@ -89,7 +89,8 @@ def main(args):  # pylint: disable=missing-docstring
             if isfile(llvm_sym):
                 LOG.info("Installing llvm-symbolizer...")
                 session.install_file(llvm_sym, "/data/local/tmp/", mode="777")
-            session.call(["shell", "am", "set-debug-app", "--persistent", package])
+            # set wait for debugger
+            # session.shell(["am", "set-debug-app", "-w", "--persistent", package])
             LOG.info("Installed %s.", package)
         if args.launch:
             pkg_name = ADBSession.get_package_name(args.launch)

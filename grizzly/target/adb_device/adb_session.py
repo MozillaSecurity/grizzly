@@ -184,12 +184,12 @@ class ADBSession:
         """
         assert isinstance(pid, int)
         assert isinstance(pid_children, int)
-        cmd = ["shell", "ps"]
+        cmd = ["ps"]
         if pid > -1:
             cmd.append(str(pid))
         if pid_children > -1:
             cmd += ["--ppid", str(pid_children)]
-        for line in self.call(cmd)[1].splitlines()[1:]:
+        for line in self.shell(cmd)[1].splitlines()[1:]:
             pinfo = self._line_to_info(line)
             if pinfo is not None:
                 yield pinfo
@@ -221,7 +221,7 @@ class ADBSession:
         Returns:
             bool: True if airplane mode is enabled otherwise False.
         """
-        return self.call(["shell", "settings", "get", "global", "airplane_mode_on"])[
+        return self.shell(["settings", "get", "global", "airplane_mode_on"])[
             1
         ].startswith("1")
 
@@ -236,19 +236,11 @@ class ADBSession:
             None
         """
         assert isinstance(mode, bool), "mode must be a bool"
-        self.call(
-            [
-                "shell",
-                "settings",
-                "put",
-                "global",
-                "airplane_mode_on",
-                "1" if mode else "0",
-            ]
+        self.shell(
+            ["settings", "put", "global", "airplane_mode_on", "1" if mode else "0"]
         )
-        self.call(
+        self.shell(
             [
-                "shell",
                 "su",
                 "root",
                 "am",
@@ -368,7 +360,9 @@ class ADBSession:
                 raise ADBCommunicationError(
                     "Timeout (%ds) waiting for device to boot" % (boot_timeout,)
                 )
-            ret_code, user = self.call(["shell", "whoami"], device_required=False)
+            ret_code, user = self.call(
+                ["shell", "-T", "-n", "whoami"], device_required=False
+            )
             if ret_code != 0 or not user:
                 self.connected = False
                 if attempt == max_attempts:
@@ -379,13 +373,11 @@ class ADBSession:
             self._root = user.splitlines()[-1] == "root"
             # collect CPU and OS info
             if self._os_version is None:
-                self._os_version = self.call(
-                    ["shell", "getprop", "ro.build.version.release"]
-                )[1]
-            if self._cpu_arch is None:
-                self._cpu_arch = self.call(["shell", "getprop", "ro.product.cpu.abi"])[
+                self._os_version = self.shell(["getprop", "ro.build.version.release"])[
                     1
                 ]
+            if self._cpu_arch is None:
+                self._cpu_arch = self.shell(["getprop", "ro.product.cpu.abi"])[1]
             # check SELinux mode
             if self._root:
                 if self.get_enforce():
@@ -393,8 +385,8 @@ class ADBSession:
                         raise ADBSessionError("set_enforce(0) failed!")
                     # set SELinux to run in permissive mode
                     self.set_enforce(0)
-                    self.call(["shell", "stop"])
-                    self.call(["shell", "start"])
+                    self.shell(["stop"])
+                    self.shell(["start"])
                     # put the device in a known state
                     self.call(["reconnect"])
                     self.connected = False
@@ -509,7 +501,7 @@ class ADBSession:
         Returns:
             bool: Returns True if "Enforcing" otherwise False.
         """
-        status = self.call(["shell", "getenforce"])[1]
+        status = self.shell(["getenforce"])[1]
         if status == "Enforcing":
             return True
         if status != "Permissive":
@@ -579,23 +571,11 @@ class ADBSession:
         if self.call(["install", "-g", "-r", apk_path], timeout=120)[0] != 0:
             raise ADBSessionError("Failed to install %r" % (apk_path,))
         # set permissions
-        self.call(
-            [
-                "shell",
-                "pm",
-                "grant",
-                pkg_name,
-                "android.permission.READ_EXTERNAL_STORAGE",
-            ]
+        self.shell(
+            ["pm", "grant", pkg_name, "android.permission.READ_EXTERNAL_STORAGE"]
         )
-        self.call(
-            [
-                "shell",
-                "pm",
-                "grant",
-                pkg_name,
-                "android.permission.WRITE_EXTERNAL_STORAGE",
-            ]
+        self.shell(
+            ["pm", "grant", pkg_name, "android.permission.WRITE_EXTERNAL_STORAGE"]
         )
         LOG.debug("installed package %r (%r)", pkg_name, apk_path)
         return pkg_name
@@ -614,11 +594,11 @@ class ADBSession:
         """
         full_dst = str(Path(dst) / Path(src).name)
         self.push(src, full_dst)
-        self.call(["shell", "chown", "root.shell", full_dst])
+        self.shell(["chown", "root.shell", full_dst])
         if mode is not None:
-            self.call(["shell", "chmod", mode, full_dst])
+            self.shell(["chmod", mode, full_dst])
         if context is not None:
-            self.call(["shell", "chcon", context, full_dst])
+            self.shell(["chcon", context, full_dst])
 
     def is_installed(self, package_name):
         """Check if a package is installed on the connected device.
@@ -641,7 +621,7 @@ class ADBSession:
             list: Strings containing names of all items in a directory.
         """
         LOG.debug("listdir(%r)", path)
-        ret_val, output = self.call(["shell", "ls", "-A", path])
+        ret_val, output = self.shell(["ls", "-A", path])
         if ret_val != 0:
             raise IOError("%r does not exist" % (path,))
         return output.splitlines()
@@ -670,12 +650,12 @@ class ADBSession:
             ), "Cannot request child open files without specifying pid"
             for proc in self._get_procs(pid_children=pid):
                 pids.append(str(proc.pid))
-        cmd = ["shell", "lsof"]
+        cmd = ["lsof"]
         if pids:
             cmd += ["-p", ",".join(pids)]
         if files:
             cmd.extend(list(files))
-        for line in self.call(cmd)[1].splitlines():
+        for line in self.shell(cmd)[1].splitlines():
             if line.endswith("Permission denied)"):
                 continue
             # I believe we only care about regular files
@@ -701,7 +681,7 @@ class ADBSession:
         Yields:
             str: Names of the installed packages
         """
-        ret_code, output = self.call(["shell", "pm", "list", "packages"])
+        ret_code, output = self.shell(["pm", "list", "packages"])
         if ret_code == 0:
             for line in output.splitlines():
                 if line.startswith("package:"):
@@ -756,7 +736,7 @@ class ADBSession:
             str: canonical path of the specified path.
         """
         LOG.debug("realpath(%r)", path)
-        ret_val, output = self.call(["shell", "realpath", path])
+        ret_val, output = self.shell(["realpath", path])
         if ret_val != 0:
             raise IOError("%r does not exist" % (path,))
         return output.strip()
@@ -842,7 +822,7 @@ class ADBSession:
         """
         prefix = prefix.lower()
         assert prefix == "asan", "only ASan is supported atm"
-        self.call(["shell", "rm", "-f", "%s.options.gecko" % (prefix,)])
+        self.shell(["rm", "-f", "%s.options.gecko" % (prefix,)])
         with TemporaryDirectory(prefix="sanopts_", dir=grz_tmp()) as working_path:
             optfile = Path(working_path) / ("%s.options.gecko" % (prefix,))
             optfile.write_text(":".join("%s=%s" % x for x in options.items()))
@@ -861,7 +841,21 @@ class ADBSession:
         assert value in (0, 1)
         if not self._root:
             LOG.warning("set_enforce requires root")
-        self.call(["shell", "setenforce", str(value)])
+        self.shell(["setenforce", str(value)])
+
+    def shell(self, cmd, timeout=120):
+        """Execute an ADB shell command via a non-interactive shell.
+
+        Args:
+            cmd (list(str)): List of strings to pass as arguments when calling ADB.
+            timeout (float, optional): Seconds to wait for ADB call to complete.
+
+        Returns:
+            tuple: The first element is an integer containing the exit code of the
+            ADB call and the second is a string containing stderr and stdout.
+        """
+        assert cmd
+        return self.call(["shell", "-T", "-n"] + cmd, timeout=timeout)
 
     def symbols_path(self, package_name):
         """Lookup path containing symbols for a specified package.
@@ -904,8 +898,8 @@ class ADBSession:
             deadline = None
         # first wait for the boot to complete then wait for the boot animation to
         # complete, this will help ensure the device is in a ready state
-        anim_chk = ["shell", "getprop", "init.svc.bootanim"]
-        boot_chk = ["shell", "getprop", "sys.boot_completed"]
+        anim_chk = ["getprop", "init.svc.bootanim"]
+        boot_chk = ["shell", "-T", "-n", "getprop", "sys.boot_completed"]
         attempts = 0
         booted = False
         while True:
@@ -915,7 +909,7 @@ class ADBSession:
             # we need to verify that boot is complete before checking the animation is
             # stopped because the animation can be in the stopped state early in the
             # boot process
-            if booted and self.call(anim_chk)[1] == "stopped":
+            if booted and self.shell(anim_chk)[1] == "stopped":
                 if attempts > 1:
                     # the device was booting so give it additional time
                     LOG.debug("device was boot was detected")

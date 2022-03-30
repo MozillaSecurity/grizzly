@@ -227,20 +227,24 @@ def test_adb_session_06(mocker):
             assert cmd[2] == ":".join([test_ip, str(test_port)])
             return 0, ""
         # already Permissive
-        if cmd[1] == "shell" and cmd[2] == "getenforce":
-            return 0, "Permissive"
-        if cmd[1] == "shell" and cmd[2] == "getprop":
-            if cmd[3] == "init.svc.bootanim":
-                return 0, "stopped"
-            if cmd[3] == "ro.build.version.release":
-                return 0, test_version
-            if cmd[3] == "ro.product.cpu.abi":
-                return 0, test_arch
-            if cmd[3] == "sys.boot_completed":
-                return 0, "1"
-        # already root
-        if cmd[1] == "shell" and cmd[2] == "whoami":
-            return 0, "root"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "getenforce":
+                return 0, "Permissive"
+            if cmd[2] == "getprop":
+                if cmd[3] == "init.svc.bootanim":
+                    return 0, "stopped"
+                if cmd[3] == "ro.build.version.release":
+                    return 0, test_version
+                if cmd[3] == "ro.product.cpu.abi":
+                    return 0, test_arch
+                if cmd[3] == "sys.boot_completed":
+                    return 0, "1"
+            # already root
+            if cmd[2] == "whoami":
+                return 0, "root"
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -288,28 +292,32 @@ def test_adb_session_07(mocker):
             obj._root = True
             obj.connected = False
             return 0, "restarting adbd as root"
-        if cmd[1] == "shell" and cmd[2] == "getenforce":
-            if test_enforcing:
-                return 0, "Enforcing"
-            return 0, "Permissive"
-        if cmd[1] == "shell" and cmd[2] == "getprop":
-            if cmd[3] == "init.svc.bootanim":
-                return 0, "stopped"
-            if cmd[3] == "ro.build.version.release":
-                return 0, test_version
-            if cmd[3] == "ro.product.cpu.abi":
-                return 0, test_arch
-            if cmd[3] == "sys.boot_completed":
-                return 0, "1"
-        if cmd[1] == "shell" and cmd[2] == "setenforce":
-            test_enforcing = False
-            return 0, ""
-        if cmd[1] == "shell" and cmd[2] in ("start", "stop"):
-            return 0, ""
-        if cmd[1] == "shell" and cmd[2] == "whoami":
-            if obj._root:
-                return 0, "root"
-            return 0, "shell"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "getenforce":
+                if test_enforcing:
+                    return 0, "Enforcing"
+                return 0, "Permissive"
+            if cmd[2] == "getprop":
+                if cmd[3] == "init.svc.bootanim":
+                    return 0, "stopped"
+                if cmd[3] == "ro.build.version.release":
+                    return 0, test_version
+                if cmd[3] == "ro.product.cpu.abi":
+                    return 0, test_arch
+                if cmd[3] == "sys.boot_completed":
+                    return 0, "1"
+            if cmd[2] == "setenforce":
+                test_enforcing = False
+                return 0, ""
+            if cmd[2] in ("start", "stop"):
+                return 0, ""
+            if cmd[2] == "whoami":
+                if obj._root:
+                    return 0, "root"
+                return 0, "shell"
         if cmd[1] == "unroot":
             obj._root = False
             obj.connected = False
@@ -354,19 +362,23 @@ def test_adb_session_08(mocker):
                 "* daemon started successfully\n"
                 "emulator-5554   device",
             )
-        if cmd[1] == "shell" and cmd[2] == "getenforce":
-            return 0, "Permissive"
-        if cmd[1] == "shell" and cmd[2] == "getprop":
-            if cmd[3] == "init.svc.bootanim":
-                return 0, "stopped"
-            if cmd[3] == "ro.build.version.release":
-                return 0, test_version
-            if cmd[3] == "ro.product.cpu.abi":
-                return 0, test_arch
-            if cmd[3] == "sys.boot_completed":
-                return 0, "1"
-        if cmd[1] == "shell" and cmd[2] == "whoami":
-            return 0, "shell"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "getenforce":
+                return 0, "Permissive"
+            if cmd[2] == "getprop":
+                if cmd[3] == "init.svc.bootanim":
+                    return 0, "stopped"
+                if cmd[3] == "ro.build.version.release":
+                    return 0, test_version
+                if cmd[3] == "ro.product.cpu.abi":
+                    return 0, test_arch
+                if cmd[3] == "sys.boot_completed":
+                    return 0, "1"
+            if cmd[2] == "whoami":
+                return 0, "shell"
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch("grizzly.target.adb_device.adb_session.ADBSession._call_adb")
@@ -422,13 +434,17 @@ def test_adb_session_10(mocker):
             return 0, ""
         if cmd[1] == "devices":
             return 0, "\n"
-        if cmd[1] == "shell" and cmd[2] == "getprop":
-            if cmd[3] == "init.svc.bootanim":
-                return 0, "stopped"
-            if cmd[3] == "sys.boot_completed":
-                return 0, "1"
-        if cmd[1] == "shell" and cmd[2] == "whoami":
-            return 1, ""
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "getprop":
+                if cmd[3] == "init.svc.bootanim":
+                    return 0, "stopped"
+                if cmd[3] == "sys.boot_completed":
+                    return 0, "1"
+            if cmd[2] == "whoami":
+                return 1, ""
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -469,21 +485,25 @@ def test_adb_session_11(mocker):
             obj._root = True
             obj.connected = False
             return 0, "restarting adbd as root"
-        if cmd[1] == "shell" and cmd[2] == "getenforce":
-            return 0, "Permissive"
-        if cmd[1] == "shell" and cmd[2] == "getprop":
-            if cmd[3] == "init.svc.bootanim":
-                return 0, "stopped"
-            if cmd[3] == "ro.build.version.release":
-                return 0, "9"
-            if cmd[3] == "ro.product.cpu.abi":
-                return 0, "x86_64"
-            if cmd[3] == "sys.boot_completed":
-                return 0, "1"
-        if cmd[1] == "shell" and cmd[2] == "whoami":
-            if obj._root:
-                return 0, "root"
-            return 0, "shell"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "getenforce":
+                return 0, "Permissive"
+            if cmd[2] == "getprop":
+                if cmd[3] == "init.svc.bootanim":
+                    return 0, "stopped"
+                if cmd[3] == "ro.build.version.release":
+                    return 0, "9"
+                if cmd[3] == "ro.product.cpu.abi":
+                    return 0, "x86_64"
+                if cmd[3] == "sys.boot_completed":
+                    return 0, "1"
+            if cmd[2] == "whoami":
+                if obj._root:
+                    return 0, "root"
+                return 0, "shell"
         if cmd[1] == "unroot":
             obj._root = False
             obj.connected = False
@@ -583,6 +603,9 @@ def test_adb_session_14(tmp_path, mocker):
                 return 0, "Success"
             return 1, ""
         if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
             assert cmd[2] == "pm"
             assert cmd[3] == "grant"
             assert cmd[4] == "test-package.blah.foo"
@@ -651,18 +674,22 @@ def test_adb_session_16(mocker):
     # pylint: disable=unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
-        if cmd[1] == "shell" and cmd[2] == "ps":
-            return (
-                0,
-                "USER      PID   PPID  VSIZE  RSS   WCHAN            PC  NAME\n"
-                "test      1337  1772  1024   1024 SyS_epoll_ 00000000 S"
-                " org.test.preinstalled\n"
-                "root      5847  1     315992 2348  poll_sched 00000000 S"
-                " /sbin/adbd\n"
-                "u0_a80    9990  1772  1221212 128064 SyS_epoll_ 00000000 S"
-                " org.mozilla.fennec_aurora\n"
-                "root      5944  5847  6280   2360           0 00000000 R ps\n\n",
-            )
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "ps":
+                return (
+                    0,
+                    "USER      PID   PPID  VSIZE  RSS   WCHAN            PC  NAME\n"
+                    "test      1337  1772  1024   1024 SyS_epoll_ 00000000 S"
+                    " org.test.preinstalled\n"
+                    "root      5847  1     315992 2348  poll_sched 00000000 S"
+                    " /sbin/adbd\n"
+                    "u0_a80    9990  1772  1221212 128064 SyS_epoll_ 00000000 S"
+                    " org.mozilla.fennec_aurora\n"
+                    "root      5944  5847  6280   2360           0 00000000 R ps\n\n",
+                )
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -683,16 +710,20 @@ def test_adb_session_17(mocker):
     # pylint: disable=unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
-        if cmd[1] == "shell" and cmd[2] == "pm":
-            assert cmd[3] == "list"
-            assert cmd[4] == "packages"
-            return (
-                0,
-                "package:org.mozilla.fennec_aurora\n"
-                "package:org.test.preinstalled\n"
-                "package:com.android.phone\n"
-                "package:com.android.shell",
-            )
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "pm":
+                assert cmd[3] == "list"
+                assert cmd[4] == "packages"
+                return (
+                    0,
+                    "package:org.mozilla.fennec_aurora\n"
+                    "package:org.test.preinstalled\n"
+                    "package:com.android.phone\n"
+                    "package:com.android.shell",
+                )
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -712,16 +743,20 @@ def test_adb_session_18(mocker):
     # pylint: disable=unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
-        if cmd[1] == "shell" and cmd[2] == "pm":
-            assert cmd[3] == "list"
-            assert cmd[4] == "packages"
-            return (
-                0,
-                "package:org.mozilla.fennec_aurora\n"
-                "package:org.test.preinstalled\n"
-                "package:com.android.phone\n"
-                "package:com.android.shell",
-            )
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "pm":
+                assert cmd[3] == "list"
+                assert cmd[4] == "packages"
+                return (
+                    0,
+                    "package:org.mozilla.fennec_aurora\n"
+                    "package:org.test.preinstalled\n"
+                    "package:com.android.phone\n"
+                    "package:com.android.shell",
+                )
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -795,6 +830,10 @@ def test_adb_session_20(mocker):
     # pylint: disable=unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
         if cmd[1] == "shell" and cmd[2] == "lsof":
             if len(cmd) == 5:
                 assert cmd[3].startswith("-p")
@@ -887,6 +926,10 @@ def test_adb_session_21(mocker):
     # pylint: disable=too-many-return-statements,unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
         if cmd[1] == "shell" and cmd[2] == "ps":
             if len(cmd) == 5:
                 assert cmd[3] == "--ppid"
@@ -1011,11 +1054,15 @@ def test_adb_session_25(mocker):
     # pylint: disable=unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
-        if cmd[1] == "shell" and cmd[2] == "ls":
-            assert cmd[3] == "-A"
-            if cmd[4] == "missing-dir":
-                return 1, ""
-            return 0, "test"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "ls":
+                assert cmd[3] == "-A"
+                if cmd[4] == "missing-dir":
+                    return 1, ""
+                return 0, "test"
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -1038,14 +1085,18 @@ def test_adb_session_26(mocker):
     # pylint: disable=unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
-        if cmd[1] == "shell" and cmd[2] == "ps":
-            assert cmd[3] == "9990"
-            return (
-                0,
-                "USER      PID   PPID  VSIZE  RSS   WCHAN            PC  NAME\n"
-                "u0_a80    9990  1772  1221212 128064 SyS_epoll_ 00000000 S"
-                " org.mozilla.fennec_aurora\n\n",
-            )
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "ps":
+                assert cmd[3] == "9990"
+                return (
+                    0,
+                    "USER      PID   PPID  VSIZE  RSS   WCHAN            PC  NAME\n"
+                    "u0_a80    9990  1772  1221212 128064 SyS_epoll_ 00000000 S"
+                    " org.mozilla.fennec_aurora\n\n",
+                )
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -1111,6 +1162,11 @@ def test_adb_session_28(mocker, tmp_path):
 @mark.usefixtures("tmp_session_adb_check")
 def test_adb_session_29(mocker, tmp_path):
     """test ADBSession.get_package_name()"""
+    mocker.patch(
+        "grizzly.target.adb_device.adb_session.ADBSession._aapt_check",
+        autospec=True,
+        return_value=b"fake_aapt",
+    )
     mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"")
     with raises(IOError):
         ADBSession.get_package_name("/fake/path")
@@ -1210,10 +1266,14 @@ def test_adb_session_32(mocker):
     # pylint: disable=unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
-        if cmd[1] == "shell" and cmd[2] == "realpath":
-            if cmd[3] == "missing/path":
-                return 1, ""
-            return 0, "existing/path"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "realpath":
+                if cmd[3] == "missing/path":
+                    return 1, ""
+                return 0, "existing/path"
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -1293,23 +1353,27 @@ def test_adb_session_35(mocker):
     # pylint: disable=unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
-        if cmd[1] == "shell" and cmd[2] == "settings":
-            if cmd[3] == "get":
-                assert cmd[4] == "global"
-                assert cmd[5] == "airplane_mode_on"
-                return 0, "1"
-            if cmd[3] == "put":
-                assert cmd[4] == "global"
-                assert cmd[5] == "airplane_mode_on"
-                assert cmd[6] in "01"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "settings":
+                if cmd[3] == "get":
+                    assert cmd[4] == "global"
+                    assert cmd[5] == "airplane_mode_on"
+                    return 0, "1"
+                if cmd[3] == "put":
+                    assert cmd[4] == "global"
+                    assert cmd[5] == "airplane_mode_on"
+                    assert cmd[6] in "01"
+                    return 0, ""
+            if cmd[2] == "su":
+                assert cmd[3] == "root"
+                assert cmd[4] == "am"
+                assert cmd[5] == "broadcast"
+                assert cmd[6] == "-a"
+                assert cmd[7] == "android.intent.action.AIRPLANE_MODE"
                 return 0, ""
-        if cmd[1] == "shell" and cmd[2] == "su":
-            assert cmd[3] == "root"
-            assert cmd[4] == "am"
-            assert cmd[5] == "broadcast"
-            assert cmd[6] == "-a"
-            assert cmd[7] == "android.intent.action.AIRPLANE_MODE"
-            return 0, ""
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -1332,11 +1396,15 @@ def test_adb_session_36(mocker):
     # test timeout
     # pylint: disable=unused-argument
     def fake_adb_01(_, cmd, timeout=None):
-        if cmd[1] == "shell" and cmd[2] == "getprop":
-            if cmd[3] == "init.svc.bootanim":
-                return 0, ""
-            if cmd[3] == "sys.boot_completed":
-                return 0, "0"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "getprop":
+                if cmd[3] == "init.svc.bootanim":
+                    return 0, ""
+                if cmd[3] == "sys.boot_completed":
+                    return 0, "0"
         raise AssertionError("unexpected command %r" % (cmd,))
 
     ADBSession._call_adb = fake_adb_01
@@ -1348,11 +1416,15 @@ def test_adb_session_36(mocker):
     # test already booted
     # pylint: disable=unused-argument
     def fake_adb_02(_, cmd, timeout=None):
-        if cmd[1] == "shell" and cmd[2] == "getprop":
-            if cmd[3] == "init.svc.bootanim":
-                return 0, "stopped"
-            if cmd[3] == "sys.boot_completed":
-                return 0, "1"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "getprop":
+                if cmd[3] == "init.svc.bootanim":
+                    return 0, "stopped"
+                if cmd[3] == "sys.boot_completed":
+                    return 0, "1"
         raise AssertionError("unexpected command %r" % (cmd,))
 
     ADBSession._call_adb = fake_adb_02
@@ -1370,17 +1442,21 @@ def test_adb_session_36(mocker):
     def fake_adb_03(_, cmd, timeout=None):
         nonlocal anim_done
         nonlocal boot_done
-        if cmd[1] == "shell" and cmd[2] == "getprop":
-            if cmd[3] == "init.svc.bootanim":
-                if not anim_done:
-                    anim_done = True
-                    return 0, ""
-                return 0, "stopped"
-            if cmd[3] == "sys.boot_completed":
-                if not boot_done:
-                    boot_done = True
-                    return 0, "0"
-                return 0, "1"
+        if cmd[1] == "shell":
+            # strip shell args
+            cmd.remove("-T")
+            cmd.remove("-n")
+            if cmd[2] == "getprop":
+                if cmd[3] == "init.svc.bootanim":
+                    if not anim_done:
+                        anim_done = True
+                        return 0, ""
+                    return 0, "stopped"
+                if cmd[3] == "sys.boot_completed":
+                    if not boot_done:
+                        boot_done = True
+                        return 0, "0"
+                    return 0, "1"
         raise AssertionError("unexpected command %r" % (cmd,))
 
     ADBSession._call_adb = fake_adb_03
@@ -1490,10 +1566,13 @@ def test_adb_session_40(mocker):
     session.sanitizer_options("asan", {"a": "1", "b": "2"})
 
 
+@mark.usefixtures("tmp_session_adb_check")
 def test_adb_session_41(mocker):
     """test ADBSession.install_file()"""
-    mocker.patch("grizzly.target.adb_device.adb_session.ADBSession.call", autospec=True)
     mocker.patch("grizzly.target.adb_device.adb_session.ADBSession.push", autospec=True)
+    mocker.patch(
+        "grizzly.target.adb_device.adb_session.ADBSession.shell", autospec=True
+    )
     session = ADBSession()
     session.install_file("a/b", "/sdcard/", mode="777", context="foo")
 
