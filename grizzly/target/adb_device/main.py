@@ -67,6 +67,14 @@ def main(args):  # pylint: disable=missing-docstring
             LOG.info("Preparing device...")
             args.airplane_mode = 1
             args.install = args.prep
+            # disable some UI animations
+            session.shell(["settings", "put", "global", "animator_duration_scale", "0"])
+            session.shell(
+                ["settings", "put", "global", "transition_animation_scale", "0"]
+            )
+            session.shell(["settings", "put", "global", "window_animation_scale", "0"])
+            # keep device awake
+            session.shell(["svc", "power", "stayon", "true"])
         if args.airplane_mode is not None:
             LOG.debug("Setting airplane mode (%d)...", args.airplane_mode)
             session.airplane_mode = args.airplane_mode == 1
