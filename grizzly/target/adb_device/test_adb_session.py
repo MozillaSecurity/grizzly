@@ -1134,7 +1134,6 @@ def test_adb_session_29(mocker, tmp_path):
     """test ADBSession.get_package_name()"""
     mocker.patch(
         "grizzly.target.adb_device.adb_session.ADBSession._aapt_check",
-        autospec=True,
         return_value=b"fake_aapt",
     )
     mocker.patch("grizzly.target.adb_device.adb_session.check_output", return_value=b"")
