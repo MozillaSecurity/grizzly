@@ -23,7 +23,7 @@ from .adb_session import (
         # success
         (CompletedProcess(["test"], stdout="test\n", returncode=0),),
         # timeout
-        TimeoutExpired(["test"], output="test\n", timeout=1),
+        TimeoutExpired(["test"], timeout=1),
     ],
 )
 def test_adb_session_01(mocker, result):
@@ -34,8 +34,12 @@ def test_adb_session_01(mocker, result):
         side_effect=result,
     )
     retcode, output = ADBSession._call_adb(["test"])
-    assert retcode == (1 if isinstance(result, TimeoutExpired) else 0)
-    assert output == "test"
+    if isinstance(result, TimeoutExpired):
+        assert retcode == 1
+        assert output == ""
+    else:
+        assert retcode == 0
+        assert output == "test"
 
 
 @mark.parametrize(

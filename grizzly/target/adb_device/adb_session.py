@@ -163,9 +163,9 @@ class ADBSession:
                 stdout=PIPE,
                 timeout=timeout,
             )
-        except TimeoutExpired as exc:
+        except TimeoutExpired:
             LOG.warning("ADB call timed out!")
-            return 1, exc.output.strip()
+            return 1, ""
         return result.returncode, result.stdout.strip()
 
     def _get_procs(self, pid=-1, pid_children=-1):
