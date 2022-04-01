@@ -247,21 +247,21 @@ class ADBSession:
             ]
         )
 
-    def call(self, cmd, device_required=True, timeout=None):
+    def call(self, cmd, device_required=True, timeout=120):
         """Call ADB with arguments provided in cmd.
 
         Args:
             cmd (list): List of strings to pass as arguments when calling ADB.
-            device_required (bool, optional): A device must be available for call.
+            device_required (bool, optional): A device must be available.
             timeout (float, optional): Seconds to wait for ADB call to complete.
 
         Returns:
             tuple: The first element is an integer containing the exit code of the
             ADB call and the second is a string containing stderr and stdout.
         """
-        assert isinstance(cmd, list) and cmd
+        assert cmd
         cmd = [self._adb_bin] + cmd
-        LOG.debug("calling: %s", " ".join(cmd))
+        LOG.debug("call %r (%r)", " ".join(cmd[1:]), timeout)
         if not self.connected and cmd[1] not in ("connect", "devices", "disconnect"):
             raise ADBCommunicationError("ADB session is not connected!")
         ret_code, output = self._call_adb(cmd, timeout=timeout)
@@ -273,7 +273,7 @@ class ADBSession:
             if output.startswith("Android Debug Bridge version"):
                 raise ADBCommandError("Invalid ADB command '%s'" % (" ".join(cmd[1:]),))
             if output.startswith("adb: usage:"):
-                raise ADBCommandError(output.strip())
+                raise ADBCommandError(output)
             if device_required and (
                 output.startswith("error: closed")
                 or output.startswith("error: device offline")
@@ -292,7 +292,6 @@ class ADBSession:
         Returns:
             None
         """
-        LOG.debug("clear_logs()")
         return self.call(["logcat", "--clear"], timeout=10)[0] == 0
 
     def collect_logs(self, pid=None):
@@ -313,7 +312,7 @@ class ADBSession:
         cmd = ["logcat", "-d", "*:I"]
         if pid is not None:
             cmd += ["--pid=%d" % (pid,)]
-        return self.call(cmd, timeout=10)[1].encode("utf-8", "ignore")
+        return self.call(cmd, timeout=30)[1].encode("utf-8", "ignore")
 
     def connect(self, as_root=True, boot_timeout=300, max_attempts=60, retry_delay=1):
         """Connect to a device via ADB.
@@ -327,9 +326,9 @@ class ADBSession:
         Returns:
             bool: Returns True if connection was established otherwise False.
         """
-        assert isinstance(boot_timeout, int) and boot_timeout > 0
-        assert isinstance(max_attempts, int) and max_attempts > 0
-        assert isinstance(retry_delay, (int, float)) and retry_delay > 0
+        assert boot_timeout > 0
+        assert max_attempts > 0
+        assert retry_delay > 0
         self._cpu_arch = None
         self._os_version = None
         attempt = 0
@@ -341,7 +340,7 @@ class ADBSession:
                 if self._ip_addr is not None:
                     addr = ":".join((self._ip_addr, str(self._port)))
                     LOG.debug("connecting to %s", addr)
-                    if self.call(["connect", addr])[0] != 0:
+                    if self.call(["connect", addr], timeout=30)[0] != 0:
                         LOG.warning("connection attempt #%d failed", attempt)
                         sleep(retry_delay)
                         continue
@@ -358,7 +357,7 @@ class ADBSession:
                     "Timeout (%ds) waiting for device to boot" % (boot_timeout,)
                 )
             ret_code, user = self.call(
-                ["shell", "-T", "-n", "whoami"], device_required=False
+                ["shell", "-T", "-n", "whoami"], device_required=False, timeout=30
             )
             if ret_code != 0 or not user:
                 self.connected = False
@@ -385,7 +384,7 @@ class ADBSession:
                     self.shell(["stop"])
                     self.shell(["start"])
                     # put the device in a known state
-                    self.call(["reconnect"])
+                    self.call(["reconnect"], timeout=30)
                     self.connected = False
                     set_enforce_called = True
                     attempt -= 1
@@ -399,7 +398,7 @@ class ADBSession:
                 break
             # enable root
             assert as_root, "Should not be here if root is not requested"
-            if self.call(["root"])[0] == 0:
+            if self.call(["root"], timeout=30)[0] == 0:
                 self.connected = False
                 # only skip attempt to call root once
                 if not root_called:
@@ -442,7 +441,7 @@ class ADBSession:
         Returns:
             dict: A dictionary keyed on device name containing the state.
         """
-        ret_code, entries = self.call(["devices"])
+        ret_code, entries = self.call(["devices"], timeout=30)
         devices = {}
         if ret_code != 0:
             return devices
@@ -478,7 +477,7 @@ class ADBSession:
             return
         if self._root and unroot:
             try:
-                if self.call(["unroot"])[0] == 0:
+                if self.call(["unroot"], timeout=30)[0] == 0:
                     self.connected = False
                     self._root = False
                     return
@@ -486,7 +485,9 @@ class ADBSession:
             except ADBCommandError:
                 LOG.warning("'unroot' not support by ADB")
         elif self._ip_addr is not None:
-            self.call(["disconnect", ":".join((self._ip_addr, str(self._port)))])
+            self.call(
+                ["disconnect", ":".join((self._ip_addr, str(self._port)))], timeout=30
+            )
         self.connected = False
 
     def get_enforce(self):
@@ -565,7 +566,7 @@ class ADBSession:
         pkg_name = self.get_package_name(apk_path)
         if pkg_name is None:
             raise ADBSessionError("Could not find APK package name")
-        if self.call(["install", "-g", "-r", apk_path], timeout=120)[0] != 0:
+        if self.call(["install", "-g", "-r", apk_path], timeout=180)[0] != 0:
             raise ADBSessionError("Failed to install %r" % (apk_path,))
         # set permissions
         self.shell(
@@ -617,7 +618,6 @@ class ADBSession:
         Returns:
             list: Strings containing names of all items in a directory.
         """
-        LOG.debug("listdir(%r)", path)
         ret_val, output = self.shell(["ls", "-A", path])
         if ret_val != 0:
             raise IOError("%r does not exist" % (path,))
@@ -706,7 +706,7 @@ class ADBSession:
             bool: True if successful otherwise False
         """
         LOG.debug("pull(%r, %r)", src, dst)
-        return self.call(["pull", src, dst])[0] == 0
+        return self.call(["pull", src, dst], timeout=180)[0] == 0
 
     def push(self, src, dst):
         """Copy file to connected device.
@@ -721,7 +721,7 @@ class ADBSession:
         LOG.debug("push(%r, %r)", src, dst)
         if not Path(src).exists():
             raise IOError("%r does not exist" % (src,))
-        return self.call(["push", src, dst])[0] == 0
+        return self.call(["push", src, dst], timeout=180)[0] == 0
 
     def realpath(self, path):
         """Get canonical path of the specified path.
@@ -732,11 +732,10 @@ class ADBSession:
         Returns:
             str: canonical path of the specified path.
         """
-        LOG.debug("realpath(%r)", path)
         ret_val, output = self.shell(["realpath", path])
         if ret_val != 0:
             raise IOError("%r does not exist" % (path,))
-        return output.strip()
+        return output
 
     def reboot_device(self, boot_timeout=300, max_attempts=60, retry_delay=1):
         """Reboot the connected device and reconnect.
@@ -750,7 +749,6 @@ class ADBSession:
             None
         """
         was_root = self._root
-        LOG.debug("calling reboot...")
         self.call(["reboot"])
         self.connected = False
         self.connect(
@@ -785,9 +783,10 @@ class ADBSession:
         Returns:
             bool: True if successful otherwise False
         """
-        assert isinstance(local, int) and 1024 < local < 0x10000
-        assert isinstance(remote, int) and 1024 < remote < 0x10000
-        return self.call(["reverse", "tcp:%d" % (remote,), "tcp:%d" % (local,)])[0] == 0
+        assert 1024 < local < 0x10000
+        assert 1024 < remote < 0x10000
+        cmd = ["reverse", "tcp:%d" % (remote,), "tcp:%d" % (local,)]
+        return self.call(cmd, timeout=10)[0] == 0
 
     def reverse_remove(self, remote=None):
         """
@@ -800,12 +799,12 @@ class ADBSession:
         """
         cmd = ["reverse"]
         if remote is not None:
-            assert isinstance(remote, int) and 1024 < remote < 0x10000
+            assert 1024 < remote < 0x10000
             cmd.append("--remove")
             cmd.append("tcp:%d" % (remote,))
         else:
             cmd.append("--remove-all")
-        return self.call(cmd)[0] == 0
+        return self.call(cmd, timeout=10)[0] == 0
 
     def sanitizer_options(self, prefix, options):
         """Set sanitizer options.
@@ -840,7 +839,7 @@ class ADBSession:
             LOG.warning("set_enforce requires root")
         self.shell(["setenforce", str(value)])
 
-    def shell(self, cmd, timeout=120):
+    def shell(self, cmd, timeout=60):
         """Execute an ADB shell command via a non-interactive shell.
 
         Args:
@@ -889,7 +888,7 @@ class ADBSession:
             bool: True if device booted successfully otherwise False.
         """
         if timeout is not None:
-            assert isinstance(timeout, (int, float)) and timeout > 0
+            assert timeout > 0
             deadline = time() + timeout
         else:
             deadline = None
@@ -909,7 +908,7 @@ class ADBSession:
             if booted and self.shell(anim_chk)[1] == "stopped":
                 if attempts > 1:
                     # the device was booting so give it additional time
-                    LOG.debug("device was boot was detected")
+                    LOG.debug("device boot was detected")
                     sleep(5)
                 return True
             if deadline and time() >= deadline:
