@@ -37,7 +37,7 @@ class ADBTarget(Target):
             LOG.warning("ADBTarget ignoring unsupported arguments: %s", ", ".join(kwds))
 
         LOG.debug("opening a session and setting up the environment")
-        self._session = ADBSession.create(as_root=True)
+        self._session = ADBSession.create(as_root=True, max_attempts=10, retry_delay=15)
         if self._session is None:
             raise RuntimeError("Could not create ADB Session!")
         self._package = ADBSession.get_package_name(self.binary)

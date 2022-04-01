@@ -412,7 +412,9 @@ class ADBSession:
         return self.connected
 
     @classmethod
-    def create(cls, ip_addr=None, port=5555, as_root=True, max_attempts=10):
+    def create(
+        cls, ip_addr=None, port=5555, as_root=True, max_attempts=10, retry_delay=1
+    ):
         """Create a ADBSession and connect to a device via ADB.
 
         Args:
@@ -420,13 +422,16 @@ class ADBSession:
                                      Defaults to None.
             port (int, optional): Port to use (TCP/IP only). Defaults to 5555.
             as_root (bool, optional): Attempt to enable root. Default is True.
-            max_attempt (int, optional): Number of attempts to connect to the device.
+            max_attempts (int, optional): Number of attempts to connect to the device.
+            retry_delay (int, optional): Number of seconds to wait between attempts.
 
         Returns:
             ADBSession: A connected ADBSession object otherwise None
         """
         session = cls(ip_addr, port)
-        if session.connect(as_root=as_root, max_attempts=max_attempts):
+        if session.connect(
+            as_root=as_root, max_attempts=max_attempts, retry_delay=retry_delay
+        ):
             return session
         return None
 
