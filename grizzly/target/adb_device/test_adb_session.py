@@ -655,14 +655,11 @@ def test_adb_session_16(mocker):
             if cmd[2] == "ps":
                 return (
                     0,
-                    "USER      PID   PPID  VSIZE  RSS   WCHAN            PC  NAME\n"
-                    "test      1337  1772  1024   1024 SyS_epoll_ 00000000 S"
-                    " org.test.preinstalled\n"
-                    "root      5847  1     315992 2348  poll_sched 00000000 S"
-                    " /sbin/adbd\n"
-                    "u0_a80    9990  1772  1221212 128064 SyS_epoll_ 00000000 S"
-                    " org.mozilla.fennec_aurora\n"
-                    "root      5944  5847  6280   2360           0 00000000 R ps\n\n",
+                    "header... this should be skipped\n"
+                    "1337  1772  1024    org.test.preinstalled\n"
+                    "5847  1     315992  /sbin/adbd\n"
+                    "9990  1772  1221212 org.mozilla.fennec_aurora\n"
+                    "5944  5847  6280    ps\n\n",
                 )
         raise AssertionError("unexpected command %r" % (cmd,))
 
@@ -865,13 +862,12 @@ def test_adb_session_20(mocker):
                 "      44840 TCP :35274->:443 (SYN_SENT)\n",
             )
         if cmd[1] == "shell" and cmd[2] == "ps":
-            assert cmd[3] == "--ppid"
-            assert cmd[4] == "9990"
+            assert "--ppid" in cmd
+            assert "9990" in cmd
             return (
                 0,
-                "USER      PID   PPID  VSIZE  RSS   WCHAN            PC  NAME\n"
-                "u0_a80    9991  9990  3332   3331 SyS_epoll_ 00000000 S"
-                " org.mozilla.fennec_aurora\n",
+                "PID   PPID  RSS  NAME\n"
+                "9991  9990  3331 org.mozilla.fennec_aurora\n",
             )
         raise AssertionError("unexpected command %r" % (cmd,))
 
@@ -897,7 +893,7 @@ def test_adb_session_20(mocker):
 def test_adb_session_21(mocker):
     """test ADBSession._get_procs()"""
 
-    # pylint: disable=too-many-return-statements,unused-argument
+    # pylint: disable=unused-argument
     def fake_adb_call(cmd, timeout=None):
         assert cmd and cmd[0].endswith("adb")
         if cmd[1] == "shell":
@@ -905,38 +901,24 @@ def test_adb_session_21(mocker):
             cmd.remove("-T")
             cmd.remove("-n")
         if cmd[1] == "shell" and cmd[2] == "ps":
-            if len(cmd) == 5:
-                assert cmd[3] == "--ppid"
-                ppid = int(cmd[-1])
-            else:
-                ppid = None
-            output = ["USER      PID   PPID  VSIZE  RSS   WCHAN            PC  NAME\n"]
+            ppid = int(cmd[-1]) if "--ppid" in cmd else None
+            output = ["PID   PPID  RSS  NAME\n"]
             if ppid is None:
                 output += [
-                    "root      1     0     8896   2208  SyS_epoll_ 00000000 S /init\n",
-                    "root      1242  2     0      0         kswapd"
-                    " 00000000 S kswapd0\n",
-                    "test      1337  1772  1024   1024 SyS_epoll_"
-                    " 00000000 S org.test.preinstalled\n",
-                    "test      1338  1337  1024   1024 SyS_epoll_"
-                    " 00000000 S org.test.child\n",
-                    "root      1772  1     1620804 122196 poll_sched"
-                    " 00000000 S zygote\n",
-                    "media_rw  2158  1758  0      0              0 00000000 Z sdcard\n",
-                    "audioserver 1773  1     34000  9624  binder_thr"
-                    " 00000000 S /system/bin/audioserver\n",
-                    "root      5847  1     315992 2348  poll_sched"
-                    " 00000000 S /sbin/adbd\n",
-                    "u0_a80    9990  1772  1221212 128064 SyS_epoll_"
-                    " 00000000 S org.mozilla.fennec_aurora\n",
-                    "root      5944  5847  6280   2360           0 00000000 R ps\n",
+                    "1     0     2208   /init\n",
+                    "a     a     a      invalid.for.coverage\n",
+                    "1242  2     0      kswapd0\n",
+                    "1337  1772  1024   org.test.preinstalled\n",
+                    "1338  1337  1024   org.test.child\n",
+                    "1772  1     122196 zygote\n",
+                    "2158  1758  0      sdcard\n",
+                    "1773  1     9624   /system/bin/audioserver\n",
+                    "5847  1     2348   /sbin/adbd\n",
+                    "9990  1772  128064 org.mozilla.fennec_aurora\n",
+                    "5944  5847  6280   ps\n",
                 ]
             elif ppid == 9990:
-                output += [
-                    "u0_a80    9991  9990  3332   3331 SyS_epoll_"
-                    " 00000000 S org.mozilla.fennec_aurora\n"
-                ]
-            output += ["\n"]
+                output.append("9991  9990  3332   org.mozilla.fennec_aurora\n")
             return 0, "".join(output)
         raise AssertionError("unexpected command %r" % (cmd,))
 
@@ -1064,12 +1046,11 @@ def test_adb_session_26(mocker):
             cmd.remove("-T")
             cmd.remove("-n")
             if cmd[2] == "ps":
-                assert cmd[3] == "9990"
+                assert cmd[-1] == "9990"
                 return (
                     0,
-                    "USER      PID   PPID  VSIZE  RSS   WCHAN            PC  NAME\n"
-                    "u0_a80    9990  1772  1221212 128064 SyS_epoll_ 00000000 S"
-                    " org.mozilla.fennec_aurora\n\n",
+                    "PID   PPID  RSS    NAME\n"
+                    "9990  1772  128064 org.mozilla.fennec_aurora\n\n",
                 )
         raise AssertionError("unexpected command %r" % (cmd,))
 
@@ -1501,23 +1482,6 @@ def test_adb_session_38(mocker):
     session._root = True
     # test as root
     session.remount()
-
-
-def test_adb_session_39():
-    """test ADBSession._line_to_info()"""
-    # nothing to parse
-    assert ADBSession._line_to_info("") is None
-    # invalid number of entries
-    assert ADBSession._line_to_info(" ".join("a" * 20)) is None
-    # invalid data (valid number of entries)
-    assert ADBSession._line_to_info(" ".join("a" * 9)) is None
-    # valid info
-    pinfo = ADBSession._line_to_info("a 1 2 a 3 a a a name")
-    assert pinfo is not None
-    assert pinfo.memory == 3
-    assert pinfo.name == "name"
-    assert pinfo.pid == 1
-    assert pinfo.ppid == 2
 
 
 @mark.usefixtures("tmp_session_adb_check")

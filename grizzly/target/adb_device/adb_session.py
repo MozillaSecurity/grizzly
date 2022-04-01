@@ -168,7 +168,7 @@ class ADBSession:
             return 1, ""
         return result.returncode, result.stdout.strip()
 
-    def _get_procs(self, pid=-1, pid_children=-1):
+    def _get_procs(self, pid=None, pid_children=None):
         """Generator function that yields a DeviceProcessInfo object for each running
         process by default. pid and pid_children can be used to filter the results.
 
@@ -179,34 +179,19 @@ class ADBSession:
         Yields:
             DeviceProcessInfo: One instance for each process found in lookup.
         """
-        assert isinstance(pid, int)
-        assert isinstance(pid_children, int)
-        cmd = ["ps"]
-        if pid > -1:
+        cmd = ["ps", "-A", "-o", "pid,ppid,rss,name"]
+        if pid is not None:
+            assert isinstance(pid, int)
             cmd.append(str(pid))
-        if pid_children > -1:
+        if pid_children is not None:
+            assert isinstance(pid_children, int)
             cmd += ["--ppid", str(pid_children)]
-        for line in self.shell(cmd)[1].splitlines()[1:]:
-            pinfo = self._line_to_info(line)
-            if pinfo is not None:
-                yield pinfo
-
-    @staticmethod
-    def _line_to_info(ps_line):
-        """Create a DeviceProcessInfo from the string output of ps.
-
-        Args:
-            ps_line (str): Line of output from ps.
-
-        Returns:
-            DeviceProcessInfo: new instance.
-        """
-        try:
-            _, pid, ppid, _, memory, _, _, _, name = ps_line.split()
-            return DeviceProcessInfo(int(memory), name, int(pid), int(ppid))
-        except ValueError:
-            LOG.debug("invalid ps line %r", ps_line)
-        return None
+        for line in self.shell(cmd, timeout=30)[1].splitlines()[1:]:
+            try:
+                proc_id, ppid, memory, name = line.split()
+                yield DeviceProcessInfo(int(memory), name, int(proc_id), int(ppid))
+            except ValueError:
+                LOG.debug("failed to parse ps line %r", line)
 
     @property
     def airplane_mode(self):
