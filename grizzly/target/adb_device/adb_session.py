@@ -628,33 +628,26 @@ class ADBSession:
             tuple: PID and path of the open file.
         """
         LOG.debug("open_files(pid=%r, children=%r, files=%r", pid, children, files)
-        pids = list()
-        if pid is not None:
-            pids.append(str(pid))
-        if children:
-            assert (
-                pid is not None
-            ), "Cannot request child open files without specifying pid"
-            for proc in self._get_procs(pid_children=pid):
-                pids.append(str(proc.pid))
         cmd = ["lsof"]
-        if pids:
+        if pid is not None:
+            pids = [str(pid)]
+            if children:
+                pids.extend(str(x.pid) for x in self._get_procs(pid_children=pid))
             cmd += ["-p", ",".join(pids)]
+        else:
+            assert not children, "children requires pid"
+            pids = None
         if files:
-            cmd.extend(list(files))
+            cmd.extend(files)
         for line in self.shell(cmd)[1].splitlines():
-            if line.endswith("Permission denied)"):
-                continue
-            # I believe we only care about regular files
-            if " REG " not in line:
+            if line.endswith("Permission denied)") or " REG " not in line:
+                # only include regular files for now
                 continue
             try:
                 file_info = line.split()
-                file_name = file_info[-1]
-                if pid is not None and file_info[1] not in pids:
-                    continue
-                # yield tuple containing pid and filename
-                yield (int(file_info[1]), file_name)
+                if pids is None or file_info[1] in pids:
+                    # tuple containing pid and filename
+                    yield (int(file_info[1]), file_info[-1])
             except ValueError:
                 pass
 
