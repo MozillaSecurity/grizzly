@@ -667,7 +667,9 @@ class ADBSession:
         Returns:
             bool: True if the process exists otherwise False
         """
-        return any(self._get_procs(pid=pid))
+        # this is called frequently and should be as light weight as possible
+        pid = str(pid)
+        return pid in self.shell(["ps", "-p", pid, "-o", "pid"], timeout=30)[1]
 
     def pull(self, src, dst):
         """Copy file from connected device.
