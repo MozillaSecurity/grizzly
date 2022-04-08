@@ -179,13 +179,15 @@ class ADBSession:
         Yields:
             DeviceProcessInfo: One instance for each process found in lookup.
         """
-        cmd = ["ps", "-A", "-o", "pid,ppid,rss,name"]
+        cmd = ["ps", "-o", "pid,ppid,rss,name"]
         if pid is not None:
             assert isinstance(pid, int)
             cmd.append(str(pid))
         if pid_children is not None:
             assert isinstance(pid_children, int)
             cmd += ["--ppid", str(pid_children)]
+        if not pid and not pid_children:
+            cmd.append("-A")
         for line in self.shell(cmd, timeout=30)[1].splitlines()[1:]:
             try:
                 proc_id, ppid, memory, name = line.split()
