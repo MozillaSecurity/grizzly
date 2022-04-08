@@ -527,19 +527,8 @@ class ADBSession:
             int: PID of the process with the specified package name if it exists
                  otherwise None.
         """
-        # TODO: _get_procs() is slow, move to pidof ASAP
-        # pidof is not supported pre-Android 6... do we care about <6? if so we could
-        # just fallback
-        pids = [proc.pid for proc in self._get_procs() if proc.name == package_name]
-        if not pids:
-            return None
-        count = len(pids)
-        if count > 1:
-            LOG.debug("get_pid() %d proc(s) found", count)
-            # TODO: get procs and use the ppid of the procs the determine the parent
-            # for now we are using the lowest pid...
-            pids.sort()
-        return pids[0]
+        ret_code, pid = self.shell(["pidof", package_name], timeout=30)
+        return int(pid) if ret_code == 0 else None
 
     def install(self, apk_path):
         """Install APK on the connected device, grant R/W permissions to /sdcard and
