@@ -95,6 +95,7 @@ class ConnectionManager:
     def listener(serv_sock, serv_job, max_workers, shutdown_delay=0):
         assert max_workers > 0
         assert shutdown_delay >= 0
+        total_launches = 0
         worker_pool = list()
         pool_size = 0
         LOG.debug("starting listener")
@@ -106,6 +107,7 @@ class ConnectionManager:
                 if worker is not None:
                     worker_pool.append(worker)
                     pool_size += 1
+                    total_launches += 1
                 # manage worker pool
                 if pool_size >= max_workers:
                     LOG.debug(
@@ -132,9 +134,10 @@ class ConnectionManager:
             serv_job.finish()
         finally:
             LOG.debug(
-                "shutting down listener, waiting %0.2fs for %d worker(s)...",
+                "shutting down listener, waiting %0.2fs for %d of %d worker(s)...",
                 shutdown_delay,
                 len(worker_pool),
+                total_launches,
             )
             # use shutdown_delay to avoid cutting off connections
             deadline = time() + shutdown_delay
