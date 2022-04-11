@@ -7,6 +7,7 @@ Sapphire HTTP server worker
 """
 from logging import getLogger
 from re import compile as re_compile
+from socket import SHUT_RDWR
 from socket import error as sock_error
 from socket import timeout as sock_timeout
 from sys import exc_info
@@ -80,6 +81,8 @@ class Worker:
     def close(self):
         if not self.done:
             LOG.debug("closing socket while thread is running!")
+            # shutdown socket to avoid hang
+            self._conn.shutdown(SHUT_RDWR)
         self._conn.close()
         self.join(timeout=60)
         if self._thread is not None and self._thread.is_alive():
