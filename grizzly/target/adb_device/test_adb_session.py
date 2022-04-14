@@ -652,15 +652,10 @@ def test_adb_session_16(mocker):
             # strip shell args
             cmd.remove("-T")
             cmd.remove("-n")
-            if cmd[2] == "ps":
-                return (
-                    0,
-                    "header... this should be skipped\n"
-                    "1337  1772  1024    org.test.preinstalled\n"
-                    "5847  1     315992  /sbin/adbd\n"
-                    "9990  1772  1221212 org.mozilla.fennec_aurora\n"
-                    "5944  5847  6280    ps\n\n",
-                )
+            if cmd[2] == "pidof":
+                if cmd[3] == "org.test.preinstalled":
+                    return 0, "1337"
+                return 1, ""
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(
@@ -1046,12 +1041,8 @@ def test_adb_session_26(mocker):
             cmd.remove("-T")
             cmd.remove("-n")
             if cmd[2] == "ps":
-                assert cmd[-1] == "9990"
-                return (
-                    0,
-                    "PID   PPID  RSS    NAME\n"
-                    "9990  1772  128064 org.mozilla.fennec_aurora\n\n",
-                )
+                assert "9990" in cmd
+                return 0, "PID\n9990\n\n"
         raise AssertionError("unexpected command %r" % (cmd,))
 
     mocker.patch(

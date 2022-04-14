@@ -2,6 +2,7 @@ import os
 import re
 from enum import Enum, unique
 from logging import getLogger
+from pathlib import Path
 from random import getrandbits
 from shutil import copy, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
@@ -328,10 +329,10 @@ class ADBProcess:
     def _process_logs(self, crash_reports):
         assert self.logs is None
         self.logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
-        unprocessed = os.path.join(self.logs, "unprocessed")
-        os.mkdir(unprocessed)
+        unprocessed = Path(self.logs) / "unprocessed"
+        unprocessed.mkdir(exist_ok=True)
 
-        with open(os.path.join(self.logs, "log_logcat.txt"), "wb") as log_fp:
+        with (Path(self.logs) / "log_logcat.txt").open("wb") as log_fp:
             # TODO: should this filter by pid or not?
             log_fp.write(self._session.collect_logs())
             # log_fp.write(self._session.collect_logs(pid=self._pid))
@@ -341,11 +342,15 @@ class ADBProcess:
 
         # copy crash logs from the device
         for fname in crash_reports:
-            self._session.pull(fname, unprocessed)
+            self._session.pull(fname, str(unprocessed))
 
         with PuppetLogger() as logger:
-            syms_path = self._session.symbols_path(self._package)
-            process_minidumps(unprocessed, syms_path, logger.add_log)
+            if any(unprocessed.glob("*.dmp")):
+                process_minidumps(
+                    unprocessed,
+                    Path(self._session.symbols_path(self._package)),
+                    logger.add_log,
+                )
             logger.close()
             logger.save_logs(self.logs)
 

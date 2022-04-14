@@ -183,33 +183,37 @@ def test_adb_process_10(mocker, tmp_path):
     assert any(dmp_path.glob("fake.txt"))
 
 
-def test_adb_process_11(mocker):
+def test_adb_process_11(mocker, tmp_path):
     """test ADBProcess._process_logs()"""
     mocker.patch("grizzly.target.adb_device.adb_process.Bootstrapper", autospec=True)
+    mocker.patch(
+        "grizzly.target.adb_device.adb_process.mkdtemp",
+        autospec=True,
+        return_value=str(tmp_path),
+    )
     mocker.patch("grizzly.target.adb_device.adb_process.PuppetLogger", autospec=True)
     fake_proc_md = mocker.patch(
         "grizzly.target.adb_device.adb_process.process_minidumps", autospec=True
     )
     fake_session = mocker.Mock(spec_set=ADBSession)
     fake_session.collect_logs.return_value = b"fake logcat data"
+    fake_session.symbols_path.return_value = "foo"
     with ADBProcess("org.some.app", fake_session) as proc:
         # no extra logs
         proc._process_logs([])
-        assert isdir(proc.logs)
-        try:
-            assert "log_logcat.txt" in listdir(proc.logs)
-        finally:
-            rmtree(proc.logs)
+        assert "log_logcat.txt" in listdir(proc.logs)
+        rmtree(proc.logs)
         proc.logs = None
         assert fake_proc_md.call_count == 0
         assert fake_session.pull.call_count == 0
         # other logs available
+        (tmp_path / "unprocessed").mkdir(parents=True)
+        (tmp_path / "unprocessed" / "log.dmp").touch()
+        (tmp_path / "unprocessed" / "asan_log.dmp").touch()
         proc._process_logs(["log.dmp", "asan_log.txt"])
         assert isdir(proc.logs)
-        try:
-            assert "log_logcat.txt" in listdir(proc.logs)
-        finally:
-            rmtree(proc.logs)
+        assert "log_logcat.txt" in listdir(proc.logs)
+        rmtree(proc.logs)
         assert fake_proc_md.call_count == 1
         assert fake_session.pull.call_count == 2
 
