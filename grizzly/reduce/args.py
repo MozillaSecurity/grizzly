@@ -97,6 +97,7 @@ class ReduceFuzzManagerIDArgs(ReduceArgs):
             "--no-repro-quality",
             choices=[x.value for x in Quality],
             default=Quality.NOT_REPRODUCIBLE.value,
+            type=int,
             help="Quality value reported when issue does not reproduce "
             "(default: %(default)s).",
         )
@@ -109,5 +110,6 @@ class ReduceFuzzManagerIDQualityArgs(ReduceFuzzManagerIDArgs):
         self.parser.add_argument(
             "--quality",
             choices=[x.value for x in Quality],
+            type=int,
             help="Only try crashes with a given quality value.",
         )
