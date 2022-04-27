@@ -64,15 +64,11 @@ def test_args_03(tmp_path):
     ReduceFuzzManagerIDArgs().parse_args([str(exe), "123"])
 
 
-def test_args_04(capsys, tmp_path):
+def test_args_04(tmp_path):
     """test ReduceFuzzManagerIDQualityArgs"""
     exe = tmp_path / "binary"
     exe.touch()
-    with raises(SystemExit):
-        ReduceFuzzManagerIDQualityArgs().parse_args(
-            [str(exe), "123", "--quality", "-1"]
-        )
-    assert "error: '--quality' value cannot be negative" in capsys.readouterr()[-1]
+    ReduceFuzzManagerIDQualityArgs().parse_args([str(exe), "123"])
 
 
 @mark.parametrize(
