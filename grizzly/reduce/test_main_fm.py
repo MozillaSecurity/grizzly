@@ -26,6 +26,7 @@ pytestmark = mark.usefixtures(
         (Exit.ABORT, Quality.REDUCED, Quality.REDUCED),
         (Exit.LAUNCH_FAILURE, Quality.REQUEST_SPECIFIC, Quality.UNREDUCED),
         (Exit.FAILURE, Quality.UNREDUCED, Quality.NOT_REPRODUCIBLE),
+        (Exit.FAILURE, Quality.UNREDUCED, Quality.REQUEST_SPECIFIC),
     ],
 )
 def test_crash_main_quality(mocker, exit_code, pre_quality, post_quality):
@@ -34,7 +35,12 @@ def test_crash_main_quality(mocker, exit_code, pre_quality, post_quality):
     crash = mocker.Mock(testcase_quality=pre_quality, crash_id=1)
     load_fm_data = mocker.patch("grizzly.reduce.crash.load_fm_data")
     load_fm_data.return_value.__enter__ = mocker.Mock(return_value=(crash, None))
-    args = mocker.Mock(input=12345, sig=None, tool=None)
+    args = mocker.Mock(
+        input=12345,
+        no_repro_quality=post_quality.value,
+        sig=None,
+        tool=None,
+    )
     assert crash_main(args) == exit_code
     # verify testcase quality was updated
     assert crash.testcase_quality == post_quality

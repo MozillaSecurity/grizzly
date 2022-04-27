@@ -7,6 +7,7 @@
 from logging import getLogger
 from pathlib import Path
 
+from ..common.reporter import Quality
 from ..replay.args import ReplayArgs
 from .strategies import DEFAULT_STRATEGIES, STRATEGIES
 
@@ -92,17 +93,21 @@ class ReduceFuzzManagerIDArgs(ReduceArgs):
         super().__init__()
         self.update_arg("input", int, "FuzzManager ID to reduce")
 
+        self.parser.add_argument(
+            "--no-repro-quality",
+            choices=[x.value for x in Quality],
+            default=Quality.NOT_REPRODUCIBLE.value,
+            help="Quality value reported when issue does not reproduce "
+            "(default: %(default)s).",
+        )
+
 
 class ReduceFuzzManagerIDQualityArgs(ReduceFuzzManagerIDArgs):
     def __init__(self):
         """Initialize argument parser."""
         super().__init__()
         self.parser.add_argument(
-            "--quality", type=int, help="Only try crashes with a given quality value"
+            "--quality",
+            choices=[x.value for x in Quality],
+            help="Only try crashes with a given quality value.",
         )
-
-    def sanity_check(self, args):
-        super().sanity_check(args)
-
-        if args.quality is not None and args.quality < 0:
-            self.parser.error("'--quality' value cannot be negative")

@@ -44,7 +44,7 @@ def main(args):
                 Exit.ERROR: Quality.REDUCER_ERROR,
                 Exit.ABORT: Quality(crash.testcase_quality),
                 Exit.SUCCESS: Quality.ORIGINAL,
-                Exit.FAILURE: Quality.NOT_REPRODUCIBLE,
+                Exit.FAILURE: Quality(args.no_repro_quality),
             }.get(result, Quality.UNREDUCED)
             # don't ever set things back to REDUCING, default to UNREDUCED in that case.
             # REDUCING is only used in automation, so ABORT should never happen.
