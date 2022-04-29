@@ -60,6 +60,7 @@ class Target(metaclass=ABCMeta):
     )
 
     def __init__(self, binary, launch_timeout, log_limit, memory_limit, assets=None):
+        assert launch_timeout > 0
         assert log_limit >= 0
         assert memory_limit >= 0
         assert binary is not None and isfile(binary)
@@ -69,7 +70,7 @@ class Target(metaclass=ABCMeta):
         self._monitor = None
         self.binary = binary
         self.environ = self.scan_environment(dict(environ), self.TRACKED_ENVVARS)
-        self.launch_timeout = max(launch_timeout, 300)
+        self.launch_timeout = launch_timeout
         self.log_limit = log_limit
         self.memory_limit = memory_limit
 

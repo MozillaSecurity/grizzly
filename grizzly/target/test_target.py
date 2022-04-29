@@ -45,7 +45,7 @@ def test_target_01(tmp_path):
     """test creating a simple Target"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with SimpleTarget(str(fake_file), 321, 2, 3) as target:
+    with SimpleTarget(str(fake_file), 10, 2, 3) as target:
         assert target.binary == str(fake_file)
         assert target.assets
         org_path = target.assets.path
@@ -54,7 +54,7 @@ def test_target_01(tmp_path):
         assert not target.environ
         assert not target.filtered_environ()
         assert not target.is_idle(0)
-        assert target.launch_timeout == 321
+        assert target.launch_timeout == 10
         assert target.log_size() == 0
         assert target.log_limit == 2
         assert target.memory_limit == 3
