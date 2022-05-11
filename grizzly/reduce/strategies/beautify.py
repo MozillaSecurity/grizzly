@@ -8,7 +8,6 @@ Constants:
     HAVE_CSSBEAUTIFIER (bool): True if `cssbeautifier` module is available.
     HAVE_JSBEAUTIFIER (bool): True if `jsbeautifier` module is available.
 """
-import os
 import re
 from abc import ABC, abstractmethod
 from logging import getLogger
@@ -17,6 +16,7 @@ from lithium.testcases import TestcaseLine
 
 try:
     import cssbeautifier
+    import cssbeautifier.css.options
 
     HAVE_CSSBEAUTIFIER = True
 except ImportError:  # pragma: no cover
@@ -32,6 +32,22 @@ from ...common.storage import TestCase
 from . import Strategy, _contains_dd
 
 LOG = getLogger(__name__)
+
+
+def _split_normal_lines(data):
+    """Like str.splitlines but only respect \n, \r\n, and \r .. leave other
+    potential line break characters intact.
+
+    Arguments:
+        data (bytes): Input line to process.
+
+    Returns:
+        generator[bytes]: Yield lines split from data, not including line endings.
+    """
+    for win_line in data.split(b"\r\n"):
+        for mac_line in win_line.split(b"\r"):
+            for unix_line in mac_line.split(b"\n"):
+                yield unix_line
 
 
 class _BeautifyStrategy(Strategy, ABC):
@@ -119,12 +135,11 @@ class _BeautifyStrategy(Strategy, ABC):
 
     @classmethod
     @abstractmethod
-    def beautify_bytes(cls, data, linesep=b"\n"):
+    def beautify_bytes(cls, data):
         """Perform beautification on a code buffer.
 
         Arguments:
             data (bytes): The code data to be beautified.
-            linesep (bytes): Newline sequence used in this testcase.
 
         Returns:
             bytes: The beautified result.
@@ -209,18 +224,12 @@ class _BeautifyStrategy(Strategy, ABC):
             )
 
             # Use Lithium just to split the file at DDBEGIN/END.
-            # Lithium already has the right logic for DDBEGIN/END and line endings.
+            # Lithium already has the right logic for DDBEGIN/END.
             lith_tc = TestcaseLine()
             lith_tc.load(file)
-            raw = b"".join(lith_tc.parts)
-
-            # try to determine line-endings from testcase before resorting to os.linesep
-            if b"\r\n" in lith_tc.before or b"\r\n" in lith_tc.after or b"\r\n" in raw:
-                linesep = b"\r\n"
-            elif b"\n" in lith_tc.before or b"\n" in lith_tc.after or b"\n" in raw:
-                linesep = b"\n"
-            else:
-                linesep = os.linesep.encode("utf-8")
+            lith_tc.before = b"\n".join(_split_normal_lines(lith_tc.before))
+            lith_tc.after = b"\n".join(_split_normal_lines(lith_tc.after))
+            raw = b"\n".join(_split_normal_lines(b"".join(lith_tc.parts)))
 
             with file.open("wb") as testcase_fp:
                 last = 0
@@ -231,13 +240,13 @@ class _BeautifyStrategy(Strategy, ABC):
                     testcase_fp.write(before)
                     to_beautify = raw[start:end]
                     LOG.debug("before: %r", to_beautify)
-                    beautified = self.beautify_bytes(to_beautify, linesep)
+                    beautified = self.beautify_bytes(to_beautify)
                     LOG.debug("after: %r", beautified)
                     if beautified:
-                        if before and not before.endswith(linesep):
-                            beautified = linesep + beautified
-                        if not beautified.endswith(linesep):
-                            beautified = beautified + linesep
+                        if before and not before.endswith(b"\n"):
+                            beautified = b"\n" + beautified
+                        if not beautified.endswith(b"\n"):
+                            beautified = beautified + b"\n"
 
                         testcase_fp.write(beautified)
                         if beautified == to_beautify:
@@ -303,23 +312,21 @@ class CSSBeautify(_BeautifyStrategy):
     tag_name = "style"
 
     @classmethod
-    def beautify_bytes(cls, data, linesep=b"\n"):
+    def beautify_bytes(cls, data):
         """Perform CSS beautification on a code buffer.
 
         Arguments:
             data (bytes): The code data to be beautified.
-            linesep (bytes): Newline sequence used in this testcase.
 
         Returns:
             bytes: The beautified result.
         """
         assert cls.import_available
-        linesep_u = linesep.decode("utf-8")
         data = data.decode("utf-8", errors="surrogateescape")
-        beautified = cssbeautifier.beautify(data, cls.opts)
-        return linesep_u.join(beautified.splitlines()).encode(
-            "utf-8", errors="surrogateescape"
-        )
+        opts = cssbeautifier.css.options.BeautifierOptions(cls.opts)
+        opts.eol = "\n"
+        beautified = cssbeautifier.beautify(data, opts)
+        return beautified.encode("utf-8", errors="surrogateescape")
 
 
 class JSBeautify(_BeautifyStrategy):
@@ -334,28 +341,29 @@ class JSBeautify(_BeautifyStrategy):
     import_name = "jsbeautifier"
     name = "jsbeautify"
     native_extension = ".js"
-    opts = None
+    opts = (
+        ("end_with_newline", False),
+        ("preserve_newlines", False),
+    )
     tag_name = "script"
     try_catch_re = re.compile(r"(\s*try {)\r?\n\s*(.*)\r?\n\s*(}\s*catch.*)")
 
     @classmethod
-    def beautify_bytes(cls, data, linesep=b"\n"):
+    def beautify_bytes(cls, data):
         """Perform JS beautification on a code buffer.
 
         Arguments:
             data (bytes): The code data to be beautified.
-            linesep (bytes): Newline sequence used in this testcase.
 
         Returns:
             bytes: The beautified result.
         """
         assert HAVE_JSBEAUTIFIER
-        linesep_u = linesep.decode("utf-8")
         data = data.decode("utf-8", errors="surrogateescape")
-        beautified = jsbeautifier.beautify(data, cls.opts)
+        opts = jsbeautifier.BeautifierOptions(cls.opts)
+        opts.eol = "\n"
+        beautified = jsbeautifier.beautify(data, opts)
         # All try/catch pairs will be expanded on their own lines
         # Collapse these pairs when only a single instruction is contained within
         beautified = cls.try_catch_re.sub(r"\1 \2 \3", beautified)
-        return linesep_u.join(beautified.splitlines()).encode(
-            "utf-8", errors="surrogateescape"
-        )
+        return beautified.encode("utf-8", errors="surrogateescape")

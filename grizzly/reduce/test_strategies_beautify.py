@@ -5,7 +5,6 @@
 # pylint: disable=protected-access
 """Unit tests for `grizzly.reduce.strategies.beautify`."""
 from logging import getLogger
-from os import linesep
 
 import pytest
 
@@ -68,8 +67,8 @@ def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker):
         ),
         pytest.param(
             "try{\r\n'a';'R'}catch(e){}\n",
-            "try {\r\n    'a';\r\n    'R'\r\n} catch (e) {}\r\n",
-            id="#2: test that mixed crlf/lf gets converted to crlf",
+            "try {\n    'a';\n    'R'\n} catch (e) {}\n",
+            id="#2: test that mixed crlf/lf gets converted to lf",
         ),
         pytest.param(
             "try{\r'a';'R'}catch(e){}\n",
@@ -77,9 +76,14 @@ def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker):
             id="#3: test that mixed cr/lf gets converted to lf",
         ),
         pytest.param(
-            "try{'a';'R'}catch(e){}\x1e",
-            linesep.join(("try {", "    'a';", "    'R'", "} catch (e) {}", "")),
-            id="#4: test that other line-ending gets converted to lf",
+            "try{'a\v';'R'}catch(e){}\n",
+            "try {\n    'a\v';\n    'R'\n} catch (e) {}\n",
+            id="#4: test beautify with a string containing a \v",
+        ),
+        pytest.param(
+            "try{'a';'R'}\n\ncatch(e){}\n",
+            "try {\n    'a';\n    'R'\n} catch (e) {}\n",
+            id="#5: test that existing newlines are not preserved",
         ),
     ],
 )
@@ -95,7 +99,7 @@ def test_beautify_js_1(test_data, reduced, mocker):
         pytest.param(
             "try{'a';'R'+'R'}catch(e){}\n",
             "try{'a';'R'+'R'}catch(e){}\n",
-            id="#5: test beautify js where beautification breaks",
+            id="#6: test beautify js where beautification breaks",
         ),
     ],
 )
@@ -111,50 +115,50 @@ def test_beautify_js_2(test_data, reduced, mocker):
         pytest.param(
             "<script>try{'a';'R'}catch(e){}</script>\n",
             "<script>\ntry {\n    'a';\n    'R'\n} catch (e) {}\n</script>\n",
-            id="#6: test beautify js embedded in html",
+            id="#7: test beautify js embedded in html",
         ),
         pytest.param(
             "<script>try{'a';'R'}catch(e){}\n",
             "<script>\ntry {\n    'a';\n    'R'\n} catch (e) {}\n",
-            id="#7: test beautify js embedded in html with no end",
+            id="#8: test beautify js embedded in html with no end",
         ),
         pytest.param(
             "<!--DDBEGIN-->\n<script>\ntry{'a';'R'}catch(e){}\n</script><!--DDEND-->\n",
             "<!--DDBEGIN-->\n<script>\ntry {\n    'a';\n    'R'\n"
             "} catch (e) {}\n</script><!--DDEND-->\n",
-            id="#8: test DDBEGIN/END respected for js embedded in html, "
+            id="#9: test DDBEGIN/END respected for js embedded in html, "
             "DD outside <script>",
         ),
         pytest.param(
             "<script>try{\n//DDBEGIN\n'a';'R'\n//DDEND\n}catch(e){}</script>\n",
             "<script>try{\n//DDBEGIN\n'a';\n'R'\n//DDEND\n}catch(e){}</script>\n",
-            id="#9: test DDBEGIN/END respected for js embedded in html, "
+            id="#10: test DDBEGIN/END respected for js embedded in html, "
             "DD inside <script>",
         ),
         pytest.param(
             "<!--DDBEGIN-->\n<script>\ntry{'a';'R'}catch(e){}\n//DDEND\n",
             "<!--DDBEGIN-->\n<script>\ntry {\n    'a';\n    'R'\n"
             "} catch (e) {}\n//DDEND\n",
-            id="#10: test DDBEGIN/END respected for js embedded in html, "
+            id="#11: test DDBEGIN/END respected for js embedded in html, "
             "DD straddle before <script>",
         ),
         pytest.param(
             "<script>\n//DDBEGIN\ntry{'a';'R'}catch(e){}\n//DDEND\n",
             "<script>\n//DDBEGIN\ntry {\n    'a';\n    'R'\n} catch (e) {}\n//DDEND\n",
-            id="#11: test DDBEGIN/END respected for js embedded in html, "
+            id="#12: test DDBEGIN/END respected for js embedded in html, "
             "DD straddle after <script>",
         ),
         pytest.param(
             "<script>\n//DDBEGIN\ntry{'a';'R'}catch(e){}\n</script>\n<!--DDEND-->\n",
             "<script>\n//DDBEGIN\ntry {\n    'a';\n    'R'\n"
             "} catch (e) {}\n</script>\n<!--DDEND-->\n",
-            id="#12: test DDBEGIN/END respected for js embedded in html, "
+            id="#13: test DDBEGIN/END respected for js embedded in html, "
             "DD straddle after </script>",
         ),
         pytest.param(
             "try{'a';'R'}catch(e){}\n",
             "try{'a';'R'}catch(e){}\n",
-            id="#13: test beautify js embedded in html (no <script>)",
+            id="#14: test beautify js embedded in html (no <script>)",
         ),
     ],
 )
@@ -171,7 +175,7 @@ def test_beautify_js_3(test_data, reduced, mocker):
             "<script>try{'a';'R'}catch(e){}</script><script>'a';'Q'</script>\n",
             "<script>\ntry {\n    'a';\n    'R'\n} catch (e) {}\n</script>"
             "<script>\n'a';\n'Q'\n</script>\n",
-            id="#14: test beautify multiple js embedded in html",
+            id="#15: test beautify multiple js embedded in html",
         ),
     ],
 )
@@ -196,8 +200,8 @@ def test_beautify_js_4(test_data, reduced, mocker):
         ),
         pytest.param(
             "*,\r\n#a{a:0;R:1}\n",
-            "*,\r\n#a {\r\n  a: 0;\r\n  R: 1\r\n}\r\n",
-            id="#1: test that mixed crlf/lf gets converted to crlf",
+            "*,\n#a {\n  a: 0;\n  R: 1\n}\n",
+            id="#1: test that mixed crlf/lf gets converted to lf",
         ),
         pytest.param(
             "*,\r#a{a:0;R:1}\n",
@@ -205,9 +209,9 @@ def test_beautify_js_4(test_data, reduced, mocker):
             id="#2: test that mixed cr/lf gets converted to lf",
         ),
         pytest.param(
-            "*,\x1e#a{a:0;R:1}\x1e",
-            linesep.join(("*,", "#a {", "  a: 0;", "  R: 1", "}", "")),
-            id="#3: test that other line-ending gets converted to lf",
+            "*,#a{a:0;\n\nR:1}\n",
+            "*,\n#a {\n  a: 0;\n  R: 1\n}\n",
+            id="#3: test that existing newlines are not preserved",
         ),
     ],
 )
