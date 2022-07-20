@@ -336,7 +336,7 @@ class ReplayManager:
                     LOG.warning("Test case was not served")
                     if runner.initial:
                         if run_result.status == Result.FOUND:
-                            # TODO: what is to best action to take in this case?
+                            # TODO: what is the best action to take in this case?
                             LOG.warning("Delayed startup failure detected")
                         else:
                             LOG.warning("Timeout too short? System too busy?")
@@ -458,9 +458,6 @@ class ReplayManager:
 
             # process results
             if self._any_crash:
-                assert (
-                    all(x.expected for x in reports.values()) or runner.startup_failure
-                )
                 # add all results if min_results was reached
                 if sum(x.count for x in reports.values() if x.expected) >= min_results:
                     results = list(reports.values())
@@ -477,7 +474,6 @@ class ReplayManager:
                         self.status.results.total,
                         min_results,
                     )
-
             else:
                 # there should be at most one expected bucket
                 assert sum(x.expected for x in reports.values()) <= 1
