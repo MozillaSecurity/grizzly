@@ -8,10 +8,9 @@ repos:
     hooks:
       - id: yesqa
   - repo: https://github.com/ambv/black
-    rev: 22.1.0
+    rev: 22.6.0
     hooks:
       - id: black
-        additional_dependencies: ['click==8.0.4']
   - repo: https://gitlab.com/pycqa/flake8
     rev: 4.0.1
     hooks:
