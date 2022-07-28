@@ -33,10 +33,10 @@ def main(args):
     elif args.s3_fuzzmanager:
         S3FuzzManagerReporter.sanity_check(args.binary)
 
+    if args.headless:
+        LOG.info("Running browser headless (%s)", args.headless)
     if args.ignore:
         LOG.info("Ignoring: %s", ", ".join(args.ignore))
-    if args.xvfb:
-        LOG.info("Running with Xvfb")
     if args.pernosco:
         LOG.info("Running with RR (Pernosco mode)")
     elif args.rr:
@@ -83,10 +83,10 @@ def main(args):
             args.launch_timeout,
             args.log_limit,
             args.memory,
+            headless=args.headless,
             pernosco=args.pernosco,
             rr=args.rr,
             valgrind=args.valgrind,
-            xvfb=args.xvfb,
         )
         # add specified assets
         target.assets.add_batch(args.asset)

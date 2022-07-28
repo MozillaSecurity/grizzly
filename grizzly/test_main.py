@@ -26,6 +26,7 @@ class FakeArgs:
         self.enable_profiling = False
         self.extension = None
         self.fuzzmanager = False
+        self.headless = None
         self.ignore = list()
         self.launch_timeout = 300
         self.limit = 0
@@ -47,7 +48,6 @@ class FakeArgs:
         self.tool = None
         self.valgrind = False
         self.verbose = False
-        self.xvfb = False
 
 
 @mark.parametrize(
@@ -90,13 +90,13 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, smoke_test, verbose
         ["fake", "fake"],
     ]
     args.adapter = "fake"
+    args.headless = "xvfb"
     args.ignore = ["fake", "fake"]
     args.limit = limit
     args.runtime = runtime
     args.rr = True
     args.smoke_test = smoke_test
     args.valgrind = True
-    args.xvfb = True
     args.verbose = verbose
     if not verbose:
         args.log_level = 20
