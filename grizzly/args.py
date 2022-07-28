@@ -87,6 +87,17 @@ class CommonArgs:
             help="DEPRECATED. Install an extension. Specify the path to the xpi or the"
             " directory containing the unpacked extension.",
         )
+        headless_choices = ["default"]
+        if system().startswith("Linux"):
+            headless_choices.append("xvfb")
+        self.launcher_grp.add_argument(
+            "--headless",
+            choices=headless_choices,
+            const="default",
+            default=None,
+            nargs="?",
+            help="Headless mode. 'default' uses browser's built-in headless mode.",
+        )
         self.launcher_grp.add_argument(
             "--launch-timeout",
             type=int,
@@ -145,7 +156,7 @@ class CommonArgs:
         )
         if system().startswith("Linux"):
             self.launcher_grp.add_argument(
-                "--xvfb", action="store_true", help="Use Xvfb."
+                "--xvfb", action="store_true", help="DEPRECATED. Use Xvfb."
             )
         else:
             self.parser.set_defaults(xvfb=False)
@@ -262,6 +273,9 @@ class CommonArgs:
         if "tool" not in self._sanity_skip:
             if args.tool is not None and not args.fuzzmanager:
                 self.parser.error("--tool can only be given with --fuzzmanager")
+
+        if args.xvfb:  # pragma: no cover
+            args.headless = "xvfb"
 
 
 class GrizzlyArgs(CommonArgs):

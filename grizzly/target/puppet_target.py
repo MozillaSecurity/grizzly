@@ -84,7 +84,7 @@ class PuppetTarget(Target):
         # create Puppet object
         self._puppet = FFPuppet(
             debugger=debugger,
-            use_xvfb=kwds.pop("xvfb", False),
+            headless=kwds.pop("headless", None),
             working_path=grz_tmp("target"),
         )
         if kwds:

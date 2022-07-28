@@ -760,10 +760,10 @@ class ReduceManager:
 
         LOG.info("Starting Grizzly Reduce")
 
+        if args.headless:
+            LOG.info("Running browser headless (%s)", args.headless)
         if args.ignore:
             LOG.info("Ignoring: %s", ", ".join(args.ignore))
-        if args.xvfb:
-            LOG.info("Running with Xvfb")
         if args.pernosco:
             LOG.info("Running with RR (Pernosco mode)")
         elif args.rr:
@@ -826,10 +826,10 @@ class ReduceManager:
                 args.log_limit,
                 args.memory,
                 assets=assets,
+                headless=args.headless,
                 pernosco=args.pernosco,
                 rr=args.rr,
                 valgrind=args.valgrind,
-                xvfb=args.xvfb,
             )
             # local environ takes priority over environ loaded from test case
             if env_vars is not None:
