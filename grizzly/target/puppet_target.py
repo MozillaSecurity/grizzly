@@ -19,7 +19,7 @@ from time import sleep, time
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
 from ffpuppet.sanitizer_util import SanitizerOptions
 from prefpicker import PrefPicker
-from psutil import AccessDenied, NoSuchProcess, Process, process_iter
+from psutil import AccessDenied, NoSuchProcess, Process, process_iter, wait_procs
 
 from ..common.reporter import Report
 from ..common.utils import grz_tmp
@@ -269,9 +269,9 @@ class PuppetTarget(Target):
                     )
                     try:
                         kill(gcda_open, SIGABRT)
-                    except OSError:
+                        wait_procs([Process(gcda_open)], timeout=15)
+                    except (AccessDenied, NoSuchProcess, OSError):
                         pass
-                    sleep(1)
                     self.close()
                     break
                 if delay < 1.0:
