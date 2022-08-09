@@ -221,7 +221,16 @@ class PuppetTarget(Target):
         # If at this point, the browser is in a good state, i.e. no crashes
         # or hangs, so signal the browser to dump coverage.
         try:
-            for child in Process(pid).children(recursive=True):
+            parent_proc = Process(pid)
+            # avoid sending SIGUSR1 to debugger
+            if parent_proc.exe().endswith(Path(self.binary).name):
+                LOG.debug("Sending SIGUSR1 to %d (parent)", pid)
+                try:
+                    kill(pid, SIGUSR1)
+                except OSError:
+                    LOG.warning("Failed to send SIGUSR1 to pid %d", pid)
+            # send SIGUSR1 to child processes
+            for child in parent_proc.children(recursive=True):
                 LOG.debug("Sending SIGUSR1 to %d (child)", child.pid)
                 try:
                     kill(child.pid, SIGUSR1)
@@ -229,25 +238,20 @@ class PuppetTarget(Target):
                     LOG.warning("Failed to send SIGUSR1 to pid %d", child.pid)
         except (AccessDenied, NoSuchProcess):  # pragma: no cover
             pass
-        LOG.debug("Sending SIGUSR1 to %d (parent)", pid)
-        try:
-            kill(pid, SIGUSR1)
-        except OSError:
-            LOG.warning("Failed to send SIGUSR1 to pid %d", pid)
         start_time = time()
         gcda_found = False
         delay = 0.1
-        # wait for processes to write .gcno files
+        # wait for processes to write .gcda files
         # this should typically take less than 1 second
         while True:
             for proc in process_iter(attrs=["pid", "ppid", "open_files"]):
-                # check if proc is the target or child process
+                # filter out unrelated processes
                 if pid in (proc.info["pid"], proc.info["ppid"]):
                     if proc.info["open_files"] is None:
                         continue
                     if any(x.path.endswith(".gcda") for x in proc.info["open_files"]):
                         gcda_found = True
-                        # get the pid of the process that has the file open
+                        # get the pid of the process with the file open
                         gcda_open = proc.info["pid"]
                         break
             else:
@@ -274,7 +278,7 @@ class PuppetTarget(Target):
                     # increase delay to a maximum of 1 second
                     delay = min(1.0, delay + 0.1)
             elif elapsed >= 3:
-                # assume we missed the process writing .gcno files
+                # assume we missed the process writing .gcda files
                 LOG.warning("No gcda files seen after %0.2fs", elapsed)
                 break
             if not self._puppet.is_healthy():
