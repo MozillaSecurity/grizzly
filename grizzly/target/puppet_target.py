@@ -213,7 +213,7 @@ class PuppetTarget(Target):
         self.close()
         return was_idle
 
-    def dump_coverage(self, timeout=15):
+    def dump_coverage(self, timeout=90):
         assert SIGUSR1 is not None
         pid = self._puppet.get_pid()
         if pid is None or not self._puppet.is_healthy():
@@ -268,7 +268,7 @@ class PuppetTarget(Target):
                     LOG.debug("gcda dump took %0.2fs", elapsed)
                     break
                 if elapsed >= timeout:
-                    # timeout failure
+                    # timeout waiting for .gnco file to be written
                     LOG.warning(
                         "gcda file open by pid %d after %0.2fs", gcda_open, elapsed
                     )
@@ -281,8 +281,10 @@ class PuppetTarget(Target):
                     break
                 if delay < 1.0:
                     # increase delay to a maximum of 1 second
+                    # it is increased when waiting for the .gcno files to be written
+                    # this decreases the number of calls to process_iter()
                     delay = min(1.0, delay + 0.1)
-            elif elapsed >= 3:
+            elif elapsed >= 10:
                 # assume we missed the process writing .gcda files
                 LOG.warning("No gcda files seen after %0.2fs", elapsed)
                 break

@@ -193,7 +193,7 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_proc_iter.return_value = (
         mocker.Mock(info={"pid": 101, "open_files": (mocker.Mock(path="a.gcda"),)}),
     )
-    fake_time.side_effect = (0, 1, 20, 20)
+    fake_time.side_effect = (0, 1, 20)
     target.dump_coverage(timeout=15)
     assert fake_kill.call_count == 3
     assert fake_proc_iter.call_count == 2
