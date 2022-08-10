@@ -240,6 +240,9 @@ class PuppetTarget(Target):
                         LOG.warning("Failed to send SIGUSR1 to pid %d", proc.pid)
         except (AccessDenied, NoSuchProcess):  # pragma: no cover
             pass
+        if not signaled_pids:
+            LOG.warning("SIGUSR1 not sent, browser processes not detected")
+            return
         start_time = time()
         gcda_found = False
         delay = 0.1
