@@ -144,8 +144,10 @@ def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed):
 @mark.skipif(system() == "Windows", reason="Unsupported on Windows")
 def test_puppet_target_05(mocker, tmp_path):
     """test PuppetTarget.dump_coverage()"""
+    mocker.patch("grizzly.target.puppet_target.wait_procs", autospec=True)
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_proc = mocker.patch("grizzly.target.puppet_target.Process", autospec=True)
+    fake_proc.return_value.pid = 100
     fake_proc.return_value.children.return_value = (mocker.Mock(pid=101),)
     fake_proc_iter = mocker.patch(
         "grizzly.target.puppet_target.process_iter", autospec=True
@@ -189,15 +191,14 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_ffp.return_value.is_healthy.side_effect = None
     fake_ffp.return_value.get_pid.return_value = 100
     fake_proc_iter.return_value = (
-        mocker.Mock(
-            info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.gcda"),)}
-        ),
+        mocker.Mock(info={"pid": 101, "open_files": (mocker.Mock(path="a.gcda"),)}),
     )
     fake_time.side_effect = (0, 1, 20, 20)
     target.dump_coverage(timeout=15)
     assert fake_kill.call_count == 3
     assert fake_proc_iter.call_count == 2
     assert fake_ffp.return_value.is_healthy.call_count == 2
+    assert fake_ffp.return_value.close.call_count == 1
     fake_ffp.reset_mock()
     fake_kill.reset_mock()
     fake_proc_iter.reset_mock()
@@ -206,43 +207,32 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_time.side_effect = None
     fake_time.return_value = 1.0
     fake_proc_iter.side_effect = (
+        # 1st call
         (
             mocker.Mock(
                 info={
                     "pid": 100,
-                    "ppid": 0,
                     "open_files": (
                         mocker.Mock(path="a.bin"),
                         mocker.Mock(path="/a/s/d"),
                     ),
                 }
             ),
-            mocker.Mock(info={"pid": 101, "ppid": 100, "open_files": None}),
-            mocker.Mock(info={"pid": 999, "ppid": 0, "open_files": None}),
+            mocker.Mock(info={"pid": 101, "open_files": None}),
+            mocker.Mock(info={"pid": 999, "open_files": None}),
         ),
+        # 2nd call
+        (mocker.Mock(info={"pid": 100, "open_files": (mocker.Mock(path="a.gcda"),)}),),
+        # 3rd call
         (
+            mocker.Mock(info={"pid": 100, "open_files": (mocker.Mock(path="a.bin"),)}),
             mocker.Mock(
-                info={
-                    "pid": 100,
-                    "ppid": 0,
-                    "open_files": (mocker.Mock(path="a.gcda"),),
-                }
-            ),
-        ),
-        (
-            mocker.Mock(
-                info={"pid": 100, "ppid": 0, "open_files": (mocker.Mock(path="a.bin"),)}
-            ),
-            mocker.Mock(
-                info={
-                    "pid": 999,
-                    "ppid": 0,
-                    "open_files": (mocker.Mock(path="ignore.gcda"),),
-                }
+                info={"pid": 999, "open_files": (mocker.Mock(path="ignore.gcda"),)}
             ),
         ),
     )
     target.dump_coverage()
+    assert fake_ffp.return_value.close.call_count == 0
     assert fake_proc_iter.call_count == 3
     assert fake_kill.call_count == 2
     fake_ffp.reset_mock()
@@ -255,7 +245,7 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_proc_iter.side_effect = None
     fake_time.side_effect = count()
     target.dump_coverage()
-    assert fake_kill.call_count == 3
+    assert fake_kill.call_count == 2
     fake_ffp.reset_mock()
     fake_kill.reset_mock()
     fake_proc_iter.reset_mock()

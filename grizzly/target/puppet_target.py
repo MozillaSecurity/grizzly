@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from itertools import chain
 from logging import getLogger
 from os import kill
 from os.path import isfile
@@ -220,40 +221,41 @@ class PuppetTarget(Target):
             return
         # If at this point, the browser is in a good state, i.e. no crashes
         # or hangs, so signal the browser to dump coverage.
+        signaled_pids = list()
         try:
+            # send SIGUSR1 to browser processes
             parent_proc = Process(pid)
-            # avoid sending SIGUSR1 to debugger
-            if parent_proc.exe().endswith(Path(self.binary).name):
-                LOG.debug("Sending SIGUSR1 to %d (parent)", pid)
-                try:
-                    kill(pid, SIGUSR1)
-                except OSError:
-                    LOG.warning("Failed to send SIGUSR1 to pid %d", pid)
-            # send SIGUSR1 to child processes
-            for child in parent_proc.children(recursive=True):
-                LOG.debug("Sending SIGUSR1 to %d (child)", child.pid)
-                try:
-                    kill(child.pid, SIGUSR1)
-                except OSError:
-                    LOG.warning("Failed to send SIGUSR1 to pid %d", child.pid)
+            for proc in chain([parent_proc], parent_proc.children(recursive=True)):
+                # avoid sending SIGUSR1 to non-browser processes
+                if proc.exe().endswith(Path(self.binary).name):
+                    LOG.debug(
+                        "Sending SIGUSR1 to %d (%s)",
+                        proc.pid,
+                        "parent" if proc.pid == pid else "child",
+                    )
+                    try:
+                        kill(proc.pid, SIGUSR1)
+                        signaled_pids.append(proc.pid)
+                    except OSError:
+                        LOG.warning("Failed to send SIGUSR1 to pid %d", proc.pid)
         except (AccessDenied, NoSuchProcess):  # pragma: no cover
             pass
         start_time = time()
         gcda_found = False
         delay = 0.1
-        # wait for processes to write .gcda files
-        # this should typically take less than 1 second
+        # wait for processes to write .gcda files (typically takes <1 second)
         while True:
-            for proc in process_iter(attrs=["pid", "ppid", "open_files"]):
-                # filter out unrelated processes
-                if pid in (proc.info["pid"], proc.info["ppid"]):
-                    if proc.info["open_files"] is None:
-                        continue
-                    if any(x.path.endswith(".gcda") for x in proc.info["open_files"]):
-                        gcda_found = True
-                        # get the pid of the process with the file open
-                        gcda_open = proc.info["pid"]
-                        break
+            for proc in process_iter(attrs=["pid", "open_files"]):
+                # scan signaled processes for open .gcda files
+                if (
+                    proc.info["pid"] in signaled_pids
+                    and proc.info["open_files"]
+                    and any(x.path.endswith(".gcda") for x in proc.info["open_files"])
+                ):
+                    gcda_found = True
+                    # collect pid of process with open .gcda file
+                    gcda_open = proc.info["pid"]
+                    break
             else:
                 gcda_open = None
             elapsed = time() - start_time
@@ -270,7 +272,7 @@ class PuppetTarget(Target):
                     try:
                         kill(gcda_open, SIGABRT)
                         wait_procs([Process(gcda_open)], timeout=15)
-                    except (AccessDenied, NoSuchProcess, OSError):
+                    except (AccessDenied, NoSuchProcess, OSError):  # pragma: no cover
                         pass
                     self.close()
                     break
