@@ -146,9 +146,12 @@ def test_puppet_target_05(mocker, tmp_path):
     """test PuppetTarget.dump_coverage()"""
     mocker.patch("grizzly.target.puppet_target.wait_procs", autospec=True)
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    child_proc = mocker.Mock(pid=101)
+    child_proc.exe.return_value = "firefox-bin"
     fake_proc = mocker.patch("grizzly.target.puppet_target.Process", autospec=True)
     fake_proc.return_value.pid = 100
-    fake_proc.return_value.children.return_value = (mocker.Mock(pid=101),)
+    fake_proc.return_value.children.return_value = (child_proc,)
+    fake_proc.return_value.exe.return_value = "firefox-bin"
     fake_proc_iter = mocker.patch(
         "grizzly.target.puppet_target.process_iter", autospec=True
     )

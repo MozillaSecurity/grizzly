@@ -225,9 +225,10 @@ class PuppetTarget(Target):
         try:
             # send SIGUSR1 to browser processes
             parent_proc = Process(pid)
+            running_procs = 0
             for proc in chain([parent_proc], parent_proc.children(recursive=True)):
                 # avoid sending SIGUSR1 to non-browser processes
-                if proc.exe().endswith(Path(self.binary).name):
+                if Path(proc.exe()).name.startswith("firefox"):
                     LOG.debug(
                         "Sending SIGUSR1 to %d (%s)",
                         proc.pid,
@@ -238,10 +239,15 @@ class PuppetTarget(Target):
                         signaled_pids.append(proc.pid)
                     except OSError:
                         LOG.warning("Failed to send SIGUSR1 to pid %d", proc.pid)
+                if proc.is_running():
+                    running_procs += 1
         except (AccessDenied, NoSuchProcess):  # pragma: no cover
             pass
         if not signaled_pids:
-            LOG.warning("SIGUSR1 not sent, browser processes not detected")
+            LOG.warning(
+                "SIGUSR1 not sent, no browser processes found (%d process(es) running)",
+                running_procs,
+            )
             return
         start_time = time()
         gcda_found = False
