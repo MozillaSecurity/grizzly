@@ -423,11 +423,12 @@ class ReduceManager:
         """
         return sum(tc.data_size for tc in self.testcases)
 
-    def run(self, repeat=1, min_results=1):
+    def run(self, repeat=1, launch_attempts=3, min_results=1):
         """Run testcase reduction.
 
         Args:
             repeat (int): Maximum number of times to run the TestCase.
+            launch_attempts (int): Number of attempts to launch the browser.
             min_results (int): Minimum number of results needed before run can
                                be considered successful.
 
@@ -504,6 +505,7 @@ class ReduceManager:
                                     expect_hang=self._expect_hang,
                                     idle_delay=self._idle_delay,
                                     idle_threshold=self._idle_threshold,
+                                    launch_attempts=launch_attempts,
                                     min_results=min_results,
                                     repeat=repeat,
                                     on_iteration_cb=self._on_replay_iteration,
@@ -866,7 +868,11 @@ class ReduceManager:
                     use_analysis=not args.no_analysis,
                     use_harness=not args.no_harness,
                 )
-                return_code = mgr.run(repeat=args.repeat, min_results=args.min_crashes)
+                return_code = mgr.run(
+                    repeat=args.repeat,
+                    launch_attempts=args.launch_attempts,
+                    min_results=args.min_crashes,
+                )
             return return_code
 
         except ConfigError as exc:

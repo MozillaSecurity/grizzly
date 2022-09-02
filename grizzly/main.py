@@ -144,6 +144,7 @@ def main(args):
                 result_limit=1 if args.smoke_test else 0,
                 runtime_limit=args.runtime,
                 display_mode=display_mode,
+                launch_attempts=args.launch_attempts,
             )
 
     except KeyboardInterrupt:

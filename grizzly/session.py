@@ -144,8 +144,10 @@ class Session:
         result_limit=0,
         runtime_limit=0,
         display_mode=DISPLAY_NORMAL,
+        launch_attempts=3,
     ):
         assert iteration_limit >= 0
+        assert launch_attempts > 0
         assert runtime_limit >= 0
         assert time_limit > 0
 
@@ -194,7 +196,9 @@ class Session:
                     )
                 try:
                     with self.status.measure("launch"):
-                        runner.launch(location, max_retries=3, retry_delay=0)
+                        runner.launch(
+                            location, max_retries=launch_attempts, retry_delay=0
+                        )
                 except TargetLaunchError as exc:
                     short_sig = exc.report.crash_info.createShortSignature()
                     LOG.info(

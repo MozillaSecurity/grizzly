@@ -28,6 +28,7 @@ class FakeArgs:
         self.fuzzmanager = False
         self.headless = None
         self.ignore = list()
+        self.launch_attempts = 3
         self.launch_timeout = 300
         self.limit = 0
         self.limit_reports = 0

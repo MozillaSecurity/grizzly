@@ -77,6 +77,12 @@ def test_common_args_02(capsys, mocker, args, msg, idx):
             "error: --tool can only be given with --fuzzmanager",
             ["targ1"],
         ),
+        # test invalid launch-attempts value
+        (
+            ["--launch-attempts", "0"],
+            "error: --launch-attempts must be >= 1",
+            ["targ1"],
+        ),
     ],
 )
 def test_common_args_03(capsys, mocker, tmp_path, args, msg, targets):

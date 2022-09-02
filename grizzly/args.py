@@ -99,6 +99,13 @@ class CommonArgs:
             help="Headless mode. 'default' uses browser's built-in headless mode.",
         )
         self.launcher_grp.add_argument(
+            "--launch-attempts",
+            type=int,
+            default=3,
+            help="Number of attempts to launch the browser before LaunchError is raised"
+            " (default: %(default)s)",
+        )
+        self.launcher_grp.add_argument(
             "--launch-timeout",
             type=int,
             default=300,
@@ -218,6 +225,9 @@ class CommonArgs:
     def sanity_check(self, args):
         if "binary" not in self._sanity_skip and not isfile(args.binary):
             self.parser.error("file not found: %r" % (args.binary,))
+
+        if args.launch_attempts < 1:
+            self.parser.error("--launch-attempts must be >= 1")
 
         args.log_level = self._level_map[args.log_level]
 
