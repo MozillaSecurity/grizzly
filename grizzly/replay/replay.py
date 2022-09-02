@@ -219,6 +219,7 @@ class ReplayManager:
         expect_hang=False,
         idle_delay=0,
         idle_threshold=0,
+        launch_attempts=3,
         on_iteration_cb=None,
     ):
         """Run testcase replay.
@@ -237,6 +238,7 @@ class ReplayManager:
                                performed.
             idle_delay (int): Number of seconds to wait before polling for idle.
             idle_threshold (int): CPU usage threshold to mark the process as idle.
+            launch_attempts (int): Number of attempts to launch the browser.
             on_iteration_cb (callable): called every time a single iteration is run
 
         Returns:
@@ -244,6 +246,7 @@ class ReplayManager:
         """
         assert idle_delay >= 0
         assert idle_threshold >= 0
+        assert launch_attempts > 0
         assert min_results > 0
         assert repeat > 0
         assert repeat >= min_results
@@ -291,7 +294,7 @@ class ReplayManager:
                             close_after=relaunch * test_count,
                             time_limit=time_limit,
                         )
-                    runner.launch(location)
+                    runner.launch(location, max_retries=launch_attempts)
                 # run tests
                 durations = list()
                 served = list()
@@ -642,6 +645,7 @@ class ReplayManager:
                         expect_hang=expect_hang,
                         idle_delay=args.idle_delay,
                         idle_threshold=args.idle_threshold,
+                        launch_attempts=args.launch_attempts,
                         min_results=args.min_crashes,
                         repeat=repeat,
                     )
