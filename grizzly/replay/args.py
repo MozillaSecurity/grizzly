@@ -77,6 +77,14 @@ class ReplayArgs(CommonArgs):
             "0 == Oldest, n-1 == Newest (default: run all testcases)",
         )
 
+        self.launcher_grp.add_argument(
+            "--post-launch-delay",
+            type=int,
+            default=None,
+            help="Number of seconds to wait after launching browser before "
+            " running the test. This provides an opportunity to connect debuggers. ",
+        )
+
         self.reporter_grp.add_argument(
             "--include-test",
             action="store_true",
@@ -100,6 +108,9 @@ class ReplayArgs(CommonArgs):
 
         if args.min_crashes < 1:
             self.parser.error("--min-crashes value must be positive")
+
+        if args.post_launch_delay is not None and args.post_launch_delay < 0:
+            self.parser.error("--post-launch-delay value must be positive")
 
         if args.repeat < 1:
             self.parser.error("--repeat value must be positive")

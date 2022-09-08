@@ -3,11 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
+from pathlib import Path
 from time import sleep, time
 
-from sapphire import Served
+from sapphire import Served, ServerMap
 
 from ..target import Result, TargetLaunchError, TargetLaunchTimeout
+from .storage import TestCase
 
 __all__ = ("Runner", "RunResult")
 __author__ = "Tyson Smith"
@@ -148,13 +150,16 @@ class Runner:
             break
 
     @staticmethod
-    def location(srv_path, srv_port, close_after=None, time_limit=None):
+    def location(
+        srv_path, srv_port, close_after=None, post_launch_delay=None, time_limit=None
+    ):
         """Build a valid URL to pass to a browser.
 
         Args:
             srv_path (str): Path segment of the URL
             srv_port (int): Server listening port
             close_after (int): Harness argument.
+            post_launch_delay (int): Post-launch delay page argument.
             time_limit (int): Harness argument.
 
         Returns:
@@ -169,6 +174,9 @@ class Runner:
         if time_limit:
             assert time_limit > 0
             args.append("time_limit=%d" % (time_limit * 1000,))
+        if post_launch_delay is not None:
+            assert post_launch_delay >= 0
+            args.append("post_launch_delay=%d" % (post_launch_delay,))
         if args:
             return "?".join((location, "&".join(args)))
         return location
@@ -184,6 +192,40 @@ class Runner:
             bool: True if at most one test has been run.
         """
         return self._tests_run < 2
+
+    def post_launch(self, delay=None):
+        """Perform actions after launching browser before loading test cases.
+
+        Args:
+            post_launch_delay (int): Amount of time in seconds before the target will
+                                     redirect to test case.
+
+        Returns:
+            None
+        """
+        if delay is not None and not self.startup_failure:
+            assert delay >= 0
+            with TestCase("post_launch_delay.html", None, "None") as content:
+                content.add_from_file(
+                    Path(__file__).parent / "post_launch_delay.html",
+                    content.landing_page,
+                    copy=True,
+                )
+                srv_map = ServerMap()
+                srv_map.set_redirect("grz_start", content.landing_page, required=False)
+                srv_map.set_redirect("grz_continue", "grz_start", required=True)
+                # temporarily disable server timeout
+                srv_timeout = self._server.timeout
+                self._server.timeout = 0
+                LOG.info("Browser launched, continuing in %ds...", delay)
+                # serve prompt page
+                self._server.serve_path(
+                    content.data_path,
+                    continue_cb=self._target.monitor.is_healthy,
+                    server_map=srv_map,
+                )
+                # re-enable server timeout
+                self._server.timeout = srv_timeout
 
     def run(
         self,
