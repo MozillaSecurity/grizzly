@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<meta charset=UTF-8>
+<title>Grizzly &sdot; Post Launch Delay</title>
+<head>
+<script>
+const args = window.location.search.replace('?', '')
+const target = args ? `/grz_continue?${args}` : '/grz_continue'
+let countInterval = null
+
+// parse args
+let limit = 300
+if (args) {
+    for (let kv of args.split('&')) {
+        let [k, v] = kv.split('=')
+        if (k === 'post_launch_delay') {
+            limit = Math.max(Number.parseInt(v), 0)
+            break
+        }
+    }
+}
+let remaining = limit
+
+function countDown() {
+    remaining -= 1
+    setTimeout(updateDisplay, 0)
+    if (remaining <= 0)
+        setTimeout(next, 0)
+}
+
+function next() {
+    if (countInterval) {
+        clearInterval(countInterval)
+    }
+    setTimeout(() => {
+        window.location = target
+    }, 0)
+}
+
+function updateDisplay() {
+    remainingSeconds = Math.max(remaining, 0)
+    let o = document.getElementById('msg')
+    o.innerText = `Test will run automatically in: ${remainingSeconds}s`
+}
+
+window.onload = () => {
+    setTimeout(updateDisplay, 0)
+    if (remaining) {
+        countInterval = setInterval(countDown, 1000)
+    }
+    else {
+        setTimeout(countDown, 0)
+    }
+}
+</script>
+</head>
+<body style='background-color:#E5E4E2'>
+<div>Connect debugger, etc...</div>
+<div id='msg'></div>
+<button onclick='next()'>Run Test</button>
+</body>
+</html>

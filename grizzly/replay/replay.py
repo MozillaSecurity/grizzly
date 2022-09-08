@@ -221,6 +221,7 @@ class ReplayManager:
         idle_threshold=0,
         launch_attempts=3,
         on_iteration_cb=None,
+        post_launch_delay=None,
     ):
         """Run testcase replay.
 
@@ -239,7 +240,9 @@ class ReplayManager:
             idle_delay (int): Number of seconds to wait before polling for idle.
             idle_threshold (int): CPU usage threshold to mark the process as idle.
             launch_attempts (int): Number of attempts to launch the browser.
-            on_iteration_cb (callable): called every time a single iteration is run
+            on_iteration_cb (callable): Called every time a single iteration is run.
+            post_launch_delay (int): Time in seconds before test case is loaded after
+                                     the browser is launched.
 
         Returns:
             list: ReplayResults that were found running testcases.
@@ -286,15 +289,21 @@ class ReplayManager:
                     on_iteration_cb()
                 if self.target.closed:
                     if self._harness is None:
-                        location = runner.location("/grz_start", self.server.port)
+                        location = runner.location(
+                            "/grz_start",
+                            self.server.port,
+                            post_launch_delay=post_launch_delay,
+                        )
                     else:
                         location = runner.location(
                             "/grz_start",
                             self.server.port,
                             close_after=relaunch * test_count,
+                            post_launch_delay=post_launch_delay,
                             time_limit=time_limit,
                         )
                     runner.launch(location, max_retries=launch_attempts)
+                    runner.post_launch(delay=post_launch_delay)
                 # run tests
                 durations = list()
                 served = list()
@@ -647,6 +656,7 @@ class ReplayManager:
                         idle_threshold=args.idle_threshold,
                         launch_attempts=args.launch_attempts,
                         min_results=args.min_crashes,
+                        post_launch_delay=args.post_launch_delay,
                         repeat=repeat,
                     )
             # handle results

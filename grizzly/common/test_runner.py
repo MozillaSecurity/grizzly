@@ -270,6 +270,8 @@ def test_runner_08():
     assert result == "http://127.0.0.1:9999/a.html?time_limit=60000"
     result = Runner.location("a.html", 9999, close_after=10, time_limit=60)
     assert result == "http://127.0.0.1:9999/a.html?close_after=10&time_limit=60000"
+    result = Runner.location("a.html", 9999, post_launch_delay=10)
+    assert result == "http://127.0.0.1:9999/a.html?post_launch_delay=10"
 
 
 def test_runner_09(mocker):
@@ -327,6 +329,19 @@ def test_runner_10(mocker, tmp_path):
         assert "inc_file.bin" in tcase.contents
         assert "nested/nested_inc.bin" in tcase.contents
         assert "test/inc_file3.txt" in tcase.contents
+
+
+def test_runner_11(mocker):
+    """test Runner.post_launch()"""
+    server = mocker.Mock(spec_set=Sapphire, timeout=1)
+    target = mocker.Mock(spec_set=Target, launch_timeout=30)
+    runner = Runner(server, target)
+    # successful launch
+    runner.launch("http://a/")
+    runner.post_launch(delay=10)
+    assert target.launch.call_count == 1
+    assert server.timeout == 1
+    assert server.serve_path.call_count == 1
 
 
 def test_idle_check_01(mocker):
