@@ -50,7 +50,11 @@ let main = () => {
     xhr.open('GET', '/grz_next_test', false)
     xhr.send(null)
     // close the harness to help catch browser shutdown issues
-    setTimeout(window.close)
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(window.close, {timeout: 500})
+    } else {
+      setTimeout(window.close)
+    }
   }
   else {
     // open test
@@ -67,8 +71,10 @@ let main = () => {
           grzDump('Test case time limit exceeded')
           if (sub && !sub.closed) {
             grzDump('Closing test case')
-            // WARNING: simplify this setTimeout can break the harness!
-            setTimeout(() => { sub.close() })
+            // WARNING: simplifying this setTimeout can break the harness!
+            setTimeout(() => {
+              try { sub.close() } catch (e) { }
+            })
           }
         }, time_limit)
       }
