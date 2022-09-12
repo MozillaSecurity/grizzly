@@ -122,4 +122,4 @@ def test_response_data_04():
     output = Worker._4xx_page(404, "Not Found", close=10)
     assert b"Content-Length: " in output
     assert b"HTTP/1.1 404 Not Found" in output
-    assert b"<script>window.setTimeout(window.close, 10000)</script>" in output
+    assert b"window.onload = () => { window.setTimeout(window.close, 10000) }" in output

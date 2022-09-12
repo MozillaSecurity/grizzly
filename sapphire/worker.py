@@ -65,7 +65,9 @@ class Worker:
             content = "<h3>%d!</h3>" % (code,)
         else:
             content = (
-                "<script>window.setTimeout(window.close, %d)</script>\n"
+                "<script>\n"
+                "window.onload = () => { window.setTimeout(window.close, %d) }\n"
+                "</script>\n"
                 '<body style="background-color:#ffffe0">\n'
                 "<h3>%d! - Calling window.close() in %d seconds</h3>\n"
                 "</body>\n" % (close * 1000, code, close)
