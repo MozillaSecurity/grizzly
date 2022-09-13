@@ -23,8 +23,10 @@ __credits__ = ["Tyson Smith"]
 DB_TIMEOUT = 30
 # used to track changes to the database layout
 DB_VERSION = 2
-# default expiration limit for entries in the database
-EXP_LIMIT = 86400
+# default expiration limit for report entries in the database (24 hours)
+REPORT_EXP_LIMIT = 86400
+# default expiration limit for result entries in the database (30 days)
+RESULT_EXP_LIMIT = 2592000
 LOG = getLogger(__name__)
 
 ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
@@ -109,7 +111,7 @@ class Status:
         db_file=None,
         enable_profiling=False,
         start_time=None,
-        exp_limit=EXP_LIMIT,
+        exp_limit=REPORT_EXP_LIMIT,
         pid=None,
         report_limit=0,
     ):
@@ -164,7 +166,6 @@ class Status:
             self.results = ResultCounter(
                 pid,
                 db_file=db_file,
-                exp_limit=EXP_LIMIT,
                 freq_limit=report_limit,
             )
 
@@ -203,26 +204,38 @@ class Status:
             cur = con.cursor()
             # collect entries
             try:
-                cur.execute(
-                    """SELECT pid,
-                             _profiles,
-                             ignored,
-                             iteration,
-                             log_size,
-                             start_time,
-                             timestamp
-                       FROM status
-                       WHERE timestamp > ?;""",
-                    (time() - time_limit,),
-                )
+                if time_limit:
+                    cur.execute(
+                        """SELECT pid,
+                                _profiles,
+                                ignored,
+                                iteration,
+                                log_size,
+                                start_time,
+                                timestamp
+                           FROM status
+                           WHERE timestamp > ?;""",
+                        (time() - time_limit,),
+                    )
+                else:
+                    cur.execute(
+                        """SELECT pid,
+                                  _profiles,
+                                  ignored,
+                                  iteration,
+                                  log_size,
+                                  start_time,
+                                  timestamp
+                           FROM status;"""
+                    )
                 entries = cur.fetchall()
             except OperationalError as exc:
                 if not str(exc).startswith("no such table:"):
                     raise  # pragma: no cover
                 entries = ()
 
-        results = ResultCounter.load(db_file, time_limit)
-
+        # Load all results
+        results = ResultCounter.load(db_file, 0)
         for entry in entries:
             status = cls(pid=entry[0])
             status._profiles = loads(entry[1])
@@ -433,7 +446,7 @@ class ResultCounter:
         "pid",
     )
 
-    def __init__(self, pid, db_file=None, exp_limit=EXP_LIMIT, freq_limit=0):
+    def __init__(self, pid, db_file=None, exp_limit=RESULT_EXP_LIMIT, freq_limit=0):
         assert exp_limit >= 0
         assert freq_limit >= 0
         assert pid >= 0
@@ -469,6 +482,15 @@ class ResultCounter:
                         )
                     # avoid (unlikely) pid reuse collision
                     cur.execute("""DELETE FROM results WHERE pid = ?;""", (pid,))
+                    # remove results for jobs that have been removed
+                    try:
+                        cur.execute(
+                            """DELETE FROM results
+                               WHERE pid NOT IN (SELECT pid FROM status);"""
+                        )
+                    except OperationalError as exc:
+                        if not str(exc).startswith("no such table:"):
+                            raise  # pragma: no cover
 
     def all(self):
         """Yield all result data.
@@ -546,15 +568,20 @@ class ResultCounter:
             cur = con.cursor()
             try:
                 # collect entries
-                cur.execute(
-                    """SELECT pid,
-                              result_id,
-                              description,
-                              count
-                       FROM results
-                       WHERE timestamp > ?;""",
-                    (int(time()) - time_limit,),
-                )
+                if time_limit:
+                    cur.execute(
+                        """SELECT pid,
+                                result_id,
+                                description,
+                                count
+                           FROM results
+                           WHERE timestamp > ?;""",
+                        (int(time()) - time_limit,),
+                    )
+                else:
+                    cur.execute(
+                        """SELECT pid, result_id, description, count FROM results"""
+                    )
                 entries = cur.fetchall()
             except OperationalError as exc:
                 if not str(exc).startswith("no such table:"):
@@ -667,7 +694,7 @@ class ReductionStatus:
         db_file=None,
         pid=None,
         tool=None,
-        exp_limit=EXP_LIMIT,
+        exp_limit=REPORT_EXP_LIMIT,
     ):
         """Initialize a ReductionStatus instance.
 

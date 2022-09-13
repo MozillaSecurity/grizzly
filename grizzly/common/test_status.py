@@ -82,7 +82,7 @@ def test_status_03(tmp_path):
 
 
 def test_status_04(mocker, tmp_path):
-    """test Status.loadall()"""
+    """test Status.loadall() - multiple entries"""
     getpid = mocker.patch("grizzly.common.status.getpid", autospec=True)
     db_file = str(tmp_path / "status.db")
     for pid in range(5):
@@ -92,6 +92,39 @@ def test_status_04(mocker, tmp_path):
 
 
 def test_status_05(mocker, tmp_path):
+    """test Status.loadall() - filter entries by time"""
+    fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
+    fake_time.return_value = 1.0
+    db_file = str(tmp_path / "status.db")
+    # load from empty db
+    assert not any(Status.loadall(db_file))
+    # create entry
+    status = Status.start(db_file)
+    status.results.count("uid1", "sig1")
+    assert status.results.total == 1
+    status.report(force=True)
+    # load entry
+    assert any(Status.loadall(db_file, time_limit=60))
+    # load with expired entry
+    fake_time.return_value = 1200.0
+    assert not any(Status.loadall(db_file, time_limit=60))
+    # load with no limit
+    assert any(Status.loadall(db_file, time_limit=0))
+    # load long running entry with a one month old result
+    fake_time.return_value = 2592000.0
+    status.report(force=True)
+    loaded = next(Status.loadall(db_file, time_limit=60))
+    assert status.start_time == loaded.start_time
+    assert status.timestamp == loaded.timestamp
+    assert status.runtime >= loaded.runtime
+    assert status.ignored == loaded.ignored
+    assert status.iteration == loaded.iteration
+    assert status.log_size == loaded.log_size
+    assert status.pid == loaded.pid
+    assert loaded.results.get("uid1") == ("uid1", 1, "sig1")
+
+
+def test_status_06(mocker, tmp_path):
     """test Status.runtime and Status.rate calculations"""
     fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
     fake_time.return_value = 1.0
@@ -140,7 +173,7 @@ def _client_writer(db_file, begin, count):
         5,
     ],
 )
-def test_status_06(tmp_path, loads_in_parallel):
+def test_status_07(tmp_path, loads_in_parallel):
     """test Status.loadall() with multiple active clients in parallel"""
     begin = Event()
     clients = 10
@@ -177,7 +210,7 @@ def test_status_06(tmp_path, loads_in_parallel):
             proc.join()
 
 
-def test_status_07(tmp_path):
+def test_status_08(tmp_path):
     """test Status.measure() and Status.record() - profiling support"""
     db_file = str(tmp_path / "status.db")
     # profiling disabled
@@ -266,7 +299,7 @@ def test_status_07(tmp_path):
         ([("uid1", "sig1", 99), ("uid2", "sig2", 10)], 1000, 100, 2),
     ],
 )
-def test_status_08(tmp_path, buckets, ratio, iterations, blockers):
+def test_status_09(tmp_path, buckets, ratio, iterations, blockers):
     """test Status.blockers()"""
     status = Status.start(str(tmp_path / "status.db"))
     status.iteration = iterations
