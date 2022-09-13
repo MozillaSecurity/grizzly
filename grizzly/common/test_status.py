@@ -62,6 +62,8 @@ def test_status_02(tmp_path):
 def test_status_03(tmp_path):
     """test Status.loadall()"""
     db_file = str(tmp_path / "status.db")
+    # load from empty db
+    assert not any(Status.loadall(db_file))
     # create simple entry
     status = Status.start(db_file, enable_profiling=True)
     status.results.count("uid1", "sig1")
@@ -96,8 +98,6 @@ def test_status_05(mocker, tmp_path):
     fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
     fake_time.return_value = 1.0
     db_file = str(tmp_path / "status.db")
-    # load from empty db
-    assert not any(Status.loadall(db_file))
     # create entry
     status = Status.start(db_file)
     status.results.count("uid1", "sig1")
@@ -309,6 +309,27 @@ def test_status_09(tmp_path, buckets, ratio, iterations, blockers):
             status.results.count(report_id, desc)
     # check for blockers
     assert len(tuple(status.blockers(iters_per_result=ratio))) == blockers
+
+
+def test_status_10(mocker, tmp_path):
+    """test Status() - purge expired entries"""
+    fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
+    db_file = str(tmp_path / "status.db")
+    # purge due to exp_limit
+    fake_time.return_value = 1.0
+    status = Status(db_file=db_file, start_time=1.0, pid=123, exp_limit=10)
+    status.report(force=True)
+    assert any(Status.loadall(db_file, time_limit=60))
+    fake_time.return_value = 20.0
+    Status(db_file=db_file, start_time=20.0, pid=456, exp_limit=10)
+    assert not any(Status.loadall(db_file, time_limit=60))
+    # purge due matching pid
+    fake_time.return_value = 1.0
+    status = Status(db_file=db_file, start_time=1.0, pid=123, exp_limit=10)
+    status.report(force=True)
+    assert any(Status.loadall(db_file, time_limit=60))
+    Status(db_file=db_file, start_time=1.0, pid=123, exp_limit=10)
+    assert not any(Status.loadall(db_file, time_limit=60))
 
 
 def test_reduce_status_01(mocker, tmp_path):
@@ -672,7 +693,7 @@ def test_report_counter_03(mocker, tmp_path):
 
 
 def test_report_counter_04(mocker, tmp_path):
-    """test ResultCounter remove old entries"""
+    """test ResultCounter remove expired entries"""
     fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
     fake_time.return_value = 1
     db_path = str(tmp_path / "storage.db")
