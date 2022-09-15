@@ -58,12 +58,16 @@ let main = () => {
   }
   else {
     // open test
-    sub = open((sub !== null) ? '/grz_next_test' : '/grz_current_test', 'GrizzlyFuzz')
+    let location = (sub !== null) ? '/grz_next_test' : '/grz_current_test'
+    sub = open()
     if (sub === null) {
       setBanner('Error! Could not open window. Blocked by the popup blocker?')
       grzDump('Could not open test! Blocked by the popup blocker?')
     }
     else {
+      // null opener will prevent test case interactions with harness
+      sub.opener = null
+      sub.location = location
       // set the test case time limit
       if (time_limit > 0) {
         grzDump(`Using test case time limit of ${time_limit}`)
