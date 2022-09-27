@@ -209,6 +209,24 @@ class ReplayManager:
             for result in expected:
                 reporter.submit(tests or [], report=result.report)
 
+    @staticmethod
+    def report_to_fuzzmanager(results, tests, tool=None):
+        """Use FuzzManagerReporter to send reports to a FuzzManager server.
+
+        Args:
+            results (iterable): ReplayResult to output.
+            tests (iterable): Testcases to output.
+            tool (str): Name used by FuzzManager.
+
+        Returns:
+            None
+        """
+        if tests and not tool:
+            tool = tests[0].adapter_name
+        reporter = FuzzManagerReporter(tool or "grizzly-replay")
+        for result in results:
+            reporter.submit(tests, result.report)
+
     def run(
         self,
         testcases,
@@ -557,7 +575,6 @@ class ReplayManager:
         configure_logging(args.log_level)
         if args.fuzzmanager:
             FuzzManagerReporter.sanity_check(args.binary)
-            # TODO: add fuzzmanager support
 
         LOG.info("Starting Grizzly Replay")
 
@@ -665,7 +682,7 @@ class ReplayManager:
                 LOG.info("Result successfully reproduced")
             else:
                 LOG.info("Failed to reproduce results")
-            if args.logs and results:
+            if results and (args.logs or args.fuzzmanager):
                 # add target assets to test cases
                 if not target.assets.is_empty():
                     for test in testcases:
@@ -674,10 +691,13 @@ class ReplayManager:
                 if target.filtered_environ():
                     for test in testcases:
                         test.env_vars = target.filtered_environ()
-                cls.report_to_filesystem(
-                    args.logs, results, testcases if args.include_test else None
-                )
-            # TODO: add fuzzmanager reporting
+                # report results
+                if args.fuzzmanager:
+                    cls.report_to_fuzzmanager(results, testcases, tool=args.tool)
+                else:
+                    cls.report_to_filesystem(
+                        args.logs, results, testcases if args.include_test else None
+                    )
             return Exit.SUCCESS if success else Exit.FAILURE
 
         except ConfigError as exc:

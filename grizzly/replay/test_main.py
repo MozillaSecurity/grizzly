@@ -450,3 +450,61 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
     assert load_target.return_value.call_args[-1]["pernosco"] == pernosco
     assert load_target.return_value.call_args[-1]["rr"] == rr
     assert load_target.return_value.call_args[-1]["valgrind"] == valgrind
+
+
+def test_main_08(mocker, tmp_path):
+    """test ReplayManager.main() - report to FuzzManager"""
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
+    reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
+    # mock Sapphire.serve_path only
+    serve_path = mocker.patch(
+        "grizzly.replay.replay.Sapphire.serve_path",
+        autospec=True,
+        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
+    )
+    # setup Target
+    load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
+    target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
+    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.check_result.side_effect = (Result.FOUND,)
+    target.save_logs = _fake_save_logs
+    load_target.return_value.return_value = target
+    with TestCase("test.html", None, "adpt") as src:
+        src.add_from_bytes(b"test", "test.html")
+        src.dump(str(tmp_path / "testcase"), include_details=True)
+    # setup args
+    args = mocker.Mock(
+        any_crash=False,
+        asset=list(),
+        fuzzmanager=True,
+        idle_delay=0,
+        idle_threshold=0,
+        ignore=[],
+        input=str(tmp_path / "testcase"),
+        launch_attempts=1,
+        logs=None,
+        min_crashes=1,
+        no_harness=False,
+        pernosco=False,
+        post_launch_delay=None,
+        relaunch=1,
+        repeat=1,
+        rr=False,
+        sig=None,
+        test_index=None,
+        time_limit=10,
+        timeout=None,
+        tool=None,
+        valgrind=False,
+    )
+    assert ReplayManager.main(args) == Exit.SUCCESS
+    assert target.reverse.call_count == 1
+    assert target.launch.call_count == 1
+    assert target.check_result.call_count == 1
+    assert serve_path.call_count == 1
+    assert load_target.call_count == 1
+    assert target.close.call_count == 2
+    assert target.cleanup.call_count == 1
+    assert target.assets.add.call_count == 0
+    assert target.assets.is_empty.call_count == 1
+    assert reporter.return_value.submit.call_count == 1
