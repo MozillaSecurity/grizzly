@@ -807,3 +807,31 @@ def test_replay_22(mocker, expect_hang, is_hang, use_sig, match_sig, ignored, re
         assert len(found[0].durations) == 1
         assert testcase.hang == is_hang
         found[0].report.cleanup()
+
+
+def test_replay_23(mocker):
+    """test ReplayManager.report_to_fuzzmanager()"""
+    reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter")
+    # no reports or tests
+    ReplayManager.report_to_fuzzmanager([], [])
+    assert reporter.call_args == (("grizzly-replay",),)
+    assert reporter.return_value.submit.call_count == 0
+    reporter.reset_mock()
+    # with reports and tests
+    results = [
+        mocker.Mock(
+            spec_set=ReplayResult, report=mocker.Mock(spec_set=Report), expected=True
+        ),
+        mocker.Mock(
+            spec_set=ReplayResult, report=mocker.Mock(spec_set=Report), expected=False
+        ),
+    ]
+    test = mocker.Mock(spec_set=TestCase, adapter_name="test-tool-name")
+    ReplayManager.report_to_fuzzmanager(results, [test])
+    assert reporter.call_args == (("test-tool-name",),)
+    assert reporter.return_value.submit.call_count == 2
+    reporter.reset_mock()
+    # with reports and no tests
+    ReplayManager.report_to_fuzzmanager(results, [], tool="test-override")
+    assert reporter.call_args == (("test-override",),)
+    assert reporter.return_value.submit.call_count == 2
