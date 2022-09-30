@@ -124,7 +124,7 @@ class PuppetTarget(Target):
             opts.pop("log_path")
             opts.pop("strip_path_prefix")
             opts.pop("suppressions")
-            filtered[san] = opts.options
+            filtered[san] = str(opts)
         # remove empty entries
         return {k: v for k, v in filtered.items() if v}
 
@@ -326,6 +326,26 @@ class PuppetTarget(Target):
     def log_size(self):
         return self._puppet.log_length("stderr") + self._puppet.log_length("stdout")
 
+    def merge_environment(self, extra):
+        output = dict(extra)
+        if self.environ:
+            # prioritize existing environment variables
+            output.update(self.environ)
+            # merge contents of *SAN_OPTIONS
+            org = SanitizerOptions()
+            out = SanitizerOptions()
+            for san in ("ASAN", "LSAN", "TSAN", "UBSAN"):
+                opts = "_".join((san, "OPTIONS"))
+                org.load_options(self.environ.get(opts, ""))
+                if not org:
+                    # nothing to add from original
+                    continue
+                out.load_options(extra.get(opts, ""))
+                for opt, value in org:  # pylint: disable=not-an-iterable
+                    out.add(opt, value, overwrite=True)
+                output[opts] = str(out)
+        self.environ = output
+
     def process_assets(self):
         self._extension = self.assets.get("extension")
         self._prefs = self.assets.get("prefs")
@@ -375,7 +395,7 @@ class PuppetTarget(Target):
                 continue
             # update sanitized *SAN_OPTIONS
             LOG.debug("updating suppressions in %r", var_name)
-            self.environ[var_name] = opts.options
+            self.environ[var_name] = str(opts)
 
     def save_logs(self, *args, **kwargs):
         self._puppet.save_logs(*args, **kwargs)

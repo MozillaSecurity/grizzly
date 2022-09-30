@@ -409,3 +409,52 @@ def test_puppet_target_11(tmp_path):
         assert "TRACKED" in target.filtered_environ()
         assert "ASAN_OPTIONS" in target.filtered_environ()
         assert "LSAN_OPTIONS" not in target.filtered_environ()
+
+
+@mark.parametrize(
+    "base, extra, result",
+    [
+        # empty
+        ({}, {}, {}),
+        # empty extra
+        ({"a": "1"}, {}, {"a": "1"}),
+        # empty base
+        ({}, {"a": "1"}, {"a": "1"}),
+        # merge
+        ({"a": "1"}, {"b": "2"}, {"a": "1", "b": "2"}),
+        # name collision, favor base
+        ({"a": "1"}, {"a": "2"}, {"a": "1"}),
+        # name collision and merge
+        ({"a": "1"}, {"a": "2", "b": "2"}, {"a": "1", "b": "2"}),
+    ],
+)
+def test_puppet_target_12(tmp_path, base, extra, result):
+    """test PuppetTarget.merge_environment()"""
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+        target.environ = base
+        target.merge_environment(extra)
+        assert target.environ == result
+
+
+@mark.parametrize(
+    "base, extra, result",
+    [
+        # collision with existing option
+        ({"ASAN_OPTIONS": "a=1"}, {"ASAN_OPTIONS": "a=2"}, ["a=1"]),
+        # add option from extra
+        ({"ASAN_OPTIONS": "a=1"}, {"ASAN_OPTIONS": "b=2:c3"}, ["a=1", "b=2", "c=3"]),
+        # add option from extra
+        ({"ASAN_OPTIONS": "a=1:c=3"}, {"ASAN_OPTIONS": "b=2"}, ["a=1", "b=2", "c=3"]),
+    ],
+)
+def test_puppet_target_13(tmp_path, base, extra, result):
+    """test PuppetTarget.merge_environment() - merge sanitizer options"""
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+        target.environ = base
+        target.merge_environment(extra)
+        for opt in target.environ["ASAN_OPTIONS"].split(":"):
+            assert opt in result

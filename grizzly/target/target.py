@@ -140,6 +140,10 @@ class Target(metaclass=ABCMeta):
         LOG.debug("log_size() not implemented! returning 0")
         return 0
 
+    @abstractmethod
+    def merge_environment(self, extra):
+        pass
+
     @property
     @abstractmethod
     def monitor(self):

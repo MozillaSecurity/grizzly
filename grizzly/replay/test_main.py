@@ -83,7 +83,7 @@ def test_main_01(mocker, tmp_path):
     assert target.reverse.call_count == 1
     assert target.launch.call_count == 3
     assert target.check_result.call_count == 3
-    assert "TEST_VAR" in target.environ
+    assert target.merge_environment.call_count == 1
     assert serve_path.call_count == 3
     assert load_target.call_count == 1
     assert target.close.call_count == 4
