@@ -642,11 +642,10 @@ class ReplayManager:
                 rr=args.rr,
                 valgrind=args.valgrind,
             )
-            # local environ takes priority over environ loaded from test case
             if env_vars is not None:
-                env_vars.update(target.environ)
-                target.environ = env_vars
-                env_vars = None
+                LOG.debug("adding environment loaded from test case")
+                target.merge_environment(env_vars)
+
             # TODO: support overriding existing assets
             # prioritize specified assets over included
             target.assets.add_batch(args.asset)

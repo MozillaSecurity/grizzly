@@ -34,6 +34,9 @@ class SimpleTarget(Target):
     def monitor(self):
         return self._monitor
 
+    def merge_environment(self, extra):
+        pass
+
     def process_assets(self):
         pass
 
