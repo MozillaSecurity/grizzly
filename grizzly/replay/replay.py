@@ -225,6 +225,9 @@ class ReplayManager:
             tool = tests[0].adapter_name
         reporter = FuzzManagerReporter(tool or "grizzly-replay")
         for result in results:
+            # always report expected results
+            # avoid reporting unexpected frequent results
+            reporter.force_report = result.expected
             reporter.submit(tests, result.report)
 
     def run(
