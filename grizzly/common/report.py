@@ -192,11 +192,22 @@ class Report:
 
     @staticmethod
     def crash_signature_max_frames(crash_info, suggested_frames=8):
-        if set(crash_info.backtrace) & {
-            "std::panicking::rust_panic",
-            "std::panicking::rust_panic_with_hook",
-        }:
-            # rust panic adds 5-6 frames of noise at the top of the stack
+        """Determine how many stack frames should be used when creating a signature.
+
+        Args:
+            crash_info (CrashInfo): Data to analyse.
+            suggested_frames (int): Minimum number of frames to use when creating a
+                                    signature.
+
+        Returns:
+            int: Number of frames to use when creating a signature.
+        """
+        if any(
+            entry.startswith("std::panicking") or entry.startswith("alloc::alloc")
+            for entry in crash_info.backtrace
+        ):
+            # Rust panics add frames of noise to the top of the stack (std::panicking)
+            # Sanitizer heap profile also have more noise on the stack (alloc::alloc)
             suggested_frames += 6
         return suggested_frames
 
