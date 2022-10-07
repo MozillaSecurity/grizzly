@@ -176,8 +176,8 @@ class Report:
         """
         if self._signature is None:
             collector = Collector()
-            with InterProcessLock(str(Path(grz_tmp()) / "fm_sigcache.lock")):
-                if collector.sigCacheDir:
+            if collector.sigCacheDir and Path(collector.sigCacheDir).is_dir():
+                with InterProcessLock(str(Path(grz_tmp()) / "fm_sigcache.lock")):
                     cache_sig, _ = collector.search(self.crash_info)
                     if cache_sig:
                         LOG.debug("signature loaded from cache file %r", cache_sig)
