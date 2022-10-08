@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -48,11 +47,11 @@ class AssetManager:
         assert isinstance(path, str)
         assert self.path, "cleanup() was called"
         if not exists(path):
-            raise OSError("%r does not exist" % (path,))
+            raise OSError(f"{path!r} does not exist")
         path = abspath(path)
         # only copy files from outside working path
         if path.startswith(self.path):
-            raise AssetError("Cannot add existing asset content %r" % (path,))
+            raise AssetError(f"Cannot add existing asset content {path!r}")
         # remove existing asset with the same name
         if asset in self.assets:
             LOG.debug("asset %r exists, removing existing", asset)
@@ -60,7 +59,7 @@ class AssetManager:
         dst_path = pathjoin(self.path, basename(path))
         # avoid overwriting data that is part of an existing asset
         if exists(dst_path):
-            raise AssetError("%r is an existing asset" % (basename(path),))
+            raise AssetError(f"{basename(path)!r} is an existing asset")
         if copy:
             if isfile(path):
                 copyfile(path, dst_path)

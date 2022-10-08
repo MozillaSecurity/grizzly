@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -77,13 +76,13 @@ class StackFrame:
     def __str__(self):
         out = []
         if self.stack_line is not None:
-            out.append("%02d" % int(self.stack_line))
+            out.append(f"{int(self.stack_line):0>2d}")
         if self.function is not None:
-            out.append("function: %r" % self.function)
+            out.append(f"function: {self.function!r}")
         if self.location is not None:
-            out.append("location: %r" % self.location)
+            out.append(f"location: {self.location!r}")
         if self.offset is not None:
-            out.append("offset: %r" % self.offset)
+            out.append(f"offset: {self.offset!r}")
         return " - ".join(out)
 
     @classmethod

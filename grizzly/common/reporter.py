@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -149,11 +148,11 @@ class FilesystemReporter(Reporter):
         dest.mkdir(parents=True, exist_ok=True)
         # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(test_cases):
-            dump_path = dest / ("%s-%d" % (report.prefix, test_number))
+            dump_path = dest / f"{report.prefix}-{test_number}"
             dump_path.mkdir(exist_ok=True)
             test_case.dump(dump_path, include_details=True)
         # move logs into bucket directory
-        log_path = dest / ("%s_%s" % (report.prefix, "logs"))
+        log_path = dest / f"{report.prefix}_logs"
         if log_path.is_dir():
             LOG.warning("Report log path exists %r", str(log_path))
         move(str(report.path), str(log_path))
@@ -161,7 +160,7 @@ class FilesystemReporter(Reporter):
         free_space = disk_usage(str(log_path)).free
         if free_space < self.min_space:
             raise RuntimeError(
-                "Running low on disk space (%0.1fMB)" % (free_space / 1048576.0,)
+                f"Running low on disk space ({free_space / 1048576.0:0.1f}MB)"
             )
         return dest
 
@@ -192,9 +191,9 @@ class FuzzManagerReporter(Reporter):
             None
         """
         if not FuzzManagerReporter.FM_CONFIG.is_file():
-            raise IOError("Missing: %s" % (FuzzManagerReporter.FM_CONFIG,))
+            raise OSError(f"Missing: {FuzzManagerReporter.FM_CONFIG}")
         if not Path("".join([bin_file, ".fuzzmanagerconf"])).is_file():
-            raise IOError("Missing: %s.fuzzmanagerconf" % (bin_file,))
+            raise OSError(f"Missing: {bin_file}.fuzzmanagerconf")
         ProgramConfiguration.fromBinary(bin_file)
 
     def add_extra_metadata(self, key, value):
@@ -275,7 +274,7 @@ class FuzzManagerReporter(Reporter):
         test_case_meta = []
         for test_number, test_case in enumerate(test_cases):
             test_case_meta.append([test_case.adapter_name, test_case.input_fname])
-            dump_path = report.path / ("%s-%d" % (report.prefix, test_number))
+            dump_path = report.path / f"{report.prefix}-{test_number}"
             dump_path.mkdir(exist_ok=True)
             test_case.dump(dump_path, include_details=True)
         report.crash_info.configuration.addMetadata(
@@ -295,7 +294,7 @@ class FuzzManagerReporter(Reporter):
         # TODO: this should likely move to ffpuppet
         # grab screen log (used in automation)
         if getenv("WINDOW") is not None:
-            screen_log = Path.cwd() / ("screenlog.%s" % (getenv("WINDOW"),))
+            screen_log = Path.cwd() / f"screenlog.{getenv('WINDOW')}"
             if screen_log.is_file():
                 target_log = report.path / "screenlog.txt"
                 copyfile(str(screen_log), str(target_log))
@@ -303,7 +302,7 @@ class FuzzManagerReporter(Reporter):
 
         with TemporaryDirectory(prefix="fm-zip", dir=grz_tmp()) as tmp_dir:
             # add results to a zip file
-            zip_name = Path(tmp_dir) / ("%s.zip" % (report.prefix,))
+            zip_name = Path(tmp_dir) / f"{report.prefix}.zip"
             with ZipFile(zip_name, mode="w", compression=ZIP_DEFLATED) as zip_fp:
                 # add test files
                 for entry in report.path.rglob("*"):
@@ -349,8 +348,8 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
         assert s3_bucket is not None
         # check for existing minor hash in S3
         s3_res = resource("s3")
-        s3_key = "rr-%s.tar.bz2" % (report.minor,)
-        s3_url = "http://%s.s3.amazonaws.com/%s" % (s3_bucket, s3_key)
+        s3_key = f"rr-{report.minor}.tar.bz2"
+        s3_url = f"http://{s3_bucket}.s3.amazonaws.com/{s3_key}"
         try:
             # HEAD, doesn't fetch the whole object
             s3_res.Object(s3_bucket, s3_key).load()
@@ -381,7 +380,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
     @staticmethod
     def sanity_check(bin_file):
         if getenv("GRZ_S3_BUCKET") is None:
-            raise EnvironmentError("'GRZ_S3_BUCKET' is not set in environment")
+            raise OSError("'GRZ_S3_BUCKET' is not set in environment")
         if _boto_import_error is not None:
             raise _boto_import_error  # pylint: disable=raising-bad-type
         FuzzManagerReporter.sanity_check(bin_file)

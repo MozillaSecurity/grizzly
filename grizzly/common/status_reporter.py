@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -98,9 +97,7 @@ class StatusReporter:
         out = list()
         for label, body in entries:
             if body:
-                out.append(
-                    "%s%s : %s" % ((" " * max(max_len - len(label), 0), label, body))
-                )
+                out.append(f"{label}".rjust(max_len) + f" : {body}")
             else:
                 out.append(label)
         return "\n".join(out)
@@ -129,8 +126,8 @@ class StatusReporter:
             desc = descs[rid]
             # trim long descriptions
             if len(descs[rid]) > max_len:
-                desc = "%s..." % (desc[: max_len - 3],)
-            label = "%s%d" % ("*" if rid in blockers else "", count)
+                desc = f"{desc[: max_len - 3]}..."
+            label = f"*{count}" if rid in blockers else str(count)
             entries.append((label, desc))
         if not entries:
             entries.append(("No results available", None))
@@ -163,23 +160,20 @@ class StatusReporter:
         self.reports.sort(key=lambda x: x.start_time)
         entries = list()
         for report in self.reports:
-            label = "PID %d started at %s" % (
-                report.pid,
-                strftime("%Y/%m/%d %X", localtime(report.start_time)),
+            label = (
+                f"PID {report.pid} started at "
+                f"{strftime('%Y/%m/%d %X', localtime(report.start_time))}"
             )
             entries.append((label, None))
             # iterations
             entries.append(
-                ("Iterations", "%d @ %0.2f" % (report.iteration, round(report.rate, 2)))
+                ("Iterations", f"{report.iteration} @ {round(report.rate, 2):0.2f}")
             )
             # ignored
             if report.ignored:
                 ignore_pct = report.ignored / float(report.iteration) * 100
                 entries.append(
-                    (
-                        "Ignored",
-                        "%d @ %0.1f%%" % (report.ignored, round(ignore_pct, 1)),
-                    )
+                    ("Ignored", f"{report.ignored} @ {round(ignore_pct, 1)}%")
                 )
             # results
             if report.results.total:
@@ -187,14 +181,13 @@ class StatusReporter:
                 iters = report.iteration if report.iteration else report.results.total
                 result_pct = report.results.total / float(iters) * 100
                 if any(report.blockers(iters_per_result=iters_per_result)):
-                    blk_str = " (Blockers detected)"
+                    blkd = " (Blockers detected)"
                 else:
-                    blk_str = ""
+                    blkd = ""
                 entries.append(
                     (
                         "Results",
-                        "%d @ %0.1f%% %s"
-                        % (report.results.total, round(result_pct, 1), blk_str),
+                        f"{report.results.total} @ {round(result_pct, 1):0.1f}%{blkd}",
                     )
                 )
             else:
@@ -209,17 +202,17 @@ class StatusReporter:
                 ):
                     avg = entry.total / float(entry.count)
                     body = list()
-                    body.append("%dx " % (entry.count,))
+                    body.append(f"{entry.count}x ")
                     if entry.total > 300:
                         body.append(str(timedelta(seconds=int(entry.total))))
                     else:
-                        body.append("%0.3fs" % (round(entry.total, 3),))
+                        body.append(f"{round(entry.total, 3):0.3f}s")
                     body.append(
-                        " %0.2f%%" % (round(entry.total / report.runtime * 100, 2),)
+                        f" {round(entry.total / report.runtime * 100, 2):0.2f}%"
                     )
-                    body.append(" (%0.3f avg," % (round(avg, 3),))
-                    body.append(" %0.3f max," % (round(entry.max, 3),))
-                    body.append(" %0.3f min)" % (round(entry.min, 3),))
+                    body.append(f" ({round(avg, 3):0.3f} avg,")
+                    body.append(f" {round(entry.max, 3):0.3f} max,")
+                    body.append(f" {round(entry.min, 3):0.3f} min)")
                     entries.append((entry.name, "".join(body)))
             entries.append(("", None))
         return self.format_entries(entries)
@@ -254,15 +247,15 @@ class StatusReporter:
             disp = list()
             disp.append(str(total_iters))
             if count > 1:
-                disp.append(" (%d, %d)" % (max(iterations), min(iterations)))
+                disp.append(f" ({max(iterations)}, {min(iterations)})")
             entries.append(("Iterations", "".join(disp)))
 
             # Rate
             disp = list()
-            disp.append("%d @ %0.2f" % (count, round(sum(rates), 2)))
+            disp.append(f"{count} @ {round(sum(rates), 2):0.2f}")
             if count > 1:
                 disp.append(
-                    " (%0.2f, %0.2f)" % (round(max(rates), 2), round(min(rates), 2))
+                    f" ({round(max(rates), 2):0.2f}, {round(min(rates), 2):0.2f})"
                 )
             entries.append(("Rate", "".join(disp)))
 
@@ -271,9 +264,9 @@ class StatusReporter:
                 total_results = sum(results)
                 result_pct = total_results / float(total_iters) * 100
                 disp = list()
-                disp.append("%d" % (total_results,))
+                disp.append(str(total_results))
                 if total_results:
-                    disp.append(" @ %0.1f%%" % (round(result_pct, 1),))
+                    disp.append(f" @ {round(result_pct, 1):0.1f}%")
                 if any(
                     any(x.blockers(iters_per_result=iters_per_result))
                     for x in self.reports
@@ -285,7 +278,7 @@ class StatusReporter:
             if total_ignored:
                 ignore_pct = total_ignored / float(total_iters) * 100
                 entries.append(
-                    ("Ignored", "%d @ %0.1f%%" % (total_ignored, round(ignore_pct, 1)))
+                    ("Ignored", f"{total_ignored} @ {round(ignore_pct, 1):0.1f}%")
                 )
 
             # Runtime
@@ -297,11 +290,11 @@ class StatusReporter:
             log_usage = sum(log_sizes) / 1_048_576.0
             if log_usage > self.DISPLAY_LIMIT_LOG:
                 disp = list()
-                disp.append("%0.1fMB" % (log_usage,))
+                disp.append(f"{log_usage:0.1f}MB")
                 if count > 1:
                     disp.append(
-                        " (%0.2fMB, %0.2fMB)"
-                        % (max(log_sizes) / 1_048_576.0, min(log_sizes) / 1_048_576.0)
+                        f" ({max(log_sizes) / 1_048_576.0:0.2f}MB, "
+                        f"{min(log_sizes) / 1_048_576.0:0.2f}MB)"
                     )
                 entries.append(("Logs", "".join(disp)))
         else:
@@ -335,7 +328,7 @@ class StatusReporter:
             str: merged tracebacks.
         """
         txt = list()
-        txt.append("\n\nWARNING Tracebacks (%d) detected!" % (len(tracebacks),))
+        txt.append(f"\n\nWARNING Tracebacks ({len(tracebacks)}) detected!")
         tb_size = len(txt[-1])
         for tbr in tracebacks:
             tb_size += len(tbr) + 1
@@ -359,17 +352,13 @@ class StatusReporter:
         # CPU and load
         disp = list()
         disp.append(
-            "%d (%d) @ %d%%"
-            % (
-                cpu_count(logical=True),
-                cpu_count(logical=False),
-                round(cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL)),
-            )
+            f"{cpu_count(logical=True)} ({cpu_count(logical=False)}) @ "
+            f"{round(cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL))}%"
         )
         if getloadavg is not None:
             disp.append(" (")
             # round the results of getloadavg(), precision varies across platforms
-            disp.append(", ".join("%0.1f" % (round(x, 1),) for x in getloadavg()))
+            disp.append(", ".join(f"{round(x, 1):0.1f}" for x in getloadavg()))
             disp.append(")")
         entries.append(("CPU & Load", "".join(disp)))
 
@@ -377,20 +366,20 @@ class StatusReporter:
         disp = list()
         mem_usage = virtual_memory()
         if mem_usage.available < 1_073_741_824:  # < 1GB
-            disp.append("%dMB" % (mem_usage.available / 1_048_576,))
+            disp.append(f"{mem_usage.available / 1_048_576}MB")
         else:
-            disp.append("%0.1fGB" % (mem_usage.available / 1_073_741_824.0,))
-        disp.append(" of %0.1fGB free" % (mem_usage.total / 1_073_741_824.0,))
+            disp.append(f"{mem_usage.available / 1_073_741_824.0:0.1f}GB")
+        disp.append(f" of {mem_usage.total / 1_073_741_824.0:0.1f}GB free")
         entries.append(("Memory", "".join(disp)))
 
         # disk usage
         disp = list()
         usage = disk_usage("/")
         if usage.free < 1_073_741_824:  # < 1GB
-            disp.append("%dMB" % (usage.free / 1_048_576,))
+            disp.append(f"{usage.free / 1_048_576}MB")
         else:
-            disp.append("%0.1fGB" % (usage.free / 1_073_741_824.0,))
-        disp.append(" of %0.1fGB free" % (usage.total / 1_073_741_824.0,))
+            disp.append(f"{usage.free / 1_073_741_824.0:0.1f}GB")
+        disp.append(f" of {usage.total / 1_073_741_824.0:0.1f}GB free")
         entries.append(("Disk", "".join(disp)))
 
         return entries
@@ -513,7 +502,7 @@ class TracebackReport:
         return len(str(self))
 
     def __str__(self):
-        return "\n".join(["Log: %r" % self.file_name] + self.prev_lines + self.lines)
+        return "\n".join([f"Log: {self.file_name!r}"] + self.prev_lines + self.lines)
 
 
 class _TableFormatter:
@@ -577,7 +566,7 @@ def _format_seconds(duration):
     # format H:M:S, and then remove all leading zeros with regex
     minutes, seconds = divmod(int(duration), 60)
     hours, minutes = divmod(minutes, 60)
-    result = re_sub("^[0:]*", "", "%d:%02d:%02d" % (hours, minutes, seconds))
+    result = re_sub("^[0:]*", "", f"{hours}:{minutes:0>2d}:{seconds:0>2d}")
     # if the result is all zeroes, ensure one zero is output
     if not result:
         result = "0"
@@ -595,7 +584,7 @@ def _format_duration(duration, total=0):
         else:
             percent = int(100 * duration / total)
         result = _format_seconds(duration)
-        result += " (%3d%%)" % (percent,)
+        result += f" ({percent:>3d}%)"
     return result
 
 
@@ -606,7 +595,7 @@ def _format_number(number, total=0):
             percent = 0
         else:
             percent = int(100 * number / total)
-        result = "{:n} ({:3d}%)".format(number, percent)
+        result = f"{number:n} ({percent:3d}%)"
     return result
 
 
@@ -652,7 +641,7 @@ class ReductionStatusReporter(StatusReporter):
         return (
             "Analysis",
             ", ".join(
-                ("%s: %d%%" % (desc, 100 * reliability))
+                f"{desc}: {100 * reliability}%"
                 for desc, reliability in report.analysis.items()
             ),
         )
@@ -661,7 +650,7 @@ class ReductionStatusReporter(StatusReporter):
     def _crash_id_entry(report):
         crash_str = str(report.crash_id)
         if report.tool:
-            crash_str += " (%s)" % (report.tool,)
+            crash_str += f" ({report.tool})"
         return ("Crash ID", crash_str)
 
     @staticmethod
@@ -673,7 +662,7 @@ class ReductionStatusReporter(StatusReporter):
         return (
             "Run Parameters",
             ", ".join(
-                ("%s: %r" % (desc, value)) for desc, value in report.run_params.items()
+                (f"{desc}: {value!r}") for desc, value in report.run_params.items()
             ),
         )
 
@@ -682,8 +671,7 @@ class ReductionStatusReporter(StatusReporter):
         return (
             "Signature",
             ", ".join(
-                ("%s: %r" % (desc, value))
-                for desc, value in report.signature_info.items()
+                (f"{desc}: {value!r}") for desc, value in report.signature_info.items()
             ),
         )
 
@@ -718,8 +706,7 @@ class ReductionStatusReporter(StatusReporter):
                 entries.append(
                     (
                         "Current Strategy",
-                        "%s (%r of %d)"
-                        % (
+                        "{} ({!r} of {})".format(
                             report.current_strategy.name,
                             report.current_strategy_idx,
                             len(report.strategies),
@@ -731,8 +718,7 @@ class ReductionStatusReporter(StatusReporter):
                 entries.append(
                     (
                         "Current/Original",
-                        "%dB / %dB"
-                        % (report.current_strategy.size, report.original.size),
+                        f"{report.current_strategy.size}B / {report.original.size}B",
                     )
                 )
             if report.total:
@@ -740,16 +726,17 @@ class ReductionStatusReporter(StatusReporter):
                 entries.append(
                     (
                         "Results",
-                        "%d successes, %d attempts"
-                        % (report.total.successes, report.total.attempts),
+                        (
+                            f"{report.total.successes} successes,"
+                            f" {report.total.attempts} attempts"
+                        ),
                     )
                 )
             if report.total and report.current_strategy:
                 entries.append(
                     (
                         "Time Elapsed",
-                        "%s in strategy, %s total"
-                        % (
+                        "{} in strategy, {} total".format(
                             _format_seconds(report.current_strategy.duration),
                             _format_seconds(report.total.duration),
                         ),
@@ -929,8 +916,8 @@ def main(args=None):
         return 0
 
     print(
-        "Grizzly Status - %s - Instance report frequency: %ds\n"
-        % (strftime("%Y/%m/%d %X"), Status.REPORT_FREQ)
+        f"Grizzly Status - {strftime('%Y/%m/%d %X')} - "
+        f"Instance report frequency: {Status.REPORT_FREQ}s\n"
     )
     print("[Reports]")
     print(reporter.specific())

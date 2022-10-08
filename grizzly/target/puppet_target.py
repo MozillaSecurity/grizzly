@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -360,7 +359,7 @@ class PuppetTarget(Target):
         abort_tokens = self.assets.get("abort-tokens")
         if abort_tokens:
             LOG.debug("loading 'abort tokens' from %r", abort_tokens)
-            with open(abort_tokens, "r") as in_fp:
+            with open(abort_tokens) as in_fp:
                 for line in in_fp:
                     line = line.strip()
                     if line:
@@ -369,9 +368,9 @@ class PuppetTarget(Target):
         # configure sanitizer suppressions
         opts = SanitizerOptions()
         for sanitizer in ("lsan", "tsan", "ubsan"):
-            asset = "%s-suppressions" % (sanitizer,)
+            asset = f"{sanitizer}-suppressions"
             # load existing sanitizer options from environment
-            var_name = "%s_OPTIONS" % (sanitizer.upper(),)
+            var_name = f"{sanitizer.upper()}_OPTIONS"
             opts.load_options(self.environ.get(var_name, ""))
             if self.assets.get(asset):
                 # use suppression file if provided as asset

@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -104,7 +103,7 @@ class Job:
             LOG.debug("required: %r", location)
         # if nothing was found check if the path exists
         if not self._pending.files and not self._wwwroot.is_dir():
-            raise OSError("%r does not exist" % (str(self._wwwroot),))
+            raise OSError(f"'{self._wwwroot}' does not exist")
         if self.server_map:
             for redirect, resource in self.server_map.redirect.items():
                 if resource.required:

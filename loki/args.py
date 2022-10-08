@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -49,6 +48,6 @@ def parse_args(argv=None):
     args = parser.parse_args(argv)
 
     if args.byte_order and args.byte_order not in Loki.BYTE_ORDERS:
-        parser.error("Invalid byte order %r" % (args.byte_order,))
+        parser.error(f"Invalid byte order {args.byte_order!r}")
 
     return args

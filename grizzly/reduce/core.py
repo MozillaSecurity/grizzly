@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -799,7 +798,7 @@ class ReduceManager:
                     "Setting default --tool=grizzly-%s from testcase",
                     testcases[0].adapter_name,
                 )
-                args.tool = "grizzly-%s" % (testcases[0].adapter_name,)
+                args.tool = f"grizzly-{testcases[0].adapter_name}"
 
             expect_hang = ReplayManager.expect_hang(args.ignore, signature, testcases)
 

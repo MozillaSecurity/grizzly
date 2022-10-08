@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -68,9 +67,7 @@ class CommonArgs:
         asset_msg = list()
         for target in sorted(assets):
             if assets[target]:
-                asset_msg.append(
-                    "%s: %s. " % (target, ", ".join(sorted(assets[target])))
-                )
+                asset_msg.append(f"{target}: {', '.join(sorted(assets[target]))}.")
 
         self.launcher_grp = self.parser.add_argument_group("Launcher Arguments")
         self.launcher_grp.add_argument(
@@ -79,7 +76,7 @@ class CommonArgs:
             default=list(),
             metavar=("ASSET", "PATH"),
             nargs=2,
-            help="Specify target specific asset files. %s" % ("".join(asset_msg),),
+            help=f"Specify target specific asset files. {''.join(asset_msg)}",
         )
         self.launcher_grp.add_argument(
             "-e",
@@ -179,8 +176,8 @@ class CommonArgs:
             default=self.DEFAULT_IGNORE,
             metavar="IGNORABLE",
             help="Space-separated list of ignorable types. Pass zero args to disable."
-            " Available: %s (default: %s)"
-            % (" ".join(self.IGNORABLE), " ".join(self.DEFAULT_IGNORE)),
+            f" Available: {' '.join(self.IGNORABLE)} "
+            f"(default: {' '.join(self.DEFAULT_IGNORE)})",
         )
         self.reporter_grp.add_argument(
             "-l",
@@ -224,7 +221,7 @@ class CommonArgs:
 
     def sanity_check(self, args):
         if "binary" not in self._sanity_skip and not isfile(args.binary):
-            self.parser.error("file not found: %r" % (args.binary,))
+            self.parser.error(f"file not found: {args.binary!r}")
 
         if args.launch_attempts < 1:
             self.parser.error("--launch-attempts must be >= 1")
@@ -251,7 +248,7 @@ class CommonArgs:
             settings = "/proc/sys/kernel/perf_event_paranoid"
             value = int(Path(settings).read_text())
             if value > 1:
-                self.parser.error("rr needs %s <= 1, but it is %d" % (settings, value))
+                self.parser.error(f"rr needs {settings} <= 1, but it is {value}")
 
         # TODO: remove deprecated 'extension' from args
         if args.extension:  # pragma: no cover
@@ -267,11 +264,11 @@ class CommonArgs:
             for asset, path in args.asset:
                 if not supported_assets or asset not in supported_assets:
                     self.parser.error(
-                        "Asset %r not supported by target %r" % (asset, args.platform)
+                        f"Asset {asset!r} not supported by target {args.platform!r}"
                     )
                 if not exists(path):
                     self.parser.error(
-                        "Failed to add asset %r cannot find %r" % (asset, path)
+                        f"Failed to add asset {asset!r} cannot find {path!r}"
                     )
 
         if args.time_limit is not None and args.time_limit < 1:
@@ -382,7 +379,7 @@ class GrizzlyArgs(CommonArgs):
             )
 
         if args.input and not args.input.exists():
-            self.parser.error("'%s' does not exist" % (args.input,))
+            self.parser.error(f"'{args.input}' does not exist")
 
         if args.limit < 0:
             self.parser.error("--limit must be >= 0")
