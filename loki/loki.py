@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -37,13 +36,13 @@ class Loki:
             pack_unit = "B"
             mask = 0xFF
         elif data_size == 2:
-            pack_unit = "%sH" % (byte_order,)
+            pack_unit = f"{byte_order}H"
             mask = 0xFFFF
         elif data_size == 4:
-            pack_unit = "%sI" % (byte_order,)
+            pack_unit = f"{byte_order}I"
             mask = 0xFFFFFFFF
         else:
-            raise AssertionError("Unsupported data size: %d" % data_size)
+            raise AssertionError(f"Unsupported data size: {data_size}")
 
         fuzz_op = randint(0, 4)
         if fuzz_op == 0:  # boundary
@@ -124,7 +123,7 @@ class Loki:
         if ext is None:
             ext = splitext(in_file)[1]
         for i in range(count):
-            out_file = pathjoin(out_dir, "".join(("%06d_fuzzed" % i, ext)))
+            out_file = pathjoin(out_dir, f"{i:0>6d}_fuzzed{ext}")
             copy(in_file, out_file)
             with open(out_file, "r+b") as out_fp:
                 self._fuzz(out_fp)

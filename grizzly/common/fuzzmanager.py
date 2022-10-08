@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -163,12 +162,10 @@ class Bucket:
             return self._sig_filename
 
         tmpd = Path(
-            mkdtemp(
-                prefix="bucket-%d-" % (self._bucket_id,), dir=grz_tmp("fuzzmanager")
-            )
+            mkdtemp(prefix=f"bucket-{self._bucket_id}-", dir=grz_tmp("fuzzmanager"))
         )
         try:
-            sig_basename = "%d.signature" % (self._bucket_id,)
+            sig_basename = f"{self._bucket_id}.signature"
             sig_filename = tmpd / sig_basename
             sig_filename.write_text(self.signature)
             sigmeta_filename = sig_filename.with_suffix(".metadata")
@@ -281,12 +278,12 @@ class CrashEntry:
 
         if "content-disposition" not in response.headers:
             raise RuntimeError(
-                "Server sent malformed response: %r" % (response,)
+                f"Server sent malformed response: {response!r}"
             )  # pragma: no cover
 
         handle, filename = mkstemp(
             dir=grz_tmp("fuzzmanager"),
-            prefix="crash-%d-" % (self.crash_id,),
+            prefix=f"crash-{self.crash_id}-",
             suffix=Path(self.testcase).suffix,
         )
         try:

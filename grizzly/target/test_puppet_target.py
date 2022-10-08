@@ -381,7 +381,7 @@ def test_puppet_target_10(tmp_path, asset, env):
             if env:
                 supp_env = tmp_path / "supp_env"
                 supp_env.touch()
-                target.environ["LSAN_OPTIONS"] = "suppressions='%s'" % (str(supp_env),)
+                target.environ["LSAN_OPTIONS"] = f"suppressions='{supp_env}'"
             else:
                 target.environ["LSAN_OPTIONS"] = "suppressions='missing'"
             target.process_assets()

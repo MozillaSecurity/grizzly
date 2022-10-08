@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -156,7 +155,7 @@ class TestCase:
 
         test_file = TestFile(file_name, self._data_path / file_name)
         if test_file.file_name in self.contents:
-            raise TestFileExists("%r exists in test" % (test_file.file_name,))
+            raise TestFileExists(f"{test_file.file_name!r} exists in test")
 
         test_file.data_file.parent.mkdir(parents=True, exist_ok=True)
         if copy:
@@ -388,7 +387,7 @@ class TestCase:
             try:
                 with (path / "test_info.json").open("r") as in_fp:
                     info = json.load(in_fp)
-            except IOError:
+            except OSError:
                 raise TestCaseLoadFailure("Missing 'test_info.json'") from None
             except ValueError:
                 raise TestCaseLoadFailure("Invalid 'test_info.json'") from None
@@ -397,7 +396,7 @@ class TestCase:
             entry_point = Path(path / info["target"])
             if not entry_point.is_file():
                 raise TestCaseLoadFailure(
-                    "Entry point %r not found in %r" % (info["target"], str(path))
+                    f"Entry point {info['target']!r} not found in {path}"
                 )
             # always load all contents of a directory if a 'test_info.json' is loaded
             adjacent = True
@@ -405,7 +404,7 @@ class TestCase:
             entry_point = path
             info = dict()
         else:
-            raise TestCaseLoadFailure("Missing or invalid TestCase %r" % (str(path),))
+            raise TestCaseLoadFailure(f"Missing or invalid TestCase '{path}'")
         # create testcase and add data
         test = cls(
             entry_point.relative_to(entry_point.parent).as_posix(),
@@ -526,12 +525,12 @@ class TestCase:
         assert isinstance(path, str)
         # check for missing filename or path containing drive letter (Windows)
         if split(path)[-1] in ("", ".", "..") or ":" in path:
-            raise ValueError("invalid path %r" % (path,))
+            raise ValueError(f"invalid path {path!r}")
         # normalize path
         path = normpath(path).replace("\\", "/")
         # check normalized path does not resolve to location outside of '.'
         if path.startswith("../"):
-            raise ValueError("invalid path %r" % (path,))
+            raise ValueError(f"invalid path {path!r}")
         return path.lstrip("/")
 
     @staticmethod

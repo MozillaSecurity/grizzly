@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -101,7 +100,7 @@ class ReplayArgs(CommonArgs):
             self.parser.error("--idle-delay value must be positive")
 
         if "input" not in self._sanity_skip and not args.input.exists():
-            self.parser.error("'%s' does not exist" % (args.input,))
+            self.parser.error(f"'{args.input}' does not exist")
 
         if args.logs is None and (args.pernosco or args.rr):
             self.parser.error("--logs must be set when using rr")
@@ -116,7 +115,7 @@ class ReplayArgs(CommonArgs):
             self.parser.error("--repeat value must be positive")
 
         if args.sig and not args.sig.is_file():
-            self.parser.error("signature file not found: '%s'" % (args.sig,))
+            self.parser.error(f"signature file not found: '{args.sig}'")
 
     def update_arg(self, name, new_type, help_msg):
         # madhax alert!

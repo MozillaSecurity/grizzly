@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -165,18 +164,18 @@ class Runner:
         Returns:
             str: A valid URL.
         """
-        location = "http://127.0.0.1:%d/%s" % (srv_port, srv_path.lstrip("/"))
+        location = f"http://127.0.0.1:{srv_port}/{srv_path.lstrip('/')}"
         # set harness related arguments
         args = []
         if close_after is not None:
             assert close_after >= 0
-            args.append("close_after=%d" % (close_after,))
+            args.append(f"close_after={close_after}")
         if time_limit:
             assert time_limit > 0
-            args.append("time_limit=%d" % (time_limit * 1000,))
+            args.append(f"time_limit={time_limit * 1000}")
         if post_launch_delay is not None:
             assert post_launch_delay >= 0
-            args.append("post_launch_delay=%d" % (post_launch_delay,))
+            args.append(f"post_launch_delay={post_launch_delay}")
         if args:
             return "?".join((location, "&".join(args)))
         return location

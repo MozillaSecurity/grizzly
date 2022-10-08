@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -61,9 +60,9 @@ def _db_version_check(con, expected=DB_VERSION):
             with con:
                 for entry in cur.fetchall():
                     LOG.debug("dropping table %r", entry[0])
-                    cur.execute("DROP TABLE IF EXISTS %s;" % (entry[0],))
+                    cur.execute(f"DROP TABLE IF EXISTS {entry[0]};")
                 # update db version number
-                cur.execute("PRAGMA user_version = %d;" % (expected,))
+                cur.execute(f"PRAGMA user_version = {expected};")
             return True
     assert version == expected, "code out of date?"
     return False

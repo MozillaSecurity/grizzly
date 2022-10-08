@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -132,7 +131,7 @@ class Worker:
                     finish_job = serv_job.remove_pending(url.path)
                 else:  # pragma: no cover
                     # this should never happen
-                    raise WorkerError("Unknown resource type %r" % (resource.type,))
+                    raise WorkerError(f"Unknown resource type {resource.type!r}")
                 if serv_job.forever:
                     finish_job = False
 

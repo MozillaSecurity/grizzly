@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -46,8 +45,7 @@ def _split_normal_lines(data):
     """
     for win_line in data.split(b"\r\n"):
         for mac_line in win_line.split(b"\r"):
-            for unix_line in mac_line.split(b"\n"):
-                yield unix_line
+            yield from mac_line.split(b"\n")
 
 
 class _BeautifyStrategy(Strategy, ABC):

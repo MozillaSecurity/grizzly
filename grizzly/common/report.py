@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -74,11 +73,11 @@ class Report:
                 # limit the hash calculations to the first n frames if a hang
                 # was detected to attempt to help local bucketing
                 stack.height_limit = self.HANG_STACK_HEIGHT if is_hang else None
-                self.prefix = "%s_%s" % (stack.minor[:8], strftime("%Y-%m-%d_%H-%M-%S"))
+                self.prefix = f"{stack.minor[:8]}_{strftime('%Y-%m-%d_%H-%M-%S')}"
                 self.stack = stack
                 break
         else:
-            self.prefix = "%s_%s" % (self.DEFAULT_MINOR, strftime("%Y-%m-%d_%H-%M-%S"))
+            self.prefix = f"{self.DEFAULT_MINOR}_{strftime('%Y-%m-%d_%H-%M-%S')}"
             self.stack = None
 
     @staticmethod
@@ -141,7 +140,7 @@ class Report:
             else:
                 aux_data = None
             # create ProgramConfiguration that can be reported to a FM server
-            if Path("%s.fuzzmanagerconf" % (self._target_binary,)).is_file():
+            if Path(f"{self._target_binary}.fuzzmanagerconf").is_file():
                 # attempt to use "<target_binary>.fuzzmanagerconf"
                 fm_cfg = ProgramConfiguration.fromBinary(self._target_binary)
             else:
@@ -233,7 +232,7 @@ class Report:
             r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump"
         )
         for fname in (x for x in logs if "minidump" in x):
-            with open(fname, "r") as log_fp:
+            with open(fname) as log_fp:
                 data = log_fp.read(65536)
                 # this will select log that contains "Crash|SIGSEGV|" or
                 # the desired "DUMP_REQUESTED" log
@@ -277,7 +276,7 @@ class Report:
         fallback = None
         found = None
         for fname in (x for x in logs if "asan" in x):
-            with open(fname, "r") as log_fp:
+            with open(fname) as log_fp:
                 data = log_fp.read(65536)
             # look for interesting crash info in the log
             if "==ERROR:" in data or "WARNING:" in data:

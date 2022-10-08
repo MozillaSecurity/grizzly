@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -34,9 +33,9 @@ def load(name, group, base_type):
             plugin = entry.load()
             break
     else:
-        raise PluginLoadError("%r not found in %r" % (name, group))
+        raise PluginLoadError(f"{name!r} not found in {group!r}")
     if not issubclass(plugin, base_type):
-        raise PluginLoadError("%r doesn't inherit from %s" % (name, base_type.__name__))
+        raise PluginLoadError(f"{name!r} doesn't inherit from {base_type.__name__}")
     return plugin
 
 
@@ -54,7 +53,7 @@ def scan(group):
     for entry in iter_entry_points(group):
         if entry.name in found:
             # not sure if this can even happen
-            raise PluginLoadError("Duplicate entry %r in %r" % (entry.name, group))
+            raise PluginLoadError(f"Duplicate entry {entry.name!r} in {group!r}")
         found.append(entry.name)
     return found
 

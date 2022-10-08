@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -52,7 +51,7 @@ def _load_strategies():
             strategy_cls.sanity_check_cls_attrs()
             assert (
                 strategy_cls.name == entry_point.name
-            ), "entry_point name mismatch, check setup.py and %s.name" % (
+            ), "entry_point name mismatch, check setup.py and {}.name".format(
                 strategy_cls.__name__,
             )
         except Exception as exc:  # pylint: disable=broad-except
@@ -62,7 +61,7 @@ def _load_strategies():
     for strategy in DEFAULT_STRATEGIES:
         assert (
             strategy in strategies
-        ), "Unknown entry in DEFAULT_STRATEGIES: %s (STRATEGIES: [%s])" % (
+        ), "Unknown entry in DEFAULT_STRATEGIES: {} (STRATEGIES: [{}])".format(
             strategy,
             ",".join(strategies),
         )

@@ -1,4 +1,3 @@
-# coding=utf-8
 """
 Job unit tests
 """
@@ -43,9 +42,7 @@ def test_job_02(tmp_path):
     opt2_path.write_bytes(b"c")
     req2_path = tmp_path / "nested" / "req_file_2.txt"
     req2_path.write_bytes(b"d")
-    job = Job(
-        tmp_path, optional_files=[opt1_path.name, "nested/%s" % (opt2_path.name,)]
-    )
+    job = Job(tmp_path, optional_files=[opt1_path.name, f"nested/{opt2_path.name}"])
     assert job.status == Served.NONE
     assert not job.is_complete()
     resource = job.lookup_resource("req_file_1.txt")

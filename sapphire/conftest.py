@@ -1,4 +1,3 @@
-# coding=utf-8
 """
 Sapphire unit test fixtures
 """
@@ -99,7 +98,7 @@ def client_factory():
                 try:
                     if t_file.custom_request is None:
                         with urlopen(
-                            "http://%s:%d/%s" % (addr, port, t_file.url), timeout=10
+                            f"http://{addr}:{port}/{t_file.url}", timeout=10
                         ) as cli:
                             resp_code = cli.getcode()
                             content_type = cli.info().get("Content-Type")
@@ -159,7 +158,7 @@ def client_factory():
                         t_file.requested += 1
                         if not skip_served or t_file.code is None:
                             t_file.code = http_err.code
-                except (BadStatusLine, socket.error, socket.timeout, URLError):
+                except (BadStatusLine, OSError, URLError):
                     exc_type, exc_obj, exc_tb = sys.exc_info()
                     # set code to zero to help testing
                     with t_file.lock:

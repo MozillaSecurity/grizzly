@@ -1,4 +1,3 @@
-# coding=utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -46,12 +45,12 @@ def parse_args(argv=None):
     args = parser.parse_args(argv)
     # sanity check
     if not isdir(args.path):
-        parser.error("Path does not exist %r" % (args.path,))
+        parser.error(f"Path does not exist {args.path!r}")
     if args.timeout is not None and args.timeout <= 0:
         parser.error("Specified timeout must be greater than 0")
     log_level = level_map.get(args.log_level.upper(), None)
     if log_level is None:
-        parser.error("Invalid log-level %r" % (args.log_level,))
+        parser.error(f"Invalid log-level {args.log_level!r}")
     args.log_level = log_level
     return args
 
