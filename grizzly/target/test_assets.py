@@ -122,7 +122,7 @@ def test_asset_manager_03(tmp_path):
 
 def test_asset_manager_04(tmp_path):
     """test AssetManager.add_batch()"""
-    batch = list()
+    batch = []
     with AssetManager(base_path=str(tmp_path)) as assets:
         # add file
         example = tmp_path / "example.txt"

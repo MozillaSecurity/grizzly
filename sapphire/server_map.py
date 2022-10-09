@@ -41,9 +41,9 @@ class ServerMap:
     __slots__ = ("dynamic", "include", "redirect")
 
     def __init__(self):
-        self.dynamic = dict()
-        self.include = dict()  # mapping of directories that can be requested
-        self.redirect = dict()  # document paths to map to file names using 307s
+        self.dynamic = {}
+        self.include = {}  # mapping of directories that can be requested
+        self.redirect = {}  # document paths to map to file names using 307s
 
     @staticmethod
     def _check_url(url):

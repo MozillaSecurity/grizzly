@@ -50,7 +50,7 @@ class Adapter(metaclass=ABCMeta):
         if not name:
             raise AdapterError("name must not be empty")
         self._harness = None
-        self.fuzz = dict()
+        self.fuzz = {}
         self.monitor = None
         self.name = name
         self.remaining = None

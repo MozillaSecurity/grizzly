@@ -220,7 +220,7 @@ class PuppetTarget(Target):
             return
         # If at this point, the browser is in a good state, i.e. no crashes
         # or hangs, so signal the browser to dump coverage.
-        signaled_pids = list()
+        signaled_pids = []
         try:
             # send SIGUSR1 to browser processes
             parent_proc = Process(pid)

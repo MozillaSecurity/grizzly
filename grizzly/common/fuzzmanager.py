@@ -30,11 +30,9 @@ class Bucket:
         self._bucket_id = bucket_id
         self._sig_filename = None
         self._coll = Collector()
-        self._url = "%s://%s:%d/crashmanager/rest/buckets/%d/" % (
-            self._coll.serverProtocol,
-            self._coll.serverHost,
-            self._coll.serverPort,
-            bucket_id,
+        self._url = (
+            f"{self._coll.serverProtocol}://{self._coll.serverHost}:"
+            f"{self._coll.serverPort}/crashmanager/rest/buckets/{bucket_id}/"
         )
         self._data = None
 
@@ -53,8 +51,8 @@ class Bucket:
             self._data = self._coll.get(self._url).json()
         if name not in self._data:
             raise AttributeError(
-                "'%s' object has no attribute '%s' (has: %s)"
-                % (type(self).__name__, name, list(self._data))
+                f"'{type(self).__name__,}' object has no attribute '{name}'"
+                f" (has: {list(self._data)})"
             )
         return self._data[name]
 
@@ -100,11 +98,9 @@ class Bucket:
             """
             LOG.debug("first request to /%s/", endpoint)
 
-            url = "%s://%s:%d/crashmanager/rest/%s/" % (
-                self._coll.serverProtocol,
-                self._coll.serverHost,
-                self._coll.serverPort,
-                endpoint,
+            url = (
+                f"{self._coll.serverProtocol}://{self._coll.serverHost}:"
+                f"{self._coll.serverPort}/crashmanager/rest/{endpoint}/"
             )
 
             response = self._coll.get(url, params=params).json()
@@ -206,11 +202,9 @@ class CrashEntry:
         assert isinstance(crash_id, int)
         self._crash_id = crash_id
         self._coll = Collector()
-        self._url = "%s://%s:%d/crashmanager/rest/crashes/%d/" % (
-            self._coll.serverProtocol,
-            self._coll.serverHost,
-            self._coll.serverPort,
-            crash_id,
+        self._url = (
+            f"{self._coll.serverProtocol}://{self._coll.serverHost}:"
+            f"{self._coll.serverPort}/crashmanager/rest/crashes/{crash_id}/"
         )
         self._data = None
         self._tc_filename = None
@@ -234,8 +228,8 @@ class CrashEntry:
             ).json()
         if name not in self._data:
             raise AttributeError(
-                "'%s' object has no attribute '%s' (has: %s)"
-                % (type(self).__name__, name, list(self._data))
+                f"'{type(self).__name__}' object has no attribute '{name}' "
+                f"(has: {list(self._data)})"
             )
         return self._data[name]
 

@@ -124,7 +124,7 @@ class Status:
             assert report_limit >= 0
             assert pid >= 0
             self._enable_profiling = enable_profiling
-        self._profiles = dict()
+        self._profiles = {}
         self._db_file = db_file
         self.ignored = 0
         self.iteration = 0
@@ -450,7 +450,7 @@ class ResultCounter:
         assert freq_limit >= 0
         assert pid >= 0
         self._count = defaultdict(int)
-        self._desc = dict()
+        self._desc = {}
         self._db_file = db_file
         self._frequent = set()
         self._limit = freq_limit
@@ -587,7 +587,7 @@ class ResultCounter:
                     raise  # pragma: no cover
                 entries = ()
 
-        loaded = dict()
+        loaded = {}
         for pid, result_id, desc, count in entries:
             if pid not in loaded:
                 loaded[pid] = cls(pid)

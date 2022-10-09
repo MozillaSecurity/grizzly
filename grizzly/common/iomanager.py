@@ -64,7 +64,7 @@ class IOManager:
         return self._test
 
     def page_name(self, offset=0):
-        return "test_%04d.html" % (self._generated + offset,)
+        return f"test_{self._generated + offset:0>4d}.html"
 
     def purge(self):
         if self._test is not None:

@@ -64,7 +64,7 @@ class CommonArgs:
 
         # build 'asset' help string
         assets = scan_target_assets()
-        asset_msg = list()
+        asset_msg = []
         for target in sorted(assets):
             if assets[target]:
                 asset_msg.append(f"{target}: {', '.join(sorted(assets[target]))}.")
@@ -73,7 +73,7 @@ class CommonArgs:
         self.launcher_grp.add_argument(
             "--asset",
             action="append",
-            default=list(),
+            default=[],
             metavar=("ASSET", "PATH"),
             nargs=2,
             help=f"Specify target specific asset files. {''.join(asset_msg)}",
@@ -153,10 +153,10 @@ class CommonArgs:
             "--timeout",
             type=int,
             default=None,
-            help="Iteration timeout in seconds. By default this is `test-duration`+%ds."
-            " If the timeout is reached the target is assumed to be in a bad state"
-            " and will be closed. Typically this should be a few seconds greater"
-            " than the value used for `test-duration`." % (TIMEOUT_DELAY,),
+            help="Iteration timeout in seconds. By default this is"
+            f" `test-duration`+{TIMEOUT_DELAY}s. If the timeout is reached the target"
+            " is assumed to be in a bad state and will be closed. Typically this should"
+            " be a few seconds greater than the value used for `test-duration`.",
         )
         if system().startswith("Linux"):
             self.launcher_grp.add_argument(

@@ -38,7 +38,6 @@ disable = [
     "missing-class-docstring",
     "missing-function-docstring",
     "missing-module-docstring",
-    "subprocess-run-check",
     "too-few-public-methods",
     "too-many-arguments",
     "too-many-branches",
@@ -47,6 +46,7 @@ disable = [
     "too-many-locals",
     "too-many-nested-blocks",
     "too-many-statements",
+    "unspecified-encoding",
 ]
 
 [tool.pylint.typecheck]

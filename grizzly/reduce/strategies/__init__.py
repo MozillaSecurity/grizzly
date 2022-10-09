@@ -49,21 +49,18 @@ def _load_strategies():
         try:
             strategy_cls = entry_point.load()
             strategy_cls.sanity_check_cls_attrs()
-            assert (
-                strategy_cls.name == entry_point.name
-            ), "entry_point name mismatch, check setup.py and {}.name".format(
-                strategy_cls.__name__,
+            assert strategy_cls.name == entry_point.name, (
+                f"entry_point name mismatch, check setup.py and "
+                f"{strategy_cls.__name__.name}"
             )
         except Exception as exc:  # pylint: disable=broad-except
             LOG.debug("error loading strategy type %s: %s", entry_point.name, exc)
             continue
         strategies[entry_point.name] = strategy_cls
     for strategy in DEFAULT_STRATEGIES:
-        assert (
-            strategy in strategies
-        ), "Unknown entry in DEFAULT_STRATEGIES: {} (STRATEGIES: [{}])".format(
-            strategy,
-            ",".join(strategies),
+        assert strategy in strategies, (
+            f"Unknown entry in DEFAULT_STRATEGIES: {strategy} "
+            f"(STRATEGIES: [{','.join(strategies)}])"
         )
     return MappingProxyType(strategies)
 
@@ -164,7 +161,7 @@ class Strategy(ABC):
             self._testcase_root.mkdir()
         for idx, testcase in enumerate(testcases):
             LOG.debug("Extracting testcase %d/%d", idx + 1, len(testcases))
-            testpath = self._testcase_root / ("%03d" % (idx,))
+            testpath = self._testcase_root / f"{idx:0>3d}"
             testcase.dump(str(testpath), include_details=True)
 
     @classmethod

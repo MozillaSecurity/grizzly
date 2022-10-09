@@ -161,7 +161,7 @@ def test_list(
             if contents == "required" and required_first:
                 required_seen = True
             elif contents == "123" and (required_seen or not required_first):
-                log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+                log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
@@ -180,7 +180,7 @@ def test_list(
     log_path = tmp_path / "logs"
 
     target = mocker.Mock(spec_set=Target)
-    target.filtered_environ.return_value = dict()
+    target.filtered_environ.return_value = {}
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -344,7 +344,7 @@ def test_purge_unserved(
                         return []
         if not has_any:
             return []
-        log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+        log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
         report = Report(str(log_path), "bin")
@@ -361,7 +361,7 @@ def test_purge_unserved(
     log_path = tmp_path / "logs"
 
     target = mocker.Mock(spec_set=Target)
-    target.filtered_environ.return_value = dict()
+    target.filtered_environ.return_value = {}
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -405,7 +405,7 @@ def test_dd_only(mocker, tmp_path):
             LOG.debug("interesting if 'required' in %r", contents)
             interesting = "required" in contents
             if interesting:
-                log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+                log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
@@ -421,7 +421,7 @@ def test_dd_only(mocker, tmp_path):
     log_path = tmp_path / "logs"
 
     target = mocker.Mock(spec_set=Target)
-    target.filtered_environ.return_value = dict()
+    target.filtered_environ.return_value = {}
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(

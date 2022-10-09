@@ -106,7 +106,7 @@ def test_args_04(tmp_path):
         (
             "grizzly.reduce.core.ReplayManager.load_testcases",
             None,
-            ([Mock(hang=False), Mock(hang=False)], Mock(spec_set=AssetManager), dict()),
+            ([Mock(hang=False), Mock(hang=False)], Mock(spec_set=AssetManager), {}),
             {"no_harness": True},
             Exit.ARGS,
         ),
@@ -149,7 +149,7 @@ def test_main_launch_error(mocker, exc_type):
         return_value=(
             [mocker.Mock(spec_set=TestCase, hang=False, adapter_name="fake")],
             None,
-            dict(),
+            {},
         ),
     )
     mocker.patch(

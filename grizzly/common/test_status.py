@@ -178,7 +178,7 @@ def test_status_07(tmp_path, loads_in_parallel):
     clients = 10
     db_file = str(tmp_path / "status.db")
     iter_count = 5
-    procs = list()
+    procs = []
     try:
         # create and launch client processes
         for _ in range(clients):
@@ -334,7 +334,7 @@ def test_status_10(mocker, tmp_path):
 def test_reduce_status_01(mocker, tmp_path):
     """test ReductionStatus()"""
     mocker.patch("grizzly.common.status.time", autospec=True, return_value=1.0)
-    strategies = ["strategy_%d" % (idx,) for idx in range(5)]
+    strategies = [f"strategy_{idx}" for idx in range(5)]
 
     def fake_tc_size():
         return 47
@@ -385,7 +385,7 @@ def test_reduce_status_02(tmp_path):
 def test_reduce_status_03(tmp_path):
     """test ReductionStatus.loadall()"""
     db_file = str(tmp_path / "status.db")
-    strategies = ["strategy_%d" % (idx,) for idx in range(5)]
+    strategies = [f"strategy_{idx}" for idx in range(5)]
     # create simple entry
     status = ReductionStatus.start(
         str(tmp_path / "status.db"),
@@ -429,7 +429,7 @@ def test_reduce_status_04(mocker, tmp_path):
 
 def test_reduce_status_05(mocker, tmp_path):
     """test ReductionStatus milestone measurements"""
-    strategies = ["strategy_%d" % (idx,) for idx in range(5)]
+    strategies = [f"strategy_{idx}" for idx in range(5)]
 
     # (time, testcase_size) steps to manually advance through
     ticks = [
@@ -468,7 +468,7 @@ def test_reduce_status_05(mocker, tmp_path):
                 status.iterations += 10
                 assert status.original.name == "begin"
                 assert status.total.name == "overall"
-                assert status.current_strategy.name == "strategy_%d" % (idx,)
+                assert status.current_strategy.name == f"strategy_{idx}"
     assert status.finished_steps == [
         ReductionStep("begin", None, None, None, 1000, None),
         ReductionStep("strategy_0", 1, 1, 2, 900, 10),

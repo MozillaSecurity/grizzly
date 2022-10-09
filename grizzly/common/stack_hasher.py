@@ -284,7 +284,7 @@ class Stack:
 
     def __init__(self, frames=None, hight_limit=None, major_depth=MAJOR_DEPTH):
         assert frames is None or isinstance(frames, list)
-        self.frames = list() if frames is None else frames
+        self.frames = frames or []
         self._height_limit = hight_limit
         self._major_depth = major_depth
         self._major = None
@@ -326,7 +326,7 @@ class Stack:
         input_txt is the data to parse the trace from.
         """
 
-        frames = list()
+        frames = []
         prev_line = None
         for line in reversed(input_text.split("\n")):
             if not line:

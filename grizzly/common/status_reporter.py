@@ -94,7 +94,7 @@ class StatusReporter:
         """
         label_lengths = tuple(len(x[0]) for x in entries if x[1])
         max_len = max(label_lengths) if label_lengths else 0
-        out = list()
+        out = []
         for label, body in entries:
             if body:
                 out.append(f"{label}".rjust(max_len) + f" : {body}")
@@ -113,7 +113,7 @@ class StatusReporter:
         """
         blockers = set()
         counts = defaultdict(int)
-        descs = dict()
+        descs = {}
         # calculate totals
         for report in self.reports:
             for result in report.results.all():
@@ -121,7 +121,7 @@ class StatusReporter:
                 counts[result.rid] += result.count
             blockers.update(x.rid for x in report.blockers())
         # generate output
-        entries = list()
+        entries = []
         for rid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
             desc = descs[rid]
             # trim long descriptions
@@ -158,7 +158,7 @@ class StatusReporter:
         if not self.reports:
             return "No status reports available"
         self.reports.sort(key=lambda x: x.start_time)
-        entries = list()
+        entries = []
         for report in self.reports:
             label = (
                 f"PID {report.pid} started at "
@@ -201,7 +201,7 @@ class StatusReporter:
                     report.profile_entries(), key=lambda x: x.total, reverse=True
                 ):
                     avg = entry.total / float(entry.count)
-                    body = list()
+                    body = []
                     body.append(f"{entry.count}x ")
                     if entry.total > 300:
                         body.append(str(timedelta(seconds=int(entry.total))))
@@ -231,7 +231,7 @@ class StatusReporter:
         Returns:
             str: A summary of merged reports.
         """
-        entries = list()
+        entries = []
         # Job specific status
         if self.reports:
             # calculate totals
@@ -244,14 +244,14 @@ class StatusReporter:
             total_iters = sum(iterations)
 
             # Iterations
-            disp = list()
+            disp = []
             disp.append(str(total_iters))
             if count > 1:
                 disp.append(f" ({max(iterations)}, {min(iterations)})")
             entries.append(("Iterations", "".join(disp)))
 
             # Rate
-            disp = list()
+            disp = []
             disp.append(f"{count} @ {round(sum(rates), 2):0.2f}")
             if count > 1:
                 disp.append(
@@ -263,7 +263,7 @@ class StatusReporter:
             if total_iters:
                 total_results = sum(results)
                 result_pct = total_results / float(total_iters) * 100
-                disp = list()
+                disp = []
                 disp.append(str(total_results))
                 if total_results:
                     disp.append(f" @ {round(result_pct, 1):0.1f}%")
@@ -289,7 +289,7 @@ class StatusReporter:
             # Log size
             log_usage = sum(log_sizes) / 1_048_576.0
             if log_usage > self.DISPLAY_LIMIT_LOG:
-                disp = list()
+                disp = []
                 disp.append(f"{log_usage:0.1f}MB")
                 if count > 1:
                     disp.append(
@@ -327,7 +327,7 @@ class StatusReporter:
         Returns:
             str: merged tracebacks.
         """
-        txt = list()
+        txt = []
         txt.append(f"\n\nWARNING Tracebacks ({len(tracebacks)}) detected!")
         tb_size = len(txt[-1])
         for tbr in tracebacks:
@@ -347,10 +347,10 @@ class StatusReporter:
         Returns:
             list(tuple): System information in tuples (label, display data).
         """
-        entries = list()
+        entries = []
 
         # CPU and load
-        disp = list()
+        disp = []
         disp.append(
             f"{cpu_count(logical=True)} ({cpu_count(logical=False)}) @ "
             f"{round(cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL))}%"
@@ -363,7 +363,7 @@ class StatusReporter:
         entries.append(("CPU & Load", "".join(disp)))
 
         # memory usage
-        disp = list()
+        disp = []
         mem_usage = virtual_memory()
         if mem_usage.available < 1_073_741_824:  # < 1GB
             disp.append(f"{mem_usage.available / 1_048_576}MB")
@@ -373,7 +373,7 @@ class StatusReporter:
         entries.append(("Memory", "".join(disp)))
 
         # disk usage
-        disp = list()
+        disp = []
         usage = disk_usage("/")
         if usage.free < 1_073_741_824:  # < 1GB
             disp.append(f"{usage.free / 1_048_576}MB")
@@ -397,7 +397,7 @@ class StatusReporter:
         Returns:
             list: A list of TracebackReports.
         """
-        tracebacks = list()
+        tracebacks = []
         for screen_log in StatusReporter._scan(path, r"screenlog\.\d+"):
             tbr = TracebackReport.from_file(screen_log, max_preceding=max_preceding)
             if tbr is None:
@@ -418,9 +418,10 @@ class TracebackReport:
 
     def __init__(self, file_name, lines, is_kbi=False, prev_lines=None):
         assert isinstance(lines, list)
+        assert isinstance(prev_lines, list) or prev_lines is None
         self.file_name = file_name
         self.lines = lines
-        self.prev_lines = list() if prev_lines is None else prev_lines
+        self.prev_lines = prev_lines or []
         self.is_kbi = is_kbi
 
     @classmethod
@@ -675,11 +676,11 @@ class ReductionStatusReporter(StatusReporter):
             ),
         )
 
-    def specific(  # pylint: disable=arguments-differ
+    def specific(
         self,
         sysinfo=False,
         timestamp=False,
-    ):
+    ):  # pylint: disable=arguments-renamed
         """Generate formatted output from status report.
 
         Args:
@@ -706,11 +707,9 @@ class ReductionStatusReporter(StatusReporter):
                 entries.append(
                     (
                         "Current Strategy",
-                        "{} ({!r} of {})".format(
-                            report.current_strategy.name,
-                            report.current_strategy_idx,
-                            len(report.strategies),
-                        ),
+                        f"{report.current_strategy.name} "
+                        f"({report.current_strategy_idx!r} of "
+                        f"{len(report.strategies)})",
                     )
                 )
             if report.current_strategy and report.original:
@@ -736,10 +735,8 @@ class ReductionStatusReporter(StatusReporter):
                 entries.append(
                     (
                         "Time Elapsed",
-                        "{} in strategy, {} total".format(
-                            _format_seconds(report.current_strategy.duration),
-                            _format_seconds(report.total.duration),
-                        ),
+                        f"{_format_seconds(report.current_strategy.duration)} in "
+                        f"strategy, {_format_seconds(report.total.duration)} total",
                     )
                 )
 

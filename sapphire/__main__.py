@@ -25,9 +25,9 @@ def parse_args(argv=None):
     parser.add_argument("path", help="Specify a directory to act as wwwroot")
     parser.add_argument(
         "--log-level",
+        choices=sorted(level_map),
         default="INFO",
-        help="Configure console logging. Options: %s (default: %%(default)s)"
-        % ", ".join(k for k, v in sorted(level_map.items(), key=lambda x: x[1])),
+        help="Configure console logging (default: %(default)s)",
     )
     parser.add_argument(
         "--port", type=int, help="Specify a port to bind to (default: random)"
@@ -48,10 +48,7 @@ def parse_args(argv=None):
         parser.error(f"Path does not exist {args.path!r}")
     if args.timeout is not None and args.timeout <= 0:
         parser.error("Specified timeout must be greater than 0")
-    log_level = level_map.get(args.log_level.upper(), None)
-    if log_level is None:
-        parser.error(f"Invalid log-level {args.log_level!r}")
-    args.log_level = log_level
+    args.log_level = level_map[args.log_level]
     return args
 
 

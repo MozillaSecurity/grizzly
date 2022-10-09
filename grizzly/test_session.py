@@ -70,7 +70,7 @@ def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runti
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
-        environ=dict(),
+        environ={},
         launch_timeout=30,
     )
     target.log_size.return_value = 1000
@@ -140,7 +140,7 @@ def test_session_02(mocker, harness, relaunch, remaining):
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
-        environ=dict(),
+        environ={},
         launch_timeout=30,
     )
     # calculate if the target is 'closed' based on relaunch
@@ -196,7 +196,7 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters, has
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
-        environ=dict(),
+        environ={},
         launch_timeout=30,
     )
     target.monitor.launches = 1
@@ -248,7 +248,7 @@ def test_session_04(mocker):
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
-        environ=dict(),
+        environ={},
         launch_timeout=30,
     )
     target.monitor.launches = 1
@@ -264,7 +264,7 @@ def test_session_05(mocker):
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
-        environ=dict(),
+        environ={},
         launch_timeout=30,
     )
     target.monitor.launches = 1
@@ -295,7 +295,7 @@ def test_session_06(mocker, harness, report_size):
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
-        environ=dict(),
+        environ={},
         launch_timeout=30,
     )
     target.monitor.launches = 1
@@ -342,7 +342,7 @@ def test_session_07(mocker, srv_results, target_result, ignored, results):
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
         closed=True,
-        environ=dict(),
+        environ={},
         launch_timeout=30,
     )
     target.monitor.launches = 1
@@ -371,7 +371,7 @@ def test_session_08(mocker):
     adapter.IGNORE_UNSERVED = False
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
-        spec_set=Target, assets=mocker.Mock(spec_set=AssetManager), environ=dict()
+        spec_set=Target, assets=mocker.Mock(spec_set=AssetManager), environ={}
     )
     target.monitor.launches = 1
     with Session(adapter, None, server, target) as session:
@@ -420,7 +420,7 @@ def test_session_10(mocker):
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
-        environ=dict(),
+        environ={},
     )
     target.monitor.launches = 1
     target.create_report.return_value = report
@@ -455,7 +455,7 @@ def test_session_11(mocker, harness, report_size, relaunch, iters, report_limit)
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
-        environ=dict(),
+        environ={},
         launch_timeout=30,
     )
     target.monitor.launches = 1
@@ -502,7 +502,7 @@ def test_session_12(mocker, harness, iters, result_limit, results):
     target = mocker.Mock(
         spec_set=Target,
         assets=mocker.Mock(spec_set=AssetManager),
-        environ=dict(),
+        environ={},
         launch_timeout=30,
     )
     target.monitor.launches = 1
