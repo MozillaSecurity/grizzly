@@ -169,7 +169,7 @@ class ReplayManager:
             # deduplicate and limit requested indices to valid range
             reqs = {max(count + x, 0) if x < 0 else min(x, count - 1) for x in subset}
             LOG.debug("using TestCase(s) with index %r", reqs)
-            selected = list()
+            selected = []
             for idx in sorted(reqs, reverse=True):
                 selected.append(testcases.pop(idx))
             selected.reverse()
@@ -290,7 +290,7 @@ class ReplayManager:
             server_map.set_redirect("grz_start", "grz_harness", required=False)
 
         # track unprocessed results
-        reports = dict()
+        reports = {}
         try:
             sig_hash = Report.calc_hash(self._signature) if self._signature else None
             test_count = len(testcases)
@@ -325,8 +325,8 @@ class ReplayManager:
                     runner.launch(location, max_retries=launch_attempts)
                     runner.post_launch(delay=post_launch_delay)
                 # run tests
-                durations = list()
-                served = list()
+                durations = []
+                served = []
                 for test_idx in range(test_count):
                     if test_count > 1:
                         LOG.info(
@@ -495,7 +495,7 @@ class ReplayManager:
                     results = list(reports.values())
                 else:
                     # add only unexpected results since min_results was not reached
-                    results = list()
+                    results = []
                     for report in reports.values():
                         if report.expected:
                             report.report.cleanup()
@@ -510,7 +510,7 @@ class ReplayManager:
                 # there should be at most one expected bucket
                 assert sum(x.expected for x in reports.values()) <= 1
                 # filter out unreliable expected results
-                results = list()
+                results = []
                 for crash_hash, report in reports.items():
                     if report.expected and report.count < min_results:
                         LOG.debug(
@@ -566,8 +566,7 @@ class ReplayManager:
             timeout = time_limit + TIMEOUT_DELAY
         if timeout < time_limit:
             raise ConfigError(
-                "Timeout (%d) cannot be less than time limit (%d)"
-                % (timeout, time_limit),
+                f"Timeout ({timeout}) cannot be less than time limit ({time_limit})",
                 Exit.ARGS,
             )
         return time_limit, timeout

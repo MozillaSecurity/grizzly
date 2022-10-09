@@ -265,7 +265,7 @@ def test_analysis(
             kw["on_iteration_cb"]()
             LOG.debug("interesting: %r", crashes[0])
             if crashes.pop(0):
-                log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+                log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir(exist_ok=True)
                 _fake_save_logs_foo(log_path)
                 report = Report(str(log_path), "bin")
@@ -514,7 +514,7 @@ def test_repro(
             # pylint: disable=logging-not-lazy
             LOG.debug("interesting if " + interesting_str, contents)
             if detect_failure(contents):
-                log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+                log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir()
                 expected = is_expected(contents)
                 if expected:
@@ -533,7 +533,7 @@ def test_repro(
     log_path = tmp_path / "logs"
 
     target = mocker.Mock(spec_set=Target)
-    target.filtered_environ.return_value = dict()
+    target.filtered_environ.return_value = {}
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -588,7 +588,7 @@ def test_report_01(mocker, tmp_path):
     def replay_run(_tests, _time_limit, **kw):
         kw["on_iteration_cb"]()
         if replayer.run.call_count in {20, 40}:
-            log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+            log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
             report = Report(str(log_path), "bin")
@@ -617,7 +617,7 @@ def test_report_01(mocker, tmp_path):
     mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
 
     target = mocker.Mock(spec_set=Target)
-    target.filtered_environ.return_value = dict()
+    target.filtered_environ.return_value = {}
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -659,7 +659,7 @@ def test_report_02(mocker, tmp_path):
     def replay_run(_tests, _time_limit, **kw):
         kw["on_iteration_cb"]()
         if replayer.run.call_count in {10, 20}:
-            log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+            log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
             report = Report(str(log_path), "bin")
@@ -689,7 +689,7 @@ def test_report_02(mocker, tmp_path):
     mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})
 
     target = mocker.Mock(spec_set=Target)
-    target.filtered_environ.return_value = dict()
+    target.filtered_environ.return_value = {}
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -731,7 +731,7 @@ def test_quality_update(mocker, tmp_path):
             contents = test.get_file("test.html").data_file.read_text()
             if not contents.strip():
                 continue
-            log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+            log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
             report = Report(str(log_path), "bin")
@@ -750,7 +750,7 @@ def test_quality_update(mocker, tmp_path):
     reporter.return_value.submit.return_value = 1234
     update_coll = mocker.patch("grizzly.common.fuzzmanager.Collector")
     target = mocker.Mock(spec_set=Target)
-    target.filtered_environ.return_value = dict()
+    target.filtered_environ.return_value = {}
     target.assets = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
@@ -794,7 +794,7 @@ def test_include_assets_and_environ(mocker, tmp_path):
             contents = test.get_file("test.html").data_file.read_text()
             if not contents.strip():
                 continue
-            log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+            log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
             report = Report(str(log_path), "bin")
@@ -931,7 +931,7 @@ def test_timeout_update(
     def replay_run(_testcases, _time_limit, **kw):
         kw["on_iteration_cb"]()
         LOG.debug("interesting true")
-        log_path = tmp_path / ("crash%d_logs" % (replayer.run.call_count,))
+        log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
         report = Report(str(log_path), "bin")
@@ -945,7 +945,7 @@ def test_timeout_update(
     log_path = tmp_path / "logs"
 
     target = mocker.Mock(spec_set=Target)
-    target.filtered_environ.return_value = dict()
+    target.filtered_environ.return_value = {}
     target.assets = mocker.Mock(spec_set=AssetManager)
     server = mocker.Mock(spec_set=Sapphire, timeout=iter_input)
     try:

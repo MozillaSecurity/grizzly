@@ -48,7 +48,7 @@ def scan(group):
     Returns:
         list: Names of installed entry points.
     """
-    found = list()
+    found = []
     LOG.debug("scanning %r", group)
     for entry in iter_entry_points(group):
         if entry.name in found:
@@ -67,7 +67,7 @@ def scan_target_assets():
     Returns:
         dict: Name of target and list of supported assets.
     """
-    assets = dict()
+    assets = {}
     for entry in iter_entry_points("grizzly_targets"):
         assets[entry.name] = entry.load().SUPPORTED_ASSETS
     return assets

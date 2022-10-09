@@ -19,14 +19,14 @@ class FakeArgs:
         self.binary = None
         self.input = None
         self.adapter = None
-        self.asset = list()
+        self.asset = []
         self.collect = 1
         self.coverage = False
         self.enable_profiling = False
         self.extension = None
         self.fuzzmanager = False
         self.headless = None
-        self.ignore = list()
+        self.ignore = []
         self.launch_attempts = 3
         self.launch_timeout = 300
         self.limit = 0
@@ -233,7 +233,7 @@ def test_main_04(mocker, arg_testlimit, arg_timeout, exit_code):
         (False, False, True),
     ],  # pylint: disable=invalid-name
 )
-def test_main_05(mocker, pernosco, rr, valgrind):
+def test_main_05(mocker, pernosco, rr, valgrind):  # pylint: disable=invalid-name
     """test enabling debuggers"""
     fake_adapter = mocker.NonCallableMock(spec_set=Adapter)
     fake_adapter.RELAUNCH = 1

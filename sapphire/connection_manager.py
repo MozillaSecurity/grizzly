@@ -95,7 +95,7 @@ class ConnectionManager:
         assert max_workers > 0
         assert shutdown_delay >= 0
         total_launches = 0
-        worker_pool = list()
+        worker_pool = []
         pool_size = 0
         LOG.debug("starting listener")
         try:

@@ -23,7 +23,7 @@ class AssetManager:
     __slots__ = ("assets", "path")
 
     def __init__(self, base_path=None):
-        self.assets = dict()
+        self.assets = {}
         self.path = mkdtemp(prefix="assets_", dir=base_path)
 
     def __enter__(self):
@@ -109,7 +109,7 @@ class AssetManager:
         Returns:
             dict: Collection asset paths keyed by asset name.
         """
-        dumped = dict()
+        dumped = {}
         if self.assets:
             if subdir:
                 dst_path = pathjoin(dst_path, subdir)

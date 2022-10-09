@@ -197,7 +197,7 @@ def test_reduce_status_reporter_05(tmp_path):
 
 def test_status_reporter_01():
     """test basic StatusReporter"""
-    st_rpt = StatusReporter(list())
+    st_rpt = StatusReporter([])
     assert not st_rpt.has_results
     st_rpt._sys_info = _fake_sys_info
     assert "No status reports available" in st_rpt.specific()
@@ -496,7 +496,7 @@ def test_status_reporter_10(mocker, tmp_path):
     status.report(force=True)
     # create screenlogs with tracebacks
     for i in range(10):
-        with (tmp_path / ("screenlog.%d" % (i,))).open("wb") as test_fp:
+        with (tmp_path / f"screenlog.{i}").open("wb") as test_fp:
             test_fp.write(b"Traceback (most recent call last):\n")
             for j in range(TracebackReport.MAX_LINES):
                 test_fp.write(
@@ -642,7 +642,7 @@ def test_traceback_report_05(tmp_path):
     output = str(tbr)
     assert len(output.splitlines()) == 18
     assert "first()" in output
-    assert "func_%d" % (TracebackReport.MAX_LINES * 2 - 1) in output
+    assert f"func_{TracebackReport.MAX_LINES * 2 - 1}" in output
 
 
 def test_traceback_report_06(tmp_path):

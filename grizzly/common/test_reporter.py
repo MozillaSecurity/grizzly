@@ -192,7 +192,7 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored, for
     (log_path / "log_stdout.txt").touch()
     (log_path / "rr-traces").mkdir()
     (tmp_path / "screenlog.0").touch()
-    test_cases = list()
+    test_cases = []
     if tests:
         fake_test = mocker.Mock(
             spec_set=TestCase,

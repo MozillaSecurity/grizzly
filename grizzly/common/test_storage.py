@@ -432,7 +432,7 @@ def test_testcase_17(tmp_path):
     (tmp_path / "not-test").mkdir()
     assert not any(TestCase.scan_path(tmp_path))
     # multiple test case directories
-    paths = [tmp_path / ("test-%d" % i) for i in range(3)]
+    paths = [tmp_path / f"test-{i}" for i in range(3)]
     with TestCase("test.htm", None, "test-adapter") as src:
         src.add_from_bytes(b"test", "test.htm")
         for path in paths:

@@ -33,11 +33,10 @@ def test_stack_02():
 
 def test_stack_03():
     """test creating a Stack with 2 frames"""
-    frames = list()
-    for _ in range(2):
-        frames.append(
-            StackFrame(function="a", location="b", offset="c", stack_line="0")
-        )
+    frames = [
+        StackFrame(function="a", location="b", offset="c", stack_line="0")
+        for _ in range(2)
+    ]
     stack = Stack(frames=frames, major_depth=2)
     assert stack.minor is not None
     assert stack.major is not None
@@ -49,11 +48,10 @@ def test_stack_03():
 
 def test_stack_04():
     """test creating a Stack with 2 frames with a major depth of 0"""
-    frames = list()
-    for line in range(2):
-        frames.append(
-            StackFrame(function="a", location="b", offset="c", stack_line=str(line))
-        )
+    frames = [
+        StackFrame(function="a", location="b", offset="c", stack_line=str(line))
+        for line in range(2)
+    ]
     stack = Stack(frames=frames, major_depth=0)
     assert stack.minor is not None
     assert stack.major is None
@@ -65,11 +63,10 @@ def test_stack_04():
 
 def test_stack_05():
     """test creating a Stack with 10 frames exceeding major depth"""
-    frames = list()
-    for line in range(10):
-        frames.append(
-            StackFrame(function="a", location="b", offset="c", stack_line=str(line))
-        )
+    frames = [
+        StackFrame(function="a", location="b", offset="c", stack_line=str(line))
+        for line in range(10)
+    ]
     stack = Stack(frames=frames, major_depth=5)
     assert stack.minor is not None
     assert stack.major is not None
@@ -270,11 +267,10 @@ def test_stack_13():
 
 def test_stack_14():
     """test Stack.height_limit"""
-    frames = list()
-    for num in range(10):
-        frames.append(
-            StackFrame(function=str(num), location="b", offset="c", stack_line=str(num))
-        )
+    frames = [
+        StackFrame(function=str(num), location="b", offset="c", stack_line=str(num))
+        for num in range(10)
+    ]
     stack = Stack(frames=frames, major_depth=3)
     assert stack.height_limit is None
     no_lim_minor = stack.minor
@@ -298,7 +294,7 @@ def test_stack_14():
 def test_stackframe_01():
     """test creating an empty StackFrame"""
     stack = StackFrame()
-    assert not stack.__str__()
+    assert not str(stack)
 
 
 def test_stackframe_02():

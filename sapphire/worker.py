@@ -43,9 +43,9 @@ class Worker:
         data = (
             "HTTP/1.1 200 OK\r\n"
             "Cache-Control: max-age=0, no-cache\r\n"
-            "Content-Length: %d\r\n"
-            "Content-Type: %s\r\n"
-            "Connection: close\r\n\r\n" % (c_length, c_type)
+            f"Content-Length: {c_length}\r\n"
+            f"Content-Type: {c_type}\r\n"
+            "Connection: close\r\n\r\n"
         )
         return data.encode(encoding)
 
@@ -53,29 +53,30 @@ class Worker:
     def _307_redirect(redirect_to, encoding="ascii"):
         data = (
             "HTTP/1.1 307 Temporary Redirect\r\n"
-            "Location: %s\r\n"
-            "Connection: close\r\n\r\n" % (redirect_to,)
+            f"Location: {redirect_to}\r\n"
+            "Connection: close\r\n\r\n"
         )
         return data.encode(encoding)
 
     @staticmethod
     def _4xx_page(code, hdr_msg, close=-1, encoding="ascii"):
         if close < 0:
-            content = "<h3>%d!</h3>" % (code,)
+            content = f"<h3>{code}!</h3>"
         else:
             content = (
                 "<script>\n"
-                "window.onload = () => { window.setTimeout(window.close, %d) }\n"
+                "window.onload = () => "
+                f"{{ window.setTimeout(window.close, {close * 1000}) }}\n"
                 "</script>\n"
                 '<body style="background-color:#ffffe0">\n'
-                "<h3>%d! - Calling window.close() in %d seconds</h3>\n"
-                "</body>\n" % (close * 1000, code, close)
+                f"<h3>{code}! - Calling window.close() in {close} seconds</h3>\n"
+                "</body>\n"
             )
         data = (
-            "HTTP/1.1 %d %s\r\n"
-            "Content-Length: %d\r\n"
+            f"HTTP/1.1 {code} {hdr_msg}\r\n"
+            f"Content-Length: {len(content)}\r\n"
             "Content-Type: text/html\r\n"
-            "Connection: close\r\n\r\n%s" % (code, hdr_msg, len(content), content)
+            f"Connection: close\r\n\r\n{content}"
         )
         return data.encode(encoding)
 

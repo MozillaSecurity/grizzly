@@ -115,7 +115,7 @@ class Target(metaclass=ABCMeta):
     def create_report(self, is_hang=False):
         pass
 
-    def dump_coverage(self, _timeout=0):  # pylint: disable=no-self-use
+    def dump_coverage(self, _timeout=0):
         LOG.warning("dump_coverage() is not supported!")
 
     def filtered_environ(self):
@@ -127,7 +127,7 @@ class Target(metaclass=ABCMeta):
         pass
 
     # TODO: move to monitor?
-    def is_idle(self, _threshold):  # pylint: disable=no-self-use
+    def is_idle(self, _threshold):
         LOG.debug("Target.is_idle() not implemented! returning False")
         return False
 
@@ -135,7 +135,7 @@ class Target(metaclass=ABCMeta):
     def launch(self, location):
         pass
 
-    def log_size(self):  # pylint: disable=no-self-use
+    def log_size(self):
         LOG.debug("log_size() not implemented! returning 0")
         return 0
 
@@ -159,7 +159,7 @@ class Target(metaclass=ABCMeta):
     @staticmethod
     def scan_environment(to_scan, tracked):
         # scan environment for tracked environment variables
-        env = dict()
+        env = {}
         if tracked:
             for var in tracked:
                 if var in to_scan:

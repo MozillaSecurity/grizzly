@@ -62,7 +62,7 @@ class TestCase:
         self.adapter_name = adapter_name
         self.assets = None
         self.duration = None
-        self.env_vars = dict()
+        self.env_vars = {}
         self.hang = False
         self.input_fname = input_fname  # file that was used to create the test case
         self.landing_page = self.sanitize_path(landing_page)
@@ -72,7 +72,7 @@ class TestCase:
             self.redirect_page = None
         self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
-        self._files = TestFileMap(optional=list(), required=list())
+        self._files = TestFileMap(optional=[], required=[])
         self._data_path = Path(mkdtemp(prefix="testcase_", dir=grz_tmp("storage")))
 
     def __enter__(self):
@@ -341,7 +341,7 @@ class TestCase:
             if path.is_file():
                 tests = [cls.load_single(path, adjacent=adjacent)]
             elif path.is_dir():
-                tests = list()
+                tests = []
                 assets = None
                 for tc_path in TestCase.scan_path(path):
                     tests.append(
@@ -402,7 +402,7 @@ class TestCase:
             adjacent = True
         elif path.is_file():
             entry_point = path
-            info = dict()
+            info = {}
         else:
             raise TestCaseLoadFailure(f"Missing or invalid TestCase '{path}'")
         # create testcase and add data
@@ -431,7 +431,7 @@ class TestCase:
                 test.cleanup()
                 raise TestCaseLoadFailure(str(exc)) from None
             # load environment variables
-            test.env_vars = info.get("env", dict())
+            test.env_vars = info.get("env", {})
             assert isinstance(test.env_vars, dict)
             # sanity check environment variable data
             for name, value in test.env_vars.items():
@@ -502,7 +502,7 @@ class TestCase:
         Returns:
             None
         """
-        to_remove = list()
+        to_remove = []
         # iterate over optional files
         for idx, opt in enumerate(self._files.optional):
             # check entries in 'keep' for a match

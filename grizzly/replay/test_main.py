@@ -57,7 +57,7 @@ def test_main_01(mocker, tmp_path):
     )
     args = mocker.Mock(
         any_crash=False,
-        asset=list(),
+        asset=[],
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
@@ -113,7 +113,7 @@ def test_main_02(mocker, tmp_path):
     # setup args
     (tmp_path / "test.html").touch()
     args = mocker.Mock(
-        asset=list(),
+        asset=[],
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
@@ -149,8 +149,8 @@ def test_main_03(mocker):
     fake_tc = mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
     # setup args
     args = mocker.Mock(
-        asset=list(),
-        ignore=list(),
+        asset=[],
+        ignore=[],
         input="test",
         min_crashes=1,
         no_harness=True,
@@ -175,7 +175,7 @@ def test_main_03(mocker):
     assert fake_load_target.call_count == 0
     # no test cases
     fake_tc.load.side_effect = None
-    fake_tc.load.return_value = list()
+    fake_tc.load.return_value = []
     assert ReplayManager.main(args) == Exit.ERROR
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
@@ -219,8 +219,8 @@ def test_main_04(mocker, tmp_path):
     )
     # setup args
     args = mocker.Mock(
-        asset=list(),
-        ignore=list(),
+        asset=[],
+        ignore=[],
         input="test",
         min_crashes=1,
         no_harness=True,
@@ -263,7 +263,7 @@ def test_main_05(mocker, tmp_path):
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
     target.check_result.return_value = Result.FOUND
-    target.filtered_environ.return_value = dict()
+    target.filtered_environ.return_value = {}
     target.monitor.is_healthy.return_value = False
     target.save_logs = _fake_save_logs
     mocker.patch(
@@ -279,7 +279,7 @@ def test_main_05(mocker, tmp_path):
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
-        ignore=list(),
+        ignore=[],
         launch_attempts=3,
         min_crashes=1,
         no_harness=True,
@@ -362,7 +362,7 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         test.dump(str(replay_path), include_details=True)
     # setup args
     args = mocker.Mock(
-        asset=list(),
+        asset=[],
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
@@ -400,7 +400,9 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         (False, False, True, False),
     ],  # pylint: disable=invalid-name
 )
-def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
+def test_main_07(
+    mocker, tmp_path, pernosco, rr, valgrind, no_harness
+):  # pylint: disable=invalid-name
     """test ReplayManager.main() enable debuggers"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     # mock Sapphire.serve_path only
@@ -420,7 +422,7 @@ def test_main_07(mocker, tmp_path, pernosco, rr, valgrind, no_harness):
     # setup args
     (tmp_path / "test.html").touch()
     args = mocker.Mock(
-        asset=list(),
+        asset=[],
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
@@ -474,7 +476,7 @@ def test_main_08(mocker, tmp_path):
     # setup args
     args = mocker.Mock(
         any_crash=False,
-        asset=list(),
+        asset=[],
         fuzzmanager=True,
         idle_delay=0,
         idle_threshold=0,
