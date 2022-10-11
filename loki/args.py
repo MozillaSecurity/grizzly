@@ -21,6 +21,7 @@ def parse_args(argv=None):
     parser.add_argument(
         "-b",
         "--byte-order",
+        choices=Loki.BYTE_ORDERS,
         default=None,
         help="Byte order to use when mutating multiple bytes at once. "
         "Use '>' for big-endian or '<' for little-endian (default: random)",
@@ -46,8 +47,5 @@ def parse_args(argv=None):
         help="Output directory for fuzzed test cases (default: '.')",
     )
     args = parser.parse_args(argv)
-
-    if args.byte_order and args.byte_order not in Loki.BYTE_ORDERS:
-        parser.error(f"Invalid byte order {args.byte_order!r}")
 
     return args

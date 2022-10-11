@@ -174,10 +174,8 @@ class CommonArgs:
             nargs="*",
             choices=self.IGNORABLE,
             default=self.DEFAULT_IGNORE,
-            metavar="IGNORABLE",
-            help="Space-separated list of ignorable types. Pass zero args to disable."
-            f" Available: {' '.join(self.IGNORABLE)} "
-            f"(default: {' '.join(self.DEFAULT_IGNORE)})",
+            help="Result types to ignore. Pass zero args to disable. NOTE: 'memory'"
+            " only applies to OOMs detected by Grizzly. (default: %(default)s)",
         )
         self.reporter_grp.add_argument(
             "-l",

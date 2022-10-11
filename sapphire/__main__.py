@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser
 from logging import DEBUG, INFO, basicConfig
-from os.path import isdir
+from pathlib import Path
 
 from .core import Sapphire
 
@@ -22,7 +22,7 @@ def parse_args(argv=None):
     # log levels for console logging
     level_map = {"DEBUG": DEBUG, "INFO": INFO}
     parser = ArgumentParser()
-    parser.add_argument("path", help="Specify a directory to act as wwwroot")
+    parser.add_argument("path", type=Path, help="Specify a directory to act as wwwroot")
     parser.add_argument(
         "--log-level",
         choices=sorted(level_map),
@@ -44,8 +44,8 @@ def parse_args(argv=None):
     )
     args = parser.parse_args(argv)
     # sanity check
-    if not isdir(args.path):
-        parser.error(f"Path does not exist {args.path!r}")
+    if not args.path.is_dir():
+        parser.error(f"Path does not exist '{args.path}'")
     if args.timeout is not None and args.timeout <= 0:
         parser.error("Specified timeout must be greater than 0")
     args.log_level = level_map[args.log_level]

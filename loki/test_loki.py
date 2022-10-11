@@ -164,10 +164,6 @@ def test_main_01(mocker, tmp_path):
     assert fake_mkdtemp.call_count == 1
 
 
-def test_args_01(capsys):
+def test_args_01():
     """test parse_args()"""
     assert parse_args(argv=["sample"])
-    # invalid byte order
-    with raises(SystemExit):
-        parse_args(argv=["sample", "-b", "a"])
-    assert "Invalid byte order" in capsys.readouterr()[1]

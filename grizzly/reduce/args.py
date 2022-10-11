@@ -48,11 +48,8 @@ class ReduceArgs(ReplayArgs):
             nargs="+",
             choices=STRATEGIES,
             default=DEFAULT_STRATEGIES,
-            metavar="STRATEGY",
             dest="strategies",
-            help="One or more strategies (space-separated)."
-            f" Available: {' '.join(sorted(STRATEGIES))}"
-            f" (default: {' '.join(DEFAULT_STRATEGIES)})",
+            help="One or more strategies. (default: %(default)s)",
         )
 
     def sanity_check(self, args):
