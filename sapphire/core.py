@@ -143,7 +143,7 @@ class Sapphire:
             - Served.REQUEST: Some files were requested
 
         Args:
-            path (Path): Directory to use as wwwroot.
+            path (str): Directory to use as wwwroot.
             continue_cb (callable): A callback that can be used to exit the serve loop.
                                     This must be a callable that returns a bool.
             forever (bool): Continue to handle requests even after all files have
@@ -155,7 +155,7 @@ class Sapphire:
         Returns:
             tuple(int, tuple(str)): Status code and files served.
         """
-        assert isinstance(path, Path)
+        path = Path(path)
         LOG.debug("serving '%s' (forever=%r)", path, forever)
         job = Job(
             path,
