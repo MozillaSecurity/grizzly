@@ -777,7 +777,7 @@ def test_sapphire_33(client, tmp_path):
 
 def test_main_01(mocker, tmp_path):
     """test Sapphire.main()"""
-    args = mocker.Mock(path=str(tmp_path), port=4536, remote=False, timeout=None)
+    args = mocker.Mock(path=tmp_path, port=4536, remote=False, timeout=None)
     fake_srv = mocker.patch("sapphire.core.Sapphire.serve_path", autospec=True)
     fake_srv.return_value = (Served.ALL, None)
     Sapphire.main(args)
