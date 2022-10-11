@@ -46,9 +46,7 @@ def test_reduce_status_reporter_02(mocker, tmp_path):
     assert not st_rpt.reports
 
     # empty reports and tb paths
-    st_rpt = ReductionStatusReporter.load(
-        str(tmp_path / "status.db"), tb_path=str(tmp_path)
-    )
+    st_rpt = ReductionStatusReporter.load(str(tmp_path / "status.db"), tb_path=tmp_path)
     assert not st_rpt.reports
     assert isinstance(st_rpt.tracebacks, list)
     assert not st_rpt.tracebacks
@@ -170,21 +168,21 @@ def test_reduce_status_reporter_05(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
+    rptr = StatusReporter.load(db_file, tb_path=tmp_path)
     assert len(rptr.tracebacks) == 1
     # create second screenlog
     with (tmp_path / "screenlog.1234").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"foo.bar.error: blah\n")
-    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
+    rptr = StatusReporter.load(db_file, tb_path=tmp_path)
     assert len(rptr.tracebacks) == 2
     # create third screenlog
     with (tmp_path / "screenlog.3").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"KeyboardInterrupt\n")
-    rptr = ReductionStatusReporter.load(db_file, tb_path=str(tmp_path))
+    rptr = ReductionStatusReporter.load(db_file, tb_path=tmp_path)
     assert len(rptr.tracebacks) == 2
     merged_log = rptr.summary()
     assert len(merged_log.splitlines()) == 13
@@ -210,7 +208,7 @@ def test_status_reporter_02(tmp_path):
     st_rpt = StatusReporter.load(str(tmp_path / "status.db"))
     assert not st_rpt.reports
     # empty reports and tb paths
-    st_rpt = StatusReporter.load(str(tmp_path / "status.db"), tb_path=str(tmp_path))
+    st_rpt = StatusReporter.load(str(tmp_path / "status.db"), tb_path=tmp_path)
     assert isinstance(st_rpt.reports, list)
     assert not st_rpt.reports
     assert isinstance(st_rpt.tracebacks, list)
@@ -271,20 +269,7 @@ def test_status_reporter_03(mocker, disk, memory, getloadavg):
         assert "MB" not in sysinfo[2][-1]
 
 
-def test_status_reporter_04(tmp_path):
-    """test StatusReporter._scan()"""
-    (tmp_path / "somefile.txt").touch()
-    test_path = tmp_path / "TEST_FILE"
-    test_path.mkdir()
-    assert not any(StatusReporter._scan(str(tmp_path), "TEST_FILE"))
-    test_path.rmdir()
-    test_path.touch()
-    assert not any(StatusReporter._scan(str(tmp_path), "TEST_FILE"))
-    test_path.write_bytes(b"test")
-    assert any(StatusReporter._scan(str(tmp_path), "TEST_FILE"))
-
-
-def test_status_reporter_05(mocker, tmp_path):
+def test_status_reporter_04(mocker, tmp_path):
     """test StatusReporter.summary()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
     mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
@@ -336,7 +321,7 @@ def test_status_reporter_05(mocker, tmp_path):
         assert match(r"\S\s:\s\S", line[position - 2 :])
 
 
-def test_status_reporter_06(mocker, tmp_path):
+def test_status_reporter_05(mocker, tmp_path):
     """test StatusReporter.specific()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
     db_file = str(tmp_path / "status.db")
@@ -381,7 +366,7 @@ def test_status_reporter_06(mocker, tmp_path):
     assert "test2" in output
 
 
-def test_status_reporter_07(mocker, tmp_path):
+def test_status_reporter_06(mocker, tmp_path):
     """test StatusReporter.results()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2, 3))
     db_file = str(tmp_path / "status.db")
@@ -419,7 +404,7 @@ def test_status_reporter_07(mocker, tmp_path):
     assert len(output.strip().split("\n")) == 4
 
 
-def test_status_reporter_08(tmp_path):
+def test_status_reporter_07(tmp_path):
     """test StatusReporter.load() with traceback"""
     db_file = str(tmp_path / "status.db")
     status = Status.start(db_file=db_file)
@@ -434,21 +419,21 @@ def test_status_reporter_08(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
+    rptr = StatusReporter.load(db_file, tb_path=tmp_path)
     assert len(rptr.tracebacks) == 1
     # create second screenlog
     with (tmp_path / "screenlog.1234").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"foo.bar.error: blah\n")
-    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
+    rptr = StatusReporter.load(db_file, tb_path=tmp_path)
     assert len(rptr.tracebacks) == 2
     # create third screenlog
     with (tmp_path / "screenlog.3").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"KeyboardInterrupt\n")
-    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
+    rptr = StatusReporter.load(db_file, tb_path=tmp_path)
     assert len(rptr.tracebacks) == 2
     merged_log = rptr.summary()
     assert len(merged_log.splitlines()) == 14
@@ -459,14 +444,14 @@ def test_status_reporter_08(tmp_path):
     assert "screenlog.3" not in merged_log
 
 
-def test_status_reporter_09(tmp_path):
+def test_status_reporter_08(tmp_path):
     """test StatusReporter.load() no reports with traceback"""
     # create screenlog with tb
     with (tmp_path / "screenlog.1").open("wb") as test_fp:
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(str(tmp_path / "status.db"), tb_path=str(tmp_path))
+    rptr = StatusReporter.load(str(tmp_path / "status.db"), tb_path=tmp_path)
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 1
     output = rptr.summary()
@@ -475,7 +460,7 @@ def test_status_reporter_09(tmp_path):
     assert "IndexError" in output
 
 
-def test_status_reporter_10(mocker, tmp_path):
+def test_status_reporter_09(mocker, tmp_path):
     """test StatusReporter.summary() limit with traceback"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
     db_file = str(tmp_path / "status.db")
@@ -496,15 +481,15 @@ def test_status_reporter_10(mocker, tmp_path):
     status.report(force=True)
     # create screenlogs with tracebacks
     for i in range(10):
-        with (tmp_path / f"screenlog.{i}").open("wb") as test_fp:
-            test_fp.write(b"Traceback (most recent call last):\n")
+        with (tmp_path / f"screenlog.{i}").open("w") as test_fp:
+            test_fp.write("Traceback (most recent call last):\n")
             for j in range(TracebackReport.MAX_LINES):
                 test_fp.write(
-                    b'  File "some/long/path/name/foobar.py", line 5000, in <module>\n'
+                    '  File "some/long/path/name/foobar.py", line 5000, in <module>\n'
                 )
-                test_fp.write(b"    some_long_name_for_a_func_%04d()\n" % (j,))
-            test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(db_file, tb_path=str(tmp_path))
+                test_fp.write(f"    some_long_name_for_a_func_{j:0>4d}()\n")
+            test_fp.write("IndexError: list index out of range\n")
+    rptr = StatusReporter.load(db_file, tb_path=tmp_path)
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 10
     merged_log = rptr.summary(
@@ -513,7 +498,7 @@ def test_status_reporter_10(mocker, tmp_path):
     assert len(merged_log) < StatusReporter.SUMMARY_LIMIT
 
 
-def test_status_reporter_11():
+def test_status_reporter_10():
     """test StatusReporter.format_entries()"""
     assert StatusReporter.format_entries([]) == ""
     assert StatusReporter.format_entries([("test", None)]) == "test"
@@ -524,9 +509,11 @@ def test_status_reporter_11():
     assert out == " first : 1\nsecond : 2\n third : 3"
 
 
-def test_traceback_report_01():
+def test_traceback_report_01(tmp_path):
     """test simple TracebackReport"""
-    tbr = TracebackReport("log.txt", ["0", "1", "2"], prev_lines=["-2", "-1"])
+    tbr = TracebackReport(
+        tmp_path / "log.txt", ["0", "1", "2"], prev_lines=["-2", "-1"]
+    )
     output = str(tbr)
     assert len(output.splitlines()) == 6
     assert len(tbr) == 26
@@ -535,9 +522,9 @@ def test_traceback_report_01():
     assert "-2" in output
 
 
-def test_traceback_report_02():
+def test_traceback_report_02(tmp_path):
     """test empty TracebackReport"""
-    tbr = TracebackReport("log.txt", [])
+    tbr = TracebackReport(tmp_path / "log.txt", [])
     assert not tbr.is_kbi
     output = str(tbr)
     assert len(output.splitlines()) == 1
@@ -547,16 +534,16 @@ def test_traceback_report_02():
 def test_traceback_report_03(tmp_path):
     """test TracebackReport.from_file()"""
     test_log = tmp_path / "screenlog.0"
-    with test_log.open("wb") as test_fp:
-        test_fp.write(b"start junk\npre1\npre2\npre3\npre4\npre5\n")
-        test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b'  File "foo.py", line 556, in <module>\n')
-        test_fp.write(b"    main(parse_args())\n")
-        test_fp.write(b'  File "foo.py", line 207, in bar\n')
-        test_fp.write(b"    a = b[10]\n")
-        test_fp.write(b"IndexError: list index out of range\n")
-        test_fp.write(b"end junk\n")
-    tbr = TracebackReport.from_file(str(test_log))
+    with test_log.open("w") as test_fp:
+        test_fp.write("start junk\npre1\npre2\npre3\npre4\npre5\n")
+        test_fp.write("Traceback (most recent call last):\n")
+        test_fp.write('  File "foo.py", line 556, in <module>\n')
+        test_fp.write("    main(parse_args())\n")
+        test_fp.write('  File "foo.py", line 207, in bar\n')
+        test_fp.write("    a = b[10]\n")
+        test_fp.write("IndexError: list index out of range\n")
+        test_fp.write("end junk\n")
+    tbr = TracebackReport.from_file(test_log, ignore_kbi=True)
     assert len(tbr.prev_lines) == 5
     assert len(tbr.lines) == 6
     assert not tbr.is_kbi
@@ -567,16 +554,16 @@ def test_traceback_report_03(tmp_path):
     assert "screenlog.0" in output
     assert "junk" not in output
 
-    with test_log.open("wb") as test_fp:
-        test_fp.write(b"start junk\n")
-        test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b'  File "foo.py", line 556, in <module>\n')
-        test_fp.write(b"    main(parse_args())\n")
-        test_fp.write(b'  File "foo.py", line 207, in bar\n')
-        test_fp.write(b"    a = b[10]\n")
-        test_fp.write(b"foo.bar.error: blah\n")
-        test_fp.write(b"end junk\n")
-    tbr = TracebackReport.from_file(str(test_log), max_preceding=0)
+    with test_log.open("w") as test_fp:
+        test_fp.write("start junk\n")
+        test_fp.write("Traceback (most recent call last):\n")
+        test_fp.write('  File "foo.py", line 556, in <module>\n')
+        test_fp.write("    main(parse_args())\n")
+        test_fp.write('  File "foo.py", line 207, in bar\n')
+        test_fp.write("    a = b[10]\n")
+        test_fp.write("foo.bar.error: blah\n")
+        test_fp.write("end junk\n")
+    tbr = TracebackReport.from_file(test_log, max_preceding=0)
     assert len(tbr.lines) == 6
     assert not tbr.prev_lines
     assert not tbr.is_kbi
@@ -586,36 +573,38 @@ def test_traceback_report_03(tmp_path):
     assert "foo.bar.error" in output
     assert "junk" not in output
     # kbi
-    with test_log.open("wb") as test_fp:
-        test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b'  File "foo.py", line 556, in <module>\n')
-        test_fp.write(b"    main(parse_args())\n")
-        test_fp.write(b'  File "foo.py", line 207, in bar\n')
-        test_fp.write(b"    a = b[10]\n")
-        test_fp.write(b"KeyboardInterrupt\n")
-        test_fp.write(b"end junk\n")
-    tbr = TracebackReport.from_file(str(test_log))
+    with test_log.open("w") as test_fp:
+        test_fp.write("Traceback (most recent call last):\n")
+        test_fp.write('  File "foo.py", line 556, in <module>\n')
+        test_fp.write("    main(parse_args())\n")
+        test_fp.write('  File "foo.py", line 207, in bar\n')
+        test_fp.write("    a = b[10]\n")
+        test_fp.write("KeyboardInterrupt\n")
+        test_fp.write("end junk\n")
+    tbr = TracebackReport.from_file(test_log)
     assert tbr.is_kbi
     output = str(tbr)
     assert len(output.splitlines()) == 7
     assert "KeyboardInterrupt" in output
+    # ignore kbi
+    assert TracebackReport.from_file(test_log, ignore_kbi=True) is None
 
 
 def test_traceback_report_04(tmp_path):
     """test TracebackReport.from_file() exceed size limit"""
     test_log = tmp_path / "screenlog.0"
-    with test_log.open("wb") as test_fp:
-        test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
-        test_fp.write(b"    first()\n")
-        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
-        test_fp.write(b"    second()\n")
+    with test_log.open("w") as test_fp:
+        test_fp.write("Traceback (most recent call last):\n")
+        test_fp.write('  File "foo.py", line 5, in <module>\n')
+        test_fp.write("    first()\n")
+        test_fp.write('  File "foo.py", line 5, in <module>\n')
+        test_fp.write("    second()\n")
         for i in reversed(range(TracebackReport.MAX_LINES)):
-            test_fp.write(b'  File "foo.py", line 5, in <module>\n')
-            test_fp.write(b"    func_%02d()\n" % i)
-        test_fp.write(b"END_WITH_BLANK_LINE\n\n")
-        test_fp.write(b"end junk\n")
-    tbr = TracebackReport.from_file(str(test_log))
+            test_fp.write('  File "foo.py", line 5, in <module>\n')
+            test_fp.write(f"    func_{i:0>2d}()\n")
+        test_fp.write("END_WITH_BLANK_LINE\n\n")
+        test_fp.write("end junk\n")
+    tbr = TracebackReport.from_file(test_log)
     assert not tbr.is_kbi
     output = str(tbr)
     assert len(output.splitlines()) == 18
@@ -630,14 +619,14 @@ def test_traceback_report_04(tmp_path):
 def test_traceback_report_05(tmp_path):
     """test TracebackReport.from_file() cut off"""
     test_log = tmp_path / "screenlog.0"
-    with test_log.open("wb") as test_fp:
-        test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
-        test_fp.write(b"    first()\n")
+    with test_log.open("w") as test_fp:
+        test_fp.write("Traceback (most recent call last):\n")
+        test_fp.write('  File "foo.py", line 5, in <module>\n')
+        test_fp.write("    first()\n")
         for i in range(TracebackReport.MAX_LINES * 2):
-            test_fp.write(b'  File "foo.py", line 5, in <module>\n')
-            test_fp.write(b"    func_%d()\n" % i)
-    tbr = TracebackReport.from_file(str(test_log))
+            test_fp.write('  File "foo.py", line 5, in <module>\n')
+            test_fp.write(f"    func_{i}()\n")
+    tbr = TracebackReport.from_file(test_log)
     assert not tbr.is_kbi
     output = str(tbr)
     assert len(output.splitlines()) == 18
@@ -648,13 +637,13 @@ def test_traceback_report_05(tmp_path):
 def test_traceback_report_06(tmp_path):
     """test TracebackReport.from_file() single word error"""
     test_log = tmp_path / "screenlog.0"
-    with test_log.open("wb") as test_fp:
-        test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
-        test_fp.write(b"    first()\n")
-        test_fp.write(b"AssertionError\n")
-        test_fp.write(b"end junk\n")
-    tbr = TracebackReport.from_file(str(test_log))
+    with test_log.open("w") as test_fp:
+        test_fp.write("Traceback (most recent call last):\n")
+        test_fp.write('  File "foo.py", line 5, in <module>\n')
+        test_fp.write("    first()\n")
+        test_fp.write("AssertionError\n")
+        test_fp.write("end junk\n")
+    tbr = TracebackReport.from_file(test_log)
     assert not tbr.is_kbi
     output = str(tbr)
     assert len(output.splitlines()) == 5
@@ -671,7 +660,7 @@ def test_traceback_report_07(tmp_path):
         test_fp.write(b'  File "foo.py", line 5, in <module>\n')
         test_fp.write(b"    bin\xd8()\n")
         test_fp.write(b"AssertionError\n")
-    tbr = TracebackReport.from_file(str(test_log))
+    tbr = TracebackReport.from_file(test_log)
     assert not tbr.is_kbi
     output = str(tbr)
     assert "bin()" in output
@@ -681,13 +670,13 @@ def test_traceback_report_07(tmp_path):
 def test_traceback_report_08(tmp_path):
     """test TracebackReport.from_file() locate token across chunks"""
     test_log = tmp_path / "screenlog.0"
-    with test_log.open("wb") as test_fp:
-        test_fp.write(b"A" * (TracebackReport.READ_LIMIT - 5))
-        test_fp.write(b"Traceback (most recent call last):\n")
-        test_fp.write(b'  File "foo.py", line 5, in <module>\n')
-        test_fp.write(b"    first()\n")
-        test_fp.write(b"AssertionError\n")
-    tbr = TracebackReport.from_file(str(test_log))
+    with test_log.open("w") as test_fp:
+        test_fp.write("A" * (TracebackReport.READ_LIMIT - 5))
+        test_fp.write("Traceback (most recent call last):\n")
+        test_fp.write('  File "foo.py", line 5, in <module>\n')
+        test_fp.write("    first()\n")
+        test_fp.write("AssertionError\n")
+    tbr = TracebackReport.from_file(test_log)
     assert not tbr.is_kbi
     output = str(tbr)
     assert len(output.splitlines()) == 5
