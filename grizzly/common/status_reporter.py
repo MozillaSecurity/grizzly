@@ -15,8 +15,8 @@ try:
 except ImportError:  # pragma: no cover
     # os.getloadavg() is not available on all platforms
     getloadavg = None
-from os import SEEK_CUR, getenv, scandir
-from os.path import isdir
+from os import SEEK_CUR, getenv
+from pathlib import Path
 from re import match
 from re import sub as re_sub
 from time import gmtime, localtime, strftime
@@ -54,18 +54,17 @@ class StatusReporter:
         """Read Grizzly status reports and create a StatusReporter object.
 
         Args:
-            path (str): Path to scan for status data files.
-            tb_path (str): Directory to scan for files containing Python tracebacks.
+            db_file (str): Status data file to load.
+            tb_path (Path): Directory to scan for files containing Python tracebacks.
             time_limit (int): Only include entries with a timestamp that is within the
                               given number of seconds.
 
         Returns:
             StatusReporter: Contains available status reports and traceback reports.
         """
-        tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
         return cls(
             list(Status.loadall(db_file=db_file, time_limit=time_limit)),
-            tracebacks=tracebacks,
+            tracebacks=None if tb_path is None else cls._tracebacks(tb_path),
         )
 
     @staticmethod
@@ -135,16 +134,6 @@ class StatusReporter:
             entries.append(("(* = Blocker)", None))
         entries.append(("", None))
         return self.format_entries(entries)
-
-    @staticmethod
-    def _scan(path, fname_pattern):
-        for entry in scandir(path):
-            if match(fname_pattern, entry.name) is None:
-                continue
-            if not entry.is_file():
-                continue
-            if entry.stat().st_size:
-                yield entry.path
 
     def specific(self, iters_per_result=100):
         """Merged and generate formatted output from status reports.
@@ -389,8 +378,8 @@ class StatusReporter:
         """Search screen logs for tracebacks.
 
         Args:
-            path (str): Directory containing log files.
-            ignore_kbi (bool): Do not include KeyboardInterupts in results
+            path (Path): Directory containing log files.
+            ignore_kbi (bool): Do not include KeyboardInterrupts in results
             max_preceding (int): Maximum number of lines preceding traceback to
                                   include.
 
@@ -398,13 +387,12 @@ class StatusReporter:
             list: A list of TracebackReports.
         """
         tracebacks = []
-        for screen_log in StatusReporter._scan(path, r"screenlog\.\d+"):
-            tbr = TracebackReport.from_file(screen_log, max_preceding=max_preceding)
-            if tbr is None:
-                continue
-            if ignore_kbi and tbr.is_kbi:
-                continue
-            tracebacks.append(tbr)
+        for screen_log in (x for x in path.glob("screenlog.*") if x.is_file()):
+            tbr = TracebackReport.from_file(
+                screen_log, max_preceding=max_preceding, ignore_kbi=ignore_kbi
+            )
+            if tbr:
+                tracebacks.append(tbr)
         return tracebacks
 
 
@@ -414,32 +402,34 @@ class TracebackReport:
     """
 
     MAX_LINES = 16  # should be no less than 6
-    READ_LIMIT = 0x10000  # 64KB
+    READ_LIMIT = 0x20000  # 128KB
 
-    def __init__(self, file_name, lines, is_kbi=False, prev_lines=None):
+    def __init__(self, log_file, lines, is_kbi=False, prev_lines=None):
         assert isinstance(lines, list)
+        assert isinstance(log_file, Path)
         assert isinstance(prev_lines, list) or prev_lines is None
-        self.file_name = file_name
-        self.lines = lines
-        self.prev_lines = prev_lines or []
         self.is_kbi = is_kbi
+        self.lines = lines
+        self.log_file = log_file
+        self.prev_lines = prev_lines or []
 
     @classmethod
-    def from_file(cls, input_log, max_preceding=5):
+    def from_file(cls, log_file, max_preceding=5, ignore_kbi=False):
         """Create TracebackReport from a text file containing a Python traceback.
         Only the first traceback in the file will be parsed.
 
         Args:
-            input_log (str): File to parse.
+            log_file (Path): File to parse.
             max_preceding (int): Number of lines to collect leading up to the traceback.
+            ignore_kbi (bool): Skip/ignore KeyboardInterrupt.
 
         Returns:
-            TracebackReport: Contains data from input_log.
+            TracebackReport: Contains data from log_file.
         """
         token = b"Traceback (most recent call last):"
         assert len(token) < cls.READ_LIMIT
         try:
-            with open(input_log, "rb") as in_fp:
+            with log_file.open("rb") as in_fp:
                 for chunk in iter(partial(in_fp.read, cls.READ_LIMIT), b""):
                     idx = chunk.find(token)
                     if idx > -1:
@@ -477,6 +467,9 @@ class TracebackReport:
                     break
                 if match(r"^\w+(\.\w+)*\:\s|^\w+(Interrupt|Error)$", log_line):
                     is_kbi = log_line.startswith("KeyboardInterrupt")
+                    if is_kbi and ignore_kbi:
+                        # ignore this exception since it is a KeyboardInterrupt
+                        return None
                     # stop after error message
                     tb_end = min(line_num + 1, line_count)
                     break
@@ -497,13 +490,15 @@ class TracebackReport:
             lines += data[tb_end - (cls.MAX_LINES - 3) : tb_end]
         else:
             lines = data[tb_start:tb_end]
-        return cls(input_log, lines, is_kbi=is_kbi, prev_lines=prev_lines)
+        return cls(log_file, lines, is_kbi=is_kbi, prev_lines=prev_lines)
 
     def __len__(self):
         return len(str(self))
 
     def __str__(self):
-        return "\n".join([f"Log: {self.file_name!r}"] + self.prev_lines + self.lines)
+        return "\n".join(
+            [f"Log: '{self.log_file.name}'"] + self.prev_lines + self.lines
+        )
 
 
 class _TableFormatter:
@@ -859,7 +854,9 @@ def main(args=None):
 
     parser = ArgumentParser(description="Grizzly status report generator")
     parser.add_argument(
-        "--dump", help="File to write report to, existing files will be overwritten."
+        "--dump",
+        type=Path,
+        help="File to write report to, existing files will be overwritten.",
     )
     parser.add_argument(
         "--type",
@@ -867,13 +864,13 @@ def main(args=None):
         default="active",
         help="Report type. active: Current snapshot of activity, complete: "
         "Aggregate summary of all jobs over a longer duration (8h). "
-        "(default: active)",
+        "(default: %(default)s)",
     )
     parser.add_argument(
         "--scan-mode",
         choices=modes.keys(),
         default="fuzzing",
-        help="Report mode. (default: fuzzing)",
+        help="Report mode. (default: %(default)s)",
     )
     parser.add_argument(
         "--system-report",
@@ -882,10 +879,11 @@ def main(args=None):
     )
     parser.add_argument(
         "--tracebacks",
+        type=Path,
         help="Scan path for Python tracebacks found in screenlog.# files",
     )
     args = parser.parse_args(args)
-    if args.tracebacks and not isdir(args.tracebacks):
+    if args.tracebacks and not args.tracebacks.is_dir():
         parser.error("--tracebacks must be a directory")
 
     reporter_cls, status_db = modes.get(args.scan_mode)
@@ -896,7 +894,7 @@ def main(args=None):
     )
 
     if args.dump:
-        with open(args.dump, "w") as ofp:
+        with args.dump.open("w") as ofp:
             if args.type == "active" and args.scan_mode == "fuzzing":
                 ofp.write(reporter.summary(runtime=False, sysinfo=True, timestamp=True))
             elif args.type == "active":
