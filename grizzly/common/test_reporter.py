@@ -53,7 +53,7 @@ def test_reporter_01(mocker, tmp_path, display_logs, is_hang):
 
     (tmp_path / "log_stderr.txt").write_bytes(b"log msg")
     report = mocker.Mock(
-        spec_set=Report, is_hang=is_hang, preferred=str(tmp_path / "log_stderr.txt")
+        spec_set=Report, is_hang=is_hang, preferred=tmp_path / "log_stderr.txt"
     )
     reporter = SimpleReporter()
     reporter.display_logs = display_logs
@@ -218,9 +218,7 @@ def test_fuzzmanager_reporter_03(mocker, tmp_path):
     """test FuzzManagerReporter._ignored()"""
     log_file = tmp_path / "test.log"
     log_file.touch()
-    report = mocker.Mock(
-        spec_set=Report, path=tmp_path, preferred=str(log_file), stack=None
-    )
+    report = mocker.Mock(spec_set=Report, path=tmp_path, preferred=log_file, stack=None)
     # not ignored
     assert not FuzzManagerReporter._ignored(report)
     # ignored - sanitizer OOM missing stack

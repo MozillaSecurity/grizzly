@@ -68,8 +68,7 @@ class Report:
                     Report.tail(log, size_limit)
         # look through logs one by one until we find a stack
         for log_file in (x for x in self._logs if x is not None):
-            with log_file.open("rb") as log_fp:
-                stack = Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
+            stack = Stack.from_text(log_file.read_text("utf-8", errors="ignore"))
             if stack.frames:
                 # limit the hash calculations to the first n frames if a hang
                 # was detected to attempt to help local bucketing
@@ -134,10 +133,9 @@ class Report:
             assert self.path is not None
             # read in the log files and create a CrashInfo object
             if self._logs.aux is not None:
-                with open(self._logs.aux, "rb") as log_fp:
-                    aux_data = (
-                        log_fp.read().decode("utf-8", errors="ignore").splitlines()
-                    )
+                aux_data = self._logs.aux.read_text(
+                    "utf-8", errors="ignore"
+                ).splitlines()
             else:
                 aux_data = None
             # create ProgramConfiguration that can be reported to a FM server
@@ -153,15 +151,12 @@ class Report:
                     "x86_64" if cpu == "amd64" else cpu,
                     system(),
                 )
-            with open(self._logs.stderr, "rb") as err_fp, open(
-                self._logs.stdout, "rb"
-            ) as out_fp:
-                self._crash_info = CrashInfo.fromRawCrashData(
-                    out_fp.read().decode("utf-8", errors="ignore").splitlines(),
-                    err_fp.read().decode("utf-8", errors="ignore").splitlines(),
-                    fm_cfg,
-                    auxCrashData=aux_data,
-                )
+            self._crash_info = CrashInfo.fromRawCrashData(
+                self._logs.stdout.read_text("utf-8", errors="ignore").splitlines(),
+                self._logs.stderr.read_text("utf-8", errors="ignore").splitlines(),
+                fm_cfg,
+                auxCrashData=aux_data,
+            )
         return self._crash_info
 
     @property
@@ -363,7 +358,7 @@ class Report:
             None
 
         Returns:
-            str: Name of log.
+            Path: Log file.
         """
         return self._logs.aux or self._logs.stderr
 
