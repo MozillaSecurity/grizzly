@@ -32,7 +32,7 @@ def test_strategy_tc_load(is_hang):
 
     class _TestStrategy(Strategy):
         def __iter__(self):
-            yield TestCase.load(str(self._testcase_root), False)
+            yield TestCase.load(self._testcase_root, False)
 
         def update(self, success, served=None):
             pass
@@ -164,7 +164,7 @@ def test_list(
                 log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
-                report = Report(str(log_path), "bin")
+                report = Report(log_path, "bin")
                 return [
                     ReplayResult(report, [["test.html"]] * len(testcases), [], True)
                 ]
@@ -347,7 +347,7 @@ def test_purge_unserved(
         log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
-        report = Report(str(log_path), "bin")
+        report = Report(log_path, "bin")
         return [ReplayResult(report, served.pop(0), [], True)]
 
     replayer.run.side_effect = replay_run
@@ -408,7 +408,7 @@ def test_dd_only(mocker, tmp_path):
                 log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
-                report = Report(str(log_path), "bin")
+                report = Report(log_path, "bin")
                 return [ReplayResult(report, [["test.html", "other.html"]], [], True)]
         return []
 

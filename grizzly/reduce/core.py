@@ -780,14 +780,14 @@ class ReduceManager:
         try:
             if args.sig:
                 signature = CrashSignature.fromFile(args.sig)
-                meta = Path(args.sig).with_suffix(".metadata")
+                meta = args.sig.with_suffix(".metadata")
                 if meta.is_file():
                     meta = json.loads(meta.read_text())
                     signature_desc = meta["shortDescription"]
 
             try:
                 testcases, assets, env_vars = ReplayManager.load_testcases(
-                    str(args.input), subset=args.test_index
+                    args.input, subset=args.test_index
                 )
             except TestCaseLoadFailure as exc:
                 LOG.error("Error: %s", str(exc))

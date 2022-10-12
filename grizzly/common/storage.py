@@ -233,9 +233,9 @@ class TestCase:
             None
 
         Returns:
-            str: Path to directory containing test case files.
+            Path: Directory containing test case files.
         """
-        return str(self._data_path)
+        return self._data_path
 
     @property
     def data_size(self):
@@ -310,7 +310,7 @@ class TestCase:
         """Load TestCases from disk.
 
         Args:
-            path (str): Path can be:
+            path (Path): Path can be:
                         1) A directory containing `test_info.json` and data.
                         2) A directory with one or more subdirectories of 1.
                         3) A zip archive containing testcase data or
@@ -323,7 +323,7 @@ class TestCase:
         Returns:
             list: TestCases successfully loaded from path.
         """
-        path = Path(path)
+        assert isinstance(path, Path)
         # unpack archive if needed
         if path.name.lower().endswith(".zip"):
             try:

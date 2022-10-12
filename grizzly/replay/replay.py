@@ -137,7 +137,7 @@ class ReplayManager:
         """Load TestCases.
 
         Args:
-            path (str): Path to load.
+            path (Path): Path to load.
             subset (list(int)): Indices of tests to load when loading multiple
                                 tests.
         Returns:
@@ -590,14 +590,11 @@ class ReplayManager:
         elif args.valgrind:
             LOG.info("Running with Valgrind. This will be SLOW!")
 
-        if args.sig:
-            signature = CrashSignature.fromFile(args.sig)
-        else:
-            signature = None
+        signature = CrashSignature.fromFile(args.sig) if args.sig else None
 
         try:
             testcases, assets, env_vars = cls.load_testcases(
-                str(args.input), subset=args.test_index
+                args.input, subset=args.test_index
             )
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
