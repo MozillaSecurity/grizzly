@@ -4,11 +4,10 @@
 from abc import ABCMeta, abstractmethod
 from enum import IntEnum, unique
 from json import dumps, loads
-from logging import WARNING, getLogger
+from logging import getLogger
 from os import getenv
 from pathlib import Path
 from shutil import copyfile, move, rmtree
-from tarfile import open as tar_open
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -18,27 +17,10 @@ from fasteners.process_lock import InterProcessLock
 from FTB.ProgramConfiguration import ProgramConfiguration
 from psutil import disk_usage
 
-# check if boto is available for S3FuzzManager reporter
-try:
-    from boto3 import resource
-    from botocore.exceptions import ClientError
-
-    _boto_import_error = None  # pylint: disable=invalid-name
-    getLogger("botocore").setLevel(WARNING)
-    getLogger("boto3").setLevel(WARNING)
-    getLogger("s3transfer").setLevel(WARNING)
-except ImportError as err:
-    _boto_import_error = err  # pylint: disable=invalid-name
-
 from .report import Report
 from .utils import grz_tmp
 
-__all__ = (
-    "FilesystemReporter",
-    "FuzzManagerReporter",
-    "Quality",
-    "S3FuzzManagerReporter",
-)
+__all__ = ("FilesystemReporter", "FuzzManagerReporter", "Quality")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -191,7 +173,7 @@ class FuzzManagerReporter(Reporter):
         """
         if not FuzzManagerReporter.FM_CONFIG.is_file():
             raise OSError(f"Missing: {FuzzManagerReporter.FM_CONFIG}")
-        if not Path("".join([bin_file, ".fuzzmanagerconf"])).is_file():
+        if not Path(f"{bin_file}.fuzzmanagerconf").is_file():
             raise OSError(f"Missing: {bin_file}.fuzzmanagerconf")
         ProgramConfiguration.fromBinary(bin_file)
 
@@ -221,7 +203,6 @@ class FuzzManagerReporter(Reporter):
             LOG.info("Ignored rr trace")
             self.add_extra_metadata("rr-trace", "ignored")
             # remove traces so they are not uploaded to FM (because they are huge)
-            # use S3FuzzManagerReporter instead
             rmtree(trace_path)
 
     @staticmethod
@@ -315,66 +296,3 @@ class FuzzManagerReporter(Reporter):
         LOG.info("Logged %d (%s)", new_entry["id"], self.quality.name)
 
         return new_entry["id"]
-
-
-class S3FuzzManagerReporter(FuzzManagerReporter):
-    @staticmethod
-    def compress_rr_trace(src, dest):
-        # resolve symlink to latest trace available
-        latest_trace = (src / "latest-trace").resolve(strict=True)
-        assert latest_trace.is_dir(), "missing latest-trace directory"
-        rr_arc = dest / "rr.tar.bz2"
-        LOG.debug("creating %r from %r", rr_arc, latest_trace)
-        with tar_open(rr_arc, "w:bz2") as arc_fp:
-            arc_fp.add(str(latest_trace), arcname=latest_trace.name)
-        # remove path containing uncompressed traces
-        rmtree(src)
-        return rr_arc
-
-    def _pre_submit(self, report):
-        self._process_rr_trace(report)
-
-    def _process_rr_trace(self, report):
-        trace_path = report.path / "rr-traces"
-        if not trace_path.is_dir():
-            return None
-        s3_bucket = getenv("GRZ_S3_BUCKET")
-        assert s3_bucket is not None
-        # check for existing minor hash in S3
-        s3_res = resource("s3")
-        s3_key = f"rr-{report.minor}.tar.bz2"
-        s3_url = f"http://{s3_bucket}.s3.amazonaws.com/{s3_key}"
-        try:
-            # HEAD, doesn't fetch the whole object
-            s3_res.Object(s3_bucket, s3_key).load()
-        except ClientError as exc:
-            if exc.response["Error"]["Code"] == "404":
-                # The object does not exist.
-                pass
-            else:  # pragma: no cover
-                # Something else has gone wrong.
-                raise
-        else:
-            # The object already exists.
-            LOG.info("rr trace exists at %r", s3_url)
-            self.add_extra_metadata("rr-trace", s3_url)
-            # remove traces so they are not reported to FM
-            rmtree(trace_path)
-            return s3_url
-
-        # Upload to S3
-        rr_arc = self.compress_rr_trace(trace_path, report.path)
-        s3_res.meta.client.upload_file(
-            str(rr_arc), s3_bucket, s3_key, ExtraArgs={"ACL": "public-read"}
-        )
-        rr_arc.unlink()
-        self.add_extra_metadata("rr-trace", s3_url)
-        return s3_url
-
-    @staticmethod
-    def sanity_check(bin_file):
-        if getenv("GRZ_S3_BUCKET") is None:
-            raise OSError("'GRZ_S3_BUCKET' is not set in environment")
-        if _boto_import_error is not None:
-            raise _boto_import_error  # pylint: disable=raising-bad-type
-        FuzzManagerReporter.sanity_check(bin_file)

@@ -3,19 +3,12 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly Reporter"""
 # pylint: disable=protected-access
-from sys import platform
-from tarfile import open as tar_open
 
 from FTB.ProgramConfiguration import ProgramConfiguration
-from pytest import importorskip, mark, raises
+from pytest import mark, raises
 
 from .report import Report
-from .reporter import (
-    FilesystemReporter,
-    FuzzManagerReporter,
-    Reporter,
-    S3FuzzManagerReporter,
-)
+from .reporter import FilesystemReporter, FuzzManagerReporter, Reporter
 from .storage import TestCase
 
 
@@ -227,96 +220,3 @@ def test_fuzzmanager_reporter_03(mocker, tmp_path):
     # ignored - Valgrind OOM
     log_file.write_bytes(b"VEX temporary storage exhausted.")
     assert FuzzManagerReporter._ignored(report)
-
-
-def test_s3fuzzmanager_reporter_01(mocker, tmp_path):
-    """test S3FuzzManagerReporter.sanity_check()"""
-    mocker.patch("grizzly.common.reporter.FuzzManagerReporter", autospec=True)
-    fake_bin = tmp_path / "bin"
-    # test GRZ_S3_BUCKET missing
-    with raises(EnvironmentError, match="'GRZ_S3_BUCKET' is not set in environment"):
-        S3FuzzManagerReporter.sanity_check(str(fake_bin))
-    # test GRZ_S3_BUCKET set
-    importorskip("boto3")
-    mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="test")
-    S3FuzzManagerReporter.sanity_check(str(fake_bin))
-
-
-def test_s3fuzzmanager_reporter_02(mocker, tmp_path):
-    """test S3FuzzManagerReporter._pre_submit()"""
-    importorskip("boto3")
-    importorskip("botocore")
-    mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="test")
-    fake_resource = mocker.patch("grizzly.common.reporter.resource", autospec=True)
-
-    fake_report = mocker.Mock(spec_set=Report)
-    fake_report.path = tmp_path / "no-path"
-    reporter = S3FuzzManagerReporter("fake_bin")
-    # test will missing rr-trace
-    assert reporter._pre_submit(fake_report) is None
-    assert not reporter._extra_metadata
-
-    # test will exiting rr-trace
-    trace_dir = tmp_path / "rr-traces" / "latest-trace"
-    trace_dir.mkdir(parents=True)
-    fake_report.minor = "1234abcd"
-    fake_report.path = tmp_path
-    reporter._pre_submit(fake_report)
-    assert not any(tmp_path.iterdir())
-    assert "rr-trace" in reporter._extra_metadata
-    assert fake_report.minor in reporter._extra_metadata["rr-trace"]
-    fake_resource.return_value.meta.client.upload_file.assert_not_called()
-
-    # test with new rr-trace
-    reporter._extra_metadata.clear()
-    trace_dir.mkdir(parents=True)
-    (trace_dir / "trace-file").touch()
-
-    class FakeClientError(Exception):
-        def __init__(self, message, response):
-            super().__init__(message)
-            self.response = response
-
-    mocker.patch("grizzly.common.reporter.ClientError", new=FakeClientError)
-    fake_resource.return_value.Object.side_effect = FakeClientError(
-        "test", {"Error": {"Code": "404"}}
-    )
-    reporter._pre_submit(fake_report)
-    assert not any(tmp_path.iterdir())
-    assert "rr-trace" in reporter._extra_metadata
-    assert fake_report.minor in reporter._extra_metadata["rr-trace"]
-    assert fake_resource.return_value.meta.client.upload_file.call_count == 1
-
-
-@mark.skipif(not platform.startswith("linux"), reason="RR only supported on Linux")
-def test_s3fuzzmanager_reporter_03(tmp_path):
-    """test S3FuzzManagerReporter.compress_rr_trace()"""
-    # create fake trace
-    src = tmp_path / "rr-traces" / "echo-0"
-    src.mkdir(parents=True)
-    (src / "fail_file").touch()
-    src = tmp_path / "rr-traces" / "echo-1"
-    src.mkdir()
-    (src / "cloned_data_5799_1").touch()
-    (src / "data").write_bytes(b"test_data")
-    (src / "events").write_bytes(b"foo")
-    (src / "mmap").write_bytes(b"bar")
-    (src / "tasks").write_bytes(b"foo")
-    (src / "version").write_bytes(b"123")
-    (tmp_path / "rr-traces" / "latest-trace").symlink_to(
-        str(src), target_is_directory=True
-    )
-    src = tmp_path / "rr-traces"
-    dest = tmp_path / "dest"
-    dest.mkdir()
-    S3FuzzManagerReporter.compress_rr_trace(src, dest)
-    assert not src.is_dir()
-    assert (dest / "rr.tar.bz2").is_file()
-    with tar_open(str(dest / "rr.tar.bz2"), "r:bz2") as arc_fp:
-        entries = arc_fp.getnames()
-    assert "echo-1" in entries
-    assert "echo-0" not in entries
-    assert "latest-trace" not in entries
-
-
-# TODO: fill out tests for FuzzManagerReporter and S3FuzzManagerReporter

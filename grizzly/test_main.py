@@ -41,7 +41,6 @@ class FakeArgs:
         self.rr = False  # pylint: disable=invalid-name
         self.relaunch = 1000
         self.runtime = 0
-        self.s3_fuzzmanager = False
         self.smoke_test = False
         self.time_limit = None
         self.timeout = None
@@ -119,8 +118,6 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, smoke_test, verbose
         None,
         # FuzzManager Reporter
         "FuzzManager",
-        # S3FuzzManager Reporter
-        "S3FuzzManager",
     ],
 )
 def test_main_02(mocker, reporter):
@@ -143,12 +140,6 @@ def test_main_02(mocker, reporter):
         fake_reporter = mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
         fake_reporter.sanity_check.return_value = True
         args.fuzzmanager = True
-    elif reporter == "S3FuzzManager":
-        fake_reporter = mocker.patch(
-            "grizzly.main.S3FuzzManagerReporter", autospec=True
-        )
-        fake_reporter.sanity_check.return_value = True
-        args.s3_fuzzmanager = True
     assert main(args) == Exit.SUCCESS
     assert fake_target.cleanup.call_count == 1
 

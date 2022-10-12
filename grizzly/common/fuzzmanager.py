@@ -72,7 +72,7 @@ class Bucket:
             None
         """
         if self._sig_filename is not None:
-            rmtree(str(self._sig_filename.parent))
+            rmtree(self._sig_filename.parent)
 
     def iter_crashes(self, quality_filter=None):
         """Fetch all crash IDs for this FuzzManager bucket.
@@ -176,7 +176,7 @@ class Bucket:
                 )
             )
         except:  # noqa pragma: no cover pylint: disable=bare-except
-            rmtree(str(tmpd))
+            rmtree(tmpd)
             raise
 
         self._sig_filename = sig_filename
