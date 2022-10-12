@@ -4,8 +4,6 @@
 """test Grizzly Report"""
 # pylint: disable=protected-access
 
-from pathlib import Path
-
 from FTB.Signatures.CrashInfo import CrashInfo
 from pytest import mark, raises
 
@@ -29,9 +27,9 @@ def test_report_01(tmp_path):
     assert report._target_binary.name == "a.bin"
     assert report.path == tmp_path
     assert report._logs.aux is None
-    assert report._logs.stderr.endswith("log_stderr.txt")
-    assert report._logs.stdout.endswith("log_stdout.txt")
-    assert report.preferred.endswith("log_stderr.txt")
+    assert report._logs.stderr.name == "log_stderr.txt"
+    assert report._logs.stdout.name == "log_stdout.txt"
+    assert report.preferred.name == "log_stderr.txt"
     assert report.stack is None
     assert Report.DEFAULT_MAJOR == report.major
     assert Report.DEFAULT_MINOR == report.minor
@@ -47,10 +45,10 @@ def test_report_02(tmp_path):
     _create_crash_log(tmp_path / "log_asan_blah.txt")
     report = Report(tmp_path, "bin")
     assert report.path == tmp_path
-    assert report._logs.aux.endswith("log_asan_blah.txt")
-    assert report._logs.stderr.endswith("log_stderr.txt")
-    assert report._logs.stdout.endswith("log_stdout.txt")
-    assert report.preferred.endswith("log_asan_blah.txt")
+    assert report._logs.aux.name == "log_asan_blah.txt"
+    assert report._logs.stderr.name == "log_stderr.txt"
+    assert report._logs.stdout.name == "log_stdout.txt"
+    assert report.preferred.name == "log_asan_blah.txt"
     assert report.stack is not None
     assert Report.DEFAULT_MAJOR != report.major
     assert Report.DEFAULT_MINOR != report.minor
@@ -65,25 +63,25 @@ def test_report_03(tmp_path):
     length = tmp_file.stat().st_size
     # no size limit
     with raises(AssertionError):
-        Report.tail(str(tmp_file), 0)
+        Report.tail(tmp_file, 0)
     assert tmp_file.stat().st_size == length
-    Report.tail(str(tmp_file), 3)
+    Report.tail(tmp_file, 3)
     log_data = tmp_file.read_bytes()
     assert log_data.startswith(b"[LOG TAILED]\n")
     assert log_data[13:] == b"FOO"
 
 
 def test_report_04(tmp_path):
-    """test Report.select_logs() uninteresting data"""
+    """test Report._select_logs() uninteresting data"""
     # test with empty path
-    assert Report.select_logs(str(tmp_path)) is None
+    assert Report._select_logs(tmp_path) is None
     # empty file
     (tmp_path / "not_a_log.txt").touch()
-    assert Report.select_logs(str(tmp_path)) is None
+    assert Report._select_logs(tmp_path) is None
 
 
 def test_report_05(tmp_path):
-    """test Report.select_logs()"""
+    """test Report._select_logs()"""
     # small log with nothing interesting
     with (tmp_path / "log_asan.txt.1").open("wb") as log_fp:
         log_fp.write(b"SHORT LOG\n")
@@ -117,14 +115,14 @@ def test_report_05(tmp_path):
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     # should be ignored in favor of "GOOD LOG"
     (tmp_path / "log_ffp_worker_blah.txt").write_bytes(b"worker log")
-    log_map = Report.select_logs(str(tmp_path))
+    log_map = Report._select_logs(tmp_path)
     assert "GOOD LOG" in (tmp_path / log_map.aux).read_text()
     assert "STDERR" in (tmp_path / log_map.stderr).read_text()
     assert "STDOUT" in (tmp_path / log_map.stdout).read_text()
 
 
 def test_report_06(tmp_path):
-    """test minidump with Report.select_logs()"""
+    """test minidump with Report._select_logs()"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     with (tmp_path / "log_minidump_01.txt").open("wb") as log_fp:
@@ -132,14 +130,14 @@ def test_report_06(tmp_path):
         log_fp.write(b"Crash|SIGSEGV|0x0|0\n")
         log_fp.write(b"minidump log\n")
     (tmp_path / "log_ffp_worker_blah.txt").write_bytes(b"worker log")
-    log_map = Report.select_logs(str(tmp_path))
+    log_map = Report._select_logs(tmp_path)
     assert (tmp_path / log_map.stderr).is_file()
     assert (tmp_path / log_map.stdout).is_file()
     assert "minidump log" in (tmp_path / log_map.aux).read_text()
 
 
 def test_report_07(tmp_path):
-    """test selecting preferred DUMP_REQUESTED minidump with Report.select_logs()"""
+    """test selecting preferred DUMP_REQUESTED minidump with Report._select_logs()"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     with (tmp_path / "log_minidump_01.txt").open("wb") as log_fp:
@@ -163,7 +161,7 @@ def test_report_07(tmp_path):
         log_fp.write(b"Crash|DUMP_REQUESTED|0x7f9518665d18|0\n")
         log_fp.write(b"0|0|bar.so|sadf|a.cc:1234|3066|0x0\n")
         log_fp.write(b"0|1|gar.so|fdsa|b.cc:4323|1644|0x12\n")
-    log_map = Report.select_logs(str(tmp_path))
+    log_map = Report._select_logs(tmp_path)
     assert (tmp_path / log_map.stderr).is_file()
     assert (tmp_path / log_map.stdout).is_file()
     assert (
@@ -173,13 +171,13 @@ def test_report_07(tmp_path):
 
 
 def test_report_08(tmp_path):
-    """test selecting worker logs with Report.select_logs()"""
+    """test selecting worker logs with Report._select_logs()"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     (tmp_path / "log_ffp_worker_1.txt").write_bytes(b"worker log")
     # we should only ever see one but if we see multiple we warn, so test that.
     (tmp_path / "log_ffp_worker_2.txt").write_bytes(b"worker log")
-    log_map = Report.select_logs(str(tmp_path))
+    log_map = Report._select_logs(tmp_path)
     assert (tmp_path / log_map.stderr).is_file()
     assert (tmp_path / log_map.stdout).is_file()
     assert "worker log" in (tmp_path / log_map.aux).read_text()
@@ -190,19 +188,19 @@ def test_report_09(tmp_path):
     # NOTE: ordered by selection priority in order to use previously added logs
     # test empty
     (tmp_path / "log_asan.txt.0").touch()
-    assert Report._find_sanitizer([str(x) for x in tmp_path.iterdir()]) is None
+    assert Report._find_sanitizer(list(tmp_path.iterdir())) is None
     # test *San log with data
     (tmp_path / "log_asan.txt.1").write_text("test")
-    selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
+    selected = Report._find_sanitizer(list(tmp_path.iterdir()))
     assert selected is not None
-    assert "test" in Path(selected).read_text()
+    assert "test" in selected.read_text()
     # test UBSan log
     (tmp_path / "log_asan.txt.1").write_text(
         "test.cc:3:5: runtime error: signed integer overflow: ..."
     )
-    selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
+    selected = Report._find_sanitizer(list(tmp_path.iterdir()))
     assert selected is not None
-    assert "runtime error: signed integer overflow" in Path(selected).read_text()
+    assert "runtime error: signed integer overflow" in selected.read_text()
     # test selecting ASan report
     with (tmp_path / "log_asan.txt.2").open("wb") as log_fp:
         # missing stack
@@ -211,9 +209,9 @@ def test_report_09(tmp_path):
         log_fp.write(b"==9482==ERROR: AddressSanitizer: stack-overflow on ...\n")
         for l_no in range(4):
             log_fp.write(b"    #%d blah...\n" % (l_no,))
-    selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
+    selected = Report._find_sanitizer(list(tmp_path.iterdir()))
     assert selected is not None
-    assert "AddressSanitizer: stack-overflow" in Path(selected).read_text()
+    assert "AddressSanitizer: stack-overflow" in selected.read_text()
     # test selecting prioritized
     with (tmp_path / "log_asan.txt.4").open("wb") as log_fp:
         log_fp.write(
@@ -226,9 +224,9 @@ def test_report_09(tmp_path):
         log_fp.write(b"missing trace...\n")
     with (tmp_path / "log_asan.txt.6").open("wb") as log_fp:
         log_fp.write(b"ERROR: Failed to mmap\n")
-    selected = Report._find_sanitizer([str(x) for x in tmp_path.iterdir()])
+    selected = Report._find_sanitizer(list(tmp_path.iterdir()))
     assert selected is not None
-    assert "heap-use-after-free" in Path(selected).read_text()
+    assert "heap-use-after-free" in selected.read_text()
     # test selecting TSan reports
     tsan_path = tmp_path / "tsan"
     tsan_path.mkdir()
@@ -242,9 +240,9 @@ def test_report_09(tmp_path):
         "  Write of size 8 at 0x7f0ca2fc3400 by thread T51:\n"
         "    #0 memcpy /sanitizer_common_interceptors.inc:810:5 (lib+0x6656e)\n"
     )
-    selected = Report._find_sanitizer([str(x) for x in tsan_path.iterdir()])
+    selected = Report._find_sanitizer(list(tsan_path.iterdir()))
     assert selected is not None
-    assert selected == str(tsan_report)
+    assert selected == tsan_report
 
 
 def test_report_10(tmp_path):
@@ -257,9 +255,9 @@ def test_report_10(tmp_path):
     report = Report(tmp_path, "bin", size_limit=size_limit)
     assert report.path == tmp_path
     assert report._logs.aux is None
-    assert report._logs.stderr.endswith("log_stderr.txt")
-    assert report._logs.stdout.endswith("log_stdout.txt")
-    assert report.preferred.endswith("log_stderr.txt")
+    assert report._logs.stderr.name == "log_stderr.txt"
+    assert report._logs.stdout.name == "log_stdout.txt"
+    assert report.preferred.name == "log_stderr.txt"
     assert report.stack is None
     size_limit += len("[LOG TAILED]\n")
     assert (report.path / report._logs.stderr).stat().st_size == size_limit
@@ -270,11 +268,11 @@ def test_report_10(tmp_path):
 
 
 def test_report_11(tmp_path):
-    """test selecting Valgrind logs with Report.select_logs()"""
+    """test selecting Valgrind logs with Report._select_logs()"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     (tmp_path / "log_valgrind.txt").write_bytes(b"valgrind log")
-    log_map = Report.select_logs(str(tmp_path))
+    log_map = Report._select_logs(tmp_path)
     assert (tmp_path / log_map.stderr).is_file()
     assert (tmp_path / log_map.stdout).is_file()
     assert "valgrind log" in (tmp_path / log_map.aux).read_text()

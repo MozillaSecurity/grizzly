@@ -4,7 +4,7 @@
 from collections import namedtuple
 from hashlib import sha1
 from logging import getLogger
-from os import SEEK_END, scandir, stat, unlink
+from os import SEEK_END
 from pathlib import Path
 from platform import machine, system
 from re import DOTALL, VERBOSE
@@ -50,24 +50,25 @@ class Report:
     )
 
     def __init__(self, log_path, target_binary, is_hang=False, size_limit=MAX_LOG_SIZE):
+        assert isinstance(log_path, Path)
         assert isinstance(target_binary, str)
         self._crash_info = None
-        self._logs = self.select_logs(log_path)
+        self._logs = self._select_logs(log_path)
         assert self._logs is not None
         self._signature = None
         self._target_binary = Path(target_binary)
         self.is_hang = is_hang
-        self.path = Path(log_path)
+        self.path = log_path
         # tail files in log_path if needed
         if size_limit < 1:
             LOG.warning("No limit set on report log size!")
         else:
-            for log in scandir(path=log_path):
+            for log in log_path.iterdir():
                 if log.is_file() and log.stat().st_size > size_limit:
-                    Report.tail(log.path, size_limit)
+                    Report.tail(log, size_limit)
         # look through logs one by one until we find a stack
         for log_file in (x for x in self._logs if x is not None):
-            with open(log_file, "rb") as log_fp:
+            with log_file.open("rb") as log_fp:
                 stack = Stack.from_text(log_fp.read().decode("utf-8", errors="ignore"))
             if stack.frames:
                 # limit the hash calculations to the first n frames if a hang
@@ -104,7 +105,7 @@ class Report:
             None
         """
         if self.path and self.path.is_dir():
-            rmtree(str(self.path))
+            rmtree(self.path)
         self.path = None
 
     @property
@@ -216,17 +217,17 @@ class Report:
         """Search through list of log files for a ffpuppet worker log.
 
         Args:
-            logs (list(str)): List of log files to search.
+            logs (list(Path)): List of log files to search.
 
         Returns:
-            str: The full file path if a match is found otherwise None.
+            Path: Log file if a match is found otherwise None.
         """
         found = None
-        for fname in (x for x in logs if "ffp_worker" in x):
+        for log_file in (x for x in logs if "ffp_worker" in x.name):
             if found is not None:
                 # we only expect one log here...
-                LOG.warning("overwriting previously selected %r", found)
-            found = fname
+                LOG.warning("overwriting previously selected '%s'", log_file)
+            found = log_file
         return found
 
     @staticmethod
@@ -234,23 +235,23 @@ class Report:
         """Search through list of log files for a minidump log.
 
         Args:
-            logs (list(str)): List of log files to search.
+            logs (list(Path)): List of log files to search.
 
         Returns:
-            str: The full file path if a match is found otherwise None.
+            Path: Log file if a match is found otherwise None.
         """
         re_dump_req = re_compile(
             r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump"
         )
-        for fname in (x for x in logs if "minidump" in x):
-            with open(fname) as log_fp:
+        for log_file in (x for x in logs if "minidump" in x.name):
+            with log_file.open() as log_fp:
                 data = log_fp.read(65536)
                 # this will select log that contains "Crash|SIGSEGV|" or
                 # the desired "DUMP_REQUESTED" log
                 # TODO: review this it may be too strict
                 # see mozilla-central/source/accessible/ipc/DocAccessibleParent.cpp#452
                 if "Crash|DUMP_REQUESTED|" not in data or re_dump_req.search(data):
-                    return fname
+                    return log_file
         return None
 
     @staticmethod
@@ -258,10 +259,10 @@ class Report:
         """Search through list of log files for a sanitizer (ASan, UBSan, etc...) log.
 
         Args:
-            logs (list(str)): List of log files to search.
+            logs (list(Path)): List of log files to search.
 
         Returns:
-            str: The full file path if a match is found otherwise None.
+            Path: Log file if a match is found otherwise None.
         """
         # pattern to identify the ASan crash triggered when the parent process goes away
         # TODO: this may no longer be required
@@ -286,8 +287,8 @@ class Report:
         )
         fallback = None
         found = None
-        for fname in (x for x in logs if "asan" in x):
-            with open(fname) as log_fp:
+        for log_file in (x for x in logs if "asan" in x.name):
+            with log_file.open() as log_fp:
                 data = log_fp.read(65536)
             # look for interesting crash info in the log
             if "==ERROR:" in data or "WARNING:" in data:
@@ -296,17 +297,17 @@ class Report:
                     continue
                 # make sure there is something that looks like a stack frame
                 if "#0 " in data:
-                    found = fname
+                    found = log_file
                     if any(x in data for x in prioritize_tokens):
                         # this is the likely cause of the crash
                         break
             if found is None:
                 # UBSan error (non-ASan builds)
                 if ": runtime error: " in data:
-                    found = fname
+                    found = log_file
                 # catch all (choose the one with info for now)
                 elif data:
-                    fallback = fname
+                    fallback = log_file
         return found or fallback
 
     @staticmethod
@@ -314,14 +315,14 @@ class Report:
         """Search through list of log files for a Valgrind worker log.
 
         Args:
-            logs (list(str)): List of log files to search.
+            logs (list(Path)): List of log files to search.
 
         Returns:
-            str: The full file path if a match is found otherwise None.
+            Path: Log file if a match is found otherwise None.
         """
-        for fname in (x for x in logs if "valgrind" in x):
-            if stat(fname).st_size:
-                return fname
+        for log_file in (x for x in logs if "valgrind" in x.name):
+            if log_file.stat().st_size:
+                return log_file
         return None
 
     @property
@@ -367,19 +368,19 @@ class Report:
         return self._logs.aux or self._logs.stderr
 
     @classmethod
-    def select_logs(cls, path):
+    def _select_logs(cls, path):
         """Scan path for file containing stderr, stdout and other (aux)
         data and build a LogMap.
 
         Args:
-            path (str): Path to scan for log files.
+            path (Path): Location to scan for log files.
 
         Returns:
             LogMap: A LogMap pointing to log files or None if path is empty.
         """
-        files = (x for x in scandir(path=path) if x.is_file())
+        files = (x for x in path.iterdir() if x.is_file())
         # order by date hopefully the oldest log is the cause of the issue
-        to_scan = [x.path for x in sorted(files, key=lambda x: x.stat().st_mtime)]
+        to_scan = list(sorted(files, key=lambda x: x.stat().st_mtime))
         if not to_scan:
             LOG.warning("No files found in %r", path)
             return None
@@ -394,11 +395,11 @@ class Report:
         # look for stderr and stdout log files
         log_err = None
         log_out = None
-        for fname in to_scan:
-            if "stderr" in fname:
-                log_err = fname
-            elif "stdout" in fname:
-                log_out = fname
+        for log_files in to_scan:
+            if "stderr" in log_files.name:
+                log_err = log_files
+            elif "stdout" in log_files.name:
+                log_out = log_files
         result = LogMap(log_aux, log_err, log_out)
         return result if any(result) else None
 
@@ -407,14 +408,14 @@ class Report:
         """Tail the given file. WARNING: This is destructive!
 
         Args:
-            in_file (str): Path to file to work with.
+            in_file (Path): Path to file to work with.
             size_limit (int): Maximum size of file after tail operation.
 
         Returns:
             None
         """
         assert size_limit > 0
-        with open(in_file, "rb") as in_fp:
+        with in_file.open("rb") as in_fp:
             in_fp.seek(0, SEEK_END)
             end = in_fp.tell()
             if end <= size_limit:
@@ -425,5 +426,5 @@ class Report:
             with open(out_fd, "wb") as out_fp:
                 out_fp.write(b"[LOG TAILED]\n")
                 copyfileobj(in_fp, out_fp, 0x10000)  # 64KB chunks
-        unlink(in_file)
+        in_file.unlink()
         move(out_file, in_file)
