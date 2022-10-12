@@ -275,9 +275,8 @@ class CommonArgs:
         if args.timeout is not None and args.timeout < 1:
             self.parser.error("--timeout must be >= 1")
 
-        if "tool" not in self._sanity_skip:
-            if args.tool is not None and not args.fuzzmanager:
-                self.parser.error("--tool can only be given with --fuzzmanager")
+        if "tool" not in self._sanity_skip and args.tool and not args.fuzzmanager:
+            self.parser.error("--tool can only be given with --fuzzmanager")
 
         if args.xvfb:  # pragma: no cover
             args.headless = "xvfb"
@@ -358,23 +357,12 @@ class GrizzlyArgs(CommonArgs):
             " The first time a result is seen it will always be submitted."
             " (default: %(default)s) - Use 0 for 'no limit'",
         )
-        self.reporter_grp.add_argument(
-            "--s3-fuzzmanager",
-            action="store_true",
-            help="Report large attachments (if any) to S3 and then the crash &"
-            " S3 link to FuzzManager.",
-        )
 
     def sanity_check(self, args):
         super().sanity_check(args)
 
         if args.collect < 1:
             self.parser.error("--collect must be greater than 0")
-
-        if args.fuzzmanager and args.s3_fuzzmanager:
-            self.parser.error(
-                "--fuzzmanager and --s3-fuzzmanager are mutually exclusive"
-            )
 
         if args.input and not args.input.exists():
             self.parser.error(f"'{args.input}' does not exist")
@@ -388,7 +376,5 @@ class GrizzlyArgs(CommonArgs):
         if args.runtime < 0:
             self.parser.error("--runtime must be >= 0")
 
-        if args.tool is not None and not (args.fuzzmanager or args.s3_fuzzmanager):
-            self.parser.error(
-                "--tool can only be given with --fuzzmanager/--s3-fuzzmanager"
-            )
+        if args.tool is not None and not args.fuzzmanager:
+            self.parser.error("--tool can only be given with --fuzzmanager")

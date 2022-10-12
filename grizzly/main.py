@@ -8,11 +8,7 @@ from sapphire import Sapphire
 
 from .adapter import Adapter
 from .common.plugins import load as load_plugin
-from .common.reporter import (
-    FilesystemReporter,
-    FuzzManagerReporter,
-    S3FuzzManagerReporter,
-)
+from .common.reporter import FilesystemReporter, FuzzManagerReporter
 from .common.utils import TIMEOUT_DELAY, Exit, configure_logging
 from .session import Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
@@ -29,8 +25,6 @@ def main(args):
     LOG.info("Starting Grizzly (%d)", getpid())
     if args.fuzzmanager:
         FuzzManagerReporter.sanity_check(args.binary)
-    elif args.s3_fuzzmanager:
-        S3FuzzManagerReporter.sanity_check(args.binary)
 
     if args.headless:
         LOG.info("Running browser headless (%s)", args.headless)
@@ -96,14 +90,9 @@ def main(args):
         if args.fuzzmanager:
             LOG.info("Results will be reported via FuzzManager")
             reporter = FuzzManagerReporter(tool=args.tool)
-        elif args.s3_fuzzmanager:
-            LOG.info(
-                "Results will be reported via FuzzManager w/ large attachments in S3"
-            )
-            reporter = S3FuzzManagerReporter(tool=args.tool)
         else:
             reporter = FilesystemReporter(args.logs / "results")
-            LOG.info("Results will be stored in %r", str(reporter.report_path))
+            LOG.info("Results will be stored in '%s'", reporter.report_path)
         reporter.display_logs = args.smoke_test or reporter.display_logs
 
         # make sure an iteration limit is set if smoke_test is True

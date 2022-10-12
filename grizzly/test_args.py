@@ -155,11 +155,6 @@ def test_grizzly_args_03(capsys, mocker):
     [
         # test invalid collect value
         (["--collect", "0"], "error: --collect must be greater than 0"),
-        # test enabling both fuzzmanager and s3-fuzzmanager reporters
-        (
-            ["--fuzzmanager", "--s3-fuzzmanager"],
-            "error: --fuzzmanager and --s3-fuzzmanager are mutually exclusive",
-        ),
         # test missing input
         (["--input", "missing"], "error: 'missing' does not exist"),
         # test invalid limit value
@@ -169,10 +164,7 @@ def test_grizzly_args_03(capsys, mocker):
         # test runtime limit value
         (["--runtime", "-1"], "error: --runtime must be >= 0"),
         # test tool
-        (
-            ["--tool", "x"],
-            "error: --tool can only be given with --fuzzmanager/--s3-fuzzmanager",
-        ),
+        (["--tool", "x"], "error: --tool can only be given with --fuzzmanager"),
     ],
 )
 def test_grizzly_args_04(capsys, mocker, tmp_path, args, msg):
