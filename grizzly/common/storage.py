@@ -381,7 +381,7 @@ class TestCase:
         Returns:
             TestCase: A TestCase.
         """
-        path = Path(path)
+        assert isinstance(path, Path)
         if path.is_dir():
             # load using test_info.json
             try:

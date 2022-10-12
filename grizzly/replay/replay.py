@@ -381,7 +381,7 @@ class ReplayManager:
                     log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
                     self.target.save_logs(log_path)
                     report = Report(
-                        log_path, self.target.binary, is_hang=run_result.timeout
+                        Path(log_path), self.target.binary, is_hang=run_result.timeout
                     )
                     # check signatures
                     if run_result.timeout:
