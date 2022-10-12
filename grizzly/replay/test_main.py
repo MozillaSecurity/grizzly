@@ -62,7 +62,7 @@ def test_main_01(mocker, tmp_path):
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
-        input=str(tmp_path / "testcase"),
+        input=tmp_path / "testcase",
         launch_attempts=3,
         logs=log_path,
         min_crashes=2,
@@ -72,7 +72,7 @@ def test_main_01(mocker, tmp_path):
         relaunch=1,
         repeat=4,
         rr=False,
-        sig=str(tmp_path / "sig.json"),
+        sig=tmp_path / "sig.json",
         test_index=None,
         time_limit=10,
         timeout=None,
@@ -118,7 +118,7 @@ def test_main_02(mocker, tmp_path):
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
-        input=str(tmp_path / "test.html"),
+        input=tmp_path / "test.html",
         launch_attempts=3,
         min_crashes=2,
         no_harness=True,
@@ -304,7 +304,7 @@ def test_main_05(mocker, tmp_path):
     with TestCase("test.html", None, "test-adapter") as src:
         src.add_from_file(str(entry_point))
         src.dump(str(input_path), include_details=True)
-    args.input = str(input_path)
+    args.input = input_path
     with AssetManager(base_path=str(tmp_path)) as assets:
         target.assets = assets
         assert ReplayManager.main(args) == Exit.SUCCESS
@@ -367,7 +367,7 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         idle_delay=0,
         idle_threshold=0,
         ignore=["timeout"],
-        input=str(replay_path),
+        input=replay_path,
         launch_attempts=3,
         min_crashes=2,
         no_harness=True,
@@ -427,7 +427,7 @@ def test_main_07(
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
-        input=str(tmp_path / "test.html"),
+        input=tmp_path / "test.html",
         launch_attempts=3,
         min_crashes=2,
         no_harness=no_harness,
@@ -481,7 +481,7 @@ def test_main_08(mocker, tmp_path):
         idle_delay=0,
         idle_threshold=0,
         ignore=[],
-        input=str(tmp_path / "testcase"),
+        input=tmp_path / "testcase",
         launch_attempts=1,
         logs=None,
         min_crashes=1,

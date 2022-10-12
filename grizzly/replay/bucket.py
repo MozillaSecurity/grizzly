@@ -34,7 +34,7 @@ def bucket_main(args, tool_main):
 
     with Bucket(args.input) as bucket:
         if args.sig is None:
-            args.sig = str(bucket.signature_path())
+            args.sig = bucket.signature_path()
 
         for crash in bucket.iter_crashes(args.quality):
             args.input = crash.crash_id

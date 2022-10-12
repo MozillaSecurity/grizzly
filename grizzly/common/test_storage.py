@@ -300,7 +300,7 @@ def test_testcase_11(tmp_path):
     """test TestCase.load() - missing file and empty directory"""
     # missing file
     with raises(TestCaseLoadFailure, match="Invalid TestCase path"):
-        TestCase.load("missing")
+        TestCase.load(tmp_path / "missing")
     # empty path
     assert not TestCase.load(tmp_path, adjacent=True)
 

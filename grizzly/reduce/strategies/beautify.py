@@ -277,7 +277,7 @@ class _BeautifyStrategy(Strategy, ABC):
                 lith_tc.dump(file)
                 continue
 
-            yield TestCase.load(str(self._testcase_root), True)
+            yield TestCase.load(self._testcase_root, True)
 
             assert self._current_feedback is not None, "No feedback for last iteration"
             if self._current_feedback:

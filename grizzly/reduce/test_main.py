@@ -71,7 +71,7 @@ def test_args_04(tmp_path):
 
 
 @mark.parametrize(
-    "patch_func, side_effect, return_value, kwargs, exit_code",
+    "patch_func, side_effect, return_value, kwargs, exit_code, use_sig",
     [
         (
             "grizzly.reduce.core.ReduceManager.run",
@@ -79,6 +79,7 @@ def test_args_04(tmp_path):
             None,
             {},
             Exit.ERROR,
+            False,
         ),
         (
             "grizzly.reduce.core.ReduceManager.run",
@@ -86,14 +87,23 @@ def test_args_04(tmp_path):
             None,
             {},
             Exit.ERROR,
+            False,
         ),
-        ("grizzly.reduce.core.load_plugin", KeyboardInterrupt, None, {}, Exit.ERROR),
+        (
+            "grizzly.reduce.core.load_plugin",
+            KeyboardInterrupt,
+            None,
+            {},
+            Exit.ERROR,
+            True,
+        ),
         (
             "grizzly.reduce.core.load_plugin",
             GrizzlyReduceBaseException(""),
             None,
             {},
             Exit.ERROR,
+            False,
         ),
         (
             "grizzly.reduce.core.ReplayManager.load_testcases",
@@ -101,22 +111,40 @@ def test_args_04(tmp_path):
             None,
             {},
             Exit.ERROR,
+            False,
         ),
-        ("grizzly.reduce.core.ReplayManager.load_testcases", None, [], {}, Exit.ERROR),
+        (
+            "grizzly.reduce.core.ReplayManager.load_testcases",
+            None,
+            [],
+            {},
+            Exit.ERROR,
+            False,
+        ),
         (
             "grizzly.reduce.core.ReplayManager.load_testcases",
             None,
             ([Mock(hang=False), Mock(hang=False)], Mock(spec_set=AssetManager), {}),
             {"no_harness": True},
             Exit.ARGS,
+            False,
         ),
     ],
 )
-def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, exit_code):
+def test_main_exit(
+    mocker, tmp_path, patch_func, side_effect, return_value, kwargs, exit_code, use_sig
+):
     """test ReduceManager.main() failure cases"""
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
+
+    if use_sig:
+        sig = tmp_path / "fake.sig"
+        sig.write_text("{}")
+    else:
+        sig = None
+
     # setup args
     args = mocker.Mock(
         ignore=["fake"],
@@ -124,7 +152,7 @@ def test_main_exit(mocker, patch_func, side_effect, return_value, kwargs, exit_c
         min_crashes=1,
         relaunch=1,
         repeat=1,
-        sig=None,
+        sig=sig,
         **kwargs
     )
 

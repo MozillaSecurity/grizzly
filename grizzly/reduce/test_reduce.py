@@ -268,7 +268,7 @@ def test_analysis(
                 log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir(exist_ok=True)
                 _fake_save_logs_foo(log_path)
-                report = Report(str(log_path), "bin")
+                report = Report(log_path, "bin")
                 results.append(ReplayResult(report, [["test.html"]], [], True))
         return results
 
@@ -521,7 +521,7 @@ def test_repro(
                     _fake_save_logs_foo(log_path)
                 else:
                     _fake_save_logs_bar(log_path)
-                report = Report(str(log_path), "bin")
+                report = Report(log_path, "bin")
                 return [ReplayResult(report, [["test.html"]], [], expected)]
         return []
 
@@ -591,14 +591,14 @@ def test_report_01(mocker, tmp_path):
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
-            report = Report(str(log_path), "bin")
+            report = Report(log_path, "bin")
             return [ReplayResult(report, [["test.html"]], [], True)]
         return []
 
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").touch()
-    testcases = TestCase.load(str(tmp_path / "test.html"))
+    testcases = TestCase.load(tmp_path / "test.html")
     assert testcases
     log_path = tmp_path / "logs"
 
@@ -609,7 +609,7 @@ def test_report_01(mocker, tmp_path):
         for count_ in range(1, 61):
             LOG.debug("fake_iter() %d", count_)
             (tmp_path / "test.html").write_text(str(count_))
-            testcases = TestCase.load(str(tmp_path / "test.html"))
+            testcases = TestCase.load(tmp_path / "test.html")
             assert testcases
             yield testcases
 
@@ -662,14 +662,14 @@ def test_report_02(mocker, tmp_path):
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
-            report = Report(str(log_path), "bin")
+            report = Report(log_path, "bin")
             return [ReplayResult(report, [["test.html"]], [], True)]
         return []
 
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").touch()
-    testcases = TestCase.load(str(tmp_path / "test.html"))
+    testcases = TestCase.load(tmp_path / "test.html")
     assert testcases
     log_path = tmp_path / "logs"
 
@@ -680,7 +680,7 @@ def test_report_02(mocker, tmp_path):
         for count_ in range(1, 31):
             LOG.debug("fake_iter() %d", count_)
             (tmp_path / "test.html").write_text(str(count_))
-            testcases = TestCase.load(str(tmp_path / "test.html"))
+            testcases = TestCase.load(tmp_path / "test.html")
             assert testcases
             yield testcases
         raise KeyboardInterrupt()
@@ -734,14 +734,14 @@ def test_quality_update(mocker, tmp_path):
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
-            report = Report(str(log_path), "bin")
+            report = Report(log_path, "bin")
             return [ReplayResult(report, [["test.html"]], [], True)]
         return []
 
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").write_text("123\n")
-    testcases = TestCase.load(str(tmp_path / "test.html"))
+    testcases = TestCase.load(tmp_path / "test.html")
     assert testcases
     log_path = tmp_path / "logs"
 
@@ -797,14 +797,14 @@ def test_include_assets_and_environ(mocker, tmp_path):
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
-            report = Report(str(log_path), "bin")
+            report = Report(log_path, "bin")
             return [ReplayResult(report, [["test.html"]], [], True)]
         return []
 
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").write_text("123\n")
-    testcases = TestCase.load(str(tmp_path / "test.html"))
+    testcases = TestCase.load(tmp_path / "test.html")
     assert testcases
     log_path = tmp_path / "logs"
 
@@ -934,7 +934,7 @@ def test_timeout_update(
         log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
-        report = Report(str(log_path), "bin")
+        report = Report(log_path, "bin")
         return [ReplayResult(report, [["test.html"]], durations, interesting)]
 
     replayer.run.side_effect = replay_run

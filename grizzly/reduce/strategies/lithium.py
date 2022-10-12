@@ -141,7 +141,7 @@ class _LithiumStrategy(Strategy, ABC):
 
             for reduction in self._current_reducer:
                 reduction.dump()
-                testcases = TestCase.load(str(self._testcase_root), True)
+                testcases = TestCase.load(self._testcase_root, True)
                 LOG.info("[%s] %s", self.name, self._current_reducer.description)
                 yield testcases
                 if self._current_feedback:
@@ -149,7 +149,7 @@ class _LithiumStrategy(Strategy, ABC):
                 else:
                     self._tried.add(self._calculate_testcase_hash())
                 if self._current_feedback and self._current_served is not None:
-                    testcases = TestCase.load(str(self._testcase_root), True)
+                    testcases = TestCase.load(self._testcase_root, True)
                     try:
                         self.purge_unserved(testcases, self._current_served)
                     finally:
@@ -173,7 +173,7 @@ class _LithiumStrategy(Strategy, ABC):
             # purging unserved files enabled us to exit early from the loop.
             # need to yield once more to set this trimmed version to the current best
             # in ReduceManager
-            testcases = TestCase.load(str(self._testcase_root), True)
+            testcases = TestCase.load(self._testcase_root, True)
             LOG.info("[%s] final iteration triggered by purge_optional", self.name)
             yield testcases
             assert self._current_feedback, "Purging unserved files broke the testcase."

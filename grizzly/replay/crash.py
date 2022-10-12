@@ -40,14 +40,14 @@ def modify_args(args, crash, bucket):
         args (argparse.Namespace): Modified arguments.
     """
     args.original_crash_id = args.input
-    args.input = str(crash.testcase_path())
+    args.input = crash.testcase_path()
     if args.tool is None:
         LOG.info("Setting default --tool=%s from CrashEntry", crash.tool)
         args.tool = crash.tool
 
     # load signature if needed
     if bucket is not None:
-        args.sig = str(bucket.signature_path())
+        args.sig = bucket.signature_path()
 
     return args
 
