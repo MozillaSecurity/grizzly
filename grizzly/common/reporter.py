@@ -107,11 +107,10 @@ class Reporter(metaclass=ABCMeta):
         # output report contents to console
         if self.display_logs:
             if not report.is_hang:
-                with open(report.preferred, "rb") as log_fp:
-                    LOG.info(
-                        "=== BEGIN REPORT ===\n%s",
-                        log_fp.read().decode("utf-8", errors="ignore"),
-                    )
+                LOG.info(
+                    "=== BEGIN REPORT ===\n%s",
+                    report.preferred.read_text("utf-8", errors="ignore"),
+                )
             else:
                 LOG.info("=== BEGIN REPORT ===\nBrowser hang detected")
             LOG.info("=== END REPORT ===")
@@ -154,8 +153,8 @@ class FilesystemReporter(Reporter):
         # move logs into bucket directory
         log_path = dest / f"{report.prefix}_logs"
         if log_path.is_dir():
-            LOG.warning("Report log path exists %r", str(log_path))
-        move(str(report.path), str(log_path))
+            LOG.warning("Report log path exists '%s'", log_path)
+        move(report.path, log_path)
         # avoid filling the disk
         free_space = disk_usage(str(log_path)).free
         if free_space < self.min_space:
@@ -223,14 +222,13 @@ class FuzzManagerReporter(Reporter):
             self.add_extra_metadata("rr-trace", "ignored")
             # remove traces so they are not uploaded to FM (because they are huge)
             # use S3FuzzManagerReporter instead
-            rmtree(str(trace_path))
+            rmtree(trace_path)
 
     @staticmethod
     def _ignored(report):
         # This is here to prevent reporting stack-less crashes
         # that were caused by system OOM
-        with open(report.preferred, "rb") as log_fp:
-            log_data = log_fp.read().decode("utf-8", errors="ignore")
+        log_data = report.preferred.read_text("utf-8", errors="ignore")
         # ignore sanitizer OOMs missing stack
         if report.stack is None:
             mem_errs = (
@@ -239,13 +237,11 @@ class FuzzManagerReporter(Reporter):
                 ": AddressSanitizer failed to allocate",
                 "Sanitizer: internal allocator is out of memory trying to allocate",
             )
-            for msg in mem_errs:
-                if msg in log_data:
-                    return True
+            # scan log data for memory error strings
+            if any(msg in log_data for msg in mem_errs):
+                return True
         # ignore Valgrind crashes
-        if log_data.startswith("VEX temporary storage exhausted."):
-            return True
-        return False
+        return log_data.startswith("VEX temporary storage exhausted.")
 
     def _submit_report(self, report, test_cases):
         collector = Collector()
@@ -297,7 +293,7 @@ class FuzzManagerReporter(Reporter):
             screen_log = Path.cwd() / f"screenlog.{getenv('WINDOW')}"
             if screen_log.is_file():
                 target_log = report.path / "screenlog.txt"
-                copyfile(str(screen_log), str(target_log))
+                copyfile(screen_log, target_log)
                 Report.tail(target_log, 10240)  # limit to last 10K
 
         with TemporaryDirectory(prefix="fm-zip", dir=grz_tmp()) as tmp_dir:
@@ -307,9 +303,7 @@ class FuzzManagerReporter(Reporter):
                 # add test files
                 for entry in report.path.rglob("*"):
                     if entry.is_file():
-                        zip_fp.write(
-                            str(entry), arcname=str(entry.relative_to(report.path))
-                        )
+                        zip_fp.write(entry, arcname=entry.relative_to(report.path))
             # override tool name if specified
             if self.tool is not None:
                 collector.tool = self.tool
@@ -334,7 +328,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
         with tar_open(rr_arc, "w:bz2") as arc_fp:
             arc_fp.add(str(latest_trace), arcname=latest_trace.name)
         # remove path containing uncompressed traces
-        rmtree(str(src))
+        rmtree(src)
         return rr_arc
 
     def _pre_submit(self, report):
@@ -365,7 +359,7 @@ class S3FuzzManagerReporter(FuzzManagerReporter):
             LOG.info("rr trace exists at %r", s3_url)
             self.add_extra_metadata("rr-trace", s3_url)
             # remove traces so they are not reported to FM
-            rmtree(str(trace_path))
+            rmtree(trace_path)
             return s3_url
 
         # Upload to S3
