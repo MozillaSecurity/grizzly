@@ -275,8 +275,8 @@ class CommonArgs:
         if args.timeout is not None and args.timeout < 1:
             self.parser.error("--timeout must be >= 1")
 
-        if "tool" not in self._sanity_skip and args.tool and not args.fuzzmanager:
-            self.parser.error("--tool can only be given with --fuzzmanager")
+        if args.tool and not args.fuzzmanager:
+            self.parser.error("--tool requires --fuzzmanager")
 
         if args.xvfb:  # pragma: no cover
             args.headless = "xvfb"
@@ -290,7 +290,6 @@ class GrizzlyArgs(CommonArgs):
         if not adapters:
             self.parser.error("No Adapters are installed")
 
-        self._sanity_skip.add("tool")
         self.parser.add_argument(
             "adapter", choices=sorted(adapters), help="Adapter to use."
         )
@@ -375,6 +374,3 @@ class GrizzlyArgs(CommonArgs):
 
         if args.runtime < 0:
             self.parser.error("--runtime must be >= 0")
-
-        if args.tool is not None and not args.fuzzmanager:
-            self.parser.error("--tool can only be given with --fuzzmanager")
