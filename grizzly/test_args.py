@@ -73,7 +73,7 @@ def test_common_args_02(capsys, mocker, args, msg, idx):
         # test invalid tool usage
         (
             ["--platform", "targ1", "--tool", "x"],
-            "error: --tool can only be given with --fuzzmanager",
+            "error: --tool requires --fuzzmanager",
             ["targ1"],
         ),
         # test invalid launch-attempts value
@@ -163,8 +163,6 @@ def test_grizzly_args_03(capsys, mocker):
         (["--limit-reports", "-1"], "error: --limit-reports must be >= 0"),
         # test runtime limit value
         (["--runtime", "-1"], "error: --runtime must be >= 0"),
-        # test tool
-        (["--tool", "x"], "error: --tool can only be given with --fuzzmanager"),
     ],
 )
 def test_grizzly_args_04(capsys, mocker, tmp_path, args, msg):
