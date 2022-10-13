@@ -43,12 +43,10 @@ class CommonArgs:
             "INFO": INFO,
             "DEBUG": DEBUG,
         }
-        self._sanity_skip = set()
 
-        if not hasattr(self, "parser"):
-            self.parser = ArgumentParser(
-                formatter_class=SortingHelpFormatter, conflict_handler="resolve"
-            )
+        self.parser = ArgumentParser(
+            formatter_class=SortingHelpFormatter, conflict_handler="resolve"
+        )
 
         targets = scan_plugins("grizzly_targets")
         if not targets:
@@ -218,7 +216,7 @@ class CommonArgs:
         return args
 
     def sanity_check(self, args):
-        if "binary" not in self._sanity_skip and not isfile(args.binary):
+        if not isfile(args.binary):
             self.parser.error(f"file not found: {args.binary!r}")
 
         if args.launch_attempts < 1:

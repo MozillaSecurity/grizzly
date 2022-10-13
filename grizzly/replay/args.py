@@ -6,22 +6,18 @@ from pathlib import Path
 
 from ..args import CommonArgs
 
+LOCAL_INPUT_HELP = """Accepted input:
+A directory containing testcase data;
+A directory with one or more subdirectories containing testcase data;
+A zip archive containing testcase data or subdirectories containing testcase data;
+or a single file to be used as a testcase.
+NOTE: When using a directory it must contain a 'test_info.json' file."""
 
-class ReplayArgs(CommonArgs):
+
+class ReplayCommonArgs(CommonArgs):
     def __init__(self):
         super().__init__()
         self.parser.set_defaults(logs=None)
-        self.parser.add_argument(
-            "input",
-            type=Path,
-            help="Accepted input includes: "
-            "1) A directory containing testcase data. "
-            "2) A directory with one or more subdirectories containing testcase data. "
-            "3) A zip archive containing testcase data or subdirectories containing"
-            " testcase data. "
-            "4) A single file to be used as a testcase. "
-            "When using a directory it must contain a 'test_info.json' file.",
-        )
 
         replay_args = self.parser.add_argument_group("Replay Arguments")
         replay_args.add_argument(
@@ -99,9 +95,6 @@ class ReplayArgs(CommonArgs):
         if args.idle_threshold and args.idle_delay <= 0:
             self.parser.error("--idle-delay value must be positive")
 
-        if "input" not in self._sanity_skip and not args.input.exists():
-            self.parser.error(f"'{args.input}' does not exist")
-
         if args.logs is None and (args.pernosco or args.rr):
             self.parser.error("--logs must be set when using rr")
 
@@ -117,37 +110,24 @@ class ReplayArgs(CommonArgs):
         if args.sig and not args.sig.is_file():
             self.parser.error(f"signature file not found: '{args.sig}'")
 
-    def update_arg(self, name, new_type, help_msg):
-        # madhax alert!
-        #
-        # We need to modify the meaning of the 'input' positional to accept an int ID
-        # instead of a local testcase.
-        # This is not possible with the public argparse API.
-        #
-        # refs: stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
-        #       bugs.python.org/issue19462
 
-        # look up the action for the positional `input` arg
-        action = None
-        for arg in self.parser._actions:  # pylint: disable=protected-access
-            if arg.dest == name and not arg.option_strings:
-                action = arg
-                break
-        assert action is not None
+class ReplayArgs(ReplayCommonArgs):
+    def __init__(self):
+        super().__init__()
+        self.parser.add_argument("input", type=Path, help=LOCAL_INPUT_HELP)
 
-        # modify its type and help string
-        action.type = new_type
-        action.help = help_msg
+    def sanity_check(self, args):
+        super().sanity_check(args)
 
-        # ... and Bob's your uncle
-        self._sanity_skip.add("input")
+        if not args.input.exists():
+            self.parser.error(f"'{args.input}' does not exist")
 
 
-class ReplayFuzzManagerIDArgs(ReplayArgs):
+class ReplayFuzzManagerIDArgs(ReplayCommonArgs):
     def __init__(self):
         """Initialize argument parser."""
         super().__init__()
-        self.update_arg("input", int, "FuzzManager ID to replay")
+        self.parser.add_argument("input", type=int, help="FuzzManager ID to replay")
 
 
 class ReplayFuzzManagerIDQualityArgs(ReplayFuzzManagerIDArgs):

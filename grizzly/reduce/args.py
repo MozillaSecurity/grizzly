@@ -7,13 +7,13 @@ from logging import getLogger
 from pathlib import Path
 
 from ..common.reporter import Quality
-from ..replay.args import ReplayArgs
+from ..replay.args import LOCAL_INPUT_HELP, ReplayCommonArgs
 from .strategies import DEFAULT_STRATEGIES, STRATEGIES
 
 LOG = getLogger(__name__)
 
 
-class ReduceArgs(ReplayArgs):
+class ReduceCommonArgs(ReplayCommonArgs):
     """Argument parser for `grizzly.reduce`.
 
     Takes all arguments defined for `grizzly.replay`, and a few specific to reduction.
@@ -23,7 +23,7 @@ class ReduceArgs(ReplayArgs):
         """Initialize argument parser."""
         super().__init__()
 
-        # these arguments have other defaults vs how they are defined in ReplayArgs
+        # these arguments have defaults that vary from ReplayCommonArgs
         self.parser.set_defaults(include_test=True, logs=Path.cwd())
 
         reduce_args = self.parser.add_argument_group("Reduce Arguments")
@@ -84,11 +84,23 @@ class ReduceArgs(ReplayArgs):
                 )
 
 
-class ReduceFuzzManagerIDArgs(ReduceArgs):
+class ReduceArgs(ReduceCommonArgs):
+    def __init__(self):
+        super().__init__()
+        self.parser.add_argument("input", type=Path, help=LOCAL_INPUT_HELP)
+
+    def sanity_check(self, args):
+        super().sanity_check(args)
+
+        if not args.input.exists():
+            self.parser.error(f"'{args.input}' does not exist")
+
+
+class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
     def __init__(self):
         """Initialize argument parser."""
         super().__init__()
-        self.update_arg("input", int, "FuzzManager ID to reduce")
+        self.parser.add_argument("input", type=int, help="FuzzManager ID to replay")
 
         self.parser.add_argument(
             "--no-repro-quality",
