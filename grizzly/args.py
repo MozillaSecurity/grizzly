@@ -152,9 +152,9 @@ class CommonArgs:
             type=int,
             default=None,
             help="Iteration timeout in seconds. By default this is"
-            f" `test-duration`+{TIMEOUT_DELAY}s. If the timeout is reached the target"
+            f" `test-limit`+{TIMEOUT_DELAY}s. If the timeout is reached the target"
             " is assumed to be in a bad state and will be closed. Typically this should"
-            " be a few seconds greater than the value used for `test-duration`.",
+            " be a few seconds greater than the value used for `test-limit`.",
         )
         if system().startswith("Linux"):
             self.launcher_grp.add_argument(
@@ -272,6 +272,9 @@ class CommonArgs:
 
         if args.timeout is not None and args.timeout < 1:
             self.parser.error("--timeout must be >= 1")
+
+        if args.time_limit and args.timeout and args.timeout < args.time_limit:
+            self.parser.error("--timeout must be >= --time-limit")
 
         if args.tool and not args.fuzzmanager:
             self.parser.error("--tool requires --fuzzmanager")
