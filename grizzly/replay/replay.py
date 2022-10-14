@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from logging import getLogger
+from math import ceil
 from pathlib import Path
 from tempfile import mkdtemp
 
@@ -274,7 +275,8 @@ class ReplayManager:
         assert repeat > 0
         assert repeat >= min_results
         assert testcases
-        assert time_limit > 0
+        assert time_limit > 0 or self._harness is None
+        assert self._harness or self._harness is None
         assert self._harness is not None or len(testcases) == 1
         assert not expect_hang or self._signature is not None
 
@@ -308,20 +310,13 @@ class ReplayManager:
                 if on_iteration_cb is not None:
                     on_iteration_cb()
                 if self.target.closed:
-                    if self._harness is None:
-                        location = runner.location(
-                            "/grz_start",
-                            self.server.port,
-                            post_launch_delay=post_launch_delay,
-                        )
-                    else:
-                        location = runner.location(
-                            "/grz_start",
-                            self.server.port,
-                            close_after=relaunch * test_count,
-                            post_launch_delay=post_launch_delay,
-                            time_limit=time_limit,
-                        )
+                    location = runner.location(
+                        "/grz_start",
+                        self.server.port,
+                        close_after=relaunch * test_count if self._harness else None,
+                        post_launch_delay=post_launch_delay,
+                        time_limit=time_limit if self._harness else None,
+                    )
                     runner.launch(location, max_retries=launch_attempts)
                     runner.post_launch(delay=post_launch_delay)
                 # run tests
@@ -545,8 +540,8 @@ class ReplayManager:
 
     @classmethod
     def time_limits(cls, time_limit, timeout, tests):
-        """Determine the test time limit and timeout. A ConfigError is raised
-        if configuration errors are detected.
+        """Determine the test time limit and timeout. If time_limit or timeout is None
+        it is calculated otherwise the provided value is used.
 
         Args:
             time_limit (int): Test time limit.
@@ -556,19 +551,23 @@ class ReplayManager:
         Returns:
             tuple (int, int): Time limit and timeout.
         """
-        if time_limit is None:
-            test_limits = tuple(int(x.time_limit) for x in tests if x.time_limit)
-            if test_limits:
-                time_limit = max(test_limits)
-            else:
-                time_limit = cls.DEFAULT_TIME_LIMIT
-        if timeout is None:
+        # calculate time limit
+        calc_limit = time_limit is None
+        if calc_limit:
+            # use DEFAULT_TIME_LIMIT as a minimum
+            test_limits = [cls.DEFAULT_TIME_LIMIT]
+            test_limits.extend(int(ceil(x.duration)) for x in tests if x.duration)
+            time_limit = max(test_limits)
+        assert time_limit > 0
+        # calculate timeout
+        calc_timeout = timeout is None
+        if calc_timeout:
             timeout = time_limit + TIMEOUT_DELAY
-        if timeout < time_limit:
-            raise ConfigError(
-                f"Timeout ({timeout}) cannot be less than time limit ({time_limit})",
-                Exit.ARGS,
-            )
+        elif calc_limit and time_limit > timeout:
+            LOG.debug("calculated time limit > given timeout, using timeout")
+            time_limit = timeout
+        assert timeout > 0
+        assert timeout >= time_limit
         return time_limit, timeout
 
     @classmethod
@@ -611,11 +610,15 @@ class ReplayManager:
                 return Exit.ARGS
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)
-            # check test time limit and timeout
+            # calculate test time limit and timeout
             time_limit, timeout = cls.time_limits(
                 args.time_limit, args.timeout, testcases
             )
-            LOG.info("Using time limit: %ds, timeout: %ds", time_limit, timeout)
+            if args.no_harness:
+                LOG.info("Using timeout: %ds (no harness)", timeout)
+            else:
+                LOG.info("Using time limit: %ds, timeout: %ds", time_limit, timeout)
+            # calculate repeat and relaunch
             repeat = max(args.min_crashes, args.repeat)
             if args.no_harness:
                 LOG.debug("no-harness enabled, forcing relaunch=1")

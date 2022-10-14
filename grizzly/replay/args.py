@@ -101,6 +101,11 @@ class ReplayCommonArgs(CommonArgs):
         if args.min_crashes < 1:
             self.parser.error("--min-crashes value must be positive")
 
+        if args.no_harness:
+            if args.time_limit is not None:
+                self.parser.error("--time-limit cannot be used with --no-harness")
+            # TODO: default --relaunch=1
+
         if args.post_launch_delay is not None and args.post_launch_delay < 0:
             self.parser.error("--post-launch-delay value must be positive")
 

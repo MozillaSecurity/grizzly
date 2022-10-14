@@ -318,74 +318,6 @@ def test_main_05(mocker, tmp_path):
 
 
 @mark.parametrize(
-    "arg_timelimit, arg_timeout, test_timelimit, result",
-    [
-        # use default test time limit and timeout values (test missing time limit)
-        (None, None, None, Exit.FAILURE),
-        # use min test time limit and default timeout values
-        (None, None, 1, Exit.FAILURE),
-        # set test time limit
-        (10, None, None, Exit.FAILURE),
-        # set both test time limit and timeout to the same value
-        (10, 10, None, Exit.FAILURE),
-        # set timeout greater than test time limit
-        (10, 11, None, Exit.FAILURE),
-        # set test time limit greater than timeout
-        (11, 10, None, Exit.ARGS),
-    ],
-)
-def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, result):
-    """test ReplayManager.main() - test time limit and timeout"""
-    mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    # mock Sapphire.serve_path only
-    mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path",
-        autospec=True,
-        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
-    )
-    # setup Target
-    target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
-    target.check_result.return_value = Result.NONE
-    mocker.patch(
-        "grizzly.replay.replay.load_plugin",
-        autospec=True,
-        return_value=mocker.Mock(spec_set=Target, return_value=target),
-    )
-    # create test to load
-    with TestCase("test.html", None, None) as test:
-        test_file = tmp_path / "test.html"
-        test_file.write_text("test")
-        test.add_from_file(str(test_file))
-        replay_path = tmp_path / "test"
-        replay_path.mkdir()
-        test.time_limit = test_timelimit
-        test.dump(str(replay_path), include_details=True)
-    # setup args
-    args = mocker.Mock(
-        asset=[],
-        fuzzmanager=False,
-        idle_delay=0,
-        idle_threshold=0,
-        ignore=["timeout"],
-        input=replay_path,
-        launch_attempts=3,
-        min_crashes=2,
-        no_harness=True,
-        pernosco=False,
-        post_launch_delay=None,
-        relaunch=1,
-        repeat=1,
-        rr=False,
-        sig=None,
-        test_index=None,
-        time_limit=arg_timelimit,
-        timeout=arg_timeout,
-        valgrind=False,
-    )
-    assert ReplayManager.main(args) == result
-
-
-@mark.parametrize(
     "pernosco, rr, valgrind, no_harness",
     [
         # No debugger enabled and no harness
@@ -400,7 +332,7 @@ def test_main_06(mocker, tmp_path, arg_timelimit, arg_timeout, test_timelimit, r
         (False, False, True, False),
     ],  # pylint: disable=invalid-name
 )
-def test_main_07(
+def test_main_06(
     mocker, tmp_path, pernosco, rr, valgrind, no_harness
 ):  # pylint: disable=invalid-name
     """test ReplayManager.main() enable debuggers"""
@@ -453,7 +385,7 @@ def test_main_07(
     assert load_target.return_value.call_args[-1]["valgrind"] == valgrind
 
 
-def test_main_08(mocker, tmp_path):
+def test_main_07(mocker, tmp_path):
     """test ReplayManager.main() - report to FuzzManager"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)

@@ -70,6 +70,12 @@ def test_common_args_02(capsys, mocker, args, msg, idx):
             "error: --timeout must be >= 1",
             ["targ1"],
         ),
+        # test timeout < time-limit
+        (
+            ["--platform", "targ1", "--timeout", "1", "--time-limit", "10"],
+            "error: --timeout must be >= --time-limit",
+            ["targ1"],
+        ),
         # test invalid tool usage
         (
             ["--platform", "targ1", "--tool", "x"],
