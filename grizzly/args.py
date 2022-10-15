@@ -276,7 +276,7 @@ class CommonArgs:
         if args.time_limit and args.timeout and args.timeout < args.time_limit:
             self.parser.error("--timeout must be >= --time-limit")
 
-        if args.tool and not args.fuzzmanager:
+        if args.tool is not None and not args.fuzzmanager:
             self.parser.error("--tool requires --fuzzmanager")
 
         if args.xvfb:  # pragma: no cover
