@@ -3,7 +3,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from logging import getLogger
-from math import ceil
 from pathlib import Path
 from tempfile import mkdtemp
 
@@ -16,7 +15,7 @@ from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner
 from ..common.status import Status
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..common.utils import TIMEOUT_DELAY, ConfigError, Exit, configure_logging, grz_tmp
+from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp, time_limits
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -38,7 +37,6 @@ class ReplayResult:
 
 class ReplayManager:
     HARNESS_FILE = str(Path(__file__).parent / ".." / "common" / "harness.html")
-    DEFAULT_TIME_LIMIT = 30
     STATUS_DB = str(Path(grz_tmp()) / "replay-status.db")
 
     __slots__ = (
@@ -539,38 +537,6 @@ class ReplayManager:
                 report.report.cleanup()
 
     @classmethod
-    def time_limits(cls, time_limit, timeout, tests):
-        """Determine the test time limit and timeout. If time_limit or timeout is None
-        it is calculated otherwise the provided value is used.
-
-        Args:
-            time_limit (int): Test time limit.
-            timeout (int): Iteration timeout.
-            tests (iterable): Testcases that may contain time limit values.
-
-        Returns:
-            tuple (int, int): Time limit and timeout.
-        """
-        # calculate time limit
-        calc_limit = time_limit is None
-        if calc_limit:
-            # use DEFAULT_TIME_LIMIT as a minimum
-            test_limits = [cls.DEFAULT_TIME_LIMIT]
-            test_limits.extend(int(ceil(x.duration)) for x in tests if x.duration)
-            time_limit = max(test_limits)
-        assert time_limit > 0
-        # calculate timeout
-        calc_timeout = timeout is None
-        if calc_timeout:
-            timeout = time_limit + TIMEOUT_DELAY
-        elif calc_limit and time_limit > timeout:
-            LOG.debug("calculated time limit > given timeout, using timeout")
-            time_limit = timeout
-        assert timeout > 0
-        assert timeout >= time_limit
-        return time_limit, timeout
-
-    @classmethod
     def main(cls, args):
         configure_logging(args.log_level)
         if args.fuzzmanager:
@@ -611,8 +577,8 @@ class ReplayManager:
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)
             # calculate test time limit and timeout
-            time_limit, timeout = cls.time_limits(
-                args.time_limit, args.timeout, testcases
+            time_limit, timeout = time_limits(
+                args.time_limit, args.timeout, tests=testcases
             )
             if args.no_harness:
                 LOG.info("Using timeout: %ds (no harness)", timeout)

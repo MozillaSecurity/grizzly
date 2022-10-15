@@ -5,7 +5,14 @@ from logging import DEBUG, INFO
 
 from pytest import mark
 
-from .utils import configure_logging, grz_tmp
+from .storage import TestCase
+from .utils import (
+    DEFAULT_TIME_LIMIT,
+    TIMEOUT_DELAY,
+    configure_logging,
+    grz_tmp,
+    time_limits,
+)
 
 
 def test_grz_tmp_01(mocker, tmp_path):
@@ -49,3 +56,30 @@ def test_configure_logging_01(mocker, env, log_level):
         assert config.call_args[-1]["level"] == DEBUG
     else:
         assert config.call_args[-1]["level"] == log_level
+
+
+@mark.parametrize(
+    "time_limit, timeout, test_durations, expected",
+    [
+        # use defaults
+        (None, None, [None], (DEFAULT_TIME_LIMIT, DEFAULT_TIME_LIMIT + TIMEOUT_DELAY)),
+        # use defaults instead of low test values
+        (None, None, [1], (DEFAULT_TIME_LIMIT, DEFAULT_TIME_LIMIT + TIMEOUT_DELAY)),
+        # use duration from test case
+        (None, None, [99.1], (100, 100 + TIMEOUT_DELAY)),
+        # multiple tests
+        (None, None, [99.9, 10, 25], (100, 100 + TIMEOUT_DELAY)),
+        # specify time limit
+        (100, None, [0], (100, 100 + TIMEOUT_DELAY)),
+        # specify timeout (> DEFAULT_TIME_LIMIT)
+        (None, 100, [0], (DEFAULT_TIME_LIMIT, 100)),
+        # specify timeout (< DEFAULT_TIME_LIMIT)
+        (None, 10, [0], (10, 10)),
+        # specify time limit and timeout
+        (50, 100, [0], (50, 100)),
+    ],
+)
+def test_time_limits_01(mocker, time_limit, timeout, test_durations, expected):
+    """test time_limits()"""
+    tests = [mocker.Mock(spec_set=TestCase, duration=d) for d in test_durations]
+    assert time_limits(time_limit, timeout, tests=tests) == expected
