@@ -21,7 +21,7 @@ from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Quality
 from ..common.status import ReductionStatus
 from ..common.status_reporter import ReductionStatusReporter
 from ..common.storage import TestCaseLoadFailure
-from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp
+from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp, time_limits
 from ..replay import ReplayManager
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
@@ -814,9 +814,7 @@ class ReduceManager:
 
             # check test time limit and timeout
             # TODO: add support for test time limit, use timeout in both cases for now
-            _, timeout = ReplayManager.time_limits(
-                args.timeout, args.timeout, testcases
-            )
+            _, timeout = time_limits(args.timeout, args.timeout, tests=testcases)
 
             args.repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, args.repeat)

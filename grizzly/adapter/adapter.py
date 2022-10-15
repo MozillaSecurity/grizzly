@@ -4,6 +4,8 @@
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
 
+from grizzly.common.utils import DEFAULT_TIME_LIMIT
+
 __all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -41,7 +43,7 @@ class Adapter(metaclass=ABCMeta):
     # Maximum execution time per test (used as minimum timeout). The iteration is
     # expected to be complete. If the test is still open the harness will attempt to
     # close it.
-    TIME_LIMIT = 30
+    TIME_LIMIT = DEFAULT_TIME_LIMIT
 
     __slots__ = ("_harness", "fuzz", "monitor", "name", "remaining")
 

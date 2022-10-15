@@ -14,7 +14,6 @@ from sapphire import Sapphire, Served
 
 from ..common.reporter import Report
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..common.utils import TIMEOUT_DELAY
 from ..target import AssetManager, Result, Target
 from .replay import ReplayManager, ReplayResult
 
@@ -835,46 +834,3 @@ def test_replay_23(mocker):
     ReplayManager.report_to_fuzzmanager(results, [], tool="test-override")
     assert reporter.call_args == (("test-override",),)
     assert reporter.return_value.submit.call_count == 2
-
-
-@mark.parametrize(
-    "time_limit, timeout, test_durations, expected",
-    [
-        # use defaults
-        (
-            None,
-            None,
-            [None],
-            (
-                ReplayManager.DEFAULT_TIME_LIMIT,
-                ReplayManager.DEFAULT_TIME_LIMIT + TIMEOUT_DELAY,
-            ),
-        ),
-        # use defaults instead of low test values
-        (
-            None,
-            None,
-            [1],
-            (
-                ReplayManager.DEFAULT_TIME_LIMIT,
-                ReplayManager.DEFAULT_TIME_LIMIT + TIMEOUT_DELAY,
-            ),
-        ),
-        # use duration from test case
-        (None, None, [99.1], (100, 100 + TIMEOUT_DELAY)),
-        # multiple tests
-        (None, None, [99.9, 10, 25], (100, 100 + TIMEOUT_DELAY)),
-        # specify time limit
-        (100, None, [0], (100, 100 + TIMEOUT_DELAY)),
-        # specify timeout (> ReplayManager.DEFAULT_TIME_LIMIT)
-        (None, 100, [0], (ReplayManager.DEFAULT_TIME_LIMIT, 100)),
-        # specify timeout (< ReplayManager.DEFAULT_TIME_LIMIT)
-        (None, 10, [0], (10, 10)),
-        # specify time limit and timeout
-        (50, 100, [0], (50, 100)),
-    ],
-)
-def test_replay_24(mocker, time_limit, timeout, test_durations, expected):
-    """test ReplayManager.time_limits()"""
-    tests = [mocker.Mock(spec_set=TestCase, duration=d) for d in test_durations]
-    assert ReplayManager.time_limits(time_limit, timeout, tests) == expected

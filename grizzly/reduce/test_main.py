@@ -180,9 +180,7 @@ def test_main_launch_error(mocker, exc_type):
             {},
         ),
     )
-    mocker.patch(
-        "grizzly.reduce.core.ReplayManager.time_limits", return_value=(None, 10)
-    )
+    mocker.patch("grizzly.reduce.core.time_limits", return_value=(None, 10))
     run = mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
     # setup args

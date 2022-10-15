@@ -2,7 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from enum import IntEnum, unique
-from logging import DEBUG, basicConfig
+from logging import DEBUG, basicConfig, getLogger
+from math import ceil
 from os import getenv, makedirs
 from os.path import join as pathjoin
 from tempfile import gettempdir
@@ -10,14 +11,17 @@ from tempfile import gettempdir
 __all__ = (
     "ConfigError",
     "configure_logging",
+    "DEFAULT_TIME_LIMIT",
     "Exit",
     "grz_tmp",
+    "time_limits",
     "TIMEOUT_DELAY",
 )
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-
+DEFAULT_TIME_LIMIT = 30
+LOG = getLogger(__name__)
 # TIMEOUT_DELAY is added to the test time limit to create the default timeout
 TIMEOUT_DELAY = 15
 
@@ -72,3 +76,46 @@ def grz_tmp(*subdir):
     path = pathjoin(getenv("GRZ_TMP", gettempdir()), "grizzly", *subdir)
     makedirs(path, exist_ok=True)
     return path
+
+
+def time_limits(
+    time_limit,
+    timeout,
+    tests=None,
+    default_limit=DEFAULT_TIME_LIMIT,
+    timeout_delay=TIMEOUT_DELAY,
+):
+    """Determine the test time limit and timeout. If time_limit or timeout is None
+    it is calculated otherwise the provided value is used.
+
+    Args:
+        time_limit (int): Test time limit.
+        timeout (int): Iteration timeout.
+        tests (iterable): Testcases that may contain time limit values.
+        default_limit (int): Value to used as default time limit.
+        timeout_delay (int): Value to used as delay when calculating timeout.
+
+    Returns:
+        tuple (int, int): Time limit and timeout.
+    """
+    assert default_limit > 0
+    assert timeout_delay >= 0
+    # calculate time limit
+    calc_limit = time_limit is None
+    if calc_limit:
+        # use default_limit as a minimum
+        test_limits = [default_limit]
+        if tests:
+            test_limits.extend(int(ceil(x.duration)) for x in tests if x.duration)
+        time_limit = max(test_limits)
+    assert time_limit > 0
+    # calculate timeout
+    calc_timeout = timeout is None
+    if calc_timeout:
+        timeout = time_limit + timeout_delay
+    elif calc_limit and time_limit > timeout:
+        LOG.debug("calculated time limit > given timeout, using timeout")
+        time_limit = timeout
+    assert timeout > 0
+    assert timeout >= time_limit
+    return time_limit, timeout
