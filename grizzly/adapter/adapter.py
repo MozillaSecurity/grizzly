@@ -74,16 +74,16 @@ class Adapter(metaclass=ABCMeta):
         *** DO NOT OVERLOAD! ***
 
         Args:
-            file_path (str): Path to file to use as a harness. If None the default
-                             harness is used.
+            file_path (str): Path to (html) file to use as a harness.
+                             If None the default harness is used.
 
         Returns:
             None
         """
-        if file_path is None:
-            file_path = self.HARNESS_FILE
-        with open(file_path, "rb") as in_fp:
-            self._harness = in_fp.read()
+        path = Path(self.HARNESS_FILE if file_path is None else file_path)
+        assert path.is_file(), f"missing harness file '{path.resolve()}'"
+        self._harness = path.read_bytes()
+        assert self._harness, f"empty harness file '{path.resolve()}'"
 
     def get_harness(self):
         """Get the harness. Used internally by Grizzly.
@@ -93,7 +93,7 @@ class Adapter(metaclass=ABCMeta):
             None
 
         Returns:
-            TestFile: The active harness.
+            bytes: The active harness.
         """
         return self._harness
 
