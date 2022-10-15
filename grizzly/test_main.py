@@ -176,21 +176,21 @@ def test_main_03(mocker, exit_code, to_raise):
 
 
 @mark.parametrize(
-    "arg_testlimit, arg_timeout, exit_code",
+    "test_limit, timeout",
     [
         # use default test time limit and timeout values
-        (None, None, Exit.SUCCESS),
+        (None, None),
         # set test time limit
-        (10, None, Exit.SUCCESS),
+        (10, None),
         # set both test time limit and timeout to the same value
-        (10, 10, Exit.SUCCESS),
+        (10, 10),
         # set timeout greater than test time limit
-        (10, 11, Exit.SUCCESS),
-        # set test time limit greater than timeout
-        (11, 10, Exit.ARGS),
+        (10, 11),
+        # use default test time limit and low timeout
+        (None, 1),
     ],
 )
-def test_main_04(mocker, arg_testlimit, arg_timeout, exit_code):
+def test_main_04(mocker, test_limit, timeout):
     """test main() - time-limit and timeout"""
     fake_adapter = mocker.NonCallableMock(spec_set=Adapter, name="fake")
     fake_adapter.RELAUNCH = 1
@@ -206,9 +206,9 @@ def test_main_04(mocker, arg_testlimit, arg_timeout, exit_code):
     fake_session.return_value.status.results.total = 0
     args = FakeArgs()
     args.adapter = "fake"
-    args.time_limit = arg_testlimit
-    args.timeout = arg_timeout
-    assert main(args) == exit_code
+    args.time_limit = test_limit
+    args.timeout = timeout
+    assert main(args) == Exit.SUCCESS
 
 
 @mark.parametrize(
