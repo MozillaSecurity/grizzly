@@ -9,7 +9,7 @@ from sapphire import Sapphire
 from .adapter import Adapter
 from .common.plugins import load as load_plugin
 from .common.reporter import FilesystemReporter, FuzzManagerReporter
-from .common.utils import TIMEOUT_DELAY, Exit, configure_logging
+from .common.utils import Exit, configure_logging, time_limits
 from .session import Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -44,20 +44,12 @@ def main(args):
         LOG.debug("initializing Adapter %r", args.adapter)
         adapter = load_plugin(args.adapter, "grizzly_adapters", Adapter)(args.adapter)
 
-        # test case time limit and timeout sanity checking
-        if args.time_limit:
-            time_limit = args.time_limit
-        else:
-            assert adapter.TIME_LIMIT >= 1
-            time_limit = adapter.TIME_LIMIT
-        if args.timeout:
-            timeout = args.timeout
-        else:
-            timeout = time_limit + TIMEOUT_DELAY
+        # calculate time limit and timeout
+        time_limit, timeout = time_limits(
+            args.time_limit, args.timeout, default_limit=adapter.TIME_LIMIT
+        )
         LOG.info("Using test time limit: %ds, timeout: %ds", time_limit, timeout)
-        if timeout < time_limit:
-            LOG.error("Timeout must be at least test time limit if not greater")
-            return Exit.ARGS
+
         if adapter.HARNESS_FILE and time_limit == timeout:
             LOG.warning(
                 "To avoid relaunches due to tests failing to close"
