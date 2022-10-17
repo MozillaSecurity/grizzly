@@ -23,19 +23,23 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.1.0
     hooks:
+      - id: check-added-large-files
       - id: check-ast
+      - id: check-case-conflict
       - id: check-docstring-first
       - id: check-executables-have-shebangs
       - id: check-merge-conflict
       - id: check-symlinks
-      - id: debug-statements
-      - id: trailing-whitespace
+      - id: check-json
+      - id: check-toml
       - id: check-yaml
+      - id: debug-statements
+      - id: end-of-file-fixer
       - id: mixed-line-ending
       - id: name-tests-test
         args: ['--django']
-      - id: check-json
       - id: requirements-txt-fixer
+      - id: trailing-whitespace
   - repo: https://github.com/codespell-project/codespell
     rev: v2.1.0
     hooks:
