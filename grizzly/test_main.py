@@ -35,6 +35,7 @@ class FakeArgs:
         self.log_level = 10  # 10 = DEBUG, 20 = INFO
         self.log_limit = 0
         self.memory = 0
+        self.no_harness = False
         self.pernosco = False
         self.platform = "fake-target"
         self.prefs = None
@@ -50,25 +51,29 @@ class FakeArgs:
 
 
 @mark.parametrize(
-    "cov, adpt_relaunch, limit, runtime, smoke_test, verbose",
+    "cov, adpt_relaunch, limit, no_harness, runtime, smoke_test, verbose",
     [
         # successful run
-        (False, 0, 0, 0, False, True),
+        (False, 0, 0, False, 0, False, True),
+        # successful run - no harness
+        (False, 0, 0, True, 0, False, True),
         # successful run (with iteration limit)
-        (False, 0, 10, 0, False, True),
+        (False, 0, 10, False, 0, False, True),
         # successful run (with runtime limit)
-        (False, 0, 0, 10, False, True),
+        (False, 0, 0, False, 10, False, True),
         # successful run (with coverage)
-        (True, 0, 0, 0, False, False),
+        (True, 0, 0, False, 0, False, False),
         # relaunch 1
-        (False, 1, 0, 0, False, False),
+        (False, 1, 0, False, 0, False, False),
         # relaunch 10
-        (False, 10, 0, 0, False, False),
+        (False, 10, 0, False, 0, False, False),
         # smoke test detects result
-        (False, 0, 0, 0, True, False),
+        (False, 0, 0, False, 0, True, False),
     ],
 )
-def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, smoke_test, verbose):
+def test_main_01(
+    mocker, cov, adpt_relaunch, limit, no_harness, runtime, smoke_test, verbose
+):
     """test main()"""
     fake_adapter = mocker.NonCallableMock(spec_set=Adapter)
     fake_adapter.RELAUNCH = adpt_relaunch
@@ -92,6 +97,7 @@ def test_main_01(mocker, cov, adpt_relaunch, limit, runtime, smoke_test, verbose
     args.headless = "xvfb"
     args.ignore = ["fake", "fake"]
     args.limit = limit
+    args.no_harness = no_harness
     args.runtime = runtime
     args.rr = True
     args.smoke_test = smoke_test

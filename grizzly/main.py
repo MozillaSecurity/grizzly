@@ -48,13 +48,15 @@ def main(args):
         time_limit, timeout = time_limits(
             args.time_limit, args.timeout, default_limit=adapter.TIME_LIMIT
         )
-        LOG.info("Using test time limit: %ds, timeout: %ds", time_limit, timeout)
-
-        if adapter.HARNESS_FILE and time_limit == timeout:
-            LOG.warning(
-                "To avoid relaunches due to tests failing to close"
-                " themselves use a timeout greater than time limit"
-            )
+        if args.no_harness:
+            LOG.info("Using timeout: %ds (no harness)", timeout)
+        else:
+            LOG.info("Using test time limit: %ds, timeout: %ds", time_limit, timeout)
+            if time_limit == timeout:
+                LOG.warning(
+                    "To avoid relaunches due to tests failing to close"
+                    " themselves use a timeout greater than time limit"
+                )
 
         if adapter.RELAUNCH > 0:
             LOG.info("Relaunch (%d) set in Adapter", adapter.RELAUNCH)
@@ -121,6 +123,7 @@ def main(args):
                 time_limit,
                 input_path=str(args.input),
                 iteration_limit=iteration_limit,
+                no_harness=args.no_harness,
                 result_limit=1 if args.smoke_test else 0,
                 runtime_limit=args.runtime,
                 display_mode=display_mode,
