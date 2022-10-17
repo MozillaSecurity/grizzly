@@ -123,7 +123,16 @@ def test_common_args_04(tmp_path):
     CommonArgs().parse_args([str(fake_bin), "--logs", str(tmp_path)])
 
 
-def test_grizzly_args_01(mocker, tmp_path):
+@mark.parametrize(
+    "extra_args, results",
+    [
+        # test default
+        ([], {}),
+        # test smoke-test
+        (["--smoke-test"], {"limit": 10}),
+    ],
+)
+def test_grizzly_args_01(mocker, tmp_path, extra_args, results):
     """test GrizzlyArgs.parse_args() - success"""
     mocker.patch(
         "grizzly.args.scan_plugins",
@@ -132,7 +141,11 @@ def test_grizzly_args_01(mocker, tmp_path):
     )
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
-    assert GrizzlyArgs().parse_args(argv=[str(fake_bin), "adpt", "--platform", "targ"])
+    cmd = [str(fake_bin), "adpt", "--platform", "targ"] + extra_args
+    args = vars(GrizzlyArgs().parse_args(argv=cmd))
+    assert args
+    for arg_name, expected_value in results.items():
+        assert args[arg_name] == expected_value, f"'{arg_name}' does not match"
 
 
 @mark.parametrize(

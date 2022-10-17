@@ -89,10 +89,8 @@ def main(args):
             LOG.info("Results will be stored in '%s'", reporter.report_path)
         reporter.display_logs = args.smoke_test or reporter.display_logs
 
-        # make sure an iteration limit is set if smoke_test is True
-        iteration_limit = (args.limit or 10) if args.smoke_test else args.limit
-        if iteration_limit:
-            LOG.info("%r iteration(s) will be attempted", iteration_limit)
+        if args.limit:
+            LOG.info("%r iteration(s) will be attempted", args.limit)
         if args.runtime:
             LOG.info("Runtime is limited to %rs", args.runtime)
 
@@ -122,7 +120,7 @@ def main(args):
                 args.ignore,
                 time_limit,
                 input_path=str(args.input),
-                iteration_limit=iteration_limit,
+                iteration_limit=args.limit,
                 no_harness=args.no_harness,
                 result_limit=1 if args.smoke_test else 0,
                 runtime_limit=args.runtime,
