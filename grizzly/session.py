@@ -128,7 +128,7 @@ class Session:
     def generate_testcase(self, time_limit):
         LOG.debug("calling iomanager.create_testcase()")
         test = self.iomanager.create_testcase(self.adapter.name, time_limit)
-        LOG.debug("calling self.adapter.generate()")
+        LOG.debug("calling adapter.generate()")
         with self.status.measure("generate"):
             self.adapter.generate(test, self.iomanager.server_map)
         self.status.test_name = test.input_fname
@@ -140,6 +140,7 @@ class Session:
         time_limit,
         input_path=None,
         iteration_limit=0,
+        no_harness=False,
         result_limit=0,
         runtime_limit=0,
         display_mode=DISPLAY_NORMAL,
@@ -152,13 +153,15 @@ class Session:
 
         LOG.debug("calling adapter.setup()")
         self.adapter.setup(input_path, self.iomanager.server_map)
-        LOG.debug("configuring harness")
-        harness = self.adapter.get_harness()
+        LOG.debug("configuring harness (%r)", not no_harness)
+        harness = None if no_harness else self.adapter.get_harness()
+        LOG.debug("configuring redirects (w/harness: %s)", harness is not None)
         if harness is None:
             self.iomanager.server_map.set_redirect(
                 "grz_start", "grz_current_test", required=False
             )
         else:
+            assert harness
             self.iomanager.server_map.set_dynamic_response(
                 "grz_harness", lambda _: harness, mime_type="text/html", required=False
             )
@@ -182,17 +185,12 @@ class Session:
                 # (re-)launch target
                 self.iomanager.purge()
                 self.adapter.pre_launch()
-                if harness is None:
-                    # harness is not in use, open the test case
-                    location = runner.location("/grz_start", self.server.port)
-                else:
-                    # harness is in use, open it and it will open the test case.
-                    location = runner.location(
-                        "/grz_start",
-                        self.server.port,
-                        close_after=relaunch,
-                        time_limit=time_limit,
-                    )
+                location = runner.location(
+                    "/grz_start",
+                    self.server.port,
+                    close_after=relaunch if harness else None,
+                    time_limit=time_limit if harness else None,
+                )
                 try:
                     with self.status.measure("launch"):
                         runner.launch(
@@ -229,10 +227,10 @@ class Session:
             # adapter callbacks
             if result.timeout:
                 current_test.hang = True
-                LOG.debug("calling self.adapter.on_timeout()")
+                LOG.debug("calling adapter.on_timeout()")
                 self.adapter.on_timeout(current_test, result.served)
             else:
-                LOG.debug("calling self.adapter.on_served()")
+                LOG.debug("calling adapter.on_served()")
                 self.adapter.on_served(current_test, result.served)
             if not result.attempted:
                 LOG.warning("Test case was not served")
