@@ -385,3 +385,8 @@ class GrizzlyArgs(CommonArgs):
 
         if args.runtime < 0:
             self.parser.error("--runtime must be >= 0")
+
+        if args.smoke_test:
+            if args.limit == 0:
+                # set iteration limit for smoke-test
+                args.limit = 10
