@@ -127,25 +127,22 @@ class Runner:
         for retries in reversed(range(max_retries)):
             try:
                 self._target.launch(location)
-            except TargetLaunchError as exc:
-                # This is likely due to a bad build or environment configuration.
-                if retries:
+            except (TargetLaunchError, TargetLaunchTimeout) as exc:
+                if not retries:
+                    self.startup_failure = True
+                    LOG.error("Please verify browser build works as expected")
+                    raise
+                if isinstance(exc, TargetLaunchError):
+                    # This is likely due to a bad build or environment configuration.
                     LOG.warning("Failure detected during launch (retries %d)", retries)
                     exc.report.cleanup()
-                    sleep(retry_delay)
-                    continue
-                self.startup_failure = True
-                raise
-            except TargetLaunchTimeout:
-                # A TargetLaunchTimeout likely has nothing to do with Grizzly but is
-                # seen frequently on machines under a high load. After multiple
-                # consecutive timeouts something is likely wrong so raise.
-                if retries:
+                else:
+                    # A TargetLaunchTimeout likely has nothing to do with Grizzly but is
+                    # seen frequently on machines under a high load. After multiple
+                    # consecutive timeouts something is likely wrong so raise.
                     LOG.warning("Timeout detected during launch (retries %d)", retries)
-                    sleep(retry_delay)
-                    continue
-                self.startup_failure = True
-                raise
+                sleep(retry_delay)
+                continue
             break
 
     @staticmethod
