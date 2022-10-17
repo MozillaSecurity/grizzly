@@ -647,7 +647,7 @@ class ReplayManager:
             if success:
                 LOG.info("Result successfully reproduced")
             else:
-                LOG.info("Failed to reproduce results")
+                LOG.info("No results detected")
             if results and (args.logs or args.fuzzmanager):
                 # add target assets to test cases
                 if not target.assets.is_empty():
