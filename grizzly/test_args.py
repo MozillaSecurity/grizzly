@@ -44,6 +44,12 @@ def test_common_args_02(capsys, mocker, args, msg, idx):
         (["--log-limit", "-1"], "error: --log-limit must be >= 0", ["targ1"]),
         # test invalid memory limit
         (["--memory", "-1"], "error: --memory must be >= 0", ["targ1"]),
+        # test --no-harness and --time-limit
+        (
+            ["--no-harness", "--time-limit", "10"],
+            "error: --time-limit cannot be used with --no-harness",
+            ["targ1"],
+        ),
         # test invalid relaunch value
         (["--relaunch", "0"], "error: --relaunch must be >= 1", ["targ1"]),
         # test invalid asset

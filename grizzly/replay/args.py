@@ -46,11 +46,6 @@ class ReplayCommonArgs(CommonArgs):
             help="Require the testcase to crash n times before accepting the result."
             " Helpful for intermittent testcases (default: %(default)sx)",
         )
-        replay_args.add_argument(
-            "--no-harness",
-            action="store_true",
-            help="Don't use the harness for redirection. Implies '--relaunch=1'.",
-        )
         # hidden argument to add original crash ID as metadata when reported
         replay_args.add_argument("--original-crash-id", type=int, help=SUPPRESS)
         replay_args.add_argument(

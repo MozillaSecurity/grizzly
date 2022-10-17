@@ -121,6 +121,11 @@ class CommonArgs:
             help="Browser process memory limit in MBs (default: 'no limit')",
         )
         self.launcher_grp.add_argument(
+            "--no-harness",
+            action="store_true",
+            help="Don't use the harness for redirection. Implies '--relaunch=1'.",
+        )
+        self.launcher_grp.add_argument(
             "--platform",
             default="ffpuppet",
             choices=sorted(targets),
@@ -235,6 +240,11 @@ class CommonArgs:
         if args.memory < 0:
             self.parser.error("--memory must be >= 0")
         args.memory *= 1_048_576
+
+        if args.no_harness:
+            if args.time_limit is not None:
+                self.parser.error("--time-limit cannot be used with --no-harness")
+            # TODO: --no-harness implies --relaunch 1
 
         if args.relaunch < 1:
             self.parser.error("--relaunch must be >= 1")

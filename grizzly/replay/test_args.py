@@ -58,11 +58,6 @@ def test_replay_args_01(capsys, mocker, tmp_path):
         ),
         # test missing signature file
         (["--sig", "missing"], "error: signature file not found"),
-        # test any-crash with signature
-        (
-            ["--no-harness", "--time-limit", "10"],
-            "error: --time-limit cannot be used with --no-harness",
-        ),
     ],
 )
 def test_replay_args_02(capsys, mocker, tmp_path, args, msg):
