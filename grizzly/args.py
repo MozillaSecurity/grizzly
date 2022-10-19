@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
+from os import getenv
 from os.path import exists, isfile
 from pathlib import Path
 from platform import system
@@ -89,7 +90,7 @@ class CommonArgs:
             "--headless",
             choices=headless_choices,
             const="default",
-            default=None,
+            default="default" if self.is_headless() else None,
             nargs="?",
             help="Headless mode. 'default' uses browser's built-in headless mode.",
         )
@@ -214,6 +215,16 @@ class CommonArgs:
             "For addition help check out the wiki:"
             " https://github.com/MozillaSecurity/grizzly/wiki"
         )
+
+    @staticmethod
+    def is_headless():
+        if (
+            system().startswith("Linux")
+            and not getenv("DISPLAY")
+            and not getenv("WAYLAND_DISPLAY")
+        ):
+            return True
+        return False
 
     def parse_args(self, argv=None):
         args = self.parser.parse_args(argv)
