@@ -123,6 +123,18 @@ def test_common_args_04(tmp_path):
     CommonArgs().parse_args([str(fake_bin), "--logs", str(tmp_path)])
 
 
+def test_common_args_05(mocker):
+    """test CommonArgs.is_headless()"""
+    mocker.patch("grizzly.args.system", autospec=True, return_value="Linux")
+    getenv = mocker.patch("grizzly.args.getenv", autospec=True)
+    # test not headless
+    getenv.return_value = ":0"
+    assert not CommonArgs.is_headless()
+    # test headless
+    getenv.return_value = None
+    assert CommonArgs.is_headless()
+
+
 @mark.parametrize(
     "extra_args, results",
     [
