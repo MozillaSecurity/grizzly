@@ -33,6 +33,27 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 LOG = getLogger(__name__)
 
 
+class PuppetMonitor(TargetMonitor):
+    def __init__(self, puppet):
+        self._puppet = puppet
+
+    def clone_log(self, log_id, offset=0):
+        return self._puppet.clone_log(log_id, offset=offset)
+
+    def is_running(self):
+        return self._puppet.is_running()
+
+    def is_healthy(self):
+        return self._puppet.is_healthy()
+
+    @property
+    def launches(self):
+        return self._puppet.launches
+
+    def log_length(self, log_id):
+        return self._puppet.log_length(log_id)
+
+
 class PuppetTarget(Target):
     SUPPORTED_ASSETS = (
         # file containing line separated list of tokens to scan stderr/out for
@@ -136,26 +157,7 @@ class PuppetTarget(Target):
     @property
     def monitor(self):
         if self._monitor is None:
-
-            class _PuppetMonitor(TargetMonitor):
-                # pylint: disable=no-self-argument,protected-access
-                def clone_log(_, log_id, offset=0):
-                    return self._puppet.clone_log(log_id, offset=offset)
-
-                def is_running(_):
-                    return self._puppet.is_running()
-
-                def is_healthy(_):
-                    return self._puppet.is_healthy()
-
-                @property
-                def launches(_):
-                    return self._puppet.launches
-
-                def log_length(_, log_id):
-                    return self._puppet.log_length(log_id)
-
-            self._monitor = _PuppetMonitor()
+            self._monitor = PuppetMonitor(self._puppet)
         return self._monitor
 
     def check_result(self, ignored):
