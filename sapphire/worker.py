@@ -195,7 +195,7 @@ class Worker:
 
         except (sock_error, sock_timeout):
             _, exc_obj, exc_tb = exc_info()
-            LOG.debug("%r - line %d", exc_obj, exc_tb.tb_lineno)
+            LOG.debug("%r - line %r", exc_obj, exc_tb.tb_lineno if exc_tb else None)
             if not finish_job:
                 serv_job.accepting.set()
 
