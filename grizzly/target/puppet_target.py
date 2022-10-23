@@ -220,11 +220,11 @@ class PuppetTarget(Target):
             return
         # If at this point, the browser is in a good state, i.e. no crashes
         # or hangs, so signal the browser to dump coverage.
+        running_procs = 0
         signaled_pids = []
         try:
             # send SIGUSR1 to browser processes
             parent_proc = Process(pid)
-            running_procs = 0
             for proc in chain([parent_proc], parent_proc.children(recursive=True)):
                 # avoid sending SIGUSR1 to non-browser processes
                 if Path(proc.exe()).name.startswith("firefox"):

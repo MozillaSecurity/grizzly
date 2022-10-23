@@ -100,10 +100,10 @@ def client_factory():
                         with urlopen(
                             f"http://{addr}:{port}/{t_file.url}", timeout=10
                         ) as cli:
+                            data_length = 0
                             resp_code = cli.getcode()
                             content_type = cli.info().get("Content-Type")
                             if resp_code == 200:
-                                data_length = 0
                                 while True:
                                     data = cli.read(self.rx_size)
                                     data_length += len(data)

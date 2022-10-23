@@ -41,7 +41,7 @@ def test_iomanager_02(report_size, iters):
             size = len(iom.tests)
             assert precommit_size <= size
             assert size <= report_size
-        assert size == report_size
+        assert len(iom.tests) == report_size
         iom.purge()
         assert iom._test is None
         assert not iom.tests
