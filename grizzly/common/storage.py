@@ -326,8 +326,8 @@ class TestCase:
         assert isinstance(path, Path)
         # unpack archive if needed
         if path.name.lower().endswith(".zip"):
+            unpacked = mkdtemp(prefix="unpack_", dir=grz_tmp("storage"))
             try:
-                unpacked = mkdtemp(prefix="unpack_", dir=grz_tmp("storage"))
                 with ZipFile(path) as zip_fp:
                     zip_fp.extractall(path=unpacked)
             except (BadZipfile, zlib_error):

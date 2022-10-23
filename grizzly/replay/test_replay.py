@@ -715,6 +715,7 @@ def test_replay_21(mocker, tmp_path):
     # success
     fake_load.return_value = [test0, test1]
     tests, assets, env_vars = ReplayManager.load_testcases(str(tmp_path))
+    assert env_vars
     assert env_vars["env"] == "var"
     assert not any(x.env_vars for x in tests)
     assert len(tests) == 2

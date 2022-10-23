@@ -320,6 +320,7 @@ class ReplayManager:
                 # run tests
                 durations = []
                 served = []
+                run_result = None
                 for test_idx in range(test_count):
                     if test_count > 1:
                         LOG.info(
@@ -357,6 +358,7 @@ class ReplayManager:
                     served.append(run_result.served)
                     if run_result.status != Result.NONE or not run_result.attempted:
                         break
+                assert run_result is not None
                 if not run_result.attempted:
                     LOG.warning("Test case was not served")
                     if runner.initial:
