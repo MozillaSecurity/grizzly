@@ -78,9 +78,7 @@ def client_factory():
             skip_served=True,
             throttle=0,
         ):
-            assert isinstance(
-                files_to_request, list
-            ), "files_to_request should be a list"
+            assert isinstance(files_to_request, list)
             if delay:
                 time.sleep(delay)
             indexes = list(range(len(files_to_request)))
@@ -163,10 +161,10 @@ def client_factory():
                     # set code to zero to help testing
                     with t_file.lock:
                         LOG.debug(
-                            "%s - %s - line %d (processing: %s)",
+                            "%s - %s - line %r (processing: %s)",
                             exc_type.__name__,
                             exc_obj,
-                            exc_tb.tb_lineno,
+                            exc_tb.tb_lineno if exc_tb else None,
                             t_file.file,
                         )
                         if indicate_failure:
