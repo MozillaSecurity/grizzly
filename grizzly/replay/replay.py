@@ -13,7 +13,7 @@ from sapphire import Sapphire, ServerMap
 from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
 from ..common.runner import Runner
-from ..common.status import Status
+from ..common.status import SimpleStatus
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp, time_limits
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
@@ -37,7 +37,6 @@ class ReplayResult:
 
 class ReplayManager:
     HARNESS_FILE = str(Path(__file__).parent / ".." / "common" / "harness.html")
-    STATUS_DB = str(Path(grz_tmp()) / "replay-status.db")
 
     __slots__ = (
         "ignore",
@@ -278,7 +277,7 @@ class ReplayManager:
         assert self._harness is not None or len(testcases) == 1
         assert not expect_hang or self._signature is not None
 
-        self.status = Status.start(db_file=self.STATUS_DB)
+        self.status = SimpleStatus.start()
 
         server_map = ServerMap()
         if self._harness is None:

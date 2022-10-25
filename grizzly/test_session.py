@@ -17,7 +17,7 @@ from .common.runner import RunResult
 from .session import LogOutputLimiter, Session, SessionError
 from .target import AssetManager, Result, Target, TargetLaunchError
 
-pytestmark = mark.usefixtures("patch_collector", "tmp_path_status_db")
+pytestmark = mark.usefixtures("patch_collector", "tmp_path_status_db_fuzz")
 
 
 class SimpleAdapter(Adapter):

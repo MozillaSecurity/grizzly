@@ -10,16 +10,22 @@ from unittest.mock import Mock
 
 from pytest import mark, raises
 
+from .status import Status
 from .status_reporter import (
     ReductionStatus,
     ReductionStatusReporter,
-    Status,
     StatusReporter,
     TracebackReport,
     main,
 )
 
 GBYTES = 1_073_741_824
+
+
+pytestmark = mark.usefixtures(
+    "tmp_path_status_db_fuzz",
+    "tmp_path_status_db_reduce",
+)
 
 
 def _fake_sys_info():
@@ -42,18 +48,18 @@ def test_reduce_status_reporter_01():
 def test_reduce_status_reporter_02(mocker, tmp_path):
     """test ReductionStatusReporter.load()"""
     # missing reports path
-    st_rpt = ReductionStatusReporter.load(str(tmp_path / "status.db"))
+    st_rpt = ReductionStatusReporter.load(tmp_path / "status.db")
     assert not st_rpt.reports
 
     # empty reports and tb paths
-    st_rpt = ReductionStatusReporter.load(str(tmp_path / "status.db"), tb_path=tmp_path)
+    st_rpt = ReductionStatusReporter.load(tmp_path / "status.db", tb_path=tmp_path)
     assert not st_rpt.reports
     assert isinstance(st_rpt.tracebacks, list)
     assert not st_rpt.tracebacks
 
     # multiple reports
     size_cb = mocker.Mock(side_effect=count(start=1000, step=-100))
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     ReductionStatus.start(
         db_file=db_file,
         testcase_size_cb=size_cb,
@@ -73,7 +79,7 @@ def test_reduce_status_reporter_03(mocker, tmp_path):
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
     mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
     size_cb = mocker.Mock(side_effect=count(start=1000, step=-100))
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     # single report
     status = ReductionStatus.start(
         db_file=db_file,
@@ -115,7 +121,7 @@ def test_reduce_status_reporter_03(mocker, tmp_path):
 def test_reduce_status_reporter_04(mocker, tmp_path):
     """test ReductionStatusReporter.specific()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     # single report
     status = ReductionStatus.start(
         db_file=db_file,
@@ -153,7 +159,7 @@ def test_reduce_status_reporter_04(mocker, tmp_path):
 
 def test_reduce_status_reporter_05(tmp_path):
     """test ReductionStatusReporter.load() with traceback"""
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     status = ReductionStatus.start(
         db_file=db_file,
         testcase_size_cb=lambda: 47,
@@ -205,10 +211,10 @@ def test_status_reporter_01():
 def test_status_reporter_02(tmp_path):
     """test StatusReporter.load()"""
     # missing reports path
-    st_rpt = StatusReporter.load(str(tmp_path / "status.db"))
+    st_rpt = StatusReporter.load(tmp_path / "status.db")
     assert not st_rpt.reports
     # empty reports and tb paths
-    st_rpt = StatusReporter.load(str(tmp_path / "status.db"), tb_path=tmp_path)
+    st_rpt = StatusReporter.load(tmp_path / "status.db", tb_path=tmp_path)
     assert isinstance(st_rpt.reports, list)
     assert not st_rpt.reports
     assert isinstance(st_rpt.tracebacks, list)
@@ -273,9 +279,9 @@ def test_status_reporter_04(mocker, tmp_path):
     """test StatusReporter.summary()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
     mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     # single report
-    status = Status.start(db_file=db_file)
+    status = Status.start(db_file)
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
@@ -295,7 +301,7 @@ def test_status_reporter_04(mocker, tmp_path):
     assert "Timestamp" not in output
     assert len(output.split("\n")) == 3
     # multiple reports
-    status = Status.start(db_file=db_file)
+    status = Status.start(db_file)
     status.ignored = 1
     status.iteration = 8
     status.log_size = 86900000
@@ -324,9 +330,9 @@ def test_status_reporter_04(mocker, tmp_path):
 def test_status_reporter_05(mocker, tmp_path):
     """test StatusReporter.specific()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     # single report
-    status = Status.start(db_file=db_file)
+    status = Status.start(db_file)
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
@@ -341,7 +347,7 @@ def test_status_reporter_05(mocker, tmp_path):
     assert "(Blockers detected)" not in output
     assert "Runtime" in output
     # multiple reports
-    status = Status.start(db_file=db_file, enable_profiling=True)
+    status = Status.start(db_file, enable_profiling=True)
     status.ignored = 1
     status.iteration = 50
     status.results.count("uid1", "sig1")
@@ -369,9 +375,9 @@ def test_status_reporter_05(mocker, tmp_path):
 def test_status_reporter_06(mocker, tmp_path):
     """test StatusReporter.results()"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2, 3))
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     # single report without results
-    status = Status.start(db_file=db_file)
+    status = Status.start(db_file)
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
@@ -382,13 +388,13 @@ def test_status_reporter_06(mocker, tmp_path):
     assert not rptr.has_results
     assert rptr.results() == "No results available\n"
     # multiple reports with results
-    status = Status.start(db_file=db_file)
+    status = Status.start(db_file)
     status.iteration = 1
     status.results.count("uid1", "[@ test1]")
     status.results.count("uid2", "[@ test2]")
     status.results.count("uid1", "[@ test1]")
     status.report(force=True)
-    status = Status.start(db_file=db_file)
+    status = Status.start(db_file)
     status.iteration = 1
     status.results.count("uid1", "[@ test1]")
     status.results.count("uid3", "[@ longsignature123]")
@@ -406,8 +412,8 @@ def test_status_reporter_06(mocker, tmp_path):
 
 def test_status_reporter_07(tmp_path):
     """test StatusReporter.load() with traceback"""
-    db_file = str(tmp_path / "status.db")
-    status = Status.start(db_file=db_file)
+    db_file = tmp_path / "status.db"
+    status = Status.start(db_file)
     status.ignored = 0
     status.iteration = 1
     status.log_size = 0
@@ -451,7 +457,7 @@ def test_status_reporter_08(tmp_path):
         test_fp.write(b"Traceback (most recent call last):\n")
         test_fp.write(b"  blah\n")
         test_fp.write(b"IndexError: list index out of range\n")
-    rptr = StatusReporter.load(str(tmp_path / "status.db"), tb_path=tmp_path)
+    rptr = StatusReporter.load(tmp_path / "status.db", tb_path=tmp_path)
     rptr._sys_info = _fake_sys_info
     assert len(rptr.tracebacks) == 1
     output = rptr.summary()
@@ -463,16 +469,16 @@ def test_status_reporter_08(tmp_path):
 def test_status_reporter_09(mocker, tmp_path):
     """test StatusReporter.summary() limit with traceback"""
     mocker.patch("grizzly.common.status.getpid", side_effect=(1, 2))
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     # create reports
-    status = Status.start(db_file=db_file)
+    status = Status.start(db_file)
     status.ignored = 100
     status.iteration = 1000
     status.log_size = 9999999999
     status.results.count("uid1", "[@ sig1]")
     status.results._count["uid1"] = 123
     status.report(force=True)
-    status = Status.start(db_file=db_file)
+    status = Status.start(db_file)
     status.ignored = 9
     status.iteration = 192938
     status.log_size = 0
@@ -684,26 +690,25 @@ def test_traceback_report_08(tmp_path):
     assert "AssertionError" in output
 
 
-@mark.usefixtures("tmp_path_status_db")
-def test_main_01(mocker):
-    """test main() with no reports"""
-    mocker.patch(
-        "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
-    )
+def test_main_01(mocker, tmp_path):
+    """test main()"""
+    status_db = tmp_path / "status.db"
+    mocker.patch("grizzly.common.status_reporter.STATUS_DB_FUZZ", status_db)
+    # without a report
     assert main([]) == 0
-
-
-@mark.usefixtures("tmp_path_status_db")
-def test_main_02(mocker):
-    """test main() with a report"""
-    mocker.patch(
-        "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
-    )
-    status = Status.start()
+    # with a report
+    status = Status.start(status_db)
     status.iteration = 1
     status.results.count("uid", "[@ test]")
     status.report(force=True)
     assert main([]) == 0
+
+
+def test_main_02(capsys):
+    """test main() with invalid args"""
+    with raises(SystemExit):
+        main(["--tracebacks", "missing"])
+    assert "--tracebacks must be a directory" in capsys.readouterr()[-1]
 
 
 @mark.parametrize(
@@ -720,14 +725,14 @@ def test_main_02(mocker):
         "complete",
     ],
 )
-@mark.usefixtures("tmp_path_status_db", "tmp_path_reduce_status_db")
 def test_main_03(mocker, tmp_path, report_type, report_mode):
     """test main() --dump"""
-    mocker.patch(
-        "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
-    )
+    mocker.patch("grizzly.common.status_reporter.cpu_percent", return_value=10)
+    status_db = tmp_path / "status.db"
     if report_mode == "reducing":
+        mocker.patch("grizzly.common.status_reporter.STATUS_DB_FUZZ", status_db)
         status = ReductionStatus.start(
+            status_db,
             testcase_size_cb=lambda: 47,
             strategies=[],
         )
@@ -735,7 +740,8 @@ def test_main_03(mocker, tmp_path, report_type, report_mode):
             status.iteration = 1
         status.report(force=True)
     else:
-        status = Status.start()
+        mocker.patch("grizzly.common.status_reporter.STATUS_DB_REDUCE", status_db)
+        status = Status.start(status_db)
         status.iteration = 1
         status.report(force=True)
     dump_file = tmp_path / "output.txt"
@@ -759,14 +765,6 @@ def test_main_03(mocker, tmp_path, report_type, report_mode):
         assert b"Timestamp" not in dump_file.read_bytes()
 
 
-@mark.usefixtures("tmp_path_status_db")
-def test_main_04(capsys):
-    """test main() with invalid args"""
-    with raises(SystemExit):
-        main(["--tracebacks", "missing"])
-    assert "--tracebacks must be a directory" in capsys.readouterr()[-1]
-
-
 @mark.parametrize(
     "report_type",
     [
@@ -774,13 +772,13 @@ def test_main_04(capsys):
         "complete",
     ],
 )
-@mark.usefixtures("tmp_path_reduce_status_db")
-def test_main_05(mocker, tmp_path, report_type):
+def test_main_04(mocker, tmp_path, report_type):
     """test main() --dump"""
-    mocker.patch(
-        "grizzly.common.status_reporter.StatusReporter.CPU_POLL_INTERVAL", 0.01
-    )
+    mocker.patch("grizzly.common.status_reporter.cpu_percent", return_value=10)
+    status_db = tmp_path / "status.db"
+    mocker.patch("grizzly.common.status_reporter.STATUS_DB_REDUCE", status_db)
     status = ReductionStatus.start(
+        status_db,
         testcase_size_cb=lambda: 47,
         strategies=[],
     )

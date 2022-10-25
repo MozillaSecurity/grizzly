@@ -4,6 +4,7 @@
 """test Grizzly status"""
 # pylint: disable=protected-access
 
+from contextlib import closing
 from multiprocessing import Event, Process
 from sqlite3 import connect
 from time import sleep, time
@@ -13,41 +14,97 @@ from pytest import mark
 from .reporter import FuzzManagerReporter
 from .status import (
     DB_VERSION,
+    BaseStatus,
+    ReadOnlyResultCounter,
+    ReadOnlyStatus,
     ReductionStatus,
     ReductionStep,
     ResultCounter,
+    SimpleResultCounter,
+    SimpleStatus,
     Status,
     _db_version_check,
 )
 
 
-def test_status_01(mocker, tmp_path):
+def test_basic_status_01():
+    """test BaseStatus()"""
+    status = BaseStatus(1337, 1234567.89)
+    assert status is not None
+    assert status.pid == 1337
+    assert status.start_time > 0
+    assert status.ignored == 0
+    assert status.iteration == 0
+    assert status.log_size == 0
+    assert status.results is None
+    assert not status._profiles
+    assert status.runtime > 0
+    assert status.rate == 0
+    assert not any(status.profile_entries())
+
+
+def test_basic_status_02(mocker):
+    """test BaseStatus.runtime and BaseStatus.rate calculations"""
+    fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
+    fake_time.return_value = 1.0
+    status = BaseStatus(1337, 1.0)
+    assert status.start_time == 1
+    # test no iterations
+    fake_time.return_value = 3.0
+    assert status.runtime == 2.0
+    assert status.rate == 0
+    # test one iteration
+    status.iteration = 1
+    fake_time.return_value = 5.0
+    assert status.runtime == 4.0
+    assert status.rate == 0.25
+
+
+def test_readonly_status_01():
+    """test ReadOnlyStatus.runtime and ReadOnlyStatus.rate calculations"""
+    # load from empty db
+    status = ReadOnlyStatus(123, 1.0, 5.0)
+    assert status.start_time == 1
+    assert status.timestamp == 5
+    assert status.runtime == 4.0
+    assert status.iteration == 0
+    assert status.rate == 0
+    status.iteration = 1
+    assert status.rate == 0.25
+
+
+def test_simple_status_01():
+    """test SimpleStatus()"""
+    status = SimpleStatus.start()
+    assert status is not None
+    assert status.pid is not None
+    assert status.start_time > 0
+    assert status.results is not None
+
+
+def test_status_01(tmp_path):
     """test Status.start()"""
-    mocker.patch("grizzly.common.status.time", autospec=True, return_value=1.0)
-    status = Status.start(str(tmp_path / "status.db"))
+    status = Status.start(tmp_path / "status.db")
     assert status is not None
     assert status._db_file is not None
+    assert status.pid is not None
     assert status.start_time > 0
     assert status.timestamp >= status.start_time
     assert status.ignored == 0
     assert status.iteration == 0
     assert status.log_size == 0
-    assert status.rate == 0
-    assert status.results.total == 0
-    assert int(status.runtime) == 0
-    assert status.pid is not None
+    assert status.results is not None
     assert not status._enable_profiling
     assert not status._profiles
-    assert not any(status.blockers())
 
 
 def test_status_02(tmp_path):
     """test Status.report()"""
-    status = Status.start(str(tmp_path / "status.db"))
+    status = Status.start(tmp_path / "status.db")
     status.results.count("uid1", "sig1")
-    # try to report before REPORT_FREQ elapses
+    # try to report before REPORT_RATE elapses
     assert not status.report()
-    # REPORT_FREQ elapses
+    # REPORT_RATE elapses
     status.timestamp = 0
     assert status.report()
     assert status.timestamp > 0
@@ -59,17 +116,17 @@ def test_status_02(tmp_path):
 
 
 def test_status_03(tmp_path):
-    """test Status.loadall()"""
-    db_file = str(tmp_path / "status.db")
+    """test ReadOnlyStatus.load_all()"""
+    db_file = tmp_path / "status.db"
     # load from empty db
-    assert not any(Status.loadall(db_file))
+    assert not any(ReadOnlyStatus.load_all(db_file))
     # create simple entry
     status = Status.start(db_file, enable_profiling=True)
     status.results.count("uid1", "sig1")
     status.record("test", 123.45)
     status.report(force=True)
     assert status.results.total == 1
-    loaded = next(Status.loadall(db_file))
+    loaded = next(ReadOnlyStatus.load_all(db_file))
     assert status.start_time == loaded.start_time
     assert status.timestamp == loaded.timestamp
     assert status.runtime >= loaded.runtime
@@ -78,41 +135,40 @@ def test_status_03(tmp_path):
     assert status.log_size == loaded.log_size
     assert status.pid == loaded.pid
     assert loaded.results.get("uid1") == ("uid1", 1, "sig1")
-    assert not loaded._enable_profiling
     assert "test" in loaded._profiles
 
 
 def test_status_04(mocker, tmp_path):
-    """test Status.loadall() - multiple entries"""
+    """test ReadOnlyStatus.load_all() - multiple entries"""
     getpid = mocker.patch("grizzly.common.status.getpid", autospec=True)
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     for pid in range(5):
         getpid.return_value = pid
         Status.start(db_file)
-    assert len(tuple(Status.loadall(db_file))) == 5
+    assert len(tuple(ReadOnlyStatus.load_all(db_file))) == 5
 
 
 def test_status_05(mocker, tmp_path):
-    """test Status.loadall() - filter entries by time"""
+    """test ReadOnlyStatus.load_all() - filter entries by time"""
     fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
     fake_time.return_value = 1.0
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     # create entry
     status = Status.start(db_file)
     status.results.count("uid1", "sig1")
     assert status.results.total == 1
     status.report(force=True)
     # load entry
-    assert any(Status.loadall(db_file, time_limit=60))
+    assert any(ReadOnlyStatus.load_all(db_file, time_limit=60))
     # load with expired entry
     fake_time.return_value = 1200.0
-    assert not any(Status.loadall(db_file, time_limit=60))
+    assert not any(ReadOnlyStatus.load_all(db_file, time_limit=60))
     # load with no limit
-    assert any(Status.loadall(db_file, time_limit=0))
+    assert any(ReadOnlyStatus.load_all(db_file, time_limit=0))
     # load long running entry with a one month old result
     fake_time.return_value = 2592000.0
     status.report(force=True)
-    loaded = next(Status.loadall(db_file, time_limit=60))
+    loaded = next(ReadOnlyStatus.load_all(db_file, time_limit=60))
     assert status.start_time == loaded.start_time
     assert status.timestamp == loaded.timestamp
     assert status.runtime >= loaded.runtime
@@ -121,35 +177,6 @@ def test_status_05(mocker, tmp_path):
     assert status.log_size == loaded.log_size
     assert status.pid == loaded.pid
     assert loaded.results.get("uid1") == ("uid1", 1, "sig1")
-
-
-def test_status_06(mocker, tmp_path):
-    """test Status.runtime and Status.rate calculations"""
-    fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
-    fake_time.return_value = 1.0
-    db_file = str(tmp_path / "status.db")
-    status = Status.start(db_file)
-    assert status.start_time == 1
-    # test no iterations
-    fake_time.return_value = 3.0
-    assert status.runtime == 2.0
-    assert status.rate == 0
-    # test one iteration
-    status.iteration = 1
-    # timestamp should be ignored when calculating rate and runtime on active object
-    fake_time.return_value = 5.0
-    status.timestamp = 100
-    assert status.runtime == 4.0
-    assert status.rate == 0.25
-    # test loaded
-    status.report(force=True)
-    loaded = next(Status.loadall(db_file))
-    assert loaded.runtime == 4.0
-    assert loaded.rate == 0.25
-    # timestamp should be used when calculating rate and runtime on loaded object
-    loaded.timestamp = 2.0
-    assert loaded.runtime == 1.0
-    assert loaded.rate == 1.0
 
 
 # NOTE: this function must be at the top level to work on Windows
@@ -172,11 +199,11 @@ def _client_writer(db_file, begin, count):
         5,
     ],
 )
-def test_status_07(tmp_path, loads_in_parallel):
-    """test Status.loadall() with multiple active clients in parallel"""
+def test_status_06(tmp_path, loads_in_parallel):
+    """test ReadOnlyStatus.load_all() with multiple active clients in parallel"""
     begin = Event()
     clients = 10
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     iter_count = 5
     procs = []
     try:
@@ -190,13 +217,13 @@ def test_status_07(tmp_path, loads_in_parallel):
         begin.set()
         # attempt parallel loads
         for _ in range(loads_in_parallel):
-            tuple(Status.loadall(db_file))
+            tuple(ReadOnlyStatus.load_all(db_file))
         # wait for processes to report and exit
         for proc in procs:
             proc.join(timeout=60)
             assert proc.exitcode == 0
         # collect reports
-        reports = tuple(Status.loadall(db_file))
+        reports = tuple(ReadOnlyStatus.load_all(db_file))
         # check that each process created a report
         assert len(reports) == clients
         # check reported data
@@ -209,9 +236,9 @@ def test_status_07(tmp_path, loads_in_parallel):
             proc.join()
 
 
-def test_status_08(tmp_path):
+def test_status_07(tmp_path):
     """test Status.measure() and Status.record() - profiling support"""
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     # profiling disabled
     status = Status.start(db_file, enable_profiling=False)
     status.record("x", 10.1)
@@ -277,58 +304,25 @@ def test_status_08(tmp_path):
     assert len(tuple(status.profile_entries())) == 3
 
 
-@mark.parametrize(
-    "buckets, ratio, iterations, blockers",
-    [
-        # no results
-        ([], 1, 1, 0),
-        # one result seen once (not blocker since count == 1)
-        ([("uid1", "sig1", 1)], 1, 1, 0),
-        # one result seen 10x (not blocker)
-        ([("uid1", "sig1", 10)], 100, 10000, 0),
-        # one result seen 10x (blocker)
-        ([("uid1", "sig1", 10)], 100, 1000, 1),
-        # one result seen 95x (blocker)
-        ([("uid1", "sig1", 95)], 100, 1000, 1),
-        # multiple results seen once (not blocker since count == 1)
-        ([("uid1", "sig1", 1), ("uid2", "sig2", 1)], 1, 1, 0),
-        # multiple results seen once (one blockers)
-        ([("uid1", "sig1", 1), ("uid2", "sig2", 10)], 1000, 100, 1),
-        # multiple results seen once (two blockers)
-        ([("uid1", "sig1", 99), ("uid2", "sig2", 10)], 1000, 100, 2),
-    ],
-)
-def test_status_09(tmp_path, buckets, ratio, iterations, blockers):
-    """test Status.blockers()"""
-    status = Status.start(str(tmp_path / "status.db"))
-    status.iteration = iterations
-    # populate counter
-    for report_id, desc, count in buckets:
-        for _ in range(count):
-            status.results.count(report_id, desc)
-    # check for blockers
-    assert len(tuple(status.blockers(iters_per_result=ratio))) == blockers
-
-
-def test_status_10(mocker, tmp_path):
-    """test Status() - purge expired entries"""
+def test_status_08(mocker, tmp_path):
+    """test ReadOnlyStatus() - purge expired entries"""
     fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
-    db_file = str(tmp_path / "status.db")
-    # purge due to exp_limit
+    db_file = tmp_path / "status.db"
+    # purge due to life_time
     fake_time.return_value = 1.0
-    status = Status(db_file=db_file, start_time=1.0, pid=123, exp_limit=10)
+    status = Status(123, 1.0, db_file, life_time=10)
     status.report(force=True)
-    assert any(Status.loadall(db_file, time_limit=60))
+    assert any(ReadOnlyStatus.load_all(db_file, time_limit=60))
     fake_time.return_value = 20.0
-    Status(db_file=db_file, start_time=20.0, pid=456, exp_limit=10)
-    assert not any(Status.loadall(db_file, time_limit=60))
+    Status(456, 20.0, db_file, life_time=10)
+    assert not any(ReadOnlyStatus.load_all(db_file, time_limit=60))
     # purge due matching pid
     fake_time.return_value = 1.0
-    status = Status(db_file=db_file, start_time=1.0, pid=123, exp_limit=10)
+    status = Status(123, 1.0, db_file, life_time=10)
     status.report(force=True)
-    assert any(Status.loadall(db_file, time_limit=60))
-    Status(db_file=db_file, start_time=1.0, pid=123, exp_limit=10)
-    assert not any(Status.loadall(db_file, time_limit=60))
+    assert any(ReadOnlyStatus.load_all(db_file, time_limit=60))
+    Status(123, 1.0, db_file, life_time=10)
+    assert not any(ReadOnlyStatus.load_all(db_file, time_limit=60))
 
 
 def test_reduce_status_01(mocker, tmp_path):
@@ -340,7 +334,7 @@ def test_reduce_status_01(mocker, tmp_path):
         return 47
 
     status = ReductionStatus.start(
-        str(tmp_path / "status.db"),
+        tmp_path / "status.db",
         strategies=strategies,
         testcase_size_cb=fake_tc_size,
     )
@@ -366,12 +360,12 @@ def test_reduce_status_01(mocker, tmp_path):
 def test_reduce_status_02(tmp_path):
     """test ReductionStatus.report()"""
     status = ReductionStatus.start(
-        str(tmp_path / "status.db"),
+        tmp_path / "status.db",
         testcase_size_cb=lambda: 47,
     )
-    # try to report before REPORT_FREQ elapses
+    # try to report before REPORT_RATE elapses
     assert not status.report()
-    # REPORT_FREQ elapses
+    # REPORT_RATE elapses
     status.timestamp = 0
     assert status.report()
     assert status.timestamp > 0
@@ -383,16 +377,16 @@ def test_reduce_status_02(tmp_path):
 
 
 def test_reduce_status_03(tmp_path):
-    """test ReductionStatus.loadall()"""
-    db_file = str(tmp_path / "status.db")
+    """test ReductionStatus.load_all()"""
+    db_file = tmp_path / "status.db"
     strategies = [f"strategy_{idx}" for idx in range(5)]
     # create simple entry
     status = ReductionStatus.start(
-        str(tmp_path / "status.db"),
+        db_file,
         strategies=strategies,
         testcase_size_cb=lambda: 47,
     )
-    loaded = tuple(ReductionStatus.loadall(db_file))
+    loaded = tuple(ReductionStatus.load_all(db_file))
     assert len(loaded) == 1
     loaded = loaded[0]
     assert status.analysis == loaded.analysis
@@ -415,16 +409,16 @@ def test_reduce_status_03(tmp_path):
 
 
 def test_reduce_status_04(mocker, tmp_path):
-    """test ReductionStatus.loadall()"""
+    """test ReductionStatus.load_all()"""
     getpid = mocker.patch("grizzly.common.status.getpid", autospec=True)
-    db_file = str(tmp_path / "status.db")
+    db_file = tmp_path / "status.db"
     for pid in range(5):
         getpid.return_value = pid
         ReductionStatus.start(
             db_file,
             testcase_size_cb=lambda: 47,
         )
-    assert len(tuple(ReductionStatus.loadall(db_file))) == 5
+    assert len(tuple(ReductionStatus.load_all(db_file))) == 5
 
 
 def test_reduce_status_05(mocker, tmp_path):
@@ -448,7 +442,7 @@ def test_reduce_status_05(mocker, tmp_path):
     )
     testcase_size_cb = mocker.Mock(side_effect=lambda: ticks[0][1])
     status = ReductionStatus.start(
-        str(tmp_path / "status.db"),
+        tmp_path / "status.db",
         strategies=strategies,
         testcase_size_cb=testcase_size_cb,
     )
@@ -486,10 +480,7 @@ def test_reduce_status_05(mocker, tmp_path):
 def test_reduce_status_06(mocker, tmp_path):
     """test ReductionStatus in-progress milestones"""
     mocker.patch("grizzly.common.status.time", autospec=True, return_value=1.0)
-    status = ReductionStatus.start(
-        str(tmp_path / "status.db"),
-        testcase_size_cb=lambda: 47,
-    )
+    status = ReductionStatus.start(tmp_path / "status.db", testcase_size_cb=lambda: 47)
     with status.measure("milestone"):
         assert len(status.finished_steps) == 0
         status2 = status.copy()
@@ -515,7 +506,7 @@ def test_reduce_status_06(mocker, tmp_path):
     with status.measure("milestone2"):
         status.report(force=True)
 
-        loaded_status = tuple(ReductionStatus.loadall(str(tmp_path / "status.db")))
+        loaded_status = tuple(ReductionStatus.load_all(tmp_path / "status.db"))
         assert len(loaded_status) == 1
         loaded_status = loaded_status[0]
 
@@ -537,7 +528,7 @@ def test_reduce_status_07(mocker, tmp_path):
     """test ReductionStatus metadata"""
     reporter = mocker.Mock(spec_set=FuzzManagerReporter)
     status = ReductionStatus.start(
-        str(tmp_path / "status.db"),
+        tmp_path / "status.db",
         testcase_size_cb=lambda: 47,
         crash_id=123,
     )
@@ -556,29 +547,24 @@ def test_reduce_status_07(mocker, tmp_path):
 
 
 @mark.parametrize(
-    "keys, counts, limit, local_only",
+    "keys, counts, limit",
     [
         # no records
-        (["a"], [0], 1, True),
-        (["a"], [0], 1, False),
+        (["a"], [0], 1),
         # single record (not frequent)
-        (["a"], [1], 2, True),
-        (["a"], [1], 2, False),
+        (["a"], [1], 2),
         # single record (frequent)
-        (["a"], [1], 1, True),
-        (["a"], [1], 1, False),
+        (["a"], [1], 1),
         # single record no limit
-        (["a"], [1], 0, True),
-        (["a"], [1], 0, False),
+        (["a"], [1], 0),
         # multiple records
-        (["a", "b", "c"], [1, 2, 10], 5, True),
-        (["a", "b", "c"], [1, 2, 10], 5, False),
+        (["a", "b", "c"], [1, 2, 10], 5),
     ],
 )
-def test_report_counter_01(tmp_path, keys, counts, limit, local_only):
-    """test ResultCounter local functionality"""
-    db_path = None if local_only else str(tmp_path / "storage.db")
-    counter = ResultCounter(1, db_file=db_path, freq_limit=limit)
+def test_report_counter_01(tmp_path, keys, counts, limit):
+    """test ResultCounter functionality"""
+    db_path = tmp_path / "storage.db"
+    counter = ResultCounter(1, db_path, report_limit=limit)
     for report_id, count in zip(keys, counts):
         assert counter.get(report_id) == (report_id, 0, None)
         assert not counter.is_frequent(report_id)
@@ -600,7 +586,7 @@ def test_report_counter_01(tmp_path, keys, counts, limit, local_only):
             assert counter.is_frequent(report_id)
         else:
             assert limit == 0
-    for _report_id, count, _desc in counter.all():
+    for _report_id, count, _desc in counter:
         assert count > 0
     assert counter.total == sum(counts)
 
@@ -609,10 +595,10 @@ def test_report_counter_02(mocker, tmp_path):
     """test ResultCounter multi instance functionality"""
     fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
     fake_time.return_value = 1
-    db_path = str(tmp_path / "storage.db")
-    counter_a = ResultCounter(1, db_file=db_path, freq_limit=0)
-    counter_b = ResultCounter(2, db_file=db_path, freq_limit=1)
-    counter_c = ResultCounter(3, db_file=db_path, freq_limit=2)
+    db_path = tmp_path / "storage.db"
+    counter_a = ResultCounter(1, db_path, report_limit=0)
+    counter_b = ResultCounter(2, db_path, report_limit=1)
+    counter_c = ResultCounter(3, db_path, report_limit=2)
     # local counts are 0, global (all counters) count is 0
     assert not counter_a.is_frequent("a")
     assert not counter_b.is_frequent("a")
@@ -648,7 +634,7 @@ def test_report_counter_02(mocker, tmp_path):
     assert not counter_a.is_frequent("x")
     # remove 'expired' reports
     fake_time.return_value = 1000
-    counter_d = ResultCounter(4, db_file=db_path, freq_limit=2, exp_limit=10)
+    counter_d = ResultCounter(4, db_path, life_time=10, report_limit=2)
     # local (counter_d, bucket a) count is 0, global (all counters) count is 0
     assert not counter_d.is_frequent("a")
     assert counter_a.total == 2
@@ -658,14 +644,14 @@ def test_report_counter_02(mocker, tmp_path):
 
 
 def test_report_counter_03(mocker, tmp_path):
-    """test ResultCounter.load()"""
+    """test ReadOnlyResultCounter.load()"""
     fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
     fake_time.return_value = 1
-    db_path = str(tmp_path / "storage.db")
+    db_path = tmp_path / "storage.db"
     # load empty db
-    assert not ResultCounter.load(db_path, 10)
+    assert not ReadOnlyResultCounter.load(db_path, 10)
     # create counter
-    counter = ResultCounter(123, db_file=db_path, exp_limit=1)
+    counter = ResultCounter(123, db_path, life_time=1)
     counter.count("a", "desc_a")
     fake_time.return_value = 2
     counter.count("a", "desc_a")
@@ -674,18 +660,18 @@ def test_report_counter_03(mocker, tmp_path):
     # filter out reports by time
     fake_time.return_value = 4
     # last 1 second
-    assert not ResultCounter.load(db_path, 1)
+    assert not ReadOnlyResultCounter.load(db_path, 1)
     # last 2 seconds
-    loaded = ResultCounter.load(db_path, 2)[0]
+    loaded = ReadOnlyResultCounter.load(db_path, 2)[0]
     assert loaded.total == 1
     assert loaded.get("b") == ("b", 1, "desc_b")
     # last 3 seconds
-    loaded = ResultCounter.load(db_path, 3)[0]
+    loaded = ReadOnlyResultCounter.load(db_path, 3)[0]
     assert loaded.get("a") == ("a", 2, "desc_a")
     assert loaded.total == 3
     # increase time limit
     fake_time.return_value = 4
-    loaded = ResultCounter.load(db_path, 10)[0]
+    loaded = ReadOnlyResultCounter.load(db_path, 10)[0]
     assert loaded.total == counter.total == 3
     assert loaded.get("a") == ("a", 2, "desc_a")
     assert loaded.get("b") == ("b", 1, "desc_b")
@@ -695,31 +681,62 @@ def test_report_counter_04(mocker, tmp_path):
     """test ResultCounter remove expired entries"""
     fake_time = mocker.patch("grizzly.common.status.time", autospec=True)
     fake_time.return_value = 1
-    db_path = str(tmp_path / "storage.db")
-    counter = ResultCounter(123, db_file=db_path, exp_limit=0)
+    db_path = tmp_path / "storage.db"
+    counter = ResultCounter(123, db_path, life_time=0)
     counter.count("a", "desc_a")
     fake_time.return_value = 100
     counter.count("b", "desc_b")
-    loaded = ResultCounter.load(db_path, 100)[0]
+    loaded = ReadOnlyResultCounter.load(db_path, time_limit=100)[0]
     assert loaded.total == 2
-    # set exp_limit to zero to skip removing expired results
-    ResultCounter(124, db_file=db_path, exp_limit=0)
-    loaded = ResultCounter.load(db_path, 100)[0]
+    # set life_time to zero to skip removing expired results
+    ResultCounter(124, db_path, life_time=0)
+    loaded = ReadOnlyResultCounter.load(db_path, time_limit=100)[0]
     assert loaded.total == 2
-    # clear expired records from database by setting exp_limit
-    ResultCounter(125, db_file=db_path, exp_limit=10)
-    loaded = ResultCounter.load(db_path, 100)[0]
+    # clear expired records from database by setting life_time
+    ResultCounter(125, db_path, life_time=10)
+    loaded = ReadOnlyResultCounter.load(db_path, time_limit=100)[0]
     assert loaded.total == 1
     # clear expired records from database by using duplicate pid
-    ResultCounter(123, db_file=db_path, exp_limit=1000)
-    assert not ResultCounter.load(db_path, 100)
+    ResultCounter(123, db_path, life_time=1000)
+    assert not ReadOnlyResultCounter.load(db_path, time_limit=100)
+
+
+@mark.parametrize(
+    "buckets, ratio, iterations, blockers",
+    [
+        # no results
+        ([], 1, 1, 0),
+        # one result seen once (not blocker since count == 1)
+        ([("uid1", "sig1", 1)], 1, 1, 0),
+        # one result seen 10x (not blocker)
+        ([("uid1", "sig1", 10)], 100, 10000, 0),
+        # one result seen 10x (blocker)
+        ([("uid1", "sig1", 10)], 100, 1000, 1),
+        # one result seen 95x (blocker)
+        ([("uid1", "sig1", 95)], 100, 1000, 1),
+        # multiple results seen once (not blocker since count == 1)
+        ([("uid1", "sig1", 1), ("uid2", "sig2", 1)], 1, 1, 0),
+        # multiple results seen once (one blockers)
+        ([("uid1", "sig1", 1), ("uid2", "sig2", 10)], 1000, 100, 1),
+        # multiple results seen once (two blockers)
+        ([("uid1", "sig1", 99), ("uid2", "sig2", 10)], 1000, 100, 2),
+    ],
+)
+def test_simple_report_counter_01(buckets, ratio, iterations, blockers):
+    """test SimpleResultCounter.blockers()"""
+    counter = SimpleResultCounter(123)
+    # populate counter
+    for report_id, desc, count in buckets:
+        counter._desc[report_id] = desc
+        counter._count[report_id] = count
+    # check for blockers
+    assert len(tuple(counter.blockers(iterations, iters_per_result=ratio))) == blockers
 
 
 def test_db_version_check_01(tmp_path):
     """test _db_version_check()"""
-    db_path = str(tmp_path / "storage.db")
-    try:
-        con = connect(db_path)
+    db_path = tmp_path / "storage.db"
+    with closing(connect(db_path, timeout=10)) as con:
         # empty db
         assert _db_version_check(con, expected=DB_VERSION)
         # no update needed
@@ -728,5 +745,3 @@ def test_db_version_check_01(tmp_path):
         Status.start(db_path)
         # force update
         assert _db_version_check(con, expected=DB_VERSION + 1)
-    finally:
-        con.close()

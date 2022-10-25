@@ -22,7 +22,8 @@ from .replay import ReplayManager
 from .test_replay import _fake_save_logs
 
 pytestmark = mark.usefixtures(
-    "patch_collector", "tmp_path_grz_tmp", "tmp_path_replay_status_db"
+    "patch_collector",
+    "tmp_path_grz_tmp",
 )
 
 
