@@ -6,7 +6,7 @@ from time import time
 
 from .common.iomanager import IOManager
 from .common.runner import Runner
-from .common.status import Status
+from .common.status import STATUS_DB_FUZZ, Status
 from .target import Result, TargetLaunchError
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
@@ -98,6 +98,7 @@ class Session:
         self.reporter = reporter
         self.server = server
         self.status = Status.start(
+            STATUS_DB_FUZZ,
             enable_profiling=enable_profiling,
             report_limit=report_limit,
         )

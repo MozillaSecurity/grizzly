@@ -10,8 +10,7 @@ from .crash import main as crash_main
 
 pytestmark = mark.usefixtures(
     "tmp_path_fm_config",
-    "tmp_path_replay_status_db",
-    "tmp_path_reduce_status_db",
+    "tmp_path_status_db_reduce",
 )
 
 

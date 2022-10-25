@@ -23,7 +23,14 @@ from time import gmtime, localtime, strftime
 
 from psutil import cpu_count, cpu_percent, disk_usage, virtual_memory
 
-from .status import ReductionStatus, ReductionStep, Status
+from .status import (
+    REPORT_RATE,
+    STATUS_DB_FUZZ,
+    STATUS_DB_REDUCE,
+    ReadOnlyStatus,
+    ReductionStatus,
+    ReductionStep,
+)
 
 __all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"
@@ -63,7 +70,7 @@ class StatusReporter:
             StatusReporter: Contains available status reports and traceback reports.
         """
         return cls(
-            list(Status.loadall(db_file=db_file, time_limit=time_limit)),
+            list(ReadOnlyStatus.load_all(db_file, time_limit=time_limit)),
             tracebacks=None if tb_path is None else cls._tracebacks(tb_path),
         )
 
@@ -115,10 +122,10 @@ class StatusReporter:
         descs = {}
         # calculate totals
         for report in self.reports:
-            for result in report.results.all():
+            for result in report.results:
                 descs[result.rid] = result.desc
                 counts[result.rid] += result.count
-            blockers.update(x.rid for x in report.blockers())
+            blockers.update(x.rid for x in report.results.blockers(report.iteration))
         # generate output
         entries = []
         for rid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
@@ -169,7 +176,9 @@ class StatusReporter:
                 # avoid divide by zero if results are found before first update
                 iters = report.iteration if report.iteration else report.results.total
                 result_pct = report.results.total / float(iters) * 100
-                if any(report.blockers(iters_per_result=iters_per_result)):
+                if any(
+                    report.results.blockers(iters, iters_per_result=iters_per_result)
+                ):
                     blkd = " (Blockers detected)"
                 else:
                     blkd = ""
@@ -257,8 +266,13 @@ class StatusReporter:
                 if total_results:
                     disp.append(f" @ {round(result_pct, 1):0.1f}%")
                 if any(
-                    any(x.blockers(iters_per_result=iters_per_result))
-                    for x in self.reports
+                    any(
+                        report.results.blockers(
+                            report.iteration, iters_per_result=iters_per_result
+                        )
+                    )
+                    for report in self.reports
+                    if report.iteration > 0
                 ):
                     disp.append(" (Blockers)")
                 entries.append(("Results", "".join(disp)))
@@ -355,7 +369,7 @@ class StatusReporter:
         disp = []
         mem_usage = virtual_memory()
         if mem_usage.available < 1_073_741_824:  # < 1GB
-            disp.append(f"{mem_usage.available / 1_048_576}MB")
+            disp.append(f"{int(mem_usage.available / 1_048_576)}MB")
         else:
             disp.append(f"{mem_usage.available / 1_073_741_824.0:0.1f}GB")
         disp.append(f" of {mem_usage.total / 1_073_741_824.0:0.1f}GB free")
@@ -365,7 +379,7 @@ class StatusReporter:
         disp = []
         usage = disk_usage("/")
         if usage.free < 1_073_741_824:  # < 1GB
-            disp.append(f"{usage.free / 1_048_576}MB")
+            disp.append(f"{int(usage.free / 1_048_576)}MB")
         else:
             disp.append(f"{usage.free / 1_073_741_824.0:0.1f}GB")
         disp.append(f" of {usage.total / 1_073_741_824.0:0.1f}GB free")
@@ -628,7 +642,7 @@ class ReductionStatusReporter(StatusReporter):
         """
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
         return cls(
-            list(ReductionStatus.loadall(db_file=db_file, time_limit=time_limit)),
+            list(ReductionStatus.load_all(db_file, time_limit=time_limit)),
             tracebacks=tracebacks,
         )
 
@@ -840,8 +854,8 @@ def main(args=None):
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
     modes = {
-        "fuzzing": (StatusReporter, Status.STATUS_DB),
-        "reducing": (ReductionStatusReporter, ReductionStatus.STATUS_DB),
+        "fuzzing": (StatusReporter, STATUS_DB_FUZZ),
+        "reducing": (ReductionStatusReporter, STATUS_DB_REDUCE),
     }
 
     # report types: define name and time range of scan
@@ -888,7 +902,7 @@ def main(args=None):
 
     reporter_cls, status_db = modes.get(args.scan_mode)
     reporter = reporter_cls.load(
-        db_file=status_db,
+        status_db,
         tb_path=args.tracebacks,
         time_limit=report_types[args.type],
     )
@@ -912,7 +926,7 @@ def main(args=None):
 
     print(
         f"Grizzly Status - {strftime('%Y/%m/%d %X')} - "
-        f"Instance report frequency: {Status.REPORT_FREQ}s\n"
+        f"Instance report frequency: {REPORT_RATE}s\n"
     )
     print("[Reports]")
     print(reporter.specific())

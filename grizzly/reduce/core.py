@@ -18,7 +18,7 @@ from sapphire import Sapphire
 from ..common.fuzzmanager import CrashEntry
 from ..common.plugins import load as load_plugin
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Quality
-from ..common.status import ReductionStatus
+from ..common.status import STATUS_DB_REDUCE, ReductionStatus
 from ..common.status_reporter import ReductionStatusReporter
 from ..common.storage import TestCaseLoadFailure
 from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp, time_limits
@@ -137,6 +137,7 @@ class ReduceManager:
         self._signature_desc = signature_desc
         self._static_timeout = expect_hang or static_timeout
         self._status = ReductionStatus.start(
+            STATUS_DB_REDUCE,
             strategies=strategies,
             testcase_size_cb=self.testcase_size,
             crash_id=reducer_crash_id,
