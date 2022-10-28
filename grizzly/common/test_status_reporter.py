@@ -730,7 +730,7 @@ def test_main_03(mocker, tmp_path, report_type, report_mode):
     mocker.patch("grizzly.common.status_reporter.cpu_percent", return_value=10)
     status_db = tmp_path / "status.db"
     if report_mode == "reducing":
-        mocker.patch("grizzly.common.status_reporter.STATUS_DB_FUZZ", status_db)
+        mocker.patch("grizzly.common.status_reporter.STATUS_DB_REDUCE", status_db)
         status = ReductionStatus.start(
             status_db,
             testcase_size_cb=lambda: 47,
@@ -740,7 +740,7 @@ def test_main_03(mocker, tmp_path, report_type, report_mode):
             status.iteration = 1
         status.report(force=True)
     else:
-        mocker.patch("grizzly.common.status_reporter.STATUS_DB_REDUCE", status_db)
+        mocker.patch("grizzly.common.status_reporter.STATUS_DB_FUZZ", status_db)
         status = Status.start(status_db)
         status.iteration = 1
         status.report(force=True)
