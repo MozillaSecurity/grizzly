@@ -51,12 +51,9 @@ def main(args):
         if args.no_harness:
             LOG.info("Using timeout: %ds (no harness)", timeout)
         else:
-            LOG.info("Using test time limit: %ds, timeout: %ds", time_limit, timeout)
+            LOG.info("Using time limit: %ds, timeout: %ds", time_limit, timeout)
             if time_limit == timeout:
-                LOG.warning(
-                    "To avoid relaunches due to tests failing to close"
-                    " themselves use a timeout greater than time limit"
-                )
+                LOG.warning("To avoid unnecessary relaunches set timeout > time limit")
 
         if adapter.RELAUNCH > 0:
             LOG.info("Relaunch (%d) set in Adapter", adapter.RELAUNCH)
