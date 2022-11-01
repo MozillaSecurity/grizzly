@@ -167,7 +167,7 @@ class StatusReporter:
             )
             # ignored
             if report.ignored:
-                ignore_pct = report.ignored / float(report.iteration) * 100
+                ignore_pct = report.ignored / report.iteration * 100
                 entries.append(
                     ("Ignored", f"{report.ignored} @ {round(ignore_pct, 1)}%")
                 )
@@ -175,7 +175,7 @@ class StatusReporter:
             if report.results.total:
                 # avoid divide by zero if results are found before first update
                 iters = report.iteration if report.iteration else report.results.total
-                result_pct = report.results.total / float(iters) * 100
+                result_pct = report.results.total / iters * 100
                 if any(
                     report.results.blockers(iters, iters_per_result=iters_per_result)
                 ):
@@ -198,7 +198,7 @@ class StatusReporter:
                 for entry in sorted(
                     report.profile_entries(), key=lambda x: x.total, reverse=True
                 ):
-                    avg = entry.total / float(entry.count)
+                    avg = entry.total / entry.count
                     body = []
                     body.append(f"{entry.count}x ")
                     if entry.total > 300:
@@ -260,7 +260,7 @@ class StatusReporter:
             # Results
             if total_iters:
                 total_results = sum(results)
-                result_pct = total_results / float(total_iters) * 100
+                result_pct = total_results / total_iters * 100
                 disp = []
                 disp.append(str(total_results))
                 if total_results:
@@ -279,7 +279,7 @@ class StatusReporter:
 
             # Ignored
             if total_ignored:
-                ignore_pct = total_ignored / float(total_iters) * 100
+                ignore_pct = total_ignored / total_iters * 100
                 entries.append(
                     ("Ignored", f"{total_ignored} @ {round(ignore_pct, 1):0.1f}%")
                 )
@@ -290,14 +290,14 @@ class StatusReporter:
                 entries.append(("Runtime", str(timedelta(seconds=int(total_runtime)))))
 
             # Log size
-            log_usage = sum(log_sizes) / 1_048_576.0
+            log_usage = sum(log_sizes) / 1_048_576
             if log_usage > self.DISPLAY_LIMIT_LOG:
                 disp = []
                 disp.append(f"{log_usage:0.1f}MB")
                 if count > 1:
                     disp.append(
-                        f" ({max(log_sizes) / 1_048_576.0:0.2f}MB, "
-                        f"{min(log_sizes) / 1_048_576.0:0.2f}MB)"
+                        f" ({max(log_sizes) / 1_048_576:0.2f}MB, "
+                        f"{min(log_sizes) / 1_048_576:0.2f}MB)"
                     )
                 entries.append(("Logs", "".join(disp)))
         else:
@@ -371,8 +371,8 @@ class StatusReporter:
         if mem_usage.available < 1_073_741_824:  # < 1GB
             disp.append(f"{int(mem_usage.available / 1_048_576)}MB")
         else:
-            disp.append(f"{mem_usage.available / 1_073_741_824.0:0.1f}GB")
-        disp.append(f" of {mem_usage.total / 1_073_741_824.0:0.1f}GB free")
+            disp.append(f"{mem_usage.available / 1_073_741_824:0.1f}GB")
+        disp.append(f" of {mem_usage.total / 1_073_741_824:0.1f}GB free")
         entries.append(("Memory", "".join(disp)))
 
         # disk usage
@@ -381,8 +381,8 @@ class StatusReporter:
         if usage.free < 1_073_741_824:  # < 1GB
             disp.append(f"{int(usage.free / 1_048_576)}MB")
         else:
-            disp.append(f"{usage.free / 1_073_741_824.0:0.1f}GB")
-        disp.append(f" of {usage.total / 1_073_741_824.0:0.1f}GB free")
+            disp.append(f"{usage.free / 1_073_741_824:0.1f}GB")
+        disp.append(f" of {usage.total / 1_073_741_824:0.1f}GB free")
         entries.append(("Disk", "".join(disp)))
 
         return entries
@@ -651,7 +651,7 @@ class ReductionStatusReporter(StatusReporter):
         return (
             "Analysis",
             ", ".join(
-                f"{desc}: {100 * reliability}%"
+                f"{desc}: {100 * reliability:0.2f}%"
                 for desc, reliability in report.analysis.items()
             ),
         )
