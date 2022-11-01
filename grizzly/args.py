@@ -83,6 +83,11 @@ class CommonArgs:
             help="DEPRECATED. Install an extension. Specify the path to the xpi or the"
             " directory containing the unpacked extension.",
         )
+        self.launcher_grp.add_argument(
+            "--display-launch-failures",
+            action="store_true",
+            help="Output launch failure logs to console. (default: %(default)s)",
+        )
         headless_choices = ["default"]
         if system().startswith("Linux"):
             headless_choices.append("xvfb")

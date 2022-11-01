@@ -11,7 +11,12 @@ from FTB.Signatures.CrashInfo import CrashSignature
 from sapphire import Sapphire, ServerMap
 
 from ..common.plugins import load as load_plugin
-from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Report
+from ..common.reporter import (
+    FailedLaunchReporter,
+    FilesystemReporter,
+    FuzzManagerReporter,
+    Report,
+)
 from ..common.runner import Runner
 from ..common.status import SimpleStatus
 from ..common.storage import TestCase, TestCaseLoadFailure
@@ -675,12 +680,10 @@ class ReplayManager:
             return Exit.ABORT
 
         except (TargetLaunchError, TargetLaunchTimeout) as exc:
-            LOG.error(str(exc))
             if isinstance(exc, TargetLaunchError) and exc.report:
-                path = grz_tmp("launch_failures")
-                LOG.error("Logs can be found here %r", path)
-                reporter = FilesystemReporter(path, major_bucket=False)
-                reporter.submit([], exc.report)
+                FailedLaunchReporter(args.display_launch_failures).submit(
+                    [], exc.report
+                )
             return Exit.LAUNCH_FAILURE
 
         finally:

@@ -130,17 +130,19 @@ class Runner:
             except (TargetLaunchError, TargetLaunchTimeout) as exc:
                 if not retries:
                     self.startup_failure = True
-                    LOG.error("Please verify browser build works as expected")
+                    LOG.error(
+                        "Launch failed, please verify browser build works as expected"
+                    )
                     raise
                 if isinstance(exc, TargetLaunchError):
                     # This is likely due to a bad build or environment configuration.
-                    LOG.warning("Failure detected during launch (retries %d)", retries)
+                    LOG.warning("Failure during launch (retries %d)", retries)
                     exc.report.cleanup()
                 else:
                     # A TargetLaunchTimeout likely has nothing to do with Grizzly but is
                     # seen frequently on machines under a high load. After multiple
                     # consecutive timeouts something is likely wrong so raise.
-                    LOG.warning("Timeout detected during launch (retries %d)", retries)
+                    LOG.warning("Timeout during launch (retries %d)", retries)
                 sleep(retry_delay)
                 continue
             break

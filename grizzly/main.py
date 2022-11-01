@@ -8,7 +8,11 @@ from sapphire import Sapphire
 
 from .adapter import Adapter
 from .common.plugins import load as load_plugin
-from .common.reporter import FilesystemReporter, FuzzManagerReporter
+from .common.reporter import (
+    FailedLaunchReporter,
+    FilesystemReporter,
+    FuzzManagerReporter,
+)
 from .common.utils import Exit, configure_logging, time_limits
 from .session import Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
@@ -130,7 +134,8 @@ def main(args):
         return Exit.ABORT
 
     except (TargetLaunchError, TargetLaunchTimeout) as exc:
-        LOG.error(str(exc))
+        if isinstance(exc, TargetLaunchError) and exc.report:
+            FailedLaunchReporter(args.display_launch_failures).submit([], exc.report)
         return Exit.LAUNCH_FAILURE
 
     finally:

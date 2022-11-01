@@ -202,26 +202,22 @@ def test_main_03(mocker):
     fake_load_target.reset_mock()
 
 
-def test_main_04(mocker, tmp_path):
+def test_main_04(mocker):
     """test ReplayManager.main() target exceptions"""
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
+    reporter = mocker.patch("grizzly.replay.replay.FailedLaunchReporter", autospec=True)
     mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
     mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
-    target = mocker.NonCallableMock(spec_set=Target, launch_timeout=30)
     mocker.patch(
         "grizzly.replay.replay.load_plugin",
         autospec=True,
-        return_value=mocker.Mock(spec_set=Target, return_value=target),
-    )
-    fake_tmp = tmp_path / "grz_tmp"
-    fake_tmp.mkdir()
-    mocker.patch(
-        "grizzly.replay.replay.grz_tmp", autospec=True, return_value=str(fake_tmp)
+        return_value=mocker.Mock(
+            spec_set=Target,
+            return_value=mocker.NonCallableMock(spec_set=Target, launch_timeout=30),
+        ),
     )
     # setup args
-    args = mocker.Mock(
-        asset=[],
-        ignore=[],
+    args = mocker.MagicMock(
         input="test",
         min_crashes=1,
         no_harness=True,
@@ -237,21 +233,19 @@ def test_main_04(mocker, tmp_path):
         valgrind=False,
     )
     # target launch error
-    fake_logs = tmp_path / "fake_report"
-    fake_logs.mkdir()
-    report = mocker.Mock(spec_set=Report, prefix="fake_report", path=str(fake_logs))
     mocker.patch(
         "grizzly.replay.replay.ReplayManager.run",
-        side_effect=TargetLaunchError("", report),
+        side_effect=TargetLaunchError("", mocker.Mock(spec_set=Report)),
     )
     assert ReplayManager.main(args) == Exit.LAUNCH_FAILURE
-    assert not fake_logs.is_dir()
-    assert "fake_report_logs" in (x.name for x in fake_tmp.iterdir())
+    assert reporter.return_value.submit.call_count == 1
+    reporter.reset_mock()
     # target launch timeout
     mocker.patch(
         "grizzly.replay.replay.ReplayManager.run", side_effect=TargetLaunchTimeout
     )
     assert ReplayManager.main(args) == Exit.LAUNCH_FAILURE
+    assert reporter.return_value.submit.call_count == 0
 
 
 def test_main_05(mocker, tmp_path):

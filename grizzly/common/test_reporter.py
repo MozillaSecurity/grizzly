@@ -8,7 +8,12 @@ from FTB.ProgramConfiguration import ProgramConfiguration
 from pytest import mark, raises
 
 from .report import Report
-from .reporter import FilesystemReporter, FuzzManagerReporter, Reporter
+from .reporter import (
+    FailedLaunchReporter,
+    FilesystemReporter,
+    FuzzManagerReporter,
+    Reporter,
+)
 from .storage import TestCase
 
 
@@ -111,7 +116,7 @@ def test_filesystem_reporter_03(tmp_path):
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     reporter = FilesystemReporter(tmp_path / "reports")
     reporter.min_space = 2**50
-    with raises(RuntimeError, match="Running low on disk space"):
+    with raises(RuntimeError, match="Low disk space: "):
         reporter.submit([], Report(log_path, "fake_bin"))
 
 
@@ -220,3 +225,10 @@ def test_fuzzmanager_reporter_03(mocker, tmp_path):
     # ignored - Valgrind OOM
     log_file.write_bytes(b"VEX temporary storage exhausted.")
     assert FuzzManagerReporter._ignored(report)
+
+
+def test_failed_launch_reporter_01(tmp_path):
+    """test FailedLaunchReporter()"""
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    FailedLaunchReporter().submit([], Report(tmp_path, "fake_bin"))
