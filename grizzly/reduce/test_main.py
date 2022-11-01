@@ -169,7 +169,7 @@ def test_main_exit(
 def test_main_launch_error(mocker, exc_type):
     mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
-    reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
+    reporter = mocker.patch("grizzly.reduce.core.FailedLaunchReporter", autospec=True)
     mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)
     mocker.patch(
         "grizzly.reduce.core.ReplayManager.load_testcases",

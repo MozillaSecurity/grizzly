@@ -15,7 +15,7 @@ from .adapter import Adapter
 from .common.reporter import Report, Reporter
 from .common.runner import RunResult
 from .session import LogOutputLimiter, Session, SessionError
-from .target import AssetManager, Result, Target, TargetLaunchError
+from .target import AssetManager, Result, Target
 
 pytestmark = mark.usefixtures("patch_collector", "tmp_path_status_db_fuzz")
 
@@ -386,27 +386,6 @@ def test_session_08(mocker):
 
 
 def test_session_09(mocker):
-    """test Session.run() handle TargetLaunchError"""
-    report = mocker.Mock(
-        spec_set=Report, major="major123", minor="minor456", crash_hash="123"
-    )
-    report.crash_info.createShortSignature.return_value = "[@ sig]"
-    runner = mocker.patch("grizzly.session.Runner", autospec=True)
-    runner.return_value.launch.side_effect = TargetLaunchError("test", report)
-    runner.return_value.startup_failure = True
-    adapter = mocker.Mock(spec_set=Adapter, remaining=None)
-    server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(spec_set=Target)
-    target.monitor.launches = 1
-    with Session(adapter, mocker.Mock(spec_set=Reporter), server, target) as session:
-        with raises(TargetLaunchError, match="test"):
-            session.run([], 10, iteration_limit=2)
-        assert session.status.iteration == 1
-        assert session.status.results.total == 1
-        assert session.status.ignored == 0
-
-
-def test_session_10(mocker):
     """test Session.run() report hang"""
     result = RunResult([], 60.0, status=Result.FOUND, timeout=True)
     result.attempted = True
@@ -445,7 +424,7 @@ def test_session_10(mocker):
         (True, 1, 1, 10, 5),
     ],
 )
-def test_session_11(mocker, harness, report_size, relaunch, iters, report_limit):
+def test_session_10(mocker, harness, report_size, relaunch, iters, report_limit):
     """test Session - limit report submission"""
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)

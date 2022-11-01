@@ -318,7 +318,6 @@ class PuppetTarget(Target):
                 env_mod=env_mod,
             )
         except LaunchError as exc:
-            LOG.error("LaunchError: %s", str(exc))
             self.close()
             if isinstance(exc, BrowserTimeoutError):
                 raise TargetLaunchTimeout(str(exc)) from None

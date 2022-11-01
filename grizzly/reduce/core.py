@@ -17,11 +17,16 @@ from sapphire import Sapphire
 
 from ..common.fuzzmanager import CrashEntry
 from ..common.plugins import load as load_plugin
-from ..common.reporter import FilesystemReporter, FuzzManagerReporter, Quality
+from ..common.reporter import (
+    FailedLaunchReporter,
+    FilesystemReporter,
+    FuzzManagerReporter,
+    Quality,
+)
 from ..common.status import STATUS_DB_REDUCE, ReductionStatus
 from ..common.status_reporter import ReductionStatusReporter
 from ..common.storage import TestCaseLoadFailure
-from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp, time_limits
+from ..common.utils import ConfigError, Exit, configure_logging, time_limits
 from ..replay import ReplayManager
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
@@ -882,12 +887,10 @@ class ReduceManager:
             return Exit.ABORT
 
         except (TargetLaunchError, TargetLaunchTimeout) as exc:
-            LOG.error("Exception: %s", exc)
             if isinstance(exc, TargetLaunchError) and exc.report:
-                path = grz_tmp("launch_failures")
-                LOG.error("Logs can be found here %r", path)
-                reporter = FilesystemReporter(path, major_bucket=False)
-                reporter.submit([], exc.report)
+                FailedLaunchReporter(args.display_launch_failures).submit(
+                    [], exc.report
+                )
             return Exit.LAUNCH_FAILURE
 
         except GrizzlyReduceBaseException as exc:

@@ -80,19 +80,26 @@ def test_main_01(mocker, adpt_relaunch, extra_args):
     "exit_code, to_raise",
     [
         # test user abort
-        (Exit.ABORT, KeyboardInterrupt()),
+        (Exit.ABORT, KeyboardInterrupt),
         # test launch failure
-        (Exit.LAUNCH_FAILURE, TargetLaunchError("test", None)),
+        (Exit.LAUNCH_FAILURE, TargetLaunchError),
     ],
 )
 def test_main_02(mocker, exit_code, to_raise):
     """test main() - exit codes"""
+    mocker.patch("grizzly.main.FailedLaunchReporter", autospec=True)
     mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
     fake_target = mocker.Mock(spec_set=Target)
     mocker.patch("grizzly.main.load_plugin", side_effect=(FakeAdapter, fake_target))
     fake_session = mocker.patch("grizzly.main.Session", autospec=True)
     fake_session.return_value.status.results.total = 0
-    fake_session.return_value.run.side_effect = to_raise
+    if to_raise == TargetLaunchError:
+        fake_session.return_value.run.side_effect = TargetLaunchError(
+            "test", mocker.Mock()
+        )
+    else:
+        fake_session.return_value.run.side_effect = to_raise()
+
     args = mocker.MagicMock(adapter="fake", time_limit=1, timeout=1)
     assert main(args) == exit_code
     assert fake_target.return_value.cleanup.call_count == 1

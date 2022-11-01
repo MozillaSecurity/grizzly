@@ -7,7 +7,7 @@ from time import time
 from .common.iomanager import IOManager
 from .common.runner import Runner
 from .common.status import STATUS_DB_FUZZ, Status
-from .target import Result, TargetLaunchError
+from .target import Result
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
 __author__ = "Tyson Smith"
@@ -192,23 +192,8 @@ class Session:
                     close_after=relaunch if harness else None,
                     time_limit=time_limit if harness else None,
                 )
-                try:
-                    with self.status.measure("launch"):
-                        runner.launch(
-                            location, max_retries=launch_attempts, retry_delay=0
-                        )
-                except TargetLaunchError as exc:
-                    short_sig = exc.report.crash_info.createShortSignature()
-                    LOG.info(
-                        "Result: %s (%s:%s)",
-                        short_sig,
-                        exc.report.major[:8],
-                        exc.report.minor[:8],
-                    )
-                    self.status.results.count(exc.report.crash_hash, short_sig)
-                    self.reporter.submit([], exc.report)
-                    exc.report.cleanup()
-                    raise TargetLaunchError(str(exc), None) from None
+                with self.status.measure("launch"):
+                    runner.launch(location, max_retries=launch_attempts, retry_delay=0)
 
             # create and populate a test case
             current_test = self.generate_testcase(time_limit)

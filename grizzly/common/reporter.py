@@ -140,10 +140,22 @@ class FilesystemReporter(Reporter):
         # avoid filling the disk
         free_space = disk_usage(str(log_path)).free
         if free_space < self.min_space:
-            raise RuntimeError(
-                f"Running low on disk space ({free_space / 1048576.0:0.1f}MB)"
-            )
+            raise RuntimeError(f"Low disk space: {free_space / 1_048_576:0.1f}MBs")
         return dest
+
+
+class FailedLaunchReporter(FilesystemReporter):
+    """Save launch failure reports to disk."""
+
+    def __init__(self, display=False):
+        super().__init__(grz_tmp("launch_failures"), major_bucket=False)
+        self.display_logs = display
+        if not display:
+            LOG.info("Display logs with --display-launch-failures")
+
+    def _post_submit(self):
+        super()._post_submit()
+        LOG.info("Logs can be found here '%s'", self.report_path)
 
 
 class FuzzManagerReporter(Reporter):
