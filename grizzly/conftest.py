@@ -19,9 +19,11 @@ def patch_collector(mocker):
 def tmp_path_status_db_fuzz(tmp_path, mocker):
     """Use a temporary status database file for testing."""
     mocker.patch("grizzly.common.status.STATUS_DB_FUZZ", tmp_path / "fuzzing-tmp.db")
+    mocker.patch("grizzly.session.STATUS_DB_FUZZ", tmp_path / "fuzzing-tmp.db")
 
 
 @fixture
 def tmp_path_status_db_reduce(tmp_path, mocker):
     """Use a temporary status database file for testing."""
     mocker.patch("grizzly.common.status.STATUS_DB_REDUCE", tmp_path / "reduce-tmp.db")
+    mocker.patch("grizzly.reduce.core.STATUS_DB_REDUCE", tmp_path / "fuzzing-tmp.db")
