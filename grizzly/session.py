@@ -267,7 +267,14 @@ class Session:
                 report.cleanup()
             elif result.status == Result.IGNORED:
                 self.status.ignored += 1
-                LOG.info("Ignored - %d", self.status.ignored)
+                if result.timeout:
+                    LOG.info(
+                        "Ignored - %d; timeout, idle: %r",
+                        self.status.ignored,
+                        result.idle,
+                    )
+                else:
+                    LOG.info("Ignored - %d", self.status.ignored)
 
             # ignore startup failure if it did not happen early on
             # to avoid aborting the fuzzing session unnecessarily

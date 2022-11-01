@@ -215,22 +215,19 @@ def test_replay_06(mocker):
 
 
 def test_replay_07(mocker):
-    """test ReplayManager.run() - ignored"""
+    """test ReplayManager.run() - ignored (timeout)"""
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    server.serve_path.return_value = (Served.ALL, ["a.html"])
+    server.serve_path.return_value = (Served.TIMEOUT, ["a.html"])
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     target.check_result.return_value = Result.IGNORED
-    target.monitor.is_healthy.return_value = False
-    testcases = [
-        mocker.Mock(spec_set=TestCase, env_vars={}, landing_page="a.html", optional=[])
-    ]
+    target.handle_hang.return_value = True
+    testcases = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
     with ReplayManager([], server, target, use_harness=False) as replay:
         assert not replay.run(testcases, 10)
-        assert target.monitor.is_healthy.call_count == 1
-        assert target.close.call_count == 2
         assert replay.status.ignored == 1
         assert replay.status.iteration == 1
         assert replay.status.results.total == 0
+    assert target.handle_hang.call_count == 1
 
 
 def test_replay_08(mocker):

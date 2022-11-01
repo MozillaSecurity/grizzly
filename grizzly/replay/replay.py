@@ -451,7 +451,14 @@ class ReplayManager:
                         report = None
                 elif run_result.status == Result.IGNORED:
                     self.status.ignored += 1
-                    LOG.info("Result: Ignored (%d)", self.status.ignored)
+                    if run_result.timeout:
+                        LOG.info(
+                            "Result: Ignored (%d); timeout, idle: %r",
+                            self.status.ignored,
+                            run_result.idle,
+                        )
+                    else:
+                        LOG.info("Result: Ignored (%d)", self.status.ignored)
 
                 if exit_early and self.status.iteration < repeat:
                     # check if failed to meet minimum number of results
