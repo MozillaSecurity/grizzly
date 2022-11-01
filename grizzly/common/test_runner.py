@@ -14,10 +14,21 @@ from .runner import Runner, _IdleChecker
 from .storage import TestCase
 
 
-def test_runner_01(mocker):
+@mark.parametrize(
+    "coverage,",
+    [
+        # coverage disabled
+        (False,),
+        # coverage enabled
+        (True,),
+    ],
+)
+def test_runner_01(mocker, coverage):
     """test Runner()"""
     mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
     server = mocker.Mock(spec_set=Sapphire)
+    serv_files = ["a.bin", "/another/file.bin"]
+    server.serve_path.return_value = (Served.ALL, serv_files)
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
     runner = Runner(server, target, relaunch=10)
@@ -26,12 +37,9 @@ def test_runner_01(mocker):
     assert runner._idle is None
     assert runner._relaunch == 10
     assert runner._tests_run == 0
-    serv_files = ["a.bin", "/another/file.bin"]
-    testcase = mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[])
-    # all files served
+    testcase = mocker.MagicMock(spec_set=TestCase, landing_page=serv_files[0])
     serv_map = ServerMap()
-    server.serve_path.return_value = (Served.ALL, serv_files)
-    result = runner.run([], serv_map, testcase)
+    result = runner.run([], serv_map, testcase, coverage=coverage)
     assert runner.initial
     assert runner._tests_run == 1
     assert result.attempted
@@ -40,22 +48,9 @@ def test_runner_01(mocker):
     assert result.served == serv_files
     assert not result.timeout
     assert not serv_map.dynamic
+    assert target.launch.call_count == 0
     assert target.close.call_count == 0
-    assert target.dump_coverage.call_count == 0
-    assert target.handle_hang.call_count == 0
-    # dump coverage
-    serv_map = ServerMap()
-    server.serve_path.return_value = (Served.ALL, serv_files)
-    result = runner.run([], serv_map, testcase, coverage=True)
-    assert not runner.initial
-    assert runner._tests_run == 2
-    assert result.attempted
-    assert result.status == Result.NONE
-    assert result.served == serv_files
-    assert not result.timeout
-    assert not serv_map.dynamic
-    assert target.close.call_count == 0
-    assert target.dump_coverage.call_count == 1
+    assert target.dump_coverage.call_count == 1 if coverage else 0
     assert target.handle_hang.call_count == 0
 
 
@@ -114,6 +109,7 @@ def test_runner_02(mocker):
     smap = ServerMap()
     result = runner.run([], smap, testcase)
     assert runner._tests_run == 3
+    assert not runner.initial
     assert result.attempted
     assert target.close.call_count == 1
     assert target.is_idle.call_count == 0
@@ -275,6 +271,9 @@ def test_runner_08():
 
 def test_runner_09(mocker):
     """test Runner.launch()"""
+    # set SLOW_LAUNCH_THRESHOLD for test coverage
+    mocker.patch("grizzly.common.runner.SLOW_LAUNCH_THRESHOLD", 0)
+    mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     runner = Runner(server, target)
@@ -283,18 +282,21 @@ def test_runner_09(mocker):
     runner.launch("http://a/")
     assert runner._tests_run == 0
     assert target.launch.call_count == 1
+    assert not runner.startup_failure
     target.reset_mock()
     # target launch error
     target.launch.side_effect = TargetLaunchError("test", mocker.Mock(spec_set=Report))
     with raises(TargetLaunchError, match="test"):
         runner.launch("http://a/")
     assert target.launch.call_count == 3
+    assert runner.startup_failure
     target.reset_mock()
     # target launch timeout
     target.launch.side_effect = TargetLaunchTimeout
     with raises(TargetLaunchTimeout):
         runner.launch("http://a/", max_retries=3)
     assert target.launch.call_count == 3
+    assert runner.startup_failure
 
 
 def test_runner_10(mocker, tmp_path):

@@ -15,6 +15,8 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 LOG = getLogger(__name__)
+# display warning if launch duration exceeds set value
+SLOW_LAUNCH_THRESHOLD = 20
 
 
 class _IdleChecker:
@@ -123,10 +125,13 @@ class Runner:
         self._server.clear_backlog()
         self._tests_run = 0
         self.startup_failure = False
+        launch_duration = 0
         LOG.debug("launching target (timeout %ds)", self._target.launch_timeout)
         for retries in reversed(range(max_retries)):
             try:
+                launch_start = time()
                 self._target.launch(location)
+                launch_duration = time() - launch_start
             except (TargetLaunchError, TargetLaunchTimeout) as exc:
                 if not retries:
                     self.startup_failure = True
@@ -146,6 +151,13 @@ class Runner:
                 sleep(retry_delay)
                 continue
             break
+
+        if launch_duration > SLOW_LAUNCH_THRESHOLD:
+            LOG.warning(
+                "Slow launch detected (%0.1fs > %ds)",
+                launch_duration,
+                SLOW_LAUNCH_THRESHOLD,
+            )
 
     @staticmethod
     def location(
