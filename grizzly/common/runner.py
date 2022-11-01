@@ -292,7 +292,8 @@ class Runner:
             )
         if result.timeout:
             LOG.debug("timeout detected")
-            if self._target.handle_hang(ignore_idle=True) or "timeout" in ignore:
+            result.idle = self._target.handle_hang(ignore_idle=True)
+            if result.idle or "timeout" in ignore:
                 result.status = Result.IGNORED
             server_map.dynamic.pop("grz_empty", None)
         if result.attempted:
@@ -362,15 +363,23 @@ class RunResult:
         served (tuple(str)): Files that were served.
         status (int): Result status of test.
         timeout (bool): A timeout occurred waiting for test to complete.
+        idle (bool): Target was idle (only applies to timeout).
     """
 
-    __slots__ = ("attempted", "duration", "served", "status", "timeout")
+    __slots__ = ("attempted", "duration", "idle", "served", "status", "timeout")
 
     def __init__(
-        self, served, duration, attempted=False, status=Result.NONE, timeout=False
+        self,
+        served,
+        duration,
+        attempted=False,
+        status=Result.NONE,
+        timeout=False,
+        idle=False,
     ):
         self.attempted = attempted
         self.duration = duration
+        self.idle = idle
         self.served = served
         self.status = status
         self.timeout = timeout

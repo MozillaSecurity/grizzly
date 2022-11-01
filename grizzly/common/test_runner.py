@@ -47,6 +47,7 @@ def test_runner_01(mocker, coverage):
     assert result.status == Result.NONE
     assert result.served == serv_files
     assert not result.timeout
+    assert not result.idle
     assert not serv_map.dynamic
     assert target.launch.call_count == 0
     assert target.close.call_count == 0
@@ -151,7 +152,7 @@ def test_runner_03(mocker, srv_result, served):
     "ignore, status, idle, check_result",
     [
         # detect a hang
-        (["memory"], Result.FOUND, False, 1),
+        (["foo"], Result.FOUND, False, 1),
         # ignore a hang
         (["timeout"], Result.IGNORED, False, 0),
         # ignore idle hang
@@ -174,6 +175,7 @@ def test_runner_04(mocker, ignore, status, idle, check_result):
     assert result.status == status
     assert result.served == serv_files
     assert result.timeout
+    assert result.idle == idle
     assert "grz_empty" not in serv_map.dynamic
     assert target.check_result.call_count == check_result
     assert target.handle_hang.call_count == 1

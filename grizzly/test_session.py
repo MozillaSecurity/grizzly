@@ -271,6 +271,7 @@ def test_session_05(mocker):
     with Session(SimpleAdapter(False), None, server, target) as session:
         with raises(SessionError, match="Please check Adapter and Target"):
             session.run([], 10)
+    assert target.handle_hang.call_count == 1
 
 
 @mark.parametrize(
