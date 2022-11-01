@@ -264,7 +264,8 @@ class CommonArgs:
         if args.no_harness:
             if args.time_limit is not None:
                 self.parser.error("--time-limit cannot be used with --no-harness")
-            # TODO: --no-harness implies --relaunch 1
+            # --no-harness implies --relaunch 1
+            args.relaunch = 1
 
         if args.relaunch < 1:
             self.parser.error("--relaunch must be >= 1")

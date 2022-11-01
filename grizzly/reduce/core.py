@@ -815,8 +815,6 @@ class ReduceManager:
                         "testcases. Perhaps '--test-index' can help."
                     )
                     return Exit.ARGS
-                LOG.debug("--no-harness specified relaunch set to 1")
-                args.relaunch = 1
 
             # check test time limit and timeout
             # TODO: add support for test time limit, use timeout in both cases for now

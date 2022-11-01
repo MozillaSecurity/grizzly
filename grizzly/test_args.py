@@ -8,12 +8,25 @@ from pytest import mark, raises
 from .args import CommonArgs, GrizzlyArgs
 
 
-def test_common_args_01(mocker, tmp_path):
+@mark.parametrize(
+    "extra_args, results",
+    [
+        # test default
+        ([], {}),
+        # test no-harness and relaunch
+        (["--no-harness"], {"relaunch": 1}),
+    ],
+)
+def test_common_args_01(mocker, tmp_path, extra_args, results):
     """test CommonArgs.parse_args() - success"""
     mocker.patch("grizzly.args.scan_plugins", return_value=["targ"])
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
-    CommonArgs().parse_args(argv=[str(fake_bin), "--platform", "targ"])
+    cmd = [str(fake_bin), "--platform", "targ"] + extra_args
+    args = vars(CommonArgs().parse_args(argv=cmd))
+    assert args
+    for arg_name, expected_value in results.items():
+        assert args[arg_name] == expected_value, f"'{arg_name}' does not match"
 
 
 @mark.parametrize(
