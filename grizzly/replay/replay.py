@@ -647,7 +647,9 @@ class ReplayManager:
             # handle results
             success = any(x.expected for x in results)
             if success:
-                LOG.info("Result successfully reproduced")
+                LOG.info("Results successfully reproduced")
+            elif any(results):
+                LOG.info("Results detected, signature does not match")
             else:
                 LOG.info("No results detected")
             if results and (args.logs or args.fuzzmanager):

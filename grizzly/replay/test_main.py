@@ -97,7 +97,18 @@ def test_main_01(mocker, tmp_path):
     assert any(log_path.glob("reports/*/log_stdout.txt"))
 
 
-def test_main_02(mocker, tmp_path):
+@mark.parametrize(
+    "repro_results,",
+    [
+        # no results
+        (Result.NONE, Result.NONE),
+        # results do not match signature
+        (Result.FOUND, Result.FOUND),
+        # no result and failed signature match
+        (Result.FOUND, Result.NONE),
+    ],
+)
+def test_main_02(mocker, tmp_path, repro_results):
     """test ReplayManager.main() - no repro"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     # mock Sapphire.serve_path only
@@ -107,20 +118,30 @@ def test_main_02(mocker, tmp_path):
         return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
     )
     # setup Target
-    load_target = mocker.patch("grizzly.replay.replay.load_plugin")
     target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
-    target.check_result.return_value = Result.NONE
-    load_target.return_value.return_value = target
+    target.check_result.side_effect = repro_results
+    target.filtered_environ.return_value = {}
+    target.save_logs = _fake_save_logs
+    mocker.patch(
+        "grizzly.replay.replay.load_plugin",
+        autospec=True,
+        return_value=mocker.Mock(spec=Target, return_value=target),
+    )
+    (tmp_path / "sig.json").write_bytes(
+        b'{"symptoms": [{"type": "stackFrames", "functionNames": ["no-match"]}]}'
+    )
     # setup args
     (tmp_path / "test.html").touch()
     args = mocker.Mock(
+        any_crash=False,
         asset=[],
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
-        ignore=["fake", "timeout"],
+        ignore=[],
         input=tmp_path / "test.html",
         launch_attempts=3,
+        logs=tmp_path / "logs",
         min_crashes=2,
         no_harness=True,
         pernosco=False,
@@ -128,7 +149,7 @@ def test_main_02(mocker, tmp_path):
         relaunch=1,
         repeat=1,
         rr=False,
-        sig=None,
+        sig=tmp_path / "sig.json",
         test_index=None,
         time_limit=10,
         timeout=None,
