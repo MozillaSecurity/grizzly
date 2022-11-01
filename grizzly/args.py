@@ -10,7 +10,7 @@ from platform import system
 
 from .common.plugins import scan as scan_plugins
 from .common.plugins import scan_target_assets
-from .common.utils import TIMEOUT_DELAY
+from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY
 
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
@@ -146,21 +146,25 @@ class CommonArgs:
             "--time-limit",
             type=int,
             default=None,
-            help="This is the maximum amount of time that a test is expected to take."
-            " After the time has elapsed the harness will attempt to close the test."
-            " By default `Adapter.TIME_LIMIT` is used."
+            help="Maximum expected execution time of a test case."
+            " If time-limit is reached before the test case has closed"
+            " the harness will attempt to close the test. If this fails for any reason"
+            " '--timeout' is the fallback."
             " Browser build types and debuggers can affect the amount of time"
-            " required to run a test case.",
+            " required for test case execution to complete."
+            " (default: fuzzing - set by 'Adapter.TIME_LIMIT'; reduce/replay - "
+            f"duration from loaded test case or minimum {DEFAULT_TIME_LIMIT}s)",
         )
         self.launcher_grp.add_argument(
             "-t",
             "--timeout",
             type=int,
             default=None,
-            help="Iteration timeout in seconds. By default this is"
-            f" `test-limit`+{TIMEOUT_DELAY}s. If the timeout is reached the target"
-            " is assumed to be in a bad state and will be closed. Typically this should"
-            " be a few seconds greater than the value used for `test-limit`.",
+            help="Test case execution (iteration) timeout."
+            " If timeout is reached before the test case has closed"
+            " the target will be closed."
+            " Typically this should be '--time-limit' + a few seconds."
+            f" (default: '--test-limit' + {TIMEOUT_DELAY}s)",
         )
         if system().startswith("Linux"):
             self.launcher_grp.add_argument(
