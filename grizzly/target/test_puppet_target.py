@@ -141,9 +141,9 @@ def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed):
     assert fake_kill.call_count == fake_ffp.return_value.wait.call_count == killed
 
 
-@mark.skipif(system() == "Windows", reason="Unsupported on Windows")
+@mark.skipif(system() != "Linux", reason="Linux only")
 def test_puppet_target_05(mocker, tmp_path):
-    """test PuppetTarget.dump_coverage()"""
+    """test PuppetTarget.dump_coverage() - full test"""
     mocker.patch("grizzly.target.puppet_target.wait_procs", autospec=True)
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     child_proc = mocker.Mock(pid=101)
@@ -460,3 +460,12 @@ def test_puppet_target_13(tmp_path, base, extra, result):
         target.merge_environment(extra)
         for opt in target.environ["ASAN_OPTIONS"].split(":"):
             assert opt in result
+
+
+def test_puppet_target_14(mocker, tmp_path):
+    """test PuppetTarget.dump_coverage() - skip on unsupported platform"""
+    mocker.patch("grizzly.target.puppet_target.system", return_value="foo")
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+        target.dump_coverage()

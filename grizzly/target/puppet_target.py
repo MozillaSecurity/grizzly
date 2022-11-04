@@ -217,6 +217,10 @@ class PuppetTarget(Target):
         return was_idle
 
     def dump_coverage(self, timeout=90):
+        if system() != "Linux":
+            LOG.debug("dump_coverage() only supported on Linux")
+            return
+
         assert SIGUSR1 is not None
         pid = self._puppet.get_pid()
         if pid is None or not self._puppet.is_healthy():
