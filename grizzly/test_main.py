@@ -4,18 +4,10 @@
 """test Grizzly main"""
 from pytest import mark
 
-from sapphire import Sapphire
-
-from .adapter import Adapter
 from .args import GrizzlyArgs
 from .common.utils import Exit
 from .main import main
-from .target import Target, TargetLaunchError
-
-
-class FakeAdapter(Adapter):
-    def generate(self, testcase, server_map):
-        pass
+from .target import TargetLaunchError
 
 
 @mark.parametrize(
@@ -47,33 +39,29 @@ class FakeAdapter(Adapter):
         (0, ["--verbose"]),
     ],
 )
-def test_main_01(mocker, adpt_relaunch, extra_args):
+def test_main_01(mocker, session_setup, adpt_relaunch, extra_args):
     """test main()"""
-    mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
     mocker.patch(
         "grizzly.args.scan_plugins",
         autospec=True,
         side_effect=(["targ"], ["adpt"]),
     )
-    fake_target = mocker.Mock(spec_set=Target)
-    FakeAdapter.RELAUNCH = adpt_relaunch
-    mocker.patch("grizzly.main.load_plugin", side_effect=(FakeAdapter, fake_target))
-    fake_session = mocker.patch("grizzly.main.Session", autospec_set=True)
-    fake_session.return_value.server = mocker.Mock(spec_set=Sapphire)
+    adapter, session_cls, session_obj, target_cls = session_setup
+    adapter.RELAUNCH = adpt_relaunch
 
     # use __file__ as "binary" since it is not used
     cmd = [__file__, "adpt", "--platform", "targ"] + extra_args
     args = GrizzlyArgs().parse_args(cmd)
-    fake_session.return_value.status.results.total = 1 if args.smoke_test else 0
+    session_obj.status.results.total = 1 if args.smoke_test else 0
 
     assert main(args) == (Exit.ERROR if args.smoke_test else Exit.SUCCESS)
-    assert fake_session.mock_calls[0][-1]["coverage"] == args.coverage
+    assert session_cls.mock_calls[0][-1]["coverage"] == args.coverage
     if adpt_relaunch:
-        assert fake_session.mock_calls[0][-1]["relaunch"] == adpt_relaunch
+        assert session_cls.mock_calls[0][-1]["relaunch"] == adpt_relaunch
     else:
-        assert fake_session.mock_calls[0][-1]["relaunch"] == args.relaunch
-    assert fake_session.return_value.run.call_count == 1
-    assert fake_target.return_value.cleanup.call_count == 1
+        assert session_cls.mock_calls[0][-1]["relaunch"] == args.relaunch
+    assert session_obj.run.call_count == 1
+    assert target_cls.return_value.cleanup.call_count == 1
 
 
 @mark.parametrize(
@@ -85,24 +73,17 @@ def test_main_01(mocker, adpt_relaunch, extra_args):
         (Exit.LAUNCH_FAILURE, TargetLaunchError),
     ],
 )
-def test_main_02(mocker, exit_code, to_raise):
+def test_main_02(mocker, session_setup, exit_code, to_raise):
     """test main() - exit codes"""
     mocker.patch("grizzly.main.FailedLaunchReporter", autospec=True)
-    mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
-    fake_target = mocker.Mock(spec_set=Target)
-    mocker.patch("grizzly.main.load_plugin", side_effect=(FakeAdapter, fake_target))
-    fake_session = mocker.patch("grizzly.main.Session", autospec=True)
-    fake_session.return_value.status.results.total = 0
+    _, _, session_obj, target_cls = session_setup
     if to_raise == TargetLaunchError:
-        fake_session.return_value.run.side_effect = TargetLaunchError(
-            "test", mocker.Mock()
-        )
+        session_obj.run.side_effect = TargetLaunchError("test", mocker.Mock())
     else:
-        fake_session.return_value.run.side_effect = to_raise()
-
+        session_obj.run.side_effect = to_raise()
     args = mocker.MagicMock(adapter="fake", time_limit=1, timeout=1)
     assert main(args) == exit_code
-    assert fake_target.return_value.cleanup.call_count == 1
+    assert target_cls.return_value.cleanup.call_count == 1
 
 
 @mark.parametrize(
@@ -120,15 +101,9 @@ def test_main_02(mocker, exit_code, to_raise):
         (None, 1),
     ],
 )
-def test_main_03(mocker, test_limit, timeout):
+def test_main_03(mocker, session_setup, test_limit, timeout):
     """test main() - time-limit and timeout"""
-    mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
-    mocker.patch(
-        "grizzly.main.load_plugin",
-        side_effect=(FakeAdapter, mocker.Mock(spec_set=Target)),
-    )
-    fake_session = mocker.patch("grizzly.main.Session", autospec=True)
-    fake_session.return_value.status.results.total = 0
+    # no_harness=False for code coverage
     args = mocker.MagicMock(
         adapter="fake",
         no_harness=False,
@@ -136,6 +111,8 @@ def test_main_03(mocker, test_limit, timeout):
         timeout=timeout,
     )
     assert main(args) == Exit.SUCCESS
+    target_cls = session_setup[3]
+    assert target_cls.return_value.cleanup.call_count == 1
 
 
 @mark.parametrize(
@@ -151,13 +128,10 @@ def test_main_03(mocker, test_limit, timeout):
         (False, False, True),
     ],
 )  # pylint: disable=invalid-name
-def test_main_04(mocker, pernosco, rr, valgrind):  # pylint: disable=invalid-name
+def test_main_04(
+    mocker, session_setup, pernosco, rr, valgrind
+):  # pylint: disable=invalid-name
     """test enabling debuggers"""
-    mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
-    fake_target = mocker.Mock(spec_set=Target)
-    mocker.patch("grizzly.main.load_plugin", side_effect=(FakeAdapter, fake_target))
-    fake_session = mocker.patch("grizzly.main.Session", autospec=True)
-    fake_session.return_value.status.results.total = 0
     # maximum one debugger allowed at a time
     assert sum((pernosco, rr, valgrind)) < 2, "test broken!"
     args = mocker.MagicMock(
@@ -169,6 +143,7 @@ def test_main_04(mocker, pernosco, rr, valgrind):  # pylint: disable=invalid-nam
         valgrind=valgrind,
     )
     assert main(args) == Exit.SUCCESS
-    assert fake_target.call_args[-1]["pernosco"] == pernosco
-    assert fake_target.call_args[-1]["rr"] == rr
-    assert fake_target.call_args[-1]["valgrind"] == valgrind
+    target_cls = session_setup[3]
+    assert target_cls.call_args[-1]["pernosco"] == pernosco
+    assert target_cls.call_args[-1]["rr"] == rr
+    assert target_cls.call_args[-1]["valgrind"] == valgrind

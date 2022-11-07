@@ -42,7 +42,7 @@ def main(args):
         LOG.info("Running with Valgrind. This will be SLOW!")
 
     adapter = None
-    session = None
+    complete_with_results = False
     target = None
     try:
         LOG.debug("initializing Adapter %r", args.adapter)
@@ -102,7 +102,7 @@ def main(args):
         with Sapphire(auto_close=1, timeout=timeout) as server:
             target.reverse(server.port, server.port)
             LOG.debug("initializing the Session")
-            session = Session(
+            with Session(
                 adapter,
                 reporter,
                 server,
@@ -112,22 +112,23 @@ def main(args):
                 relaunch=relaunch,
                 report_limit=args.limit_reports,
                 report_size=args.collect,
-            )
-            if args.log_level == DEBUG or args.verbose:
-                display_mode = Session.DISPLAY_VERBOSE
-            else:
-                display_mode = Session.DISPLAY_NORMAL
-            session.run(
-                args.ignore,
-                time_limit,
-                input_path=str(args.input),
-                iteration_limit=args.limit,
-                no_harness=args.no_harness,
-                result_limit=1 if args.smoke_test else 0,
-                runtime_limit=args.runtime,
-                display_mode=display_mode,
-                launch_attempts=args.launch_attempts,
-            )
+            ) as session:
+                if args.log_level == DEBUG or args.verbose:
+                    display_mode = Session.DISPLAY_VERBOSE
+                else:
+                    display_mode = Session.DISPLAY_NORMAL
+                session.run(
+                    args.ignore,
+                    time_limit,
+                    input_path=str(args.input),
+                    iteration_limit=args.limit,
+                    no_harness=args.no_harness,
+                    result_limit=1 if args.smoke_test else 0,
+                    runtime_limit=args.runtime,
+                    display_mode=display_mode,
+                    launch_attempts=args.launch_attempts,
+                )
+                complete_with_results = session.status.results.total > 0
 
     except KeyboardInterrupt:
         LOG.info("Ctrl+C detected.")
@@ -140,9 +141,6 @@ def main(args):
 
     finally:
         LOG.info("Shutting down...")
-        if session is not None:
-            LOG.debug("calling session.close()")
-            session.close()
         if target is not None:
             LOG.debug("calling target.cleanup()")
             target.cleanup()
@@ -151,6 +149,6 @@ def main(args):
             adapter.cleanup()
         LOG.info("Done.")
 
-    if session and session.status.results.total > 0:
+    if complete_with_results:
         return Exit.ERROR
     return Exit.SUCCESS
