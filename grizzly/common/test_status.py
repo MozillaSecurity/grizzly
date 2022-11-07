@@ -5,15 +5,17 @@
 # pylint: disable=protected-access
 
 from contextlib import closing
+from itertools import count
 from multiprocessing import Event, Process
 from sqlite3 import connect
-from time import sleep, time
+from time import sleep
 
 from pytest import mark
 
 from .reporter import FuzzManagerReporter
 from .status import (
     DB_VERSION,
+    REPORT_RATE,
     BaseStatus,
     ReadOnlyResultCounter,
     ReadOnlyStatus,
@@ -98,21 +100,26 @@ def test_status_01(tmp_path):
     assert not status._profiles
 
 
-def test_status_02(tmp_path):
+@mark.parametrize(
+    "cur_time, force, reported, found_result",
+    [
+        # attempt report before REPORT_RATE elapses
+        (count(start=1.0, step=0.1), False, False, False),
+        # force report before REPORT_RATE elapses
+        (count(start=1.0, step=0.1), True, True, False),
+        # attempt report before REPORT_RATE elapses
+        (count(start=1.0, step=0.1), False, True, True),
+        # attempt report after REPORT_RATE elapses
+        (count(start=1.0, step=REPORT_RATE + 1.0), False, True, False),
+    ],
+)
+def test_status_02(mocker, tmp_path, cur_time, force, reported, found_result):
     """test Status.report()"""
+    mocker.patch("grizzly.common.status.time", autospec=True, side_effect=cur_time)
     status = Status.start(tmp_path / "status.db")
-    status.results.count("uid1", "sig1")
-    # try to report before REPORT_RATE elapses
-    assert not status.report()
-    # REPORT_RATE elapses
-    status.timestamp = 0
-    assert status.report()
-    assert status.timestamp > 0
-    # force report
-    future = int(time()) + 1000
-    status.timestamp = future
-    assert status.report(force=True)
-    assert status.timestamp < future
+    if found_result:
+        status.results.count("uid1", "sig1")
+    assert status.report(force=force) == reported
 
 
 def test_status_03(tmp_path):
@@ -180,11 +187,11 @@ def test_status_05(mocker, tmp_path):
 
 
 # NOTE: this function must be at the top level to work on Windows
-def _client_writer(db_file, begin, count):
+def _client_writer(db_file, begin, iters):
     """Used by test_status_06"""
     begin.wait(timeout=45)
     status = Status.start(db_file)
-    for _ in range(count):
+    for _ in range(iters):
         status.iteration += 1
         status.report(force=True)
         sleep(0.01)
@@ -357,23 +364,22 @@ def test_reduce_status_01(mocker, tmp_path):
     assert status._current_size is None
 
 
-def test_reduce_status_02(tmp_path):
+@mark.parametrize(
+    "cur_time, force, reported",
+    [
+        # attempt report before REPORT_RATE elapses
+        (count(start=1.0, step=0.1), False, False),
+        # force report
+        (count(start=1.0, step=0.1), True, True),
+        # attempt report after REPORT_RATE elapses
+        (count(start=1.0, step=REPORT_RATE + 1.0), False, True),
+    ],
+)
+def test_reduce_status_02(mocker, tmp_path, cur_time, force, reported):
     """test ReductionStatus.report()"""
-    status = ReductionStatus.start(
-        tmp_path / "status.db",
-        testcase_size_cb=lambda: 47,
-    )
-    # try to report before REPORT_RATE elapses
-    assert not status.report()
-    # REPORT_RATE elapses
-    status.timestamp = 0
-    assert status.report()
-    assert status.timestamp > 0
-    # force report
-    future = int(time()) + 1000
-    status.timestamp = future
-    assert status.report(force=True)
-    assert status.timestamp < future
+    mocker.patch("grizzly.common.status.time", autospec=True, side_effect=cur_time)
+    status = ReductionStatus.start(tmp_path / "status.db", testcase_size_cb=lambda: 47)
+    assert status.report(force=force) == reported
 
 
 def test_reduce_status_03(tmp_path):
@@ -565,19 +571,19 @@ def test_report_counter_01(tmp_path, keys, counts, limit):
     """test ResultCounter functionality"""
     db_path = tmp_path / "storage.db"
     counter = ResultCounter(1, db_path, report_limit=limit)
-    for report_id, count in zip(keys, counts):
+    for report_id, counted in zip(keys, counts):
         assert counter.get(report_id) == (report_id, 0, None)
         assert not counter.is_frequent(report_id)
-        # call count() with report_id 'count' times
-        for current in range(1, count + 1):
+        # call count() with report_id 'counted' times
+        for current in range(1, counted + 1):
             assert counter.count(report_id, "desc") == current
         # test get()
         if sum(counts) > 0:
-            assert counter.get(report_id) == (report_id, count, "desc")
+            assert counter.get(report_id) == (report_id, counted, "desc")
         else:
-            assert counter.get(report_id) == (report_id, count, None)
+            assert counter.get(report_id) == (report_id, counted, None)
         # test is_frequent()
-        if count > limit > 0:
+        if counted > limit > 0:
             assert counter.is_frequent(report_id)
         elif limit > 0:
             assert not counter.is_frequent(report_id)
@@ -586,8 +592,8 @@ def test_report_counter_01(tmp_path, keys, counts, limit):
             assert counter.is_frequent(report_id)
         else:
             assert limit == 0
-    for _report_id, count, _desc in counter:
-        assert count > 0
+    for _report_id, counted, _desc in counter:
+        assert counted > 0
     assert counter.total == sum(counts)
 
 
@@ -726,9 +732,9 @@ def test_simple_report_counter_01(buckets, ratio, iterations, blockers):
     """test SimpleResultCounter.blockers()"""
     counter = SimpleResultCounter(123)
     # populate counter
-    for report_id, desc, count in buckets:
+    for report_id, desc, total in buckets:
         counter._desc[report_id] = desc
-        counter._count[report_id] = count
+        counter._count[report_id] = total
     # check for blockers
     assert len(tuple(counter.blockers(iterations, iters_per_result=ratio))) == blockers
 
