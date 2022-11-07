@@ -603,7 +603,7 @@ class ReadOnlyResultCounter(SimpleResultCounter):
                                 count
                            FROM results
                            WHERE timestamp > ?;""",
-                        (int(time()) - time_limit,),
+                        (time() - time_limit,),
                     )
                 else:
                     cur.execute(
@@ -659,7 +659,7 @@ class ResultCounter(SimpleResultCounter):
                 if life_time > 0:
                     cur.execute(
                         """DELETE FROM results WHERE timestamp <= ?;""",
-                        (int(time() - life_time),),
+                        (time() - life_time,),
                     )
                 # avoid (unlikely) pid reuse collision
                 cur.execute("""DELETE FROM results WHERE pid = ?;""", (pid,))
@@ -684,7 +684,7 @@ class ResultCounter(SimpleResultCounter):
             int: Current count for given result_id.
         """
         super().count(result_id, desc)
-        timestamp = int(time())
+        timestamp = time()
         with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
             cur = con.cursor()
             with con:
