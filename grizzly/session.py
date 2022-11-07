@@ -111,6 +111,9 @@ class Session:
         self.close()
 
     def close(self):
+        if self.status is not None:
+            # perform final status report
+            self.status.report(force=True)
         if self.iomanager is not None:
             self.iomanager.cleanup()
 
@@ -304,6 +307,3 @@ class Session:
                 LOG.warning(
                     "Large browser logs: %dMBs", (self.status.log_size / 0x100000)
                 )
-
-        # perform final status report
-        self.status.report(force=True)

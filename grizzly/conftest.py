@@ -6,6 +6,24 @@
 
 from pytest import fixture
 
+from .adapter import Adapter
+from .target import Target
+
+
+@fixture
+def session_setup(mocker):
+    mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
+    mocker.patch("grizzly.main.Sapphire", autospec_set=True)
+    adapter_cls = mocker.Mock(spec_set=Adapter)
+    adapter_cls.return_value.RELAUNCH = Adapter.RELAUNCH
+    adapter_cls.return_value.TIME_LIMIT = Adapter.TIME_LIMIT
+    target_cls = mocker.Mock(spec_set=Target)
+    mocker.patch("grizzly.main.load_plugin", side_effect=(adapter_cls, target_cls))
+    session_cls = mocker.patch("grizzly.main.Session", autospec_set=True)
+    session_obj = session_cls.return_value.__enter__.return_value
+    session_obj.status.results.total = 0
+    yield adapter_cls.return_value, session_cls, session_obj, target_cls
+
 
 @fixture
 def patch_collector(mocker):
