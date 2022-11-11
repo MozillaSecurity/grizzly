@@ -240,17 +240,19 @@ class FuzzManagerReporter(Reporter):
         collector = Collector()
 
         if not self.force_report:
-            # search for a cached signature match
-            with InterProcessLock(str(Path(grz_tmp()) / "fm_sigcache.lock")):
-                _, cache_metadata = collector.search(report.crash_info)
-
-            # check if signature has been marked as frequent in FM
-            if cache_metadata is not None and cache_metadata["frequent"]:
-                LOG.info(
-                    "Frequent crash matched existing signature: %s",
-                    cache_metadata["shortDescription"],
-                )
-                return None
+            if collector.sigCacheDir and Path(collector.sigCacheDir).is_dir():
+                # search for a cached signature match
+                with InterProcessLock(str(Path(grz_tmp()) / "fm_sigcache.lock")):
+                    _, cache_metadata = collector.search(report.crash_info)
+                # check if signature has been marked as frequent in FM
+                if cache_metadata and cache_metadata["frequent"]:
+                    LOG.info(
+                        "Frequent crash matched existing signature: %s",
+                        cache_metadata["shortDescription"],
+                    )
+                    return None
+            else:
+                LOG.debug("sigCacheDir does not exist (%r)", collector.sigCacheDir)
 
         if self._ignored(report):
             LOG.info("Report is in ignore list")
