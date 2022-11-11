@@ -155,21 +155,25 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
 
 
 @mark.parametrize(
-    "tests, frequent, ignored, force",
+    "tests, frequent, ignored, force, sig_cache",
     [
         # report - without test
-        (False, False, False, False),
+        (False, False, False, False, True),
         # report - with test
-        (True, False, False, False),
+        (True, False, False, False, True),
         # report - frequent
-        (True, True, False, False),
+        (True, True, False, False, True),
         # report - forced frequent
-        (True, True, False, True),
+        (True, True, False, True, True),
         # report - ignored
-        (True, False, True, False),
+        (True, False, True, False, True),
+        # report - missing sigCacheDir
+        (False, False, False, False, False),
     ],
 )
-def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored, force):
+def test_fuzzmanager_reporter_02(
+    mocker, tmp_path, tests, frequent, ignored, force, sig_cache
+):
     """test FuzzManagerReporter.submit()"""
     mocker.patch(
         "grizzly.common.reporter.FuzzManagerReporter._ignored",
@@ -183,6 +187,7 @@ def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, ignored, for
         None,
         {"frequent": frequent, "shortDescription": "[@ test]"},
     )
+    fake_collector.return_value.sigCacheDir = str(tmp_path) if sig_cache else None
     log_path = tmp_path / "log_path"
     log_path.mkdir()
     (log_path / "log_ffp_worker_blah.txt").touch()
