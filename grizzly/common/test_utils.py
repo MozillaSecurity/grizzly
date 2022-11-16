@@ -17,20 +17,19 @@ from .utils import (
 
 def test_grz_tmp_01(mocker, tmp_path):
     """test grz_tmp()"""
-    mocker.patch(
-        "grizzly.common.utils.gettempdir", autospec=True, return_value=str(tmp_path)
-    )
+    fake_tmp = tmp_path / "grizzly"
+    mocker.patch("grizzly.common.utils.GRZ_TMP", fake_tmp)
     # create temp path
+    assert not fake_tmp.is_dir()
     path = grz_tmp()
-    assert path == str(tmp_path / "grizzly")
-    assert (tmp_path / "grizzly").is_dir()
+    assert path == fake_tmp
+    assert path.is_dir()
     # create temp path (exists)
-    path = grz_tmp()
-    assert path == str(tmp_path / "grizzly")
+    assert grz_tmp() == fake_tmp
     # create temp path with sub directory
     path = grz_tmp("test1", "test2")
-    assert path == str(tmp_path / "grizzly" / "test1" / "test2")
-    assert (tmp_path / "grizzly" / "test1" / "test2").is_dir()
+    assert path == fake_tmp / "test1" / "test2"
+    assert path.is_dir()
 
 
 @mark.parametrize(

@@ -16,6 +16,6 @@ def tmp_path_grz_tmp(tmp_path, mocker):
     def _grz_tmp(*subdir):
         path = Path(tmp_path, "grizzly", *subdir)
         path.mkdir(parents=True, exist_ok=True)
-        return str(path)
+        return path
 
     mocker.patch("grizzly.replay.replay.grz_tmp", _grz_tmp)

@@ -4,8 +4,8 @@
 from enum import IntEnum, unique
 from logging import DEBUG, basicConfig, getLogger
 from math import ceil
-from os import getenv, makedirs
-from os.path import join as pathjoin
+from os import getenv
+from pathlib import Path
 from tempfile import gettempdir
 
 __all__ = (
@@ -21,6 +21,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 DEFAULT_TIME_LIMIT = 30
+GRZ_TMP = Path(getenv("GRZ_TMP", gettempdir()), "grizzly")
 LOG = getLogger(__name__)
 # TIMEOUT_DELAY is added to the test time limit to create the default timeout
 TIMEOUT_DELAY = 15
@@ -73,8 +74,8 @@ def configure_logging(log_level):
 
 
 def grz_tmp(*subdir):
-    path = pathjoin(getenv("GRZ_TMP", gettempdir()), "grizzly", *subdir)
-    makedirs(path, exist_ok=True)
+    path = Path(GRZ_TMP, *subdir)
+    path.mkdir(parents=True, exist_ok=True)
     return path
 
 
