@@ -397,7 +397,7 @@ class PuppetTarget(Target):
                 else:
                     LOG.warning("Missing %s suppressions file %r", sanitizer, supp_file)
             else:
-                # nothing to do
+                LOG.debug("%r does not contain suppressions", var_name)
                 continue
             # update sanitized *SAN_OPTIONS
             LOG.debug("updating suppressions in %r", var_name)
