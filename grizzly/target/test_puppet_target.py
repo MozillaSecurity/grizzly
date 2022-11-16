@@ -373,15 +373,16 @@ def test_puppet_target_10(tmp_path, asset, env):
     """test PuppetTarget.process_assets() - configure sanitizer suppressions"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
+    supp_asset = tmp_path / "supp_asset"
+    supp_env = tmp_path / "supp_env"
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("prefs", str(fake_file))
         if asset:
-            supp_asset = tmp_path / "supp_asset"
             supp_asset.touch()
             assets.add("lsan-suppressions", str(supp_asset))
         with PuppetTarget(str(fake_file), 300, 25, 5000, assets=assets) as target:
+            target.environ["TSAN_OPTIONS"] = "a=1"
             if env:
-                supp_env = tmp_path / "supp_env"
                 supp_env.touch()
                 target.environ["LSAN_OPTIONS"] = f"suppressions='{supp_env}'"
             else:
