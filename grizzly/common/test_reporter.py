@@ -232,8 +232,14 @@ def test_fuzzmanager_reporter_03(mocker, tmp_path):
     assert FuzzManagerReporter._ignored(report)
 
 
-def test_failed_launch_reporter_01(tmp_path):
+def test_failed_launch_reporter_01(mocker, tmp_path):
     """test FailedLaunchReporter()"""
-    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
-    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    FailedLaunchReporter().submit([], Report(tmp_path, "fake_bin"))
+    gtp = tmp_path / "grizzly"
+    gtp.mkdir()
+    mocker.patch("grizzly.common.reporter.grz_tmp", autospec=True, return_value=gtp)
+    report_path = tmp_path / "report"
+    report_path.mkdir()
+    (report_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (report_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    FailedLaunchReporter().submit([], Report(report_path, "fake_bin"))
+    assert any(gtp.glob("*_logs"))

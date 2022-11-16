@@ -8,7 +8,6 @@ from copy import deepcopy
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
-from pathlib import Path
 from sqlite3 import OperationalError, connect
 from time import time
 
@@ -29,8 +28,8 @@ REPORTS_EXPIRE = 86400
 # default life time for result entries in the database (30 days)
 RESULTS_EXPIRE = 2592000
 # status database files
-STATUS_DB_FUZZ = Path(grz_tmp()) / "fuzz-status.db"
-STATUS_DB_REDUCE = Path(grz_tmp()) / "reduce-status.db"
+STATUS_DB_FUZZ = grz_tmp() / "fuzz-status.db"
+STATUS_DB_REDUCE = grz_tmp() / "reduce-status.db"
 
 LOG = getLogger(__name__)
 

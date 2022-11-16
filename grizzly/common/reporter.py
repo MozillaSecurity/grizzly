@@ -242,7 +242,7 @@ class FuzzManagerReporter(Reporter):
         if not self.force_report:
             if collector.sigCacheDir and Path(collector.sigCacheDir).is_dir():
                 # search for a cached signature match
-                with InterProcessLock(str(Path(grz_tmp()) / "fm_sigcache.lock")):
+                with InterProcessLock(str(grz_tmp() / "fm_sigcache.lock")):
                     _, cache_metadata = collector.search(report.crash_info)
                 # check if signature has been marked as frequent in FM
                 if cache_metadata and cache_metadata["frequent"]:

@@ -108,7 +108,7 @@ class PuppetTarget(Target):
         self._puppet = FFPuppet(
             debugger=debugger,
             headless=kwds.pop("headless", None),
-            working_path=grz_tmp("target"),
+            working_path=str(grz_tmp("target")),
         )
         if kwds:
             LOG.warning(
