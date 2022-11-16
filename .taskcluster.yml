@@ -56,24 +56,28 @@ tasks:
             version: "3.8"
             env:
               TOXENV: py38,lint
-          - name: test python 3.8 (windows)
-            version: "3.8"
-            platform: windows
-            env:
-              TOXENV: py38
           - name: tests python 3.9
             version: "3.9"
             env:
               TOXENV: py39,lint
-          - name: tests python 3.9 (macos)
-            version: "3.9"
-            platform: macos
-            env:
-              TOXENV: py39
           - name: tests python 3.10
             version: "3.10"
             env:
               TOXENV: py310,lint
+          - name: tests python 3.10 (macos)
+            version: "3.10"
+            platform: macos
+            env:
+              TOXENV: py310
+          - name: test python 3.10 (windows)
+            version: "3.10"
+            platform: windows
+            env:
+              TOXENV: py310
+          - name: tests python 3.11
+            version: "3.11"
+            env:
+              TOXENV: py311,lint
           - name: PyPI upload
             version: "3.8"
             env:
