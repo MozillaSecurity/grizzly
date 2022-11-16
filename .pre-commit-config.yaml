@@ -4,24 +4,24 @@ repos:
     hooks:
       - id: isort
   - repo: https://github.com/asottile/yesqa
-    rev: v1.3.0
+    rev: v1.4.0
     hooks:
       - id: yesqa
   - repo: https://github.com/asottile/pyupgrade
-    rev: v2.38.2
+    rev: v3.2.2
     hooks:
       - id: pyupgrade
         args: ['--py37-plus']
   - repo: https://github.com/ambv/black
-    rev: 22.6.0
+    rev: 22.10.0
     hooks:
       - id: black
   - repo: https://github.com/pycqa/flake8
-    rev: 4.0.1
+    rev: 5.0.4
     hooks:
       - id: flake8
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.1.0
+    rev: v4.3.0
     hooks:
       - id: check-added-large-files
       - id: check-ast
@@ -41,16 +41,16 @@ repos:
       - id: requirements-txt-fixer
       - id: trailing-whitespace
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.1.0
+    rev: v2.2.2
     hooks:
       - id: codespell
         exclude_types: [json]
   - repo: https://github.com/marco-c/taskcluster_yml_validator
-    rev: v0.0.7
+    rev: v0.0.9
     hooks:
       - id: taskcluster_yml
   - repo: https://github.com/MozillaSecurity/orion
-    rev: v0.0.4
+    rev: v0.0.6
     hooks:
       - id: orion_ci
   - repo: meta
