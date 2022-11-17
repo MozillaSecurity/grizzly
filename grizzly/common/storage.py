@@ -535,17 +535,18 @@ class TestCase:
 
     @staticmethod
     def scan_path(path):
-        """Check path and subdirectories for potential test cases.
+        """Check path and subdirectories for potential test cases. Subdirectories are
+        only scanned one level deep.
 
         Args:
             path (Path): Path to scan.
 
         Yields:
-            str: Path to what appears to be a valid testcase.
+            Path: Directory containing 'test_info.json' (potential testcase).
         """
-        if "test_info.json" in (x.name for x in path.iterdir()):
+        if (path / "test_info.json").is_file():
             yield path
         else:
             for entry in path.iterdir():
-                if entry.is_dir() and (entry / "test_info.json").is_file():
+                if (entry / "test_info.json").is_file():
                     yield entry
