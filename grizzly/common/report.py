@@ -34,7 +34,7 @@ LogMap = namedtuple("LogMap", "aux stderr stdout")
 
 class Report:
     DEFAULT_MAJOR = "NO_STACK"
-    DEFAULT_MINOR = "0"
+    DEFAULT_MINOR = "NO_STACK"
     HANG_STACK_HEIGHT = 10
     MAX_LOG_SIZE = 1_048_576  # 1MB
 
