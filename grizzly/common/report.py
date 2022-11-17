@@ -377,7 +377,7 @@ class Report:
         """
         files = (x for x in path.iterdir() if x.is_file())
         # order by date hopefully the oldest log is the cause of the issue
-        to_scan = list(sorted(files, key=lambda x: x.stat().st_mtime))
+        to_scan = sorted(files, key=lambda x: x.stat().st_mtime)
         if not to_scan:
             LOG.warning("No files found in %r", path)
             return None

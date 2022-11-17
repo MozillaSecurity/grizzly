@@ -160,7 +160,7 @@ class _LithiumStrategy(Strategy, ABC):
                     self.rescan_files_to_reduce()
                     LOG.debug("files being reduced after: %r", self._files_to_reduce)
                     files_to_reduce = set(self._files_to_reduce)
-                    reduce_queue = list(sorted(set(reduce_queue) & files_to_reduce))
+                    reduce_queue = sorted(set(reduce_queue) & files_to_reduce)
                     testcase_root_dirty = len(self._files_to_reduce) != num_files_before
                     if file not in files_to_reduce:
                         # current reduction was for a purged file
