@@ -9,7 +9,7 @@ from json import dumps, loads
 from logging import getLogger
 from os import getpid
 from sqlite3 import OperationalError, connect
-from time import time
+from time import perf_counter, time
 
 from ..common.utils import grz_tmp
 
@@ -366,9 +366,9 @@ class Status(BaseStatus):
             None
         """
         if self._enable_profiling:
-            mark = time()
+            mark = perf_counter()
             yield
-            self.record(name, time() - mark)
+            self.record(name, perf_counter() - mark)
         else:
             yield
 
