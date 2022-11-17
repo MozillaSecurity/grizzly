@@ -70,6 +70,7 @@ class Report:
         for log_file in (x for x in self._logs if x is not None):
             stack = Stack.from_text(log_file.read_text("utf-8", errors="ignore"))
             if stack.frames:
+                assert stack.minor is not None
                 # limit the hash calculations to the first n frames if a hang
                 # was detected to attempt to help local bucketing
                 stack.height_limit = self.HANG_STACK_HEIGHT if is_hang else None
@@ -307,7 +308,8 @@ class Report:
 
     @staticmethod
     def _find_valgrind(logs):
-        """Search through list of log files for a Valgrind worker log.
+        """Search through list of log files for a Valgrind log.
+        Empty files are ignored.
 
         Args:
             logs (list(Path)): List of log files to search.
@@ -315,8 +317,8 @@ class Report:
         Returns:
             Path: Log file if a match is found otherwise None.
         """
-        for log_file in (x for x in logs if "valgrind" in x.name):
-            if log_file.stat().st_size:
+        for log_file in logs:
+            if "valgrind" in log_file.name and log_file.stat().st_size:
                 return log_file
         return None
 
