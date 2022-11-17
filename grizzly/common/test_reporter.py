@@ -195,14 +195,14 @@ def test_fuzzmanager_reporter_02(
     (log_path / "log_stdout.txt").touch()
     (log_path / "rr-traces").mkdir()
     (tmp_path / "screenlog.0").touch()
+    fake_test = mocker.Mock(
+        spec_set=TestCase,
+        adapter_name="adapter",
+        env_vars={"TEST": "1"},
+        input_fname="input",
+    )
     test_cases = []
     if tests:
-        fake_test = mocker.Mock(
-            spec_set=TestCase,
-            adapter_name="adapter",
-            env_vars={"TEST": "1"},
-            input_fname="input",
-        )
         test_cases.append(fake_test)
     reporter = FuzzManagerReporter("fake_bin")
     reporter.force_report = force

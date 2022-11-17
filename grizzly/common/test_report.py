@@ -116,9 +116,9 @@ def test_report_05(tmp_path):
     # should be ignored in favor of "GOOD LOG"
     (tmp_path / "log_ffp_worker_blah.txt").write_bytes(b"worker log")
     log_map = Report._select_logs(tmp_path)
-    assert "GOOD LOG" in (tmp_path / log_map.aux).read_text()
-    assert "STDERR" in (tmp_path / log_map.stderr).read_text()
-    assert "STDOUT" in (tmp_path / log_map.stdout).read_text()
+    assert "GOOD LOG" in log_map.aux.read_text()
+    assert "STDERR" in log_map.stderr.read_text()
+    assert "STDOUT" in log_map.stdout.read_text()
 
 
 def test_report_06(tmp_path):
@@ -131,9 +131,9 @@ def test_report_06(tmp_path):
         log_fp.write(b"minidump log\n")
     (tmp_path / "log_ffp_worker_blah.txt").write_bytes(b"worker log")
     log_map = Report._select_logs(tmp_path)
-    assert (tmp_path / log_map.stderr).is_file()
-    assert (tmp_path / log_map.stdout).is_file()
-    assert "minidump log" in (tmp_path / log_map.aux).read_text()
+    assert log_map.stderr.is_file()
+    assert log_map.stdout.is_file()
+    assert "minidump log" in log_map.aux.read_text()
 
 
 def test_report_07(tmp_path):
@@ -162,12 +162,9 @@ def test_report_07(tmp_path):
         log_fp.write(b"0|0|bar.so|sadf|a.cc:1234|3066|0x0\n")
         log_fp.write(b"0|1|gar.so|fdsa|b.cc:4323|1644|0x12\n")
     log_map = Report._select_logs(tmp_path)
-    assert (tmp_path / log_map.stderr).is_file()
-    assert (tmp_path / log_map.stdout).is_file()
-    assert (
-        "google_breakpad::ExceptionHandler::WriteMinidump"
-        in (tmp_path / log_map.aux).read_text()
-    )
+    assert log_map.stderr.is_file()
+    assert log_map.stdout.is_file()
+    assert "google_breakpad::ExceptionHandler::WriteMinidump" in log_map.aux.read_text()
 
 
 def test_report_08(tmp_path):
@@ -178,9 +175,9 @@ def test_report_08(tmp_path):
     # we should only ever see one but if we see multiple we warn, so test that.
     (tmp_path / "log_ffp_worker_2.txt").write_bytes(b"worker log")
     log_map = Report._select_logs(tmp_path)
-    assert (tmp_path / log_map.stderr).is_file()
-    assert (tmp_path / log_map.stdout).is_file()
-    assert "worker log" in (tmp_path / log_map.aux).read_text()
+    assert log_map.stderr.is_file()
+    assert log_map.stdout.is_file()
+    assert "worker log" in log_map.aux.read_text()
 
 
 def test_report_09(tmp_path):
@@ -260,9 +257,9 @@ def test_report_10(tmp_path):
     assert report.preferred.name == "log_stderr.txt"
     assert report.stack is None
     size_limit += len("[LOG TAILED]\n")
-    assert (report.path / report._logs.stderr).stat().st_size == size_limit
-    assert (report.path / report._logs.stdout).stat().st_size == size_limit
-    assert (report.path / "unrelated.txt").stat().st_size == size_limit
+    assert report._logs.stderr.stat().st_size == size_limit
+    assert report._logs.stdout.stat().st_size == size_limit
+    assert (tmp_path / "unrelated.txt").stat().st_size == size_limit
     report.cleanup()
     assert not tmp_path.is_dir()
 
@@ -273,9 +270,9 @@ def test_report_11(tmp_path):
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     (tmp_path / "log_valgrind.txt").write_bytes(b"valgrind log")
     log_map = Report._select_logs(tmp_path)
-    assert (tmp_path / log_map.stderr).is_file()
-    assert (tmp_path / log_map.stdout).is_file()
-    assert "valgrind log" in (tmp_path / log_map.aux).read_text()
+    assert log_map.stderr.is_file()
+    assert log_map.stdout.is_file()
+    assert "valgrind log" in log_map.aux.read_text()
 
 
 def test_report_12(tmp_path):
