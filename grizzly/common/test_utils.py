@@ -10,6 +10,7 @@ from .utils import (
     DEFAULT_TIME_LIMIT,
     TIMEOUT_DELAY,
     configure_logging,
+    display_time_limits,
     grz_tmp,
     time_limits,
 )
@@ -76,9 +77,34 @@ def test_configure_logging_01(mocker, env, log_level):
         (None, 10, [0], (10, 10)),
         # specify time limit and timeout
         (50, 100, [0], (50, 100)),
+        # timeout disabled - use default time limit
+        (None, 0, [None], (DEFAULT_TIME_LIMIT, 0)),
+        # timeout disabled - with time limit
+        (15, 0, [None], (15, 0)),
     ],
 )
 def test_time_limits_01(mocker, time_limit, timeout, test_durations, expected):
     """test time_limits()"""
     tests = [mocker.Mock(spec_set=TestCase, duration=d) for d in test_durations]
     assert time_limits(time_limit, timeout, tests=tests) == expected
+
+
+@mark.parametrize(
+    "time_limit, timeout, no_harness, msg",
+    [
+        # typical - harness
+        (1, 2, False, "Using time limit: 1s, timeout: 2s"),
+        # typical - without harness
+        (1, 2, True, "Using timeout: 2s, harness: DISABLED"),
+        # warn time limit and timeout match - harness
+        (1, 1, False, "To avoid unnecessary relaunches set timeout > time limit"),
+        # disabled timeout - harness
+        (1, 0, False, "Using time limit: 1s, timeout: DISABLED"),
+        # disable timeout - without harness
+        (1, 0, True, "Using timeout: DISABLED, harness: DISABLED"),
+    ],
+)
+def test_display_time_limits_01(caplog, time_limit, timeout, no_harness, msg):
+    """test display_time_limits()"""
+    display_time_limits(time_limit, timeout, no_harness)
+    assert msg in caplog.text

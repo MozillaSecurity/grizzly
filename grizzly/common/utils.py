@@ -11,6 +11,7 @@ from tempfile import gettempdir
 __all__ = (
     "ConfigError",
     "configure_logging",
+    "display_time_limits",
     "DEFAULT_TIME_LIMIT",
     "Exit",
     "grz_tmp",
@@ -73,6 +74,32 @@ def configure_logging(log_level):
     basicConfig(format=log_fmt, datefmt=date_fmt, level=log_level)
 
 
+def display_time_limits(time_limit, timeout, no_harness):
+    """Output configuration of time limits and harness.
+
+    Args:
+        time_limit (int): Time in seconds before harness attempts to close current test.
+        timeout (int): Time in seconds before iteration is considered a timeout.
+        no_harness (bool): Indicate whether harness will is disabled.
+
+    Returns:
+        None
+    """
+    if timeout > 0:
+        if no_harness:
+            LOG.info("Using timeout: %ds, harness: DISABLED", timeout)
+        else:
+            LOG.info("Using time limit: %ds, timeout: %ds", time_limit, timeout)
+            if time_limit == timeout:
+                LOG.info("To avoid unnecessary relaunches set timeout > time limit")
+    else:
+        if no_harness:
+            LOG.info("Using timeout: DISABLED, harness: DISABLED")
+        else:
+            LOG.info("Using time limit: %ds, timeout: DISABLED,", time_limit)
+        LOG.warning("TIMEOUT DISABLED, not recommended for automation")
+
+
 def grz_tmp(*subdir):
     path = Path(GRZ_TMP, *subdir)
     path.mkdir(parents=True, exist_ok=True)
@@ -114,9 +141,10 @@ def time_limits(
     calc_timeout = timeout is None
     if calc_timeout:
         timeout = time_limit + timeout_delay
-    elif calc_limit and time_limit > timeout:
+    elif calc_limit and time_limit > timeout > 0:
         LOG.debug("calculated time limit > given timeout, using timeout")
         time_limit = timeout
-    assert timeout > 0
-    assert timeout >= time_limit
+    assert timeout >= 0
+    # timeout should always be >= time limit unless timeout is disabled
+    assert timeout >= time_limit or timeout == 0
     return time_limit, timeout

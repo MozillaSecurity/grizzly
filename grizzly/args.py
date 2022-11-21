@@ -301,8 +301,8 @@ class CommonArgs:
         if args.time_limit is not None and args.time_limit < 1:
             self.parser.error("--time-limit must be >= 1")
 
-        if args.timeout is not None and args.timeout < 1:
-            self.parser.error("--timeout must be >= 1")
+        if args.timeout is not None and args.timeout < 0:
+            self.parser.error("--timeout must be >= 0")
 
         if args.time_limit and args.timeout and args.timeout < args.time_limit:
             self.parser.error("--timeout must be >= --time-limit")
