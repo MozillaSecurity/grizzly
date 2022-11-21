@@ -203,10 +203,8 @@ class Sapphire:
         Returns:
             None
         """
-        if not value:
-            self._timeout = 0
-        else:
-            self._timeout = max(value, 1)
+        assert value >= 0
+        self._timeout = value
 
     @classmethod
     def main(cls, args):

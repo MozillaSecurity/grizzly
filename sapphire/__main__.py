@@ -39,15 +39,16 @@ def parse_args(argv=None):
     )
     parser.add_argument(
         "--timeout",
+        default=0,
         type=int,
-        help="Duration in seconds to serve before exiting. Default run forever.",
+        help="Duration in seconds to serve before exiting (default: 0 - no timeout)",
     )
     args = parser.parse_args(argv)
     # sanity check
     if not args.path.is_dir():
         parser.error(f"Path does not exist '{args.path}'")
-    if args.timeout is not None and args.timeout <= 0:
-        parser.error("Specified timeout must be greater than 0")
+    if args.timeout < 0:
+        parser.error("--timeout must be >= 0")
     args.log_level = level_map[args.log_level]
     return args
 

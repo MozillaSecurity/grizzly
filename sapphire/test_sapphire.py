@@ -167,14 +167,11 @@ def test_sapphire_07(tmp_path):
     """test timeout of the server"""
     with Sapphire(timeout=60) as serv:
         assert serv.timeout == 60  # verify default
-        serv.timeout = None  # disable timeout
-        assert serv.timeout == 0
         serv.timeout = 0  # disable timeout
         assert serv.timeout == 0
-        serv.timeout = 0.1  # set minimum time
-        assert serv.timeout == 1
+        serv.timeout = 0.01
+        assert serv.timeout == 0.01
         _create_test("test_case.html", tmp_path)
-        serv._timeout = 0.01  # force shorter timeout for faster tests
         status, files_served = serv.serve_path(tmp_path)
     assert status == Served.TIMEOUT
     assert not files_served
@@ -777,7 +774,7 @@ def test_sapphire_33(client, tmp_path):
 
 def test_main_01(mocker, tmp_path):
     """test Sapphire.main()"""
-    args = mocker.Mock(path=tmp_path, port=4536, remote=False, timeout=None)
+    args = mocker.Mock(path=tmp_path, port=4536, remote=False, timeout=0)
     fake_srv = mocker.patch("sapphire.core.Sapphire.serve_path", autospec=True)
     fake_srv.return_value = (Served.ALL, None)
     Sapphire.main(args)
