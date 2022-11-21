@@ -86,7 +86,7 @@ def test_common_args_02(capsys, mocker, args, msg, idx):
         # test invalid timeout
         (
             ["--platform", "targ1", "--timeout", "-1"],
-            "error: --timeout must be >= 1",
+            "error: --timeout must be >= 0",
             ["targ1"],
         ),
         # test timeout < time-limit

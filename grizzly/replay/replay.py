@@ -20,7 +20,14 @@ from ..common.reporter import (
 from ..common.runner import Runner
 from ..common.status import SimpleStatus
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..common.utils import ConfigError, Exit, configure_logging, grz_tmp, time_limits
+from ..common.utils import (
+    ConfigError,
+    Exit,
+    configure_logging,
+    display_time_limits,
+    grz_tmp,
+    time_limits,
+)
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -593,10 +600,7 @@ class ReplayManager:
             time_limit, timeout = time_limits(
                 args.time_limit, args.timeout, tests=testcases
             )
-            if args.no_harness:
-                LOG.info("Using timeout: %ds (no harness)", timeout)
-            else:
-                LOG.info("Using time limit: %ds, timeout: %ds", time_limit, timeout)
+            display_time_limits(time_limit, timeout, args.no_harness)
             # calculate repeat and relaunch
             repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, repeat)

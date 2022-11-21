@@ -13,7 +13,7 @@ from .common.reporter import (
     FilesystemReporter,
     FuzzManagerReporter,
 )
-from .common.utils import Exit, configure_logging, time_limits
+from .common.utils import Exit, configure_logging, display_time_limits, time_limits
 from .session import Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -52,12 +52,7 @@ def main(args):
         time_limit, timeout = time_limits(
             args.time_limit, args.timeout, default_limit=adapter.TIME_LIMIT
         )
-        if args.no_harness:
-            LOG.info("Using timeout: %ds (no harness)", timeout)
-        else:
-            LOG.info("Using time limit: %ds, timeout: %ds", time_limit, timeout)
-            if time_limit == timeout:
-                LOG.warning("To avoid unnecessary relaunches set timeout > time limit")
+        display_time_limits(time_limit, timeout, args.no_harness)
 
         if adapter.RELAUNCH > 0:
             LOG.info("Relaunch (%d) set in Adapter", adapter.RELAUNCH)
