@@ -428,7 +428,7 @@ class ReduceManager:
         """
         return sum(tc.data_size for tc in self.testcases)
 
-    def run(self, repeat=1, launch_attempts=3, min_results=1):
+    def run(self, repeat=1, launch_attempts=3, min_results=1, post_launch_delay=0):
         """Run testcase reduction.
 
         Args:
@@ -436,6 +436,8 @@ class ReduceManager:
             launch_attempts (int): Number of attempts to launch the browser.
             min_results (int): Minimum number of results needed before run can
                                be considered successful.
+            post_launch_delay (int): Time in seconds before continuing after the
+                                     browser is launched.
 
         Returns:
             int: One of the Exit enum values.
@@ -514,6 +516,7 @@ class ReduceManager:
                                     min_results=min_results,
                                     repeat=repeat,
                                     on_iteration_cb=self._on_replay_iteration,
+                                    post_launch_delay=post_launch_delay,
                                 )
                                 self._status.attempts += 1
                                 self.update_timeout(results)
@@ -873,6 +876,7 @@ class ReduceManager:
                     repeat=args.repeat,
                     launch_attempts=args.launch_attempts,
                     min_results=args.min_crashes,
+                    post_launch_delay=args.post_launch_delay,
                 )
             return return_code
 

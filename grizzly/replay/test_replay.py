@@ -206,7 +206,7 @@ def test_replay_06(mocker):
         (Served.REQUEST, ["x"]),
     )
     with ReplayManager([], server, target, use_harness=True, relaunch=10) as replay:
-        assert replay.run(testcases, 10, repeat=2)
+        assert replay.run(testcases, 10, repeat=2, post_launch_delay=-1)
         assert replay.status.ignored == 0
         assert replay.status.iteration == 2
         assert replay.status.results.total == 1
@@ -537,7 +537,7 @@ def test_replay_15(mocker):
         [], server, target, any_crash=True, use_harness=True, relaunch=2
     ) as replay:
         with raises(KeyboardInterrupt):
-            replay.run(testcases, 10, repeat=3, min_results=2)
+            replay.run(testcases, 10, repeat=3, min_results=2, post_launch_delay=-1)
         assert replay.signature is None
         assert replay.status.iteration == 2
         assert replay.status.results.total == 1
@@ -581,7 +581,7 @@ def test_replay_17(mocker):
         for _ in range(3)
     ]
     with ReplayManager([], server, target, use_harness=True, relaunch=2) as replay:
-        assert not replay.run(testcases, 10, repeat=10)
+        assert not replay.run(testcases, 10, repeat=10, post_launch_delay=-1)
         assert server.serve_path.call_count == 30
         assert target.close.call_count == 6
         assert target.launch.call_count == 5
@@ -613,7 +613,7 @@ def test_replay_18(mocker):
         mocker.Mock(spec_set=TestCase, env_vars={}, landing_page="c.html", optional=[]),
     ]
     with ReplayManager([], server, target, use_harness=True) as replay:
-        results = replay.run(testcases, 30)
+        results = replay.run(testcases, 30, post_launch_delay=-1)
         assert target.close.call_count == 2
         assert replay.status.ignored == 0
         assert replay.status.iteration == 1
@@ -635,11 +635,11 @@ def test_replay_19(mocker):
     target.check_result.return_value = Result.NONE
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, use_harness=True) as replay:
-            assert not replay.run([testcase], 30)
+            assert not replay.run([testcase], 30, post_launch_delay=-1)
             assert replay.status.iteration == 1
-            assert not replay.run([testcase], 30)
+            assert not replay.run([testcase], 30, post_launch_delay=-1)
             assert replay.status.iteration == 1
-            assert not replay.run([testcase], 30)
+            assert not replay.run([testcase], 30, post_launch_delay=-1)
             assert replay.status.iteration == 1
     assert server.serve_path.call_count == 3
 
@@ -785,7 +785,9 @@ def test_replay_22(mocker, expect_hang, is_hang, use_sig, match_sig, ignored, re
         with ReplayManager(
             [], server, target, signature=signature, relaunch=10
         ) as replay:
-            found = replay.run([testcase], 10, expect_hang=expect_hang)
+            found = replay.run(
+                [testcase], 10, expect_hang=expect_hang, post_launch_delay=-1
+            )
             assert replay.status.iteration == 1
             assert replay.status.ignored == ignored
             assert replay.status.results.total == results

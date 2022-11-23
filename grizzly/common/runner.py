@@ -161,7 +161,7 @@ class Runner:
 
     @staticmethod
     def location(
-        srv_path, srv_port, close_after=None, post_launch_delay=None, time_limit=None
+        srv_path, srv_port, close_after=None, post_launch_delay=-1, time_limit=None
     ):
         """Build a valid URL to pass to a browser.
 
@@ -184,8 +184,7 @@ class Runner:
         if time_limit:
             assert time_limit > 0
             args.append(f"time_limit={time_limit * 1000}")
-        if post_launch_delay is not None:
-            assert post_launch_delay >= 0
+        if post_launch_delay >= 0:
             args.append(f"post_launch_delay={post_launch_delay}")
         if args:
             return "?".join((location, "&".join(args)))
@@ -203,18 +202,17 @@ class Runner:
         """
         return self._tests_run < 2
 
-    def post_launch(self, delay=None):
+    def post_launch(self, delay=-1):
         """Perform actions after launching browser before loading test cases.
 
         Args:
             post_launch_delay (int): Amount of time in seconds before the target will
-                                     redirect to test case.
+                                     continue.
 
         Returns:
             None
         """
-        if delay is not None and not self.startup_failure:
-            assert delay >= 0
+        if delay >= 0 and not self.startup_failure:
             with TestCase("post_launch_delay.html", None, "None") as content:
                 content.add_from_file(
                     Path(__file__).parent / "post_launch_delay.html",
@@ -230,13 +228,18 @@ class Runner:
                 if delay > 0:
                     LOG.info("Browser launched, continuing in %ds...", delay)
                 # serve prompt page
-                self._server.serve_path(
+                server_status, _ = self._server.serve_path(
                     content.data_path,
                     continue_cb=self._target.monitor.is_healthy,
                     server_map=srv_map,
                 )
                 # reset server timeout
                 self._server.timeout = srv_timeout
+                if server_status != Served.ALL:
+                    self.startup_failure = True
+
+        if self.startup_failure:
+            LOG.warning("Post launch check failed!")
 
     def run(
         self,

@@ -138,6 +138,15 @@ class CommonArgs:
             help="Target to use (default: %(default)s)",
         )
         self.launcher_grp.add_argument(
+            "--post-launch-delay",
+            type=int,
+            default=0,
+            help="Delay after launching browser before continuing. "
+            "This provides an opportunity to connect debuggers. "
+            ">0 - delay in seconds; 0 - continue immediately; -1 - skip. "
+            "(default: %(default)s)",
+        )
+        self.launcher_grp.add_argument(
             "-p", "--prefs", help="DEPRECATED. prefs.js file to use"
         )
         self.launcher_grp.add_argument(

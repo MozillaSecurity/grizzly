@@ -251,7 +251,7 @@ class ReplayManager:
         idle_threshold=0,
         launch_attempts=3,
         on_iteration_cb=None,
-        post_launch_delay=None,
+        post_launch_delay=0,
     ):
         """Run testcase replay.
 
@@ -271,8 +271,8 @@ class ReplayManager:
             idle_threshold (int): CPU usage threshold to mark the process as idle.
             launch_attempts (int): Number of attempts to launch the browser.
             on_iteration_cb (callable): Called every time a single iteration is run.
-            post_launch_delay (int): Time in seconds before test case is loaded after
-                                     the browser is launched.
+            post_launch_delay (int): Time in seconds before continuing after the
+                                     browser is launched.
 
         Returns:
             list: ReplayResults that were found running testcases.
@@ -328,6 +328,7 @@ class ReplayManager:
                     )
                     runner.launch(location, max_retries=launch_attempts)
                     runner.post_launch(delay=post_launch_delay)
+                    # TODO: avoid running test case if runner.startup_failure is True
                 # run tests
                 durations = []
                 served = []

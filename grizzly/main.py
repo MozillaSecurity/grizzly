@@ -122,6 +122,7 @@ def main(args):
                     runtime_limit=args.runtime,
                     display_mode=display_mode,
                     launch_attempts=args.launch_attempts,
+                    post_launch_delay=args.post_launch_delay,
                 )
                 complete_with_results = session.status.results.total > 0
 

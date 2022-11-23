@@ -149,6 +149,7 @@ class Session:
         runtime_limit=0,
         display_mode=DISPLAY_NORMAL,
         launch_attempts=3,
+        post_launch_delay=0,
     ):
         assert iteration_limit >= 0
         assert launch_attempts > 0
@@ -194,9 +195,12 @@ class Session:
                     self.server.port,
                     close_after=relaunch if harness else None,
                     time_limit=time_limit if harness else None,
+                    post_launch_delay=post_launch_delay,
                 )
                 with self.status.measure("launch"):
                     runner.launch(location, max_retries=launch_attempts, retry_delay=0)
+                runner.post_launch(delay=post_launch_delay)
+                # TODO: avoid running test case if runner.startup_failure is True
 
             # create and populate a test case
             current_test = self.generate_testcase(time_limit)
