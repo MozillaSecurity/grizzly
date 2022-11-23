@@ -175,9 +175,10 @@ class Bucket:
                     }
                 )
             )
-        except:  # noqa pragma: no cover pylint: disable=bare-except
-            rmtree(tmpd)
-            raise
+            tmpd = None
+        finally:  # pragma: no cover
+            if tmpd:
+                rmtree(tmpd)
 
         self._sig_filename = sig_filename
         return self._sig_filename
@@ -283,10 +284,12 @@ class CrashEntry:
         try:
             with open(handle, "wb") as output:
                 output.write(response.content)
-        except:  # noqa pragma: no cover pylint: disable=bare-except
-            unlink(filename)
-            raise
-        self._tc_filename = Path(filename)
+            result = Path(filename)
+            filename = None
+        finally:  # pragma: no cover
+            if filename:
+                unlink(filename)
+        self._tc_filename = result
         return self._tc_filename
 
 

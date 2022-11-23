@@ -533,10 +533,9 @@ class ReduceManager:
                                         not self._any_crash
                                         and self._signature_desc is None
                                     ):
-                                        self._signature_desc = (
-                                            # pylint: disable=line-too-long
-                                            first_expected.report.crash_info.createShortSignature()  # noqa: E501
-                                        )
+                                        crash = first_expected.report.crash_info
+                                        sig = crash.createShortSignature()
+                                        self._signature_desc = sig
                                 self._status.report()
                                 served = None
                                 if success and not self._any_crash:
