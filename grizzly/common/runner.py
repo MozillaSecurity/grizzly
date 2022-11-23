@@ -227,14 +227,15 @@ class Runner:
                 # temporarily disable server timeout
                 srv_timeout = self._server.timeout
                 self._server.timeout = 0
-                LOG.info("Browser launched, continuing in %ds...", delay)
+                if delay > 0:
+                    LOG.info("Browser launched, continuing in %ds...", delay)
                 # serve prompt page
                 self._server.serve_path(
                     content.data_path,
                     continue_cb=self._target.monitor.is_healthy,
                     server_map=srv_map,
                 )
-                # re-enable server timeout
+                # reset server timeout
                 self._server.timeout = srv_timeout
 
     def run(
