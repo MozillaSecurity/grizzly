@@ -3,6 +3,14 @@
 <head>
 <meta charset=UTF-8>
 <title>Grizzly &sdot; Harness</title>
+<style>
+body {
+  background-color: #222;
+  color: #ccc;
+  font-family: monospace;
+  font-size: 1.2em;
+}
+</style>
 <script>
 let close_after, limit_tmr, time_limit
 let sub = null
@@ -20,11 +28,11 @@ let poll = () => {
     setTimeout(poll, 50)
 }
 
-let setBanner = (msg) => {
+let setMsg = (msgStr) => {
   try {
-    document.getElementById('banner').innerHTML = msg
+    document.getElementById('msg').innerHTML = msgStr
   } catch(e) {
-    grzDump(`setBanner error: ${e}`)
+    grzDump(`setMsg error: ${e}`)
   }
 }
 
@@ -41,8 +49,11 @@ let main = () => {
 
   if ((close_after !== undefined) && (close_after-- < 1)) {
     grzDump('Iteration limit hit.')
-    setBanner('Iteration limit hit. Browser should close momentarily...<br>' +
-              'Warning: Any additional open tabs can block browser from closing.')
+    setMsg(
+      '&gt; Iteration limit hit.<br>' +
+      '&gt; Note: Open tabs can block browser from closing.<br>' +
+      '&gt; Browser should close momentarily...'
+    )
     try { window.focus() } catch(e) { }
     let xhr = new XMLHttpRequest()
     // indicate the test is complete by requesting `/grz_next_test`
@@ -59,9 +70,13 @@ let main = () => {
   else {
     // open test
     let location = (sub !== null) ? '/grz_next_test' : '/grz_current_test'
-    sub = open()
+    sub = window.open()
     if (sub === null) {
-      setBanner('Error! Could not open window. Blocked by the popup blocker?')
+      setMsg(
+        '&gt; ERROR: window.open() failed!<br>' +
+        '&gt; Try disabling popup blocker.<br>' +
+        '&gt; Stopped.'
+      )
       grzDump('Could not open test! Blocked by the popup blocker?')
     }
     else {
@@ -103,14 +118,15 @@ window.addEventListener('load', () => {
       }
     }
   }
-  // update banner
-  setBanner('&#x1f43b; &sdot; Grizzly Harness &sdot; &#x1f98a;')
+  // update msg
+  setMsg('&gt; Running...')
   // begin iterations
   setTimeout(main)
 })
 </script>
 </head>
-<body style='background-color:#E5E4E2'>
-<h4 id='banner'>&#x1f43b; &sdot; Loading...</h4>
+<body>
+<h4>Grizzly &sdot; Harness</h4>
+<div id='msg'>&gt; Loading harness...</h4>
 </body>
 </html>

@@ -3,6 +3,24 @@
 <meta charset=UTF-8>
 <title>Grizzly &sdot; Post Launch Delay</title>
 <head>
+<style>
+body {
+    background-color: #222;
+    color: #ccc;
+    font-family: monospace;
+    font-size: 1.2em;
+}
+button {
+    background-color: #444;
+    border: 2px solid;
+    border-color: #ccc;
+    color: inherit;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    padding: .1em .4em;
+}
+</style>
 <script>
 const args = window.location.search.replace('?', '')
 const target = args ? `/grz_continue?${args}` : '/grz_continue'
@@ -32,6 +50,7 @@ function next() {
     if (countInterval) {
         clearInterval(countInterval)
     }
+    document.getElementById('msg').innerText = `> Redirecting...`
     setTimeout(() => {
         window.location = target
     }, 0)
@@ -39,8 +58,9 @@ function next() {
 
 function updateDisplay() {
     remainingSeconds = Math.max(remaining, 0)
-    let o = document.getElementById('msg')
-    o.innerText = `Test will run automatically in: ${remainingSeconds}s`
+    document.getElementById('msg').innerText = (
+        `> Continuing automatically in: ${remainingSeconds}s`
+    )
 }
 
 window.onload = () => {
@@ -49,14 +69,19 @@ window.onload = () => {
         countInterval = setInterval(countDown, 1000)
     }
     else {
+        document.getElementById('btn').style.display = 'none'
+        document.getElementById('prompt').style.display = 'none'
         setTimeout(countDown, 0)
     }
 }
 </script>
 </head>
-<body style='background-color:#E5E4E2'>
-<div>Connect debugger, etc...</div>
+<body>
+<h4>Grizzly &sdot; Post Launch Delay</h4>
+<div>&gt; Browser launched.</div>
+<div id='prompt'>&gt; Connect debugger, etc...</div>
 <div id='msg'></div>
-<button onclick='next()'>Run Test</button>
+<div>&nbsp;</div>
+<button id='btn' onclick='next()'>Continue</button>
 </body>
 </html>
