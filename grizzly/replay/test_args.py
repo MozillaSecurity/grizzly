@@ -43,11 +43,6 @@ def test_replay_args_01(capsys, mocker, tmp_path):
         ),
         # test invalid min-crashes value
         (["--min-crashes", "0"], "error: --min-crashes value must be positive"),
-        # test invalid post-launch-delay value
-        (
-            ["--post-launch-delay", "-1"],
-            "error: --post-launch-delay value must be positive",
-        ),
         # test invalid repeat value
         (["--repeat", "-1"], "error: --repeat value must be positive"),
         # test running with rr without --logs set

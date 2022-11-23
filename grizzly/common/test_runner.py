@@ -334,17 +334,33 @@ def test_runner_10(mocker, tmp_path):
         assert "test/inc_file3.txt" in tcase.contents
 
 
-def test_runner_11(mocker):
+@mark.parametrize(
+    "delay, srv_result, startup_failure",
+    [
+        # with delay
+        (10, (Served.ALL, None), False),
+        # continue immediately
+        (0, (Served.ALL, None), False),
+        # skip post launch delay page
+        (-1, None, False),
+        # startup failure
+        (0, (Served.NONE, None), True),
+    ],
+)
+def test_runner_11(mocker, delay, srv_result, startup_failure):
     """test Runner.post_launch()"""
-    server = mocker.Mock(spec_set=Sapphire, timeout=1)
-    target = mocker.Mock(spec_set=Target, launch_timeout=30)
-    runner = Runner(server, target)
-    # successful launch
+    srv_timeout = 1
+    server = mocker.Mock(
+        spec_set=Sapphire,
+        timeout=srv_timeout,
+    )
+    server.serve_path.return_value = srv_result
+    runner = Runner(server, mocker.Mock(spec_set=Target, launch_timeout=30))
     runner.launch("http://a/")
-    runner.post_launch(delay=10)
-    assert target.launch.call_count == 1
-    assert server.timeout == 1
-    assert server.serve_path.call_count == 1
+    runner.post_launch(delay=delay)
+    assert server.serve_path.call_count == (1 if srv_result else 0)
+    assert server.timeout == srv_timeout
+    assert runner.startup_failure == startup_failure
 
 
 def test_idle_check_01(mocker):

@@ -69,7 +69,7 @@ def test_main_01(mocker, tmp_path):
         min_crashes=2,
         no_harness=False,
         pernosco=False,
-        post_launch_delay=None,
+        post_launch_delay=0,
         relaunch=1,
         repeat=4,
         rr=False,
@@ -84,7 +84,7 @@ def test_main_01(mocker, tmp_path):
     assert target.launch.call_count == 3
     assert target.check_result.call_count == 3
     assert target.merge_environment.call_count == 1
-    assert serve_path.call_count == 3
+    assert serve_path.call_count == 6
     assert load_target.call_count == 1
     assert target.close.call_count == 4
     assert target.filtered_environ.call_count == 2
@@ -145,7 +145,7 @@ def test_main_02(mocker, tmp_path, repro_results):
         min_crashes=2,
         no_harness=True,
         pernosco=False,
-        post_launch_delay=None,
+        post_launch_delay=-1,
         relaunch=1,
         repeat=1,
         rr=False,
@@ -177,7 +177,7 @@ def test_main_03(mocker):
         min_crashes=1,
         no_harness=True,
         pernosco=False,
-        post_launch_delay=None,
+        post_launch_delay=-1,
         relaunch=1,
         repeat=1,
         rr=False,
@@ -242,7 +242,7 @@ def test_main_04(mocker):
         input="test",
         min_crashes=1,
         no_harness=True,
-        post_launch_delay=None,
+        post_launch_delay=-1,
         pernosco=False,
         relaunch=1,
         repeat=1,
@@ -300,7 +300,7 @@ def test_main_05(mocker, tmp_path):
         min_crashes=1,
         no_harness=True,
         pernosco=False,
-        post_launch_delay=None,
+        post_launch_delay=-1,
         relaunch=1,
         repeat=1,
         rr=False,
@@ -380,7 +380,7 @@ def test_main_06(
         min_crashes=2,
         no_harness=no_harness,
         pernosco=pernosco,
-        post_launch_delay=None,
+        post_launch_delay=-1,
         relaunch=1,
         repeat=1,
         rr=rr,
@@ -435,7 +435,7 @@ def test_main_07(mocker, tmp_path):
         min_crashes=1,
         no_harness=False,
         pernosco=False,
-        post_launch_delay=None,
+        post_launch_delay=-1,
         relaunch=1,
         repeat=1,
         rr=False,

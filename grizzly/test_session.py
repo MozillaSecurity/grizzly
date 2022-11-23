@@ -316,7 +316,7 @@ def test_session_06(mocker, harness, report_size):
             (Served.ALL, [session.iomanager.page_name()]),
             (Served.NONE, []),
         )
-        session.run([], 10, iteration_limit=2)
+        session.run([], 10, iteration_limit=2, post_launch_delay=-1)
         assert reporter.submit.call_count == 1
         assert len(reporter.submit.call_args[0][0]) == 1
         assert reporter.submit.call_args[0][1].major == "major123"
