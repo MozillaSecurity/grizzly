@@ -4,7 +4,6 @@
 """
 Sapphire HTTP server
 """
-from errno import EADDRINUSE
 from logging import getLogger
 from pathlib import Path
 from random import randint
@@ -42,7 +41,7 @@ class Sapphire:
         self.close()
 
     @staticmethod
-    def _create_listening_socket(remote, port=None, retries=20, timeout=LISTEN_TIMEOUT):
+    def _create_listening_socket(remote, port=None, retries=10, timeout=LISTEN_TIMEOUT):
         """Create listening socket. Search for an open socket if needed and
         and configure the socket. If a specific port is unavailable or no
         available ports can be found socket.error will be raised.
@@ -61,21 +60,24 @@ class Sapphire:
         assert timeout > 0
         addr = "0.0.0.0" if remote else "127.0.0.1"
         sock = None
-        for retry in reversed(range(max(retries + 1, 1))):
+        for remaining in reversed(range(retries + 1)):
+            # find an unused port and avoid blocked ports
+            # see: searchfox.org/mozilla-central/source/netwerk/base/nsIOService.cpp
+            # highest blocked port is 10080 (0x2760)
+            attempt_port = port or randint(0x2770, 0xFFFF)
             try:
                 sock = socket(AF_INET, SOCK_STREAM)
                 sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
                 sock.settimeout(timeout)
-                # find an unused port and avoid blocked ports
-                # see: searchfox.org/mozilla-central/source/netwerk/base/nsIOService.cpp
-                # highest blocked port is 10080 (0x2760)
-                sock.bind((addr, port or randint(0x2770, 0xFFFF)))
+                sock.bind((addr, attempt_port))
                 sock.listen(5)
-            except OSError as soc_e:
+            except (OSError, PermissionError) as exc:
+                LOG.debug("failed to open listening socket, port: %d", attempt_port)
+                LOG.debug("%s: %s (errno: %r)", type(exc).__name__, exc, exc.errno)
                 if sock is not None:
                     sock.close()
                     sock = None
-                if retry > 1 and soc_e.errno in (EADDRINUSE, 10013):
+                if remaining > 0:
                     sleep(0.1)
                     continue
                 raise
