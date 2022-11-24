@@ -727,14 +727,14 @@ def test_sapphire_31(mocker):
     assert fake_sleep.call_count == 0
     fake_sock.reset_mock()
     # failure to bind
-    fake_sock.return_value.bind.side_effect = OSError
+    fake_sock.return_value.bind.side_effect = OSError("some error")
     with raises(OSError):
-        Sapphire._create_listening_socket(False, None)
+        Sapphire._create_listening_socket(False, None, retries=0)
     assert fake_sock.return_value.close.call_count == 1
     assert fake_sleep.call_count == 0
     fake_sock.reset_mock()
     # failure and pass on retry
-    exc = OSError()
+    exc = PermissionError("blah")
     exc.errno = 10013
     fake_sock.return_value.bind.side_effect = (exc, None)
     assert Sapphire._create_listening_socket(False, None)
