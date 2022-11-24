@@ -27,18 +27,13 @@ pytestmark = mark.usefixtures(
 )
 
 
-def test_main_01(mocker, tmp_path):
+def test_main_01(mocker, server, tmp_path):
     """test ReplayManager.main()"""
     # This is a typical scenario - a test that reproduces results ~50% of the time.
     # Of the four attempts only the first and third will 'reproduce' the result
     # and the forth attempt should be skipped.
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    # mock Sapphire.serve_path only
-    serve_path = mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path",
-        autospec=True,
-        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
-    )
+    server.serve_path.return_value = (Served.ALL, ["test.html"])
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
     target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
@@ -84,7 +79,7 @@ def test_main_01(mocker, tmp_path):
     assert target.launch.call_count == 3
     assert target.check_result.call_count == 3
     assert target.merge_environment.call_count == 1
-    assert serve_path.call_count == 6
+    assert server.serve_path.call_count == 6
     assert load_target.call_count == 1
     assert target.close.call_count == 4
     assert target.filtered_environ.call_count == 2
@@ -108,15 +103,10 @@ def test_main_01(mocker, tmp_path):
         (Result.FOUND, Result.NONE),
     ],
 )
-def test_main_02(mocker, tmp_path, repro_results):
+def test_main_02(mocker, server, tmp_path, repro_results):
     """test ReplayManager.main() - no repro"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    # mock Sapphire.serve_path only
-    mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path",
-        autospec=True,
-        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
-    )
+    server.serve_path.return_value = (Served.ALL, ["test.html"])
     # setup Target
     target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
     target.check_result.side_effect = repro_results
@@ -269,13 +259,9 @@ def test_main_04(mocker):
     assert reporter.return_value.submit.call_count == 0
 
 
-def test_main_05(mocker, tmp_path):
+def test_main_05(mocker, server, tmp_path):
     """test ReplayManager.main() loading specified assets"""
-    serve_path = mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path",
-        autospec=True,
-        return_value=(None, ["test.html"]),  # passed to Target.check_result
-    )
+    server.serve_path.return_value = (None, ["test.html"])
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
     target.check_result.return_value = Result.FOUND
@@ -328,7 +314,7 @@ def test_main_05(mocker, tmp_path):
     assert target.launch.call_count == 1
     assert target.check_result.call_count == 1
     assert target.filtered_environ.call_count == 1
-    assert serve_path.call_count == 1
+    assert server.serve_path.call_count == 1
     assert log_path.is_dir()
     assert any(log_path.glob("**/sample_asset"))
 
@@ -349,16 +335,11 @@ def test_main_05(mocker, tmp_path):
     ],  # pylint: disable=invalid-name
 )
 def test_main_06(
-    mocker, tmp_path, pernosco, rr, valgrind, no_harness
+    mocker, server, tmp_path, pernosco, rr, valgrind, no_harness
 ):  # pylint: disable=invalid-name
     """test ReplayManager.main() enable debuggers"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    # mock Sapphire.serve_path only
-    mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path",
-        autospec=True,
-        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
-    )
+    server.serve_path.return_value = (Served.ALL, ["test.html"])
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
     target.check_result.return_value = Result.NONE
@@ -401,16 +382,11 @@ def test_main_06(
     assert load_target.return_value.call_args[-1]["valgrind"] == valgrind
 
 
-def test_main_07(mocker, tmp_path):
+def test_main_07(mocker, server, tmp_path):
     """test ReplayManager.main() - report to FuzzManager"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
+    server.serve_path.return_value = (Served.ALL, ["test.html"])
     reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
-    # mock Sapphire.serve_path only
-    serve_path = mocker.patch(
-        "grizzly.replay.replay.Sapphire.serve_path",
-        autospec=True,
-        return_value=(Served.ALL, ["test.html"]),  # passed to Target.check_result
-    )
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
     target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
@@ -450,7 +426,7 @@ def test_main_07(mocker, tmp_path):
     assert target.reverse.call_count == 1
     assert target.launch.call_count == 1
     assert target.check_result.call_count == 1
-    assert serve_path.call_count == 1
+    assert server.serve_path.call_count == 1
     assert load_target.call_count == 1
     assert target.close.call_count == 2
     assert target.cleanup.call_count == 1
