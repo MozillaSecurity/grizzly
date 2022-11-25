@@ -803,7 +803,8 @@ def test_replay_23(mocker):
     ]
     test = mocker.Mock(spec_set=TestCase, adapter_name="test-tool-name")
     ReplayManager.report_to_fuzzmanager(results, [test])
-    assert reporter.call_args == (("test-tool-name",),)
+    # check 'grizzy-' prefix is added
+    assert reporter.call_args == (("grizzly-test-tool-name",),)
     assert reporter.return_value.submit.call_count == 2
     reporter.reset_mock()
     # with reports and no tests

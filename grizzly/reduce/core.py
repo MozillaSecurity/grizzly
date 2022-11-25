@@ -137,7 +137,7 @@ class ReduceManager:
         self._original_use_harness = use_harness
         self._report_to_fuzzmanager = report_to_fuzzmanager
         self._report_periodically = report_period
-        self._report_tool = tool
+        self._report_tool = tool or "grizzly-reducer"
         self._signature = signature
         self._signature_desc = signature_desc
         self._static_timeout = expect_hang or static_timeout
@@ -801,12 +801,9 @@ class ReduceManager:
                 LOG.error("Error: %s", str(exc))
                 return Exit.ERROR
 
-            if args.tool is None and testcases[0].adapter_name is not None:
-                LOG.warning(
-                    "Setting default --tool=grizzly-%s from testcase",
-                    testcases[0].adapter_name,
-                )
+            if not args.tool and testcases[0].adapter_name:
                 args.tool = f"grizzly-{testcases[0].adapter_name}"
+                LOG.warning("Setting default --tool=%s from testcase", args.tool)
 
             expect_hang = ReplayManager.expect_hang(args.ignore, signature, testcases)
 

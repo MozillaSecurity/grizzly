@@ -163,12 +163,15 @@ class FuzzManagerReporter(Reporter):
 
     __slots__ = ("_extra_metadata", "force_report", "quality", "tool")
 
-    def __init__(self, tool=None):
+    def __init__(self, tool):
         super().__init__()
+        assert isinstance(tool, str)
         self._extra_metadata = {}
         self.force_report = False
         self.quality = Quality.UNREDUCED
-        self.tool = tool  # optional tool name
+        # remove whitespace and use only lowercase
+        self.tool = "-".join(tool.lower().split())
+        assert self.tool, "tool value cannot be empty"
 
     def _post_submit(self):
         self._extra_metadata.clear()
@@ -237,7 +240,7 @@ class FuzzManagerReporter(Reporter):
         return log_data.startswith("VEX temporary storage exhausted.")
 
     def _submit_report(self, report, test_cases):
-        collector = Collector()
+        collector = Collector(tool=self.tool)
 
         if not self.force_report:
             if collector.sigCacheDir and Path(collector.sigCacheDir).is_dir():
@@ -299,14 +302,16 @@ class FuzzManagerReporter(Reporter):
                 for entry in report.path.rglob("*"):
                     if entry.is_file():
                         zip_fp.write(entry, arcname=entry.relative_to(report.path))
-            # override tool name if specified
-            if self.tool is not None:
-                collector.tool = self.tool
 
             # submit results to the FuzzManager server
             new_entry = collector.submit(
                 report.crash_info, testCase=zip_name, testCaseQuality=self.quality.value
             )
-        LOG.info("Logged %d (%s)", new_entry["id"], self.quality.name)
+        LOG.info(
+            "Reported: %d, %s, %s",
+            new_entry["id"],
+            self.quality.name,
+            collector.tool,
+        )
 
         return new_entry["id"]
