@@ -15,6 +15,10 @@ def test_adapter_01():
     """test a simple Adapter"""
     with pytest.raises(AdapterError, match="name must not be empty"):
         SimpleAdapter("")
+    with pytest.raises(AdapterError, match="name must not contain whitespace"):
+        SimpleAdapter("a a")
+    with pytest.raises(AdapterError, match="name must not contain whitespace"):
+        SimpleAdapter(" a")
     adpt = SimpleAdapter("simple")
     assert isinstance(adpt.fuzz, dict)
     assert not adpt.fuzz
