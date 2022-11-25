@@ -188,6 +188,7 @@ def test_fuzzmanager_reporter_02(
         {"frequent": frequent, "shortDescription": "[@ test]"},
     )
     fake_collector.return_value.sigCacheDir = str(tmp_path) if sig_cache else None
+    fake_collector.return_value.tool = "fake-tool"
     log_path = tmp_path / "log_path"
     log_path.mkdir()
     (log_path / "log_ffp_worker_blah.txt").touch()
@@ -204,10 +205,11 @@ def test_fuzzmanager_reporter_02(
     test_cases = []
     if tests:
         test_cases.append(fake_test)
-    reporter = FuzzManagerReporter("fake_bin")
+    reporter = FuzzManagerReporter("fake-tool")
     reporter.force_report = force
     reporter.submit(test_cases, Report(log_path, "fake_bin", is_hang=True))
     assert not log_path.is_dir()
+    assert fake_collector.call_args == ({"tool": "fake-tool"},)
     if (frequent and not force) or ignored:
         assert fake_collector.return_value.submit.call_count == 0
         assert fake_test.dump.call_count == 0
@@ -230,6 +232,24 @@ def test_fuzzmanager_reporter_03(mocker, tmp_path):
     # ignored - Valgrind OOM
     log_file.write_bytes(b"VEX temporary storage exhausted.")
     assert FuzzManagerReporter._ignored(report)
+
+
+@mark.parametrize(
+    "tool, sanitized",
+    [
+        # no whitespace
+        ("test-tool", "test-tool"),
+        # whitespace
+        ("test tool", "test-tool"),
+        # whitespace
+        ("test\t\r\n\vtool", "test-tool"),
+        # mixed case
+        ("TeSt-ToOl", "test-tool"),
+    ],
+)
+def test_fuzzmanager_reporter_04(tool, sanitized):
+    """test FuzzManagerReporter() sanitizing tool"""
+    assert FuzzManagerReporter(tool).tool == sanitized
 
 
 def test_failed_launch_reporter_01(mocker, tmp_path):

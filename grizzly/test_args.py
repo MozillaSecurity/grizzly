@@ -101,6 +101,18 @@ def test_common_args_02(capsys, mocker, args, msg, idx):
             "error: --tool requires --fuzzmanager",
             ["targ1"],
         ),
+        # test invalid tool usage
+        (
+            ["--platform", "targ1", "--fuzzmanager", "--tool", "x x"],
+            "error: --tool cannot contain whitespace",
+            ["targ1"],
+        ),
+        # test invalid tool usage
+        (
+            ["--platform", "targ1", "--fuzzmanager", "--tool", " x"],
+            "error: --tool cannot contain whitespace",
+            ["targ1"],
+        ),
         # test invalid launch-attempts value
         (
             ["--launch-attempts", "0"],

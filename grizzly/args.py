@@ -316,8 +316,11 @@ class CommonArgs:
         if args.time_limit and args.timeout and args.timeout < args.time_limit:
             self.parser.error("--timeout must be >= --time-limit")
 
-        if args.tool is not None and not args.fuzzmanager:
-            self.parser.error("--tool requires --fuzzmanager")
+        if args.tool:
+            if not args.fuzzmanager:
+                self.parser.error("--tool requires --fuzzmanager")
+            if len(args.tool.split()) != 1 or args.tool.strip() != args.tool:
+                self.parser.error("--tool cannot contain whitespace")
 
         if args.xvfb:  # pragma: no cover
             args.headless = "xvfb"

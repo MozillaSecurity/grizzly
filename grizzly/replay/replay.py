@@ -230,8 +230,8 @@ class ReplayManager:
         Returns:
             None
         """
-        if tests and not tool:
-            tool = tests[0].adapter_name
+        if not tool and tests and tests[0].adapter_name:
+            tool = f"grizzly-{tests[0].adapter_name}"
         reporter = FuzzManagerReporter(tool or "grizzly-replay")
         for result in results:
             # always report expected results
