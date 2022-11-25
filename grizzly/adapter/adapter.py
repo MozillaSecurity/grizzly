@@ -51,6 +51,8 @@ class Adapter(metaclass=ABCMeta):
         assert isinstance(name, str)
         if not name:
             raise AdapterError("name must not be empty")
+        if len(name.split()) != 1 or name.strip() != name:
+            raise AdapterError("name must not contain whitespace")
         self._harness = None
         self.fuzz = {}
         self.monitor = None
