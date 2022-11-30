@@ -89,20 +89,21 @@ class StackFrame:
     def from_line(cls, input_line, parse_mode=None):
         assert "\n" not in input_line, "Input contains unexpected new line(s)"
         sframe = None
-        if parse_mode is None or parse_mode == Mode.SANITIZER:
+        if parse_mode in (None, Mode.SANITIZER):
             sframe = cls._parse_sanitizer(input_line)
-        if not sframe and parse_mode is None or parse_mode == Mode.GDB:
+        if not sframe and parse_mode in (None, Mode.GDB):
             sframe = cls._parse_gdb(input_line)
-        if not sframe and parse_mode is None or parse_mode == Mode.MINIDUMP:
+        if not sframe and parse_mode in (None, Mode.MINIDUMP):
             sframe = cls._parse_minidump(input_line)
-        if not sframe and parse_mode is None or parse_mode == Mode.RR:
+        if not sframe and parse_mode in (None, Mode.RR):
             sframe = cls._parse_rr(input_line)
-        if not sframe and parse_mode is None or parse_mode == Mode.RUST:
+        if not sframe and parse_mode in (None, Mode.RUST):
             sframe = cls._parse_rust(input_line)
-        if not sframe and parse_mode is None or parse_mode == Mode.TSAN:
+        if not sframe and parse_mode in (None, Mode.TSAN):
             sframe = cls._parse_tsan(input_line)
-        if not sframe and parse_mode is None or parse_mode == Mode.VALGRIND:
+        if not sframe and parse_mode in (None, Mode.VALGRIND):
             sframe = cls._parse_valgrind(input_line)
+        assert sframe is None or sframe.mode is not None
         return sframe
 
     @classmethod
@@ -143,8 +144,9 @@ class StackFrame:
                 line_no,
                 offset,
             ) = input_line.split("|")
-            if int(tid) < 0 or int(stack_line) < 0:
-                return None
+            # check tid and stack_line are valid
+            _ = int(tid)
+            _ = int(stack_line)
         except ValueError:
             return None
         sframe = cls(mode=Mode.MINIDUMP, stack_line=stack_line)
@@ -209,8 +211,10 @@ class StackFrame:
         if match.group("in"):
             # find function/method name
             match = cls._re_func_name.match(input_line)
-            if match is not None:
+            if match:
                 sframe.function = match.group("func")
+                # remove function name
+                input_line = input_line.split(" ", 1)[-1]
         if input_line.startswith("("):
             input_line = input_line.strip("()")
         # find location (file name or module) and offset (line # or offset)
@@ -329,6 +333,7 @@ class Stack:
         frames = []
         prev_line = None
         for line in reversed(input_text.split("\n")):
+            line = line.rstrip()
             if not line:
                 # skip empty lines
                 continue
@@ -344,9 +349,7 @@ class Stack:
             if parse_mode is None:
                 parse_mode = frame.mode
                 LOG.debug("parser mode: %s", parse_mode.name)
-            elif parse_mode != frame.mode:
-                # don't mix parse modes!
-                continue
+            assert frame.mode == parse_mode
 
             if frame.stack_line is not None:
                 stack_line = int(frame.stack_line)
@@ -364,11 +367,11 @@ class Stack:
         if frames and prev_line is not None:
             # assuming the first frame is 0
             if int(frames[0].stack_line) != 0:
-                LOG.warning("First stack line %s not 0", frames[0].stack_line)
+                LOG.warning("First stack frame is %s not 0", frames[0].stack_line)
             if int(frames[-1].stack_line) != len(frames) - 1:
                 LOG.warning(
-                    "Last stack line %s not %d (frames-1)",
-                    frames[0].stack_line,
+                    "Missing frames? Last frame is %s, expected %d (frames-1)",
+                    frames[-1].stack_line,
                     len(frames) - 1,
                 )
 

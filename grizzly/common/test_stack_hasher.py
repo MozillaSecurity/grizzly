@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import pytest
+from pytest import raises
 
 from .stack_hasher import Mode, Stack, StackFrame
 
@@ -114,9 +114,8 @@ def test_stack_07():
         ""
         "    #0 0x4d2cde in a_b_c /a/lib/info.c:392:12\n"
         "    #1 0x491e82 in main /a/b/d_e.c:128:8\n"
-        "    #2 0x7f090384582f in __libc_start_main /build/glibc-glibc-2.23/csu/"
-        "../csu/libc-start.c:291\n"
-        "#2  0x0000000000400545 in gdb_frame ()\n"
+        "    #2 0x7f090384582f in __libc_start_main /build/a/../libc-start.c:291\n"
+        "#0  0x0000000000400545 in gdb_frame ()\n"
         "    #3 0x41b228 in _start (bin_name+0x41b228)\n"
     )
     stack = Stack.from_text(input_txt)
@@ -291,6 +290,29 @@ def test_stack_14():
     assert no_lim_major == stack.major
 
 
+def test_stack_15():
+    """test creating a Stack from trace missing #0"""
+    stack = Stack.from_text("    #1 0x000098fc in frame1() test/a.cpp:655\n")
+    assert len(stack.frames) == 1
+    assert stack.frames[0].location == "a.cpp"
+    assert stack.frames[0].function == "frame1"
+    assert stack.frames[0].mode == Mode.SANITIZER
+
+
+def test_stack_16():
+    """test creating a Stack from mixed traces"""
+    stack = Stack.from_text(
+        ""
+        "    #0 0x0001230 in stack_1a() test/a.cpp:12\n"
+        "    #2 0x0001231 in stack_2a() test/a.cpp:45\n"
+        "    #1 0x0001232 in stack_1b() test/a.cpp:23\n"
+        "    #2 0x0001233 in stack_1c() test/a.cpp:34\n"
+    )
+    assert len(stack.frames) == 2
+    assert stack.frames[0].function == "stack_1b"
+    assert stack.frames[0].mode == Mode.SANITIZER
+
+
 def test_stackframe_01():
     """test creating an empty StackFrame"""
     stack = StackFrame()
@@ -301,7 +323,7 @@ def test_stackframe_02():
     """test creating a StackFrame from junk"""
     assert StackFrame.from_line("#0      ") is None
     assert StackFrame.from_line(" #0 ") is None
-    with pytest.raises(AssertionError) as exc:
+    with raises(AssertionError) as exc:
         StackFrame.from_line("#0 \n \n\n\n#1\n\ntest()!")
     assert "Input contains unexpected new line(s)" in str(exc.value)
     assert StackFrame.from_line("#0#0#0#0#0#0#0#0") is None
@@ -311,6 +333,8 @@ def test_stackframe_02():
     assert StackFrame.from_line("123") is None
     assert StackFrame.from_line("test()") is None
     assert StackFrame.from_line("|||") is None
+    assert StackFrame.from_line("||||||") is None
+    assert StackFrame.from_line("a|b|c|d|e|f|g") is None
     assert StackFrame.from_line("==123==") is None
     assert StackFrame.from_line("==1== by 0x0: a ()") is None
 
@@ -409,6 +433,16 @@ def test_sanitizer_stackframe_08():
     assert frame.mode == Mode.SANITIZER
 
 
+def test_sanitizer_stackframe_09():
+    """test creating a StackFrame from a line with filename missing path"""
+    frame = StackFrame.from_line("    #0 0x0000123 in func a.cpp:12")
+    assert frame.stack_line == "0"
+    assert frame.function == "func"
+    assert frame.location == "a.cpp"
+    assert frame.offset == "12"
+    assert frame.mode == Mode.SANITIZER
+
+
 def test_gdb_stackframe_01():
     """test creating a StackFrame from a GDB line with symbols"""
     frame = StackFrame.from_line(
@@ -438,6 +472,16 @@ def test_gdb_stackframe_03():
     assert frame.function == "main"
     assert frame.location == "test.c"
     assert frame.offset == "5"
+    assert frame.mode == Mode.GDB
+
+
+def test_gdb_stackframe_04():
+    """test creating a StackFrame from a GDB line unknown address"""
+    frame = StackFrame.from_line("#0  0x00000000 in ?? ()")
+    assert frame.stack_line == "0"
+    assert frame.function == "??"
+    assert frame.location is None
+    assert frame.offset is None
     assert frame.mode == Mode.GDB
 
 
