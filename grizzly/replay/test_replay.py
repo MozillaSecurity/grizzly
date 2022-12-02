@@ -8,6 +8,7 @@ unit tests for grizzly.replay
 from itertools import cycle
 from pathlib import Path
 
+from FTB.Signatures.CrashInfo import CrashSignature
 from pytest import mark, raises
 
 from sapphire import Served
@@ -811,3 +812,106 @@ def test_replay_23(mocker):
     ReplayManager.report_to_fuzzmanager(results, [], tool="test-override")
     assert reporter.call_args == (("test-override",),)
     assert reporter.return_value.submit.call_count == 2
+
+
+def test_replay_24(mocker, server, tmp_path):
+    """test ReplayManager.run() - signature - matching stacks"""
+    sig_file = tmp_path / "sig.json"
+    sig_file.write_text(
+        "{\n"
+        '  "symptoms": [\n'
+        "    {\n"
+        '      "src": "stderr",\n'
+        '      "type": "output",\n'
+        '      "value": "/STDERR/"\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
+    )
+    sig = CrashSignature.fromFile(str(sig_file))
+
+    server.serve_path.return_value = (Served.ALL, ["index.html"])
+    target = mocker.MagicMock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target.check_result.return_value = Result.FOUND
+    target.monitor.is_healthy.return_value = False
+
+    call_count = 0
+
+    def _save_logs_variation(result_logs, _meta=False):
+        """create different stacks each call"""
+        nonlocal call_count
+        call_count += 1
+        log_path = Path(result_logs)
+        (log_path / "log_stderr.txt").write_text("STDERR log\n")
+        (log_path / "log_stdout.txt").write_text("STDOUT log\n")
+        with (log_path / "log_asan_blah.txt").open("w") as log_fp:
+            log_fp.write("==1==ERROR: AddressSanitizer: ")
+            log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+            log_fp.write(f"    #0 0xbad000 in call_a{call_count:02d} file.c:23:34\n")
+            log_fp.write(f"    #1 0xbad001 in call_b{call_count:02d} file.c:12:45\n")
+
+    target.save_logs.side_effect = _save_logs_variation
+
+    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+        with ReplayManager([], server, target, relaunch=10, signature=sig) as replay:
+            results = replay.run([testcase], 10, min_results=2, repeat=2)
+            assert replay.signature is not None
+            assert replay.status.ignored == 0
+            assert replay.status.iteration == 2
+            assert replay.status.results.total == 2
+        assert len(results) == 1
+        assert results[0].count == 2
+        assert results[0].expected
+        assert results[0].report
+        results[0].report.cleanup()
+
+
+@mark.parametrize(
+    "stderr_log, ignored, total",
+    [
+        # match stack only
+        (["STDERR log\n", "STDERR log\n"], 0, 2),
+        # match stack only
+        (["STDERR log\n", "STDERR log\nAssertion failure: test\n"], 0, 2),
+        # match stack and assertion message
+        (["STDERR log\nAssertion failure: test\n", "STDERR log\n"], 1, 1),
+        # match stack and assertion message
+        (["Assertion failure: #1\n", "Assertion failure: #2\n"], 1, 1),
+        # match, no match, match
+        (["Assertion failure: #1\n", "foo\n", "Assertion failure: #1\n"], 1, 2),
+    ],
+)
+def test_replay_25(mocker, server, stderr_log, ignored, total):
+    """test ReplayManager.run() - no signature - match first result"""
+    iters = len(stderr_log)
+    assert iters == ignored + total, "test is broken"
+    server.serve_path.return_value = (Served.ALL, ["index.html"])
+    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target.check_result.return_value = Result.FOUND
+    target.monitor.is_healthy.return_value = False
+
+    def _save_logs_variation(result_logs, _meta=False):
+        """create logs"""
+        nonlocal stderr_log
+        assert stderr_log, "test is broken"
+        log_path = Path(result_logs)
+        (log_path / "log_stderr.txt").write_text(stderr_log.pop(0))
+        (log_path / "log_stdout.txt").write_text("STDOUT log\n")
+        with (log_path / "log_asan_blah.txt").open("w") as log_fp:
+            log_fp.write("==1==ERROR: AddressSanitizer: ")
+            log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+            log_fp.write("    #0 0xbad000 in call_a file.c:23:34\n")
+            log_fp.write("    #1 0xbad001 in call_b file.c:12:45\n")
+
+    target.save_logs.side_effect = _save_logs_variation
+
+    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+        with ReplayManager([], server, target, relaunch=10) as replay:
+            results = replay.run([testcase], 10, min_results=2, repeat=iters)
+            assert replay.signature is not None
+            assert replay.status.ignored == ignored
+            assert replay.status.iteration == iters
+            assert replay.status.results.total == total
+        for result in results:
+            result.report.cleanup()
+        assert results
