@@ -5,10 +5,11 @@ Sapphire unit tests
 
 import hashlib
 import os
-import random
 import socket
 import threading
+from itertools import repeat
 from platform import system
+from random import choices, getrandbits
 from urllib.parse import quote, urlparse
 
 from pytest import mark, raises
@@ -205,7 +206,7 @@ def test_sapphire_09(client, tmp_path):
     ]
     for test in tests:
         test["file"] = _TestFile(test["name"])
-        t_data = "".join(random.choices("ABCD1234", k=test["size"])).encode("ascii")
+        t_data = "".join(choices("ABCD1234", k=test["size"])).encode("ascii")
         (tmp_path / test["file"].file).write_bytes(t_data)
         test["file"].md5_org = hashlib.md5(t_data).hexdigest()
     with Sapphire(timeout=10) as serv:
@@ -572,7 +573,7 @@ def test_sapphire_24(client_factory, tmp_path):
     """test all request types via multiple connections"""
 
     def _dyn_test_cb(_):
-        return b"A" if random.getrandbits(1) else b"AA"
+        return b"A" if getrandbits(1) else b"AA"
 
     smap = ServerMap()
     with Sapphire(max_workers=10, timeout=60) as serv:
@@ -592,7 +593,7 @@ def test_sapphire_24(client_factory, tmp_path):
             redir_target = _create_test(f"redir_{i:0>3d}.html", tmp_path, data=b"AA")
             to_serve.append(_TestFile(f"redir_{i:0>3d}"))
             smap.set_redirect(
-                to_serve[-1].file, redir_target.file, required=random.getrandbits(1) > 0
+                to_serve[-1].file, redir_target.file, required=getrandbits(1) > 0
             )
             # add dynamic responses
             to_serve.append(_TestFile(f"dynm_{i:0>3d}"))
@@ -602,7 +603,7 @@ def test_sapphire_24(client_factory, tmp_path):
         clients = []
         for _ in range(100):  # number of clients to spawn
             clients.append(client_factory(rx_size=1))
-            throttle = 0.05 if random.getrandbits(1) else 0
+            throttle = 0.05 if getrandbits(1) else 0
             clients[-1].launch("127.0.0.1", serv.port, to_serve, throttle=throttle)
         assert serv.serve_path(tmp_path, server_map=smap)[0] == Served.ALL
 
@@ -621,7 +622,7 @@ def test_sapphire_25(client, tmp_path):
 
 def test_sapphire_26(client, tmp_path):
     """test serving to a slow client"""
-    t_data = "".join(random.choices("ABCD1234", k=0x19000)).encode("ascii")  # 100KB
+    t_data = "".join(choices("ABCD1234", k=0x19000)).encode("ascii")  # 100KB
     t_file = _create_test("test_case.html", tmp_path, data=t_data, calc_hash=True)
     # rx_size 10KB and throttle to 0.25 sec, which will be ~50KB/s
     # also taking 2.5 seconds to complete will hopefully find problems
@@ -638,7 +639,7 @@ def test_sapphire_26(client, tmp_path):
 
 def test_sapphire_27(client, tmp_path):
     """test timeout while requesting multiple files"""
-    t_data = "".join(random.choices("ABCD1234", k=1024)).encode("ascii")
+    t_data = "".join(choices("ABCD1234", k=1024)).encode("ascii")
     files_to_serve = [
         _create_test(f"test_{i:0>3d}.html", tmp_path, data=t_data) for i in range(50)
     ]
@@ -714,36 +715,50 @@ def test_sapphire_30(client, tmp_path):
     assert all(t_file.code is not None for t_file in to_serve)
 
 
-def test_sapphire_31(mocker):
+@mark.parametrize(
+    "bind,",
+    [
+        # success
+        (None,),
+        # failure and success on retry
+        (PermissionError("foo", 10013), None),
+    ],
+)
+def test_sapphire_31(mocker, bind):
     """test Sapphire._create_listening_socket()"""
     fake_sleep = mocker.patch("sapphire.core.sleep", autospec=True)
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
+    fake_sock.return_value.bind.side_effect = bind
+    bind_calls = len(bind)
     assert Sapphire._create_listening_socket(False, None)
     assert fake_sock.return_value.close.call_count == 0
     assert fake_sock.return_value.setsockopt.call_count == 1
     assert fake_sock.return_value.settimeout.call_count == 1
-    assert fake_sock.return_value.bind.call_count == 1
+    assert fake_sock.return_value.bind.call_count == bind_calls
     assert fake_sock.return_value.listen.call_count == 1
-    assert fake_sleep.call_count == 0
-    fake_sock.reset_mock()
-    # failure to bind
-    fake_sock.return_value.bind.side_effect = OSError("some error")
-    with raises(OSError):
-        Sapphire._create_listening_socket(False, None, retries=0)
-    assert fake_sock.return_value.close.call_count == 1
-    assert fake_sleep.call_count == 0
-    fake_sock.reset_mock()
-    # failure and pass on retry
-    exc = PermissionError("blah")
-    exc.errno = 10013
-    fake_sock.return_value.bind.side_effect = (exc, None)
-    assert Sapphire._create_listening_socket(False, None)
-    assert fake_sock.return_value.close.call_count == 1
-    assert fake_sock.return_value.listen.call_count == 1
-    assert fake_sleep.call_count == 1
+    assert fake_sleep.call_count == bind_calls - 1
 
 
-def test_sapphire_32(mocker):
+@mark.parametrize(
+    "bind, retries, raised",
+    [
+        # failure to bind (no retry)
+        ((OSError("foo"),), 0, OSError),
+        # failure and fail on retry
+        (repeat(PermissionError("foo", 10013), 2), 1, PermissionError),
+    ],
+)
+def test_sapphire_32(mocker, bind, retries, raised):
+    """test Sapphire._create_listening_socket() - bind/listen failure"""
+    mocker.patch("sapphire.core.sleep", autospec=True)
+    fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
+    fake_sock.return_value.bind.side_effect = bind
+    with raises(raised):
+        Sapphire._create_listening_socket(False, None, retries=retries)
+    assert fake_sock.return_value.close.call_count == 1
+
+
+def test_sapphire_33(mocker):
     """test Sapphire.clear_backlog()"""
     mocker.patch("sapphire.core.socket", autospec=True)
     mocker.patch("sapphire.core.time", autospec=True, return_value=1)
@@ -758,7 +773,7 @@ def test_sapphire_32(mocker):
 
 
 @mark.skipif(system() != "Windows", reason="Only supported on Windows")
-def test_sapphire_33(client, tmp_path):
+def test_sapphire_34(client, tmp_path):
     """test serving from path using Windows short file name"""
     wwwroot = tmp_path / "long_path_name_that_can_be_truncated_on_windows"
     wwwroot.mkdir()
