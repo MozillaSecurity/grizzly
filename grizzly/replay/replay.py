@@ -407,10 +407,13 @@ class ReplayManager:
                         and self._signature is None
                     ):
                         assert not expect_hang
-                        LOG.debug("no signature given, using %r", short_sig)
+                        LOG.debug("no signature given, using short sig %r", short_sig)
                         self._signature = report.crash_signature
-                        assert not sig_hash, "sig_hash should only be set once"
-                        sig_hash = Report.calc_hash(self._signature)
+                        if self._signature is None:
+                            LOG.debug("failed to generate signature to use")
+                        else:
+                            assert not sig_hash, "sig_hash should only be set once"
+                            sig_hash = Report.calc_hash(self._signature)
 
                     # bucket result
                     if not runner.startup_failure and (

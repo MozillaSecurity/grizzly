@@ -814,21 +814,23 @@ def test_replay_24(mocker, server, tmp_path):
 
 
 @mark.parametrize(
-    "stderr_log, ignored, total",
+    "stderr_log, ignored, total, include_stack",
     [
         # match stack only
-        (["STDERR log\n", "STDERR log\n"], 0, 2),
+        (["STDERR log\n", "STDERR log\n"], 0, 2, True),
         # match stack only
-        (["STDERR log\n", "STDERR log\nAssertion failure: test\n"], 0, 2),
+        (["STDERR log\n", "STDERR log\nAssertion failure: test\n"], 0, 2, True),
         # match stack and assertion message
-        (["STDERR log\nAssertion failure: test\n", "STDERR log\n"], 1, 1),
+        (["STDERR log\nAssertion failure: test\n", "STDERR log\n"], 1, 1, True),
         # match stack and assertion message
-        (["Assertion failure: #1\n", "Assertion failure: #2\n"], 1, 1),
+        (["Assertion failure: #1\n", "Assertion failure: #2\n"], 1, 1, True),
         # match, no match, match
-        (["Assertion failure: #1\n", "foo\n", "Assertion failure: #1\n"], 1, 2),
+        (["Assertion failure: #1\n", "foo\n", "Assertion failure: #1\n"], 1, 2, True),
+        # fail to create signature (missing stack)
+        (["STDERR log\n", "STDERR log\n"], 0, 2, False),
     ],
 )
-def test_replay_25(mocker, server, stderr_log, ignored, total):
+def test_replay_25(mocker, server, stderr_log, ignored, total, include_stack):
     """test ReplayManager.run() - no signature - match first result"""
     # NOTE: this is similar to test_replay_14 but it is more of an integration test
     iters = len(stderr_log)
@@ -841,22 +843,27 @@ def test_replay_25(mocker, server, stderr_log, ignored, total):
     def _save_logs_variation(result_logs, _meta=False):
         """create logs"""
         nonlocal stderr_log
+        nonlocal include_stack
         assert stderr_log, "test is broken"
         log_path = Path(result_logs)
         (log_path / "log_stderr.txt").write_text(stderr_log.pop(0))
         (log_path / "log_stdout.txt").write_text("STDOUT log\n")
-        with (log_path / "log_asan_blah.txt").open("w") as log_fp:
-            log_fp.write("==1==ERROR: AddressSanitizer: ")
-            log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
-            log_fp.write("    #0 0xbad000 in call_a file.c:23:34\n")
-            log_fp.write("    #1 0xbad001 in call_b file.c:12:45\n")
+        if include_stack:
+            with (log_path / "log_asan_blah.txt").open("w") as log_fp:
+                log_fp.write("==1==ERROR: AddressSanitizer: ")
+                log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
+                log_fp.write("    #0 0xbad000 in call_a file.c:23:34\n")
+                log_fp.write("    #1 0xbad001 in call_b file.c:12:45\n")
 
     target.save_logs.side_effect = _save_logs_variation
 
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, relaunch=10) as replay:
             results = replay.run([testcase], 10, min_results=2, repeat=iters)
-            assert replay.signature is not None
+            if include_stack:
+                assert replay.signature is not None
+            else:
+                assert replay.signature is None
             assert replay.status.ignored == ignored
             assert replay.status.iteration == iters
             assert replay.status.results.total == total
