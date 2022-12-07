@@ -7,6 +7,9 @@ from math import ceil
 from os import getenv
 from pathlib import Path
 from tempfile import gettempdir
+from time import sleep
+
+from psutil import virtual_memory
 
 __all__ = (
     "ConfigError",
@@ -51,6 +54,37 @@ class Exit(IntEnum):
     LAUNCH_FAILURE = 4
     # expected results not reproduced (opposite of SUCCESS)
     FAILURE = 5
+
+
+def check_system_memory(target, low_limit):
+    """Check the amount of system memory that is currently available.
+    If the available amount is less than low_limit then close the target.
+    This will temporarily free up memory and deal with memory leaks in the target.
+    This is primarily intended to help avoid system OOMs in automation.
+
+    Args:
+        target (Target): Active target.
+        low_limit (int): Minimum amount of memory available before action is taken.
+
+    Returns:
+        None
+    """
+    assert low_limit > 0
+    mem_available = virtual_memory().available
+    if not target.closed and mem_available < low_limit:
+        LOG.info(
+            "Low system memory: %dMB available, relaunching target...",
+            mem_available / 1024 / 1024,
+        )
+        target.close()
+        # wait a moment if needed
+        for delay in (1, 5, 20):
+            if virtual_memory().available >= low_limit:
+                break
+            LOG.info("System memory is still low! Waiting %ds...", delay)
+            sleep(delay)
+        else:
+            LOG.warning("System memory is still low! Continuing...")
 
 
 def configure_logging(log_level):

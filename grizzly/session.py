@@ -7,6 +7,7 @@ from time import time
 from .common.iomanager import IOManager
 from .common.runner import Runner
 from .common.status import STATUS_DB_FUZZ, Status
+from .common.utils import check_system_memory
 from .target import Result
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
@@ -60,6 +61,8 @@ class LogOutputLimiter:
 class Session:
     DISPLAY_VERBOSE = 0  # display status every iteration
     DISPLAY_NORMAL = 1  # quickly reduce the amount of output
+
+    LOW_MEMORY_LIMIT = 512 * 1024 * 1024
 
     # display warning when target log files exceed limit (25MB)
     TARGET_LOG_SIZE_WARN = 0x1900000
@@ -185,6 +188,10 @@ class Session:
             self.status.report()
             self.status.iteration += 1
             LOG.debug("- iteration %d -", self.status.iteration)
+
+            # attempt to avoid system OOM when the system is running low on memory
+            # it is likely most helpful when running multiple instances in parallel
+            check_system_memory(self.target, self.LOW_MEMORY_LIMIT)
 
             if self.target.closed:
                 # (re-)launch target
