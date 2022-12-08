@@ -730,35 +730,46 @@ def test_sapphire_31(mocker, bind):
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
     fake_sock.return_value.bind.side_effect = bind
     bind_calls = len(bind)
-    assert Sapphire._create_listening_socket(False, None)
-    assert fake_sock.return_value.close.call_count == 0
-    assert fake_sock.return_value.setsockopt.call_count == 1
-    assert fake_sock.return_value.settimeout.call_count == 1
+    assert Sapphire._create_listening_socket(False)
+    assert fake_sock.return_value.close.call_count == bind_calls - 1
+    assert fake_sock.return_value.setsockopt.call_count == bind_calls
+    assert fake_sock.return_value.settimeout.call_count == bind_calls
     assert fake_sock.return_value.bind.call_count == bind_calls
     assert fake_sock.return_value.listen.call_count == 1
     assert fake_sleep.call_count == bind_calls - 1
 
 
 @mark.parametrize(
-    "bind, retries, raised",
+    "bind, attempts, raised",
     [
         # failure to bind (no retry)
-        ((OSError("foo"),), 0, OSError),
+        ((OSError("foo"),), 1, OSError),
         # failure and fail on retry
-        (repeat(PermissionError("foo", 10013), 2), 1, PermissionError),
+        (repeat(PermissionError("foo", 10013), 2), 2, PermissionError),
     ],
 )
-def test_sapphire_32(mocker, bind, retries, raised):
+def test_sapphire_32(mocker, bind, attempts, raised):
     """test Sapphire._create_listening_socket() - bind/listen failure"""
     mocker.patch("sapphire.core.sleep", autospec=True)
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
     fake_sock.return_value.bind.side_effect = bind
     with raises(raised):
-        Sapphire._create_listening_socket(False, None, retries=retries)
-    assert fake_sock.return_value.close.call_count == 1
+        Sapphire._create_listening_socket(False, attempts=attempts)
+    assert fake_sock.return_value.close.call_count == attempts
 
 
 def test_sapphire_33(mocker):
+    """test Sapphire._create_listening_socket() - fail to find port"""
+    fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
+    # always choose a blocked port
+    fake_sock.return_value.getsockname.return_value = (None, 6665)
+    with raises(RuntimeError, match="Could not find available port"):
+        Sapphire._create_listening_socket(False, attempts=1)
+    assert fake_sock.return_value.listen.call_count == 1
+    assert fake_sock.return_value.close.call_count == 1
+
+
+def test_sapphire_34(mocker):
     """test Sapphire.clear_backlog()"""
     mocker.patch("sapphire.core.socket", autospec=True)
     mocker.patch("sapphire.core.time", autospec=True, return_value=1)
@@ -773,7 +784,7 @@ def test_sapphire_33(mocker):
 
 
 @mark.skipif(system() != "Windows", reason="Only supported on Windows")
-def test_sapphire_34(client, tmp_path):
+def test_sapphire_35(client, tmp_path):
     """test serving from path using Windows short file name"""
     wwwroot = tmp_path / "long_path_name_that_can_be_truncated_on_windows"
     wwwroot.mkdir()
