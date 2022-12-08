@@ -6,8 +6,7 @@ Sapphire HTTP server
 """
 from logging import getLogger
 from pathlib import Path
-from random import randint
-from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, gethostname, socket
+from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
 from time import sleep, time
 
 from .connection_manager import ConnectionManager
@@ -26,11 +25,11 @@ class Sapphire:
     __slots__ = ("_auto_close", "_max_workers", "_socket", "_timeout")
 
     def __init__(
-        self, allow_remote=False, auto_close=-1, max_workers=10, port=None, timeout=60
+        self, allow_remote=False, auto_close=-1, max_workers=10, port=0, timeout=60
     ):
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
-        self._socket = Sapphire._create_listening_socket(allow_remote, port)
+        self._socket = Sapphire._create_listening_socket(allow_remote, port=port)
         self._timeout = None
         self.timeout = timeout
 
@@ -41,44 +40,70 @@ class Sapphire:
         self.close()
 
     @staticmethod
-    def _create_listening_socket(remote, port=None, retries=10, timeout=LISTEN_TIMEOUT):
+    def _create_listening_socket(remote, port=0, attempts=10, timeout=LISTEN_TIMEOUT):
         """Create listening socket. Search for an open socket if needed and
         and configure the socket. If a specific port is unavailable or no
         available ports can be found socket.error will be raised.
 
         Args:
             remote (bool): Accept all (non-local) incoming connections.
-            port (int): Port to listen on. If None is given a random port will
-                        be used.
-            retries (int): Number of additional attempts to configure the socket.
+            port (int): Port to listen on. Use 0 for system assigned port.
+            attempts (int): Number of attempts to configure the socket.
             timeout (float): Used to set socket timeout.
 
         Returns:
             socket: A listening socket.
         """
-        assert retries >= 0
+        assert attempts > 0
+        assert port >= 0
         assert timeout > 0
-        addr = "0.0.0.0" if remote else "127.0.0.1"
-        sock = socket(AF_INET, SOCK_STREAM)
-        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        sock.settimeout(timeout)
-        for remaining in reversed(range(retries + 1)):
-            # find an unused port and avoid blocked ports
-            # see: searchfox.org/mozilla-central/source/netwerk/base/nsIOService.cpp
-            # highest blocked port is 10080 (0x2760)
-            attempt_port = port or randint(0x2770, 0xFFFF)
+
+        # see: searchfox.org/mozilla-central/source/netwerk/base/nsIOService.cpp
+        # include ports above 1024
+        blocked_ports = (
+            1719,
+            1720,
+            1723,
+            2049,
+            3659,
+            4045,
+            5060,
+            5061,
+            6000,
+            6566,
+            6665,
+            6666,
+            6667,
+            6668,
+            6669,
+            6697,
+            10080,
+        )
+
+        for remaining in reversed(range(attempts)):
+            sock = socket()
+            sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+            sock.settimeout(timeout)
+            # attempt to bind/listen
             try:
-                sock.bind((addr, attempt_port))
+                sock.bind(("0.0.0.0" if remote else "127.0.0.1", port))
                 sock.listen(5)
             except (OSError, PermissionError) as exc:
+                sock.close()
                 if remaining > 0:
                     LOG.debug("%s: %s", type(exc).__name__, exc)
                     sleep(0.1)
                     continue
-                LOG.error("Failed to bind/listen (port: %d)", attempt_port)
-                sock.close()
                 raise
+            # avoid blocked ports
+            if port == 0 and sock.getsockname()[1] in blocked_ports:
+                LOG.debug("bound to blocked port, retrying...")
+                sock.close()
+                continue
+            # success
             break
+        else:
+            raise RuntimeError("Could not find available port")
         return sock
 
     def clear_backlog(self):
@@ -116,8 +141,7 @@ class Sapphire:
         Returns:
             None
         """
-        if self._socket is not None:
-            self._socket.close()
+        self._socket.close()
 
     @property
     def port(self):
