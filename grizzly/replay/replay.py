@@ -409,9 +409,7 @@ class ReplayManager:
                         assert not expect_hang
                         LOG.debug("no signature given, using short sig %r", short_sig)
                         self._signature = report.crash_signature
-                        if self._signature is None:
-                            LOG.debug("failed to generate signature to use")
-                        else:
+                        if self._signature is not None:
                             assert not sig_hash, "sig_hash should only be set once"
                             sig_hash = Report.calc_hash(self._signature)
 
