@@ -56,7 +56,7 @@ class ReduceManager:
     ANALYSIS_ITERATIONS = 11  # number of iterations to analyze
     # --min-crashes value when analysis is used and reliability is less than perfect
     ANALYSIS_MIN_CRASHES = 1
-    ANALYSIS_PERFECT_MIN_CRASHES = 2  # --min-crashes when reliability is perfect
+    ANALYSIS_PERFECT_MIN_CRASHES = 1  # --min-crashes when reliability is perfect
     # probability that successful reduction will observe the crash
     ANALYSIS_TARGET_PROBABILITY = 0.95
     # to see the worst case, run the `repeat` calculation in run_reliability_analysis
