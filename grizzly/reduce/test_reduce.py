@@ -9,7 +9,7 @@ from functools import partial, wraps
 from itertools import count
 from logging import getLogger
 
-from pytest import mark, raises
+from pytest import mark, param, raises
 
 from sapphire import Sapphire
 
@@ -53,180 +53,203 @@ def _fake_save_logs_bar(result_logs, meta=False):  # pylint: disable=unused-argu
     )
 
 
-AnalysisTestParams = namedtuple(
-    "AnalysisTestParams",
-    "harness_last_crashes, harness_crashes, no_harness_crashes, expected_repeat, "
-    "expected_min_crashes, use_harness, result_harness",
-)
-
-
 @mark.parametrize(
-    AnalysisTestParams._fields,
+    "harness_last_crashes,harness_crashes,no_harness_crashes,expected_repeat,"
+    "expected_min_crashes,use_harness,result_harness",
     [
-        # perfect with harness
-        AnalysisTestParams(None, 11, None, 2, 2, True, True),
-        # perfect, use_harness=False
-        AnalysisTestParams(None, 11, None, 2, 2, False, False),
-        # 10/11 with harness
-        AnalysisTestParams(None, 10, None, 2, 1, True, True),
-        # 9/11 with harness
-        AnalysisTestParams(None, 9, None, 2, 1, True, True),
-        # 8/11 with harness
-        AnalysisTestParams(None, 8, None, 3, 1, True, True),
-        # 7/11 with harness
-        AnalysisTestParams(None, 7, None, 3, 1, True, True),
-        # 6/11 with harness
-        AnalysisTestParams(None, 6, None, 4, 1, True, True),
-        # 5/11 with harness
-        AnalysisTestParams(None, 5, 0, 5, 1, True, True),
-        # 5/11 with harness, 1/11 without
-        AnalysisTestParams(None, 5, 1, 5, 1, True, True),
-        # 5/11 with harness, 2/11 without
-        AnalysisTestParams(None, 5, 2, 5, 1, True, True),
-        # 5/11 with harness, 3/11 without
-        AnalysisTestParams(None, 5, 3, 5, 1, True, True),
-        # 5/11 with harness, 4/11 without
-        AnalysisTestParams(None, 5, 4, 5, 1, True, True),
-        # 5/11 with harness, 5/11 without
-        AnalysisTestParams(None, 5, 5, 5, 1, True, True),
-        # 5/11 with harness, 6/11 without
-        AnalysisTestParams(None, 5, 6, 5, 1, True, True),
-        # 5/11 with harness, 7/11 without
-        AnalysisTestParams(None, 5, 7, 5, 1, True, True),
-        # 5/11 with harness, 8/11 without
-        AnalysisTestParams(None, 5, 8, 3, 1, True, False),
-        # 5/11 with harness, 9/11 without
-        AnalysisTestParams(None, 5, 9, 2, 1, True, False),
-        # 5/11 with harness, 10/11 without
-        AnalysisTestParams(None, 5, 10, 2, 1, True, False),
-        # 5/11 with harness, perfect without
-        AnalysisTestParams(None, 5, 11, 2, 2, True, False),
-        # 4/11 with harness
-        AnalysisTestParams(None, 4, 0, 7, 1, True, True),
-        # 4/11 with harness, 1/11 without
-        AnalysisTestParams(None, 4, 1, 7, 1, True, True),
-        # 4/11 with harness, 2/11 without
-        AnalysisTestParams(None, 4, 2, 7, 1, True, True),
-        # 4/11 with harness, 3/11 without
-        AnalysisTestParams(None, 4, 3, 7, 1, True, True),
-        # 4/11 with harness, 4/11 without
-        AnalysisTestParams(None, 4, 4, 7, 1, True, True),
-        # 4/11 with harness, 5/11 without
-        AnalysisTestParams(None, 4, 5, 7, 1, True, True),
-        # 4/11 with harness, 6/11 without
-        AnalysisTestParams(None, 4, 6, 4, 1, True, False),
-        # 4/11 with harness, 7/11 without
-        AnalysisTestParams(None, 4, 7, 3, 1, True, False),
-        # 4/11 with harness, 8/11 without
-        AnalysisTestParams(None, 4, 8, 3, 1, True, False),
-        # 4/11 with harness, 9/11 without
-        AnalysisTestParams(None, 4, 9, 2, 1, True, False),
-        # 4/11 with harness, 10/11 without
-        AnalysisTestParams(None, 4, 10, 2, 1, True, False),
-        # 4/11 with harness, perfect without
-        AnalysisTestParams(None, 4, 11, 2, 2, True, False),
-        # 3/11 with harness
-        AnalysisTestParams(None, 3, 0, 10, 1, True, True),
-        # 3/11 with harness, 1/11 without
-        AnalysisTestParams(None, 3, 1, 10, 1, True, True),
-        # 3/11 with harness, 2/11 without
-        AnalysisTestParams(None, 3, 2, 10, 1, True, True),
-        # 3/11 with harness, 3/11 without
-        AnalysisTestParams(None, 3, 3, 10, 1, True, True),
-        # 3/11 with harness, 4/11 without
-        AnalysisTestParams(None, 3, 4, 10, 1, True, True),
-        # 3/11 with harness, 5/11 without
-        AnalysisTestParams(None, 3, 5, 5, 1, True, False),
-        # 3/11 with harness, 6/11 without
-        AnalysisTestParams(None, 3, 6, 4, 1, True, False),
-        # 3/11 with harness, 7/11 without
-        AnalysisTestParams(None, 3, 7, 3, 1, True, False),
-        # 3/11 with harness, 8/11 without
-        AnalysisTestParams(None, 3, 8, 3, 1, True, False),
-        # 3/11 with harness, 9/11 without
-        AnalysisTestParams(None, 3, 9, 2, 1, True, False),
-        # 3/11 with harness, 10/11 without
-        AnalysisTestParams(None, 3, 10, 2, 1, True, False),
-        # 3/11 with harness, perfect without
-        AnalysisTestParams(None, 3, 11, 2, 2, True, False),
-        # 2/11 with harness
-        AnalysisTestParams(None, 2, 0, 15, 1, True, True),
-        # 2/11 with harness, 1/11 without
-        AnalysisTestParams(None, 2, 1, 15, 1, True, True),
-        # 2/11 with harness, 2/11 without
-        AnalysisTestParams(None, 2, 2, 15, 1, True, True),
-        # 2/11 with harness, 3/11 without
-        AnalysisTestParams(None, 2, 3, 10, 1, True, False),
-        # 2/11 with harness, 4/11 without
-        AnalysisTestParams(None, 2, 4, 7, 1, True, False),
-        # 2/11 with harness, 5/11 without
-        AnalysisTestParams(None, 2, 5, 5, 1, True, False),
-        # 2/11 with harness, 6/11 without
-        AnalysisTestParams(None, 2, 6, 4, 1, True, False),
-        # 2/11 with harness, 7/11 without
-        AnalysisTestParams(None, 2, 7, 3, 1, True, False),
-        # 2/11 with harness, 8/11 without
-        AnalysisTestParams(None, 2, 8, 3, 1, True, False),
-        # 2/11 with harness, 9/11 without
-        AnalysisTestParams(None, 2, 9, 2, 1, True, False),
-        # 2/11 with harness, 10/11 without
-        AnalysisTestParams(None, 2, 10, 2, 1, True, False),
-        # 2/11 with harness, perfect without
-        AnalysisTestParams(None, 2, 11, 2, 2, True, False),
-        # 1/11 with harness
-        AnalysisTestParams(None, 1, 0, 32, 1, True, True),
-        # 1/11 with harness, 1/11 without
-        AnalysisTestParams(None, 1, 1, 32, 1, True, True),
-        # 1/11 with harness, 2/11 without
-        AnalysisTestParams(None, 1, 2, 15, 1, True, False),
-        # 1/11 with harness, 3/11 without
-        AnalysisTestParams(None, 1, 3, 10, 1, True, False),
-        # 1/11 with harness, 4/11 without
-        AnalysisTestParams(None, 1, 4, 7, 1, True, False),
-        # 1/11 with harness, 5/11 without
-        AnalysisTestParams(None, 1, 5, 5, 1, True, False),
-        # 1/11 with harness, 6/11 without
-        AnalysisTestParams(None, 1, 6, 4, 1, True, False),
-        # 1/11 with harness, 7/11 without
-        AnalysisTestParams(None, 1, 7, 3, 1, True, False),
-        # 1/11 with harness, 8/11 without
-        AnalysisTestParams(None, 1, 8, 3, 1, True, False),
-        # 1/11 with harness, 9/11 without
-        AnalysisTestParams(None, 1, 9, 2, 1, True, False),
-        # 1/11 with harness, 10/11 without
-        AnalysisTestParams(None, 1, 10, 2, 1, True, False),
-        # 1/11 with harness, perfect without
-        AnalysisTestParams(None, 1, 11, 2, 2, True, False),
-        # perfect without harness
-        AnalysisTestParams(None, 0, 11, 2, 2, True, False),
-        # 10/11 without harness
-        AnalysisTestParams(None, 0, 10, 2, 1, True, False),
-        # 9/11 without harness
-        AnalysisTestParams(None, 0, 9, 2, 1, True, False),
-        # 8/11 without harness
-        AnalysisTestParams(None, 0, 8, 3, 1, True, False),
-        # 7/11 without harness
-        AnalysisTestParams(None, 0, 7, 3, 1, True, False),
-        # 6/11 without harness
-        AnalysisTestParams(None, 0, 6, 4, 1, True, False),
-        # 5/11 without harness
-        AnalysisTestParams(None, 0, 5, 5, 1, True, False),
-        # 4/11 without harness
-        AnalysisTestParams(None, 0, 4, 7, 1, True, False),
-        # 3/11 without harness
-        AnalysisTestParams(None, 0, 3, 10, 1, True, False),
-        # 2/11 without harness
-        AnalysisTestParams(None, 0, 2, 15, 1, True, False),
-        # 1/11 without harness
-        AnalysisTestParams(None, 0, 1, 32, 1, True, False),
-        # last test repros (1/11), all tests are not tried, without_harness is tried
-        AnalysisTestParams(1, None, 0, 32, 1, True, True),
-        # last test repros (11/11), no other rounds are tried
-        AnalysisTestParams(11, None, None, 2, 2, True, True),
-        # last test doesn't repro, harness+all tests is (1/11), without harness is tried
-        AnalysisTestParams(None, 1, 0, 32, 1, True, True),
-        # last test doesn't repro, harness+all tests is (11/11), skip without harness
-        AnalysisTestParams(None, 11, None, 2, 2, True, True),
+        param(
+            None,
+            11,
+            None,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            True,
+            True,
+            id="perfect with harness",
+        ),
+        param(
+            None,
+            11,
+            None,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            False,
+            False,
+            id="perfect, use_harness=False",
+        ),
+        param(None, 10, None, 2, 1, True, True, id="10/11 with harness"),
+        param(None, 9, None, 2, 1, True, True, id="9/11 with harness"),
+        param(None, 8, None, 3, 1, True, True, id="8/11 with harness"),
+        param(None, 7, None, 3, 1, True, True, id="7/11 with harness"),
+        param(None, 6, None, 4, 1, True, True, id="6/11 with harness"),
+        param(None, 5, 0, 5, 1, True, True, id="5/11 with harness"),
+        param(None, 5, 1, 5, 1, True, True, id="5/11 with harness, 1/11 without"),
+        param(None, 5, 2, 5, 1, True, True, id="5/11 with harness, 2/11 without"),
+        param(None, 5, 3, 5, 1, True, True, id="5/11 with harness, 3/11 without"),
+        param(None, 5, 4, 5, 1, True, True, id="5/11 with harness, 4/11 without"),
+        param(None, 5, 5, 5, 1, True, True, id="5/11 with harness, 5/11 without"),
+        param(None, 5, 6, 5, 1, True, True, id="5/11 with harness, 6/11 without"),
+        param(None, 5, 7, 5, 1, True, True, id="5/11 with harness, 7/11 without"),
+        param(None, 5, 8, 3, 1, True, False, id="5/11 with harness, 8/11 without"),
+        param(None, 5, 9, 2, 1, True, False, id="5/11 with harness, 9/11 without"),
+        param(None, 5, 10, 2, 1, True, False, id="5/11 with harness, 10/11 without"),
+        param(
+            None,
+            5,
+            11,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            True,
+            False,
+            id="5/11 with harness, perfect without",
+        ),
+        param(None, 4, 0, 7, 1, True, True, id="4/11 with harness"),
+        param(None, 4, 1, 7, 1, True, True, id="4/11 with harness, 1/11 without"),
+        param(None, 4, 2, 7, 1, True, True, id="4/11 with harness, 2/11 without"),
+        param(None, 4, 3, 7, 1, True, True, id="4/11 with harness, 3/11 without"),
+        param(None, 4, 4, 7, 1, True, True, id="4/11 with harness, 4/11 without"),
+        param(None, 4, 5, 7, 1, True, True, id="4/11 with harness, 5/11 without"),
+        param(None, 4, 6, 4, 1, True, False, id="4/11 with harness, 6/11 without"),
+        param(None, 4, 7, 3, 1, True, False, id="4/11 with harness, 7/11 without"),
+        param(None, 4, 8, 3, 1, True, False, id="4/11 with harness, 8/11 without"),
+        param(None, 4, 9, 2, 1, True, False, id="4/11 with harness, 9/11 without"),
+        param(None, 4, 10, 2, 1, True, False, id="4/11 with harness, 10/11 without"),
+        param(
+            None,
+            4,
+            11,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            True,
+            False,
+            id="4/11 with harness, perfect without",
+        ),
+        param(None, 3, 0, 10, 1, True, True, id="3/11 with harness"),
+        param(None, 3, 1, 10, 1, True, True, id="3/11 with harness, 1/11 without"),
+        param(None, 3, 2, 10, 1, True, True, id="3/11 with harness, 2/11 without"),
+        param(None, 3, 3, 10, 1, True, True, id="3/11 with harness, 3/11 without"),
+        param(None, 3, 4, 10, 1, True, True, id="3/11 with harness, 4/11 without"),
+        param(None, 3, 5, 5, 1, True, False, id="3/11 with harness, 5/11 without"),
+        param(None, 3, 6, 4, 1, True, False, id="3/11 with harness, 6/11 without"),
+        param(None, 3, 7, 3, 1, True, False, id="3/11 with harness, 7/11 without"),
+        param(None, 3, 8, 3, 1, True, False, id="3/11 with harness, 8/11 without"),
+        param(None, 3, 9, 2, 1, True, False, id="3/11 with harness, 9/11 without"),
+        param(None, 3, 10, 2, 1, True, False, id="3/11 with harness, 10/11 without"),
+        param(
+            None,
+            3,
+            11,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            True,
+            False,
+            id="3/11 with harness, perfect without",
+        ),
+        param(None, 2, 0, 15, 1, True, True, id="2/11 with harness"),
+        param(None, 2, 1, 15, 1, True, True, id="2/11 with harness, 1/11 without"),
+        param(None, 2, 2, 15, 1, True, True, id="2/11 with harness, 2/11 without"),
+        param(None, 2, 3, 10, 1, True, False, id="2/11 with harness, 3/11 without"),
+        param(None, 2, 4, 7, 1, True, False, id="2/11 with harness, 4/11 without"),
+        param(None, 2, 5, 5, 1, True, False, id="2/11 with harness, 5/11 without"),
+        param(None, 2, 6, 4, 1, True, False, id="2/11 with harness, 6/11 without"),
+        param(None, 2, 7, 3, 1, True, False, id="2/11 with harness, 7/11 without"),
+        param(None, 2, 8, 3, 1, True, False, id="2/11 with harness, 8/11 without"),
+        param(None, 2, 9, 2, 1, True, False, id="2/11 with harness, 9/11 without"),
+        param(None, 2, 10, 2, 1, True, False, id="2/11 with harness, 10/11 without"),
+        param(
+            None,
+            2,
+            11,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            True,
+            False,
+            id="2/11 with harness, perfect without",
+        ),
+        param(None, 1, 0, 32, 1, True, True, id="1/11 with harness"),
+        param(None, 1, 1, 32, 1, True, True, id="1/11 with harness, 1/11 without"),
+        param(None, 1, 2, 15, 1, True, False, id="1/11 with harness, 2/11 without"),
+        param(None, 1, 3, 10, 1, True, False, id="1/11 with harness, 3/11 without"),
+        param(None, 1, 4, 7, 1, True, False, id="1/11 with harness, 4/11 without"),
+        param(None, 1, 5, 5, 1, True, False, id="1/11 with harness, 5/11 without"),
+        param(None, 1, 6, 4, 1, True, False, id="1/11 with harness, 6/11 without"),
+        param(None, 1, 7, 3, 1, True, False, id="1/11 with harness, 7/11 without"),
+        param(None, 1, 8, 3, 1, True, False, id="1/11 with harness, 8/11 without"),
+        param(None, 1, 9, 2, 1, True, False, id="1/11 with harness, 9/11 without"),
+        param(None, 1, 10, 2, 1, True, False, id="1/11 with harness, 10/11 without"),
+        param(
+            None,
+            1,
+            11,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            True,
+            False,
+            id="1/11 with harness, perfect without",
+        ),
+        param(
+            None,
+            0,
+            11,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            True,
+            False,
+            id="perfect without harness",
+        ),
+        param(None, 0, 10, 2, 1, True, False, id="10/11 without harness"),
+        param(None, 0, 9, 2, 1, True, False, id="9/11 without harness"),
+        param(None, 0, 8, 3, 1, True, False, id="8/11 without harness"),
+        param(None, 0, 7, 3, 1, True, False, id="7/11 without harness"),
+        param(None, 0, 6, 4, 1, True, False, id="6/11 without harness"),
+        param(None, 0, 5, 5, 1, True, False, id="5/11 without harness"),
+        param(None, 0, 4, 7, 1, True, False, id="4/11 without harness"),
+        param(None, 0, 3, 10, 1, True, False, id="3/11 without harness"),
+        param(None, 0, 2, 15, 1, True, False, id="2/11 without harness"),
+        param(None, 0, 1, 32, 1, True, False, id="1/11 without harness"),
+        param(
+            1,
+            None,
+            0,
+            32,
+            1,
+            True,
+            True,
+            id="last test repros (1/11), all tests are not tried, "
+            "without_harness is tried",
+        ),
+        param(
+            11,
+            None,
+            None,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            True,
+            True,
+            id="last test repros (11/11), no other rounds are tried",
+        ),
+        param(
+            None,
+            1,
+            0,
+            32,
+            1,
+            True,
+            True,
+            id="last test doesn't repro, harness+all tests is (1/11), "
+            "without harness is tried",
+        ),
+        param(
+            None,
+            11,
+            None,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            ReduceManager.ANALYSIS_PERFECT_MIN_CRASHES,
+            True,
+            True,
+            id="last test doesn't repro, harness+all tests is (11/11), "
+            "skip without harness",
+        ),
     ],
 )
 def test_analysis(
@@ -297,11 +320,21 @@ def test_analysis(
         for test in tests:
             test.cleanup()
 
-    assert replayer.run.call_count == expected_iters
-    assert repeat == expected_repeat
-    assert min_crashes == expected_min_crashes
-    assert mgr._use_harness == result_harness
-    assert mgr._status.iterations == expected_iters * 11
+    observed = {
+        "replay_iters": replayer.run.call_count,
+        "repeat": repeat,
+        "min_crashes": min_crashes,
+        "use_harness": mgr._use_harness,
+        "launch_iters": mgr._status.iterations,
+    }
+    expected = {
+        "replay_iters": expected_iters,
+        "repeat": expected_repeat,
+        "min_crashes": expected_min_crashes,
+        "use_harness": result_harness,
+        "launch_iters": expected_iters * 11,
+    }
+    assert observed == expected
 
 
 def _ignore_arg(func):
