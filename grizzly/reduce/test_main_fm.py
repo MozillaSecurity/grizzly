@@ -29,8 +29,12 @@ pytestmark = mark.usefixtures(
 )
 def test_crash_main_quality(mocker, exit_code, pre_quality, post_quality):
     """test that quality is updated"""
-    mocker.patch("grizzly.reduce.crash.ReduceManager.main", return_value=exit_code)
+    reduce_main = mocker.patch(
+        "grizzly.reduce.crash.ReduceManager.main",
+        return_value=exit_code,
+    )
     crash = mocker.Mock(testcase_quality=pre_quality, crash_id=1)
+    crash.create_signature.side_effect = RuntimeError("no sig to create")
     load_fm_data = mocker.patch("grizzly.reduce.crash.load_fm_data")
     load_fm_data.return_value.__enter__ = mocker.Mock(return_value=(crash, None))
     args = mocker.Mock(
@@ -42,3 +46,4 @@ def test_crash_main_quality(mocker, exit_code, pre_quality, post_quality):
     assert crash_main(args) == exit_code
     # verify testcase quality was updated
     assert crash.testcase_quality == post_quality
+    assert reduce_main.call_args[0][0].sig is None

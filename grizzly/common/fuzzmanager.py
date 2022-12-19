@@ -11,7 +11,10 @@ from shutil import rmtree
 from tempfile import mkdtemp, mkstemp
 
 from Collector.Collector import Collector
+from FTB.ProgramConfiguration import ProgramConfiguration
+from FTB.Signatures.CrashInfo import CrashInfo
 
+from .reporter import Quality
 from .utils import grz_tmp
 
 LOG = getLogger(__name__)
@@ -209,6 +212,7 @@ class CrashEntry:
         )
         self._data = None
         self._tc_filename = None
+        self._sig_filename = None
 
     @property
     def crash_id(self):
@@ -255,6 +259,8 @@ class CrashEntry:
         """
         if self._tc_filename is not None:
             self._tc_filename.unlink()
+        if self._sig_filename is not None:
+            rmtree(self._sig_filename.parent)
 
     def testcase_path(self):
         """Download the testcase data from CrashManager.
@@ -291,6 +297,57 @@ class CrashEntry:
                 unlink(filename)
         self._tc_filename = result
         return self._tc_filename
+
+    def create_signature(self, binary):
+        """Create a CrashManager signature from this crash.
+        If self.bucket is set, self.bucket.signature_path() should be used instead.
+
+        Arguments:
+            binary (Path): binary location, needed to create a program configuration
+
+        Returns:
+            Path: Path on disk where signature exists, or None if could not create.
+        """
+        if self._sig_filename is not None:
+            return self._sig_filename
+
+        tmpd = Path(
+            mkdtemp(prefix=f"crash-sig-{self._crash_id}-", dir=grz_tmp("fuzzmanager"))
+        )
+        try:
+            sig_basename = f"{self._crash_id}.signature"
+            sig_filename = tmpd / sig_basename
+
+            cfg = ProgramConfiguration.fromBinary(binary)
+            fm_crash = CrashInfo.fromRawCrashData(
+                self.rawStdout, self.rawStderr, cfg, auxCrashData=self.rawCrashData
+            )
+            fm_sig = fm_crash.createCrashSignature()
+            if fm_sig is None:
+                raise RuntimeError(
+                    "Failed to generate signature from crash data: "
+                    f"{fm_crash.failureReason}"
+                )
+            sig_filename.write_text(fm_sig.rawSignature)
+
+            sigmeta_filename = sig_filename.with_suffix(".metadata")
+            sigmeta_filename.write_text(
+                json.dumps(
+                    {
+                        "size": 1,
+                        "frequent": False,
+                        "shortDescription": fm_crash.createShortSignature(),
+                        "testcase__quality": Quality.UNREDUCED,
+                    }
+                )
+            )
+            tmpd = None
+        finally:  # pragma: no cover
+            if tmpd:
+                rmtree(tmpd)
+
+        self._sig_filename = sig_filename
+        return self._sig_filename
 
 
 @contextmanager

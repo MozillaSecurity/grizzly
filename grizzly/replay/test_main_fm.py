@@ -15,32 +15,44 @@ from .crash import modify_args
 
 def test_crash_main(mocker):
     """test main()"""
-    mocker.patch("grizzly.replay.crash.ReplayManager.main", return_value=0)
+    replay_main = mocker.patch(
+        "grizzly.replay.crash.ReplayManager.main",
+        return_value=0,
+    )
     crash = mocker.Mock(spec=CrashEntry, crash_id=1, tool="tool-name")
+    crash.create_signature.side_effect = RuntimeError("no sig to create")
     load_fm_data = mocker.patch("grizzly.replay.crash.load_fm_data")
     load_fm_data.return_value.__enter__ = mocker.Mock(return_value=(crash, None))
     args = mocker.Mock(input=12345, sig=None, tool=None)
     assert crash_main(args) == 0
+    assert replay_main.call_args[0][0].sig is None
 
 
-@mark.parametrize(
-    "arg_tool, signature",
-    [
-        (None, None),
-        ("arg_tool", None),
-        (None, "bucket_sig"),
-    ],
-)
-def test_modify_args(mocker, arg_tool, signature):
+@mark.parametrize("arg_tool", [None, "arg_tool"])
+@mark.parametrize("signature", [None, "bucket_sig", "crash_auto_sig"])
+def test_modify_args(tmp_path, mocker, arg_tool, signature):
     """test modify_args()"""
     args = mocker.Mock(input="org_input", tool=arg_tool, sig=None)
     crash = mocker.Mock(spec=CrashEntry, tool="crash_tool")
     crash.testcase_path.return_value = "crash_input"
-    if signature is not None:
+    if signature == "bucket_sig":
         bucket = mocker.Mock(spec=Bucket)
+        bucket.bucket_id = 1234
         bucket.signature_path.return_value = signature
+        crash.create_signature.side_effect = RuntimeError("no sig to create")
+    elif signature == "crash_auto_sig":
+        bucket = None
+        sig_path = tmp_path / "sig.signature"
+        sig_path.write_text("{}")
+        sig_path.with_suffix(".metadata").write_text(
+            '{"shortDescription":"ERROR: AddressSanitizer: SEGV on address 0x14 '
+            '(pc 0x123 sp 0x456 bp 0x789 T0)"}'
+        )
+        crash.create_signature.return_value = sig_path
+        signature = sig_path
     else:
         bucket = None
+        crash.create_signature.side_effect = RuntimeError("no sig to create")
     mod = modify_args(args, crash, bucket)
     assert mod.original_crash_id == "org_input"
     assert mod.input == "crash_input"
