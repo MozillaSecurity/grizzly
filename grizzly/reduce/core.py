@@ -628,9 +628,10 @@ class ReduceManager:
                                     and now - strategy_last_report
                                     > self._report_periodically
                                 ):
-                                    self._status.last_reports = self.report(
+                                    self.report(
                                         best_results,
                                         self.testcases,
+                                        update_status=True,
                                     )
                                     for result in best_results:
                                         result.report.cleanup()
@@ -648,17 +649,13 @@ class ReduceManager:
                         self._signature = replay.signature
 
                     if best_results:
-                        self._status.last_reports = self.report(
-                            best_results, self.testcases
-                        )
+                        self.report(best_results, self.testcases, update_status=True)
                     for result, reduction in other_results.values():
                         self.report([result], reduction)
 
                 except KeyboardInterrupt:
                     if best_results:
-                        self._status.last_reports = self.report(
-                            best_results, self.testcases
-                        )
+                        self.report(best_results, self.testcases, update_status=True)
                         LOG.warning(
                             "Ctrl+C detected, best reduction so far reported as %r",
                             self._status.last_reports,
@@ -705,17 +702,15 @@ class ReduceManager:
             return Exit.SUCCESS
         return Exit.FAILURE
 
-    def report(self, results, testcases):
+    def report(self, results, testcases, update_status=False):
         """Report results, either to FuzzManager or to filesystem.
 
         Arguments:
             results (list(ReplayResult)): Results observed during reduction.
             testcases (list(TestCase)): Testcases used to trigger results.
-
-        Returns:
-            list(*): List of return values from `reporter.submit()`.
+            update_status (bool): Whether to update status "Latest Reports"
         """
-        ret_values = []
+        new_reports = []
         status = self._status.copy()  # copy implicitly closes open counters
         for result in results:
             if self._report_to_fuzzmanager:
@@ -745,11 +740,14 @@ class ReduceManager:
                 if result is not None:
                     if isinstance(result, Path):
                         result = str(result)
-                    ret_values.append(result)
+                    new_reports.append(result)
             finally:
                 for clone in clones:
                     clone.cleanup()
-        return ret_values
+        # only write new reports if not empty, otherwise previous reports may be
+        # overwritten with an empty list if later reports are ignored
+        if update_status and new_reports:
+            self._status.last_reports = new_reports
 
     @classmethod
     def main(cls, args):
