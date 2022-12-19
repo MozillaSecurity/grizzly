@@ -4,6 +4,7 @@
 """Tests for interface for getting Crash and Bucket data from CrashManager API"""
 import json
 
+from FTB.ProgramConfiguration import ProgramConfiguration
 from pytest import mark, raises
 
 from .fuzzmanager import Bucket, CrashEntry, load_fm_data
@@ -184,6 +185,62 @@ def test_crash_3(mocker):
         # second call returns same path
         assert crash.testcase_path() == tc_path
     assert coll.return_value.get.call_count == 2
+
+
+def test_crash_4(mocker):
+    """crash create_signature writes and returns signature path"""
+    cfg = ProgramConfiguration("product", "platform", "os")
+    mocker.patch(
+        "grizzly.common.fuzzmanager.ProgramConfiguration"
+    ).fromBinary.return_value = cfg
+    coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
+    coll.return_value.serverProtocol = "http"
+    coll.return_value.serverPort = 123
+    coll.return_value.serverHost = "allizom.org"
+    coll.return_value.get.return_value.json.return_value = {
+        "rawStdout": "",
+        "rawStderr": "",
+        "rawCrashData": "ERROR: AddressSanitizer: SEGV on address 0x14 "
+        "(pc 0x123 sp 0x456 bp 0x789 T0)",
+    }
+    with CrashEntry(123) as crash:
+        assert coll.return_value.get.call_count == 0
+        sig_path = crash.create_signature(None)
+        assert sig_path.is_file()
+        assert sig_path.with_suffix(".metadata").is_file()
+        assert "AddressSanitizer" in sig_path.read_text()
+        assert json.loads(sig_path.with_suffix(".metadata").read_text()) == {
+            "size": 1,
+            "frequent": False,
+            "shortDescription": "AddressSanitizer: SEGV",
+            "testcase__quality": 5,
+        }
+        assert coll.return_value.get.call_count == 1
+        # second call returns same path
+        assert crash.create_signature(None) == sig_path
+    assert coll.return_value.get.call_count == 1
+
+
+def test_crash_5(mocker):
+    """crash create_signature raises when it can't create a signature"""
+    cfg = ProgramConfiguration("product", "platform", "os")
+    mocker.patch(
+        "grizzly.common.fuzzmanager.ProgramConfiguration"
+    ).fromBinary.return_value = cfg
+    coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
+    coll.return_value.serverProtocol = "http"
+    coll.return_value.serverPort = 123
+    coll.return_value.serverHost = "allizom.org"
+    coll.return_value.get.return_value.json.return_value = {
+        "rawStdout": "",
+        "rawStderr": "",
+        "rawCrashData": "",
+    }
+    with raises(RuntimeError) as exc:
+        with CrashEntry(123) as crash:
+            crash.create_signature(None)
+    assert "failed to generate" in str(exc).lower()
+    assert coll.return_value.get.call_count == 1
 
 
 @mark.parametrize(
