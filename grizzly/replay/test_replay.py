@@ -817,24 +817,30 @@ def test_replay_24(mocker, server, tmp_path):
     "stderr_log, ignored, total, include_stack",
     [
         # match stack only
-        (["STDERR log\n", "STDERR log\n"], 0, 2, True),
+        (["STDERR log\n", "STDERR log\n"], 0, 2, [True] * 2),
         # match stack only
-        (["STDERR log\n", "STDERR log\nAssertion failure: test\n"], 0, 2, True),
+        (["STDERR log\n", "STDERR log\nAssertion failure: test\n"], 0, 2, [True] * 2),
         # match stack and assertion message
-        (["STDERR log\nAssertion failure: test\n", "STDERR log\n"], 1, 1, True),
+        (["STDERR log\nAssertion failure: test\n", "STDERR log\n"], 1, 1, [True] * 2),
         # match stack and assertion message
-        (["Assertion failure: #1\n", "Assertion failure: #2\n"], 1, 1, True),
+        (["Assertion failure: 1\n", "Assertion failure: 2\n"], 1, 1, [True] * 2),
         # match, no match, match
-        (["Assertion failure: #1\n", "foo\n", "Assertion failure: #1\n"], 1, 2, True),
-        # fail to create signature (missing stack)
-        (["STDERR log\n", "STDERR log\n"], 0, 2, False),
+        (["Assertion failure: 1\n", "a\n", "Assertion failure: 1\n"], 1, 2, [True] * 3),
+        # fail to create signature x2 (missing stack)
+        (["STDERR log\n", "STDERR log\n"], 0, 2, [False] * 2),
+        # fail to create signature, create signature
+        (["STDERR log\n", "STDERR log\n"], 1, 1, [False, True]),
+        # create signature, fail to create signature
+        (["STDERR log\n", "STDERR log\n"], 1, 1, [True, False]),
     ],
 )
 def test_replay_25(mocker, server, stderr_log, ignored, total, include_stack):
     """test ReplayManager.run() - no signature - match first result"""
-    # NOTE: this is similar to test_replay_14 but it is more of an integration test
+    # NOTE: this is similar to "no signature - use first crash" test
+    # but this is more of an integration test
     iters = len(stderr_log)
     assert iters == ignored + total, "test is broken"
+    assert iters == len(include_stack), "test is broken"
     server.serve_path.return_value = (Served.ALL, ["index.html"])
     target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
     target.check_result.return_value = Result.FOUND
@@ -844,11 +850,10 @@ def test_replay_25(mocker, server, stderr_log, ignored, total, include_stack):
         """create logs"""
         nonlocal stderr_log
         nonlocal include_stack
-        assert stderr_log, "test is broken"
         log_path = Path(result_logs)
         (log_path / "log_stderr.txt").write_text(stderr_log.pop(0))
         (log_path / "log_stdout.txt").write_text("STDOUT log\n")
-        if include_stack:
+        if include_stack.pop(0):
             with (log_path / "log_asan_blah.txt").open("w") as log_fp:
                 log_fp.write("==1==ERROR: AddressSanitizer: ")
                 log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
@@ -857,10 +862,11 @@ def test_replay_25(mocker, server, stderr_log, ignored, total, include_stack):
 
     target.save_logs.side_effect = _save_logs_variation
 
+    has_sig = include_stack[0]
     with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, relaunch=10) as replay:
             results = replay.run([testcase], 10, min_results=2, repeat=iters)
-            if include_stack:
+            if has_sig:
                 assert replay.signature is not None
             else:
                 assert replay.signature is None
