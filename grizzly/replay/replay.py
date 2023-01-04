@@ -98,9 +98,23 @@ class ReplayManager:
         return self._signature
 
     @staticmethod
-    def check_match(signature, report, expect_hang):
+    def check_match(signature, report, expect_hang, check_failed):
+        """Check if report matches signature.
+
+        Args:
+            signature (CrashSignature): Signature to match.
+            report (Report): Report to check matches signature.
+            expect_hang (bool): A hang is expected.
+            check_failed (bool): Check if report signature creation failed.
+
+        Returns:
+            bool: True if report matches signature otherwise False.
+        """
         if signature is None:
-            # Treat 'None' signature as a bucket if it's not a hang
+            if check_failed and not report.is_hang:
+                # treat failed signature creation as a match
+                return report.crash_signature is None
+            # treat 'None' signature as a bucket if it's not a hang
             return not report.is_hang
         if expect_hang and not report.is_hang:
             # avoid catching other crashes with forgiving hang signatures
@@ -304,6 +318,8 @@ class ReplayManager:
         reports = {}
         try:
             sig_hash = Report.calc_hash(self._signature) if self._signature else None
+            # an attempt has been made to set self._signature
+            sig_set = self._signature is not None
             test_count = len(testcases)
             relaunch = min(self._relaunch, repeat)
             runner = Runner(
@@ -404,21 +420,23 @@ class ReplayManager:
                         not runner.startup_failure
                         and not self._any_crash
                         and not run_result.timeout
-                        and self._signature is None
+                        and not sig_set
                     ):
                         assert not expect_hang
+                        assert self._signature is None
                         LOG.debug("no signature given, using short sig %r", short_sig)
                         self._signature = report.crash_signature
-                        if self._signature is None:
-                            LOG.debug("failed to generate signature to use")
-                        else:
+                        sig_set = True
+                        if self._signature is not None:
                             assert not sig_hash, "sig_hash should only be set once"
                             sig_hash = Report.calc_hash(self._signature)
 
                     # bucket result
                     if not runner.startup_failure and (
                         self._any_crash
-                        or self.check_match(self._signature, report, expect_hang)
+                        or self.check_match(
+                            self._signature, report, expect_hang, sig_set
+                        )
                     ):
                         if sig_hash is not None:
                             LOG.debug("using signature hash (%s) to bucket", sig_hash)
