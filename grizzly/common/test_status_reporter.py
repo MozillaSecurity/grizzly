@@ -311,16 +311,16 @@ def test_status_reporter_04(mocker, tmp_path):
     rptr = StatusReporter.load(db_file)
     rptr._sys_info = _fake_sys_info
     assert len(rptr.reports) == 2
-    output = rptr.summary(sysinfo=True, timestamp=True)
+    output = rptr.summary(rate=False, sysinfo=True, timestamp=True)
     assert "Iteration" in output
-    assert "Rate" in output
+    assert "Rate" not in output
     assert "Results" in output
     assert "Ignored" in output
     assert "Logs" in output
     assert "Runtime" in output
     assert "Timestamp" in output
     lines = output.split("\n")
-    assert len(lines) == 10
+    assert len(lines) == 9
     # verify alignment
     position = len(lines[0].split(":")[0])
     for line in lines:
