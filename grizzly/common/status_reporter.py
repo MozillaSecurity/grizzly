@@ -247,16 +247,14 @@ class StatusReporter:
             total_iters = sum(iterations)
 
             # Iterations
-            disp = []
-            disp.append(str(total_iters))
+            disp = [str(total_iters)]
             if count > 1:
                 disp.append(f" ({max(iterations)}, {min(iterations)})")
             entries.append(("Iterations", "".join(disp)))
 
             # Rate
             if rate:
-                disp = []
-                disp.append(f"{count} @ {round(sum(rates), 2):0.2f}")
+                disp = [f"{count} @ {round(sum(rates), 2):0.2f}"]
                 if count > 1:
                     disp.append(
                         f" ({round(max(rates), 2):0.2f}, {round(min(rates), 2):0.2f})"
@@ -267,8 +265,10 @@ class StatusReporter:
             if total_iters:
                 total_results = sum(results)
                 result_pct = total_results / total_iters * 100
-                disp = []
-                disp.append(str(total_results))
+                buckets = set()
+                for report in self.reports:
+                    buckets.update(x.rid for x in report.results)
+                disp = [f"{total_results} ({len(buckets)})"]
                 if total_results:
                     disp.append(f" @ {round(result_pct, 1):0.1f}%")
                 if any(
@@ -298,8 +298,7 @@ class StatusReporter:
             # Log size
             log_usage = sum(log_sizes) / 1_048_576
             if log_usage > self.DISPLAY_LIMIT_LOG:
-                disp = []
-                disp.append(f"{log_usage:0.1f}MB")
+                disp = [f"{log_usage:0.1f}MB"]
                 if count > 1:
                     disp.append(
                         f" ({max(log_sizes) / 1_048_576:0.2f}MB, "
