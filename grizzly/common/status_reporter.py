@@ -216,7 +216,12 @@ class StatusReporter:
         return self.format_entries(entries)
 
     def summary(
-        self, runtime=True, sysinfo=False, timestamp=False, iters_per_result=100
+        self,
+        rate=True,
+        runtime=True,
+        sysinfo=False,
+        timestamp=False,
+        iters_per_result=100,
     ):
         """Merge and generate a summary from status reports.
 
@@ -249,13 +254,14 @@ class StatusReporter:
             entries.append(("Iterations", "".join(disp)))
 
             # Rate
-            disp = []
-            disp.append(f"{count} @ {round(sum(rates), 2):0.2f}")
-            if count > 1:
-                disp.append(
-                    f" ({round(max(rates), 2):0.2f}, {round(min(rates), 2):0.2f})"
-                )
-            entries.append(("Rate", "".join(disp)))
+            if rate:
+                disp = []
+                disp.append(f"{count} @ {round(sum(rates), 2):0.2f}")
+                if count > 1:
+                    disp.append(
+                        f" ({round(max(rates), 2):0.2f}, {round(min(rates), 2):0.2f})"
+                    )
+                entries.append(("Rate", "".join(disp)))
 
             # Results
             if total_iters:
@@ -762,6 +768,7 @@ class ReductionStatusReporter(StatusReporter):
 
     def summary(
         self,
+        rate=False,
         runtime=False,
         sysinfo=False,
         timestamp=False,
@@ -769,6 +776,7 @@ class ReductionStatusReporter(StatusReporter):
         """Merge and generate a summary from status reports.
 
         Args:
+            rate (bool): Ignored (compatibility).
             runtime (bool): Ignored (compatibility).
             sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output.
             timestamp (bool): Include time stamp in output.
@@ -916,7 +924,9 @@ def main(args=None):
                 ofp.write(reporter.specific(sysinfo=True, timestamp=True))
             else:
                 ofp.write(
-                    reporter.summary(runtime=True, sysinfo=False, timestamp=False)
+                    reporter.summary(
+                        rate=False, runtime=True, sysinfo=False, timestamp=False
+                    )
                 )
         return 0
 
@@ -934,7 +944,7 @@ def main(args=None):
         print("[Result Signatures]")
         print(reporter.results())
     print("[Summary]")
-    print(reporter.summary(sysinfo=args.system_report))
+    print(reporter.summary(rate=args.type == "active", sysinfo=args.system_report))
     return 0
 
 
