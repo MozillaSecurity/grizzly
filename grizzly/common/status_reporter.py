@@ -162,15 +162,11 @@ class StatusReporter:
             )
             entries.append((label, None))
             # iterations
-            entries.append(
-                ("Iterations", f"{report.iteration} @ {round(report.rate, 2):0.2f}")
-            )
+            entries.append(("Iterations", f"{report.iteration} @ {report.rate:0.2f}"))
             # ignored
             if report.ignored:
                 ignore_pct = report.ignored / report.iteration * 100
-                entries.append(
-                    ("Ignored", f"{report.ignored} @ {round(ignore_pct, 1)}%")
-                )
+                entries.append(("Ignored", f"{report.ignored} @ {ignore_pct:0.1f}%"))
             # results
             if report.results.total:
                 # avoid divide by zero if results are found before first update
@@ -185,7 +181,7 @@ class StatusReporter:
                 entries.append(
                     (
                         "Results",
-                        f"{report.results.total} @ {round(result_pct, 1):0.1f}%{blkd}",
+                        f"{report.results.total} @ {result_pct:0.1f}%{blkd}",
                     )
                 )
             else:
@@ -204,13 +200,11 @@ class StatusReporter:
                     if entry.total > 300:
                         body.append(str(timedelta(seconds=int(entry.total))))
                     else:
-                        body.append(f"{round(entry.total, 3):0.3f}s")
-                    body.append(
-                        f" {round(entry.total / report.runtime * 100, 2):0.2f}%"
-                    )
-                    body.append(f" ({round(avg, 3):0.3f} avg,")
-                    body.append(f" {round(entry.max, 3):0.3f} max,")
-                    body.append(f" {round(entry.min, 3):0.3f} min)")
+                        body.append(f"{entry.total:0.3f}s")
+                    body.append(f" {entry.total / report.runtime * 100:0.2f}%")
+                    body.append(f" ({avg:0.3f} avg,")
+                    body.append(f" {entry.max:0.3f} max,")
+                    body.append(f" {entry.min:0.3f} min)")
                     entries.append((entry.name, "".join(body)))
             entries.append(("", None))
         return self.format_entries(entries)
@@ -254,11 +248,9 @@ class StatusReporter:
 
             # Rate
             if rate:
-                disp = [f"{count} @ {round(sum(rates), 2):0.2f}"]
+                disp = [f"{count} @ {sum(rates):0.2f}"]
                 if count > 1:
-                    disp.append(
-                        f" ({round(max(rates), 2):0.2f}, {round(min(rates), 2):0.2f})"
-                    )
+                    disp.append(f" ({max(rates):0.2f}, {min(rates):0.2f})")
                 entries.append(("Rate", "".join(disp)))
 
             # Results
@@ -270,7 +262,7 @@ class StatusReporter:
                     buckets.update(x.rid for x in report.results)
                 disp = [f"{total_results} ({len(buckets)})"]
                 if total_results:
-                    disp.append(f" @ {round(result_pct, 1):0.1f}%")
+                    disp.append(f" @ {result_pct:0.1f}%")
                 if any(
                     any(
                         report.results.blockers(
@@ -286,9 +278,7 @@ class StatusReporter:
             # Ignored
             if total_ignored:
                 ignore_pct = total_ignored / total_iters * 100
-                entries.append(
-                    ("Ignored", f"{total_ignored} @ {round(ignore_pct, 1):0.1f}%")
-                )
+                entries.append(("Ignored", f"{total_ignored} @ {ignore_pct:0.1f}%"))
 
             # Runtime
             if runtime:
@@ -361,12 +351,12 @@ class StatusReporter:
         disp = []
         disp.append(
             f"{cpu_count(logical=True)} ({cpu_count(logical=False)}) @ "
-            f"{round(cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL))}%"
+            f"{cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL):0.0f}%"
         )
         if getloadavg is not None:
             disp.append(" (")
             # round the results of getloadavg(), precision varies across platforms
-            disp.append(", ".join(f"{round(x, 1):0.1f}" for x in getloadavg()))
+            disp.append(", ".join(f"{x:0.1f}" for x in getloadavg()))
             disp.append(")")
         entries.append(("CPU & Load", "".join(disp)))
 
