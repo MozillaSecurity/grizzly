@@ -106,16 +106,17 @@ class Reporter(metaclass=ABCMeta):
 class FilesystemReporter(Reporter):
     DISK_SPACE_ABORT = 512 * 1024 * 1024  # 512 MB
 
-    __slots__ = ("major_bucket", "min_space", "report_path")
+    __slots__ = ("major_bucket", "min_space", "report_path", "report_prefix")
 
     def __init__(self, report_path, major_bucket=True):
         super().__init__()
         self.major_bucket = major_bucket
         self.min_space = FilesystemReporter.DISK_SPACE_ABORT
         self.report_path = Path(report_path)
+        self.report_prefix = None
 
     def _pre_submit(self, report):
-        pass
+        self.report_prefix = report.prefix
 
     def _post_submit(self):
         pass
@@ -129,11 +130,11 @@ class FilesystemReporter(Reporter):
         dest.mkdir(parents=True, exist_ok=True)
         # dump test cases and the contained files to working directory
         for test_number, test_case in enumerate(test_cases):
-            dump_path = dest / f"{report.prefix}-{test_number}"
+            dump_path = dest / f"{self.report_prefix}-{test_number}"
             dump_path.mkdir(exist_ok=True)
             test_case.dump(dump_path, include_details=True)
         # move logs into bucket directory
-        log_path = dest / f"{report.prefix}_logs"
+        log_path = dest / f"{self.report_prefix}_logs"
         if log_path.is_dir():
             LOG.warning("Report log path exists '%s'", log_path)
         move(report.path, log_path)
@@ -155,7 +156,9 @@ class FailedLaunchReporter(FilesystemReporter):
 
     def _post_submit(self):
         super()._post_submit()
-        LOG.info("Logs can be found here '%s'", self.report_path)
+        LOG.info(
+            "Logs for %r can be found here '%s'", self.report_prefix, self.report_path
+        )
 
 
 class FuzzManagerReporter(Reporter):
