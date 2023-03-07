@@ -37,7 +37,7 @@ def test_iomanager_02(report_size, iters):
             precommit_size = len(iom.tests)
             iom.commit()
             assert iom._test is None
-            assert tcase == iom.tests[0]
+            assert tcase == iom.tests[-1]
             size = len(iom.tests)
             assert precommit_size <= size
             assert size <= report_size

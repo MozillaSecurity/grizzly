@@ -601,7 +601,7 @@ def test_replay_20(mocker, tmp_path):
     result2.report = mocker.Mock(
         spec_set=Report, path=tmp_path / "report_other2", prefix="other2"
     )
-    test = mocker.Mock(spec_set=TestCase)
+    test = mocker.Mock(spec_set=TestCase, timestamp=1.0)
     path = tmp_path / "dest"
     ReplayManager.report_to_filesystem(path, [result0, result1, result2], tests=[test])
     assert test.dump.call_count == 3  # called once per report

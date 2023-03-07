@@ -1,8 +1,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from collections import deque
-
 from sapphire.server_map import ServerMap
 
 from .storage import TestCase
@@ -24,8 +22,10 @@ class IOManager:
     def __init__(self, report_size=1):
         assert report_size > 0
         self.server_map = ServerMap()
-        self.tests = deque()
-        self._generated = 0  # number of test cases generated
+        # tests will be ordered oldest to newest
+        self.tests = []
+        # total number of test cases generated
+        self._generated = 0
         self._report_size = report_size
         self._test = None
 
@@ -40,11 +40,11 @@ class IOManager:
 
     def commit(self):
         assert self._test is not None
-        self.tests.appendleft(self._test)
+        self.tests.append(self._test)
         self._test = None
         # manage testcase cache size
         if len(self.tests) > self._report_size:
-            self.tests.pop().cleanup()
+            self.tests.pop(0).cleanup()
 
     def create_testcase(self, adapter_name, time_limit):
         assert self._test is None
