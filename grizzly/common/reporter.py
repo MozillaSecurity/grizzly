@@ -75,7 +75,7 @@ class Reporter(metaclass=ABCMeta):
         """Submit report containing results.
 
         Args:
-            test_cases (iterable): A collection of testcases, ordered newest to oldest,
+            test_cases (iterable): A collection of testcases, ordered oldest to newest,
                                    the newest being the mostly likely to trigger
                                    the result (crash, assert... etc).
             report (Report): Report to submit.
@@ -85,6 +85,9 @@ class Reporter(metaclass=ABCMeta):
         """
         assert isinstance(report, Report)
         assert report.path is not None
+        assert (
+            not test_cases or test_cases[0].timestamp <= test_cases[-1].timestamp
+        ), "tests must be ordered oldest to newest"
         self._pre_submit(report)
         # output report contents to console
         if self.display_logs:
@@ -129,7 +132,7 @@ class FilesystemReporter(Reporter):
             dest = self.report_path
         dest.mkdir(parents=True, exist_ok=True)
         # dump test cases and the contained files to working directory
-        for test_number, test_case in enumerate(test_cases):
+        for test_number, test_case in enumerate(reversed(test_cases)):
             dump_path = dest / f"{self.report_prefix}-{test_number}"
             dump_path.mkdir(exist_ok=True)
             test_case.dump(dump_path, include_details=True)
@@ -269,7 +272,7 @@ class FuzzManagerReporter(Reporter):
 
         # dump test cases and the contained files to working directory
         test_case_meta = []
-        for test_number, test_case in enumerate(test_cases):
+        for test_number, test_case in enumerate(reversed(test_cases)):
             test_case_meta.append([test_case.adapter_name, test_case.input_fname])
             dump_path = report.path / f"{report.prefix}-{test_number}"
             dump_path.mkdir(exist_ok=True)
