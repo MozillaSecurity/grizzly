@@ -6,7 +6,7 @@ Sapphire unit tests
 import socket
 import threading
 
-import pytest
+from pytest import mark, raises
 
 from .job import Job
 from .worker import Worker, WorkerError
@@ -41,7 +41,7 @@ def test_worker_02(mocker):
     )
     # it is assumed that launch() has already been called at this point
     worker._thread.is_alive.return_value = True
-    with pytest.raises(WorkerError, match="Worker thread failed to join!"):
+    with raises(WorkerError, match="Worker thread failed to join!"):
         worker.close()
 
 
@@ -65,12 +65,22 @@ def test_worker_03(mocker):
     assert serv_job.accepting.set.call_count == 1
 
 
-def test_worker_04(mocker, tmp_path):
+@mark.parametrize(
+    "url",
+    [
+        "/testfile",
+        "/./testfile",
+        "http://localhost/testfile",
+        "http://127.0.0.1/testfile",
+        "http://sub.host:1234/testfile",
+    ],
+)
+def test_worker_04(mocker, tmp_path, url):
     """test Worker.launch()"""
     (tmp_path / "testfile").touch()
     job = Job(tmp_path)
     clnt_sock = mocker.Mock(spec_set=socket.socket)
-    clnt_sock.recv.return_value = b"GET /testfile HTTP/1.1"
+    clnt_sock.recv.return_value = f"GET {url} HTTP/1.1".encode()
     serv_sock = mocker.Mock(spec_set=socket.socket)
     serv_sock.accept.return_value = (clnt_sock, None)
     worker = Worker.launch(serv_sock, job)
@@ -79,7 +89,10 @@ def test_worker_04(mocker, tmp_path):
         assert job.is_complete(wait=1)
     finally:
         worker.close()
+        if not job.exceptions.empty():
+            raise job.exceptions.get()[1]
     assert worker.done
+    assert clnt_sock.sendall.called
     assert serv_sock.accept.call_count == 1
     assert clnt_sock.close.call_count == 2
 
