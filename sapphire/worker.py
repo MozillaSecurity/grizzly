@@ -105,13 +105,26 @@ class Worker:
             # receive all the incoming data
             raw_request = conn.recv(cls.DEFAULT_REQUEST_LIMIT)
             if not raw_request:
-                LOG.debug("raw_request was empty")
+                LOG.debug("request was empty")
                 serv_job.accepting.set()
                 return
 
-            # check if request can be handled
+            # parse request
             raw_url = cls.REQ_PATTERN.match(raw_request)
-            if raw_url is None:
+            if raw_url:
+                try:
+                    url = urlparse(unquote(raw_url.group("url").decode("ascii")))
+                except ValueError as exc:
+                    if "Invalid IPv6 URL" not in str(exc):  # pragma: no cover
+                        raise
+                    LOG.debug("failed to parse url")
+                    url = None
+            else:
+                LOG.debug("request missing url (failed to match regex)")
+                url = None
+
+            # handle bad requests
+            if raw_url is None or url is None:
                 serv_job.accepting.set()
                 conn.sendall(cls._4xx_page(400, "Bad Request", serv_job.auto_close))
                 LOG.debug(
@@ -122,7 +135,6 @@ class Worker:
                 return
 
             # lookup resource
-            url = urlparse(unquote(raw_url.group("url").decode("ascii")))
             LOG.debug("lookup_resource(%r)", url.path)
             resource = serv_job.lookup_resource(url.path)
             if resource:

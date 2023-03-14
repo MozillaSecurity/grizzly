@@ -97,7 +97,36 @@ def test_worker_04(mocker, tmp_path, url):
     assert clnt_sock.close.call_count == 2
 
 
-def test_worker_05(mocker):
+@mark.parametrize(
+    "req",
+    [
+        b"a",
+        b"GET http://[test/ HTTP/1.1",
+        b"GET  HTTP/1.1",
+        b"GET a a a a a HTTP/1.1",
+    ],
+)
+def test_worker_05(mocker, tmp_path, req):
+    """test Worker.launch() with unparsable requests"""
+    (tmp_path / "testfile").touch()
+    job = Job(tmp_path)
+    clnt_sock = mocker.Mock(spec_set=socket.socket)
+    clnt_sock.recv.return_value = req
+    serv_sock = mocker.Mock(spec_set=socket.socket)
+    serv_sock.accept.return_value = (clnt_sock, None)
+    worker = Worker.launch(serv_sock, job)
+    assert worker is not None
+    worker.join(timeout=1)
+    worker.close()
+    if not job.exceptions.empty():
+        raise job.exceptions.get()[1]
+    assert serv_sock.accept.call_count == 1
+    assert clnt_sock.close.call_count == 2
+    assert clnt_sock.sendall.called
+    assert b"400 Bad Request" in clnt_sock.sendall.call_args[0][0]
+
+
+def test_worker_06(mocker):
     """test Worker.handle_request() socket errors"""
     serv_con = mocker.Mock(spec_set=socket.socket)
     serv_con.recv.side_effect = socket.error
