@@ -104,6 +104,7 @@ def main(args):
                 target,
                 coverage=args.coverage,
                 enable_profiling=args.enable_profiling,
+                host_alias=args.host_alias,
                 relaunch=relaunch,
                 report_limit=args.limit_reports,
                 report_size=args.collect,

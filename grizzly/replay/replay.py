@@ -21,6 +21,7 @@ from ..common.runner import Runner
 from ..common.status import SimpleStatus
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import (
+    HOST_ALIAS,
     ConfigError,
     Exit,
     configure_logging,
@@ -157,11 +158,12 @@ class ReplayManager:
         return is_hang
 
     @classmethod
-    def load_testcases(cls, path, subset=None):
+    def load_testcases(cls, path, host_alias=None, subset=None):
         """Load TestCases.
 
         Args:
             path (Path): Path to load.
+            host_alias (str): Host alias to use instead of loaded value.
             subset (list(int)): Indices of tests to load when loading multiple
                                 tests.
         Returns:
@@ -182,6 +184,9 @@ class ReplayManager:
             if not env_vars and test.env_vars:
                 env_vars = dict(test.env_vars)
             test.env_vars.clear()
+            # overwrite host_alias
+            if host_alias:
+                test.host_alias = host_alias
         LOG.debug(
             "loaded TestCase(s): %d, assets: %r, env vars: %r",
             len(testcases),
@@ -336,8 +341,10 @@ class ReplayManager:
                     on_iteration_cb()
                 if self.target.closed:
                     location = runner.location(
-                        "/grz_start",
+                        # prefer host alias from test case over default
+                        testcases[0].host_alias or HOST_ALIAS,
                         self.server.port,
+                        "/grz_start",
                         close_after=relaunch * test_count if self._harness else None,
                         post_launch_delay=post_launch_delay,
                         time_limit=time_limit if self._harness else None,
@@ -603,7 +610,7 @@ class ReplayManager:
 
         try:
             testcases, assets, env_vars = cls.load_testcases(
-                args.input, subset=args.test_index
+                args.input, host_alias=args.host_alias, subset=args.test_index
             )
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))

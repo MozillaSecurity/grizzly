@@ -15,6 +15,7 @@ __all__ = (
     "DEFAULT_TIME_LIMIT",
     "Exit",
     "grz_tmp",
+    "HOST_ALIAS",
     "time_limits",
     "TIMEOUT_DELAY",
 )
@@ -23,6 +24,7 @@ __credits__ = ["Tyson Smith"]
 
 DEFAULT_TIME_LIMIT = 30
 GRZ_TMP = Path(getenv("GRZ_TMP", gettempdir()), "grizzly")
+HOST_ALIAS = "127.0.0.1"
 LOG = getLogger(__name__)
 # TIMEOUT_DELAY is added to the test time limit to create the default timeout
 TIMEOUT_DELAY = 15

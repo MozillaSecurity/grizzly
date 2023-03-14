@@ -55,6 +55,7 @@ def test_main_01(mocker, server, tmp_path):
         any_crash=False,
         asset=[],
         fuzzmanager=False,
+        host_alias=None,
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
@@ -126,6 +127,7 @@ def test_main_02(mocker, server, tmp_path, repro_results):
         any_crash=False,
         asset=[],
         fuzzmanager=False,
+        host_alias=None,
         idle_delay=0,
         idle_threshold=0,
         ignore=[],
@@ -162,6 +164,7 @@ def test_main_03(mocker):
     # setup args
     args = mocker.Mock(
         asset=[],
+        host_alias=None,
         ignore=[],
         input="test",
         min_crashes=1,
@@ -229,6 +232,7 @@ def test_main_04(mocker):
     )
     # setup args
     args = mocker.MagicMock(
+        host_alias=None,
         input="test",
         min_crashes=1,
         no_harness=True,
@@ -279,6 +283,7 @@ def test_main_05(mocker, server, tmp_path):
     args = mocker.Mock(
         asset=[["from_cmdline", str(asset)]],
         fuzzmanager=False,
+        host_alias=None,
         idle_delay=0,
         idle_threshold=0,
         ignore=[],
@@ -353,6 +358,7 @@ def test_main_06(
     args = mocker.Mock(
         asset=[],
         fuzzmanager=False,
+        host_alias=None,
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
@@ -402,6 +408,7 @@ def test_main_07(mocker, server, tmp_path):
         any_crash=False,
         asset=[],
         fuzzmanager=True,
+        host_alias=None,
         idle_delay=0,
         idle_threshold=0,
         ignore=[],

@@ -41,29 +41,33 @@ class SimpleAdapter(Adapter):
 
 
 @mark.parametrize(
-    "harness, profiling, coverage, relaunch, iters, runtime",
+    "harness, profiling, coverage, relaunch, iters, runtime, alias",
     [
         # with harness, single iteration
-        (True, False, False, 1, 1, 0),
+        (True, False, False, 1, 1, 0, None),
+        # with harness, single iteration, with host alias
+        (True, False, False, 1, 1, 0, "test-alias"),
         # with harness, 10 iterations relaunch every iteration
-        (True, False, False, 1, 10, 0),
+        (True, False, False, 1, 10, 0, None),
         # with harness, 10 iterations relaunch every other iteration
-        (True, False, False, 2, 10, 0),
+        (True, False, False, 2, 10, 0, None),
         # with harness, 10 iterations no relaunches
-        (True, False, False, 10, 10, 0),
+        (True, False, False, 10, 10, 0, None),
         # no harness, single iteration
-        (False, False, False, 1, 1, 0),
+        (False, False, False, 1, 1, 0, None),
         # no harness, 10 iterations
-        (False, False, False, 1, 10, 0),
+        (False, False, False, 1, 10, 0, None),
         # test enable profiling
-        (True, True, False, 10, 10, 0),
+        (True, True, False, 10, 10, 0, None),
         # test Session.dump_coverage()
-        (True, True, True, 2, 2, 0),
+        (True, True, True, 2, 2, 0, None),
         # with harness, runtime limit
-        (True, False, False, 1, 0, 1),
+        (True, False, False, 1, 0, 1, None),
     ],
 )
-def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runtime):
+def test_session_01(
+    mocker, harness, profiling, coverage, relaunch, iters, runtime, alias
+):
     """test Session with typical fuzzer Adapter"""
     mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
@@ -91,12 +95,14 @@ def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runti
         target,
         coverage=coverage,
         enable_profiling=profiling,
+        host_alias=alias,
         relaunch=relaunch,
     ) as session:
         server.serve_path = lambda *a, **kv: (
             Served.ALL,
             [session.iomanager.page_name(offset=-1)],
         )
+        assert not session.iomanager.tests
         session.run(
             [],
             10,
@@ -104,6 +110,11 @@ def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runti
             iteration_limit=iters,
             runtime_limit=runtime,
         )
+        assert session.iomanager.tests
+        assert session.iomanager.tests[-1].adapter_name == "simple"
+        assert session.iomanager.tests[-1].duration is not None
+        assert session.iomanager.tests[-1].host_alias == alias
+        assert session.iomanager.tests[-1].timestamp is not None
         assert session.status.iteration == max_iters
         assert session.status.test_name == "file.bin"
         assert target.close.call_count == max_iters / relaunch

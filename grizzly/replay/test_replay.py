@@ -627,11 +627,13 @@ def test_replay_20(mocker, tmp_path):
 def test_replay_21(mocker, tmp_path):
     """test ReplayManager.load_testcases()"""
     fake_load = mocker.patch("grizzly.replay.replay.TestCase.load")
-    test0 = mocker.Mock(spec_set=TestCase, env_vars={"env": "var"})
+    test0 = mocker.Mock(spec_set=TestCase, env_vars={"env": "var"}, host_alias=None)
     test0.pop_assets.return_value = None
-    test1 = mocker.Mock(spec_set=TestCase, env_vars={}, landing_page="x.html")
+    test1 = mocker.Mock(
+        spec_set=TestCase, env_vars={}, host_alias=None, landing_page="x.html"
+    )
     test1.pop_assets.return_value = None
-    test2 = mocker.Mock(spec_set=TestCase, env_vars={})
+    test2 = mocker.Mock(spec_set=TestCase, env_vars={}, host_alias=None)
     test2.pop_assets.return_value = None
     # failure
     fake_load.return_value = ()
@@ -644,10 +646,18 @@ def test_replay_21(mocker, tmp_path):
     assert env_vars["env"] == "var"
     assert not any(x.env_vars for x in tests)
     assert len(tests) == 2
+    assert tests[0].host_alias is None
     assert tests[0].cleanup.call_count == 0
     assert tests[1].cleanup.call_count == 0
     assert assets is None
+    # success passing host_alias
+    fake_load.return_value = [test0]
+    tests, _, _ = ReplayManager.load_testcases(str(tmp_path), host_alias="test-alias")
+    assert len(tests) == 1
+    assert tests[0].host_alias == "test-alias"
+    test0.reset_mock()
     # success select
+    fake_load.return_value = [test0, test1]
     test0.pop_assets.return_value = mocker.Mock(spec_set=AssetManager)
     fake_load.return_value = [test0, test1, test2, mocker.MagicMock(spec_set=TestCase)]
     tests, assets, _ = ReplayManager.load_testcases(str(tmp_path), subset=[1, 3])

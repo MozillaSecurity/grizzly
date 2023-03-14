@@ -41,6 +41,7 @@ class TestCase:
         "duration",
         "env_vars",
         "hang",
+        "host_alias",
         "input_fname",
         "landing_page",
         "redirect_page",
@@ -64,6 +65,7 @@ class TestCase:
         self.duration = None
         self.env_vars = {}
         self.hang = False
+        self.host_alias = None
         self.input_fname = input_fname  # file that was used to create the test case
         self.landing_page = self.sanitize_path(landing_page)
         if redirect_page is not None:
@@ -201,6 +203,7 @@ class TestCase:
         result.duration = self.duration
         result.env_vars = dict(self.env_vars)
         result.hang = self.hang
+        result.host_alias = self.host_alias
 
         # copy test data files
         for entry, required in chain(
@@ -282,6 +285,10 @@ class TestCase:
                 "time_limit": self.time_limit,
                 "timestamp": self.timestamp,
             }
+            # only add non-default entries
+            # TODO: this could include more than just host_alias
+            if self.host_alias is not None:
+                info["host_alias"] = self.host_alias
             # save target assets and update meta data
             if self.assets and not self.assets.is_empty():
                 info["assets_path"] = "_assets_"
@@ -416,6 +423,7 @@ class TestCase:
         )
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
+        test.host_alias = info.get("host_alias", None)
         test.add_from_file(
             entry_point, file_name=test.landing_page, required=True, copy=copy
         )

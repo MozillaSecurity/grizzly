@@ -257,17 +257,17 @@ def test_runner_07(mocker):
 
 def test_runner_08():
     """test Runner.location()"""
-    result = Runner.location("a.html", 34567)
+    result = Runner.location("localhost", 34567, "a.html")
+    assert result == "http://localhost:34567/a.html"
+    result = Runner.location("127.0.0.1", 34567, "/a.html")
     assert result == "http://127.0.0.1:34567/a.html"
-    result = Runner.location("/a.html", 34567)
-    assert result == "http://127.0.0.1:34567/a.html"
-    result = Runner.location("a.html", 34567, close_after=10)
+    result = Runner.location("127.0.0.1", 34567, "a.html", close_after=10)
     assert result == "http://127.0.0.1:34567/a.html?close_after=10"
-    result = Runner.location("a.html", 9999, time_limit=60)
+    result = Runner.location("127.0.0.1", 9999, "a.html", time_limit=60)
     assert result == "http://127.0.0.1:9999/a.html?time_limit=60000"
-    result = Runner.location("a.html", 9999, close_after=10, time_limit=60)
+    result = Runner.location("127.0.0.1", 9999, "a.html", close_after=10, time_limit=60)
     assert result == "http://127.0.0.1:9999/a.html?close_after=10&time_limit=60000"
-    result = Runner.location("a.html", 9999, post_launch_delay=10)
+    result = Runner.location("127.0.0.1", 9999, "a.html", post_launch_delay=10)
     assert result == "http://127.0.0.1:9999/a.html?post_launch_delay=10"
 
 

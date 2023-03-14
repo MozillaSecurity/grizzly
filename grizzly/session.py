@@ -7,6 +7,7 @@ from time import time
 from .common.iomanager import IOManager
 from .common.runner import Runner
 from .common.status import STATUS_DB_FUZZ, Status
+from .common.utils import HOST_ALIAS
 from .target import Result
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
@@ -69,6 +70,7 @@ class Session:
         "_relaunch",
         "_report_size",
         "adapter",
+        "host_alias",
         "iomanager",
         "reporter",
         "server",
@@ -84,6 +86,7 @@ class Session:
         target,
         coverage=False,
         enable_profiling=False,
+        host_alias=None,
         relaunch=1,
         report_limit=0,
         report_size=1,
@@ -94,6 +97,7 @@ class Session:
         self._coverage = coverage
         self._relaunch = relaunch
         self.adapter = adapter
+        self.host_alias = host_alias
         self.iomanager = IOManager(report_size=report_size)
         self.reporter = reporter
         self.server = server
@@ -191,11 +195,12 @@ class Session:
                 self.iomanager.purge()
                 self.adapter.pre_launch()
                 location = runner.location(
-                    "/grz_start",
+                    self.host_alias or HOST_ALIAS,
                     self.server.port,
+                    "/grz_start",
                     close_after=relaunch if harness else None,
-                    time_limit=time_limit if harness else None,
                     post_launch_delay=post_launch_delay,
+                    time_limit=time_limit if harness else None,
                 )
                 with self.status.measure("launch"):
                     runner.launch(location, max_retries=launch_attempts, retry_delay=0)
@@ -217,6 +222,7 @@ class Session:
             current_test.duration = result.duration
             current_test.assets = self.target.assets
             current_test.env_vars = self.target.filtered_environ()
+            current_test.host_alias = self.host_alias
             # adapter callbacks
             if result.timeout:
                 current_test.hang = True

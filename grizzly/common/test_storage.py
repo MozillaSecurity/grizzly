@@ -25,6 +25,7 @@ def test_testcase_01(tmp_path):
         assert tcase.adapter_name == adpt_name
         assert tcase.duration is None
         assert tcase.data_size == 0
+        assert tcase.host_alias is None
         assert tcase.input_fname is None
         assert tcase.timestamp > 0
         assert not tcase.env_vars

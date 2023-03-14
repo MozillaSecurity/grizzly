@@ -100,6 +100,10 @@ class CommonArgs:
             help="Headless mode. 'default' uses browser's built-in headless mode.",
         )
         self.launcher_grp.add_argument(
+            "--host-alias",
+            help="Host alias. (default: 127.0.0.1)",
+        )
+        self.launcher_grp.add_argument(
             "--launch-attempts",
             type=int,
             default=3,

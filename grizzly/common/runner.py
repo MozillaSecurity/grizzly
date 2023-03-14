@@ -163,13 +163,19 @@ class Runner:
 
     @staticmethod
     def location(
-        srv_path, srv_port, close_after=None, post_launch_delay=-1, time_limit=None
+        srv_host,
+        srv_port,
+        srv_path,
+        close_after=None,
+        post_launch_delay=-1,
+        time_limit=None,
     ):
         """Build a valid URL to pass to a browser.
 
         Args:
-            srv_path (str): Path segment of the URL
-            srv_port (int): Server listening port
+            srv_host (str): Host or domain name.
+            srv_port (int): Server listening port.
+            srv_path (str): Path segment of the URL.
             close_after (int): Harness argument.
             post_launch_delay (int): Post-launch delay page argument.
             time_limit (int): Harness argument.
@@ -177,7 +183,8 @@ class Runner:
         Returns:
             str: A valid URL.
         """
-        location = f"http://127.0.0.1:{srv_port}/{srv_path.lstrip('/')}"
+        assert srv_host
+        location = f"http://{srv_host}:{srv_port}/{srv_path.lstrip('/')}"
         # set harness related arguments
         args = []
         if close_after is not None:

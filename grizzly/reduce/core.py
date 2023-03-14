@@ -793,7 +793,7 @@ class ReduceManager:
 
             try:
                 testcases, assets, env_vars = ReplayManager.load_testcases(
-                    args.input, subset=args.test_index
+                    args.input, host_alias=args.host_alias, subset=args.test_index
                 )
             except TestCaseLoadFailure as exc:
                 LOG.error("Error: %s", str(exc))
