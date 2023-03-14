@@ -29,7 +29,7 @@ class WorkerError(Exception):
 class Worker:
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
-    REQ_PATTERN = re_compile(b"^GET\\s/(?P<url>\\S*)\\sHTTP/1")
+    REQ_PATTERN = re_compile(rb"^GET\s(?P<url>\S+)\sHTTP/1")
 
     __slots__ = ("_conn", "_thread")
 
@@ -129,7 +129,7 @@ class Worker:
                 if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                     finish_job = serv_job.remove_pending(str(resource.target))
                 elif resource.type in (Resource.URL_DYNAMIC, Resource.URL_REDIRECT):
-                    finish_job = serv_job.remove_pending(url.path)
+                    finish_job = serv_job.remove_pending(url.path.lstrip("/"))
                 else:  # pragma: no cover
                     # this should never happen
                     raise WorkerError(f"Unknown resource type {resource.type!r}")

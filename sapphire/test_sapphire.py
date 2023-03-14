@@ -149,7 +149,7 @@ def test_sapphire_05(client, tmp_path):
     assert len(files_served) == 1
     assert client.wait(timeout=10)
     assert os.path.basename(__file__) in files_to_serve[0].file
-    assert files_to_serve[0].code == 403
+    assert files_to_serve[0].code == 404
     assert "no_access.html" in files_to_serve[1].file
     assert files_to_serve[1].code == 403
     assert files_to_serve[2].code == 200

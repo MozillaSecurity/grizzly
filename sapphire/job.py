@@ -129,6 +129,7 @@ class Job:
         return mime
 
     def lookup_resource(self, path):
+        path = path.lstrip("/")
         # check if path is a file in wwwroot
         try:
             local = self._wwwroot / path

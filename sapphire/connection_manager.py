@@ -97,7 +97,7 @@ class ConnectionManager:
         total_launches = 0
         worker_pool = []
         pool_size = 0
-        LOG.debug("starting listener")
+        LOG.debug("starting listener (max workers %d)", max_workers)
         try:
             while not serv_job.is_complete():
                 if not serv_job.accepting.wait(0.05):
