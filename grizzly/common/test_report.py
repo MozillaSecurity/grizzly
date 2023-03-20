@@ -343,3 +343,28 @@ def test_report_14(mocker):
         "std::panicking::rust_panic_with_hook",
     )
     assert Report.crash_signature_max_frames(info) == 14
+
+
+@mark.parametrize(
+    "data, lines",
+    [
+        # simple log
+        ("test", 1),
+        # simple log
+        ("a\nb", 2),
+        # empty log
+        ("", 0),
+        # no log
+        (None, 0),
+        # log with bad chars
+        ("a\n\0", 2),
+    ],
+)
+def test_report_15(tmp_path, data, lines):
+    """test Report._load_log()"""
+    if data is None:
+        assert Report._load_log(None) is None
+    else:
+        log = tmp_path / "test-log.txt"
+        log.write_text(data)
+        assert len(Report._load_log(log)) == lines
