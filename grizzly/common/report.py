@@ -132,13 +132,6 @@ class Report:
         """
         if self._crash_info is None:
             assert self.path is not None
-            # read in the log files and create a CrashInfo object
-            if self._logs.aux is not None:
-                aux_data = self._logs.aux.read_text(
-                    "utf-8", errors="ignore"
-                ).splitlines()
-            else:
-                aux_data = None
             # create ProgramConfiguration that can be reported to a FM server
             if Path(f"{self._target_binary}.fuzzmanagerconf").is_file():
                 # attempt to use "<target_binary>.fuzzmanagerconf"
@@ -152,11 +145,12 @@ class Report:
                     "x86_64" if cpu == "amd64" else cpu,
                     system(),
                 )
+            # read the log files and create a CrashInfo object
             self._crash_info = CrashInfo.fromRawCrashData(
-                self._logs.stdout.read_text("utf-8", errors="ignore").splitlines(),
-                self._logs.stderr.read_text("utf-8", errors="ignore").splitlines(),
+                self._load_log(self._logs.stdout),
+                self._load_log(self._logs.stderr),
                 fm_cfg,
-                auxCrashData=aux_data,
+                auxCrashData=self._load_log(self._logs.aux),
             )
         return self._crash_info
 
@@ -308,8 +302,7 @@ class Report:
 
     @staticmethod
     def _find_valgrind(logs):
-        """Search through list of log files for a Valgrind log.
-        Empty files are ignored.
+        """Search through log files for a Valgrind log. Empty files are ignored.
 
         Args:
             logs (list(Path)): List of log files to search.
@@ -321,6 +314,20 @@ class Report:
             if "valgrind" in log_file.name and log_file.stat().st_size:
                 return log_file
         return None
+
+    @staticmethod
+    def _load_log(path):
+        """Load and sanitize text from a file for use with CrashInfo.fromRawCrashData().
+
+        Args:
+            path (Path): Log file to load.
+
+        Returns:
+            list(str): Text data sanitized and split into lines or None if path is None.
+        """
+        if not path:
+            return None
+        return path.read_text("utf-8", errors="replace").replace("\0", "?").splitlines()
 
     @property
     def major(self):
@@ -405,7 +412,7 @@ class Report:
         """Tail the given file. WARNING: This is destructive!
 
         Args:
-            in_file (Path): Path to file to work with.
+            in_file (Path): File to work with.
             size_limit (int): Maximum size of file after tail operation.
 
         Returns:
