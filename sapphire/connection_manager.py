@@ -81,13 +81,13 @@ class ConnectionManager:
         # it is important to keep this loop fast because it can limit
         # the total iteration rate of Grizzly
         while not self._job.is_complete(wait=poll):
-            # check for a timeout
-            if deadline and deadline <= time():
-                return False
             # check if callback returns False
             if continue_cb is not None and not continue_cb():
                 LOG.debug("continue_cb() returned False")
                 break
+            # check for a timeout
+            if deadline and deadline <= time():
+                return False
         return True
 
     @staticmethod
