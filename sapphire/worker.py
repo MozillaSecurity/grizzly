@@ -120,7 +120,7 @@ class Worker:
                     LOG.debug("failed to parse url")
                     url = None
             else:
-                LOG.debug("request missing url (failed to match regex)")
+                LOG.debug("request failed to match regex %r", raw_request[:16])
                 url = None
 
             # handle bad requests
