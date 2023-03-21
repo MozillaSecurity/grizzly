@@ -9,7 +9,7 @@ import threading
 from pytest import mark, raises
 
 from .job import Job
-from .worker import Worker, WorkerError
+from .worker import Request, Worker, WorkerError
 
 
 def test_worker_01(mocker):
@@ -98,16 +98,14 @@ def test_worker_04(mocker, tmp_path, url):
 
 
 @mark.parametrize(
-    "req",
+    "req, response",
     [
-        b"a",
-        b"GET http://[test/ HTTP/1.1",
-        b"GET  HTTP/1.1",
-        b"GET a a a a a HTTP/1.1",
+        (b"a", b"400 Bad Request"),
+        (b"BAD / HTTP/1.1", b"405 Method Not Allowed"),
     ],
 )
-def test_worker_05(mocker, tmp_path, req):
-    """test Worker.launch() with unparsable requests"""
+def test_worker_05(mocker, tmp_path, req, response):
+    """test Worker.launch() with invalid/unsupported requests"""
     (tmp_path / "testfile").touch()
     job = Job(tmp_path)
     clnt_sock = mocker.Mock(spec_set=socket.socket)
@@ -123,7 +121,7 @@ def test_worker_05(mocker, tmp_path, req):
     assert serv_sock.accept.call_count == 1
     assert clnt_sock.close.call_count == 2
     assert clnt_sock.sendall.called
-    assert b"400 Bad Request" in clnt_sock.sendall.call_args[0][0]
+    assert response in clnt_sock.sendall.call_args[0][0]
 
 
 def test_worker_06(mocker):
@@ -164,3 +162,35 @@ def test_response_data_04():
     assert b"Content-Length: " in output
     assert b"HTTP/1.1 404 Not Found" in output
     assert b"window.onload = () => { window.setTimeout(window.close, 10000) }" in output
+
+
+@mark.parametrize(
+    "req, method, scheme, path",
+    [
+        (b"GET / HTTP/1.1\r\n", "GET", "", "/"),
+        (b"GET /foo HTTP/1.1\r\n", "GET", "", "/foo"),
+        (b"GET /foo/bar HTTP/1.1\r\n", "GET", "", "/foo/bar"),
+        (b"GET http://foo/ HTTP/1.1\r\n", "GET", "http", "/"),
+        (b"GET http://foo/bar HTTP/1.1\r\n", "GET", "http", "/bar"),
+    ],
+)
+def test_response_01(req, method, scheme, path):
+    """test Request.parse() success"""
+    request = Request.parse(req)
+    assert request.method == method
+    assert request.url.path == path
+    assert request.url.scheme == scheme
+
+
+@mark.parametrize(
+    "req",
+    [
+        b"a",
+        b"GET http://[test/ HTTP/1.1",
+        b"GET  HTTP/1.1",
+        b"GET a a a a a HTTP/1.1",
+    ],
+)
+def test_response_02(req):
+    """test Request.parse() failures"""
+    assert Request.parse(req) is None
