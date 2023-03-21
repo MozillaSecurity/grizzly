@@ -22,6 +22,39 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
+class Request:
+    REQ_PATTERN = re_compile(rb"^(?P<method>\w+)\s(?P<url>\S+)\sHTTP/1")
+
+    __slots__ = ("method", "url")
+
+    def __init__(self, method, url):
+        self.method = method
+        self.url = url
+
+    @classmethod
+    def parse(cls, raw_data):
+        assert isinstance(raw_data, bytes)
+        req_match = cls.REQ_PATTERN.match(raw_data)
+        if not req_match:
+            LOG.debug("request failed to match regex")
+            return None
+
+        # TODO: parse headers if needed
+
+        try:
+            # unquote() accepts str | bytes as of Python 3.9
+            url = urlparse(
+                unquote(req_match.group("url").decode("ascii", errors="replace"))
+            )
+        except ValueError as exc:
+            if "Invalid IPv6 URL" not in str(exc):  # pragma: no cover
+                raise
+            LOG.debug("failed to parse url from request")
+            return None
+
+        return cls(req_match.group("method").decode("ascii", errors="replace"), url)
+
+
 class WorkerError(Exception):
     """Raised by Worker"""
 
@@ -29,7 +62,6 @@ class WorkerError(Exception):
 class Worker:
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
-    REQ_PATTERN = re_compile(rb"^GET\s(?P<url>\S+)\sHTTP/1")
 
     __slots__ = ("_conn", "_thread")
 
@@ -102,46 +134,45 @@ class Worker:
     def handle_request(cls, conn, serv_job):
         finish_job = False  # call finish() on return
         try:
-            # receive all the incoming data
+            # receive incoming request data
             raw_request = conn.recv(cls.DEFAULT_REQUEST_LIMIT)
             if not raw_request:
                 LOG.debug("request was empty")
                 serv_job.accepting.set()
                 return
-
-            # parse request
-            raw_url = cls.REQ_PATTERN.match(raw_request)
-            if raw_url:
-                try:
-                    url = urlparse(unquote(raw_url.group("url").decode("ascii")))
-                except ValueError as exc:
-                    if "Invalid IPv6 URL" not in str(exc):  # pragma: no cover
-                        raise
-                    LOG.debug("failed to parse url")
-                    url = None
-            else:
-                LOG.debug("request failed to match regex %r", raw_request[:16])
-                url = None
-
-            # handle bad requests
-            if raw_url is None or url is None:
+            request = Request.parse(raw_request)
+            # handle bad request
+            if not request:
                 serv_job.accepting.set()
                 conn.sendall(cls._4xx_page(400, "Bad Request", serv_job.auto_close))
                 LOG.debug(
-                    "400 request length %d (%d to go)",
+                    "400 bad request %r... length %d (%d to go)",
+                    raw_request[:16],
                     len(raw_request),
+                    serv_job.pending,
+                )
+                return
+            # handle unsupported method
+            if request.method != "GET":
+                serv_job.accepting.set()
+                conn.sendall(
+                    cls._4xx_page(405, "Method Not Allowed", serv_job.auto_close)
+                )
+                LOG.debug(
+                    "405 method %r (%d to go)",
+                    request.method,
                     serv_job.pending,
                 )
                 return
 
             # lookup resource
-            LOG.debug("lookup_resource(%r)", url.path)
-            resource = serv_job.lookup_resource(url.path)
+            LOG.debug("lookup_resource(%r)", request.url.path)
+            resource = serv_job.lookup_resource(request.url.path)
             if resource:
                 if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
                     finish_job = serv_job.remove_pending(str(resource.target))
                 elif resource.type in (Resource.URL_DYNAMIC, Resource.URL_REDIRECT):
-                    finish_job = serv_job.remove_pending(url.path.lstrip("/"))
+                    finish_job = serv_job.remove_pending(request.url.path.lstrip("/"))
                 else:  # pragma: no cover
                     # this should never happen
                     raise WorkerError(f"Unknown resource type {resource.type!r}")
@@ -156,29 +187,31 @@ class Worker:
             # send response
             if resource is None:
                 conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
-                LOG.debug("404 %r (%d to go)", url.path, serv_job.pending)
+                LOG.debug("404 %r (%d to go)", request.url.path, serv_job.pending)
             elif resource.type == Resource.URL_REDIRECT:
                 redirect_to = [quote(resource.target)]
-                if url.query:
-                    LOG.debug("appending query %r", url.query)
-                    redirect_to.append(url.query)
+                if request.url.query:
+                    LOG.debug("appending query %r", request.url.query)
+                    redirect_to.append(request.url.query)
                 conn.sendall(cls._307_redirect("?".join(redirect_to)))
                 LOG.debug(
                     "307 %r -> %r (%d to go)",
-                    url.path,
+                    request.url.path,
                     resource.target,
                     serv_job.pending,
                 )
             elif resource.type == Resource.URL_DYNAMIC:
                 # pass query string to callback
-                data = resource.target(url.query)
+                data = resource.target(request.url.query)
                 if not isinstance(data, bytes):
-                    LOG.debug("dynamic request: %r", url.path)
+                    LOG.debug("dynamic request: %r", request.url.path)
                     raise TypeError("dynamic request callback must return 'bytes'")
                 conn.sendall(cls._200_header(len(data), resource.mime))
                 conn.sendall(data)
                 LOG.debug(
-                    "200 %r - dynamic request (%d to go)", url.path, serv_job.pending
+                    "200 %r - dynamic request (%d to go)",
+                    request.url.path,
+                    serv_job.pending,
                 )
             elif serv_job.is_forbidden(
                 resource.target, is_include=resource.type == Resource.URL_INCLUDE
@@ -188,7 +221,7 @@ class Worker:
                 # However this is meant to only be accessible via localhost.
                 LOG.debug("target %r", str(resource.target))
                 conn.sendall(cls._4xx_page(403, "Forbidden", serv_job.auto_close))
-                LOG.debug("403 %r (%d to go)", url.path, serv_job.pending)
+                LOG.debug("403 %r (%d to go)", request.url.path, serv_job.pending)
             else:
                 # serve the file
                 LOG.debug("target %r", str(resource.target))
@@ -202,7 +235,7 @@ class Worker:
                     while offset < data_size:
                         conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
                         offset = in_fp.tell()
-                LOG.debug("200 %r (%d to go)", url.path, serv_job.pending)
+                LOG.debug("200 %r (%d to go)", request.url.path, serv_job.pending)
                 serv_job.mark_served(resource.target)
 
         except (sock_error, sock_timeout):
