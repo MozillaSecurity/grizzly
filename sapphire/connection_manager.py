@@ -94,9 +94,10 @@ class ConnectionManager:
     def listener(serv_sock, serv_job, max_workers, shutdown_delay=0):
         assert max_workers > 0
         assert shutdown_delay >= 0
-        total_launches = 0
+        launches = 0
         worker_pool = []
         pool_size = 0
+        start_time = time()
         LOG.debug("starting listener (max workers %d)", max_workers)
         try:
             while not serv_job.is_complete():
@@ -106,7 +107,7 @@ class ConnectionManager:
                 if worker is not None:
                     worker_pool.append(worker)
                     pool_size += 1
-                    total_launches += 1
+                    launches += 1
                 # manage worker pool
                 if pool_size >= max_workers:
                     LOG.debug(
@@ -132,20 +133,18 @@ class ConnectionManager:
                 serv_job.exceptions.put(exc_info())
             serv_job.finish()
         finally:
-            LOG.debug(
-                "shutting down listener, waiting %0.2fs for %d of %d worker(s)...",
-                shutdown_delay,
-                len(worker_pool),
-                total_launches,
-            )
+            LOG.debug("%d requests in %0.3f seconds", launches, time() - start_time)
+            LOG.debug("shutting down, waiting for %d worker(s)...", len(worker_pool))
             # use shutdown_delay to avoid cutting off connections
             deadline = time() + shutdown_delay
+            # wait for all running workers to exit
             while time() < deadline:
-                # wait for all running workers to exit
+                serv_job.worker_complete.clear()
                 if all(w.done for w in worker_pool):
                     break
-                sleep(0.1)
+                serv_job.worker_complete.wait(max(deadline - time(), 0))
             else:  # pragma: no cover
+                # reached deadline force close workers
                 worker_pool = list(w for w in worker_pool if not w.done)
                 LOG.debug("closing remaining %d worker(s)", len(worker_pool))
                 for worker in worker_pool:
