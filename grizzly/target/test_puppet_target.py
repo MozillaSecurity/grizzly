@@ -108,19 +108,21 @@ def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, clo
 
 
 @mark.parametrize(
-    "healthy, usage, os_name, killed",
+    "healthy, usage, os_name, killed, debugger",
     [
         # skip sending SIGABRT on unsupported OSs
-        (True, [(1234, 90)], "Windows", 0),
+        (True, [(1234, 90)], "Windows", 0, Debugger.NONE),
         # skip idle check if target is in a bad state
-        (False, [], "Linux", 0),
+        (False, [], "Linux", 0, Debugger.NONE),
         # send SIGABRT to hung process
-        (True, [(234, 10), (236, 75), (238, 60)], "Linux", 1),
+        (True, [(234, 10), (236, 75), (238, 60)], "Linux", 1, Debugger.NONE),
+        # Don't send SIGABRT when using a debugger
+        (True, [(236, 75)], "Linux", 0, Debugger.RR),
         # ignore idle timeout (close don't abort)
-        (True, [(234, 10)], "Linux", 0),
+        (True, [(234, 10)], "Linux", 0, Debugger.NONE),
     ],
 )
-def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed):
+def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed, debugger):
     """test PuppetTarget.handle_hang()"""
     mocker.patch(
         "grizzly.target.puppet_target.system", autospec=True, return_value=os_name
@@ -134,6 +136,7 @@ def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed):
     fake_ffp.return_value.cpu_usage.return_value = usage
     fake_ffp.return_value.is_healthy.return_value = healthy
     with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+        target._debugger = debugger
         target.handle_hang()
     assert fake_ffp.return_value.is_healthy.call_count == 1
     assert fake_ffp.return_value.close.call_count == 1

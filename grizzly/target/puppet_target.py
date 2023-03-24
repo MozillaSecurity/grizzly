@@ -82,7 +82,7 @@ class PuppetTarget(Target):
         "XPCOM_DEBUG_BREAK",
     )
 
-    __slots__ = ("use_valgrind", "_extension", "_prefs", "_puppet")
+    __slots__ = ("use_valgrind", "_debugger", "_extension", "_prefs", "_puppet")
 
     def __init__(self, binary, launch_timeout, log_limit, memory_limit, **kwds):
         super().__init__(
@@ -93,20 +93,20 @@ class PuppetTarget(Target):
             assets=kwds.pop("assets", None),
         )
         # TODO: clean up handling debuggers
-        debugger = Debugger.NONE
+        self._debugger = Debugger.NONE
         if kwds.pop("pernosco", False):
-            debugger = Debugger.PERNOSCO
+            self._debugger = Debugger.PERNOSCO
         if kwds.pop("rr", False):
-            debugger = Debugger.RR
+            self._debugger = Debugger.RR
         if kwds.pop("valgrind", False):
             self.use_valgrind = True
-            debugger = Debugger.VALGRIND
+            self._debugger = Debugger.VALGRIND
         self._extension = None
         self._prefs = None
 
         # create Puppet object
         self._puppet = FFPuppet(
-            debugger=debugger,
+            debugger=self._debugger,
             headless=kwds.pop("headless", None),
             working_path=str(grz_tmp("target")),
         )
@@ -202,7 +202,7 @@ class PuppetTarget(Target):
                     # don't send SIGABRT if process is idle
                     LOG.debug("ignoring idle hang (%0.1f%%)", cpu)
                     was_idle = True
-                elif system() == "Linux":
+                elif system() == "Linux" and self._debugger == Debugger.NONE:
                     # sending SIGABRT is only supported on Linux for now
                     # TODO: add/test on other OSs
                     LOG.debug("sending SIGABRT to %r (%0.1f%%)", pid, cpu)
