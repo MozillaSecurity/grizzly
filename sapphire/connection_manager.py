@@ -95,8 +95,7 @@ class ConnectionManager:
         assert max_workers > 0
         assert shutdown_delay >= 0
         launches = 0
-        worker_pool = []
-        pool_size = 0
+        workers = []
         start_time = time()
         LOG.debug("starting listener (max workers %d)", max_workers)
         try:
@@ -105,47 +104,43 @@ class ConnectionManager:
                     continue
                 worker = Worker.launch(serv_sock, serv_job)
                 if worker is not None:
-                    worker_pool.append(worker)
-                    pool_size += 1
+                    workers.append(worker)
                     launches += 1
-                # manage worker pool
-                if pool_size >= max_workers:
-                    LOG.debug(
-                        "pool size: %d, waiting for worker to finish...", pool_size
-                    )
-                    serv_job.worker_complete.wait()
+                # manage workers
+                if len(workers) >= max_workers:
+                    LOG.debug("max worker limit (%d) hit, waiting...", len(workers))
+                    assert serv_job.worker_complete.wait(300)
                     serv_job.worker_complete.clear()
-                    LOG.debug("removing completed workers from worker pool")
+                    LOG.debug("removing completed workers...")
                     # sometimes the thread that triggered the event doesn't quite
                     # cleanup in time, so retry (10x with 0.5 second sleep on failure)
                     for _ in range(10):
-                        worker_pool = list(w for w in worker_pool if not w.done)
-                        pool_size = len(worker_pool)
-                        if pool_size < max_workers:
+                        workers = list(w for w in workers if not w.done)
+                        if len(workers) < max_workers:
                             break
                         sleep(0.5)  # pragma: no cover
                     else:  # pragma: no cover
                         # this should never happen
-                        raise RuntimeError("Failed to trim worker pool!")
-                    LOG.debug("trimmed worker pool (size: %d)", pool_size)
+                        raise RuntimeError("Failed remove workers!")
+                    LOG.debug("removed completed workers (%d active)", len(workers))
         except Exception:  # pylint: disable=broad-except
             if serv_job.exceptions.empty():
                 serv_job.exceptions.put(exc_info())
             serv_job.finish()
         finally:
             LOG.debug("%d requests in %0.3f seconds", launches, time() - start_time)
-            LOG.debug("shutting down, waiting for %d worker(s)...", len(worker_pool))
+            LOG.debug("shutting down, waiting for %d worker(s)...", len(workers))
             # use shutdown_delay to avoid cutting off connections
             deadline = time() + shutdown_delay
             # wait for all running workers to exit
             while time() < deadline:
                 serv_job.worker_complete.clear()
-                if all(w.done for w in worker_pool):
+                if all(w.done for w in workers):
                     break
                 serv_job.worker_complete.wait(max(deadline - time(), 0))
             else:  # pragma: no cover
                 # reached deadline force close workers
-                worker_pool = list(w for w in worker_pool if not w.done)
-                LOG.debug("closing remaining %d worker(s)", len(worker_pool))
-                for worker in worker_pool:
+                workers = list(w for w in workers if not w.done)
+                LOG.debug("closing remaining %d worker(s)", len(workers))
+                for worker in workers:
                     worker.close()
