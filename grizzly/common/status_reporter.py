@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import timedelta
 from functools import partial
 from itertools import zip_longest
-from logging import DEBUG, INFO, basicConfig
+from logging import DEBUG, INFO, basicConfig, getLogger
 
 try:
     from os import getloadavg
@@ -35,6 +35,8 @@ from .status import (
 __all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
+
+LOG = getLogger(__name__)
 
 
 class StatusReporter:
@@ -847,7 +849,7 @@ def main(args=None):
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
     else:
         log_level = INFO
-        log_fmt = "[%(asctime)s] %(message)s"
+        log_fmt = "%(message)s"
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
     modes = {
@@ -920,20 +922,21 @@ def main(args=None):
         return 0
 
     if not reporter.reports:
-        print("Grizzly Status - No status reports to display")
+        LOG.info("Grizzly Status - No status reports to display")
         return 0
 
-    print(
-        f"Grizzly Status - {strftime('%Y/%m/%d %X')} - "
-        f"Instance report frequency: {REPORT_RATE}s\n"
+    LOG.info(
+        "Grizzly Status - %s - Instance report frequency: %ds\n",
+        strftime("%Y/%m/%d %X"),
+        REPORT_RATE,
     )
-    print("[Reports]")
-    print(reporter.specific())
+    LOG.info("[Reports]")
+    LOG.info(reporter.specific())
     if reporter.has_results:
-        print("[Result Signatures]")
-        print(reporter.results())
-    print("[Summary]")
-    print(reporter.summary(rate=args.type == "active", sysinfo=args.system_report))
+        LOG.info("[Result Signatures]")
+        LOG.info(reporter.results())
+    LOG.info("[Summary]")
+    LOG.info(reporter.summary(rate=args.type == "active", sysinfo=args.system_report))
     return 0
 
 
