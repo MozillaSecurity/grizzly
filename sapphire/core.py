@@ -184,7 +184,7 @@ class Sapphire:
             tuple(int, tuple(str)): Status code and files served.
         """
         assert isinstance(path, Path)
-        LOG.debug("serving '%s' (forever=%r)", path, forever)
+        LOG.debug("serving '%s' (forever=%r, timeout=%r)", path, forever, self.timeout)
         job = Job(
             path,
             auto_close=self._auto_close,
