@@ -274,7 +274,10 @@ class Worker:
             job.accepting.clear()
             w_thread.start()
             return cls(conn, w_thread)
-        except (sock_error, sock_timeout) as exc:
+        except sock_timeout:
+            # no connections to accept
+            pass
+        except sock_error as exc:
             LOG.debug("worker thread not launched: %s", exc)
             if conn is not None:  # pragma: no cover
                 conn.close()
