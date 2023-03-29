@@ -127,7 +127,7 @@ def test_worker_05(mocker, tmp_path, req, response):
 def test_worker_06(mocker):
     """test Worker.handle_request() socket errors"""
     serv_con = mocker.Mock(spec_set=socket.socket)
-    serv_con.recv.side_effect = socket.error
+    serv_con.recv.side_effect = OSError
     serv_job = mocker.Mock(spec_set=Job)
     Worker.handle_request(serv_con, serv_job)
     assert serv_job.accepting.set.call_count == 1

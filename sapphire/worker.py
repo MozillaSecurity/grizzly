@@ -7,8 +7,7 @@ Sapphire HTTP server worker
 from logging import getLogger
 from re import compile as re_compile
 from socket import SHUT_RDWR
-from socket import error as sock_error
-from socket import timeout as sock_timeout
+from socket import timeout as sock_timeout  # Py3.10 socket.timeout => TimeoutError
 from sys import exc_info
 from threading import Thread, ThreadError, active_count
 from time import sleep
@@ -238,7 +237,7 @@ class Worker:
                 LOG.debug("200 %r (%d to go)", request.url.path, serv_job.pending)
                 serv_job.mark_served(resource.target)
 
-        except (sock_error, sock_timeout):
+        except (OSError, sock_timeout):
             _, exc_obj, exc_tb = exc_info()
             LOG.debug("%r - line %r", exc_obj, exc_tb.tb_lineno if exc_tb else None)
             if not finish_job:
@@ -277,7 +276,7 @@ class Worker:
         except sock_timeout:
             # no connections to accept
             pass
-        except sock_error as exc:
+        except OSError as exc:
             LOG.debug("worker thread not launched: %s", exc)
             if conn is not None:  # pragma: no cover
                 conn.close()
