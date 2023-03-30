@@ -45,6 +45,7 @@ class TestCase:
         "input_fname",
         "landing_page",
         "redirect_page",
+        "server_port",
         "time_limit",
         "timestamp",
         "_data_path",
@@ -72,6 +73,7 @@ class TestCase:
             self.redirect_page = self.sanitize_path(redirect_page)
         else:
             self.redirect_page = None
+        self.server_port = None
         self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
         self._files = TestFileMap(optional=[], required=[])
@@ -204,6 +206,7 @@ class TestCase:
         result.env_vars = dict(self.env_vars)
         result.hang = self.hang
         result.host_alias = self.host_alias
+        result.server_port = self.server_port
 
         # copy test data files
         for entry, required in chain(
@@ -289,6 +292,8 @@ class TestCase:
             # TODO: this could include more than just host_alias
             if self.host_alias is not None:
                 info["host_alias"] = self.host_alias
+            if self.server_port is not None:
+                info["server_port"] = self.server_port
             # save target assets and update meta data
             if self.assets and not self.assets.is_empty():
                 info["assets_path"] = "_assets_"
@@ -424,6 +429,7 @@ class TestCase:
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
         test.host_alias = info.get("host_alias", None)
+        test.server_port = info.get("server_port", None)
         test.add_from_file(
             entry_point, file_name=test.landing_page, required=True, copy=copy
         )

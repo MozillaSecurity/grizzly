@@ -25,11 +25,11 @@ class Sapphire:
     __slots__ = ("_auto_close", "_max_workers", "_socket", "_timeout")
 
     def __init__(
-        self, allow_remote=False, auto_close=-1, max_workers=10, port=0, timeout=60
+        self, allow_remote=False, auto_close=-1, max_workers=10, port=None, timeout=60
     ):
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
-        self._socket = Sapphire._create_listening_socket(allow_remote, port=port)
+        self._socket = Sapphire._create_listening_socket(allow_remote, port=port or 0)
         self._timeout = None
         self.timeout = timeout
 

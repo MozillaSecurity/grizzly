@@ -45,7 +45,15 @@ class Adapter(metaclass=ABCMeta):
     # close it.
     TIME_LIMIT = DEFAULT_TIME_LIMIT
 
-    __slots__ = ("_harness", "fuzz", "monitor", "name", "remaining")
+    __slots__ = (
+        "_harness",
+        "fuzz",
+        "host_alias",
+        "monitor",
+        "name",
+        "remaining",
+        "server_port",
+    )
 
     def __init__(self, name):
         assert isinstance(name, str)
@@ -55,9 +63,11 @@ class Adapter(metaclass=ABCMeta):
             raise AdapterError("name must not contain whitespace")
         self._harness = None
         self.fuzz = {}
+        self.host_alias = None
         self.monitor = None
         self.name = name
         self.remaining = None
+        self.server_port = None
 
     def cleanup(self):
         """Automatically called once at shutdown. Used internally by Grizzly.

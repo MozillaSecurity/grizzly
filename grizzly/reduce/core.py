@@ -842,7 +842,11 @@ class ReduceManager:
             target.process_assets()
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
-            with Sapphire(auto_close=1, timeout=timeout) as server:
+            with Sapphire(
+                auto_close=1,
+                port=testcases[0].server_port,
+                timeout=timeout,
+            ) as server:
                 target.reverse(server.port, server.port)
                 mgr = ReduceManager(
                     args.ignore,

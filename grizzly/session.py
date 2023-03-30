@@ -222,7 +222,9 @@ class Session:
             current_test.duration = result.duration
             current_test.assets = self.target.assets
             current_test.env_vars = self.target.filtered_environ()
-            current_test.host_alias = self.host_alias
+            if self.host_alias is not None:
+                current_test.host_alias = self.host_alias
+                current_test.server_port = self.server.port
             # adapter callbacks
             if result.timeout:
                 current_test.hang = True

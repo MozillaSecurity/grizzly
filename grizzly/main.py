@@ -95,6 +95,11 @@ def main(args):
         # launch http server used to serve test cases
         LOG.debug("starting Sapphire server")
         with Sapphire(auto_close=1, timeout=timeout) as server:
+            if args.host_alias is not None:
+                LOG.debug("setting adapter.host_alias=%r", args.host_alias)
+                adapter.host_alias = args.host_alias
+                LOG.debug("setting adapter.port=%d", server.port)
+                adapter.server_port = server.port
             target.reverse(server.port, server.port)
             LOG.debug("initializing the Session")
             with Session(
