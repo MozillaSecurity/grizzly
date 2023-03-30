@@ -278,14 +278,12 @@ class Worker:
             pass
         except OSError as exc:
             LOG.debug("worker thread not launched: %s", exc)
-            if conn is not None:  # pragma: no cover
-                conn.close()
         except ThreadError:
-            if conn is not None:  # pragma: no cover
-                conn.close()
             # reset accepting status
             job.accepting.set()
             LOG.warning("ThreadError (worker), threads: %d", active_count())
             # wait for system resources to free up
             sleep(0.1)
+        if conn is not None:
+            conn.close()
         return None
