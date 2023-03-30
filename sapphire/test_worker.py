@@ -45,20 +45,32 @@ def test_worker_02(mocker):
         worker.close()
 
 
-def test_worker_03(mocker):
-    """test Worker.launch() fail cases"""
+@mark.parametrize(
+    "exc",
+    [
+        socket.timeout("test"),
+        OSError("test"),
+    ],
+)
+def test_worker_03(mocker, exc):
+    """test Worker.launch() socket exception cases"""
+    mocker.patch("sapphire.worker.Thread", autospec=True)
     serv_con = mocker.Mock(spec_set=socket.socket)
     serv_job = mocker.Mock(spec_set=Job)
-    fake_thread = mocker.patch("sapphire.worker.Thread", autospec=True)
-    mocker.patch("sapphire.worker.sleep", autospec=True)
-
-    serv_con.accept.side_effect = socket.timeout
+    serv_con.accept.side_effect = exc
     assert Worker.launch(serv_con, serv_job) is None
+    assert serv_job.accepting.clear.call_count == 0
+    assert serv_job.accepting.set.call_count == 0
 
-    serv_con.accept.side_effect = None
+
+def test_worker_04(mocker):
+    """test Worker.launch() thread exception case"""
+    mocker.patch("sapphire.worker.sleep", autospec=True)
+    mocker.patch("sapphire.worker.Thread", side_effect=threading.ThreadError("test"))
+    serv_con = mocker.Mock(spec_set=socket.socket)
+    serv_job = mocker.Mock(spec_set=Job)
     conn = mocker.Mock(spec_set=socket.socket)
     serv_con.accept.return_value = (conn, None)
-    fake_thread.side_effect = threading.ThreadError
     assert Worker.launch(serv_con, serv_job) is None
     assert conn.close.call_count == 1
     assert serv_job.accepting.clear.call_count == 0
@@ -75,7 +87,7 @@ def test_worker_03(mocker):
         "http://sub.host:1234/testfile",
     ],
 )
-def test_worker_04(mocker, tmp_path, url):
+def test_worker_05(mocker, tmp_path, url):
     """test Worker.launch()"""
     (tmp_path / "testfile").touch()
     job = Job(tmp_path)
@@ -104,7 +116,7 @@ def test_worker_04(mocker, tmp_path, url):
         (b"BAD / HTTP/1.1", b"405 Method Not Allowed"),
     ],
 )
-def test_worker_05(mocker, tmp_path, req, response):
+def test_worker_06(mocker, tmp_path, req, response):
     """test Worker.launch() with invalid/unsupported requests"""
     (tmp_path / "testfile").touch()
     job = Job(tmp_path)
@@ -124,7 +136,7 @@ def test_worker_05(mocker, tmp_path, req, response):
     assert response in clnt_sock.sendall.call_args[0][0]
 
 
-def test_worker_06(mocker):
+def test_worker_07(mocker):
     """test Worker.handle_request() socket errors"""
     serv_con = mocker.Mock(spec_set=socket.socket)
     serv_con.recv.side_effect = OSError
