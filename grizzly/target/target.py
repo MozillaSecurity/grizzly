@@ -123,7 +123,7 @@ class Target(metaclass=ABCMeta):
         return dict(self.environ)
 
     @abstractmethod
-    def handle_hang(self, ignore_idle=True):
+    def handle_hang(self, ignore_idle=True, ignore_timeout=False):
         pass
 
     # TODO: move to monitor?
