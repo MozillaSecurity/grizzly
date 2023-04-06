@@ -24,7 +24,7 @@ class SimpleTarget(Target):
     def create_report(self, is_hang=False):
         pass
 
-    def handle_hang(self, ignore_idle=True):
+    def handle_hang(self, ignore_idle=True, ignore_timeout=False):
         pass
 
     def launch(self, location):

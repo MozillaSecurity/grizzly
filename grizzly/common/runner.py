@@ -298,7 +298,9 @@ class Runner:
             )
         if result.timeout:
             LOG.debug("timeout detected")
-            result.idle = self._target.handle_hang(ignore_idle=True)
+            result.idle = self._target.handle_hang(
+                ignore_idle=True, ignore_timeout="timeout" in ignore
+            )
             if result.idle or "timeout" in ignore:
                 result.status = Result.IGNORED
             server_map.dynamic.pop("grz_empty", None)

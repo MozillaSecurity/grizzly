@@ -192,7 +192,13 @@ class PuppetTarget(Target):
                 result = Result.FOUND
         return result
 
-    def handle_hang(self, ignore_idle=True):
+    def handle_hang(self, ignore_idle=True, ignore_timeout=False):
+        # only send SIGABRT in certain case
+        send_abort = (
+            not ignore_timeout
+            and system() == "Linux"
+            and self._debugger == Debugger.NONE
+        )
         was_idle = False
         if self._puppet.is_healthy():
             proc_usage = sorted(self._puppet.cpu_usage(), key=lambda x: x[1])
@@ -202,7 +208,7 @@ class PuppetTarget(Target):
                     # don't send SIGABRT if process is idle
                     LOG.debug("ignoring idle hang (%0.1f%%)", cpu)
                     was_idle = True
-                elif system() == "Linux" and self._debugger == Debugger.NONE:
+                elif send_abort:
                     # sending SIGABRT is only supported on Linux for now
                     # TODO: add/test on other OSs
                     LOG.debug("sending SIGABRT to %r (%0.1f%%)", pid, cpu)
