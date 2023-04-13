@@ -7,6 +7,7 @@ Sapphire HTTP server
 from logging import getLogger
 from pathlib import Path
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
+from ssl import PROTOCOL_TLS_SERVER, SSLContext
 from time import sleep, time
 
 from .connection_manager import ConnectionManager
@@ -22,14 +23,26 @@ LOG = getLogger(__name__)
 class Sapphire:
     LISTEN_TIMEOUT = 0.25
 
-    __slots__ = ("_auto_close", "_max_workers", "_socket", "_timeout")
+    __slots__ = ("_auto_close", "_max_workers", "_socket", "_timeout", "scheme")
 
     def __init__(
-        self, allow_remote=False, auto_close=-1, max_workers=10, port=0, timeout=60
+        self,
+        allow_remote=False,
+        auto_close=-1,
+        certs=None,
+        max_workers=10,
+        port=0,
+        timeout=60,
     ):
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
-        self._socket = Sapphire._create_listening_socket(allow_remote, port=port)
+        self.scheme = "https" if certs else "http"
+        self._socket = Sapphire._create_listening_socket(
+            allow_remote,
+            cert=certs.host if certs else None,
+            prv_key=certs.key if certs else None,
+            port=port,
+        )
         self._timeout = None
         self.timeout = timeout
 
@@ -40,15 +53,24 @@ class Sapphire:
         self.close()
 
     @staticmethod
-    def _create_listening_socket(remote, port=0, attempts=10, timeout=LISTEN_TIMEOUT):
+    def _create_listening_socket(
+        remote,
+        attempts=10,
+        cert=None,
+        port=0,
+        prv_key=None,
+        timeout=LISTEN_TIMEOUT,
+    ):
         """Create listening socket. Search for an open socket if needed and
         and configure the socket. If a specific port is unavailable or no
         available ports can be found socket.error will be raised.
 
         Args:
             remote (bool): Accept all (non-local) incoming connections.
-            port (int): Port to listen on. Use 0 for system assigned port.
             attempts (int): Number of attempts to configure the socket.
+            cert (Path): Certificate file.
+            port (int): Port to listen on. Use 0 for system assigned port.
+            prv_key (Path): Private keyfile.
             timeout (float): Used to set socket timeout.
 
         Returns:
@@ -57,6 +79,7 @@ class Sapphire:
         assert attempts > 0
         assert port >= 0
         assert timeout > 0
+        assert (cert and prv_key) or not (cert or prv_key)
 
         # see: searchfox.org/mozilla-central/source/netwerk/base/nsIOService.cpp
         # include ports above 1024
@@ -104,6 +127,11 @@ class Sapphire:
             break
         else:
             raise RuntimeError("Could not find available port")
+
+        if cert:
+            context = SSLContext(PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(cert, prv_key)
+            return context.wrap_socket(sock, server_side=True)
         return sock
 
     def clear_backlog(self):
