@@ -91,6 +91,7 @@ class PuppetTarget(Target):
             log_limit,
             memory_limit,
             assets=kwds.pop("assets", None),
+            certs=kwds.pop("certs", None),
         )
         # TODO: clean up handling debuggers
         self._debugger = Debugger.NONE
@@ -328,6 +329,7 @@ class PuppetTarget(Target):
                 prefs_js=self._prefs,
                 extension=self._extension,
                 env_mod=env_mod,
+                cert_files=[self.certs.root] if self.certs else None,
             )
         except LaunchError as exc:
             self.close()

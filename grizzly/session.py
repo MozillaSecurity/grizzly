@@ -194,8 +194,9 @@ class Session:
                     "/grz_start",
                     self.server.port,
                     close_after=relaunch if harness else None,
-                    time_limit=time_limit if harness else None,
                     post_launch_delay=post_launch_delay,
+                    scheme=self.server.scheme,
+                    time_limit=time_limit if harness else None,
                 )
                 with self.status.measure("launch"):
                     runner.launch(location, max_retries=launch_attempts, retry_delay=0)

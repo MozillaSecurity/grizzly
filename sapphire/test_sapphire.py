@@ -14,6 +14,8 @@ from urllib.parse import quote, urlparse
 
 from pytest import mark, raises
 
+from grizzly.common.utils import CertificateBundle
+
 from .core import Sapphire
 from .job import Served
 from .server_map import ServerMap
@@ -56,6 +58,7 @@ def test_sapphire_00(client, tmp_path):
     """test requesting a single file"""
     with Sapphire(timeout=10) as serv:
         assert serv.timeout == 10
+        assert serv.scheme == "http"
         test = _create_test("test_case.html", tmp_path)
         client.launch("127.0.0.1", serv.port, [test])
         assert serv.serve_path(tmp_path)[0] == Served.ALL
@@ -796,6 +799,14 @@ def test_sapphire_35(client, tmp_path):
     assert client.wait(timeout=10)
     assert test.code == 200
     assert test.len_srv == test.len_org
+
+
+def test_sapphire_36(tmp_path):
+    """test Sapphire with certificates"""
+    certs = CertificateBundle.create(path=tmp_path)
+    with Sapphire(timeout=10, certs=certs) as serv:
+        assert serv.scheme == "https"
+    certs.cleanup()
 
 
 def test_main_01(mocker, tmp_path):
