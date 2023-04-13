@@ -21,6 +21,7 @@ from ..common.runner import Runner
 from ..common.status import SimpleStatus
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import (
+    CertificateBundle,
     ConfigError,
     Exit,
     configure_logging,
@@ -339,6 +340,7 @@ class ReplayManager:
                         self.server.port,
                         close_after=relaunch * test_count if self._harness else None,
                         post_launch_delay=post_launch_delay,
+                        scheme=self.server.scheme,
                         time_limit=time_limit if self._harness else None,
                     )
                     runner.launch(location, max_retries=launch_attempts)
@@ -608,6 +610,7 @@ class ReplayManager:
             LOG.error("Error: %s", str(exc))
             return Exit.ERROR
 
+        certs = None
         results = None
         target = None
         try:
@@ -633,6 +636,9 @@ class ReplayManager:
                 args.min_crashes,
                 relaunch,
             )
+            if args.use_https or testcases[0].https:
+                certs = CertificateBundle.create()
+                LOG.info("HTTPS enabled")
             LOG.debug("initializing the Target")
             target = load_plugin(args.platform, "grizzly_targets", Target)(
                 args.binary,
@@ -640,6 +646,7 @@ class ReplayManager:
                 args.log_limit,
                 args.memory,
                 assets=assets,
+                certs=certs,
                 headless=args.headless,
                 pernosco=args.pernosco,
                 rr=args.rr,
@@ -656,7 +663,7 @@ class ReplayManager:
 
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
-            with Sapphire(auto_close=1, timeout=timeout) as server:
+            with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
                 target.reverse(server.port, server.port)
                 with cls(
                     args.ignore,
@@ -730,4 +737,6 @@ class ReplayManager:
                 testcase.cleanup()
             if assets:
                 assets.cleanup()
+            if certs is not None:
+                certs.cleanup()
             LOG.info("Done.")

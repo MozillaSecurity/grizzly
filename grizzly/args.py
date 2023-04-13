@@ -180,6 +180,11 @@ class CommonArgs:
             " Typically this should be '--time-limit' + a few seconds."
             f" (default: '--test-limit' + {TIMEOUT_DELAY}s)",
         )
+        self.launcher_grp.add_argument(
+            "--use-https",
+            action="store_true",
+            help="Enable HTTPS. (default: %(default)s)",
+        )
         if system().startswith("Linux"):
             self.launcher_grp.add_argument(
                 "--xvfb", action="store_true", help="DEPRECATED. Use Xvfb."

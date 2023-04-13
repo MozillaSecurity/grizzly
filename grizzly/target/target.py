@@ -7,7 +7,7 @@ from logging import getLogger
 from os import environ
 from threading import Lock
 
-from ..common.utils import grz_tmp
+from ..common.utils import CertificateBundle, grz_tmp
 from .assets import AssetManager
 
 __all__ = ("Result", "Target", "TargetError", "TargetLaunchError")
@@ -51,22 +51,33 @@ class Target(metaclass=ABCMeta):
         "_lock",
         "_monitor",
         "binary",
+        "certs",
         "environ",
         "launch_timeout",
         "log_limit",
         "memory_limit",
     )
 
-    def __init__(self, binary, launch_timeout, log_limit, memory_limit, assets=None):
+    def __init__(
+        self,
+        binary,
+        launch_timeout,
+        log_limit,
+        memory_limit,
+        assets=None,
+        certs=None,
+    ):
         assert launch_timeout > 0
         assert log_limit >= 0
         assert memory_limit >= 0
         assert binary is not None and binary.is_file()
         assert assets is None or isinstance(assets, AssetManager)
+        assert certs is None or isinstance(certs, CertificateBundle)
         self._assets = assets if assets else AssetManager(base_path=grz_tmp("target"))
         self._lock = Lock()
         self._monitor = None
         self.binary = binary
+        self.certs = certs
         self.environ = self.scan_environment(dict(environ), self.TRACKED_ENVVARS)
         self.launch_timeout = launch_timeout
         self.log_limit = log_limit

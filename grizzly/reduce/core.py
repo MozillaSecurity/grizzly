@@ -26,7 +26,13 @@ from ..common.reporter import (
 from ..common.status import STATUS_DB_REDUCE, ReductionStatus
 from ..common.status_reporter import ReductionStatusReporter
 from ..common.storage import TestCaseLoadFailure
-from ..common.utils import ConfigError, Exit, configure_logging, time_limits
+from ..common.utils import (
+    CertificateBundle,
+    ConfigError,
+    Exit,
+    configure_logging,
+    time_limits,
+)
 from ..replay import ReplayManager
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
@@ -779,6 +785,7 @@ class ReduceManager:
             LOG.info("Running with Valgrind. This will be SLOW!")
 
         assets = None
+        certs = None
         signature = None
         signature_desc = None
         target = None
@@ -816,9 +823,13 @@ class ReduceManager:
             # check test time limit and timeout
             # TODO: add support for test time limit, use timeout in both cases for now
             _, timeout = time_limits(args.timeout, args.timeout, tests=testcases)
-
             args.repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, args.repeat)
+
+            if args.use_https or testcases[0].https:
+                certs = CertificateBundle.create()
+                LOG.info("HTTPS enabled")
+
             LOG.debug("initializing the Target")
             target = load_plugin(args.platform, "grizzly_targets", Target)(
                 args.binary,
@@ -826,6 +837,7 @@ class ReduceManager:
                 args.log_limit,
                 args.memory,
                 assets=assets,
+                certs=certs,
                 headless=args.headless,
                 pernosco=args.pernosco,
                 rr=args.rr,
@@ -842,7 +854,7 @@ class ReduceManager:
             target.process_assets()
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
-            with Sapphire(auto_close=1, timeout=timeout) as server:
+            with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
                 target.reverse(server.port, server.port)
                 mgr = ReduceManager(
                     args.ignore,
@@ -905,4 +917,6 @@ class ReduceManager:
                 testcase.cleanup()
             if assets:
                 assets.cleanup()
+            if certs is not None:
+                certs.cleanup()
             LOG.info("Done.")

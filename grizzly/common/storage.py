@@ -41,6 +41,7 @@ class TestCase:
         "duration",
         "env_vars",
         "hang",
+        "https",
         "input_fname",
         "landing_page",
         "redirect_page",
@@ -64,6 +65,7 @@ class TestCase:
         self.duration = None
         self.env_vars = {}
         self.hang = False
+        self.https = False
         self.input_fname = input_fname  # file that was used to create the test case
         self.landing_page = self.sanitize_path(landing_page)
         if redirect_page is not None:
