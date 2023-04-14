@@ -10,7 +10,7 @@ from platform import system
 
 from .common.plugins import scan as scan_plugins
 from .common.plugins import scan_target_assets
-from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY
+from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, __version__
 
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
@@ -179,6 +179,13 @@ class CommonArgs:
             " the target will be closed."
             " Typically this should be '--time-limit' + a few seconds."
             f" (default: '--test-limit' + {TIMEOUT_DELAY}s)",
+        )
+        self.launcher_grp.add_argument(
+            "--version",
+            "-V",
+            action="version",
+            version=__version__ if __version__ else "Unknown - Package not installed.",
+            help="Show version number",
         )
         if system().startswith("Linux"):
             self.launcher_grp.add_argument(
