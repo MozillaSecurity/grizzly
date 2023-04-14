@@ -14,7 +14,7 @@ from zipfile import BadZipfile, ZipFile
 from zlib import error as zlib_error
 
 from ..target import AssetError, AssetManager
-from .utils import grz_tmp
+from .utils import __version__, grz_tmp
 
 __all__ = ("TestCase", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
@@ -46,6 +46,7 @@ class TestCase:
         "redirect_page",
         "time_limit",
         "timestamp",
+        "version",
         "_data_path",
         "_files",
     )
@@ -72,6 +73,7 @@ class TestCase:
             self.redirect_page = None
         self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
+        self.version = __version__
         self._files = TestFileMap(optional=[], required=[])
         self._data_path = Path(mkdtemp(prefix="testcase_", dir=grz_tmp("storage")))
 
@@ -281,6 +283,7 @@ class TestCase:
                 "target": self.landing_page,
                 "time_limit": self.time_limit,
                 "timestamp": self.timestamp,
+                "version": self.version,
             }
             # save target assets and update meta data
             if self.assets and not self.assets.is_empty():
@@ -416,6 +419,7 @@ class TestCase:
         )
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
+        test.version = info.get("version", None)
         test.add_from_file(
             entry_point, file_name=test.landing_page, required=True, copy=copy
         )

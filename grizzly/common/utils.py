@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from enum import IntEnum, unique
+from importlib.metadata import PackageNotFoundError, version
 from logging import DEBUG, basicConfig, getLogger
 from math import ceil
 from os import getenv
@@ -20,6 +21,12 @@ __all__ = (
 )
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
+
+try:
+    __version__ = version("grizzly-framework")
+except PackageNotFoundError:  # pragma: no cover
+    # package is not installed
+    __version__ = None
 
 DEFAULT_TIME_LIMIT = 30
 GRZ_TMP = Path(getenv("GRZ_TMP", gettempdir()), "grizzly")
