@@ -32,8 +32,7 @@ class TargetMonitor(metaclass=ABCMeta):
         log_file = self.clone_log(log_id, offset=offset)
         if log_file:
             try:
-                with open(log_file, "rb") as log_fp:
-                    data = log_fp.read()
+                data = log_file.read_bytes()
             finally:
                 remove(log_file)
         return data

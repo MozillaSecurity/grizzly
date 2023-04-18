@@ -5,7 +5,6 @@ from abc import ABCMeta, abstractmethod
 from enum import Enum, unique
 from logging import getLogger
 from os import environ
-from os.path import isfile
 from threading import Lock
 
 from ..common.utils import grz_tmp
@@ -62,7 +61,7 @@ class Target(metaclass=ABCMeta):
         assert launch_timeout > 0
         assert log_limit >= 0
         assert memory_limit >= 0
-        assert binary is not None and isfile(binary)
+        assert binary is not None and binary.is_file()
         assert assets is None or isinstance(assets, AssetManager)
         self._assets = assets if assets else AssetManager(base_path=grz_tmp("target"))
         self._lock = Lock()

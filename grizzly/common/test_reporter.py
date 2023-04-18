@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly Reporter"""
 # pylint: disable=protected-access
+from pathlib import Path
 
 from FTB.ProgramConfiguration import ProgramConfiguration
 from pytest import mark, raises
@@ -69,7 +70,7 @@ def test_filesystem_reporter_01(tmp_path):
     report_path = tmp_path / "reports"
     report_path.mkdir()
     reporter = FilesystemReporter(report_path)
-    reporter.submit([], Report(log_path, "fake_bin"))
+    reporter.submit([], Report(log_path, Path("bin")))
     buckets = tuple(report_path.iterdir())
     # check major bucket
     assert len(buckets) == 1
@@ -92,7 +93,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     report_path = tmp_path / "reports"
     assert not report_path.exists()
     reporter = FilesystemReporter(report_path)
-    reporter.submit(tests, Report(log_path, "fake_bin"))
+    reporter.submit(tests, Report(log_path, Path("bin")))
     assert not log_path.exists()
     assert report_path.exists()
     assert len(tuple(report_path.iterdir())) == 1
@@ -102,7 +103,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     tests = list(mocker.Mock(spec_set=TestCase, timestamp=1) for _ in range(2))
-    reporter.submit(tests, Report(log_path, "fake_bin"))
+    reporter.submit(tests, Report(log_path, Path("bin")))
     assert all(x.dump.call_count == 1 for x in tests)
     assert len(tuple(report_path.iterdir())) == 2
     assert len(tuple(report_path.glob("NO_STACK"))) == 1
@@ -117,7 +118,7 @@ def test_filesystem_reporter_03(tmp_path):
     reporter = FilesystemReporter(tmp_path / "reports")
     reporter.min_space = 2**50
     with raises(RuntimeError, match="Low disk space: "):
-        reporter.submit([], Report(log_path, "fake_bin"))
+        reporter.submit([], Report(log_path, Path("bin")))
 
 
 def test_filesystem_reporter_04(mocker, tmp_path):
@@ -208,7 +209,7 @@ def test_fuzzmanager_reporter_02(
         test_cases.append(fake_test)
     reporter = FuzzManagerReporter("fake-tool")
     reporter.force_report = force
-    reporter.submit(test_cases, Report(log_path, "fake_bin", is_hang=True))
+    reporter.submit(test_cases, Report(log_path, Path("bin"), is_hang=True))
     assert not log_path.is_dir()
     assert fake_collector.call_args == ({"tool": "fake-tool"},)
     if (frequent and not force) or ignored:
@@ -262,5 +263,5 @@ def test_failed_launch_reporter_01(mocker, tmp_path):
     report_path.mkdir()
     (report_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (report_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    FailedLaunchReporter().submit([], Report(report_path, "fake_bin"))
+    FailedLaunchReporter().submit([], Report(report_path, Path("bin")))
     assert any(gtp.glob("*_logs"))

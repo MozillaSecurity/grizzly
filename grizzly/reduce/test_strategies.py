@@ -5,6 +5,7 @@
 """Unit tests for `grizzly.reduce.strategies`."""
 from collections import namedtuple
 from logging import getLogger
+from pathlib import Path
 
 from pytest import mark, raises
 
@@ -163,7 +164,7 @@ def test_list(
                 log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
-                report = Report(log_path, "bin")
+                report = Report(log_path, Path("bin"))
                 return [
                     ReplayResult(report, [["test.html"]] * len(testcases), [], True)
                 ]
@@ -346,7 +347,7 @@ def test_purge_unserved(
         log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
-        report = Report(log_path, "bin")
+        report = Report(log_path, Path("bin"))
         return [ReplayResult(report, served.pop(0), [], True)]
 
     replayer.run.side_effect = replay_run
@@ -407,7 +408,7 @@ def test_dd_only(mocker, tmp_path):
                 log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir()
                 _fake_save_logs_foo(log_path)
-                report = Report(log_path, "bin")
+                report = Report(log_path, Path("bin"))
                 return [ReplayResult(report, [["test.html", "other.html"]], [], True)]
         return []
 

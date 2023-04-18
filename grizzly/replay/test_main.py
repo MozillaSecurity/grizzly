@@ -4,6 +4,8 @@
 """
 unit tests for grizzly.replay.main
 """
+from pathlib import Path
+
 from pytest import mark
 
 from sapphire import Served
@@ -36,7 +38,9 @@ def test_main_01(mocker, server, tmp_path):
     server.serve_path.return_value = (Served.ALL, ["test.html"])
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
-    target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
+    target = mocker.Mock(
+        spec_set=Target, binary=Path("bin"), environ={}, launch_timeout=30
+    )
     target.assets = mocker.Mock(spec_set=AssetManager)
     target.check_result.side_effect = (Result.FOUND, Result.NONE, Result.FOUND)
     target.filtered_environ.return_value = {"ENV": "123"}
@@ -108,7 +112,9 @@ def test_main_02(mocker, server, tmp_path, repro_results):
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server.serve_path.return_value = (Served.ALL, ["test.html"])
     # setup Target
-    target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
+    target = mocker.Mock(
+        spec_set=Target, binary=Path("bin"), environ={}, launch_timeout=30
+    )
     target.check_result.side_effect = repro_results
     target.filtered_environ.return_value = {}
     target.save_logs = _fake_save_logs
@@ -263,7 +269,9 @@ def test_main_05(mocker, server, tmp_path):
     """test ReplayManager.main() loading specified assets"""
     server.serve_path.return_value = (None, ["test.html"])
     # setup Target
-    target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
+    target = mocker.NonCallableMock(
+        spec_set=Target, binary=Path("bin"), launch_timeout=30
+    )
     target.check_result.return_value = Result.FOUND
     target.filtered_environ.return_value = {}
     target.monitor.is_healthy.return_value = False
@@ -389,7 +397,9 @@ def test_main_07(mocker, server, tmp_path):
     reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
-    target = mocker.Mock(spec_set=Target, binary="bin", environ={}, launch_timeout=30)
+    target = mocker.Mock(
+        spec_set=Target, binary=Path("bin"), environ={}, launch_timeout=30
+    )
     target.assets = mocker.Mock(spec_set=AssetManager)
     target.check_result.side_effect = (Result.FOUND,)
     target.save_logs = _fake_save_logs

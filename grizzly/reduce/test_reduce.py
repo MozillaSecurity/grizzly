@@ -8,6 +8,7 @@ from collections import namedtuple
 from functools import partial, wraps
 from itertools import count
 from logging import getLogger
+from pathlib import Path
 
 from pytest import mark, param, raises
 
@@ -29,7 +30,7 @@ pytestmark = mark.usefixtures(
 )
 
 
-def _fake_save_logs_foo(result_logs, meta=False):  # pylint: disable=unused-argument
+def _fake_save_logs_foo(result_logs):
     """write fake log data to disk"""
     (result_logs / "log_stderr.txt").write_text("STDERR log\n")
     (result_logs / "log_stdout.txt").write_text("STDOUT log\n")
@@ -41,7 +42,7 @@ def _fake_save_logs_foo(result_logs, meta=False):  # pylint: disable=unused-argu
     )
 
 
-def _fake_save_logs_bar(result_logs, meta=False):  # pylint: disable=unused-argument
+def _fake_save_logs_bar(result_logs):
     """write fake log data to disk"""
     (result_logs / "log_stderr.txt").write_text("STDERR log\n")
     (result_logs / "log_stdout.txt").write_text("STDOUT log\n")
@@ -290,7 +291,7 @@ def test_analysis(
                 log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
                 log_path.mkdir(exist_ok=True)
                 _fake_save_logs_foo(log_path)
-                report = Report(log_path, "bin")
+                report = Report(log_path, Path("bin"))
                 results.append(ReplayResult(report, [["test.html"]], [], True))
         return results
 
@@ -553,7 +554,7 @@ def test_repro(
                     _fake_save_logs_foo(log_path)
                 else:
                     _fake_save_logs_bar(log_path)
-                report = Report(log_path, "bin")
+                report = Report(log_path, Path("bin"))
                 return [ReplayResult(report, [["test.html"]], [], expected)]
         return []
 
@@ -623,7 +624,7 @@ def test_report_01(mocker, tmp_path):
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
-            report = Report(log_path, "bin")
+            report = Report(log_path, Path("bin"))
             return [ReplayResult(report, [["test.html"]], [], True)]
         return []
 
@@ -694,7 +695,7 @@ def test_report_02(mocker, tmp_path):
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
-            report = Report(log_path, "bin")
+            report = Report(log_path, Path("bin"))
             return [ReplayResult(report, [["test.html"]], [], True)]
         return []
 
@@ -766,7 +767,7 @@ def test_quality_update(mocker, tmp_path):
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
-            report = Report(log_path, "bin")
+            report = Report(log_path, Path("bin"))
             return [ReplayResult(report, [["test.html"]], [], True)]
         return []
 
@@ -829,7 +830,7 @@ def test_include_assets_and_environ(mocker, tmp_path):
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
-            report = Report(log_path, "bin")
+            report = Report(log_path, Path("bin"))
             return [ReplayResult(report, [["test.html"]], [], True)]
         return []
 
@@ -966,7 +967,7 @@ def test_timeout_update(
         log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
-        report = Report(log_path, "bin")
+        report = Report(log_path, Path("bin"))
         return [ReplayResult(report, [["test.html"]], durations, interesting)]
 
     replayer.run.side_effect = replay_run

@@ -21,7 +21,7 @@ from .replay import ReplayManager, ReplayResult
 pytestmark = mark.usefixtures("patch_collector", "tmp_path_grz_tmp")
 
 
-def _fake_save_logs(result_logs, _meta=False):
+def _fake_save_logs(result_logs):
     """write fake log data to disk"""
     log_path = Path(result_logs)
     (log_path / "log_stderr.txt").write_text("STDERR log\n")
@@ -56,7 +56,9 @@ def test_replay_01(mocker, server):
 def test_replay_02(mocker, server):
     """test ReplayManager.run() - no repro - with repeats"""
     server.serve_path.return_value = (Served.ALL, ["index.html"])
-    target = mocker.Mock(spec_set=Target, closed=False, launch_timeout=30)
+    target = mocker.Mock(
+        spec_set=Target, binary=Path("bin"), closed=False, launch_timeout=30
+    )
     target.check_result.return_value = Result.NONE
     target.monitor.is_healthy.return_value = False
     iter_cb = mocker.Mock()
@@ -110,14 +112,14 @@ def test_replay_04(mocker, server, good_sig):
     """test ReplayManager.run() - successful repro"""
     served = ["index.html"]
     server.serve_path.return_value = (Served.ALL, served)
-    target = mocker.Mock(spec_set=Target, binary="C:\\fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
     if good_sig:
         target.save_logs = _fake_save_logs
     else:
 
-        def _save_logs(result_logs, _meta=False):
+        def _save_logs(result_logs):
             """create uninteresting logs"""
             log_path = Path(result_logs)
             (log_path / "log_stderr.txt").write_text("STDERR log\n")
@@ -150,7 +152,9 @@ def test_replay_04(mocker, server, good_sig):
 
 def test_replay_05(mocker, server):
     """test ReplayManager.run() - error - landing page not requested"""
-    target = mocker.Mock(spec_set=Target, binary="bin", closed=True, launch_timeout=30)
+    target = mocker.Mock(
+        spec_set=Target, binary=Path("bin"), closed=True, launch_timeout=30
+    )
     tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
     # test target unresponsive
     target.check_result.return_value = Result.NONE
@@ -182,7 +186,7 @@ def test_replay_05(mocker, server):
 def test_replay_06(mocker, server):
     """test ReplayManager.run()
     delayed failure - following test landing page not requested"""
-    target = mocker.Mock(spec_set=Target, binary="bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     type(target).closed = mocker.PropertyMock(side_effect=(True, False, True))
     target.check_result.side_effect = (Result.NONE, Result.FOUND)
     target.monitor.is_healthy.return_value = False
@@ -220,7 +224,7 @@ def test_replay_08(mocker, server):
     """test ReplayManager.run() - early exit"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server.serve_path.return_value = (Served.ALL, ["a.html"])
-    target = mocker.Mock(spec_set=Target, binary="path/fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.save_logs = _fake_save_logs
     tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
     # early failure
@@ -293,7 +297,7 @@ def test_replay_09(mocker, server):
     server.serve_path.return_value = (Served.ALL, ["a.html"])
     signature = mocker.Mock()
     signature.matches.side_effect = (True, False, False)
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
     with ReplayManager(
@@ -327,7 +331,7 @@ def test_replay_10(mocker, server):
     server.serve_path.return_value = (Served.ALL, ["a.html"])
     sig = mocker.Mock(spec_set=CrashSignature)
     sig.matches.side_effect = (True, True)
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
     tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
@@ -356,7 +360,7 @@ def test_replay_11(mocker, server):
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2)
     server.serve_path.return_value = (Served.ALL, ["a.html"])
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
     tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
@@ -384,7 +388,7 @@ def test_replay_12(mocker, server):
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2)
     server.serve_path.return_value = (Served.ALL, ["a.html"])
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.side_effect = (
         Result.NONE,
         Result.FOUND,
@@ -408,7 +412,7 @@ def test_replay_12(mocker, server):
 def test_replay_13(mocker, server):
     """test ReplayManager.run() - any crash - startup failure"""
     server.serve_path.return_value = (Served.NONE, [])
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.save_logs = _fake_save_logs
     target.monitor.is_healthy.return_value = False
@@ -441,7 +445,7 @@ def test_replay_14(mocker, server):
     fake_report.side_effect = (report_1, report_2, report_3)
     fake_report.calc_hash.return_value = "bucket_hash"
     server.serve_path.return_value = (Served.ALL, ["a.html"])
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
     tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
@@ -468,7 +472,7 @@ def test_replay_15(mocker, server):
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_0,)
     server.serve_path.side_effect = ((Served.ALL, ["a.html"]), KeyboardInterrupt)
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
     with ReplayManager(
@@ -532,7 +536,7 @@ def test_replay_18(mocker, server):
         (Served.ALL, ["1.html"]),
         (Served.ALL, ["2.html"]),
     )
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.side_effect = (
         Result.NONE,
         Result.NONE,
@@ -636,10 +640,10 @@ def test_replay_21(mocker, tmp_path):
     # failure
     fake_load.return_value = ()
     with raises(TestCaseLoadFailure, match="Failed to load TestCases"):
-        ReplayManager.load_testcases(str(tmp_path))
+        ReplayManager.load_testcases(tmp_path)
     # success
     fake_load.return_value = [test0, test1]
-    tests, assets, env_vars = ReplayManager.load_testcases(str(tmp_path))
+    tests, assets, env_vars = ReplayManager.load_testcases(tmp_path)
     assert env_vars
     assert env_vars["env"] == "var"
     assert not any(x.env_vars for x in tests)
@@ -650,7 +654,7 @@ def test_replay_21(mocker, tmp_path):
     # success select
     test0.pop_assets.return_value = mocker.Mock(spec_set=AssetManager)
     fake_load.return_value = [test0, test1, test2, mocker.MagicMock(spec_set=TestCase)]
-    tests, assets, _ = ReplayManager.load_testcases(str(tmp_path), subset=[1, 3])
+    tests, assets, _ = ReplayManager.load_testcases(tmp_path, subset=[1, 3])
     assert len(tests) == 2
     assert tests[0].landing_page == "x.html"
     assert test0.cleanup.call_count == 1
@@ -662,7 +666,7 @@ def test_replay_21(mocker, tmp_path):
     # select (first and last) with invalid input
     test0.pop_assets.return_value = None
     fake_load.return_value = [test0, test1, test2]
-    tests, _a, _e = ReplayManager.load_testcases(str(tmp_path), subset=[0, 10, -10, -1])
+    tests, _a, _e = ReplayManager.load_testcases(tmp_path, subset=[0, 10, -10, -1])
     assert len(tests) == 2
     assert test0.cleanup.call_count == 0
     assert test1.cleanup.call_count == 1
@@ -701,7 +705,7 @@ def test_replay_22(
         signature.rawSignature = "fakesig"
     else:
         signature = None
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.handle_hang.return_value = False
     target.save_logs = _fake_save_logs
@@ -778,13 +782,13 @@ def test_replay_24(mocker, server, tmp_path):
     sig = CrashSignature.fromFile(str(sig_file))
 
     server.serve_path.return_value = (Served.ALL, ["index.html"])
-    target = mocker.MagicMock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.MagicMock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
 
     call_count = 0
 
-    def _save_logs_variation(result_logs, _meta=False):
+    def _save_logs_variation(result_logs):
         """create different stacks each call"""
         nonlocal call_count
         call_count += 1
@@ -842,11 +846,11 @@ def test_replay_25(mocker, server, stderr_log, ignored, total, include_stack):
     assert iters == ignored + total, "test is broken"
     assert iters == len(include_stack), "test is broken"
     server.serve_path.return_value = (Served.ALL, ["index.html"])
-    target = mocker.Mock(spec_set=Target, binary="fake_bin", launch_timeout=30)
+    target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
 
-    def _save_logs_variation(result_logs, _meta=False):
+    def _save_logs_variation(result_logs):
         """create logs"""
         nonlocal stderr_log
         nonlocal include_stack

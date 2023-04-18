@@ -130,9 +130,9 @@ class PuppetTarget(Target):
         return self._puppet.reason is not None
 
     def create_report(self, is_hang=False):
-        logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
+        logs = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
         self.save_logs(logs)
-        return Report(Path(logs), self.binary, is_hang=is_hang)
+        return Report(logs, self.binary, is_hang=is_hang)
 
     def filtered_environ(self):
         # remove context specific entries from environment

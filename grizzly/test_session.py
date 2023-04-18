@@ -6,6 +6,7 @@
 unit tests for grizzly.Session
 """
 from itertools import chain, count, repeat
+from pathlib import Path
 
 from pytest import mark, raises
 
@@ -222,7 +223,7 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters, has
             log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
             log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
             log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19\n")
-    report = Report(log_path, "bin")
+    report = Report(log_path, Path("bin"))
     target.create_report.return_value = report
     with Session(
         adapter, reporter, server, target, relaunch=relaunch, report_size=report_size

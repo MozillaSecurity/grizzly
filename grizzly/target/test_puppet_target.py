@@ -20,7 +20,7 @@ def test_puppet_target_01(mocker, tmp_path):
     fake_ffp.return_value.log_length.return_value = 562
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         assert target.assets
         assert target.closed
         assert target.launch_timeout == 300
@@ -31,11 +31,11 @@ def test_puppet_target_01(mocker, tmp_path):
         fake_ffp.return_value.log_length.assert_any_call("stderr")
         fake_ffp.return_value.log_length.assert_any_call("stdout")
         assert target.monitor is not None
-        target.save_logs("fake_dest")
+        target.save_logs(tmp_path / "fake_dest")
         assert fake_ffp.return_value.save_logs.call_count == 1
     assert fake_ffp.return_value.clean_up.call_count == 1
     # with extra args
-    with PuppetTarget(str(fake_file), 1, 1, 1, rr=True, fake=1) as target:
+    with PuppetTarget(fake_file, 1, 1, 1, rr=True, fake=1) as target:
         pass
 
 
@@ -45,7 +45,7 @@ def test_puppet_target_02(mocker, tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     # test providing prefs.js
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         # launch success
         target.launch("launch_target_page")
         assert fake_ffp.return_value.launch.call_count == 1
@@ -102,7 +102,7 @@ def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, clo
         fake_ffp.return_value.available_logs.return_value = "ffp_worker_log_size"
     fake_ffp.return_value.is_healthy.return_value = healthy
     fake_ffp.return_value.reason = reason
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         assert target.check_result(ignore) == result
     assert fake_ffp.return_value.close.call_count == closes
 
@@ -135,7 +135,7 @@ def test_puppet_target_04(mocker, tmp_path, healthy, usage, os_name, killed, deb
     fake_file.touch()
     fake_ffp.return_value.cpu_usage.return_value = usage
     fake_ffp.return_value.is_healthy.return_value = healthy
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         target._debugger = debugger
         target.handle_hang()
     assert fake_ffp.return_value.is_healthy.call_count == 1
@@ -162,7 +162,7 @@ def test_puppet_target_05(mocker, tmp_path):
     fake_time = mocker.patch("grizzly.target.puppet_target.time", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    target = PuppetTarget(str(fake_file), 300, 25, 5000)
+    target = PuppetTarget(fake_file, 300, 25, 5000)
     fake_kill = mocker.patch("grizzly.target.puppet_target.kill", autospec=True)
     # not running
     fake_ffp.return_value.get_pid.return_value = None
@@ -264,7 +264,7 @@ def test_puppet_target_06(mocker, tmp_path):
     fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         assert not target.is_idle(0)
         assert not target.is_idle(25)
         assert target.is_idle(50)
@@ -275,7 +275,7 @@ def test_puppet_target_07(mocker, tmp_path):
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         fake_ffp.return_value.is_running.return_value = False
         fake_ffp.return_value.is_healthy.return_value = False
         assert target.monitor is not None
@@ -299,7 +299,7 @@ def test_puppet_target_08(mocker, tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.write_text("1\n2\n")
     # no prefs file provided
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         assert target.assets.get("prefs") is None
         target.process_assets()
         assert isfile(target.assets.get("prefs"))
@@ -307,14 +307,14 @@ def test_puppet_target_08(mocker, tmp_path):
     # prefs file provided
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("prefs", str(fake_file))
-        with PuppetTarget(str(fake_file), 300, 25, 5000, assets=assets) as target:
+        with PuppetTarget(fake_file, 300, 25, 5000, assets=assets) as target:
             target.process_assets()
             assert isfile(target.assets.get("prefs"))
             assert target.assets.get("prefs").endswith("fake")
     # abort tokens file provided
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("abort-tokens", str(fake_file))
-        with PuppetTarget(str(fake_file), 300, 25, 5000, assets=assets) as target:
+        with PuppetTarget(fake_file, 300, 25, 5000, assets=assets) as target:
             # ignore E1101: (pylint 2.9.3 bug?)
             #    Method 'add_abort_token' has no 'call_count' member (no-member)
             # pylint: disable=no-member
@@ -346,7 +346,7 @@ def test_puppet_target_09(
     fake_file = tmp_path / "fake"
     fake_file.touch()
     with PuppetTarget(
-        str(fake_file), 30, 25, 500, pernosco=pernosco, rr=rr, valgrind=valgrind
+        fake_file, 30, 25, 500, pernosco=pernosco, rr=rr, valgrind=valgrind
     ) as _:
         pass
     if pernosco:
@@ -383,7 +383,7 @@ def test_puppet_target_10(tmp_path, asset, env):
         if asset:
             supp_asset.touch()
             assets.add("lsan-suppressions", str(supp_asset))
-        with PuppetTarget(str(fake_file), 300, 25, 5000, assets=assets) as target:
+        with PuppetTarget(fake_file, 300, 25, 5000, assets=assets) as target:
             target.environ["TSAN_OPTIONS"] = "a=1"
             if env:
                 supp_env.touch()
@@ -404,7 +404,7 @@ def test_puppet_target_11(tmp_path):
     """test PuppetTarget.filtered_environ()"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         target.environ = {
             "TRACKED": "1",
             "ASAN_OPTIONS": "external_symbolizer_path='a':no_remove='b'",
@@ -438,7 +438,7 @@ def test_puppet_target_12(tmp_path, base, extra, result):
     """test PuppetTarget.merge_environment()"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         target.environ = base
         target.merge_environment(extra)
         assert target.environ == result
@@ -459,7 +459,7 @@ def test_puppet_target_13(tmp_path, base, extra, result):
     """test PuppetTarget.merge_environment() - merge sanitizer options"""
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         target.environ = base
         target.merge_environment(extra)
         for opt in target.environ["ASAN_OPTIONS"].split(":"):
@@ -471,5 +471,5 @@ def test_puppet_target_14(mocker, tmp_path):
     mocker.patch("grizzly.target.puppet_target.system", return_value="foo")
     fake_file = tmp_path / "fake"
     fake_file.touch()
-    with PuppetTarget(str(fake_file), 300, 25, 5000) as target:
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
         target.dump_coverage()
