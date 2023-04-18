@@ -48,7 +48,7 @@ class ReplayResult:
 
 
 class ReplayManager:
-    HARNESS_FILE = str(Path(__file__).parent / ".." / "common" / "harness.html")
+    HARNESS_FILE = Path(__file__).parent.parent / "common" / "harness.html"
 
     __slots__ = (
         "ignore",
@@ -81,8 +81,7 @@ class ReplayManager:
         self._relaunch = relaunch
         self._signature = signature
         if use_harness:
-            with open(self.HARNESS_FILE, "rb") as in_fp:
-                self._harness = in_fp.read()
+            self._harness = self.HARNESS_FILE.read_bytes()
         else:
             # target must relaunch every iteration when not using harness
             assert relaunch == 1
@@ -401,10 +400,10 @@ class ReplayManager:
                     # update console to show progress
                     LOG.info("Processing result...")
                     # TODO: use self.target.create_report here
-                    log_path = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
+                    log_path = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
                     self.target.save_logs(log_path)
                     report = Report(
-                        Path(log_path), self.target.binary, is_hang=run_result.timeout
+                        log_path, self.target.binary, is_hang=run_result.timeout
                     )
                     # check signatures
                     if run_result.timeout:

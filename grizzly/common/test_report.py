@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly Report"""
 # pylint: disable=protected-access
+from pathlib import Path
 
 from FTB.Signatures.CrashInfo import CrashInfo
 from pytest import mark, raises
@@ -23,7 +24,7 @@ def test_report_01(tmp_path):
     (tmp_path / "not_a_log.txt").touch()
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    report = Report(tmp_path, "a.bin", size_limit=0)
+    report = Report(tmp_path, Path("a.bin"), size_limit=0)
     assert report._target_binary.name == "a.bin"
     assert report.path == tmp_path
     assert report._logs.aux is None
@@ -43,7 +44,7 @@ def test_report_02(tmp_path):
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     _create_crash_log(tmp_path / "log_asan_blah.txt")
-    report = Report(tmp_path, "bin")
+    report = Report(tmp_path, Path("bin"))
     assert report.path == tmp_path
     assert report._logs.aux.name == "log_asan_blah.txt"
     assert report._logs.stderr.name == "log_stderr.txt"
@@ -249,7 +250,7 @@ def test_report_10(tmp_path):
     (tmp_path / "unrelated.txt").write_bytes(b"nothing burger\n" * 200)
     (tmp_path / "rr-trace").mkdir()
     size_limit = len("STDERR log\n")
-    report = Report(tmp_path, "bin", size_limit=size_limit)
+    report = Report(tmp_path, Path("bin"), size_limit=size_limit)
     assert report.path == tmp_path
     assert report._logs.aux is None
     assert report._logs.stderr.name == "log_stderr.txt"
@@ -281,7 +282,7 @@ def test_report_12(tmp_path):
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     _create_crash_log(tmp_path / "log_asan_blah.txt")
     # no binary.fuzzmanagerconf
-    report = Report(tmp_path, target_binary="fake_bin")
+    report = Report(tmp_path, Path("bin"))
     assert report._crash_info is None
     assert report.crash_info is not None
     assert report._crash_info is not None
@@ -291,7 +292,7 @@ def test_report_12(tmp_path):
         conf.write(b"platform = x86-64\n")
         conf.write(b"product = mozilla-central\n")
         conf.write(b"os = linux\n")
-    report = Report(tmp_path, target_binary=str(tmp_path / "fake_bin"))
+    report = Report(tmp_path, Path("bin"))
     assert report._crash_info is None
     assert report.crash_info is not None
     assert report._crash_info is not None
@@ -323,7 +324,7 @@ def test_report_13(mocker, tmp_path, sig_cache, has_sig):
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     if has_sig:
         _create_crash_log(tmp_path / "log_asan_blah.txt")
-    report = Report(tmp_path, "bin")
+    report = Report(tmp_path, Path("bin"))
     assert report._signature is None
     if has_sig:
         assert report.crash_signature

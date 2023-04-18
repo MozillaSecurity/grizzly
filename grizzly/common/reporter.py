@@ -187,7 +187,7 @@ class FuzzManagerReporter(Reporter):
         """Perform FuzzManager sanity check.
 
         Args:
-            bin_file (str): Binary file being tested.
+            bin_file (Path): Binary file being tested.
 
         Returns:
             None
@@ -196,7 +196,7 @@ class FuzzManagerReporter(Reporter):
             raise OSError(f"Missing: {FuzzManagerReporter.FM_CONFIG}")
         if not Path(f"{bin_file}.fuzzmanagerconf").is_file():
             raise OSError(f"Missing: {bin_file}.fuzzmanagerconf")
-        ProgramConfiguration.fromBinary(bin_file)
+        ProgramConfiguration.fromBinary(str(bin_file))
 
     def add_extra_metadata(self, key, value):
         """Add extra metadata to be reported with any CrashEntrys reported.

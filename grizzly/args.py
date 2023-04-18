@@ -4,7 +4,7 @@
 from argparse import ArgumentParser, HelpFormatter
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import getenv
-from os.path import exists, isfile
+from os.path import exists
 from pathlib import Path
 from platform import system
 
@@ -53,7 +53,7 @@ class CommonArgs:
         if not targets:
             self.parser.error("No Platforms (Targets) are installed")
 
-        self.parser.add_argument("binary", help="Firefox binary to run")
+        self.parser.add_argument("binary", type=Path, help="Firefox binary to run")
         self.parser.add_argument(
             "--log-level",
             choices=sorted(self._level_map),
@@ -250,8 +250,8 @@ class CommonArgs:
         return args
 
     def sanity_check(self, args):
-        if not isfile(args.binary):
-            self.parser.error(f"file not found: {args.binary!r}")
+        if not args.binary.is_file():
+            self.parser.error(f"file not found: '{args.binary!s}'")
 
         if args.launch_attempts < 1:
             self.parser.error("--launch-attempts must be >= 1")

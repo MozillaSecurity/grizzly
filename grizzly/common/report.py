@@ -51,12 +51,12 @@ class Report:
 
     def __init__(self, log_path, target_binary, is_hang=False, size_limit=MAX_LOG_SIZE):
         assert isinstance(log_path, Path)
-        assert isinstance(target_binary, str)
+        assert isinstance(target_binary, Path)
         self._crash_info = None
         self._logs = self._select_logs(log_path)
         assert self._logs is not None
         self._signature = None
-        self._target_binary = Path(target_binary)
+        self._target_binary = target_binary
         self.is_hang = is_hang
         self.path = log_path
         # tail files in log_path if needed
