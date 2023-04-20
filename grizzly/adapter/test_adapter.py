@@ -37,6 +37,7 @@ def test_adapter_01():
 def test_adapter_02(tmp_path):
     """test Adapter.enable_harness()"""
     adpt = SimpleAdapter("a")
+    assert not adpt.get_harness()
     # built-in harness
     adpt.enable_harness()
     assert adpt.get_harness()
@@ -44,7 +45,7 @@ def test_adapter_02(tmp_path):
     ext_harness_file = tmp_path / "ext_harness.html"
     test_data = b"external_harness_data"
     ext_harness_file.write_bytes(test_data)
-    adpt.enable_harness(str(ext_harness_file))
+    adpt.enable_harness(ext_harness_file)
     assert adpt.get_harness() == test_data
 
 

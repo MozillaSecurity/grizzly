@@ -16,6 +16,7 @@ __all__ = (
     "DEFAULT_TIME_LIMIT",
     "Exit",
     "grz_tmp",
+    "HARNESS_FILE",
     "time_limits",
     "TIMEOUT_DELAY",
 )
@@ -30,6 +31,7 @@ except PackageNotFoundError:  # pragma: no cover
 
 DEFAULT_TIME_LIMIT = 30
 GRZ_TMP = Path(getenv("GRZ_TMP", gettempdir()), "grizzly")
+HARNESS_FILE = Path(__file__).parent / "harness.html"
 LOG = getLogger(__name__)
 # TIMEOUT_DELAY is added to the test time limit to create the default timeout
 TIMEOUT_DELAY = 15

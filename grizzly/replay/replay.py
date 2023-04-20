@@ -21,6 +21,7 @@ from ..common.runner import Runner
 from ..common.status import SimpleStatus
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import (
+    HARNESS_FILE,
     ConfigError,
     Exit,
     configure_logging,
@@ -48,8 +49,6 @@ class ReplayResult:
 
 
 class ReplayManager:
-    HARNESS_FILE = Path(__file__).parent.parent / "common" / "harness.html"
-
     __slots__ = (
         "ignore",
         "server",
@@ -77,14 +76,11 @@ class ReplayManager:
         self.status = None
         self.target = target
         self._any_crash = any_crash
-        self._harness = None
+        self._harness = HARNESS_FILE.read_bytes() if use_harness else None
         self._relaunch = relaunch
         self._signature = signature
-        if use_harness:
-            self._harness = self.HARNESS_FILE.read_bytes()
-        else:
-            # target must relaunch every iteration when not using harness
-            assert relaunch == 1
+        # target must relaunch every iteration when not using harness
+        assert use_harness or relaunch == 1
 
     def __enter__(self):
         return self
