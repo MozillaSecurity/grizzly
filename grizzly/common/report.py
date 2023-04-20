@@ -386,7 +386,7 @@ class Report:
         # order by date hopefully the oldest log is the cause of the issue
         to_scan = sorted(files, key=lambda x: x.stat().st_mtime)
         if not to_scan:
-            LOG.warning("No files found in %r", path)
+            LOG.warning("No files found in '%s'", path)
             return None
         # look for file to use as aux log
         log_aux = cls._find_sanitizer(to_scan)
