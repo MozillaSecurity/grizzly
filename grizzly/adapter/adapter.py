@@ -4,7 +4,7 @@
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
 
-from grizzly.common.utils import DEFAULT_TIME_LIMIT
+from grizzly.common.utils import DEFAULT_TIME_LIMIT, HARNESS_FILE
 
 __all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"
@@ -25,8 +25,7 @@ class Adapter(metaclass=ABCMeta):
     operating correctly.
 
     Attributes:
-        _harness (str): Path to harness file that will be used. If None, no
-                        harness will be used.
+        _harness (Path): Harness file that will be used.
         fuzz (dict): Available as a safe scratch pad for the end-user.
         monitor (TargetMonitor): Used to provide Target status information to
                                  the adapter.
@@ -35,7 +34,6 @@ class Adapter(metaclass=ABCMeta):
                          remaining to process.
     """
 
-    HARNESS_FILE = str((Path(__file__).parent / "../common/harness.html").resolve())
     # Only report test cases with served content.
     IGNORE_UNSERVED = True
     # Maximum iterations between Target relaunches (<1 use default)
@@ -71,18 +69,17 @@ class Adapter(metaclass=ABCMeta):
         """
         self.shutdown()
 
-    def enable_harness(self, file_path=None):
+    def enable_harness(self, file_path=HARNESS_FILE):
         """Enable use of a harness during fuzzing. By default no harness is used.
         *** DO NOT OVERLOAD! ***
 
         Args:
-            file_path (str): Path to (html) file to use as a harness.
-                             If None the default harness is used.
+            file_path (StrPath): HTML file to use as a harness.
 
         Returns:
             None
         """
-        path = Path(self.HARNESS_FILE if file_path is None else file_path)
+        path = Path(file_path)
         assert path.is_file(), f"missing harness file '{path.resolve()}'"
         self._harness = path.read_bytes()
         assert self._harness, f"empty harness file '{path.resolve()}'"
