@@ -13,11 +13,84 @@ from time import sleep, time
 from .connection_manager import ConnectionManager
 from .job import Job, Served
 
+__all__ = (
+    "BLOCKED_PORTS",
+    "create_listening_socket",
+    "Sapphire",
+)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
+# collection of ports to avoid
+# see: searchfox.org/mozilla-central/source/netwerk/base/nsIOService.cpp
+# include ports above 1024
+BLOCKED_PORTS = (
+    1719,
+    1720,
+    1723,
+    2049,
+    3659,
+    4045,
+    5060,
+    5061,
+    6000,
+    6566,
+    6665,
+    6666,
+    6667,
+    6668,
+    6669,
+    6697,
+    10080,
+)
 LOG = getLogger(__name__)
+
+
+def create_listening_socket(attempts=10, port=0, remote=False, timeout=None):
+    """Create listening socket. Search for an open socket if needed and
+    and configure the socket. If a specific port is unavailable or no
+    available ports can be found socket.error will be raised.
+
+    Args:
+        attempts (int): Number of attempts to configure the socket.
+        port (int): Port to listen on. Use 0 for system assigned port.
+        remote (bool): Accept all (non-local) incoming connections.
+        timeout (float): Used to set socket timeout.
+
+    Returns:
+        socket: A listening socket.
+    """
+    assert attempts > 0
+    assert port >= 0
+    assert timeout is None or timeout > 0
+
+    for remaining in reversed(range(attempts)):
+        sock = socket()
+        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        if timeout is not None:
+            sock.settimeout(timeout)
+        # attempt to bind/listen
+        try:
+            sock.bind(("0.0.0.0" if remote else "127.0.0.1", port))
+            sock.listen(5)
+        except (OSError, PermissionError) as exc:
+            sock.close()
+            if remaining > 0:
+                LOG.debug("%s: %s", type(exc).__name__, exc)
+                sleep(0.1)
+                continue
+            raise
+        # avoid blocked ports
+        if port == 0 and sock.getsockname()[1] in BLOCKED_PORTS:
+            LOG.debug("bound to blocked port, retrying...")
+            sock.close()
+            continue
+        # success
+        break
+    else:
+        raise RuntimeError("Could not find available port")
+    return sock
 
 
 class Sapphire:
@@ -36,13 +109,20 @@ class Sapphire:
     ):
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
-        self.scheme = "https" if certs else "http"
-        self._socket = Sapphire._create_listening_socket(
-            allow_remote,
-            cert=certs.host if certs else None,
-            prv_key=certs.key if certs else None,
+        sock = create_listening_socket(
             port=port,
+            remote=allow_remote,
+            timeout=self.LISTEN_TIMEOUT,
         )
+        # enable https if certificates are provided
+        if certs:
+            context = SSLContext(PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(certs.host, certs.key)
+            self._socket = context.wrap_socket(sock, server_side=True)
+            self.scheme = "https"
+        else:
+            self._socket = sock
+            self.scheme = "http"
         self._timeout = None
         self.timeout = timeout
 
@@ -51,88 +131,6 @@ class Sapphire:
 
     def __exit__(self, *exc):
         self.close()
-
-    @staticmethod
-    def _create_listening_socket(
-        remote,
-        attempts=10,
-        cert=None,
-        port=0,
-        prv_key=None,
-        timeout=LISTEN_TIMEOUT,
-    ):
-        """Create listening socket. Search for an open socket if needed and
-        and configure the socket. If a specific port is unavailable or no
-        available ports can be found socket.error will be raised.
-
-        Args:
-            remote (bool): Accept all (non-local) incoming connections.
-            attempts (int): Number of attempts to configure the socket.
-            cert (Path): Certificate file.
-            port (int): Port to listen on. Use 0 for system assigned port.
-            prv_key (Path): Private keyfile.
-            timeout (float): Used to set socket timeout.
-
-        Returns:
-            socket: A listening socket.
-        """
-        assert attempts > 0
-        assert port >= 0
-        assert timeout > 0
-        assert (cert and prv_key) or not (cert or prv_key)
-
-        # see: searchfox.org/mozilla-central/source/netwerk/base/nsIOService.cpp
-        # include ports above 1024
-        blocked_ports = (
-            1719,
-            1720,
-            1723,
-            2049,
-            3659,
-            4045,
-            5060,
-            5061,
-            6000,
-            6566,
-            6665,
-            6666,
-            6667,
-            6668,
-            6669,
-            6697,
-            10080,
-        )
-
-        for remaining in reversed(range(attempts)):
-            sock = socket()
-            sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-            sock.settimeout(timeout)
-            # attempt to bind/listen
-            try:
-                sock.bind(("0.0.0.0" if remote else "127.0.0.1", port))
-                sock.listen(5)
-            except (OSError, PermissionError) as exc:
-                sock.close()
-                if remaining > 0:
-                    LOG.debug("%s: %s", type(exc).__name__, exc)
-                    sleep(0.1)
-                    continue
-                raise
-            # avoid blocked ports
-            if port == 0 and sock.getsockname()[1] in blocked_ports:
-                LOG.debug("bound to blocked port, retrying...")
-                sock.close()
-                continue
-            # success
-            break
-        else:
-            raise RuntimeError("Could not find available port")
-
-        if cert:
-            context = SSLContext(PROTOCOL_TLS_SERVER)
-            context.load_cert_chain(cert, prv_key)
-            return context.wrap_socket(sock, server_side=True)
-        return sock
 
     def clear_backlog(self):
         """Remove all pending connections from backlog. This should only be
