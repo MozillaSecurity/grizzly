@@ -16,7 +16,7 @@ from pytest import mark, raises
 
 from grizzly.common.utils import CertificateBundle
 
-from .core import Sapphire
+from .core import Sapphire, create_listening_socket
 from .job import Served
 from .server_map import ServerMap
 from .worker import Worker
@@ -728,12 +728,12 @@ def test_sapphire_30(client, tmp_path):
     ],
 )
 def test_sapphire_31(mocker, bind):
-    """test Sapphire._create_listening_socket()"""
+    """test create_listening_socket()"""
     fake_sleep = mocker.patch("sapphire.core.sleep", autospec=True)
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
     fake_sock.return_value.bind.side_effect = bind
     bind_calls = len(bind)
-    assert Sapphire._create_listening_socket(False)
+    assert create_listening_socket(timeout=0.25)
     assert fake_sock.return_value.close.call_count == bind_calls - 1
     assert fake_sock.return_value.setsockopt.call_count == bind_calls
     assert fake_sock.return_value.settimeout.call_count == bind_calls
@@ -752,22 +752,22 @@ def test_sapphire_31(mocker, bind):
     ],
 )
 def test_sapphire_32(mocker, bind, attempts, raised):
-    """test Sapphire._create_listening_socket() - bind/listen failure"""
+    """test create_listening_socket() - bind/listen failure"""
     mocker.patch("sapphire.core.sleep", autospec=True)
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
     fake_sock.return_value.bind.side_effect = bind
     with raises(raised):
-        Sapphire._create_listening_socket(False, attempts=attempts)
+        create_listening_socket(attempts=attempts)
     assert fake_sock.return_value.close.call_count == attempts
 
 
 def test_sapphire_33(mocker):
-    """test Sapphire._create_listening_socket() - fail to find port"""
+    """test create_listening_socket() - fail to find port"""
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
     # always choose a blocked port
     fake_sock.return_value.getsockname.return_value = (None, 6665)
     with raises(RuntimeError, match="Could not find available port"):
-        Sapphire._create_listening_socket(False, attempts=1)
+        create_listening_socket(attempts=1)
     assert fake_sock.return_value.listen.call_count == 1
     assert fake_sock.return_value.close.call_count == 1
 
