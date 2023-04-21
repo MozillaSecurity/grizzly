@@ -7,7 +7,7 @@ Sapphire HTTP server
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from .certificate_bundle import CertificateBundle
-from .core import Sapphire
+from .core import Sapphire, create_listening_socket
 from .job import Served
 from .server_map import ServerMap
 
@@ -16,6 +16,7 @@ __all__ = (
     "Sapphire",
     "Served",
     "ServerMap",
+    "create_listening_socket",
 )
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]

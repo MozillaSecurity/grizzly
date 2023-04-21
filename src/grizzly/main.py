@@ -24,6 +24,7 @@ from .common.utils import (
     package_version,
     time_limits,
 )
+from .services import WebServices
 from .session import LogRate, Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -64,6 +65,7 @@ def main(args: Namespace) -> int:
     adapter: Adapter | None = None
     certs: CertificateBundle | None = None
     complete_with_results = False
+    ext_services = None
     target: Target | None = None
     try:
         LOG.debug("initializing Adapter %r", args.adapter)
@@ -133,6 +135,9 @@ def main(args: Namespace) -> int:
         # launch http server used to serve test cases
         LOG.debug("starting Sapphire server")
         with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
+            if certs is not None:
+                ext_services = WebServices.start_services(certs.host, certs.key)
+
             target.reverse(server.port, server.port)
             LOG.debug("initializing the Session")
             with Session(
@@ -161,6 +166,7 @@ def main(args: Namespace) -> int:
                     log_rate=log_rate,
                     launch_attempts=args.launch_attempts,
                     post_launch_delay=args.post_launch_delay,
+                    services=ext_services,
                 )
                 complete_with_results = session.status.results.total > 0
 
@@ -181,6 +187,8 @@ def main(args: Namespace) -> int:
         if adapter is not None:
             LOG.debug("calling adapter.cleanup()")
             adapter.cleanup()
+        if ext_services is not None:
+            ext_services.cleanup()
         if certs is not None:
             certs.cleanup()
         LOG.info("Done.")
