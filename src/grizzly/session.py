@@ -19,11 +19,11 @@ if TYPE_CHECKING:
     from .adapter import Adapter
     from .common.reporter import Reporter
     from .common.storage import TestCase
+    from .services import WebServices
 
 __all__ = ("LogOutputLimiter", "Session", "SessionError")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
-
 
 LOG = getLogger(__name__)
 
@@ -167,6 +167,7 @@ class Session:
         log_rate: LogRate = LogRate.NORMAL,
         launch_attempts: int = 3,
         post_launch_delay: int = 0,
+        services: WebServices | None = None,
     ) -> None:
         assert iteration_limit >= 0
         assert launch_attempts > 0
@@ -190,6 +191,8 @@ class Session:
             self.iomanager.server_map.set_redirect(
                 "grz_start", "grz_harness", required=False
             )
+        if services:
+            services.map_locations(self.iomanager.server_map)
 
         log_limiter = LogOutputLimiter(rate=log_rate)
         # limit relaunch to max iterations if needed
