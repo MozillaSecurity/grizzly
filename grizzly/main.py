@@ -5,6 +5,7 @@ from logging import DEBUG, getLogger
 from os import getpid
 
 from sapphire import Sapphire
+from services import WebServices
 
 from .adapter import Adapter
 from .common.plugins import load as load_plugin
@@ -50,6 +51,7 @@ def main(args):
     adapter = None
     certs = None
     complete_with_results = False
+    ext_sevices = None
     target = None
     try:
         LOG.debug("initializing Adapter %r", args.adapter)
@@ -107,6 +109,10 @@ def main(args):
         # launch http server used to serve test cases
         LOG.debug("starting Sapphire server")
         with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
+            if certs is not None:
+                LOG.debug("starting additional web services")
+                ext_services = WebServices.start_services(certs.host, certs.key)
+
             target.reverse(server.port, server.port)
             LOG.debug("initializing the Session")
             with Session(
@@ -155,6 +161,8 @@ def main(args):
         if adapter is not None:
             LOG.debug("calling adapter.cleanup()")
             adapter.cleanup()
+        if ext_services is not None:
+            ext_services.cleanup()
         if certs is not None:
             certs.cleanup()
         LOG.info("Done.")
