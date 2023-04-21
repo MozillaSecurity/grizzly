@@ -9,6 +9,7 @@ from tempfile import mkdtemp
 from FTB.Signatures.CrashInfo import CrashSignature
 
 from sapphire import Sapphire, ServerMap
+from grizzly_services import WebServices
 
 from ..common.plugins import load as load_plugin
 from ..common.reporter import (
@@ -605,6 +606,7 @@ class ReplayManager:
         certs = None
         results = None
         target = None
+        ext_services = None
         try:
             if args.no_harness and len(testcases) > 1:
                 LOG.error(
@@ -660,6 +662,10 @@ class ReplayManager:
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
+                if certs is not None:
+                    LOG.debug("starting additional web services")
+                    ext_services = WebServices.start_services(certs.host, certs.key)
+
                 target.reverse(server.port, server.port)
                 with cls(
                     args.ignore,
@@ -735,4 +741,6 @@ class ReplayManager:
                 assets.cleanup()
             if certs is not None:
                 certs.cleanup()
+            if ext_services is not None:
+                ext_services.cleanup()
             LOG.info("Done.")
