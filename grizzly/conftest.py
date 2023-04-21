@@ -14,6 +14,7 @@ from .target import Target
 def session_setup(mocker):
     mocker.patch("grizzly.main.FuzzManagerReporter", autospec=True)
     mocker.patch("grizzly.main.Sapphire", autospec_set=True)
+    mocker.patch("grizzly.main.WebServices", autospec_set=True)
     adapter_cls = mocker.Mock(spec_set=Adapter)
     adapter_cls.return_value.RELAUNCH = Adapter.RELAUNCH
     adapter_cls.return_value.TIME_LIMIT = Adapter.TIME_LIMIT

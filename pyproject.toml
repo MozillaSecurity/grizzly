@@ -12,6 +12,7 @@ omit = [
     "*/resources/*",
     "*/.tox/*",
     "*/.egg/*",
+    "grizzly/services/webtransport/wpt_h3_server/*",
 ]
 
 [tool.coverage.report]
