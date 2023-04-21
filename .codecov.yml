@@ -1,3 +1,5 @@
+ignore:
+  - "grizzly/services/webtransport/wpt_h3_server"
 codecov:
   ci:
     - community-tc.services.mozilla.com
