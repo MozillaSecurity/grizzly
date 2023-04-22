@@ -9,7 +9,7 @@ from tempfile import mkdtemp
 from FTB.Signatures.CrashInfo import CrashSignature
 
 from sapphire import Sapphire, ServerMap
-from grizzly_services import WebServices
+from grizzly_services import WebServices, WebTransportServer
 
 from ..common.plugins import load as load_plugin
 from ..common.reporter import (
@@ -262,6 +262,7 @@ class ReplayManager:
         launch_attempts=3,
         on_iteration_cb=None,
         post_launch_delay=0,
+        services=None,
     ):
         """Run testcase replay.
 
@@ -309,6 +310,16 @@ class ReplayManager:
                 "grz_harness", lambda _: self._harness, mime_type="text/html"
             )
             server_map.set_redirect("grz_start", "grz_harness", required=False)
+
+        if services:
+            for service in services:
+                if isinstance(service, WebTransportServer):
+                    server_map.set_dynamic_response(
+                        "grz_webtransport_server",
+                        lambda _: b"https://127.0.0.1:%d" % (service.port,),
+                        mime_type="text/plain",
+                        required=False,
+                    )
 
         # track unprocessed results
         reports = {}
@@ -686,6 +697,7 @@ class ReplayManager:
                         min_results=args.min_crashes,
                         post_launch_delay=args.post_launch_delay,
                         repeat=repeat,
+                        services=ext_services.services if ext_services else None,
                     )
             # handle results
             success = any(x.expected for x in results)

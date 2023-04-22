@@ -16,7 +16,7 @@ class WebServices:
 
         Args:
             loop (AbstractEventLoop): Active asyncio event loop
-            services (dict): List of running services
+            services (list): List of running services
         """
         self._thread = thread
         self._loop = loop
@@ -24,7 +24,7 @@ class WebServices:
         self.services = services
 
     async def is_running(self):
-        for service in self.services.values():
+        for service in self.services:
             await service.is_running()
 
     def cleanup(self):
@@ -52,8 +52,7 @@ class WebServices:
         thread = Thread(target=loop.run_forever, daemon=True)
         thread.start()
 
-        services = {"wt": wt_service}
-        ext_services = cls(thread, loop, services)
+        ext_services = cls(thread, loop, [wt_service])
 
         # Ensure that all services have started.
         asyncio.run(ext_services.is_running())

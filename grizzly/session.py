@@ -4,6 +4,8 @@
 from logging import getLogger
 from time import time
 
+from grizzly_services import WebTransportServer
+
 from .common.iomanager import IOManager
 from .common.runner import Runner
 from .common.status import STATUS_DB_FUZZ, Status
@@ -150,6 +152,7 @@ class Session:
         display_mode=DISPLAY_NORMAL,
         launch_attempts=3,
         post_launch_delay=0,
+        services=None,
     ):
         assert iteration_limit >= 0
         assert launch_attempts > 0
@@ -173,6 +176,15 @@ class Session:
             self.iomanager.server_map.set_redirect(
                 "grz_start", "grz_harness", required=False
             )
+        if services:
+            for service in services:
+                if isinstance(service, WebTransportServer):
+                    self.iomanager.server_map.set_dynamic_response(
+                        "grz_webtransport_server",
+                        lambda _: b"https://127.0.0.1:%d" % (service.port,),
+                        mime_type="text/plain",
+                        required=False,
+                    )
 
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         # limit relaunch to max iterations if needed
