@@ -2,7 +2,7 @@ import argparse
 import asyncio
 import logging
 
-from .core import start_web_transport
+from .core import WebTransportServer
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +18,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     loop = asyncio.get_event_loop()
-    loop.create_task(start_web_transport(args.certificate, args.key))
+    wt_server = WebTransportServer()
+    loop.create_task(wt_server.start(args.certificate, args.key))
     try:
-        logging.info("Starting server on https://127.0.0.1:{}".format(wt_server.port))
+        logging.info(f"Starting server on https://127.0.0.1:{wt_server.port}")
         loop.run_forever()
     except KeyboardInterrupt:
         pass

@@ -2,9 +2,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import asyncio
+from logging import getLogger
 from threading import Thread
 
 from .webtransport import WebTransportServer
+
+LOG = getLogger(__name__)
 
 
 class WebServices:
@@ -17,9 +20,8 @@ class WebServices:
             thread (Thread): Active thread.
             loop (AbstractEventLoop): Active asyncio event loop.
         """
-        self._thread = thread
         self._loop = loop
-
+        self._thread = thread
         self.services = services
 
     def cleanup(self):
@@ -31,13 +33,18 @@ class WebServices:
 
     @classmethod
     def start_services(cls, cert, key):
-        services = []
+        LOG.debug("starting web services")
+
+        services = {}
         loop = asyncio.new_event_loop()
 
         # Start WebTransport service
         wt_service = WebTransportServer()
-        services.append({"name": "wt", "port": wt_service.port})
         loop.create_task(wt_service.start(cert, key))
+        # TODO: this fails if we open the socket in wt_service.start()
+        # I'm not sure how to use Events with async (haven't looked)
+        assert wt_service.port
+        services["wt"] = {"port": wt_service.port}
 
         thread = Thread(target=loop.run_forever, daemon=True)
         thread.start()

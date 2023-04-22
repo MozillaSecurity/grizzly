@@ -150,6 +150,7 @@ class Session:
         display_mode=DISPLAY_NORMAL,
         launch_attempts=3,
         post_launch_delay=0,
+        services=None,
     ):
         assert iteration_limit >= 0
         assert launch_attempts > 0
@@ -173,6 +174,14 @@ class Session:
             self.iomanager.server_map.set_redirect(
                 "grz_start", "grz_harness", required=False
             )
+        if services:
+            if "wt" in services:
+                self.iomanager.server_map.set_dynamic_response(
+                    "grz_webtransport_server",
+                    lambda _: b"https://127.0.0.1:%d" % (services["wt"]["port"],),
+                    mime_type="text/plain",
+                    required=False,
+                )
 
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         # limit relaunch to max iterations if needed

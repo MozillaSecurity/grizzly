@@ -51,7 +51,7 @@ def main(args):
     adapter = None
     certs = None
     complete_with_results = False
-    ext_sevices = None
+    ext_services = None
     target = None
     try:
         LOG.debug("initializing Adapter %r", args.adapter)
@@ -110,7 +110,6 @@ def main(args):
         LOG.debug("starting Sapphire server")
         with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
             if certs is not None:
-                LOG.debug("starting additional web services")
                 ext_services = WebServices.start_services(certs.host, certs.key)
 
             target.reverse(server.port, server.port)
@@ -141,6 +140,7 @@ def main(args):
                     display_mode=display_mode,
                     launch_attempts=args.launch_attempts,
                     post_launch_delay=args.post_launch_delay,
+                    services=ext_services.services if ext_services else None,
                 )
                 complete_with_results = session.status.results.total > 0
 

@@ -8,6 +8,7 @@ from aioquic.h3.connection import H3_ALPN
 from aioquic.quic.configuration import QuicConfiguration
 
 from sapphire import create_listening_socket
+
 from .wt_server import WebTransportProtocol
 
 LOG = getLogger(__name__)
@@ -19,6 +20,7 @@ class WebTransportServer:
         self.port = self._socket.getsockname()[1]
 
     async def start(self, cert, key):
+        # TODO: it'd be nice to open and close the socket here
         self._socket.close()
         configuration = QuicConfiguration(
             alpn_protocols=H3_ALPN,
@@ -26,7 +28,7 @@ class WebTransportServer:
             max_datagram_frame_size=65536,
         )
         configuration.load_cert_chain(cert, key)
-        LOG.info("Starting WebTransport service on port", self.port)
+        LOG.debug("starting WebTransport service on port %d", self.port)
         await serve(
             "127.0.0.1",
             self.port,
