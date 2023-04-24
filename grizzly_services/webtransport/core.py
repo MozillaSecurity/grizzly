@@ -18,8 +18,7 @@ LOG = getLogger(__name__)
 
 class WebTransportServer(GrizzlyBaseService):
     def __init__(self):
-        self._socket = create_listening_socket()
-        self._port = self._socket.getsockname()[1]
+        self._port = None
 
     @property
     def port(self):
@@ -53,7 +52,10 @@ class WebTransportServer(GrizzlyBaseService):
             cert (Path): Path to the certificate file
             key (Path): Path to the certificate's private key
         """
-        self._socket.close()
+        sock = create_listening_socket()
+        self._port = sock.getsockname()[1]
+        sock.close()
+
         configuration = QuicConfiguration(
             alpn_protocols=H3_ALPN,
             is_client=False,
