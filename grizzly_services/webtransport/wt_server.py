@@ -11,19 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: skip-file
 from collections import defaultdict
 from typing import Dict, Optional
 
 from aioquic.asyncio import QuicConnectionProtocol
 from aioquic.h3.connection import H3Connection
 from aioquic.h3.events import (
+    DatagramReceived,
     H3Event,
     HeadersReceived,
     WebTransportStreamDataReceived,
-    DatagramReceived,
 )
 from aioquic.quic.connection import stream_is_unidirectional
-from aioquic.quic.events import ProtocolNegotiated, StreamReset, QuicEvent
+from aioquic.quic.events import ProtocolNegotiated, QuicEvent, StreamReset
 
 
 class CounterHandler:

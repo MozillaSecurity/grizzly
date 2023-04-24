@@ -1,21 +1,23 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
 import asyncio
 
 from grizzly.common.utils import CertificateBundle
+
 from .core import WebServices
 
 
 def test_service_01():
-    """Verify that services are started and that event loop/thread are closed on cleanup"""
+    """Verify that services are started and shutdown gracefully"""
     cert = CertificateBundle.create()
     try:
         ext_services = WebServices.start_services(cert.host, cert.key)
-        assert len(ext_services.services.keys()) == 1
+        assert len(ext_services.services) == 1
 
         # Check that all services are running
-        for service in ext_services.services.values():
+        for service in ext_services.services:
             assert asyncio.run(service.is_running()) is True
 
         ext_services.cleanup()

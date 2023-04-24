@@ -8,8 +8,8 @@ from tempfile import mkdtemp
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
-from sapphire import Sapphire, ServerMap
 from grizzly_services import WebServices, WebTransportServer
+from sapphire import Sapphire, ServerMap
 
 from ..common.plugins import load as load_plugin
 from ..common.reporter import (

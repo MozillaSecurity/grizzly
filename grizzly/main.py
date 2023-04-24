@@ -4,8 +4,8 @@
 from logging import DEBUG, getLogger
 from os import getpid
 
-from sapphire import Sapphire
 from grizzly_services import WebServices
+from sapphire import Sapphire
 
 from .adapter import Adapter
 from .common.plugins import load as load_plugin

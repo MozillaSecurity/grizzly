@@ -5,13 +5,14 @@ import asyncio
 import ssl
 from logging import getLogger
 
-from aioquic.asyncio import serve, connect
+from aioquic.asyncio import connect, serve
 from aioquic.h3.connection import H3_ALPN
 from aioquic.quic.configuration import QuicConfiguration
 
 from sapphire import create_listening_socket
-from .wt_server import WebTransportProtocol
+
 from ..base import GrizzlyBaseService
+from .wt_server import WebTransportProtocol
 
 LOG = getLogger(__name__)
 
@@ -27,16 +28,17 @@ class WebTransportServer(GrizzlyBaseService):
 
     async def is_running(self):
         """Returns a boolean which indicates if the service is running"""
+
         async def connect_to_server():
             """Attempts to connect to the Quic service"""
-            configuration = QuicConfiguration(
+            config = QuicConfiguration(
                 alpn_protocols=H3_ALPN,
                 is_client=True,
                 verify_mode=ssl.CERT_NONE,
             )
 
-            async with connect("127.0.0.1", self.port, configuration=configuration) as protocol:
-                await protocol.ping()
+            async with connect("127.0.0.1", self.port, configuration=config) as proto:
+                await proto.ping()
 
         try:
             await asyncio.wait_for(connect_to_server(), timeout=5.0)
