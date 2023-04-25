@@ -2,9 +2,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import asyncio
+from logging import getLogger
 from threading import Thread
 
 from .webtransport.core import WebTransportServer
+
+LOG = getLogger(__name__)
 
 
 class WebServices:
@@ -24,7 +27,11 @@ class WebServices:
 
     async def is_running(self):
         for service in self.services:
-            await service.is_running()
+            if await service.is_running() is False:
+                LOG.info("Failed to start service: %s", service.__class__.__name__)
+                return False
+
+        return True
 
     def cleanup(self):
         """Stops all running services and join's the service thread"""

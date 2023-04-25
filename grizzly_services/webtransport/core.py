@@ -37,15 +37,20 @@ class WebTransportServer(GrizzlyBaseService):
                 verify_mode=ssl.CERT_NONE,
             )
 
-            async with connect("127.0.0.1", self.port, configuration=config) as proto:
-                await proto.ping()
+            async with connect("127.0.0.1", self.port, configuration=config) as client:
+                await client.ping()
 
-        try:
-            await asyncio.wait_for(connect_to_server(), timeout=5.0)
-        except asyncio.TimeoutError:
-            LOG.warning("Failed to connect WebTransport over HTTP/3 server")
-            return False
-        return True
+        for _ in range(3):
+            try:
+                LOG.debug("attempting to connect to webtransport server")
+                await asyncio.wait_for(connect_to_server(), timeout=3)
+            except asyncio.TimeoutError:
+                LOG.debug("connection timed out")
+                await asyncio.sleep(1)
+            else:
+                return True
+
+        return False
 
     async def start(self, cert, key):
         """Start the WebTransport Service
