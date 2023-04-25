@@ -180,13 +180,13 @@ class Session:
 
             def create_cb(url):
                 """Creates lambda return URL for use in loops"""
-                return lambda: url
+                return lambda _: url
 
             for service in services:
                 if isinstance(service, WebTransportServer):
                     self.iomanager.server_map.set_dynamic_response(
                         "grz_webtransport_server",
-                        create_cb(f"https://127.0.0.1:{service.port}"),
+                        create_cb(b"https://127.0.0.1:%d" % (service.port,)),
                         mime_type="text/plain",
                         required=False,
                     )
