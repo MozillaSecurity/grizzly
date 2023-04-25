@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import asyncio
 import ssl
-from logging import getLogger
+from logging import WARNING, getLogger
 
 from aioquic.asyncio import connect, serve
 from aioquic.h3.connection import H3_ALPN
@@ -13,6 +13,8 @@ from sapphire import create_listening_socket
 
 from ..base import GrizzlyBaseService
 from .wt_server import WebTransportProtocol
+
+getLogger("quic").setLevel(WARNING)
 
 LOG = getLogger(__name__)
 
