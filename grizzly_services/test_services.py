@@ -2,8 +2,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-import asyncio
-
 from grizzly.common.utils import CertificateBundle
 
 from .core import WebServices
@@ -17,8 +15,7 @@ def test_service_01():
         assert len(ext_services.services) == 1
 
         # Check that all services are running
-        for service in ext_services.services:
-            assert asyncio.run(service.is_running()) is True
+        assert ext_services.is_running() is True
 
         ext_services.cleanup()
 
