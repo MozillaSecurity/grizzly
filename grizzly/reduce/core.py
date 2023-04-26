@@ -787,6 +787,7 @@ class ReduceManager:
 
         assets = None
         certs = None
+        ext_services = None
         signature = None
         signature_desc = None
         target = None
@@ -930,4 +931,6 @@ class ReduceManager:
                 assets.cleanup()
             if certs is not None:
                 certs.cleanup()
+            if ext_services is not None:
+                ext_services.cleanup()
             LOG.info("Done.")
