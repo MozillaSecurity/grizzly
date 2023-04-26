@@ -13,6 +13,7 @@ from time import time
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
+from grizzly_services import WebServices
 from sapphire import Sapphire
 
 from ..common.fuzzmanager import CrashEntry
@@ -95,6 +96,7 @@ class ReduceManager:
         tool=None,
         use_analysis=True,
         use_harness=True,
+        services=None,
     ):
         """Initialize reduction manager. Many arguments are common with `ReplayManager`.
 
@@ -156,6 +158,7 @@ class ReduceManager:
         )
         self._use_analysis = use_analysis
         self._use_harness = use_harness
+        self._services = services
 
     def update_timeout(self, results):
         """Tune idle/server timeout values based on actual duration of expected results.
@@ -313,6 +316,7 @@ class ReduceManager:
                     idle_delay=self._idle_delay,
                     idle_threshold=self._idle_threshold,
                     on_iteration_cb=self._on_replay_iteration,
+                    services=self._services,
                 )
                 try:
                     crashes = sum(x.count for x in results if x.expected)
@@ -523,6 +527,7 @@ class ReduceManager:
                                     repeat=repeat,
                                     on_iteration_cb=self._on_replay_iteration,
                                     post_launch_delay=post_launch_delay,
+                                    services=self._services,
                                 )
                                 self._status.attempts += 1
                                 self.update_timeout(results)
@@ -856,6 +861,10 @@ class ReduceManager:
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
+                if certs is not None:
+                    LOG.debug("starting additional web services")
+                    ext_services = WebServices.start_services(certs.host, certs.key)
+
                 target.reverse(server.port, server.port)
                 mgr = ReduceManager(
                     args.ignore,
@@ -878,6 +887,7 @@ class ReduceManager:
                     tool=args.tool,
                     use_analysis=not args.no_analysis,
                     use_harness=not args.no_harness,
+                    services=ext_services.services if ext_services else None,
                 )
                 return_code = mgr.run(
                     repeat=args.repeat,
