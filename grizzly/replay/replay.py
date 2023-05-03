@@ -632,7 +632,7 @@ class ReplayManager:
                 args.min_crashes,
                 relaunch,
             )
-            if args.use_https or testcases[0].https:
+            if args.use_https or any(x.https for x in testcases):
                 certs = CertificateBundle.create()
                 LOG.info("HTTPS enabled")
             LOG.debug("initializing the Target")

@@ -826,7 +826,7 @@ class ReduceManager:
             args.repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, args.repeat)
 
-            if args.use_https or testcases[0].https:
+            if args.use_https or any(x.https for x in testcases):
                 certs = CertificateBundle.create()
                 LOG.info("HTTPS enabled")
 
