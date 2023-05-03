@@ -25,6 +25,7 @@ def test_testcase_01(tmp_path):
         assert tcase.adapter_name == adpt_name
         assert tcase.duration is None
         assert tcase.data_size == 0
+        assert not tcase.https
         assert tcase.input_fname is None
         assert tcase.timestamp > 0
         assert not tcase.env_vars
@@ -271,6 +272,7 @@ def test_testcase_10(tmp_path):
         # set non default values
         org.duration = 1.23
         org.env_vars = {"en1": "1", "en2": "2"}
+        org.https = True
         org.hang = True
         org.input_fname = "infile"
         org.time_limit = 10
@@ -457,6 +459,7 @@ def test_testcase_19():
     with TestCase("a.htm", "b.htm", "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
         src.hang = True
+        src.https = True
         src.add_from_bytes(b"123", "test.htm", required=True)
         src.add_from_bytes(b"456", "opt.htm", required=False)
         src.env_vars["foo"] = "bar"

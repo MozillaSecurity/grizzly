@@ -302,6 +302,8 @@ class Runner:
                 (x for x in result.served if x.startswith(resource.target)),
                 prefix=url,
             )
+        # record use of https in testcase
+        testcase.https = self._server.scheme == "https"
         if result.timeout:
             LOG.debug("timeout detected")
             result.idle = self._target.handle_hang(

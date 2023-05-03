@@ -15,18 +15,20 @@ from .storage import TestCase
 
 
 @mark.parametrize(
-    "coverage,",
+    "coverage, scheme",
     [
         # coverage disabled
-        (False,),
+        (False, "http"),
         # coverage enabled
-        (True,),
+        (True, "http"),
+        # https enabled
+        (False, "https"),
     ],
 )
-def test_runner_01(mocker, coverage):
+def test_runner_01(mocker, coverage, scheme):
     """test Runner()"""
     mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
-    server = mocker.Mock(spec_set=Sapphire)
+    server = mocker.Mock(spec_set=Sapphire, scheme=scheme)
     serv_files = ["a.bin", "/another/file.bin"]
     server.serve_path.return_value = (Served.ALL, serv_files)
     target = mocker.Mock(spec_set=Target)
@@ -37,9 +39,10 @@ def test_runner_01(mocker, coverage):
     assert runner._idle is None
     assert runner._relaunch == 10
     assert runner._tests_run == 0
-    testcase = mocker.MagicMock(spec_set=TestCase, landing_page=serv_files[0])
     serv_map = ServerMap()
-    result = runner.run([], serv_map, testcase, coverage=coverage)
+    with TestCase(serv_files[0], "x", "x") as testcase:
+        result = runner.run([], serv_map, testcase, coverage=coverage)
+        assert testcase.https == (scheme == "https")
     assert runner.initial
     assert runner._tests_run == 1
     assert result.attempted
@@ -51,7 +54,7 @@ def test_runner_01(mocker, coverage):
     assert not serv_map.dynamic
     assert target.launch.call_count == 0
     assert target.close.call_count == 0
-    assert target.dump_coverage.call_count == 1 if coverage else 0
+    assert target.dump_coverage.call_count == (1 if coverage else 0)
     assert target.handle_hang.call_count == 0
 
 
