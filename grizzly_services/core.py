@@ -1,9 +1,9 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import asyncio
 from logging import getLogger
-from threading import Thread
+
+from sapphire import create_listening_socket
 
 from .webtransport.core import WebTransportServer
 
@@ -13,21 +13,26 @@ LOG = getLogger(__name__)
 class WebServices:
     """Class for running additional web services"""
 
-    def __init__(self, thread, loop, services):
+    def __init__(self, services):
         """Initialize new WebServices instance
 
         Args:
-            loop (AbstractEventLoop): Active asyncio event loop
             services (list): List of running services
         """
-        self._thread = thread
-        self._loop = loop
-
         self.services = services
 
-    async def is_running(self):
+    @staticmethod
+    def get_free_port():
+        """Returns an open port"""
+        sock = create_listening_socket()
+        port = sock.getsockname()[1]
+        sock.close()
+
+        return port
+
+    def is_running(self):
         for service in self.services:
-            if await service.is_running() is False:
+            if service.is_running() is False:
                 LOG.info("Failed to start service: %s", service.__class__.__name__)
                 return False
 
@@ -35,10 +40,8 @@ class WebServices:
 
     def cleanup(self):
         """Stops all running services and join's the service thread"""
-        self._loop.call_soon_threadsafe(self._loop.stop)
-
-        if self._thread is not None:
-            self._thread.join()
+        for service in self.services:
+            service.cleanup()
 
     @classmethod
     def start_services(cls, cert, key):
@@ -48,19 +51,14 @@ class WebServices:
             cert (Path): Path to the certificate file
             key (Path): Path to the certificate's private key
         """
-        loop = asyncio.new_event_loop()
-
         # Start WebTransport service
-        wt_service = WebTransportServer()
-        loop.create_task(wt_service.start(cert, key))
+        wt_port = cls.get_free_port()
+        wt_service = WebTransportServer(wt_port, cert, key)
+        wt_service.start()
 
-        # Run the loop in a new thread
-        thread = Thread(target=loop.run_forever, daemon=True)
-        thread.start()
-
-        ext_services = cls(thread, loop, [wt_service])
+        ext_services = cls([wt_service])
 
         # Ensure that all services have started.
-        asyncio.run(ext_services.is_running())
+        ext_services.is_running()
 
         return ext_services

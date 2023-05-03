@@ -13,5 +13,5 @@ class GrizzlyBaseService(ABC):
         """The port on which the service is listening"""
 
     @abstractmethod
-    async def is_running(self):
+    def is_running(self):
         """Returns a boolean which indicates if the service is running"""

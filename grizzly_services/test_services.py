@@ -20,6 +20,6 @@ def test_service_01():
         ext_services.cleanup()
 
         # Check that all services have stopped
-        assert ext_services._thread.is_alive() is False
+        assert ext_services.is_running() is False
     finally:
         cert.cleanup()

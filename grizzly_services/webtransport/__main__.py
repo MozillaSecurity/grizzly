@@ -1,7 +1,7 @@
 import argparse
-import asyncio
 import logging
 
+from .. import WebServices
 from .core import WebTransportServer
 
 LOG = logging.getLogger(__name__)
@@ -13,13 +13,9 @@ def main(argv=None):
     parser.add_argument("key")
     args = parser.parse_args(argv)
 
-    loop = asyncio.get_event_loop()
-    wt_service = WebTransportServer()
-    loop.create_task(wt_service.start(args.certificate, args.key))
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
+    port = WebServices.get_free_port()
+    wt_service = WebTransportServer(port, args.certificate, args.key)
+    wt_service.start()
 
 
 SystemExit(main())
