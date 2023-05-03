@@ -205,6 +205,7 @@ class TestCase:
         result.duration = self.duration
         result.env_vars = dict(self.env_vars)
         result.hang = self.hang
+        result.https = self.https
 
         # copy test data files
         for entry, required in chain(
@@ -281,6 +282,7 @@ class TestCase:
                 "duration": self.duration,
                 "env": self.env_vars,
                 "hang": self.hang,
+                "https": self.https,
                 "input": Path(self.input_fname).name if self.input_fname else None,
                 "target": self.landing_page,
                 "time_limit": self.time_limit,
@@ -421,6 +423,7 @@ class TestCase:
         )
         test.duration = info.get("duration", None)
         test.hang = info.get("hang", False)
+        test.https = info.get("https", False)
         test.version = info.get("version", None)
         test.add_from_file(
             entry_point, file_name=test.landing_page, required=True, copy=copy
