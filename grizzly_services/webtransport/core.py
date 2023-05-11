@@ -47,12 +47,14 @@ class WebTransportServer(GrizzlyBaseService):
 
     def is_running(self):
         """Check if the service is running"""
+        LOG.debug("Attempting to connect to webtransport server")
         for _ in range(3):
-            LOG.debug("attempting to connect to webtransport server")
             result = server_is_running("127.0.0.1", self.port, timeout=1.0)
             if result is True:
+                LOG.debug("WebTransport service responded")
                 return result
 
+        LOG.debug("Unable to communicate with WebTransport service")
         return False
 
     def start(self) -> None:
