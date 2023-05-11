@@ -4,7 +4,7 @@
 import asyncio
 import sys
 import threading
-from logging import WARNING, getLogger
+from logging import CRITICAL, getLogger
 from pathlib import Path
 
 from aioquic.asyncio import serve
@@ -18,7 +18,7 @@ from .wpt_h3_server.webtransport_h3_server import (
     server_is_running,
 )
 
-getLogger("quic").setLevel(WARNING)
+getLogger("quic").setLevel(CRITICAL)
 
 LOG = getLogger(__name__)
 
