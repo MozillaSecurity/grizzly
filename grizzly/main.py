@@ -4,7 +4,6 @@
 from logging import DEBUG, getLogger
 from os import getpid
 
-from grizzly_services import WebServices
 from sapphire import Sapphire
 
 from .adapter import Adapter
@@ -21,6 +20,7 @@ from .common.utils import (
     display_time_limits,
     time_limits,
 )
+from .services import WebServices
 from .session import Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 

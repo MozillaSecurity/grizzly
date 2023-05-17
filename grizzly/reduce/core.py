@@ -13,7 +13,6 @@ from time import time
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
-from grizzly_services import WebServices
 from sapphire import Sapphire
 
 from ..common.fuzzmanager import CrashEntry
@@ -35,6 +34,7 @@ from ..common.utils import (
     time_limits,
 )
 from ..replay import ReplayManager
+from ..services import WebServices
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
 from .strategies import STRATEGIES

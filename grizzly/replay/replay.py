@@ -8,7 +8,6 @@ from tempfile import mkdtemp
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
-from grizzly_services import WebServices, WebTransportServer
 from sapphire import Sapphire, ServerMap
 
 from ..common.plugins import load as load_plugin
@@ -31,6 +30,7 @@ from ..common.utils import (
     grz_tmp,
     time_limits,
 )
+from ..services import WebServices, WebTransportServer
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"

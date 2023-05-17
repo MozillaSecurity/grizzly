@@ -4,17 +4,15 @@
 from logging import getLogger
 from time import time
 
-from grizzly_services import WebTransportServer
-
 from .common.iomanager import IOManager
 from .common.runner import Runner
 from .common.status import STATUS_DB_FUZZ, Status
+from .services import WebTransportServer
 from .target import Result
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
-
 
 LOG = getLogger(__name__)
 
