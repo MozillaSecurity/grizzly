@@ -90,13 +90,13 @@ class ReduceManager:
         relaunch=1,
         report_period=None,
         report_to_fuzzmanager=False,
+        services=None,
         signature=None,
         signature_desc=None,
         static_timeout=False,
         tool=None,
         use_analysis=True,
         use_harness=True,
-        services=None,
     ):
         """Initialize reduction manager. Many arguments are common with `ReplayManager`.
 
@@ -118,6 +118,7 @@ class ReduceManager:
             report_period (int or None): Periodically report best results for
                                          long-running strategies.
             report_to_fuzzmanager (bool): Report to FuzzManager rather than filesystem.
+            services (WebServices): WebServices instance.
             signature (FTB.Signatures.CrashInfo.CrashSignature or None):
                 Signature for accepting crashes.
             signature_desc (str): Short description of the given signature.
