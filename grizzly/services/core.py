@@ -59,7 +59,7 @@ class WebServices:
         except asyncio.TimeoutError:
             for name, task in tasks.items():
                 if not task.done():
-                    LOG.debug("Failed to start service (%s)", ServiceName(name).name)
+                    LOG.warning("Failed to start service (%s)", ServiceName(name).name)
             return False
 
         return True
