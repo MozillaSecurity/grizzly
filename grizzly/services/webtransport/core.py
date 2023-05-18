@@ -15,7 +15,7 @@ from ..base import GrizzlyBaseService
 from .wpt_h3_server.webtransport_h3_server import (
     SessionTicketStore,
     WebTransportH3Protocol,
-    server_is_running,
+    _connect_to_server,
 )
 
 getLogger("quic").setLevel(CRITICAL)
@@ -45,17 +45,30 @@ class WebTransportServer(GrizzlyBaseService):
         """The port on which the service is listening"""
         return self._port
 
-    def is_running(self):
-        """Check if the service is running"""
-        LOG.debug("Attempting to connect to webtransport server")
-        for _ in range(3):
-            result = server_is_running("127.0.0.1", self.port, timeout=1.0)
-            if result is True:
-                LOG.debug("WebTransport service responded")
-                return result
+    @property
+    def url(self):
+        """Returns the URL and callback for Sapphire.set_dynamic_response
 
-        LOG.debug("Unable to communicate with WebTransport service")
-        return False
+        Returns:
+            (str, callback)
+        """
+        #  pylint: disable=unnecessary-direct-lambda-call
+        return (
+            "grz_webtransport_server",
+            (lambda port: lambda _: b"https://127.0.0.1:%d" % (port,))(self.port),
+        )
+
+    async def is_ready(self):
+        """Wait until the service is ready"""
+        while True:
+            try:
+                await asyncio.wait_for(
+                    _connect_to_server("127.0.0.1", self.port), timeout=1.0
+                )
+            except asyncio.TimeoutError:
+                pass
+            else:
+                return
 
     def start(self) -> None:
         """Start the server."""

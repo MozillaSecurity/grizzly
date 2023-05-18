@@ -1,11 +1,14 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+import asyncio
 from enum import Enum
 from logging import getLogger
+from typing import Dict
 
 from sapphire import create_listening_socket
 
+from .base import GrizzlyBaseService
 from .webtransport.core import WebTransportServer
 
 LOG = getLogger(__name__)
@@ -37,17 +40,33 @@ class WebServices:
 
         return port
 
-    def is_running(self):
-        for name, service in self.services.values():
-            if not service.is_running():
-                LOG.info("Failed to start service: %s", ServiceName(name).name)
-                return False
+    async def is_running(self, timeout=20):
+        """Polls all available services to ensure they are running and accessible.
+
+        Args:
+            timeout (int): Total time to wait.
+
+        Returns:
+            bool: Indicates if all services started successfully.
+        """
+        tasks = {}
+        for name, service in self.services.items():
+            task = asyncio.create_task(service.is_ready())
+            tasks[name] = task
+
+        try:
+            await asyncio.wait_for(asyncio.gather(*tasks.values()), timeout)
+        except asyncio.TimeoutError:
+            for name, task in tasks.items():
+                if not task.done():
+                    LOG.debug("Failed to start service (%s)", ServiceName(name).name)
+            return False
 
         return True
 
     def cleanup(self):
         """Stops all running services and join's the service thread"""
-        for _, service in self.services.items():
+        for service in self.services.values():
             service.cleanup()
 
     @classmethod
@@ -61,12 +80,10 @@ class WebServices:
         services = {}
         # Start WebTransport service
         wt_port = cls.get_free_port()
-        services[ServiceName.WEBTRANSPORT] = WebTransportServer(wt_port, cert, key)
-        services[ServiceName.WEBTRANSPORT].start()
+        services[ServiceName.WEB_TRANSPORT] = WebTransportServer(wt_port, cert, key)
+        services[ServiceName.WEB_TRANSPORT].start()
 
         ext_services = cls(services)
-
-        # Ensure that all services have started.
-        ext_services.is_running()
+        assert asyncio.run(ext_services.is_running())
 
         return ext_services

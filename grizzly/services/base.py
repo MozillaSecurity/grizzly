@@ -12,6 +12,15 @@ class GrizzlyBaseService(ABC):
     def port(self):
         """The port on which the service is listening"""
 
+    @property
     @abstractmethod
-    def is_running(self):
-        """Returns a boolean which indicates if the service is running"""
+    def url(self):
+        """Returns the URL and callback for Sapphire.set_dynamic_response"""
+
+    @abstractmethod
+    async def is_ready(self):
+        """Wait until the service is ready"""
+
+    @abstractmethod
+    def cleanup(self):
+        """Stop the server."""

@@ -2,6 +2,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
+import asyncio
+
+import pytest
+
 from ...common.utils import CertificateBundle
 from ..core import WebServices
 from .core import WebTransportServer
@@ -13,17 +17,18 @@ def test_webtransport_01():
     try:
         port = WebServices.get_free_port()
         web_transport = WebTransportServer(port, cert.host, cert.key)
-        assert web_transport._started is False
+        assert not web_transport._started
 
         web_transport.start()
 
         # Check that all services are running
-        assert web_transport._started is True
-        assert web_transport.is_running() is True
+        assert web_transport._started
+        asyncio.run(asyncio.wait_for(web_transport.is_ready(), timeout=3.0))
 
         web_transport.cleanup()
 
-        assert web_transport._started is False
-        assert web_transport.is_running() is False
+        assert not web_transport._started
+        with pytest.raises(asyncio.TimeoutError):
+            asyncio.run(asyncio.wait_for(web_transport.is_ready(), timeout=1.0))
     finally:
         cert.cleanup()
