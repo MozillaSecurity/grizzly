@@ -175,16 +175,14 @@ class Session:
                 "grz_start", "grz_harness", required=False
             )
         if services:
-
-            def create_cb(url):
-                """Creates lambda return URL for use in loops"""
-                return lambda _: url
-
             for service in services:
                 if isinstance(service, WebTransportServer):
+                    #  pylint: disable=unnecessary-direct-lambda-call
                     self.iomanager.server_map.set_dynamic_response(
                         "grz_webtransport_server",
-                        create_cb(b"https://127.0.0.1:%d" % (service.port,)),
+                        (lambda port: lambda _: b"https://127.0.0.1:%d" % (port,))(
+                            service.port
+                        ),
                         mime_type="text/plain",
                         required=False,
                     )
