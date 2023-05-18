@@ -39,7 +39,7 @@ class WebServices:
 
     def is_running(self):
         for name, service in self.services.values():
-            if service.is_running() is False:
+            if not service.is_running():
                 LOG.info("Failed to start service: %s", ServiceName(name).name)
                 return False
 
