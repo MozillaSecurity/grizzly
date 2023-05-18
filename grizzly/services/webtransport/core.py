@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import asyncio
+import os
 import sys
 import threading
 from logging import CRITICAL, getLogger
@@ -18,7 +19,8 @@ from .wpt_h3_server.webtransport_h3_server import (
     _connect_to_server,
 )
 
-getLogger("quic").setLevel(CRITICAL)
+if "GRZ_QUIC_LOGGING" not in os.environ:
+    getLogger("quic").setLevel(CRITICAL)
 
 LOG = getLogger(__name__)
 
