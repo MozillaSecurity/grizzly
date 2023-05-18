@@ -14,13 +14,13 @@ LOG = getLogger(__name__)
 class ServiceName(Enum):
     """Enum for listing available services"""
 
-    WEBTRANSPORT = 1
+    WEB_TRANSPORT = 1
 
 
 class WebServices:
     """Class for running additional web services"""
 
-    def __init__(self, services):
+    def __init__(self, services: Dict[ServiceName, GrizzlyBaseService]):
         """Initialize new WebServices instance
 
         Args:
