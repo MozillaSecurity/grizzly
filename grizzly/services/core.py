@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from enum import Enum
 from logging import getLogger
 
 from sapphire import create_listening_socket
@@ -10,6 +11,12 @@ from .webtransport.core import WebTransportServer
 LOG = getLogger(__name__)
 
 
+class ServiceName(Enum):
+    """Enum for listing available services"""
+
+    WEBTRANSPORT = 1
+
+
 class WebServices:
     """Class for running additional web services"""
 
@@ -17,7 +24,7 @@ class WebServices:
         """Initialize new WebServices instance
 
         Args:
-            services (list): List of running services
+            services (dict of ServiceName: GrizzlyBaseService): List of running services
         """
         self.services = services
 
@@ -31,16 +38,16 @@ class WebServices:
         return port
 
     def is_running(self):
-        for service in self.services:
+        for name, service in self.services.values():
             if service.is_running() is False:
-                LOG.info("Failed to start service: %s", service.__class__.__name__)
+                LOG.info("Failed to start service: %s", ServiceName(name).name)
                 return False
 
         return True
 
     def cleanup(self):
         """Stops all running services and join's the service thread"""
-        for service in self.services:
+        for _, service in self.services.items():
             service.cleanup()
 
     @classmethod
@@ -51,12 +58,13 @@ class WebServices:
             cert (Path): Path to the certificate file
             key (Path): Path to the certificate's private key
         """
+        services = {}
         # Start WebTransport service
         wt_port = cls.get_free_port()
-        wt_service = WebTransportServer(wt_port, cert, key)
-        wt_service.start()
+        services[ServiceName.WEBTRANSPORT] = WebTransportServer(wt_port, cert, key)
+        services[ServiceName.WEBTRANSPORT].start()
 
-        ext_services = cls([wt_service])
+        ext_services = cls(services)
 
         # Ensure that all services have started.
         ext_services.is_running()
