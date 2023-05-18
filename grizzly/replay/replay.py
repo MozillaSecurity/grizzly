@@ -30,7 +30,7 @@ from ..common.utils import (
     grz_tmp,
     time_limits,
 )
-from ..services import WebServices, WebTransportServer
+from ..services import WebServices
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -312,17 +312,12 @@ class ReplayManager:
             server_map.set_redirect("grz_start", "grz_harness", required=False)
 
         if services:
-            for service in services:
-                if isinstance(service, WebTransportServer):
-                    #  pylint: disable=unnecessary-direct-lambda-call
-                    server_map.set_dynamic_response(
-                        "grz_webtransport_server",
-                        (lambda port: lambda _: b"https://127.0.0.1:%d" % (port,))(
-                            service.port
-                        ),
-                        mime_type="text/plain",
-                        required=False,
-                    )
+            for service in services.values():
+                server_map.set_dynamic_response(
+                    *service.url,
+                    mime_type="text/plain",
+                    required=False,
+                )
 
         # track unprocessed results
         reports = {}

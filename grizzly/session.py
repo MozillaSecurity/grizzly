@@ -7,7 +7,6 @@ from time import time
 from .common.iomanager import IOManager
 from .common.runner import Runner
 from .common.status import STATUS_DB_FUZZ, Status
-from .services import WebTransportServer
 from .target import Result
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
@@ -175,17 +174,12 @@ class Session:
                 "grz_start", "grz_harness", required=False
             )
         if services:
-            for service in services:
-                if isinstance(service, WebTransportServer):
-                    #  pylint: disable=unnecessary-direct-lambda-call
-                    self.iomanager.server_map.set_dynamic_response(
-                        "grz_webtransport_server",
-                        (lambda port: lambda _: b"https://127.0.0.1:%d" % (port,))(
-                            service.port
-                        ),
-                        mime_type="text/plain",
-                        required=False,
-                    )
+            for service in services.values():
+                self.iomanager.server_map.set_dynamic_response(
+                    *service.url,
+                    mime_type="text/plain",
+                    required=False,
+                )
 
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         # limit relaunch to max iterations if needed
