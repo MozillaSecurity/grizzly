@@ -174,12 +174,7 @@ class Session:
                 "grz_start", "grz_harness", required=False
             )
         if services:
-            for service in services.values():
-                self.iomanager.server_map.set_dynamic_response(
-                    *service.url,
-                    mime_type="text/plain",
-                    required=False,
-                )
+            services.map_locations(self.iomanager.server_map)
 
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         # limit relaunch to max iterations if needed

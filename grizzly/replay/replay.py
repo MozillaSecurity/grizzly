@@ -312,12 +312,7 @@ class ReplayManager:
             server_map.set_redirect("grz_start", "grz_harness", required=False)
 
         if services:
-            for service in services.values():
-                server_map.set_dynamic_response(
-                    *service.url,
-                    mime_type="text/plain",
-                    required=False,
-                )
+            services.map_locations(server_map)
 
         # track unprocessed results
         reports = {}
@@ -695,7 +690,7 @@ class ReplayManager:
                         min_results=args.min_crashes,
                         post_launch_delay=args.post_launch_delay,
                         repeat=repeat,
-                        services=ext_services.services if ext_services else None,
+                        services=ext_services,
                     )
             # handle results
             success = any(x.expected for x in results)

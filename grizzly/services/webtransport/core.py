@@ -2,30 +2,30 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import asyncio
-import os
-import sys
-import threading
 from logging import CRITICAL, getLogger
+from os import environ
 from pathlib import Path
+from platform import system
+from threading import Thread
 
 from aioquic.asyncio import serve
 from aioquic.h3.connection import H3_ALPN
 from aioquic.quic.configuration import QuicConfiguration
 
-from ..base import GrizzlyBaseService
+from ..base import BaseService
 from .wpt_h3_server.webtransport_h3_server import (
     SessionTicketStore,
     WebTransportH3Protocol,
     _connect_to_server,
 )
 
-if "GRZ_QUIC_LOGGING" not in os.environ:
+if "GRZ_QUIC_LOGGING" not in environ:
     getLogger("quic").setLevel(CRITICAL)
 
 LOG = getLogger(__name__)
 
 
-class WebTransportServer(GrizzlyBaseService):
+class WebTransportServer(BaseService):
     def __init__(self, port: int, cert: Path, key: Path) -> None:
         """A WebTransport service.
 
@@ -43,22 +43,24 @@ class WebTransportServer(GrizzlyBaseService):
         self._started = False
 
     @property
+    def location(self):
+        return "grz_webtransport_server"
+
+    @property
     def port(self):
         """The port on which the service is listening"""
         return self._port
 
-    @property
-    def url(self):
-        """Returns the URL and callback for Sapphire.set_dynamic_response
+    def url(self, _query):
+        """URL for Sapphire.set_dynamic_response
+
+        Args:
+            _query (str): Unused query string.
 
         Returns:
-            (str, callback)
+            bytes: Server URL.
         """
-        #  pylint: disable=unnecessary-direct-lambda-call
-        return (
-            "grz_webtransport_server",
-            (lambda port: lambda _: b"https://127.0.0.1:%d" % (port,))(self.port),
-        )
+        return b"https://127.0.0.1:%d" % (self._port,)
 
     async def is_ready(self):
         """Wait until the service is ready"""
@@ -89,7 +91,7 @@ class WebTransportServer(GrizzlyBaseService):
             # On Windows, the default event loop is ProactorEventLoop, but it
             # doesn't seem to work when aioquic detects a connection loss.
             # Use SelectorEventLoop to work around the problem.
-            if sys.platform == "win32":
+            if system() == "Windows":
                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
@@ -106,7 +108,7 @@ class WebTransportServer(GrizzlyBaseService):
             )
             self._loop.run_forever()
 
-        self._server_thread = threading.Thread(target=_start_service, daemon=True)
+        self._server_thread = Thread(target=_start_service, daemon=True)
         self._server_thread.start()
         self._started = True
 

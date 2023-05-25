@@ -4,18 +4,22 @@
 from abc import ABC, abstractmethod
 
 
-class GrizzlyBaseService(ABC):
+class BaseService(ABC):
     """Base service class"""
 
     @property
     @abstractmethod
-    def port(self):
-        """The port on which the service is listening"""
+    def location(self):
+        """Location to use with Sapphire.set_dynamic_response"""
 
     @property
     @abstractmethod
-    def url(self):
-        """Returns the URL and callback for Sapphire.set_dynamic_response"""
+    def port(self):
+        """The port on which the server is listening"""
+
+    @abstractmethod
+    def url(self, _query):
+        """Returns the URL of the server."""
 
     @abstractmethod
     async def is_ready(self):

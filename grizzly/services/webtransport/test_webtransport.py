@@ -25,6 +25,9 @@ def test_webtransport_01():
         assert web_transport._started
         asyncio.run(asyncio.wait_for(web_transport.is_ready(), timeout=3.0))
 
+        assert web_transport.location == "grz_webtransport_server"
+        assert isinstance(web_transport.url(None), bytes)
+
         web_transport.cleanup()
 
         assert not web_transport._started

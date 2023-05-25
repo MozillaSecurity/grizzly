@@ -8,7 +8,7 @@ from typing import Dict
 
 from sapphire import create_listening_socket
 
-from .base import GrizzlyBaseService
+from .base import BaseService
 from .webtransport.core import WebTransportServer
 
 LOG = getLogger(__name__)
@@ -23,11 +23,11 @@ class ServiceName(Enum):
 class WebServices:
     """Class for running additional web services"""
 
-    def __init__(self, services: Dict[ServiceName, GrizzlyBaseService]):
+    def __init__(self, services: Dict[ServiceName, BaseService]):
         """Initialize new WebServices instance
 
         Args:
-            services (dict of ServiceName: GrizzlyBaseService): List of running services
+            services (dict of ServiceName: BaseService): Collection of services.
         """
         self.services = services
 
@@ -68,6 +68,13 @@ class WebServices:
         """Stops all running services and join's the service thread"""
         for service in self.services.values():
             service.cleanup()
+
+    def map_locations(self, server_map):
+        """Configure server map"""
+        for service in self.services.values():
+            server_map.set_dynamic_response(
+                service.location, service.url, mime_type="text/plain", required=False
+            )
 
     @classmethod
     def start_services(cls, cert, key):
