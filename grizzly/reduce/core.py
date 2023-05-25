@@ -889,7 +889,7 @@ class ReduceManager:
                     tool=args.tool,
                     use_analysis=not args.no_analysis,
                     use_harness=not args.no_harness,
-                    services=ext_services.services if ext_services else None,
+                    services=ext_services,
                 )
                 return_code = mgr.run(
                     repeat=args.repeat,
