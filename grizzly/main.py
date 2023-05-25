@@ -142,7 +142,7 @@ def main(args):
                     display_mode=display_mode,
                     launch_attempts=args.launch_attempts,
                     post_launch_delay=args.post_launch_delay,
-                    services=ext_services.services if ext_services else None,
+                    services=ext_services,
                 )
                 complete_with_results = session.status.results.total > 0
 
