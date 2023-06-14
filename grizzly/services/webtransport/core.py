@@ -64,15 +64,7 @@ class WebTransportServer(BaseService):
 
     async def is_ready(self):
         """Wait until the service is ready"""
-        while True:
-            try:
-                await asyncio.wait_for(
-                    _connect_to_server("127.0.0.1", self.port), timeout=1.0
-                )
-            except asyncio.TimeoutError:
-                pass
-            else:
-                return
+        await _connect_to_server("127.0.0.1", self.port)
 
     def start(self) -> None:
         """Start the server."""
