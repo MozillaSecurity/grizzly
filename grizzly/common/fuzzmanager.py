@@ -137,7 +137,6 @@ class Bucket:
         for crash in _get_results(
             "crashes", params={"query": query, "include_raw": "0"}
         ):
-
             if not crash["testcase"]:
                 LOG.warning("crash %d has no testcase, skipping", crash["id"])
                 continue

@@ -250,7 +250,7 @@ class ReduceManager:
         # N.B. We only use `last_test_only` if `len(self.testcases) > 1` ..
         # if `self.testcases` only has 1 entry to begin with, we don't need
         # `last_test_only` to trim it
-        for (use_harness, last_test_only) in (
+        for use_harness, last_test_only in (
             (True, True),
             (True, False),
             # only one of the two use_harness=False cases will run:
