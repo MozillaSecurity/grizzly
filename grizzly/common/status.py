@@ -317,7 +317,6 @@ class Status(BaseStatus):
         life_time=REPORTS_EXPIRE,
         report_limit=0,
     ):
-
         super().__init__(pid, start_time)
         assert life_time >= 0
         assert report_limit >= 0
