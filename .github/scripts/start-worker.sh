@@ -5,7 +5,6 @@
 
 set -x
 
-TC_VERSION=v44.4.0
 TC_PROJECT=fuzzing
 TC_WORKER_TYPE=ci-osx
 TC_IDLE_TIMEOUT=300
@@ -40,10 +39,16 @@ EOF
 set -x
 unset TASKCLUSTER_ACCESS_TOKEN
 
-curl -sSL "https://github.com/taskcluster/taskcluster/releases/download/$TC_VERSION/generic-worker-simple-darwin-amd64" -o generic-worker
-curl -sSL "https://github.com/taskcluster/taskcluster/releases/download/$TC_VERSION/livelog-darwin-amd64" -o livelog
-curl -sSL "https://github.com/taskcluster/taskcluster/releases/download/$TC_VERSION/taskcluster-proxy-darwin-amd64" -o taskcluster-proxy
-chmod +x generic-worker livelog taskcluster-proxy
+retry_curl () {
+  curl --connect-timeout 25 --fail --retry 5 --show-error --silent "$@"
+}
+
+# '|| kill $$' is to emulate 'set -o pipefail'
+TC_VERSION="$({ retry_curl --head "https://github.com/taskcluster/taskcluster/releases/latest" || kill "$$"; } | { grep ^location || kill "$$"; } | { sed 's/.\{1,\}\/tag\/\(.\{1,\}\)[[:space:]]\{1,\}/\1/' || kill "$$"; })"
+retry_curl -L "https://github.com/taskcluster/taskcluster/releases/download/$TC_VERSION/generic-worker-simple-darwin-amd64" -o generic-worker
+retry_curl -L "https://github.com/taskcluster/taskcluster/releases/download/$TC_VERSION/livelog-darwin-amd64" -o livelog
+retry_curl -L "https://github.com/taskcluster/taskcluster/releases/download/$TC_VERSION/taskcluster-proxy-darwin-amd64" -o taskcluster-proxy
+chmod 0755 generic-worker livelog taskcluster-proxy
 
 ./generic-worker new-ed25519-keypair --file worker.key
 mkdir tasks
