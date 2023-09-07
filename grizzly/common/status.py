@@ -184,7 +184,7 @@ class ReadOnlyStatus(BaseStatus):
 
         Args:
             db_file (Path): Database containing status data.
-            time_limit (int): Filter entries by age.
+            time_limit (int): Filter entries by age. Use zero for no limit.
 
         Yields:
             ReadOnlyStatus: Successfully loaded objects.
@@ -194,30 +194,18 @@ class ReadOnlyStatus(BaseStatus):
             cur = con.cursor()
             # collect entries
             try:
-                if time_limit:
-                    cur.execute(
-                        """SELECT pid,
-                                _profiles,
-                                ignored,
-                                iteration,
-                                log_size,
-                                start_time,
-                                timestamp
-                           FROM status
-                           WHERE timestamp > ?;""",
-                        (time() - time_limit,),
-                    )
-                else:
-                    cur.execute(
-                        """SELECT pid,
-                                  _profiles,
-                                  ignored,
-                                  iteration,
-                                  log_size,
-                                  start_time,
-                                  timestamp
-                           FROM status;"""
-                    )
+                cur.execute(
+                    """SELECT pid,
+                            _profiles,
+                            ignored,
+                            iteration,
+                            log_size,
+                            start_time,
+                            timestamp
+                        FROM status
+                        WHERE timestamp > ?;""",
+                    (time() - time_limit if time_limit else 0,),
+                )
                 entries = cur.fetchall()
             except OperationalError as exc:
                 if not str(exc).startswith("no such table:"):
@@ -993,7 +981,7 @@ class ReductionStatus:
         Args:
             db_file (Path): Database containing status data.
             time_limit (int): Only include entries with a timestamp that is within the
-                              given number of seconds.
+                              given number of seconds. Use zero for no limit.
 
         Yields:
             Status: Successfully loaded read-only status objects.
@@ -1023,7 +1011,7 @@ class ReductionStatus:
                        FROM reduce_status
                        WHERE timestamp > ?
                        ORDER BY timestamp DESC;""",
-                    (time() - time_limit,),
+                    (time() - time_limit if time_limit else 0,),
                 )
                 entries = cur.fetchall()
             except OperationalError as exc:
