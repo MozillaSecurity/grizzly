@@ -66,7 +66,7 @@ class StatusReporter:
             db_file (str): Status data file to load.
             tb_path (Path): Directory to scan for files containing Python tracebacks.
             time_limit (int): Only include entries with a timestamp that is within the
-                              given number of seconds.
+                              given number of seconds. Use zero for no limit.
 
         Returns:
             StatusReporter: Contains available status reports and traceback reports.
@@ -631,7 +631,7 @@ class ReductionStatusReporter(StatusReporter):
             path (str): Path to scan for status data files.
             tb_path (str): Directory to scan for files containing Python tracebacks.
             time_limit (int): Only include entries with a timestamp that is within the
-                              given number of seconds.
+                              given number of seconds. Use zero for no limit.
 
         Returns:
             ReductionStatusReporter: Contains available status reports and traceback
@@ -876,8 +876,7 @@ def main(args=None):
         choices=report_types.keys(),
         default="active",
         help="Report type. active: Current snapshot of activity, complete: "
-        "Aggregate summary of all jobs over a longer duration (8h). "
-        "(default: %(default)s)",
+        "Aggregate summary of all jobs over a longer duration. (default: %(default)s)",
     )
     parser.add_argument(
         "--scan-mode",
@@ -891,6 +890,12 @@ def main(args=None):
         help="Output summary and system information",
     )
     parser.add_argument(
+        "--time-limit",
+        type=int,
+        help="Maximum age of reports in seconds. Use zero for no limit."
+        f" (default: {', '.join(f'{k}: {v}s' for k, v  in report_types.items())})",
+    )
+    parser.add_argument(
         "--tracebacks",
         type=Path,
         help="Scan path for Python tracebacks found in screenlog.# files",
@@ -899,11 +904,12 @@ def main(args=None):
     if args.tracebacks and not args.tracebacks.is_dir():
         parser.error("--tracebacks must be a directory")
 
+    time_limit = report_types[args.type] if args.time_limit is None else args.time_limit
     reporter_cls, status_db = modes.get(args.scan_mode)
     reporter = reporter_cls.load(
         status_db,
         tb_path=args.tracebacks,
-        time_limit=report_types[args.type],
+        time_limit=time_limit,
     )
 
     if args.dump:
