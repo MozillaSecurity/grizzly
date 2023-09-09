@@ -843,7 +843,8 @@ def test_include_assets_and_environ(mocker, tmp_path):
 
     reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
 
-    def submit(test_cases, report):
+    # pylint: disable=unused-argument
+    def submit(test_cases, report, force=False):
         assert test_cases
         assert isinstance(report, Report)
         for test in test_cases:

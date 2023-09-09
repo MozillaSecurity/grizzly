@@ -258,7 +258,7 @@ class Session:
                     else:
                         # FM crash signature creation failed
                         short_sig = "Signature creation failed"
-                seen = self.status.results.count(bucket_hash, short_sig)
+                seen, initial = self.status.results.count(bucket_hash, short_sig)
                 LOG.info(
                     "Result: %s (%s:%s) - %d",
                     short_sig,
@@ -266,8 +266,8 @@ class Session:
                     report.minor[:8],
                     seen,
                 )
-                if not self.status.results.is_frequent(bucket_hash):
-                    self.reporter.submit(self.iomanager.tests, report)
+                if initial or not self.status.results.is_frequent(bucket_hash):
+                    self.reporter.submit(self.iomanager.tests, report, force=initial)
                 else:
                     # we should always submit the first instance of a result
                     assert seen > 1

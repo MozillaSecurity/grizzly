@@ -616,9 +616,11 @@ class ResultCounter(SimpleResultCounter):
 
     def __init__(self, pid, db_file, life_time=RESULTS_EXPIRE, report_limit=0):
         super().__init__(pid)
+        assert db_file
         assert report_limit >= 0
         self._db_file = db_file
         self._frequent = set()
+        # use zero to disable report limit
         self._limit = report_limit
         self.last_found = 0
         self._init_db(db_file, pid, life_time)
@@ -667,10 +669,12 @@ class ResultCounter(SimpleResultCounter):
             desc (str): User friendly description.
 
         Returns:
-            int: Current count for given result_id.
+            tuple (int, bool): Local count and initial report (includes
+                               parallel instances) for given result_id.
         """
         super().count(result_id, desc)
         timestamp = time()
+        initial = False
         with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
             cur = con.cursor()
             with con:
@@ -684,6 +688,11 @@ class ResultCounter(SimpleResultCounter):
                 )
                 if cur.rowcount < 1:
                     cur.execute(
+                        """SELECT pid FROM results WHERE result_id = ?;""",
+                        (result_id,),
+                    )
+                    initial = cur.fetchone() is None
+                    cur.execute(
                         """INSERT INTO results(
                                 pid,
                                 result_id,
@@ -691,16 +700,10 @@ class ResultCounter(SimpleResultCounter):
                                 timestamp,
                                 count)
                             VALUES (?, ?, ?, ?, ?);""",
-                        (
-                            self.pid,
-                            result_id,
-                            desc,
-                            timestamp,
-                            self._count[result_id],
-                        ),
+                        (self.pid, result_id, desc, timestamp, self._count[result_id]),
                     )
         self.last_found = timestamp
-        return self._count[result_id]
+        return self._count[result_id], initial
 
     def is_frequent(self, result_id):
         """Scan all results including results from other running instances
@@ -723,16 +726,18 @@ class ResultCounter(SimpleResultCounter):
         # only check the db for parallel results if
         # - result has been found locally more than once
         # - limit has not been exceeded locally
-        # - a db file is given
-        if self._limit >= total > 1 and self._db_file:
+        if self._limit >= total > 1:
             with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
                 cur = con.cursor()
                 # look up total count from all processes
                 cur.execute(
-                    """SELECT SUM(count) FROM results WHERE result_id = ?;""",
+                    """SELECT COALESCE(SUM(count), 0)
+                        FROM results WHERE result_id = ?;""",
                     (result_id,),
                 )
-                total = cur.fetchone()[0] or 0
+                global_total = cur.fetchone()[0]
+            assert global_total >= total
+            total = global_total
         if total > self._limit:
             self._frequent.add(result_id)
             return True

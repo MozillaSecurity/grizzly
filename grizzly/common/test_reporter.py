@@ -47,7 +47,7 @@ def test_reporter_01(mocker, tmp_path, display_logs, is_hang):
         def _post_submit(self):
             pass
 
-        def _submit_report(self, report, test_cases):
+        def _submit_report(self, report, test_cases, force):
             pass
 
     (tmp_path / "log_stderr.txt").write_bytes(b"log msg")
@@ -208,8 +208,9 @@ def test_fuzzmanager_reporter_02(
     if tests:
         test_cases.append(fake_test)
     reporter = FuzzManagerReporter("fake-tool")
-    reporter.force_report = force
-    reporter.submit(test_cases, Report(log_path, Path("bin"), is_hang=True))
+    reporter.submit(
+        test_cases, Report(log_path, Path("bin"), is_hang=True), force=force
+    )
     assert not log_path.is_dir()
     assert fake_collector.call_args == ({"tool": "fake-tool"},)
     if (frequent and not force) or ignored:
