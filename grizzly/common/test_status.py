@@ -576,7 +576,7 @@ def test_report_counter_01(tmp_path, keys, counts, limit):
         assert not counter.is_frequent(report_id)
         # call count() with report_id 'counted' times
         for current in range(1, counted + 1):
-            assert counter.count(report_id, "desc") == current
+            assert counter.count(report_id, "desc") == (current, (current == 1))
         # test get()
         if sum(counts) > 0:
             assert counter.get(report_id) == (report_id, counted, "desc")
@@ -610,31 +610,31 @@ def test_report_counter_02(mocker, tmp_path):
     assert not counter_b.is_frequent("a")
     assert not counter_c.is_frequent("a")
     # local (counter_a, bucket a) count is 1, global (all counters) count is 1
-    assert counter_a.count("a", "desc") == 1
+    assert counter_a.count("a", "desc") == (1, True)
     assert not counter_a.is_frequent("a")
     assert not counter_b.is_frequent("a")
     assert not counter_c.is_frequent("a")
     # local (counter_b, bucket a) count is 1, global (all counters) count is 2
-    assert counter_b.count("a", "desc") == 1
+    assert counter_b.count("a", "desc") == (1, False)
     assert not counter_a.is_frequent("a")
     assert not counter_b.is_frequent("a")
     assert not counter_c.is_frequent("a")
     # local (counter_b, bucket a) count is 2, global (all counters) count is 3
     # locally exceeded
-    assert counter_b.count("a", "desc") == 2
+    assert counter_b.count("a", "desc") == (2, False)
     assert counter_b.is_frequent("a")
     # local (counter_c, bucket a) count is 1, global (all counters) count is 4
-    assert counter_c.count("a", "desc") == 1
+    assert counter_c.count("a", "desc") == (1, False)
     assert not counter_a.is_frequent("a")
     assert counter_b.is_frequent("a")
     assert not counter_c.is_frequent("a")
     # local (counter_a, bucket a) count is 2, global (all counters) count is 5
     # no limit
-    assert counter_a.count("a", "desc") == 2
+    assert counter_a.count("a", "desc") == (2, False)
     assert not counter_a.is_frequent("a")
     # local (counter_c, bucket a) count is 2, global (all counters) count is 6
     # locally not exceeded, globally exceeded
-    assert counter_c.count("a", "desc") == 2
+    assert counter_c.count("a", "desc") == (2, False)
     assert counter_c.is_frequent("a")
     # local (counter_a, bucket x) count is 0, global (all counters) count is 0
     assert not counter_a.is_frequent("x")

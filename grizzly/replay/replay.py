@@ -246,8 +246,7 @@ class ReplayManager:
         for result in results:
             # always report expected results
             # avoid reporting unexpected frequent results
-            reporter.force_report = result.expected
-            reporter.submit(tests, result.report)
+            reporter.submit(tests, result.report, force=result.expected)
 
     def run(
         self,

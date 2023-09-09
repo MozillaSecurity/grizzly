@@ -721,8 +721,6 @@ class ReduceManager:
         for result in results:
             if self._report_to_fuzzmanager:
                 reporter = FuzzManagerReporter(self._report_tool)
-                if result.expected:
-                    reporter.force_report = True
             else:
                 report_dir = "reports" if result.expected else "other_reports"
                 reporter = FilesystemReporter(
@@ -742,7 +740,7 @@ class ReduceManager:
                 if result.served is not None:
                     for clone, served in zip(clones, result.served):
                         clone.purge_optional(served)
-                result = reporter.submit(clones, result.report)
+                result = reporter.submit(clones, result.report, force=result.expected)
                 if result is not None:
                     if isinstance(result, Path):
                         result = str(result)

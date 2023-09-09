@@ -68,10 +68,10 @@ class Reporter(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _submit_report(self, report, test_cases):
+    def _submit_report(self, report, test_cases, force):
         pass
 
-    def submit(self, test_cases, report):
+    def submit(self, test_cases, report, force=False):
         """Submit report containing results.
 
         Args:
@@ -79,6 +79,7 @@ class Reporter(metaclass=ABCMeta):
                                    the newest being the mostly likely to trigger
                                    the result (crash, assert... etc).
             report (Report): Report to submit.
+            force (bool): Ignore any limits.
 
         Returns:
             *: implementation specific result indicating where the report was created
@@ -99,7 +100,7 @@ class Reporter(metaclass=ABCMeta):
             else:
                 LOG.info("=== BEGIN REPORT ===\nBrowser hang detected")
             LOG.info("=== END REPORT ===")
-        result = self._submit_report(report, test_cases)
+        result = self._submit_report(report, test_cases, force)
         if report is not None:
             report.cleanup()
         self._post_submit()
@@ -124,7 +125,7 @@ class FilesystemReporter(Reporter):
     def _post_submit(self):
         pass
 
-    def _submit_report(self, report, test_cases):
+    def _submit_report(self, report, test_cases, force):
         # create major bucket directory in working directory if needed
         if self.major_bucket:
             dest = self.report_path / report.major[:16]
@@ -167,13 +168,12 @@ class FailedLaunchReporter(FilesystemReporter):
 class FuzzManagerReporter(Reporter):
     FM_CONFIG = Path.home() / ".fuzzmanagerconf"
 
-    __slots__ = ("_extra_metadata", "force_report", "quality", "tool")
+    __slots__ = ("_extra_metadata", "quality", "tool")
 
     def __init__(self, tool):
         super().__init__()
         assert isinstance(tool, str)
         self._extra_metadata = {}
-        self.force_report = False
         self.quality = Quality.UNREDUCED
         # remove whitespace and use only lowercase
         self.tool = "-".join(tool.lower().split())
@@ -245,10 +245,10 @@ class FuzzManagerReporter(Reporter):
         # ignore Valgrind crashes
         return log_data.startswith("VEX temporary storage exhausted.")
 
-    def _submit_report(self, report, test_cases):
+    def _submit_report(self, report, test_cases, force):
         collector = Collector(tool=self.tool)
 
-        if not self.force_report:
+        if not force:
             if collector.sigCacheDir and Path(collector.sigCacheDir).is_dir():
                 # search for a cached signature match
                 with InterProcessLock(str(grz_tmp() / "fm_sigcache.lock")):
