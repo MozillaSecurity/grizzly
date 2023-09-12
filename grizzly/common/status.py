@@ -25,8 +25,8 @@ DB_VERSION = 2
 REPORT_RATE = 60
 # default life time for report entries in the database (24 hours)
 REPORTS_EXPIRE = 86400
-# default life time for result entries in the database (30 days)
-RESULTS_EXPIRE = 2592000
+# default life time for result entries in the database (14 days)
+RESULTS_EXPIRE = 1209600
 # status database files
 STATUS_DB_FUZZ = grz_tmp() / "fuzz-status.db"
 STATUS_DB_REDUCE = grz_tmp() / "reduce-status.db"
