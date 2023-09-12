@@ -222,6 +222,7 @@ class StatusReporter:
         """Merge and generate a summary from status reports.
 
         Args:
+            rate (bool): Include iteration rate.
             runtime (bool): Include total runtime in output.
             sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output.
             timestamp (bool): Include time stamp in output.
@@ -236,7 +237,6 @@ class StatusReporter:
             # calculate totals
             iterations = tuple(x.iteration for x in self.reports)
             log_sizes = tuple(x.log_size for x in self.reports)
-            rates = tuple(x.rate for x in self.reports)
             results = tuple(x.results.total for x in self.reports)
             count = len(self.reports)
             total_ignored = sum(x.ignored for x in self.reports)
@@ -250,10 +250,13 @@ class StatusReporter:
 
             # Rate
             if rate:
+                rates = tuple(x.rate for x in self.reports)
                 disp = [f"{count} @ {sum(rates):0.2f}"]
                 if count > 1:
                     disp.append(f" ({max(rates):0.2f}, {min(rates):0.2f})")
                 entries.append(("Rate", "".join(disp)))
+            else:
+                entries.append(("Instances", str(count)))
 
             # Results
             if total_iters:
@@ -893,7 +896,7 @@ def main(args=None):
         "--time-limit",
         type=int,
         help="Maximum age of reports in seconds. Use zero for no limit."
-        f" (default: {', '.join(f'{k}: {v}s' for k, v  in report_types.items())})",
+        f" (default: {', '.join(f'{k}: {v}' for k, v  in report_types.items())})",
     )
     parser.add_argument(
         "--tracebacks",
@@ -928,14 +931,16 @@ def main(args=None):
         return 0
 
     if not reporter.reports:
-        LOG.info("Grizzly Status - No status reports to display")
+        LOG.info(
+            "Grizzly Status - No status reports to display (time-limit: %s)",
+            _format_seconds(time_limit),
+        )
         return 0
 
-    LOG.info(
-        "Grizzly Status - %s - Instance report frequency: %ds\n",
-        strftime("%Y/%m/%d %X"),
-        REPORT_RATE,
-    )
+    LOG.info("Grizzly Status - %s", strftime("%Y/%m/%d %X"))
+    LOG.info("Instance report frequency: %s", _format_seconds(REPORT_RATE))
+    LOG.info("Time limit filter: %s", _format_seconds(time_limit))
+    LOG.info("")
     LOG.info("[Reports]")
     LOG.info(reporter.specific())
     if reporter.has_results:
