@@ -292,6 +292,7 @@ def test_status_reporter_04(mocker, tmp_path):
     assert len(rptr.reports) == 1
     output = rptr.summary(runtime=False)
     assert "Iteration" in output
+    assert "Instances" not in output
     assert "Rate" in output
     assert "Results" in output
     assert "Blockers" not in output
@@ -313,6 +314,7 @@ def test_status_reporter_04(mocker, tmp_path):
     assert len(rptr.reports) == 2
     output = rptr.summary(rate=False, sysinfo=True, timestamp=True)
     assert "Iteration" in output
+    assert "Instances" in output
     assert "Rate" not in output
     assert "Results" in output
     assert "Ignored" in output
@@ -320,7 +322,7 @@ def test_status_reporter_04(mocker, tmp_path):
     assert "Runtime" in output
     assert "Timestamp" in output
     lines = output.split("\n")
-    assert len(lines) == 9
+    assert len(lines) == 10
     # verify alignment
     position = len(lines[0].split(":")[0])
     for line in lines:
