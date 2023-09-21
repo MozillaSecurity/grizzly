@@ -231,13 +231,15 @@ class Session:
                 LOG.debug("ignoring test case since nothing was served")
                 if current_test.landing_page not in current_test.contents:
                     raise SessionError("Test case is missing landing page")
-                if runner.initial:
+                if runner.initial and result.status != Result.NONE:
                     # since this is the first iteration since the Target launched
                     # something is likely wrong with the Target or Adapter
-                    if result.status == Result.FOUND:
-                        LOG.warning("Delayed startup failure detected")
-                    else:
-                        LOG.warning("Timeout too short? System too busy?")
+                    LOG.warning(
+                        "Failure detected before running a test case, "
+                        "browser build is potentially unstable"
+                    )
+                if result.timeout:
+                    LOG.warning("Browser hung? Timeout too short? System too busy?")
             else:
                 if self.adapter.IGNORE_UNSERVED:
                     LOG.debug("removing unserved files from the test case")
@@ -283,11 +285,6 @@ class Session:
                     )
                 else:
                     LOG.info("Ignored - %d", self.status.ignored)
-
-            # ignore startup failure if it did not happen early on
-            # to avoid aborting the fuzzing session unnecessarily
-            if runner.startup_failure and self.status.iteration < 100:
-                raise SessionError("Please check Adapter and Target")
 
             if self.adapter.remaining is not None and self.adapter.remaining < 1:
                 # all test cases have been replayed

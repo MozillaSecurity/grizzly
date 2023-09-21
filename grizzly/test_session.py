@@ -258,23 +258,6 @@ def test_session_04(mocker):
             session.run([], 10)
 
 
-def test_session_05(mocker):
-    """test Target not requesting landing page"""
-    server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    server.serve_path.return_value = (Served.TIMEOUT, [])
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
-        environ={},
-        launch_timeout=30,
-    )
-    target.monitor.launches = 1
-    with Session(SimpleAdapter(False), None, server, target) as session:
-        with raises(SessionError, match="Please check Adapter and Target"):
-            session.run([], 10)
-    assert target.handle_hang.call_count == 1
-
-
 @mark.parametrize(
     "harness, report_size",
     [
@@ -286,7 +269,7 @@ def test_session_05(mocker):
         (False, 1),
     ],
 )
-def test_session_06(mocker, harness, report_size):
+def test_session_05(mocker, harness, report_size):
     """test Session - handle Target delayed failures"""
     reporter = mocker.Mock(spec_set=Reporter)
     report = mocker.Mock(
@@ -326,13 +309,13 @@ def test_session_06(mocker, harness, report_size):
 @mark.parametrize(
     "srv_results, target_result, ignored, results",
     [
-        # delayed startup crash
+        # delayed startup crash (before requesting test)
         (Served.NONE, Result.FOUND, 0, 1),
         # startup hang/unresponsive
         (Served.TIMEOUT, Result.NONE, 1, 0),
     ],
 )
-def test_session_07(mocker, srv_results, target_result, ignored, results):
+def test_session_06(mocker, srv_results, target_result, ignored, results):
     """test Session.run() - initial test case was not served"""
     report = mocker.Mock(
         spec_set=Report, major="major123", minor="minor456", crash_hash="123"
@@ -347,22 +330,22 @@ def test_session_07(mocker, srv_results, target_result, ignored, results):
         environ={},
         launch_timeout=30,
     )
+    target.log_size.return_value = 1
     target.monitor.launches = 1
     target.check_result.side_effect = (target_result,)
     target.create_report.return_value = report
     with Session(SimpleAdapter(False), reporter, server, target) as session:
         server.serve_path.return_value = (srv_results, [])
-        with raises(SessionError, match="Please check Adapter and Target"):
-            session.run([], 10, iteration_limit=2)
+        session.run([], 10, iteration_limit=1)
         assert session.status.iteration == 1
         assert session.status.results.total == results
         assert session.status.ignored == ignored
-        assert reporter.submit.call_count == results
-        assert target.check_result.call_count == results
-        assert target.handle_hang.call_count == ignored
+    assert reporter.submit.call_count == results
+    assert target.check_result.call_count == results
+    assert target.handle_hang.call_count == ignored
 
 
-def test_session_08(mocker):
+def test_session_07(mocker):
     """test Session.run() ignoring failures"""
     result = RunResult([], 0.1, status=Result.IGNORED)
     result.attempted = True
@@ -387,7 +370,7 @@ def test_session_08(mocker):
         assert session.status.ignored == 1
 
 
-def test_session_09(mocker):
+def test_session_08(mocker):
     """test Session.run() report hang"""
     result = RunResult([], 60.0, status=Result.FOUND, timeout=True)
     result.attempted = True
@@ -426,7 +409,7 @@ def test_session_09(mocker):
         (True, 1, 1, 10, 5),
     ],
 )
-def test_session_10(mocker, harness, report_size, relaunch, iters, report_limit):
+def test_session_09(mocker, harness, report_size, relaunch, iters, report_limit):
     """test Session - limit report submission"""
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
@@ -473,7 +456,7 @@ def test_session_10(mocker, harness, report_size, relaunch, iters, report_limit)
         (True, 2, 1, 0),
     ],
 )
-def test_session_12(mocker, harness, iters, result_limit, results):
+def test_session_10(mocker, harness, iters, result_limit, results):
     """test Session - limit results"""
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
