@@ -226,25 +226,6 @@ class FuzzManagerReporter(Reporter):
             # remove traces so they are not uploaded to FM (because they are huge)
             rmtree(trace_path)
 
-    @staticmethod
-    def _ignored(report):
-        # This is here to prevent reporting stack-less crashes
-        # that were caused by system OOM
-        log_data = report.preferred.read_text("utf-8", errors="ignore")
-        # ignore sanitizer OOMs missing stack
-        if report.stack is None:
-            mem_errs = (
-                "ERROR: Failed to mmap",
-                # NOTE: max_allocation_size_mb can trigger a similar message
-                ": AddressSanitizer failed to allocate",
-                "Sanitizer: internal allocator is out of memory trying to allocate",
-            )
-            # scan log data for memory error strings
-            if any(msg in log_data for msg in mem_errs):
-                return True
-        # ignore Valgrind crashes
-        return log_data.startswith("VEX temporary storage exhausted.")
-
     def _submit_report(self, report, test_cases, force):
         collector = Collector(tool=self.tool)
 
@@ -262,10 +243,6 @@ class FuzzManagerReporter(Reporter):
                     return None
             else:
                 LOG.debug("sigCacheDir does not exist (%r)", collector.sigCacheDir)
-
-        if self._ignored(report):
-            LOG.info("Report is in ignore list")
-            return None
 
         if report.is_hang:
             self.add_extra_metadata("is_hang", True)

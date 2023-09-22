@@ -156,31 +156,22 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
 
 
 @mark.parametrize(
-    "tests, frequent, ignored, force, sig_cache",
+    "tests, frequent, force, sig_cache",
     [
         # report - without test
-        (False, False, False, False, True),
+        (False, False, False, True),
         # report - with test
-        (True, False, False, False, True),
+        (True, False, False, True),
         # report - frequent
-        (True, True, False, False, True),
+        (True, True, False, True),
         # report - forced frequent
-        (True, True, False, True, True),
-        # report - ignored
-        (True, False, True, False, True),
+        (True, True, True, True),
         # report - missing sigCacheDir
-        (False, False, False, False, False),
+        (False, False, False, False),
     ],
 )
-def test_fuzzmanager_reporter_02(
-    mocker, tmp_path, tests, frequent, ignored, force, sig_cache
-):
+def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, force, sig_cache):
     """test FuzzManagerReporter.submit()"""
-    mocker.patch(
-        "grizzly.common.reporter.FuzzManagerReporter._ignored",
-        new_callable=mocker.MagicMock,
-        return_value=ignored,
-    )
     mocker.patch("grizzly.common.reporter.Path.cwd", return_value=tmp_path)
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="0")
     fake_collector = mocker.patch("grizzly.common.reporter.Collector", autospec=True)
@@ -213,28 +204,13 @@ def test_fuzzmanager_reporter_02(
     )
     assert not log_path.is_dir()
     assert fake_collector.call_args == ({"tool": "fake-tool"},)
-    if (frequent and not force) or ignored:
+    if frequent and not force:
         assert fake_collector.return_value.submit.call_count == 0
         assert fake_test.dump.call_count == 0
     else:
         assert fake_collector.return_value.submit.call_count == 1
         if tests:
             assert fake_test.dump.call_count == 1
-
-
-def test_fuzzmanager_reporter_03(mocker, tmp_path):
-    """test FuzzManagerReporter._ignored()"""
-    log_file = tmp_path / "test.log"
-    log_file.touch()
-    report = mocker.Mock(spec_set=Report, path=tmp_path, preferred=log_file, stack=None)
-    # not ignored
-    assert not FuzzManagerReporter._ignored(report)
-    # ignored - sanitizer OOM missing stack
-    log_file.write_bytes(b"ERROR: Failed to mmap")
-    assert FuzzManagerReporter._ignored(report)
-    # ignored - Valgrind OOM
-    log_file.write_bytes(b"VEX temporary storage exhausted.")
-    assert FuzzManagerReporter._ignored(report)
 
 
 @mark.parametrize(
@@ -250,7 +226,7 @@ def test_fuzzmanager_reporter_03(mocker, tmp_path):
         ("TeSt-ToOl", "test-tool"),
     ],
 )
-def test_fuzzmanager_reporter_04(tool, sanitized):
+def test_fuzzmanager_reporter_03(tool, sanitized):
     """test FuzzManagerReporter() sanitizing tool"""
     assert FuzzManagerReporter(tool).tool == sanitized
 
