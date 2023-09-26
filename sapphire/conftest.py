@@ -8,7 +8,6 @@ import re
 import socket
 import sys
 import threading
-import time
 from http.client import BadStatusLine
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
@@ -31,10 +30,15 @@ def client_factory():
         def __init__(self, rx_size=0x10000):
             self.thread = None
             self.rx_size = rx_size
+            # use this event to add delays instead of sleep
+            # this will help avoid shutdown hangs when there are test failures
+            self._closed = threading.Event()
+            self._closed.set()
             self._idle = threading.Event()
             self._idle.set()
 
         def close(self):
+            self._closed.set()
             if self.thread is not None:
                 self.thread.join()
                 self.thread = None
@@ -51,8 +55,10 @@ def client_factory():
             skip_served=True,
             throttle=0,
         ):
+            assert self._closed.is_set()
             assert self._idle.is_set()
             assert self.thread is None
+            self._closed.clear()
             self._idle.clear()
             self.thread = threading.Thread(
                 target=self._handle_request,
@@ -80,10 +86,11 @@ def client_factory():
         ):
             assert isinstance(files_to_request, list)
             if delay:
-                time.sleep(delay)
+                self._closed.wait(delay)
             indexes = list(range(len(files_to_request)))
             if not in_order:
-                random.shuffle(indexes)  # request files in random order
+                # request files in random order
+                random.shuffle(indexes)
             for index in indexes:
                 t_file = files_to_request[index]
                 with t_file.lock:
@@ -102,7 +109,7 @@ def client_factory():
                             resp_code = cli.getcode()
                             content_type = cli.info().get("Content-Type")
                             if resp_code == 200:
-                                while True:
+                                while not self._closed.is_set():
                                     data = cli.read(self.rx_size)
                                     data_length += len(data)
                                     if data_hash is not None:
@@ -111,11 +118,16 @@ def client_factory():
                                         break
                                     if throttle > 0:
                                         # try to simulate a slow connection
-                                        time.sleep(throttle)
+                                        # this might not be very effective with
+                                        # a larger receive buffer size and sendall()
+                                        # used on the other side of the connection
+                                        self._closed.wait(throttle)
                                 if data_hash is not None:
                                     data_hash = data_hash.hexdigest()
-                    else:  # custom request
+                    # custom request
+                    else:
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                         try:
                             sock.connect((addr, port))
                             # safety, so test doesn't hang on failure
@@ -143,7 +155,8 @@ def client_factory():
                     # update test info
                     with t_file.lock:
                         if skip_served and t_file.code is not None:
-                            continue  # test has already be updated
+                            # test has already be updated
+                            continue
                         t_file.requested += 1
                         t_file.code = resp_code
                         if resp_code == 200:
