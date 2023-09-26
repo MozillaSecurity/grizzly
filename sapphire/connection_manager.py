@@ -115,14 +115,16 @@ class ConnectionManager:
                     # sometimes the thread that triggered the event doesn't quite
                     # cleanup in time, so retry (10x with 0.5 second sleep on failure)
                     for _ in range(10):
-                        workers = list(w for w in workers if not w.done)
+                        workers = list(w for w in workers if not w.join(timeout=0))
                         if len(workers) < max_workers:
                             break
                         sleep(0.5)  # pragma: no cover
                     else:  # pragma: no cover
                         # this should never happen
-                        raise RuntimeError("Failed remove workers!")
+                        LOG.error("Failed to remove workers")
+                        raise RuntimeError("Failed to remove workers")
                     LOG.debug("removed completed workers (%d active)", len(workers))
+
         except Exception:  # pylint: disable=broad-except
             if serv_job.exceptions.empty():
                 serv_job.exceptions.put(exc_info())
@@ -135,12 +137,19 @@ class ConnectionManager:
             # wait for all running workers to exit
             while time() < deadline:
                 serv_job.worker_complete.clear()
-                if all(w.done for w in workers):
+                workers = list(w for w in workers if not w.join(timeout=0))
+                if not workers:
                     break
                 serv_job.worker_complete.wait(max(deadline - time(), 0))
-            else:  # pragma: no cover
-                # reached deadline force close workers
-                workers = list(w for w in workers if not w.done)
-                LOG.debug("closing remaining %d worker(s)", len(workers))
+            # close remaining active workers
+            if workers:
+                LOG.debug("closing remaining active workers: %d", len(workers))
                 for worker in workers:
                     worker.close()
+                # join remaining workers
+                deadline = time() + 30
+                for worker in workers:
+                    worker.join(timeout=max(deadline - time(), 0))
+                if not all(w.join(timeout=0) for w in workers):  # pragma: no cover
+                    LOG.error("Failed to close workers")
+                    raise RuntimeError("Failed to close workers")
