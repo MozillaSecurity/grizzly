@@ -112,27 +112,25 @@ class Worker:
         return data.encode(encoding)
 
     def close(self):
-        if not self.done:
-            LOG.debug("closing socket while thread is running!")
+        # workers that are no longer running will have had close() called
+        if self.is_alive():
             # shutdown socket to avoid hang
-            self._conn.shutdown(SHUT_RDWR)
-        self._conn.close()
-        self.join(timeout=60)
-        if self._thread is not None and self._thread.is_alive():
-            # this is here to catch unexpected hangs
-            raise WorkerError("Worker thread failed to join!")
+            LOG.debug("closing socket while thread is running!")
+            try:
+                self._conn.shutdown(SHUT_RDWR)
+            except OSError as exc:
+                LOG.debug("close - shutdown(): %s", exc)
+            self._conn.close()
 
-    @property
-    def done(self):
-        if self._thread is not None and not self._thread.is_alive():
-            self.join()
-            self._thread = None
-        return self._thread is None
+    def is_alive(self):
+        return self._thread is not None and self._thread.is_alive()
 
     @classmethod
     def handle_request(cls, conn, serv_job):
         finish_job = False  # call finish() on return
         try:
+            # socket operations should not block forever
+            assert conn.gettimeout() is not None
             # receive incoming request data
             raw_request = conn.recv(cls.DEFAULT_REQUEST_LIMIT)
             if not raw_request:
@@ -244,6 +242,7 @@ class Worker:
                 serv_job.accepting.set()
 
         except Exception:  # pylint: disable=broad-except
+            LOG.debug("worker thread exception")
             # set finish_job to abort immediately
             finish_job = True
             if serv_job.exceptions.empty():
@@ -255,19 +254,22 @@ class Worker:
                 serv_job.finish()
             serv_job.worker_complete.set()
 
-    def join(self, timeout=None):
+    def join(self, timeout=30):
+        assert timeout >= 0
         if self._thread is not None:
             self._thread.join(timeout=timeout)
             if not self._thread.is_alive():
                 self._thread = None
+        return self._thread is None
 
     @classmethod
-    def launch(cls, listen_sock, job):
+    def launch(cls, listen_sock, job, timeout=30):
+        assert timeout >= 0
         assert job.accepting.is_set()
         conn = None
         try:
             conn, _ = listen_sock.accept()
-            conn.settimeout(None)
+            conn.settimeout(timeout)
             # create a worker thread to handle client request
             w_thread = Thread(target=cls.handle_request, args=(conn, job))
             job.accepting.clear()

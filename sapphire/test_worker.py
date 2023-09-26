@@ -4,45 +4,38 @@ Sapphire unit tests
 # pylint: disable=protected-access
 
 import socket
-import threading
+from threading import Thread, ThreadError
 
-from pytest import mark, raises
+from pytest import mark
 
 from .job import Job
-from .worker import Request, Worker, WorkerError
+from .worker import Request, Worker
 
 
 def test_worker_01(mocker):
-    """test simple Worker in running state"""
-    wthread = mocker.Mock(spec_set=threading.Thread)
-    wthread.is_alive.return_value = True
-    worker = Worker(mocker.Mock(spec_set=socket.socket), wthread)
-    assert worker._conn is not None
-    assert worker._thread is not None
+    """test a Worker"""
+    wthread = mocker.Mock(spec_set=Thread)
+    wsocket = mocker.Mock(spec_set=socket.socket)
+    worker = Worker(wsocket, wthread)
     # it is assumed that launch() has already been called at this point
-    assert not worker.done
-    assert wthread.join.call_count == 0
+    assert worker.is_alive()
     assert wthread.is_alive.call_count == 1
-    worker.join(timeout=0)
+    assert not worker.join(timeout=0)
     assert wthread.join.call_count == 1
-    assert wthread.is_alive.call_count == 2
-    assert worker._conn.close.call_count == 0
-    wthread.is_alive.return_value = False
+    # simulator closing a worker that is alive
+    # have shutdown raise OSError for coverage
+    wsocket.shutdown.side_effect = (OSError("test"),)
     worker.close()
-    assert worker._conn.close.call_count == 1
-    assert worker._thread is None
-    assert worker.done
-
-
-def test_worker_02(mocker):
-    """test simple Worker fails to close"""
-    worker = Worker(
-        mocker.Mock(spec_set=socket.socket), mocker.Mock(spec_set=threading.Thread)
-    )
-    # it is assumed that launch() has already been called at this point
-    worker._thread.is_alive.return_value = True
-    with raises(WorkerError, match="Worker thread failed to join!"):
-        worker.close()
+    assert wsocket.shutdown.call_count == 1
+    assert wsocket.close.call_count == 1
+    # at this point the worker should be complete
+    wthread.is_alive.return_value = False
+    assert not worker.is_alive()
+    assert worker.join(timeout=0)
+    # calling a close when the worker is not alive should do nothing
+    worker.close()
+    assert wsocket.shutdown.call_count == 1
+    assert wsocket.close.call_count == 1
 
 
 @mark.parametrize(
@@ -52,7 +45,7 @@ def test_worker_02(mocker):
         OSError("test"),
     ],
 )
-def test_worker_03(mocker, exc):
+def test_worker_02(mocker, exc):
     """test Worker.launch() socket exception cases"""
     mocker.patch("sapphire.worker.Thread", autospec=True)
     serv_con = mocker.Mock(spec_set=socket.socket)
@@ -63,10 +56,10 @@ def test_worker_03(mocker, exc):
     assert serv_job.accepting.set.call_count == 0
 
 
-def test_worker_04(mocker):
+def test_worker_03(mocker):
     """test Worker.launch() thread exception case"""
     mocker.patch("sapphire.worker.sleep", autospec=True)
-    mocker.patch("sapphire.worker.Thread", side_effect=threading.ThreadError("test"))
+    mocker.patch("sapphire.worker.Thread", side_effect=ThreadError("test"))
     serv_con = mocker.Mock(spec_set=socket.socket)
     serv_job = mocker.Mock(spec_set=Job)
     conn = mocker.Mock(spec_set=socket.socket)
@@ -87,7 +80,7 @@ def test_worker_04(mocker):
         "http://sub.host:1234/testfile",
     ],
 )
-def test_worker_05(mocker, tmp_path, url):
+def test_worker_04(mocker, tmp_path, url):
     """test Worker.launch()"""
     (tmp_path / "testfile").touch()
     job = Job(tmp_path)
@@ -103,10 +96,10 @@ def test_worker_05(mocker, tmp_path, url):
         worker.close()
         if not job.exceptions.empty():
             raise job.exceptions.get()[1]
-    assert worker.done
+    assert worker.join(timeout=10)
     assert clnt_sock.sendall.called
     assert serv_sock.accept.call_count == 1
-    assert clnt_sock.close.call_count == 2
+    assert clnt_sock.close.call_count == 1
 
 
 @mark.parametrize(
@@ -116,7 +109,7 @@ def test_worker_05(mocker, tmp_path, url):
         (b"BAD / HTTP/1.1", b"405 Method Not Allowed"),
     ],
 )
-def test_worker_06(mocker, tmp_path, req, response):
+def test_worker_05(mocker, tmp_path, req, response):
     """test Worker.launch() with invalid/unsupported requests"""
     (tmp_path / "testfile").touch()
     job = Job(tmp_path)
@@ -126,17 +119,17 @@ def test_worker_06(mocker, tmp_path, req, response):
     serv_sock.accept.return_value = (clnt_sock, None)
     worker = Worker.launch(serv_sock, job)
     assert worker is not None
-    worker.join(timeout=1)
+    assert worker.join(timeout=10)
     worker.close()
     if not job.exceptions.empty():
         raise job.exceptions.get()[1]
     assert serv_sock.accept.call_count == 1
-    assert clnt_sock.close.call_count == 2
+    assert clnt_sock.close.call_count == 1
     assert clnt_sock.sendall.called
     assert response in clnt_sock.sendall.call_args[0][0]
 
 
-def test_worker_07(mocker):
+def test_worker_06(mocker):
     """test Worker.handle_request() socket errors"""
     serv_con = mocker.Mock(spec_set=socket.socket)
     serv_con.recv.side_effect = OSError
@@ -144,6 +137,7 @@ def test_worker_07(mocker):
     Worker.handle_request(serv_con, serv_job)
     assert serv_job.accepting.set.call_count == 1
     assert serv_con.sendall.call_count == 0
+    assert serv_con.shutdown.call_count == 0
     assert serv_con.close.call_count == 1
 
 
