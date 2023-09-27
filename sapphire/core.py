@@ -222,8 +222,8 @@ class Sapphire:
             job.finish()
             LOG.debug("nothing to serve")
             return (Served.NONE, tuple())
-        with ConnectionManager(job, self._socket, self._max_workers) as loadmgr:
-            was_timeout = not loadmgr.wait(self.timeout, continue_cb=continue_cb)
+        with ConnectionManager(job, self._socket, limit=self._max_workers) as mgr:
+            was_timeout = not mgr.serve(self.timeout, continue_cb=continue_cb)
         LOG.debug("%s, timeout: %r", job.status, was_timeout)
         return (Served.TIMEOUT if was_timeout else job.status, tuple(job.served))
 
