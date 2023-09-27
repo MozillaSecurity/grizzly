@@ -169,11 +169,7 @@ def test_sapphire_06(client, tmp_path):
 
 def test_sapphire_07(tmp_path):
     """test timeout of the server"""
-    with Sapphire(timeout=60) as serv:
-        assert serv.timeout == 60  # verify default
-        serv.timeout = 0  # disable timeout
-        assert serv.timeout == 0
-        serv.timeout = 0.01
+    with Sapphire(timeout=0.01) as serv:
         assert serv.timeout == 0.01
         _create_test("test_case.html", tmp_path)
         status, files_served = serv.serve_path(tmp_path)
@@ -659,7 +655,6 @@ def test_sapphire_27(client, tmp_path):
 def test_sapphire_28(client_factory, tmp_path):
     """test Sapphire.serve_path() with forever=True"""
     with Sapphire(timeout=10) as serv:
-        assert serv.timeout == 10
         test = _create_test("test_case.html", tmp_path)
         clients = [client_factory() for _ in range(3)]
         for client in clients:

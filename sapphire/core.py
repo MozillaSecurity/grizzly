@@ -96,7 +96,7 @@ def create_listening_socket(attempts=10, port=0, remote=False, timeout=None):
 class Sapphire:
     LISTEN_TIMEOUT = 0.25
 
-    __slots__ = ("_auto_close", "_max_workers", "_socket", "_timeout", "scheme")
+    __slots__ = ("_auto_close", "_max_workers", "_socket", "scheme", "timeout")
 
     def __init__(
         self,
@@ -107,6 +107,7 @@ class Sapphire:
         port=0,
         timeout=60,
     ):
+        assert timeout >= 0
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
         sock = create_listening_socket(
@@ -123,7 +124,6 @@ class Sapphire:
         else:
             self._socket = sock
             self.scheme = "http"
-        self._timeout = None
         self.timeout = timeout
 
     def __enter__(self):
@@ -210,7 +210,8 @@ class Sapphire:
             tuple(int, tuple(str)): Status code and files served.
         """
         assert isinstance(path, Path)
-        LOG.debug("serving '%s' (forever=%r, timeout=%r)", path, forever, self.timeout)
+        assert self.timeout >= 0
+        LOG.debug("serving '%s' (forever=%r, timeout=%d)", path, forever, self.timeout)
         job = Job(
             path,
             auto_close=self._auto_close,
@@ -226,33 +227,6 @@ class Sapphire:
             was_timeout = not mgr.serve(self.timeout, continue_cb=continue_cb)
         LOG.debug("%s, timeout: %r", job.status, was_timeout)
         return (Served.TIMEOUT if was_timeout else job.status, tuple(job.served))
-
-    @property
-    def timeout(self):
-        """The amount of time that must pass before exiting the serve loop and
-        indicating a timeout.
-
-        Args:
-            None
-
-        Returns:
-            int: Timeout in seconds.
-        """
-        return self._timeout
-
-    @timeout.setter
-    def timeout(self, value):
-        """The amount of time that must pass before exiting the serve loop and
-        indicating a timeout.
-
-        Args:
-            value (int): Timeout in seconds.
-
-        Returns:
-            None
-        """
-        assert value >= 0
-        self._timeout = value
 
     @classmethod
     def main(cls, args):
