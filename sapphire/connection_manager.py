@@ -120,16 +120,13 @@ class ConnectionManager:
         assert self._job.pending
         assert self._socket.gettimeout() is not None
         assert shutdown_delay >= 0
+        assert timeout >= 0
         if continue_cb is not None and not callable(continue_cb):
             raise TypeError("continue_cb must be callable")
 
         self._deadline_exceeded = False
         start_time = time()
-        if not timeout:
-            self._deadline = None
-        else:
-            assert timeout > 0
-            self._deadline = start_time + timeout
+        self._deadline = start_time + timeout if timeout else None
 
         launches = 0
         running = 0
