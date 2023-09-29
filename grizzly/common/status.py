@@ -317,7 +317,7 @@ class Status(BaseStatus):
     @staticmethod
     def _init_db(db_file, pid, life_time):
         # prepare database
-        LOG.debug("status using db %r", db_file)
+        LOG.debug("status using db %s", db_file)
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
             _db_version_check(con)
             cur = con.cursor()
@@ -628,7 +628,7 @@ class ResultCounter(SimpleResultCounter):
     @staticmethod
     def _init_db(db_file, pid, life_time):
         # prepare database
-        LOG.debug("resultcounter using db %r", db_file)
+        LOG.debug("resultcounter using db %s", db_file)
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
             _db_version_check(con)
             cur = con.cursor()
@@ -805,7 +805,7 @@ class ReductionStatus:
 
         # prepare database
         if self._db_file:
-            LOG.debug("status using db %r", self._db_file)
+            LOG.debug("status using db %s", self._db_file)
             with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
                 _db_version_check(con)
                 cur = con.cursor()
