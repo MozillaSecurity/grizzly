@@ -243,12 +243,21 @@ def test_job_08(tmp_path):
 
 
 def test_job_09(tmp_path):
+    """test Job.lookup_resource() with file name that is too long"""
+    (tmp_path / "test.txt").touch()
+    job = Job(tmp_path)
+    assert job.status == Served.NONE
+    assert job.pending == 1
+    assert job.lookup_resource(f"/{'a' * 8192}.txt") is None
+
+
+def test_job_10(tmp_path):
     """test Job with missing directory"""
     with raises(OSError):
         Job(tmp_path / "missing")
 
 
-def test_job_10(tmp_path):
+def test_job_11(tmp_path):
     """test Job.mark_served() and Job.served"""
     job = Job(tmp_path)
     assert not any(job.served)
@@ -260,7 +269,7 @@ def test_job_10(tmp_path):
     assert "/some/include/path/inc.bin" in job.served
 
 
-def test_job_11():
+def test_job_12():
     """test Job.lookup_mime()"""
     assert Job.lookup_mime("unknown") == "application/octet-stream"
     # look up from Job.MIME_MAP

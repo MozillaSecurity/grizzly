@@ -6,6 +6,7 @@ Sapphire HTTP server job
 """
 from collections import namedtuple
 from enum import Enum, unique
+from errno import ENAMETOOLONG
 from logging import getLogger
 from mimetypes import guess_type
 from os.path import splitext
@@ -143,6 +144,11 @@ class Job:
                     mime=self.lookup_mime(path),
                     required=required,
                 )
+        except OSError as exc:
+            if exc.errno == ENAMETOOLONG:
+                # file name is too long to look up so ignore it
+                return None
+            raise  # pragma: no cover
         except ValueError:  # pragma: no cover
             # this is for compatibility with python versions < 3.8
             # is_file() will raise if the path contains characters unsupported
