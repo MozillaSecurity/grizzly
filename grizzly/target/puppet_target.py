@@ -223,7 +223,7 @@ class PuppetTarget(Target):
         self.close()
         return was_idle
 
-    def dump_coverage(self, timeout=90):
+    def dump_coverage(self, timeout=5):
         if system() != "Linux":
             LOG.debug("dump_coverage() only supported on Linux")
             return
@@ -276,6 +276,7 @@ class PuppetTarget(Target):
                     and any(x.path.endswith(".gcda") for x in proc.info["open_files"])
                 ):
                     gcda_found = True
+                    # TODO: collect all process with open files
                     # collect pid of process with open .gcda file
                     gcda_open = proc.info["pid"]
                     break
@@ -288,20 +289,21 @@ class PuppetTarget(Target):
                     LOG.debug("gcda dump took %0.2fs", elapsed)
                     break
                 if elapsed >= timeout:
-                    # timeout waiting for .gnco file to be written
+                    # timeout waiting for .gcda file to be written
                     LOG.warning(
                         "gcda file open by pid %d after %0.2fs", gcda_open, elapsed
                     )
                     try:
                         kill(gcda_open, SIGABRT)
-                        wait_procs([Process(gcda_open)], timeout=15)
+                        # wait for logs
+                        wait_procs([Process(gcda_open)], timeout=5)
                     except (AccessDenied, NoSuchProcess, OSError):  # pragma: no cover
                         pass
                     self.close()
                     break
                 if delay < 1.0:
                     # increase delay to a maximum of 1 second
-                    # it is increased when waiting for the .gcno files to be written
+                    # it is increased when waiting for the .gcda files to be written
                     # this decreases the number of calls to process_iter()
                     delay = min(1.0, delay + 0.1)
             elif elapsed >= 10:
