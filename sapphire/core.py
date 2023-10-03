@@ -49,7 +49,7 @@ LOG = getLogger(__name__)
 
 def create_listening_socket(attempts=10, port=0, remote=False, timeout=None):
     """Create listening socket. Search for an open socket if needed and
-    and configure the socket. If a specific port is unavailable or no
+    configure the socket. If a specific port is unavailable or no
     available ports can be found socket.error will be raised.
 
     Args:
@@ -62,7 +62,7 @@ def create_listening_socket(attempts=10, port=0, remote=False, timeout=None):
         socket: A listening socket.
     """
     assert attempts > 0
-    assert port >= 0
+    assert 0 <= port <= 65535
     assert timeout is None or timeout > 0
 
     for remaining in reversed(range(attempts)):
