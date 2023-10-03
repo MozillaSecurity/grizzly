@@ -30,7 +30,7 @@ def parse_args(argv=None):
         help="Configure console logging (default: %(default)s)",
     )
     parser.add_argument(
-        "--port", type=int, help="Specify a port to bind to (default: random)"
+        "--port", default=0, type=int, help="Specify port (default: automatic)"
     )
     parser.add_argument(
         "--remote",
@@ -46,7 +46,9 @@ def parse_args(argv=None):
     args = parser.parse_args(argv)
     # sanity check
     if not args.path.is_dir():
-        parser.error(f"Path does not exist '{args.path}'")
+        parser.error(f"Directory does not exist '{args.path}'")
+    if args.port < 0 or args.port > 65535:
+        parser.error("--port must be >= 0 and <= 65535")
     if args.timeout < 0:
         parser.error("--timeout must be >= 0")
     args.log_level = level_map[args.log_level]
