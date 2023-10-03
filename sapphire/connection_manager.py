@@ -131,9 +131,7 @@ class ConnectionManager:
         launches = 0
         running = 0
         workers = []
-        LOG.debug(
-            "accepting requests (worker limit: %d, timeout: %r)", self._limit, timeout
-        )
+        LOG.debug("accepting requests (workers: %d, timeout: %r)", self._limit, timeout)
         try:
             while not self._job.is_complete() and self._can_continue(continue_cb):
                 # launch workers
@@ -149,7 +147,7 @@ class ConnectionManager:
 
                 # manage workers
                 if running >= self._limit:
-                    LOG.debug("worker limit (%d) hit, waiting...", len(workers))
+                    LOG.debug("worker limit (%d) hit, waiting...", running)
                     if self._job.worker_complete.wait(1):
                         self._job.worker_complete.clear()
                     workers = self._join_workers(workers)
@@ -157,10 +155,14 @@ class ConnectionManager:
                     LOG.debug("removed completed workers (%d active)", running)
 
         finally:
-            LOG.debug("%d requests in %0.3f seconds", launches, time() - start_time)
-            LOG.debug("shutting down, waiting for %d worker(s)...", len(workers))
+            LOG.debug(
+                "serve exit: %d request(s) in %0.3fs, waiting for %d worker(s)...",
+                launches,
+                time() - start_time,
+                running,
+            )
             if not self._job.is_complete():
-                LOG.debug("job was incomplete")
+                LOG.debug("job not complete")
                 self._job.finish()
             # use shutdown_delay to avoid cutting off connections
             workers = self._join_workers(workers, timeout=shutdown_delay)
@@ -171,7 +173,7 @@ class ConnectionManager:
                     worker.close()
                 # join remaining workers
                 if self._join_workers(workers, timeout=30):
-                    LOG.error("Failed to close workers")
+                    LOG.error("Failed to close %d workers", len(workers))
                     raise RuntimeError("Failed to close workers")
 
         # return False only if there was a timeout

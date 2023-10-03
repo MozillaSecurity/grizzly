@@ -155,15 +155,11 @@ class Worker:
                 conn.sendall(
                     cls._4xx_page(405, "Method Not Allowed", serv_job.auto_close)
                 )
-                LOG.debug(
-                    "405 method %r (%d to go)",
-                    request.method,
-                    serv_job.pending,
-                )
+                LOG.debug("405 method %r (%d to go)", request.method, serv_job.pending)
                 return
 
             # lookup resource
-            LOG.debug("lookup_resource(%r)", request.url.path)
+            LOG.debug("lookup resource %r", request.url.path)
             resource = serv_job.lookup_resource(request.url.path)
             if resource:
                 if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
@@ -184,7 +180,12 @@ class Worker:
             # send response
             if resource is None:
                 conn.sendall(cls._4xx_page(404, "Not Found", serv_job.auto_close))
-                LOG.debug("404 %r (%d to go)", request.url.path, serv_job.pending)
+                LOG.debug(
+                    "404 '%s%s' (%d to go)",
+                    "..." if len(request.url.path) > 40 else "",
+                    request.url.path[-40:],
+                    serv_job.pending,
+                )
             elif resource.type == Resource.URL_REDIRECT:
                 redirect_to = [quote(resource.target)]
                 if request.url.query:
@@ -221,10 +222,12 @@ class Worker:
                 LOG.debug("403 %r (%d to go)", request.url.path, serv_job.pending)
             else:
                 # serve the file
-                LOG.debug("target %r", str(resource.target))
                 data_size = resource.target.stat().st_size
                 LOG.debug(
-                    "sending: %s bytes, mime: %r", format(data_size, ","), resource.mime
+                    "sending: %s, %r, '%s'",
+                    f"{data_size:,}B",
+                    resource.mime,
+                    resource.target,
                 )
                 with resource.target.open("rb") as in_fp:
                     conn.sendall(cls._200_header(data_size, resource.mime))
