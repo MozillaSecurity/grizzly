@@ -82,26 +82,22 @@ class Job:
         self.forever = forever
         self.server_map = server_map
         self.worker_complete = Event()
-        self._build_queue(optional_files)
+        self._build_pending(optional_files)
 
-    def _build_queue(self, optional_files):
+    def _build_pending(self, optional_files):
         # build file list to track files that must be served
         # this is intended to only be called once by __init__()
         for entry in self._wwwroot.rglob("*"):
-            if not entry.is_file():
-                continue
             location = entry.relative_to(self._wwwroot).as_posix()
             # do not add optional files to queue of required files
             if optional_files and location in optional_files:
-                LOG.debug("optional: %r", location)
                 continue
             if "?" in str(entry):
-                LOG.warning(
-                    "Cannot add files with '?' in path. Skipping %r", str(entry)
-                )
+                LOG.warning("Path cannot contain '?', skipping '%s'", entry)
                 continue
-            self._pending.files.add(str(entry.resolve()))
-            LOG.debug("required: %r", location)
+            if entry.is_file():
+                self._pending.files.add(str(entry.resolve()))
+                LOG.debug("required: %r", location)
         # if nothing was found check if the path exists
         if not self._pending.files and not self._wwwroot.is_dir():
             raise OSError(f"'{self._wwwroot}' does not exist")
@@ -109,17 +105,16 @@ class Job:
             for redirect, resource in self.server_map.redirect.items():
                 if resource.required:
                     self._pending.files.add(redirect)
-                LOG.debug(
-                    "%s: %r -> %r",
-                    "required" if resource.required else "optional",
-                    redirect,
-                    resource.target,
-                )
+                    LOG.debug("required: %r -> %r", redirect, resource.target)
             for dyn_resp, resource in self.server_map.dynamic.items():
                 if resource.required:
                     self._pending.files.add(dyn_resp)
-                    LOG.debug("%s: %r -> %r", "required", dyn_resp, resource.target)
-        LOG.debug("%d files required to serve", len(self._pending.files))
+                    LOG.debug("required: %r -> %r", dyn_resp, resource.target)
+        LOG.debug(
+            "job has %d required and %d optional file(s)",
+            len(self._pending.files),
+            len(optional_files) if optional_files else 0,
+        )
 
     @classmethod
     def lookup_mime(cls, url):
