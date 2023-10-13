@@ -7,7 +7,7 @@ from unittest.mock import Mock
 from pytest import mark, raises
 
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..common.utils import Exit
+from ..common.utils import ConfigError, Exit
 from ..target import AssetManager, TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
@@ -93,15 +93,15 @@ def test_args_04(tmp_path):
             KeyboardInterrupt,
             None,
             {},
-            Exit.ERROR,
+            Exit.ABORT,
             True,
         ),
         (
             "grizzly.reduce.core.load_plugin",
-            GrizzlyReduceBaseException(""),
+            GrizzlyReduceBaseException("", 999),
             None,
             {},
-            Exit.ERROR,
+            999,
             False,
         ),
         (
@@ -128,6 +128,14 @@ def test_args_04(tmp_path):
             Exit.ARGS,
             False,
         ),
+        (
+            "grizzly.reduce.core.ReplayManager.load_testcases",
+            ConfigError("", 999),
+            None,
+            {},
+            999,
+            False,
+        ),
     ],
 )
 def test_main_exit(
@@ -140,18 +148,22 @@ def test_main_exit(
 
     if use_sig:
         sig = tmp_path / "fake.sig"
-        sig.write_text("{}")
+        sig.write_text('{"symptoms": [{"address": "0", "type": "crashAddress"}]}')
+        sig.with_suffix(".metadata").write_text('{"shortDescription": "foo"}')
     else:
         sig = None
 
+    (tmp_path / "test.html").touch()
     # setup args
     args = mocker.Mock(
         ignore=["fake"],
-        input="test",
+        input=(tmp_path / "test.html"),
         min_crashes=1,
         relaunch=1,
         repeat=1,
         sig=sig,
+        test_index=None,
+        timeout=10,
         **kwargs
     )
 
