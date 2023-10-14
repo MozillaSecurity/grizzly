@@ -17,6 +17,7 @@ from tempfile import TemporaryDirectory, mkdtemp
 from time import sleep, time
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
+from ffpuppet.helpers import certutil_available, certutil_find
 from ffpuppet.sanitizer_util import SanitizerOptions
 from prefpicker import PrefPicker
 from psutil import AccessDenied, NoSuchProcess, Process, process_iter, wait_procs
@@ -85,14 +86,23 @@ class PuppetTarget(Target):
     __slots__ = ("use_valgrind", "_debugger", "_extension", "_prefs", "_puppet")
 
     def __init__(self, binary, launch_timeout, log_limit, memory_limit, **kwds):
+        certs = kwds.pop("certs", None)
+        # only pass certs to FFPuppet if certutil is available
+        # otherwise certs can't be used
+        if certs and not certutil_available(certutil_find(binary)):
+            LOG.warning("HTTPS support requires NSS certutil.")
+            certs = None
+
         super().__init__(
             binary,
             launch_timeout,
             log_limit,
             memory_limit,
             assets=kwds.pop("assets", None),
-            certs=kwds.pop("certs", None),
+            certs=certs,
         )
+        self._https = certs is not None
+
         # TODO: clean up handling debuggers
         self._debugger = Debugger.NONE
         if kwds.pop("pernosco", False):
@@ -112,9 +122,7 @@ class PuppetTarget(Target):
             working_path=str(grz_tmp("target")),
         )
         if kwds:
-            LOG.warning(
-                "PuppetTarget ignoring unsupported arguments: %s", ", ".join(kwds)
-            )
+            LOG.debug("PuppetTarget ignoring unsupported kwargs: %s", ", ".join(kwds))
 
     def _cleanup(self):
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
@@ -222,6 +230,9 @@ class PuppetTarget(Target):
         # be called when there has been a timeout
         self.close()
         return was_idle
+
+    def https(self):
+        return self._https
 
     def dump_coverage(self, timeout=5):
         if system() != "Linux":

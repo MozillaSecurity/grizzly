@@ -824,9 +824,8 @@ class ReduceManager:
             args.repeat = max(args.min_crashes, args.repeat)
             relaunch = min(args.relaunch, args.repeat)
 
-            if args.use_https or any(x.https for x in testcases):
+            if not args.use_http:
                 certs = CertificateBundle.create()
-                LOG.info("HTTPS enabled")
 
             LOG.debug("initializing the Target")
             target = load_plugin(args.platform, "grizzly_targets", Target)(
@@ -850,6 +849,12 @@ class ReduceManager:
             # prioritize specified assets over included
             target.assets.add_batch(args.asset)
             target.process_assets()
+
+            if certs and not target.https():
+                LOG.warning("Target does not support HTTPS, using HTTP")
+                certs.cleanup()
+                certs = None
+
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:

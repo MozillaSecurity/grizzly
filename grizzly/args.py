@@ -181,9 +181,9 @@ class CommonArgs:
             f" (default: '--test-limit' + {TIMEOUT_DELAY}s)",
         )
         self.launcher_grp.add_argument(
-            "--use-https",
+            "--use-http",
             action="store_true",
-            help="Enable HTTPS. (default: %(default)s)",
+            help="Use HTTP instead of HTTPS.",
         )
         self.launcher_grp.add_argument(
             "--version",

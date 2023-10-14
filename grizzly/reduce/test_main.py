@@ -8,7 +8,7 @@ from pytest import mark, raises
 
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import ConfigError, Exit
-from ..target import AssetManager, TargetLaunchError, TargetLaunchTimeout
+from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
 from .exceptions import GrizzlyReduceBaseException
@@ -217,3 +217,33 @@ def test_main_launch_error(mocker, exc_type):
         assert report is exc_obj.report
     else:
         assert reporter.return_value.submit.call_count == 0
+
+
+@mark.parametrize("https_supported", [True, False])
+def test_main_https_support(mocker, tmp_path, https_supported):
+    """test ReduceManager.main() - Target HTTPS support"""
+    mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
+    mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True, return_value=0)
+    mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
+    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
+    (tmp_path / "test.html").touch()
+    # setup args
+    args = mocker.Mock(
+        ignore=["fake"],
+        input=tmp_path / "test.html",
+        min_crashes=1,
+        relaunch=1,
+        repeat=1,
+        sig=None,
+        test_index=None,
+        use_http=False,
+        time_limit=1,
+        timeout=1,
+    )
+
+    target_cls = mocker.MagicMock(spec_set=Target)
+    target = target_cls.return_value
+    target.https.return_value = https_supported
+    mocker.patch("grizzly.reduce.core.load_plugin", return_value=target_cls)
+    assert ReduceManager.main(args) == 0
+    assert target.https.call_count == 1

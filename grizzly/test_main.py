@@ -151,3 +151,18 @@ def test_main_04(
     assert target_cls.call_args[-1]["pernosco"] == pernosco
     assert target_cls.call_args[-1]["rr"] == rr
     assert target_cls.call_args[-1]["valgrind"] == valgrind
+
+
+def test_main_05(mocker, session_setup):
+    """test target does not support https"""
+    target_cls = session_setup[3]
+    target_cls.return_value.https.return_value = False
+    args = mocker.MagicMock(
+        adapter="fake",
+        binary=Path("bin"),
+        use_http=False,
+        time_limit=1,
+        timeout=1,
+    )
+    assert main(args) == Exit.SUCCESS
+    assert target_cls.return_value.https.call_count == 1

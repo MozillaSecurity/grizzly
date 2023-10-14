@@ -443,3 +443,31 @@ def test_main_07(mocker, server, tmp_path):
     assert target.assets.add.call_count == 0
     assert target.assets.is_empty.call_count == 1
     assert reporter.return_value.submit.call_count == 1
+
+
+@mark.parametrize("https_supported", [True, False])
+def test_main_08(mocker, tmp_path, https_supported):
+    """test ReplayManager.main() - Target HTTPS support"""
+    (tmp_path / "test.html").touch()
+    args = mocker.MagicMock(
+        adapter="fake",
+        binary=Path("bin"),
+        input=tmp_path / "test.html",
+        fuzzmanager=False,
+        launch_attempts=1,
+        min_crashes=1,
+        relaunch=1,
+        repeat=1,
+        sig=None,
+        use_http=False,
+        time_limit=1,
+        timeout=1,
+    )
+
+    target_cls = mocker.MagicMock(spec_set=Target)
+    target = target_cls.return_value
+    target.https.return_value = https_supported
+    mocker.patch("grizzly.replay.replay.load_plugin", return_value=target_cls)
+    mocker.patch("grizzly.replay.replay.ReplayManager.run", return_value=[])
+    assert ReplayManager.main(args) == Exit.FAILURE
+    assert target.https.call_count == 1

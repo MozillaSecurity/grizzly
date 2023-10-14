@@ -67,9 +67,8 @@ def main(args):
         else:
             relaunch = args.relaunch
 
-        if args.use_https:
+        if not args.use_http:
             certs = CertificateBundle.create()
-            LOG.info("HTTPS enabled")
 
         LOG.debug("initializing the Target %r", args.platform)
         target = load_plugin(args.platform, "grizzly_targets", Target)(
@@ -87,6 +86,11 @@ def main(args):
         target.assets.add_batch(args.asset)
         target.process_assets()
         adapter.monitor = target.monitor
+
+        if certs and not target.https():
+            LOG.warning("Target does not support HTTPS, using HTTP")
+            certs.cleanup()
+            certs = None
 
         LOG.debug("initializing the Reporter")
         if args.fuzzmanager:
