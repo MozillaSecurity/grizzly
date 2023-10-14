@@ -9,6 +9,7 @@ from platform import system
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, Debugger, Reason
 from pytest import mark, raises
 
+from ..common.utils import CertificateBundle
 from .puppet_target import PuppetTarget
 from .target import AssetManager, Result, TargetLaunchError, TargetLaunchTimeout
 
@@ -27,6 +28,7 @@ def test_puppet_target_01(mocker, tmp_path):
         assert target.log_limit == 25
         assert target.memory_limit == 5000
         assert target.check_result([]) == Result.NONE
+        assert not target.https()
         assert target.log_size() == 1124
         fake_ffp.return_value.log_length.assert_any_call("stderr")
         fake_ffp.return_value.log_length.assert_any_call("stdout")
@@ -473,3 +475,28 @@ def test_puppet_target_14(mocker, tmp_path):
     fake_file.touch()
     with PuppetTarget(fake_file, 300, 25, 5000) as target:
         target.dump_coverage()
+
+
+@mark.parametrize(
+    "certutil, certs",
+    [
+        # certutil and cert bundle available
+        (True, True),
+        # missing certutil
+        (False, True),
+        # no cert bundle
+        (True, False),
+    ],
+)
+def test_puppet_target_15(mocker, tmp_path, certutil, certs):
+    """test PuppetTarget - HTTPS support"""
+    mocker.patch(
+        "grizzly.target.puppet_target.certutil_available", return_value=certutil
+    )
+
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+
+    certs_bundle = mocker.Mock(spec_set=CertificateBundle) if certs else None
+    with PuppetTarget(fake_file, 300, 25, 5000, certs=certs_bundle) as target:
+        assert target.https() == (certutil and certs)

@@ -27,6 +27,9 @@ class SimpleTarget(Target):
     def handle_hang(self, ignore_idle=True, ignore_timeout=False):
         pass
 
+    def https(self):
+        return self._https
+
     def launch(self, location):
         pass
 

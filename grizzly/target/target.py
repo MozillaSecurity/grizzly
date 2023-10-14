@@ -48,6 +48,7 @@ class Target(metaclass=ABCMeta):
 
     __slots__ = (
         "_assets",
+        "_https",
         "_lock",
         "_monitor",
         "binary",
@@ -74,6 +75,7 @@ class Target(metaclass=ABCMeta):
         assert assets is None or isinstance(assets, AssetManager)
         assert certs is None or isinstance(certs, CertificateBundle)
         self._assets = assets if assets else AssetManager(base_path=grz_tmp("target"))
+        self._https = False
         self._lock = Lock()
         self._monitor = None
         self.binary = binary
@@ -134,6 +136,10 @@ class Target(metaclass=ABCMeta):
 
     @abstractmethod
     def handle_hang(self, ignore_idle=True, ignore_timeout=False):
+        pass
+
+    @abstractmethod
+    def https(self):
         pass
 
     # TODO: move to monitor?
