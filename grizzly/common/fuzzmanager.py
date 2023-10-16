@@ -17,6 +17,7 @@ from FTB.Signatures.CrashInfo import CrashInfo
 from .reporter import Quality
 from .utils import grz_tmp
 
+FM_CONFIG = Path.home() / ".fuzzmanagerconf"
 LOG = getLogger(__name__)
 
 

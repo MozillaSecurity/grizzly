@@ -579,9 +579,6 @@ class ReplayManager:
     @classmethod
     def main(cls, args):
         configure_logging(args.log_level)
-        if args.fuzzmanager:
-            FuzzManagerReporter.sanity_check(args.binary)
-
         LOG.info("Starting Grizzly Replay")
 
         if args.headless:

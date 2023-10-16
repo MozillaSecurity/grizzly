@@ -766,8 +766,6 @@ class ReduceManager:
         # pylint: disable=too-many-return-statements
         configure_logging(args.log_level)
         setlocale(LC_ALL, "")
-        if args.fuzzmanager:
-            FuzzManagerReporter.sanity_check(args.binary)
 
         LOG.info("Starting Grizzly Reduce")
 

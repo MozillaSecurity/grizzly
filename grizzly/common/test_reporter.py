@@ -5,7 +5,6 @@
 # pylint: disable=protected-access
 from pathlib import Path
 
-from FTB.ProgramConfiguration import ProgramConfiguration
 from pytest import mark, raises
 
 from .report import Report
@@ -133,28 +132,6 @@ def test_filesystem_reporter_04(mocker, tmp_path):
     assert any((tmp_path / "dst").glob("test_prefix_logs"))
 
 
-def test_fuzzmanager_reporter_01(mocker, tmp_path):
-    """test FuzzManagerReporter.sanity_check()"""
-    fake_reporter = mocker.patch("grizzly.common.reporter.ProgramConfiguration")
-    fake_reporter.fromBinary.return_value = mocker.Mock(spec_set=ProgramConfiguration)
-    # missing global FM config file
-    FuzzManagerReporter.FM_CONFIG = tmp_path / "no_file"
-    with raises(IOError, match="no_file"):
-        FuzzManagerReporter.sanity_check("fake")
-    # missing binary FM config file
-    fake_fmc = tmp_path / ".fuzzmanagerconf"
-    fake_fmc.touch()
-    fake_bin = tmp_path / "bin"
-    fake_bin.touch()
-    FuzzManagerReporter.FM_CONFIG = fake_fmc
-    with raises(IOError, match="bin.fuzzmanagerconf"):
-        FuzzManagerReporter.sanity_check(str(fake_bin))
-    # success
-    (tmp_path / "bin.fuzzmanagerconf").touch()
-    FuzzManagerReporter.sanity_check(str(fake_bin))
-    assert fake_reporter.fromBinary.call_count == 1
-
-
 @mark.parametrize(
     "tests, frequent, force, sig_cache",
     [
@@ -170,7 +147,7 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path):
         (False, False, False, False),
     ],
 )
-def test_fuzzmanager_reporter_02(mocker, tmp_path, tests, frequent, force, sig_cache):
+def test_fuzzmanager_reporter_01(mocker, tmp_path, tests, frequent, force, sig_cache):
     """test FuzzManagerReporter.submit()"""
     mocker.patch("grizzly.common.reporter.Path.cwd", return_value=tmp_path)
     mocker.patch("grizzly.common.reporter.getenv", autospec=True, return_value="0")

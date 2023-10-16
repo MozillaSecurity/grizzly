@@ -33,8 +33,6 @@ LOG = getLogger(__name__)
 def main(args):
     configure_logging(args.log_level)
     LOG.info("Starting Grizzly (%d)", getpid())
-    if args.fuzzmanager:
-        FuzzManagerReporter.sanity_check(args.binary)
 
     if args.headless:
         LOG.info("Running browser headless (%s)", args.headless)

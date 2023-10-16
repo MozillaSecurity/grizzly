@@ -8,6 +8,7 @@ from os.path import exists
 from pathlib import Path
 from platform import system
 
+from .common.fuzzmanager import FM_CONFIG, ProgramConfiguration
 from .common.plugins import scan as scan_plugins
 from .common.plugins import scan_target_assets
 from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, __version__
@@ -264,6 +265,18 @@ class CommonArgs:
     def sanity_check(self, args):
         if not args.binary.is_file():
             self.parser.error(f"file not found: '{args.binary!s}'")
+
+        # fuzzmanager reporter related checks
+        if args.fuzzmanager:
+            if not FM_CONFIG.is_file():
+                self.parser.error(f"--fuzzmanager: missing '{FM_CONFIG}'")
+            bin_cfg = Path(f"{args.binary}.fuzzmanagerconf")
+            if not bin_cfg.is_file():
+                self.parser.error(f"--fuzzmanager: missing '{bin_cfg}'")
+            try:
+                ProgramConfiguration.fromBinary(str(args.binary))
+            except RuntimeError as exc:
+                self.parser.error(f"--fuzzmanager, {exc}")
 
         if args.launch_attempts < 1:
             self.parser.error("--launch-attempts must be >= 1")

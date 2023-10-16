@@ -8,10 +8,7 @@ from ..common.reporter import Quality
 from ..common.utils import Exit
 from .crash import main as crash_main
 
-pytestmark = mark.usefixtures(
-    "tmp_path_fm_config",
-    "tmp_path_status_db_reduce",
-)
+pytestmark = mark.usefixtures("tmp_path_status_db_reduce")
 
 
 @mark.parametrize(

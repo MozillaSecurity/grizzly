@@ -25,7 +25,6 @@ from .strategies import Strategy
 LOG = getLogger(__name__)
 pytestmark = mark.usefixtures(
     "reporter_sequential_strftime",
-    "tmp_path_fm_config",
     "tmp_path_status_db_reduce",
 )
 

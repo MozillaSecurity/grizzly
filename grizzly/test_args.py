@@ -123,6 +123,10 @@ def test_common_args_02(capsys, mocker, args, msg, idx):
 )
 def test_common_args_03(capsys, mocker, tmp_path, args, msg, targets):
     """test CommonArgs.parse_args()"""
+    fm_config = tmp_path / ".fuzzmanagerconf"
+    fm_config.touch()
+    mocker.patch("grizzly.args.FM_CONFIG", fm_config)
+    mocker.patch("grizzly.args.ProgramConfiguration", autospec=True)
     mocker.patch("grizzly.args.scan_plugins", autospec=True, return_value=targets)
     mocker.patch(
         "grizzly.args.scan_target_assets",
@@ -132,6 +136,7 @@ def test_common_args_03(capsys, mocker, tmp_path, args, msg, targets):
     mocker.patch("grizzly.args.system", autospec=True, return_value="foo")
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
+    fake_bin.with_suffix(fake_bin.suffix + ".fuzzmanagerconf").touch()
     with raises(SystemExit):
         CommonArgs().parse_args(argv=[str(fake_bin)] + args)
     assert msg in capsys.readouterr()[-1]
@@ -158,6 +163,32 @@ def test_common_args_05(mocker):
     # test headless
     getenv.return_value = None
     assert CommonArgs.is_headless()
+
+
+def test_common_args_06(capsys, mocker, tmp_path):
+    """test CommonArgs fuzzmanager checks"""
+    fake_bin = tmp_path / "bin.exe"
+    fake_bin.touch()
+    bin_config = tmp_path / "bin.exe.fuzzmanagerconf"
+    fm_config = tmp_path / ".fuzzmanagerconf"
+    mocker.patch("grizzly.args.FM_CONFIG", fm_config)
+
+    # missing system .fuzzmanagerconf
+    with raises(SystemExit):
+        CommonArgs().parse_args(argv=[str(fake_bin), "--fuzzmanager"])
+    assert f"--fuzzmanager: missing '{fm_config}'" in capsys.readouterr()[-1]
+
+    fm_config.touch()
+    # missing binary.fuzzmanagerconf
+    with raises(SystemExit):
+        CommonArgs().parse_args(argv=[str(fake_bin), "--fuzzmanager"])
+    assert f"--fuzzmanager: missing '{bin_config}'" in capsys.readouterr()[-1]
+
+    bin_config.touch()
+    # bad binary.fuzzmanagerconf
+    with raises(SystemExit):
+        CommonArgs().parse_args(argv=[str(fake_bin), "--fuzzmanager"])
+    assert '"product" in binary configuration file' in capsys.readouterr()[-1]
 
 
 @mark.parametrize(
