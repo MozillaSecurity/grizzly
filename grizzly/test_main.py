@@ -35,8 +35,6 @@ from .target import TargetLaunchError
         (0, ["--ignore", "timeout"]),
         # headless
         (0, ["--headless"]),
-        # FuzzManager reporter
-        (0, ["--fuzzmanager"]),
         # verbose mode
         (0, ["--verbose"]),
     ],

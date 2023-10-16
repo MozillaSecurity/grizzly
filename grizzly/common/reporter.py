@@ -11,10 +11,8 @@ from shutil import copyfile, move, rmtree
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile
 
-# import FuzzManager utilities
 from Collector.Collector import Collector
 from fasteners.process_lock import InterProcessLock
-from FTB.ProgramConfiguration import ProgramConfiguration
 from psutil import disk_usage
 
 from .report import Report
@@ -166,8 +164,6 @@ class FailedLaunchReporter(FilesystemReporter):
 
 
 class FuzzManagerReporter(Reporter):
-    FM_CONFIG = Path.home() / ".fuzzmanagerconf"
-
     __slots__ = ("_extra_metadata", "quality", "tool")
 
     def __init__(self, tool):
@@ -181,22 +177,6 @@ class FuzzManagerReporter(Reporter):
 
     def _post_submit(self):
         self._extra_metadata.clear()
-
-    @staticmethod
-    def sanity_check(bin_file):
-        """Perform FuzzManager sanity check.
-
-        Args:
-            bin_file (Path): Binary file being tested.
-
-        Returns:
-            None
-        """
-        if not FuzzManagerReporter.FM_CONFIG.is_file():
-            raise OSError(f"Missing: {FuzzManagerReporter.FM_CONFIG}")
-        if not Path(f"{bin_file}.fuzzmanagerconf").is_file():
-            raise OSError(f"Missing: {bin_file}.fuzzmanagerconf")
-        ProgramConfiguration.fromBinary(str(bin_file))
 
     def add_extra_metadata(self, key, value):
         """Add extra metadata to be reported with any CrashEntrys reported.

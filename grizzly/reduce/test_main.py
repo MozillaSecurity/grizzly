@@ -13,10 +13,7 @@ from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
 from .exceptions import GrizzlyReduceBaseException
 
-pytestmark = mark.usefixtures(
-    "tmp_path_fm_config",
-    "tmp_path_status_db_reduce",
-)
+pytestmark = mark.usefixtures("tmp_path_status_db_reduce")
 
 
 def test_args_01(capsys, tmp_path, mocker):
