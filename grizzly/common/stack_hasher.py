@@ -22,10 +22,17 @@ __all__ = ("Stack", "StackFrame")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
+# These entries pad out the stack and make bucketing more difficult
+IGNORED_FRAMES = (
+    "core::panicking::",
+    "mozglue_static::panic_hook::",
+    "rust_begin_unwind",
+    "RustMozCrash",
+    "std::panicking::",
+    "std::sys_common::backtrace::",
+)
 LOG = getLogger(__name__)
-
 MAJOR_DEPTH = 5
-MAJOR_DEPTH_RUST = 10
 
 
 @unique
@@ -300,19 +307,29 @@ class Stack:
     def _calculate_hash(self, major=False):
         if not self.frames or (major and self._major_depth < 1):
             return None
+
         shash = sha1()
         if self._height_limit is None:
             offset = 0
         else:
             offset = max(len(self.frames) - self._height_limit, 0)
-        for depth, frame in enumerate(self.frames[offset:], start=1):
-            if major and depth > self._major_depth:
-                break
+
+        major_depth = 0
+        for frame in self.frames[offset:]:
+            # don't count ignored frames towards major hash depth
+            if major and (
+                not frame.function
+                or not any(frame.function.startswith(x) for x in IGNORED_FRAMES)
+            ):
+                major_depth += 1
+                if major_depth > self._major_depth:
+                    break
+
             if frame.location is not None:
                 shash.update(frame.location.encode("utf-8", errors="ignore"))
             if frame.function is not None:
                 shash.update(frame.function.encode("utf-8", errors="ignore"))
-            if major and depth > 1:
+            if major_depth > 1:
                 # only add the offset from the top frame when calculating
                 # the major hash and skip the rest
                 continue
@@ -374,9 +391,6 @@ class Stack:
                     frames[-1].stack_line,
                     len(frames) - 1,
                 )
-
-        if frames and frames[0].mode == Mode.RUST and major_depth < MAJOR_DEPTH_RUST:
-            major_depth = MAJOR_DEPTH_RUST
 
         return cls(frames=frames, major_depth=major_depth)
 

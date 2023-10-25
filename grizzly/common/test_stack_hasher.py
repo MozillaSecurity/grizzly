@@ -313,6 +313,35 @@ def test_stack_16():
     assert stack.frames[0].mode == Mode.SANITIZER
 
 
+def test_stack_17():
+    """test creating a Stack with ignored frames"""
+    st_01 = (
+        "#0 0x10 in MOZ_Crash /a.h:281:3\n"
+        "#1 0x11 in std::panicking::ignored::hd80c17bcc51bbfda /l.rs:96:9\n"
+        "#2 0x11 in std::panicking::ignored::hd80c17bcc51bbfda /l.rs:96:9\n"
+        "#3 0x11 in foo_a /l.rs:1:9\n"
+        "#4 0x11 in foo_b1111 /l.rs:2:9\n"
+        "#5 0x11 in foo_c1111 /l.rs:3:9\n"
+    )
+    stack01 = Stack.from_text(st_01, major_depth=3)
+    assert len(stack01.frames) == 6
+
+    st_02 = (
+        "#0 0x10 in MOZ_Crash /a.h:281:3\n"
+        "#1 0x11 in std::panicking::ignored::hd80c17bcc51bbfda /l.rs:96:9\n"
+        "#2 0x11 in std::panicking::ignored::hd80c17bcc51bbfda /l.rs:96:9\n"
+        "#3 0x11 in foo_a /l.rs:1:9\n"
+        "#4 0x11 in foo_b2222 /l.rs:2:9\n"
+        "#5 0x11 in foo_c2222 /l.rs:3:9\n"
+    )
+    stack02 = Stack.from_text(st_02, major_depth=3)
+    assert len(stack02.frames) == 6
+
+    assert stack01.minor != stack02.minor
+    assert stack01.major != stack02.major
+    assert stack01.frames[0].mode == Mode.SANITIZER
+
+
 def test_stackframe_01():
     """test creating an empty StackFrame"""
     stack = StackFrame()
