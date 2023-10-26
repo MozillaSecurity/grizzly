@@ -366,6 +366,8 @@ def test_stackframe_02():
     assert StackFrame.from_line("a|b|c|d|e|f|g") is None
     assert StackFrame.from_line("==123==") is None
     assert StackFrame.from_line("==1== by 0x0: a ()") is None
+    assert StackFrame.from_line("rr(foo") is None
+    assert StackFrame.from_line("==1==    at 0x0: ??? (:)") is None
 
 
 def test_sanitizer_stackframe_01():
@@ -514,6 +516,16 @@ def test_gdb_stackframe_04():
     assert frame.mode == Mode.GDB
 
 
+def test_gdb_stackframe_05():
+    """test creating a StackFrame from a GDB line missing line number"""
+    frame = StackFrame.from_line("#3  0x400545 in main () at test.c")
+    assert frame.stack_line == "3"
+    assert frame.function == "main"
+    assert frame.location == "test.c"
+    assert frame.offset is None
+    assert frame.mode == Mode.GDB
+
+
 def test_minidump_stackframe_01():
     """test creating a StackFrame from a Minidump line with symbols"""
     frame = StackFrame.from_line(
@@ -638,6 +650,15 @@ def test_valgrind_stackframe_05():
     assert frame.function == "Foo::Foo(char *, int, bool)"
     assert frame.location == "File.h"
     assert frame.offset == "37"
+    assert frame.mode == Mode.VALGRIND
+
+
+def test_valgrind_stackframe_06():
+    frame = StackFrame.from_line("==4754==    at 0x4C2AB80: ??? (in /bin/a)")
+    assert frame.stack_line is None
+    assert frame.function == "???"
+    assert frame.location == "a"
+    assert frame.offset is None
     assert frame.mode == Mode.VALGRIND
 
 
