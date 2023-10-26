@@ -25,7 +25,7 @@ __credits__ = ["Tyson Smith"]
 # These entries pad out the stack and make bucketing more difficult
 IGNORED_FRAMES = (
     "core::panicking::",
-    "mozglue_static::panic_hook::",
+    "mozglue_static::panic_hook",
     "rust_begin_unwind",
     "RustMozCrash",
     "std::panicking::",
@@ -342,14 +342,21 @@ class Stack:
 
     @classmethod
     def from_text(cls, input_text, major_depth=MAJOR_DEPTH, parse_mode=None):
-        """
-        parse a stack trace from text.
-        input_txt is the data to parse the trace from.
+        """Parse a stack trace from text. This is intended to parse the output
+        from a single result. Some debuggers such as ASan and TSan can include
+        multiple stacks per result.
+
+        Args:
+            input_text: Data to parse.
+            major_depth: Number of frames use to calculate the major hash.
+            parse_mode: Format to use. If None the format is detected automatically.
+
+        Returns:
+            Stack
         """
 
         frames = []
-        prev_line = None
-        for line in reversed(input_text.split("\n")):
+        for line in input_text.split("\n"):
             line = line.rstrip()
             if not line:
                 # skip empty lines
@@ -368,29 +375,19 @@ class Stack:
                 LOG.debug("parser mode: %s", parse_mode.name)
             assert frame.mode == parse_mode
 
-            if frame.stack_line is not None:
-                stack_line = int(frame.stack_line)
-                # check if we've found a different stack in the data
-                if prev_line is not None and prev_line <= stack_line:
+            if frame.stack_line is not None and frames:
+                num = int(frame.stack_line)
+                # check for new stack
+                if num == 0:
+                    # select stack to use
+                    if parse_mode in (Mode.SANITIZER, Mode.TSAN):
+                        break
+                    frames.clear()
+                # check for out of order or missing frames
+                elif frames[-1].stack_line and num - 1 != int(frames[-1].stack_line):
+                    LOG.debug("scrambled logs?")
                     break
-                frames.insert(0, frame)
-                if stack_line < 1:
-                    break
-                prev_line = stack_line
-            else:
-                frames.insert(0, frame)
-
-        # sanity check
-        if frames and prev_line is not None:
-            # assuming the first frame is 0
-            if int(frames[0].stack_line) != 0:
-                LOG.warning("First stack frame is %s not 0", frames[0].stack_line)
-            if int(frames[-1].stack_line) != len(frames) - 1:
-                LOG.warning(
-                    "Missing frames? Last frame is %s, expected %d (frames-1)",
-                    frames[-1].stack_line,
-                    len(frames) - 1,
-                )
+            frames.append(frame)
 
         return cls(frames=frames, major_depth=major_depth)
 
