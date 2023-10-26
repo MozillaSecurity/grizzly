@@ -78,7 +78,7 @@ def test_stack_05():
 
 
 def test_stack_06():
-    """test creating a Stack by calling from_text()"""
+    """test Stack.from_text() - single Sanitizer stack"""
     input_txt = (
         "=================================================================\n"
         "==7854==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000"
@@ -109,7 +109,7 @@ def test_stack_06():
 
 
 def test_stack_07():
-    """test creating a Stack by calling from_text() with mixed frames modes"""
+    """test Stack.from_text() - mixed frames modes"""
     input_txt = (
         ""
         "    #0 0x4d2cde in a_b_c /a/lib/info.c:392:12\n"
@@ -125,13 +125,20 @@ def test_stack_07():
 
 
 def test_stack_08():
-    """test creating a Stack by calling from_text() with text containing 2 stacks"""
+    """test Stack.from_text() - multiple stacks"""
     input_txt = (
-        ""
-        "    #0 0x0bad0bad in bad::frame0(nsA*, nsB*) /aa/a.cpp:12:1\n"
-        "    #1 0x0bad0bad in bad::frame1(mz::d::EE*, int) /aa/a.cpp:12:1\n"
+        "=================================================================\n"
+        "==5540==ERROR: AddressSanitizer: ...\n"
         "    #0 0x1badf00d in good::frame0(nsA*, nsB*) /aa/a.cpp:12:1\n"
-        "    #1 0xdeadbeef in good::frame1(mz::d::EE*, int) /aa/a.cpp:12:1\n"
+        "    #1 0xdeadbeef in good::frame1(mz::d::EE*, int) /aa/a.cpp:12:1\n\n"
+        "0x12876 is located 1024 bytes after 4096-byte region [0x12876,0x12876)\n"
+        "freed by thread T5 here:\n"
+        "    #0 0x0bad0bad in bad::frame0(nsA*, nsB*) /aa/a.cpp:12:1\n"
+        "    #1 0x0bad0bad in bad::frame1(mz::d::EE*, int) /aa/a.cpp:12:1\n\n"
+        "0x12876 is located 1024 bytes after 4096-byte region [0x12876,0x12876)\n"
+        "previously allocated by thread T0 here:\n"
+        "    #0 0x0bad0bad in bad::frame0(nsA*, nsB*) /aa/a.cpp:12:1\n"
+        "    #1 0x0bad0bad in bad::frame1(mz::d::EE*, int) /aa/a.cpp:12:1\n\n"
     )
     stack = Stack.from_text(input_txt)
     assert len(stack.frames) == 2
@@ -142,7 +149,7 @@ def test_stack_08():
 
 
 def test_stack_09():
-    """test creating a Stack by calling from_text() with empty string"""
+    """test Stack.from_text() - empty string"""
     stack = Stack.from_text("")
     assert not stack.frames
     assert stack.minor is None
@@ -150,7 +157,7 @@ def test_stack_09():
 
 
 def test_stack_10():
-    """test creating a Stack from a Sanitizer trace with an unsymbolized lib"""
+    """test Stack.from_text() - Sanitizer trace with an unsymbolized lib"""
     input_txt = (
         ""
         "    #0 0x4c7702 in realloc asan/asan_malloc_linux.cc:107:3\n"
@@ -167,7 +174,7 @@ def test_stack_10():
 
 
 def test_stack_11():
-    """test creating a Stack from a Sanitizer trace with an unsymbolized lib"""
+    """test Stack.from_text() - Sanitizer trace with an unsymbolized lib"""
     input_txt = (
         ""
         "    #0 0x90000223  (/usr/swr_a.so+0x231223)\n"
@@ -186,7 +193,7 @@ def test_stack_11():
 
 
 def test_stack_12():
-    """test creating a Stack from a Valgrind trace"""
+    """test Stack.from_text() - Valgrind trace"""
     input_txt = (
         ""
         "==4754== \n"
@@ -211,7 +218,7 @@ def test_stack_12():
 
 
 def test_stack_13():
-    """test creating a Stack from Rust trace"""
+    """test Stack.from_text() - Rust trace"""
     input_txt = (
         "thread '<unnamed>' panicked at 'Invoking Servo_Element_IsDisplayContents"
         " on unstyled element', libcore/option.rs:917:5\n"
@@ -291,7 +298,7 @@ def test_stack_14():
 
 
 def test_stack_15():
-    """test creating a Stack from trace missing #0"""
+    """test Stack.from_text() - trace missing #0"""
     stack = Stack.from_text("    #1 0x000098fc in frame1() test/a.cpp:655\n")
     assert len(stack.frames) == 1
     assert stack.frames[0].location == "a.cpp"
@@ -300,7 +307,7 @@ def test_stack_15():
 
 
 def test_stack_16():
-    """test creating a Stack from mixed traces"""
+    """test Stack.from_text() - mixed traces"""
     stack = Stack.from_text(
         ""
         "    #0 0x0001230 in stack_1a() test/a.cpp:12\n"
@@ -308,13 +315,13 @@ def test_stack_16():
         "    #1 0x0001232 in stack_1b() test/a.cpp:23\n"
         "    #2 0x0001233 in stack_1c() test/a.cpp:34\n"
     )
-    assert len(stack.frames) == 2
-    assert stack.frames[0].function == "stack_1b"
+    assert len(stack.frames) == 1
+    assert stack.frames[0].function == "stack_1a"
     assert stack.frames[0].mode == Mode.SANITIZER
 
 
 def test_stack_17():
-    """test creating a Stack with ignored frames"""
+    """test Stack.from_text() - contains ignored frames"""
     st_01 = (
         "#0 0x10 in MOZ_Crash /a.h:281:3\n"
         "#1 0x11 in std::panicking::ignored::hd80c17bcc51bbfda /l.rs:96:9\n"
@@ -336,10 +343,29 @@ def test_stack_17():
     )
     stack02 = Stack.from_text(st_02, major_depth=3)
     assert len(stack02.frames) == 6
-
     assert stack01.minor != stack02.minor
     assert stack01.major != stack02.major
     assert stack01.frames[0].mode == Mode.SANITIZER
+
+
+def test_stack_18():
+    """test Stack.from_text() - multiple minidump stackwalk traces"""
+    stack = Stack.from_text(
+        "CPU|x86|GenuineIntel family 6 model 85 stepping 4|8\n"
+        "Crash|EXCEPTION_BREAKPOINT|0x67a30091|44\n"
+        "42|0|xul.dll|foo_a()|s3:g-g-sources:e/a.cpp:|14302|0x3f1\n"
+        "42|1|xul.dll|foo_b()|s3:g-g-sources:e/a.cpp:|14302|0x3f1\n"
+        "42|2|xul.dll|foo_c()|s3:g-g-sources:e/a.cpp:|14302|0x3f1\n"
+        "43|0|xul.dll|bar_a()|s3:g-g-sources:e/a.cpp:|14302|0x3f1\n"
+        "43|1|xul.dll|bar_b()|s3:g-g-sources:e/a.cpp:|14302|0x3f1\n"
+        "43|2|xul.dll|bar_c()|s3:g-g-sources:e/a.cpp:|14302|0x3f1\n"
+        "44|0|xul.dll|good_a()|s3:g-g-sources:e/a.cpp:|14302|0x3f1\n"
+        "44|1|xul.dll|good_a()|s3:g-g-sources:e/a.cpp:|14302|0x3f1\n"
+        "44|2|xul.dll|good_c()|s3:g-g-sources:e/a.cpp:|14302|0x3f1\n"
+    )
+    assert len(stack.frames) == 3
+    assert stack.frames[0].function == "good_a()"
+    assert stack.frames[0].mode == Mode.MINIDUMP
 
 
 def test_stackframe_01():
@@ -349,7 +375,7 @@ def test_stackframe_01():
 
 
 def test_stackframe_02():
-    """test creating a StackFrame from junk"""
+    """test StackFrame.from_line() - junk"""
     assert StackFrame.from_line("#0      ") is None
     assert StackFrame.from_line(" #0 ") is None
     with raises(AssertionError) as exc:
@@ -371,7 +397,7 @@ def test_stackframe_02():
 
 
 def test_sanitizer_stackframe_01():
-    """test creating a StackFrame from a line with symbols"""
+    """test StackFrame.from_line() - with symbols"""
     frame = StackFrame.from_line(
         "    #1 0x7f00dad60565 in Abort(char const*) /blah/base/nsDebugImpl.cpp:472"
     )
@@ -383,7 +409,7 @@ def test_sanitizer_stackframe_01():
 
 
 def test_sanitizer_stackframe_02():
-    """test creating a StackFrame from a line with symbols"""
+    """test StackFrame.from_line() - with symbols"""
     frame = StackFrame.from_line(
         "    #36 0x48a6e4 in main /app/nsBrowserApp.cpp:399:11"
     )
@@ -395,7 +421,7 @@ def test_sanitizer_stackframe_02():
 
 
 def test_sanitizer_stackframe_03():
-    """test creating a StackFrame from a line without symbols"""
+    """test StackFrame.from_line() - without symbols"""
     frame = StackFrame.from_line(
         "    #1 0x7f00ecc1b33f (/lib/x86_64-linux-gnu/libpthread.so.0+0x1033f)"
     )
@@ -407,7 +433,7 @@ def test_sanitizer_stackframe_03():
 
 
 def test_sanitizer_stackframe_04():
-    """test creating a StackFrame from a line with symbols"""
+    """test StackFrame.from_line() - with symbols"""
     frame = StackFrame.from_line(
         "    #25 0x7f0155526181 in start_thread (/l/libpthread.so.0+0x8181)"
     )
@@ -419,7 +445,7 @@ def test_sanitizer_stackframe_04():
 
 
 def test_sanitizer_stackframe_05():
-    """test creating a StackFrame from a line with angle brackets"""
+    """test StackFrame.from_line() - angle brackets"""
     frame = StackFrame.from_line(
         "    #123 0x7f30afea9148 in Call<nsBlah *> /a/b.cpp:356:50"
     )
@@ -431,7 +457,7 @@ def test_sanitizer_stackframe_05():
 
 
 def test_sanitizer_stackframe_06():
-    """test creating a StackFrame from a useless frame"""
+    """test StackFrame.from_line() - useless frame"""
     frame = StackFrame.from_line("    #2 0x7ffffffff  (<unknown module>)")
     assert frame.stack_line == "2"
     assert frame.function is None
@@ -441,7 +467,7 @@ def test_sanitizer_stackframe_06():
 
 
 def test_sanitizer_stackframe_07():
-    """test creating a StackFrame from a line missing a function"""
+    """test StackFrame.from_line() - missing a function"""
     frame = StackFrame.from_line(
         "    #0 0x7f0d571e04bd  /a/glibc-2.23/../syscall-template.S:84"
     )
@@ -453,7 +479,7 @@ def test_sanitizer_stackframe_07():
 
 
 def test_sanitizer_stackframe_08():
-    """test creating a StackFrame from a line with lots of spaces"""
+    """test StackFrame.from_line() - lots of spaces"""
     frame = StackFrame.from_line(
         "    #0 0x48a6e4 in Call<a *> /test path/file name.c:1:2"
     )
@@ -465,7 +491,7 @@ def test_sanitizer_stackframe_08():
 
 
 def test_sanitizer_stackframe_09():
-    """test creating a StackFrame from a line with filename missing path"""
+    """test StackFrame.from_line() - filename missing path"""
     frame = StackFrame.from_line("    #0 0x0000123 in func a.cpp:12")
     assert frame.stack_line == "0"
     assert frame.function == "func"
@@ -474,8 +500,21 @@ def test_sanitizer_stackframe_09():
     assert frame.mode == Mode.SANITIZER
 
 
+def test_sanitizer_stackframe_10():
+    """test StackFrame.from_line() - with build id"""
+    frame = StackFrame.from_line(
+        "    #0 0x7f76d25b7fc0  (/usr/lib/x86_64-linux-gnu/dri/swrast_dri.so+0x704fc0) "
+        "(BuildId: d04a40e4062a8d444ff6f23d4fe768215b2e32c7)"
+    )
+    assert frame.stack_line == "0"
+    assert frame.function is None
+    assert frame.location == "swrast_dri.so"
+    assert frame.offset == "0x704fc0"
+    assert frame.mode == Mode.SANITIZER
+
+
 def test_gdb_stackframe_01():
-    """test creating a StackFrame from a GDB line with symbols"""
+    """test StackFrame.from_line() - with symbols"""
     frame = StackFrame.from_line(
         "#0  __memmove_ssse3_back () at ../d/x86_64/a/memcpy-ssse3-back.S:1654"
     )
@@ -487,7 +526,7 @@ def test_gdb_stackframe_01():
 
 
 def test_gdb_stackframe_02():
-    """test creating a StackFrame from a GDB line with symbols but no line numbers"""
+    """test StackFrame.from_line() - with symbols, missing line numbers"""
     frame = StackFrame.from_line("#2  0x0000000000400545 in main ()")
     assert frame.stack_line == "2"
     assert frame.function == "main"
@@ -497,7 +536,7 @@ def test_gdb_stackframe_02():
 
 
 def test_gdb_stackframe_03():
-    """test creating a StackFrame from a GDB line with symbols"""
+    """test StackFrame.from_line() - with symbols"""
     frame = StackFrame.from_line("#3  0x0000000000400545 in main () at test.c:5")
     assert frame.stack_line == "3"
     assert frame.function == "main"
@@ -507,7 +546,7 @@ def test_gdb_stackframe_03():
 
 
 def test_gdb_stackframe_04():
-    """test creating a StackFrame from a GDB line unknown address"""
+    """test StackFrame.from_line() - unknown address"""
     frame = StackFrame.from_line("#0  0x00000000 in ?? ()")
     assert frame.stack_line == "0"
     assert frame.function == "??"
@@ -517,7 +556,7 @@ def test_gdb_stackframe_04():
 
 
 def test_gdb_stackframe_05():
-    """test creating a StackFrame from a GDB line missing line number"""
+    """test StackFrame.from_line() - missing line number"""
     frame = StackFrame.from_line("#3  0x400545 in main () at test.c")
     assert frame.stack_line == "3"
     assert frame.function == "main"
@@ -527,7 +566,7 @@ def test_gdb_stackframe_05():
 
 
 def test_minidump_stackframe_01():
-    """test creating a StackFrame from a Minidump line with symbols"""
+    """test StackFrame.from_line() - with symbols"""
     frame = StackFrame.from_line(
         "0|2|libtest|main|hg:c.a.org/m-c:a/b/file.cpp:5bf50|114|0x3a"
     )
@@ -539,7 +578,7 @@ def test_minidump_stackframe_01():
 
 
 def test_minidump_stackframe_02():
-    """test creating a StackFrame from a Minidump line without symbols"""
+    """test StackFrame.from_line() - without symbols"""
     frame = StackFrame.from_line("9|42|libpthread-2.26.so||||0x10588")
     assert frame.stack_line == "42"
     assert frame.function is None
@@ -549,7 +588,7 @@ def test_minidump_stackframe_02():
 
 
 def test_minidump_stackframe_03():
-    """test creating a StackFrame from a Minidump line without hg repo info"""
+    """test StackFrame.from_line() - without hg repo info"""
     frame = StackFrame.from_line(
         "0|49|libxul.so|foo|/usr/x86_64-linux-gnu/test.h|85|0x5"
     )
@@ -560,8 +599,20 @@ def test_minidump_stackframe_03():
     assert frame.mode == Mode.MINIDUMP
 
 
+def test_minidump_stackframe_04():
+    """test StackFrame.from_line() - with s3 repo info"""
+    frame = StackFrame.from_line(
+        "42|0|xul.dll|foo_a() const|s3:g-g-sources:e/a.cpp:|14302|0x3f1"
+    )
+    assert frame.stack_line == "0"
+    assert frame.function == "foo_a() const"
+    assert frame.location == "a.cpp"
+    assert frame.offset == "14302"
+    assert frame.mode == Mode.MINIDUMP
+
+
 def test_tsan_stackframe_01():
-    """test creating a StackFrame from a symbolized TSan line"""
+    """test StackFrame.from_line() - symbolized"""
     frame = StackFrame.from_line("    #0 main race.c:10 (exe+0xa3b4)")
     assert frame.stack_line == "0"
     assert frame.function == "main"
@@ -571,7 +622,7 @@ def test_tsan_stackframe_01():
 
 
 def test_tsan_stackframe_02():
-    """test creating a StackFrame from a symbolized TSan line"""
+    """test StackFrame.from_line() - symbolized"""
     frame = StackFrame.from_line(
         "    #1 test1 test2 /a b/c.h:51:10 (libxul.so+0x18c9873)"
     )
@@ -583,7 +634,7 @@ def test_tsan_stackframe_02():
 
 
 def test_tsan_stackframe_03():
-    """test creating a StackFrame from an unsymbolized TSan line"""
+    """test StackFrame.from_line() - unsymbolized"""
     frame = StackFrame.from_line("    #2 <null> <null> (0xbad)")
     assert frame.stack_line == "2"
     assert frame.function is None
@@ -593,7 +644,7 @@ def test_tsan_stackframe_03():
 
 
 def test_tsan_stackframe_04():
-    """test creating a StackFrame from a TSan line missing file"""
+    """test StackFrame.from_line() - missing file"""
     frame = StackFrame.from_line("    #0 func <null> (mod+0x123ac)")
     assert frame.stack_line == "0"
     assert frame.function == "func"
@@ -603,6 +654,7 @@ def test_tsan_stackframe_04():
 
 
 def test_valgrind_stackframe_01():
+    """test StackFrame.from_line()"""
     frame = StackFrame.from_line("==4754==    at 0x45C6C0: FuncName (decode.c:123)")
     assert frame.stack_line is None
     assert frame.function == "FuncName"
@@ -612,6 +664,7 @@ def test_valgrind_stackframe_01():
 
 
 def test_valgrind_stackframe_02():
+    """test StackFrame.from_line()"""
     frame = StackFrame.from_line("==4754==    by 0x462A20: main (foo.cc:71)")
     assert frame.stack_line is None
     assert frame.function == "main"
@@ -621,6 +674,7 @@ def test_valgrind_stackframe_02():
 
 
 def test_valgrind_stackframe_03():
+    """test StackFrame.from_line()"""
     frame = StackFrame.from_line(
         "==4754==    at 0x4C2AB80: malloc (in /usr/lib/blah-linux.so)"
     )
@@ -632,6 +686,7 @@ def test_valgrind_stackframe_03():
 
 
 def test_valgrind_stackframe_04():
+    """test StackFrame.from_line()"""
     frame = StackFrame.from_line(
         "==2342==    by 0x4E3E71: (anon ns)::test(b2::a&, int) (main.cpp:49)"
     )
@@ -643,6 +698,7 @@ def test_valgrind_stackframe_04():
 
 
 def test_valgrind_stackframe_05():
+    """test StackFrame.from_line()"""
     frame = StackFrame.from_line(
         "==2342==    at 0xF00D: Foo::Foo(char *, int, bool) (File.h:37)"
     )
@@ -654,6 +710,7 @@ def test_valgrind_stackframe_05():
 
 
 def test_valgrind_stackframe_06():
+    """test StackFrame.from_line()"""
     frame = StackFrame.from_line("==4754==    at 0x4C2AB80: ??? (in /bin/a)")
     assert frame.stack_line is None
     assert frame.function == "???"
@@ -663,6 +720,7 @@ def test_valgrind_stackframe_06():
 
 
 def test_rr_stackframe_01():
+    """test StackFrame.from_line()"""
     frame = StackFrame.from_line("rr(main+0x244)[0x450b74]")
     assert frame.stack_line is None
     assert frame.function is None
@@ -672,7 +730,7 @@ def test_rr_stackframe_01():
 
 
 def test_rust_stackframe_01():
-    """test creating a Rust StackFrame from stack line"""
+    """test StackFrame.from_line()"""
     frame = StackFrame.from_line("  53:    0x7ff1d7e4982f - __libc_start_main")
     assert frame.stack_line == "53"
     assert frame.function == "__libc_start_main"
@@ -682,7 +740,7 @@ def test_rust_stackframe_01():
 
 
 def test_rust_stackframe_02():
-    """test creating a Rust StackFrame from stack line"""
+    """test StackFrame.from_line()"""
     frame = StackFrame.from_line(
         "  4:    0x10b715a5b - unwind::begin_unwind_fmt::h227376fe1e021a36n3d"
     )
