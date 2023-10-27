@@ -71,7 +71,7 @@ def test_iomanager_04():
         assert not any(tcase.optional)
         assert tcase.time_limit == time_limit
         assert "grz_current_test" in iom.server_map.redirect
-        assert iom.server_map.redirect["grz_current_test"].target == tcase.landing_page
+        assert iom.server_map.redirect["grz_current_test"].target == tcase.entry_point
         assert "grz_next_test" in iom.server_map.redirect
         assert iom._test is not None
         iom.purge()

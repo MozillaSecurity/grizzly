@@ -15,10 +15,10 @@ from .storage import TestCase, TestCaseLoadFailure, TestFileExists
 
 def test_testcase_01(tmp_path):
     """test empty TestCase"""
-    l_page = "land.html"
+    entry_point = "test.html"
     adpt_name = "test-adapter"
-    with TestCase(l_page, adpt_name) as tcase:
-        assert tcase.landing_page == l_page
+    with TestCase(entry_point, adpt_name) as tcase:
+        assert tcase.entry_point == entry_point
         assert tcase.assets is None
         assert tcase.adapter_name == adpt_name
         assert tcase.duration is None
@@ -223,7 +223,7 @@ def test_testcase_08(mocker, tmp_path):
         assert asset
         with asset:
             assert "example" in asset.assets
-        assert dst.landing_page == "target.bin"
+        assert dst.entry_point == "target.bin"
         assert "target.bin" in (x.file_name for x in dst._files.required)
         assert "optional.bin" in (x.file_name for x in dst._files.optional)
         assert "x.bin" in (x.file_name for x in dst._files.optional)
@@ -251,13 +251,13 @@ def test_testcase_09(tmp_path):
     with TestCase.load_single(entry_point, adjacent=False) as tcase:
         assert tcase.assets is None
         assert not tcase.env_vars
-        assert tcase.landing_page == "target.bin"
+        assert tcase.entry_point == "target.bin"
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
         assert tcase.timestamp == 0
     # load full test case
     with TestCase.load_single(entry_point, adjacent=True) as tcase:
-        assert tcase.landing_page == "target.bin"
+        assert tcase.entry_point == "target.bin"
         assert "target.bin" in (x.file_name for x in tcase._files.required)
         assert "optional.bin" in (x.file_name for x in tcase._files.optional)
 

@@ -5,6 +5,7 @@
 import json
 from collections import namedtuple
 from itertools import chain, product
+from logging import getLogger
 from os.path import normpath, split
 from pathlib import Path
 from shutil import copyfile, move, rmtree
@@ -19,6 +20,9 @@ from .utils import __version__, grz_tmp
 __all__ = ("TestCase", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
+
+
+LOG = getLogger(__name__)
 
 
 class TestCaseLoadFailure(Exception):
@@ -39,11 +43,11 @@ class TestCase:
         "adapter_name",
         "assets",
         "duration",
+        "entry_point",
         "env_vars",
         "hang",
         "https",
         "input_fname",
-        "landing_page",
         "time_limit",
         "timestamp",
         "version",
@@ -53,13 +57,13 @@ class TestCase:
 
     def __init__(
         self,
-        landing_page,
+        entry_point,
         adapter_name,
         input_fname=None,
         time_limit=None,
         timestamp=None,
     ):
-        assert landing_page
+        assert entry_point
         self.adapter_name = adapter_name
         self.assets = None
         self.duration = None
@@ -67,7 +71,7 @@ class TestCase:
         self.hang = False
         self.https = False
         self.input_fname = input_fname  # file that was used to create the test case
-        self.landing_page = self.sanitize_path(landing_page)
+        self.entry_point = self.sanitize_path(entry_point)
         self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
         self.version = __version__
@@ -162,8 +166,8 @@ class TestCase:
         else:
             move(src_file, test_file.data_file)
 
-        # landing_page is always 'required'
-        if required or test_file.file_name == self.landing_page:
+        # entry_point is always 'required'
+        if required or test_file.file_name == self.entry_point:
             self._files.required.append(test_file)
         else:
             self._files.optional.append(test_file)
@@ -189,7 +193,7 @@ class TestCase:
             TestCase: A copy of the TestCase instance.
         """
         result = type(self)(
-            self.landing_page,
+            self.entry_point,
             self.adapter_name,
             self.input_fname,
             self.time_limit,
@@ -278,7 +282,7 @@ class TestCase:
                 "hang": self.hang,
                 "https": self.https,
                 "input": Path(self.input_fname).name if self.input_fname else None,
-                "target": self.landing_page,
+                "target": self.entry_point,
                 "time_limit": self.time_limit,
                 "timestamp": self.timestamp,
                 "version": self.version,
@@ -305,6 +309,22 @@ class TestCase:
             if tfile.file_name == path:
                 return tfile
         return None
+
+    @property
+    def landing_page(self):
+        """TestCase.landing_page is deprecated!
+        Should be replaced with TestCase.entry_page.
+
+        Args:
+            None
+
+        Returns:
+            str: TestCase.entry_page.
+        """
+        LOG.warning(
+            "'TestCase.landing_page' deprecated, use 'TestCase.entry_point' in adapter"
+        )
+        return self.entry_point
 
     @classmethod
     def load(cls, path, adjacent=False):
@@ -419,7 +439,7 @@ class TestCase:
         test.https = info.get("https", False)
         test.version = info.get("version", None)
         test.add_from_file(
-            entry_point, file_name=test.landing_page, required=True, copy=copy
+            entry_point, file_name=test.entry_point, required=True, copy=copy
         )
         if info:
             # load assets
@@ -453,7 +473,7 @@ class TestCase:
                 if asset_path and location.startswith(asset_path):
                     continue
                 # ignore files that have been previously loaded
-                if location in (test.landing_page, "test_info.json"):
+                if location in (test.entry_point, "test_info.json"):
                     continue
                 # NOTE: when loading all files except the entry point are
                 # marked as `required=False`

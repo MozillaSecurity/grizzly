@@ -39,18 +39,17 @@ class NoOpAdapter(Adapter):
         )
 
     def generate(self, testcase, _server_map):
-        """Since the test case has already been created just add the data to the
-        TestCase.
+        """The test case contents have been created now add the data to the TestCase.
 
-        Also all TestCases require an entry point and the one expected by Grizzly
-        is provided in `testcase.landing_page` so use it as the file name for
+        All TestCases require an entry point and the one expected by Grizzly
+        is provided in `testcase.entry_point` so use it as the file name for
         the test.
 
         Args:
             testcase (grizzly.common.storage.TestCase): TestCase to be populated.
-            _server_map (sapphire.server_map.ServerMap): Unused.
+            _server_map (sapphire.server_map.ServerMap): Unused in this example.
 
         Returns:
             None
         """
-        testcase.add_from_bytes(self.fuzz["test"], testcase.landing_page)
+        testcase.add_from_bytes(self.fuzz["test"], testcase.entry_point)

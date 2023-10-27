@@ -229,8 +229,9 @@ class Session:
             if not result.attempted:
                 LOG.warning("Test case was not served")
                 LOG.debug("ignoring test case since nothing was served")
-                if current_test.landing_page not in current_test.contents:
-                    raise SessionError("Test case is missing landing page")
+                if current_test.entry_point not in current_test.contents:
+                    LOG.error("Check adapter, test case is missing entry point")
+                    raise SessionError("Test case is missing entry point")
                 if runner.initial and result.status != Result.NONE:
                     # since this is the first iteration since the Target launched
                     # something is likely wrong with the Target or Adapter
