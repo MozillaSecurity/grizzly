@@ -35,7 +35,7 @@ class SimpleAdapter(Adapter):
     def generate(self, testcase, _server_map):
         assert testcase.adapter_name == self.name
         testcase.input_fname = self.fuzz["input"]
-        testcase.add_from_bytes(b"test", testcase.landing_page)
+        testcase.add_from_bytes(b"test", testcase.entry_point)
         if self.remaining is not None:
             assert self.remaining > 0
             self.remaining -= 1
@@ -254,7 +254,7 @@ def test_session_04(mocker):
     )
     target.monitor.launches = 1
     with Session(FuzzAdapter("fuzz"), None, server, target) as session:
-        with raises(SessionError, match="Test case is missing landing page"):
+        with raises(SessionError, match="Test case is missing entry point"):
             session.run([], 10)
 
 

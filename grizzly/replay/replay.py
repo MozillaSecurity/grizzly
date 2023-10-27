@@ -363,12 +363,12 @@ class ReplayManager:
                         next_idx = (test_idx + 1) % test_count
                         server_map.set_redirect(
                             "grz_next_test",
-                            testcases[next_idx].landing_page,
+                            testcases[next_idx].entry_point,
                             required=True,
                         )
                     server_map.set_redirect(
                         "grz_current_test",
-                        testcases[test_idx].landing_page,
+                        testcases[test_idx].entry_point,
                         required=False,
                     )
                     # run testcase

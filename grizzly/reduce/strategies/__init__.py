@@ -257,8 +257,8 @@ class Strategy(ABC):
         remove_testcases = []
         for idx, (testcase, tc_served) in enumerate(zip(testcases, served)):
             LOG.debug("testcase %d served %r", idx, tc_served)
-            if testcase.landing_page not in tc_served:
-                LOG.debug("landing page %r not served", testcase.landing_page)
+            if testcase.entry_point not in tc_served:
+                LOG.debug("entry point not served (%r)", testcase.entry_point)
                 remove_testcases.append(idx)
                 anything_purged = True
             else:

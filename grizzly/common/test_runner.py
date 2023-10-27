@@ -67,7 +67,7 @@ def test_runner_02(mocker):
     target.check_result.return_value = Result.NONE
     serv_files = ["a.bin"]
     server.serve_path.return_value = (Served.ALL, serv_files)
-    testcase = mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, entry_point=serv_files[0], optional=[])
     # single run/iteration relaunch (not idle exit)
     target.is_idle.return_value = False
     runner = Runner(server, target, relaunch=1)
@@ -129,7 +129,7 @@ def test_runner_02(mocker):
     [
         # no files served
         (Served.NONE, []),
-        # landing page not served
+        # entry point not served
         (Served.REQUEST, ["harness"]),
     ],
 )
@@ -139,7 +139,7 @@ def test_runner_03(mocker, srv_result, served):
     server.serve_path.return_value = (srv_result, served)
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
-    testcase = mocker.Mock(spec_set=TestCase, landing_page="x", optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, entry_point="x", optional=[])
     runner = Runner(server, target)
     result = runner.run([], ServerMap(), testcase)
     assert runner.initial
@@ -166,7 +166,7 @@ def test_runner_04(mocker, ignore, status, idle, check_result):
     """test reporting timeout"""
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
-    testcase = mocker.Mock(spec_set=TestCase, landing_page="a.bin", optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, entry_point="a.bin", optional=[])
     serv_files = ["a.bin", "/another/file.bin"]
     server.serve_path.return_value = (Served.TIMEOUT, serv_files)
     target.check_result.return_value = Result.FOUND
@@ -191,7 +191,7 @@ def test_runner_04(mocker, ignore, status, idle, check_result):
         (["a.bin"], True, Result.FOUND, Result.FOUND),
         # IGNORED
         (["a.bin"], True, Result.IGNORED, Result.IGNORED),
-        # failure before serving landing page
+        # failure before serving entry point
         (["harness"], False, Result.FOUND, Result.FOUND),
     ],
 )
@@ -202,7 +202,7 @@ def test_runner_05(mocker, served, attempted, target_result, status):
     target = mocker.Mock(spec_set=Target, launch_timeout=10)
     target.check_result.return_value = target_result
     target.monitor.is_healthy.return_value = False
-    testcase = mocker.Mock(spec_set=TestCase, landing_page="a.bin", optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, entry_point="a.bin", optional=[])
     runner = Runner(server, target)
     runner.launch("http://a/")
     result = runner.run([], ServerMap(), testcase)
@@ -225,7 +225,7 @@ def test_runner_06(mocker):
     result = runner.run(
         [],
         ServerMap(),
-        mocker.Mock(spec_set=TestCase, landing_page=serv_files[0], optional=[]),
+        mocker.Mock(spec_set=TestCase, entry_point=serv_files[0], optional=[]),
     )
     assert result.status == Result.NONE
     assert result.attempted

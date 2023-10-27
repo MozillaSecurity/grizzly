@@ -224,11 +224,11 @@ class Runner:
             with TestCase("post_launch_delay.html", "None") as content:
                 content.add_from_file(
                     Path(__file__).parent / "post_launch_delay.html",
-                    content.landing_page,
+                    content.entry_point,
                     copy=True,
                 )
                 srv_map = ServerMap()
-                srv_map.set_redirect("grz_start", content.landing_page, required=False)
+                srv_map.set_redirect("grz_start", content.entry_point, required=False)
                 srv_map.set_redirect("grz_continue", "grz_start", required=True)
                 # temporarily disable server timeout
                 srv_timeout = self._server.timeout
@@ -290,7 +290,7 @@ class Runner:
         result = RunResult(
             served,
             duration,
-            attempted=testcase.landing_page in served,
+            attempted=testcase.entry_point in served,
             timeout=server_status == Served.TIMEOUT,
         )
         # TODO: fix calling TestCase.add_batch() for multi-test replay
@@ -344,7 +344,7 @@ class Runner:
         else:
             # something is wrong so close the target
             # previous iteration put target in a bad state?
-            LOG.debug("landing page %r not served!", testcase.landing_page)
+            LOG.debug("entry point not served (%r)", testcase.entry_point)
             self._target.close()
             # detect startup failures
             if self.initial:
@@ -374,7 +374,7 @@ class RunResult:
     """A RunResult holds result details from a call to Runner.run().
 
     Attributes:
-        attempted (bool): Test landing page (entry point) was requested.
+        attempted (bool): Test entry point was requested.
         duration (float): Time spent waiting for test contents to be served.
         served (tuple(str)): Files that were served.
         status (int): Result status of test.

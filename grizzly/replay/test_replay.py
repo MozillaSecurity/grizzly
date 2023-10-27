@@ -151,11 +151,11 @@ def test_replay_04(mocker, server, good_sig):
 
 
 def test_replay_05(mocker, server):
-    """test ReplayManager.run() - error - landing page not requested"""
+    """test ReplayManager.run() - error - entry point not requested"""
     target = mocker.Mock(
         spec_set=Target, binary=Path("bin"), closed=True, launch_timeout=30
     )
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     # test target unresponsive
     target.check_result.return_value = Result.NONE
     server.serve_path.return_value = (Served.NONE, [])
@@ -185,13 +185,13 @@ def test_replay_05(mocker, server):
 
 def test_replay_06(mocker, server):
     """test ReplayManager.run()
-    delayed failure - following test landing page not requested"""
+    delayed failure - following test entry point not requested"""
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     type(target).closed = mocker.PropertyMock(side_effect=(True, False, True))
     target.check_result.side_effect = (Result.NONE, Result.FOUND)
     target.monitor.is_healthy.return_value = False
     target.save_logs = _fake_save_logs
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     server.serve_path.side_effect = (
         (Served.ALL, ["a.html"]),
         (Served.REQUEST, ["x"]),
@@ -211,7 +211,7 @@ def test_replay_07(mocker, server):
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     target.check_result.return_value = Result.IGNORED
     target.handle_hang.return_value = True
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, use_harness=False) as replay:
         assert not replay.run(tests, 10)
         assert replay.status.ignored == 1
@@ -226,7 +226,7 @@ def test_replay_08(mocker, server):
     server.serve_path.return_value = (Served.ALL, ["a.html"])
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.save_logs = _fake_save_logs
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     # early failure
     target.check_result.side_effect = (
         Result.FOUND,
@@ -299,7 +299,7 @@ def test_replay_09(mocker, server):
     signature.matches.side_effect = (True, False, False)
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager(
         [], server, target, signature=signature, use_harness=False
     ) as replay:
@@ -334,7 +334,7 @@ def test_replay_10(mocker, server):
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, signature=sig, use_harness=False) as replay:
         results = replay.run(tests, 10, repeat=2, min_results=2)
         assert target.close.call_count == 3
@@ -363,7 +363,7 @@ def test_replay_11(mocker, server):
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
         results = replay.run(tests, 10, repeat=2, min_results=2)
         assert target.close.call_count == 3
@@ -396,7 +396,7 @@ def test_replay_12(mocker, server):
         Result.NONE,
     )
     target.monitor.is_healthy.return_value = False
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, any_crash=True) as replay:
         assert not replay.run(tests, 10, repeat=4, min_results=3)
         assert target.close.call_count == 5
@@ -416,7 +416,7 @@ def test_replay_13(mocker, server):
     target.check_result.return_value = Result.FOUND
     target.save_logs = _fake_save_logs
     target.monitor.is_healthy.return_value = False
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
         results = replay.run(tests, 10, repeat=1, min_results=1)
         assert results
@@ -448,7 +448,7 @@ def test_replay_14(mocker, server):
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, use_harness=False) as replay:
         results = replay.run(tests, 10, repeat=3, min_results=2)
         assert target.close.call_count == 4
@@ -474,7 +474,7 @@ def test_replay_15(mocker, server):
     server.serve_path.side_effect = ((Served.ALL, ["a.html"]), KeyboardInterrupt)
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
-    tests = [mocker.MagicMock(spec_set=TestCase, landing_page="a.html")]
+    tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager(
         [], server, target, any_crash=True, use_harness=True, relaunch=2
     ) as replay:
@@ -497,7 +497,7 @@ def test_replay_16(mocker, server):
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     target.check_result.return_value = Result.NONE
     tests = [
-        mocker.MagicMock(spec_set=TestCase, landing_page="a.html") for _ in range(3)
+        mocker.MagicMock(spec_set=TestCase, entry_point="a.html") for _ in range(3)
     ]
     with ReplayManager([], server, target, use_harness=True) as replay:
         assert not replay.run(tests, 10)
@@ -516,7 +516,7 @@ def test_replay_17(mocker, server):
     target.check_result.return_value = Result.NONE
     target.monitor.is_healthy.return_value = False
     tests = [
-        mocker.MagicMock(spec_set=TestCase, landing_page="a.html") for _ in range(3)
+        mocker.MagicMock(spec_set=TestCase, entry_point="a.html") for _ in range(3)
     ]
     with ReplayManager([], server, target, use_harness=True, relaunch=2) as replay:
         assert not replay.run(tests, 10, repeat=10, post_launch_delay=-1)
@@ -545,7 +545,7 @@ def test_replay_18(mocker, server):
     target.monitor.is_healthy.return_value = False
     target.save_logs = _fake_save_logs
     tests = [
-        mocker.MagicMock(spec_set=TestCase, landing_page=f"{i}.html") for i in range(3)
+        mocker.MagicMock(spec_set=TestCase, entry_point=f"{i}.html") for i in range(3)
     ]
     with ReplayManager([], server, target, use_harness=True) as replay:
         results = replay.run(tests, 30, post_launch_delay=-1)
@@ -633,7 +633,7 @@ def test_replay_21(mocker, tmp_path):
     fake_load = mocker.patch("grizzly.replay.replay.TestCase.load")
     test0 = mocker.Mock(spec_set=TestCase, env_vars={"env": "var"})
     test0.pop_assets.return_value = None
-    test1 = mocker.Mock(spec_set=TestCase, env_vars={}, landing_page="x.html")
+    test1 = mocker.Mock(spec_set=TestCase, env_vars={}, entry_point="x.html")
     test1.pop_assets.return_value = None
     test2 = mocker.Mock(spec_set=TestCase, env_vars={})
     test2.pop_assets.return_value = None
@@ -656,7 +656,7 @@ def test_replay_21(mocker, tmp_path):
     fake_load.return_value = [test0, test1, test2, mocker.MagicMock(spec_set=TestCase)]
     tests, assets, _ = ReplayManager.load_testcases(tmp_path, subset=[1, 3])
     assert len(tests) == 2
-    assert tests[0].landing_page == "x.html"
+    assert tests[0].entry_point == "x.html"
     assert test0.cleanup.call_count == 1
     assert test1.cleanup.call_count == 0
     assert test2.cleanup.call_count == 1
