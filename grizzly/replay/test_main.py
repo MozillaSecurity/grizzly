@@ -46,7 +46,7 @@ def test_main_01(mocker, server, tmp_path):
     target.filtered_environ.return_value = {"ENV": "123"}
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
-    with TestCase("test.html", None, "adpt") as src:
+    with TestCase("test.html", "adpt") as src:
         src.env_vars["TEST_VAR"] = "100"
         src.add_from_bytes(b"test", "test.html")
         src.dump(str(tmp_path / "testcase"), include_details=True)
@@ -311,7 +311,7 @@ def test_main_05(mocker, server, tmp_path):
     # build a test case
     entry_point = input_path / "test.html"
     entry_point.touch()
-    with TestCase("test.html", None, "test-adapter") as src:
+    with TestCase("test.html", "test-adapter") as src:
         src.add_from_file(str(entry_point))
         src.dump(str(input_path), include_details=True)
     args.input = input_path
@@ -404,7 +404,7 @@ def test_main_07(mocker, server, tmp_path):
     target.check_result.side_effect = (Result.FOUND,)
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
-    with TestCase("test.html", None, "adpt") as src:
+    with TestCase("test.html", "adpt") as src:
         src.add_from_bytes(b"test", "test.html")
         src.dump(str(tmp_path / "testcase"), include_details=True)
     # setup args

@@ -16,11 +16,9 @@ from .storage import TestCase, TestCaseLoadFailure, TestFileExists
 def test_testcase_01(tmp_path):
     """test empty TestCase"""
     l_page = "land.html"
-    r_page = "redirect.html"
     adpt_name = "test-adapter"
-    with TestCase(l_page, r_page, adpt_name) as tcase:
+    with TestCase(l_page, adpt_name) as tcase:
         assert tcase.landing_page == l_page
-        assert tcase.redirect_page == r_page
         assert tcase.assets is None
         assert tcase.adapter_name == adpt_name
         assert tcase.duration is None
@@ -52,7 +50,7 @@ def test_testcase_01(tmp_path):
 )
 def test_testcase_02(tmp_path, copy, required):
     """test TestCase.add_from_file()"""
-    with TestCase("land_page.html", "a.html", "adpt", input_fname="in.bin") as tcase:
+    with TestCase("land_page.html", "adpt", input_fname="in.bin") as tcase:
         in_file = tmp_path / "file.bin"
         in_file.write_text("data")
         tcase.add_from_file(in_file, copy=copy, required=required)
@@ -83,7 +81,7 @@ def test_testcase_02(tmp_path, copy, required):
 )
 def test_testcase_03(tmp_path, file_paths):
     """test TestCase.add_from_file()"""
-    with TestCase("land_page.html", "a.html", "adpt") as tcase:
+    with TestCase("land_page.html", "adpt") as tcase:
         for file_path in file_paths:
             src_file = tmp_path / file_path
             src_file.parent.mkdir(exist_ok=True, parents=True)
@@ -95,7 +93,7 @@ def test_testcase_03(tmp_path, file_paths):
 
 def test_testcase_04():
     """test TestCase.add_from_bytes()"""
-    with TestCase("a.html", None, "adpt") as tcase:
+    with TestCase("a.html", "adpt") as tcase:
         tcase.add_from_bytes(b"foo", "a.html", required=True)
         tcase.add_from_bytes(b"foo", "b.html", required=False)
         assert "a.html" in (x.file_name for x in tcase._files.required)
@@ -107,7 +105,7 @@ def test_testcase_04():
 
 def test_testcase_05():
     """test TestCase.purge_optional()"""
-    with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
+    with TestCase("land_page.html", "test-adapter") as tcase:
         # no optional files
         tcase.purge_optional(["foo"])
         # setup
@@ -138,7 +136,7 @@ def test_testcase_05():
 
 def test_testcase_06():
     """test TestCase.data_size"""
-    with TestCase("land_page.html", "redirect.html", "test-adapter") as tcase:
+    with TestCase("land_page.html", "test-adapter") as tcase:
         assert tcase.data_size == 0
         tcase.add_from_bytes(b"1", "testfile1.bin", required=True)
         assert tcase.data_size == 1
@@ -166,7 +164,7 @@ def test_testcase_07(tmp_path):
     src_dir.mkdir()
     entry_point = src_dir / "target.bin"
     entry_point.touch()
-    with TestCase("target.bin", None, "test-adapter") as src:
+    with TestCase("target.bin", "test-adapter") as src:
         src.add_from_file(entry_point)
         src.dump(src_dir, include_details=True)
     # bad 'target' entry in test_info.json
@@ -178,7 +176,7 @@ def test_testcase_07(tmp_path):
     with AssetManager(base_path=str(tmp_path)) as assets:
         (tmp_path / "example_asset").touch()
         assets.add("example", str(tmp_path / "example_asset"), copy=False)
-        with TestCase("target.bin", None, "test-adapter") as src:
+        with TestCase("target.bin", "test-adapter") as src:
             src.assets = assets
             src.dump(src_dir, include_details=True)
     test_info = loads((src_dir / "test_info.json").read_text())
@@ -207,7 +205,7 @@ def test_testcase_08(mocker, tmp_path):
     dst_dir = tmp_path / "dst"
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("example", str(asset_file))
-        with TestCase("target.bin", None, "test-adapter") as src:
+        with TestCase("target.bin", "test-adapter") as src:
             src.env_vars["TEST_ENV_VAR"] = "100"
             src.add_from_file(entry_point)
             src.add_from_file(src_dir / "optional.bin", required=False)
@@ -268,7 +266,7 @@ def test_testcase_10(tmp_path):
     """test TestCase - dump, load and compare"""
     working = tmp_path / "working"
     working.mkdir()
-    with TestCase("a.html", "b.html", "adpt") as org:
+    with TestCase("a.html", "adpt") as org:
         # set non default values
         org.duration = 1.23
         org.env_vars = {"en1": "1", "en2": "2"}
@@ -287,7 +285,7 @@ def test_testcase_10(tmp_path):
         with TestCase.load_single(working, adjacent=False) as loaded:
             try:
                 for prop in TestCase.__slots__:
-                    if prop.startswith("_") or prop in ("assets", "redirect_page"):
+                    if prop.startswith("_") or prop == "assets":
                         continue
                     assert getattr(loaded, prop) == getattr(org, prop)
                 assert not set(org.contents) ^ set(loaded.contents)
@@ -321,7 +319,7 @@ def test_testcase_12(tmp_path):
 
 def test_testcase_13(tmp_path):
     """test TestCase.load() - single directory"""
-    with TestCase("target.bin", None, "test-adapter") as src:
+    with TestCase("target.bin", "test-adapter") as src:
         src.add_from_bytes(b"test", "target.bin")
         src.dump(tmp_path, include_details=True)
     testcases = TestCase.load(tmp_path)
@@ -340,7 +338,7 @@ def test_testcase_14(tmp_path):
     asset_file.touch()
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("example", str(asset_file))
-        with TestCase("target.bin", None, "test-adapter") as src:
+        with TestCase("target.bin", "test-adapter") as src:
             src.assets = assets
             src.add_from_bytes(b"test", "target.bin")
             src.dump(nested / "test-1", include_details=True)
@@ -370,7 +368,7 @@ def test_testcase_15(tmp_path):
     with raises(TestCaseLoadFailure, match="Testcase archive is corrupted"):
         TestCase.load(archive)
     # build archive containing multiple testcases
-    with TestCase("target.bin", None, "test-adapter") as src:
+    with TestCase("target.bin", "test-adapter") as src:
         src.add_from_bytes(b"test", "target.bin")
         src.dump(tmp_path / "test-0", include_details=True)
         src.dump(tmp_path / "test-1", include_details=True)
@@ -403,7 +401,7 @@ def test_testcase_16(tmp_path):
     other_path = tmp_path / "other_path"
     other_path.mkdir()
     (other_path / "no_include.bin").write_bytes(b"a")
-    with TestCase("a.b", "a.b", "simple") as tcase:
+    with TestCase("a.b", "simple") as tcase:
         # missing directory
         tcase.add_batch("/missing/path/", tuple())
         assert not any(tcase.contents)
@@ -435,7 +433,7 @@ def test_testcase_17(tmp_path):
     assert not any(TestCase.scan_path(tmp_path))
     # multiple test case directories
     paths = [tmp_path / f"test-{i}" for i in range(3)]
-    with TestCase("test.htm", None, "test-adapter") as src:
+    with TestCase("test.htm", "test-adapter") as src:
         src.add_from_bytes(b"test", "test.htm")
         for path in paths:
             src.dump(path, include_details=True)
@@ -448,7 +446,7 @@ def test_testcase_17(tmp_path):
 
 def test_testcase_18():
     """test TestCase.get_file()"""
-    with TestCase("test.htm", None, "test-adapter") as src:
+    with TestCase("test.htm", "test-adapter") as src:
         src.add_from_bytes(b"test", "test.htm")
         assert src.get_file("missing") is None
         assert src.get_file("test.htm")
@@ -456,7 +454,7 @@ def test_testcase_18():
 
 def test_testcase_19():
     """test TestCase.clone()"""
-    with TestCase("a.htm", "b.htm", "adpt", input_fname="fn", time_limit=2) as src:
+    with TestCase("a.htm", "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
         src.hang = True
         src.https = True

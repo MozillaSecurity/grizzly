@@ -296,11 +296,11 @@ def test_analysis(
 
     replayer.run.side_effect = replay_run
 
-    test = TestCase("test.html", None, "test-adapter")
+    test = TestCase("test.html", "test-adapter")
     test.add_from_bytes(b"1", "test.html")
     tests = [test]
     if harness_last_crashes is not None:
-        test = TestCase("test.html", None, "test-adapter")
+        test = TestCase("test.html", "test-adapter")
         test.add_from_bytes(b"2", "test.html")
         tests.append(test.clone())
     log_path = tmp_path / "logs"
@@ -559,7 +559,7 @@ def test_repro(
 
     replayer.run.side_effect = replay_run
 
-    test = TestCase("test.html", None, "test-adapter")
+    test = TestCase("test.html", "test-adapter")
     test.add_from_bytes(original, "test.html")
     tests = [test]
     log_path = tmp_path / "logs"
@@ -972,7 +972,7 @@ def test_timeout_update(
 
     replayer.run.side_effect = replay_run
 
-    test = TestCase("test.html", None, "test-adapter")
+    test = TestCase("test.html", "test-adapter")
     test.add_from_bytes(b"123\n", "test.html")
     tests = [test]
     log_path = tmp_path / "logs"

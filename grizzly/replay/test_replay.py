@@ -40,7 +40,7 @@ def test_replay_01(mocker, server):
     target.check_result.return_value = Result.NONE
     target.monitor.is_healthy.return_value = False
     iter_cb = mocker.Mock()
-    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+    with TestCase("index.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, use_harness=True, relaunch=1) as replay:
             assert not replay.run([testcase], 10, on_iteration_cb=iter_cb)
             assert replay.signature is None
@@ -62,7 +62,7 @@ def test_replay_02(mocker, server):
     target.check_result.return_value = Result.NONE
     target.monitor.is_healthy.return_value = False
     iter_cb = mocker.Mock()
-    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+    with TestCase("index.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, use_harness=True, relaunch=20) as replay:
             assert not replay.run(
                 [testcase], 10, repeat=10, min_results=1, on_iteration_cb=iter_cb
@@ -88,7 +88,7 @@ def test_replay_03(mocker, server):
     server.serve_path.return_value = (Served.ALL, ["index.html"])
     target = mocker.Mock(spec_set=Target, closed=False, launch_timeout=30)
     target.check_result.return_value = Result.NONE
-    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+    with TestCase("index.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, use_harness=True, relaunch=20) as replay:
             assert not replay.run([testcase], 10, repeat=10, min_results=1)
             assert replay.status.ignored == 0
@@ -126,7 +126,7 @@ def test_replay_04(mocker, server, good_sig):
             (log_path / "log_stdout.txt").write_text("STDOUT log\n")
 
         target.save_logs = _save_logs
-    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+    with TestCase("index.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, relaunch=10) as replay:
             assert replay.signature is None
             results = replay.run([testcase], 10)
@@ -567,7 +567,7 @@ def test_replay_19(mocker, server):
     server.serve_path.return_value = (Served.ALL, ["index.html"])
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     target.check_result.return_value = Result.NONE
-    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+    with TestCase("index.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, use_harness=True) as replay:
             assert not replay.run([testcase], 30, post_launch_delay=-1)
             assert replay.status.iteration == 1
@@ -710,7 +710,7 @@ def test_replay_22(
     target.handle_hang.return_value = False
     target.save_logs = _fake_save_logs
     target.monitor.is_healthy.return_value = False
-    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+    with TestCase("index.html", "test-adapter") as testcase:
         testcase.hang = is_hang
         with ReplayManager(
             [], server, target, signature=signature, relaunch=10
@@ -803,7 +803,7 @@ def test_replay_24(mocker, server, tmp_path):
 
     target.save_logs.side_effect = _save_logs_variation
 
-    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+    with TestCase("index.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, relaunch=10, signature=sig) as replay:
             results = replay.run([testcase], 10, min_results=2, repeat=2)
             assert replay.signature is not None
@@ -867,7 +867,7 @@ def test_replay_25(mocker, server, stderr_log, ignored, total, include_stack):
     target.save_logs.side_effect = _save_logs_variation
 
     has_sig = include_stack[0]
-    with TestCase("index.html", "redirect.html", "test-adapter") as testcase:
+    with TestCase("index.html", "test-adapter") as testcase:
         with ReplayManager([], server, target, relaunch=10) as replay:
             results = replay.run([testcase], 10, min_results=2, repeat=iters)
             if has_sig:

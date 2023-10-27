@@ -221,7 +221,7 @@ class Runner:
             None
         """
         if delay >= 0 and not self.startup_failure:
-            with TestCase("post_launch_delay.html", None, "None") as content:
+            with TestCase("post_launch_delay.html", "None") as content:
                 content.add_from_file(
                     Path(__file__).parent / "post_launch_delay.html",
                     content.landing_page,

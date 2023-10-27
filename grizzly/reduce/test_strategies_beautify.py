@@ -16,7 +16,7 @@ LOG = getLogger(__name__)
 def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker):
     mocker.patch("grizzly.reduce.strategies.beautify._contains_dd", return_value=True)
 
-    best_test = TestCase(test_name, None, "test-adapter")
+    best_test = TestCase(test_name, "test-adapter")
     best_test.add_from_bytes(test_data.encode("ascii"), test_name)
     best_tests = [best_test]
 
