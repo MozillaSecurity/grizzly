@@ -37,7 +37,7 @@ def test_strategy_tc_load(is_hang):
             pass
 
     # create testcase that is_hang
-    with TestCase("a.htm", None, "adpt", input_fname="fn", time_limit=2) as src:
+    with TestCase("a.htm", "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
         src.hang = is_hang
         src.add_from_bytes(b"123", "a.htm")
@@ -173,7 +173,7 @@ def test_list(
 
     tests = []
     for data in test_data:
-        test = TestCase("test.html", None, "test-adapter")
+        test = TestCase("test.html", "test-adapter")
         test.add_from_bytes(data, "test.html")
         tests.append(test)
     log_path = tmp_path / "logs"
@@ -353,7 +353,7 @@ def test_purge_unserved(
 
     tests = []
     for testcase in test_data:
-        test = TestCase("test.html", None, "test-adapter")
+        test = TestCase("test.html", "test-adapter")
         for filename, data in testcase.items():
             test.add_from_bytes(data, filename)
         tests.append(test)
@@ -413,7 +413,7 @@ def test_dd_only(mocker, tmp_path):
 
     replayer.run.side_effect = replay_run
 
-    test = TestCase("test.html", None, "test-adapter")
+    test = TestCase("test.html", "test-adapter")
     test.add_from_bytes(b"DDBEGIN\n123\nrequired\nDDEND\n", "test.html")
     test.add_from_bytes(b"blah\n", "other.html")
     tests = [test]

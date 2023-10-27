@@ -44,7 +44,6 @@ class TestCase:
         "https",
         "input_fname",
         "landing_page",
-        "redirect_page",
         "time_limit",
         "timestamp",
         "version",
@@ -55,12 +54,12 @@ class TestCase:
     def __init__(
         self,
         landing_page,
-        redirect_page,
         adapter_name,
         input_fname=None,
         time_limit=None,
         timestamp=None,
     ):
+        assert landing_page
         self.adapter_name = adapter_name
         self.assets = None
         self.duration = None
@@ -69,10 +68,6 @@ class TestCase:
         self.https = False
         self.input_fname = input_fname  # file that was used to create the test case
         self.landing_page = self.sanitize_path(landing_page)
-        if redirect_page is not None:
-            self.redirect_page = self.sanitize_path(redirect_page)
-        else:
-            self.redirect_page = None
         self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
         self.version = __version__
@@ -195,7 +190,6 @@ class TestCase:
         """
         result = type(self)(
             self.landing_page,
-            self.redirect_page,
             self.adapter_name,
             self.input_fname,
             self.time_limit,
@@ -415,7 +409,6 @@ class TestCase:
         # create testcase and add data
         test = cls(
             entry_point.relative_to(entry_point.parent).as_posix(),
-            None,
             info.get("adapter", None),
             input_fname=info.get("input", None),
             time_limit=info.get("time_limit", None),

@@ -40,7 +40,7 @@ def test_runner_01(mocker, coverage, scheme):
     assert runner._relaunch == 10
     assert runner._tests_run == 0
     serv_map = ServerMap()
-    with TestCase(serv_files[0], "x", "x") as testcase:
+    with TestCase(serv_files[0], "x") as testcase:
         result = runner.run([], serv_map, testcase, coverage=coverage)
         assert testcase.https == (scheme == "https")
     assert runner.initial
@@ -328,7 +328,7 @@ def test_runner_10(mocker, tmp_path):
     smap.set_include("/test", str(inc_path2))
     serv_files = ["a.b", str(inc1), str(inc2), str(inc3)]
     server.serve_path.return_value = (Served.ALL, serv_files)
-    with TestCase("a.b", "x", "x") as tcase:
+    with TestCase("a.b", "x") as tcase:
         result = runner.run([], smap, tcase)
         assert result.attempted
         assert result.status == Result.NONE

@@ -49,12 +49,7 @@ class IOManager:
     def create_testcase(self, adapter_name, time_limit):
         assert self._test is None
         # create testcase object and landing page names
-        self._test = TestCase(
-            self.page_name(),
-            self.page_name(offset=1),
-            adapter_name=adapter_name,
-            time_limit=time_limit,
-        )
+        self._test = TestCase(self.page_name(), adapter_name, time_limit=time_limit)
         # reset redirect map
         self.server_map.set_redirect(
             "grz_current_test", self.page_name(), required=False
