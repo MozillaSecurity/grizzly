@@ -67,7 +67,9 @@ def test_runner_02(mocker):
     target.check_result.return_value = Result.NONE
     serv_files = ["a.bin"]
     server.serve_path.return_value = (Served.ALL, serv_files)
-    testcase = mocker.Mock(spec_set=TestCase, entry_point=serv_files[0], optional=[])
+    testcase = mocker.Mock(
+        spec_set=TestCase, entry_point=serv_files[0], required=serv_files
+    )
     # single run/iteration relaunch (not idle exit)
     target.is_idle.return_value = False
     runner = Runner(server, target, relaunch=1)
@@ -139,7 +141,7 @@ def test_runner_03(mocker, srv_result, served):
     server.serve_path.return_value = (srv_result, served)
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
-    testcase = mocker.Mock(spec_set=TestCase, entry_point="x", optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, entry_point="x", required=["x"])
     runner = Runner(server, target)
     result = runner.run([], ServerMap(), testcase)
     assert runner.initial
@@ -166,7 +168,7 @@ def test_runner_04(mocker, ignore, status, idle, check_result):
     """test reporting timeout"""
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
-    testcase = mocker.Mock(spec_set=TestCase, entry_point="a.bin", optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, entry_point="a.bin", required=["a.bin"])
     serv_files = ["a.bin", "/another/file.bin"]
     server.serve_path.return_value = (Served.TIMEOUT, serv_files)
     target.check_result.return_value = Result.FOUND
@@ -202,7 +204,7 @@ def test_runner_05(mocker, served, attempted, target_result, status):
     target = mocker.Mock(spec_set=Target, launch_timeout=10)
     target.check_result.return_value = target_result
     target.monitor.is_healthy.return_value = False
-    testcase = mocker.Mock(spec_set=TestCase, entry_point="a.bin", optional=[])
+    testcase = mocker.Mock(spec_set=TestCase, entry_point="a.bin", required=["a.bin"])
     runner = Runner(server, target)
     runner.launch("http://a/")
     result = runner.run([], ServerMap(), testcase)
@@ -225,7 +227,7 @@ def test_runner_06(mocker):
     result = runner.run(
         [],
         ServerMap(),
-        mocker.Mock(spec_set=TestCase, entry_point=serv_files[0], optional=[]),
+        mocker.Mock(spec_set=TestCase, entry_point=serv_files[0], required=serv_files),
     )
     assert result.status == Result.NONE
     assert result.attempted

@@ -33,6 +33,7 @@ def test_testcase_01(tmp_path):
         assert not any(tcase.contents)
         assert tcase.pop_assets() is None
         assert not any(tcase.optional)
+        assert not any(tcase.required)
         tcase.dump(tmp_path)
         assert not any(tmp_path.iterdir())
         tcase.dump(tmp_path, include_details=True)
@@ -88,6 +89,7 @@ def test_testcase_03(tmp_path, file_paths):
             src_file.write_text("data")
             tcase.add_from_file(src_file, file_name=file_path, required=True)
             assert file_path in tcase.contents
+            assert file_path in tcase.required
             assert file_path not in tcase.optional
 
 
@@ -113,25 +115,25 @@ def test_testcase_05():
         tcase.add_from_bytes(b"foo", "testfile2.bin", required=False)
         tcase.add_from_bytes(b"foo", "testfile3.bin", required=False)
         tcase.add_from_bytes(b"foo", "not_served.bin", required=False)
-        assert len(tuple(tcase.optional)) == 3
+        assert len(tcase._files.optional) == 3
         # nothing to remove - with required
         tcase.purge_optional(chain(["testfile1.bin"], tcase.optional))
-        assert len(tuple(tcase.optional)) == 3
+        assert len(tcase._files.optional) == 3
         # nothing to remove - use relative path (forced)
         tcase.purge_optional(x.file_name for x in tcase._files.optional)
-        assert len(tuple(tcase.optional)) == 3
+        assert len(tcase._files.optional) == 3
         # nothing to remove - use absolute path
         tcase.purge_optional(x.data_file.as_posix() for x in tcase._files.optional)
-        assert len(tuple(tcase.optional)) == 3
+        assert len(tcase._files.optional) == 3
         # remove not_served.bin
         tcase.purge_optional(["testfile2.bin", "testfile3.bin"])
-        assert len(tuple(tcase.optional)) == 2
+        assert len(tcase._files.optional) == 2
         assert "testfile2.bin" in tcase.optional
         assert "testfile3.bin" in tcase.optional
         assert "not_served.bin" not in tcase.optional
         # remove remaining optional
         tcase.purge_optional(["testfile1.bin"])
-        assert not any(tcase.optional)
+        assert not tcase._files.optional
 
 
 def test_testcase_06():
@@ -478,6 +480,7 @@ def test_testcase_19():
                 assert not dst_file.samefile(src_file)
             assert dst.env_vars == {"foo": "bar"}
             assert not set(src.optional) ^ set(dst.optional)
+            assert not set(src.required) ^ set(dst.required)
 
 
 @mark.parametrize(

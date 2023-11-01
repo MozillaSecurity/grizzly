@@ -68,7 +68,7 @@ class Job:
         wwwroot,
         auto_close=-1,
         forever=False,
-        optional_files=None,
+        required_files=None,
         server_map=None,
     ):
         self._complete = Event()
@@ -82,25 +82,26 @@ class Job:
         self.forever = forever
         self.server_map = server_map
         self.worker_complete = Event()
-        self._build_pending(optional_files)
+        self._build_pending(required_files)
+        if not self._pending.files and not self.forever:
+            raise RuntimeError("Empty Job")
 
-    def _build_pending(self, optional_files):
+    def _build_pending(self, required_files):
         # build file list to track files that must be served
         # this is intended to only be called once by __init__()
-        for entry in self._wwwroot.rglob("*"):
-            location = entry.relative_to(self._wwwroot).as_posix()
-            # do not add optional files to queue of required files
-            if optional_files and location in optional_files:
-                continue
-            if "?" in str(entry):
-                LOG.warning("Path cannot contain '?', skipping '%s'", entry)
-                continue
-            if entry.is_file():
-                self._pending.files.add(str(entry.resolve()))
-                LOG.debug("required: %r", location)
+        assert not self._complete.is_set()
+        assert not self._pending.files
+        assert not self._served.files
+        if required_files:
+            for required in required_files:
+                assert "?" not in required
+                entry = self._wwwroot / required
+                if entry.is_file():
+                    self._pending.files.add(str(entry.resolve()))
+                    LOG.debug("required: %r", entry)
         # if nothing was found check if the path exists
         if not self._pending.files and not self._wwwroot.is_dir():
-            raise OSError(f"'{self._wwwroot}' does not exist")
+            raise OSError(f"wwwroot '{self._wwwroot}' does not exist")
         if self.server_map:
             for redirect, resource in self.server_map.redirect.items():
                 if resource.required:
@@ -110,11 +111,7 @@ class Job:
                 if resource.required:
                     self._pending.files.add(dyn_resp)
                     LOG.debug("required: %r -> %r", dyn_resp, resource.target)
-        LOG.debug(
-            "job has %d required and %d optional file(s)",
-            len(self._pending.files),
-            len(optional_files) if optional_files else 0,
-        )
+        LOG.debug("job has %d required file(s)", len(self._pending.files))
 
     @classmethod
     def lookup_mime(cls, url):
@@ -144,11 +141,6 @@ class Job:
                 # file name is too long to look up so ignore it
                 return None
             raise  # pragma: no cover
-        except ValueError:  # pragma: no cover
-            # this is for compatibility with python versions < 3.8
-            # is_file() will raise if the path contains characters unsupported
-            # at the OS level
-            pass
         # look for path in server map
         if self.server_map is not None:
             if path in self.server_map.redirect:
@@ -160,11 +152,7 @@ class Job:
                 LOG.debug("checking include %r", inc)
                 file = path[len(inc) :].lstrip("/")
                 local = Path(self.server_map.include[inc].target) / file
-                try:
-                    if not local.is_file():
-                        continue
-                except ValueError:  # pragma: no cover
-                    # python versions < 3.8 compatibility
+                if not local.is_file():
                     continue
                 # file exists, look up resource
                 return Resource(
@@ -212,7 +200,7 @@ class Job:
             return len(self._pending.files)
 
     def remove_pending(self, file_name):
-        # return True when all file have been removed
+        # return True when all files have been removed
         with self._pending.lock:
             if self._pending.files:
                 self._pending.files.discard(file_name)
