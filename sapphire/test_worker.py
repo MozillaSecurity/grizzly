@@ -83,7 +83,7 @@ def test_worker_03(mocker):
 def test_worker_04(mocker, tmp_path, url):
     """test Worker.launch()"""
     (tmp_path / "testfile").touch()
-    job = Job(tmp_path)
+    job = Job(tmp_path, required_files=["testfile"])
     clnt_sock = mocker.Mock(spec_set=socket.socket)
     clnt_sock.recv.return_value = f"GET {url} HTTP/1.1".encode()
     serv_sock = mocker.Mock(spec_set=socket.socket)
@@ -112,7 +112,7 @@ def test_worker_04(mocker, tmp_path, url):
 def test_worker_05(mocker, tmp_path, req, response):
     """test Worker.launch() with invalid/unsupported requests"""
     (tmp_path / "testfile").touch()
-    job = Job(tmp_path)
+    job = Job(tmp_path, required_files=["testfile"])
     clnt_sock = mocker.Mock(spec_set=socket.socket)
     clnt_sock.recv.return_value = req
     serv_sock = mocker.Mock(spec_set=socket.socket)

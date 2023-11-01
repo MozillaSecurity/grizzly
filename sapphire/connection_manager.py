@@ -14,7 +14,8 @@ LOG = getLogger(__name__)
 
 
 class ConnectionManager:
-    SHUTDOWN_DELAY = 0.5  # allow extra time before closing socket if needed
+    # allow extra time before closing socket if needed
+    SHUTDOWN_DELAY = 0.5
 
     __slots__ = (
         "_deadline",
@@ -117,7 +118,7 @@ class ConnectionManager:
         Returns:
             bool: True unless the timeout is exceeded.
         """
-        assert self._job.pending
+        assert self._job.pending or self._job.forever
         assert self._socket.gettimeout() is not None
         assert shutdown_delay >= 0
         assert timeout >= 0

@@ -534,6 +534,19 @@ class TestCase:
         for idx in reversed(to_remove):
             self._files.optional.pop(idx).data_file.unlink()
 
+    @property
+    def required(self):
+        """Get file paths of required files.
+
+        Args:
+            None
+
+        Yields:
+            str: File path of each file.
+        """
+        for test in self._files.required:
+            yield test.file_name
+
     @staticmethod
     def sanitize_path(path):
         """Sanitize given path for use as a URI path.

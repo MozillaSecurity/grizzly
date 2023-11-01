@@ -186,13 +186,13 @@ class Sapphire:
         path,
         continue_cb=None,
         forever=False,
-        optional_files=None,
+        required_files=None,
         server_map=None,
     ):
-        """Serve files in path. On completion a list served files and a status
+        """Serve files in path. On completion a of list served files and a status
         code will be returned.
         The status codes include:
-            - Served.ALL: All files excluding files in optional_files were served
+            - Served.ALL: All required files were served
             - Served.NONE: No files were served
             - Served.REQUEST: Some files were requested
 
@@ -202,8 +202,8 @@ class Sapphire:
                                     This must be a callable that returns a bool.
             forever (bool): Continue to handle requests even after all files have
                             been served. This is meant to be used with continue_cb.
-            optional_files (list(str)): Files that do not need to be served in order
-                                        to exit the serve loop.
+            required_files (list(str)): Files that need to be served in order to exit
+                                        the serve loop.
             server_map (ServerMap):
 
         Returns:
@@ -216,17 +216,13 @@ class Sapphire:
             path,
             auto_close=self._auto_close,
             forever=forever,
-            optional_files=optional_files,
+            required_files=required_files,
             server_map=server_map,
         )
-        if not job.pending:
-            job.finish()
-            LOG.debug("nothing to serve")
-            return (Served.NONE, tuple())
         with ConnectionManager(job, self._socket, limit=self._max_workers) as mgr:
-            was_timeout = not mgr.serve(self.timeout, continue_cb=continue_cb)
-        LOG.debug("%s, timeout: %r", job.status, was_timeout)
-        return (Served.TIMEOUT if was_timeout else job.status, tuple(job.served))
+            timed_out = not mgr.serve(self.timeout, continue_cb=continue_cb)
+        LOG.debug("%s, timed out: %r", job.status, timed_out)
+        return (Served.TIMEOUT if timed_out else job.status, tuple(job.served))
 
     @classmethod
     def main(cls, args):
@@ -240,10 +236,6 @@ class Sapphire:
                     gethostname() if args.remote else "127.0.0.1",
                     serv.port,
                 )
-                status = serv.serve_path(args.path)[0]
-            if status == Served.ALL:
-                LOG.info("All test case content was served")
-            else:
-                LOG.warning("Failed to serve all test content")
+                serv.serve_path(args.path, forever=True)
         except KeyboardInterrupt:
             LOG.warning("Ctrl+C detected. Shutting down...")

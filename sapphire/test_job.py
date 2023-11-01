@@ -12,8 +12,12 @@ from .server_map import Resource, ServerMap
 
 
 def test_job_01(tmp_path):
-    """test creating an empty Job"""
-    job = Job(tmp_path)
+    """test creating a simple Job"""
+    test_file = tmp_path / "test.txt"
+    test_file.touch()
+    with raises(RuntimeError, match="Empty Job"):
+        Job(tmp_path)
+    job = Job(tmp_path, required_files=[test_file.name])
     assert not job.forever
     assert job.status == Served.NONE
     assert job.lookup_resource("") is None
@@ -23,26 +27,28 @@ def test_job_01(tmp_path):
     assert job.lookup_resource("\x00\x0B\xAD\xF0\x0D") is None
     assert not job.is_forbidden(tmp_path)
     assert not job.is_forbidden(tmp_path / "missing_file")
-    assert job.pending == 0
+    assert job.pending == 1
     assert not job.is_complete()
-    assert job.remove_pending("no_file.test")
+    assert job.remove_pending(str(test_file))
     job.finish()
     assert not any(job.served)
-    assert job.is_complete()
+    assert job.is_complete(wait=0.01)
 
 
 def test_job_02(tmp_path):
     """test Job proper handling of required and optional files"""
-    opt1_path = tmp_path / "opt_file_1.txt"
-    opt1_path.write_bytes(b"a")
-    req1_path = tmp_path / "req_file_1.txt"
-    req1_path.write_bytes(b"b")
+    opt = []
+    opt.append(tmp_path / "opt_file_1.txt")
+    opt[-1].write_bytes(b"a")
+    req = []
+    req.append(tmp_path / "req_file_1.txt")
+    req[-1].write_bytes(b"b")
     (tmp_path / "nested").mkdir()
-    opt2_path = tmp_path / "nested" / "opt_file_2.txt"
-    opt2_path.write_bytes(b"c")
-    req2_path = tmp_path / "nested" / "req_file_2.txt"
-    req2_path.write_bytes(b"d")
-    job = Job(tmp_path, optional_files=[opt1_path.name, f"nested/{opt2_path.name}"])
+    opt.append(tmp_path / "nested" / "opt_file_2.txt")
+    opt[-1].write_bytes(b"c")
+    req.append(tmp_path / "nested" / "req_file_2.txt")
+    req[-1].write_bytes(b"d")
+    job = Job(tmp_path, required_files=[req[0].name, f"nested/{req[1].name}"])
     assert job.status == Served.NONE
     assert not job.is_complete()
     resource = job.lookup_resource("req_file_1.txt")
@@ -50,27 +56,27 @@ def test_job_02(tmp_path):
     assert job.pending == 2
     assert resource.target == tmp_path / "req_file_1.txt"
     assert resource.type == Resource.URL_FILE
-    assert not job.is_forbidden(req1_path)
+    assert not job.is_forbidden(req[0])
     assert not job.remove_pending("no_file.test")
     assert job.pending == 2
-    assert not job.remove_pending(str(req1_path))
-    job.mark_served(req1_path)
+    assert not job.remove_pending(str(req[0]))
+    job.mark_served(req[0])
     assert job.status == Served.REQUEST
     assert job.pending == 1
-    assert job.remove_pending(str(req2_path))
-    job.mark_served(req2_path)
+    assert job.remove_pending(str(req[1]))
+    job.mark_served(req[1])
     assert job.status == Served.ALL
     assert job.pending == 0
-    assert job.remove_pending(str(req1_path))
-    job.mark_served(req1_path)
+    assert job.remove_pending(str(req[0]))
+    job.mark_served(req[0])
     resource = job.lookup_resource("opt_file_1.txt")
     assert not resource.required
-    assert resource.target == opt1_path
+    assert resource.target == opt[0]
     assert resource.type == Resource.URL_FILE
-    assert job.remove_pending(str(opt1_path))
-    job.mark_served(opt1_path)
+    assert job.remove_pending(str(opt[0]))
+    job.mark_served(opt[0])
     resource = job.lookup_resource("nested/opt_file_2.txt")
-    assert resource.target == opt2_path
+    assert resource.target == opt[1]
     assert resource.type == Resource.URL_FILE
     assert not resource.required
     job.finish()
@@ -122,7 +128,7 @@ def test_job_04(mocker, tmp_path):
     smap.include["testinc/1/2/3"] = Resource(Resource.URL_INCLUDE, srv_include)
     smap.include[""] = Resource(Resource.URL_INCLUDE, srv_include)
     smap.set_include("testinc/inc2", str(srv_include_2))
-    job = Job(srv_root, server_map=smap)
+    job = Job(srv_root, server_map=smap, required_files=[test_1.name])
     assert job.status == Served.NONE
     # test include path pointing to a missing file
     assert job.lookup_resource("testinc/missing") is None
@@ -171,7 +177,7 @@ def test_job_05(tmp_path):
     # test url matching part of the file name
     smap = ServerMap()
     smap.include["inc"] = Resource(Resource.URL_INCLUDE, str(inc_dir))
-    job = Job(srv_root, server_map=smap)
+    job = Job(srv_root, server_map=smap, required_files=[req.name])
     resource = job.lookup_resource("inc/sub/include.js")
     assert resource.type == Resource.URL_INCLUDE
     assert resource.target == inc_file1
@@ -196,11 +202,11 @@ def test_job_05(tmp_path):
 def test_job_06(tmp_path):
     """test Job dynamic"""
     smap = ServerMap()
-    smap.set_dynamic_response("cb1", lambda _: 0, mime_type="mime_type")
+    smap.set_dynamic_response("cb1", lambda _: 0, mime_type="mime_type", required=True)
     smap.set_dynamic_response("cb2", lambda _: 1)
     job = Job(tmp_path, server_map=smap)
     assert job.status == Served.NONE
-    assert job.pending == 0
+    assert job.pending == 1
     resource = job.lookup_resource("cb1")
     assert resource.type == Resource.URL_DYNAMIC
     assert callable(resource.target)
@@ -216,17 +222,17 @@ def test_job_07(tmp_path):
     """test accessing forbidden files"""
     srv_root = tmp_path / "root"
     srv_root.mkdir()
-    test_1 = srv_root / "req_file.txt"
-    test_1.write_bytes(b"a")
+    test_file = srv_root / "req_file.txt"
+    test_file.write_bytes(b"a")
     no_access = tmp_path / "no_access.txt"
     no_access.write_bytes(b"a")
-    job = Job(srv_root)
+    job = Job(srv_root, required_files=[test_file.name])
     assert job.status == Served.NONE
     assert job.pending == 1
     resource = job.lookup_resource("../no_access.txt")
     assert resource.target == no_access
     assert resource.type == Resource.URL_FILE
-    assert not job.is_forbidden(test_1)
+    assert not job.is_forbidden(test_file)
     assert job.is_forbidden((srv_root / ".." / "no_access.txt").resolve())
 
 
@@ -236,7 +242,7 @@ def test_job_08(tmp_path):
     test_file = tmp_path / "test.txt"
     test_file.write_bytes(b"a")
     (tmp_path / "?_2.txt").write_bytes(b"a")
-    job = Job(tmp_path)
+    job = Job(tmp_path, required_files=[test_file.name])
     assert job.status == Served.NONE
     assert job.pending == 1
     assert job.lookup_resource("test.txt").target == test_file
@@ -245,7 +251,7 @@ def test_job_08(tmp_path):
 def test_job_09(tmp_path):
     """test Job.lookup_resource() with file name that is too long"""
     (tmp_path / "test.txt").touch()
-    job = Job(tmp_path)
+    job = Job(tmp_path, required_files=["test.txt"])
     assert job.status == Served.NONE
     assert job.pending == 1
     assert job.lookup_resource(f"/{'a' * 8192}.txt") is None
@@ -259,7 +265,8 @@ def test_job_10(tmp_path):
 
 def test_job_11(tmp_path):
     """test Job.mark_served() and Job.served"""
-    job = Job(tmp_path)
+    (tmp_path / "test.txt").touch()
+    job = Job(tmp_path, required_files=["test.txt"])
     assert not any(job.served)
     job.mark_served(tmp_path / "a.bin")
     assert "a.bin" in job.served

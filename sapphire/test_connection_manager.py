@@ -17,7 +17,7 @@ from .worker import Worker
 def test_connection_manager_01(mocker, tmp_path, timeout):
     """test basic ConnectionManager"""
     (tmp_path / "testfile").write_bytes(b"test")
-    job = Job(tmp_path)
+    job = Job(tmp_path, required_files=["testfile"])
     clnt_sock = mocker.Mock(spec_set=socket)
     clnt_sock.recv.return_value = b"GET /testfile HTTP/1.1"
     serv_sock = mocker.Mock(spec_set=socket)
@@ -37,7 +37,7 @@ def test_connection_manager_02(mocker, tmp_path, worker_limit):
     (tmp_path / "test1").touch()
     (tmp_path / "test2").touch()
     (tmp_path / "test3").touch()
-    job = Job(tmp_path)
+    job = Job(tmp_path, required_files=["test1", "test2", "test3"])
     clnt_sock = mocker.Mock(spec_set=socket)
     clnt_sock.recv.side_effect = (
         b"GET /test1 HTTP/1.1",
@@ -60,8 +60,8 @@ def test_connection_manager_02(mocker, tmp_path, worker_limit):
 
 def test_connection_manager_03(mocker, tmp_path):
     """test ConnectionManager re-raise worker exceptions"""
-    (tmp_path / "test1").touch()
-    job = Job(tmp_path)
+    (tmp_path / "file").touch()
+    job = Job(tmp_path, required_files=["file"])
     clnt_sock = mocker.Mock(spec_set=socket)
     clnt_sock.recv.side_effect = Exception("worker exception")
     serv_sock = mocker.Mock(spec_set=socket)
@@ -76,8 +76,8 @@ def test_connection_manager_03(mocker, tmp_path):
 
 def test_connection_manager_04(mocker, tmp_path):
     """test ConnectionManager.serve() with callback"""
-    (tmp_path / "test1").touch()
-    job = Job(tmp_path)
+    (tmp_path / "file").touch()
+    job = Job(tmp_path, required_files=["file"])
     with ConnectionManager(job, mocker.Mock(spec_set=socket), poll=0.01) as mgr:
         # invalid callback
         with raises(TypeError, match="continue_cb must be callable"):
@@ -92,13 +92,12 @@ def test_connection_manager_04(mocker, tmp_path):
 def test_connection_manager_05(mocker, tmp_path):
     """test ConnectionManager.serve() with timeout"""
     mocker.patch("sapphire.connection_manager.time", autospec=True, side_effect=count())
-    (tmp_path / "test1").touch()
-    job = Job(tmp_path)
+    (tmp_path / "file").touch()
     clnt_sock = mocker.Mock(spec_set=socket)
     clnt_sock.recv.return_value = b""
     serv_sock = mocker.Mock(spec_set=socket)
     serv_sock.accept.return_value = (clnt_sock, None)
-    job = Job(tmp_path)
+    job = Job(tmp_path, required_files=["file"])
     with ConnectionManager(job, serv_sock, poll=0.01) as mgr:
         assert not mgr.serve(10)
         assert job.is_complete()
@@ -108,11 +107,11 @@ def test_connection_manager_06(mocker, tmp_path):
     """test ConnectionManager.serve() worker fails to exit"""
     mocker.patch("sapphire.worker.Thread", autospec=True)
     mocker.patch("sapphire.connection_manager.time", autospec=True, side_effect=count())
-    (tmp_path / "test1").touch()
+    (tmp_path / "file").touch()
     clnt_sock = mocker.Mock(spec_set=socket)
     serv_sock = mocker.Mock(spec_set=socket)
     serv_sock.accept.return_value = (clnt_sock, None)
-    job = Job(tmp_path)
+    job = Job(tmp_path, required_files=["file"])
     mocker.patch.object(job, "worker_complete")
     with ConnectionManager(job, serv_sock) as mgr:
         with raises(RuntimeError, match="Failed to close workers"):

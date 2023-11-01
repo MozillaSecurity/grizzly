@@ -283,7 +283,7 @@ class Runner:
             testcase.data_path,
             continue_cb=self._keep_waiting,
             forever=wait_for_callback,
-            optional_files=tuple(testcase.optional),
+            required_files=tuple(testcase.required),
             server_map=server_map,
         )
         duration = time() - serve_start
