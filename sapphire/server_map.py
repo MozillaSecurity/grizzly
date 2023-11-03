@@ -28,13 +28,14 @@ class Resource:
     URL_INCLUDE = 2
     URL_REDIRECT = 3
 
-    __slots__ = ("mime", "required", "target", "type")
+    __slots__ = ("mime", "required", "target", "type", "url")
 
-    def __init__(self, resource_type, target, mime=None, required=False):
+    def __init__(self, resource_type, target, mime=None, required=False, url=None):
         self.mime = mime
         self.required = required
         self.target = target
         self.type = resource_type
+        self.url = url
 
 
 class ServerMap:

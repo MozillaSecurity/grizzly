@@ -87,8 +87,15 @@ class Job:
             raise RuntimeError("Empty Job")
 
     def _build_pending(self, required_files):
-        # build file list to track files that must be served
-        # this is intended to only be called once by __init__()
+        """Build file list to track files that must be served.
+        Note: This is intended to only be called once by __init__().
+
+        Args:
+            required_files (list(str)): List of file paths relative to wwwroot.
+
+        Returns:
+            None
+        """
         assert not self._complete.is_set()
         assert not self._pending.files
         assert not self._served.files
@@ -115,6 +122,15 @@ class Job:
 
     @classmethod
     def lookup_mime(cls, url):
+        """Determine mime type for a given URL.
+
+        Args:
+            url (str): URL to inspect.
+
+        Returns:
+            str: Mime type of URL or 'application/octet-stream' if the mime type
+                 cannot be determined.
+        """
         mime = cls.MIME_MAP.get(splitext(url)[-1].lower())
         if mime is None:
             # default to "application/octet-stream"
@@ -122,6 +138,14 @@ class Job:
         return mime
 
     def lookup_resource(self, path):
+        """Find the Resource mapped to a given URL path.
+
+        Args:
+            path (str): URL path.
+
+        Returns:
+            Resource: Resource for the given URL path or None if one is not found.
+        """
         path = path.lstrip("/")
         # check if path is a file in wwwroot
         try:
@@ -135,6 +159,7 @@ class Job:
                     local,
                     mime=self.lookup_mime(path),
                     required=required,
+                    url=path,
                 )
         except OSError as exc:
             if exc.errno == ENAMETOOLONG:
@@ -150,6 +175,7 @@ class Job:
             # search include paths for a match
             for inc in (x for x in self.server_map.include if path.startswith(x)):
                 LOG.debug("checking include %r", inc)
+                # strip include prefix from potential file name
                 file = path[len(inc) :].lstrip("/")
                 local = Path(self.server_map.include[inc].target) / file
                 if not local.is_file():
@@ -160,26 +186,63 @@ class Job:
                     local.resolve(),
                     mime=self.server_map.include[inc].mime or self.lookup_mime(file),
                     required=self.server_map.include[inc].required,
+                    url=f"{inc}/{file}" if inc else file,
                 )
         return None
 
     def finish(self):
+        """Mark Job as complete.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         self._complete.set()
 
-    def mark_served(self, path):
-        # update list of served files
-        assert isinstance(path, Path)
+    def mark_served(self, item):
+        """Mark a Resource as served to track served Resources.
+
+        Args:
+            item (Resource): Resource to track.
+
+        Returns:
+            None
+        """
+        assert isinstance(item, Resource)
+        assert item.type in (Resource.URL_FILE, Resource.URL_INCLUDE)
         with self._served.lock:
-            self._served.files.add(path)
+            if item.url not in self._served.files:
+                self._served.files.add(item)
 
     def is_complete(self, wait=None):
+        """Check if a Job has been marked as complete.
+
+        Args:
+            wait (float): Time to wait in seconds.
+
+        Returns:
+            boot: True if Job complete flag is set otherwise False.
+        """
         if wait is not None:
             return self._complete.wait(wait)
         return self._complete.is_set()
 
     def is_forbidden(self, target, is_include=False):
-        # it is assumed that these file exists on disk
-        # and that the paths are absolute and sanitized
+        """Check if a path is forbidden. Anything outside of wwwroot and not
+        added by an included is forbidden.
+
+        Note: It is assumed that the files exist on disk and that the
+        paths are absolute and sanitized.
+
+        Args:
+            target (Path or str): Path to check.
+            is_include (bool): Indicates if given path is an include.
+
+        Returns:
+            bool: True if no forbidden otherwise False.
+        """
         target = str(target)
         if not is_include:
             # check if target is in wwwroot
@@ -195,12 +258,26 @@ class Job:
 
     @property
     def pending(self):
-        # number of pending files
+        """Number of pending files.
+
+        Args:
+            None
+
+        Returns:
+            int: Number of pending file.
+        """
         with self._pending.lock:
             return len(self._pending.files)
 
     def remove_pending(self, file_name):
-        # return True when all files have been removed
+        """Remove a file from pending list.
+
+        Args:
+            file_name (str): File to remove from pending list.
+
+        Returns:
+            bool: True when all files have been removed otherwise False.
+        """
         with self._pending.lock:
             if self._pending.files:
                 self._pending.files.discard(file_name)
@@ -208,22 +285,27 @@ class Job:
 
     @property
     def served(self):
-        # served files
-        # files served from wwwroot will have a relative path
-        # include files will have an absolute path
+        """Served files.
+
+        Args:
+            None
+
+        Returns:
+            dict: Mapping of URLs to files on disk.
+        """
         with self._served.lock:
-            # make a copy of what is available (maybe a copy not necessary?)
-            served = tuple(self._served.files)
-        for path in served:
-            try:
-                # file is in wwwroot
-                yield path.relative_to(self._wwwroot).as_posix()
-            except ValueError:
-                # include file
-                yield path.as_posix()
+            return {entry.url: entry.target for entry in self._served.files}
 
     @property
     def status(self):
+        """Job Status.
+
+        Args:
+            None
+
+        Returns:
+            Served: Current status.
+        """
         with self._pending.lock:
             if not self._served.files:
                 return Served.NONE

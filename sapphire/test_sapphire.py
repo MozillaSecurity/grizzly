@@ -77,6 +77,7 @@ def test_sapphire_01(client, tmp_path, count):
     for t_file in to_serve:
         assert t_file.code == 200
         assert t_file.len_srv == t_file.len_org
+        assert t_file.url in served
 
 
 @mark.parametrize(
@@ -379,9 +380,12 @@ def test_sapphire_14(client, tmp_path):
         )
     assert status == Served.ALL
     assert "test_case.html" in served
-    assert (inc1_path / "included_file1.html").as_posix() in served
-    assert (inc2_path / "included_file2.html").as_posix() in served
-    assert (nest_path / "nested_file.html").as_posix() in served
+    assert "included_file1.html" in served
+    assert served["included_file1.html"] == (inc1_path / "included_file1.html")
+    assert "inc_test/included_file2.html" in served
+    assert served["inc_test/included_file2.html"] == (inc2_path / "included_file2.html")
+    assert "nested/nested_file.html" in served
+    assert served["nested/nested_file.html"] == (nest_path / "nested_file.html")
     assert client.wait(timeout=10)
     assert inc1.code == 200
     assert inc2.code == 200
