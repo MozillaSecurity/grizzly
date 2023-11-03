@@ -139,7 +139,7 @@ class Adapter(metaclass=ABCMeta):
 
         Args:
             testcase (TestCase): TestCase that was served.
-            served (list(str)): Files served from testcase.
+            served (tuple(str)): Files served from testcase.
 
         Returns:
             None
@@ -151,7 +151,7 @@ class Adapter(metaclass=ABCMeta):
 
         Args:
             testcase (TestCase): TestCase that was served.
-            served (list(str)): Files served from testcase.
+            served (tuple(str)): Files served from testcase.
 
         Returns:
             None
