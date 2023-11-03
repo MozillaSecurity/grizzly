@@ -110,7 +110,7 @@ def test_replay_03(mocker, server):
 )
 def test_replay_04(mocker, server, good_sig):
     """test ReplayManager.run() - successful repro"""
-    served = ["index.html"]
+    served = ("index.html",)
     server.serve_path.return_value = (Served.ALL, served)
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
@@ -694,7 +694,7 @@ def test_replay_22(
     mocker, server, expect_hang, is_hang, use_sig, match_sig, ignored, results
 ):
     """test ReplayManager.run() - detect hangs"""
-    served = ["index.html"]
+    served = ("index.html",)
     server.serve_path.return_value = (
         Served.TIMEOUT if is_hang else Served.ALL,
         served,

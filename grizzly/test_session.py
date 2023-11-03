@@ -347,7 +347,7 @@ def test_session_06(mocker, srv_results, target_result, ignored, results):
 
 def test_session_07(mocker):
     """test Session.run() ignoring failures"""
-    result = RunResult([], 0.1, status=Result.IGNORED)
+    result = RunResult((), 0.1, status=Result.IGNORED)
     result.attempted = True
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
     runner.return_value.run.return_value = result
@@ -372,7 +372,7 @@ def test_session_07(mocker):
 
 def test_session_08(mocker):
     """test Session.run() report hang"""
-    result = RunResult([], 60.0, status=Result.FOUND, timeout=True)
+    result = RunResult((), 60.0, status=Result.FOUND, timeout=True)
     result.attempted = True
     runner = mocker.patch("grizzly.session.Runner", autospec=True)
     runner.return_value.run.return_value = result

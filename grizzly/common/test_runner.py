@@ -29,7 +29,7 @@ def test_runner_01(mocker, coverage, scheme):
     """test Runner()"""
     mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
     server = mocker.Mock(spec_set=Sapphire, scheme=scheme)
-    serv_files = ["a.bin", "/another/file.bin"]
+    serv_files = ("a.bin", "/another/file.bin")
     server.serve_path.return_value = (Served.ALL, serv_files)
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
@@ -65,7 +65,7 @@ def test_runner_02(mocker):
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
-    serv_files = ["a.bin"]
+    serv_files = ("a.bin",)
     server.serve_path.return_value = (Served.ALL, serv_files)
     testcase = mocker.Mock(
         spec_set=TestCase, entry_point=serv_files[0], required=serv_files
@@ -169,7 +169,7 @@ def test_runner_04(mocker, ignore, status, idle, check_result):
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
     testcase = mocker.Mock(spec_set=TestCase, entry_point="a.bin", required=["a.bin"])
-    serv_files = ["a.bin", "/another/file.bin"]
+    serv_files = ("a.bin", "/another/file.bin")
     server.serve_path.return_value = (Served.TIMEOUT, serv_files)
     target.check_result.return_value = Result.FOUND
     target.handle_hang.return_value = idle
@@ -220,7 +220,7 @@ def test_runner_06(mocker):
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
-    serv_files = ["/fake/file", "/another/file.bin"]
+    serv_files = ("/fake/file", "/another/file.bin")
     server.serve_path.return_value = (Served.ALL, serv_files)
     runner = Runner(server, target, idle_threshold=0.01, idle_delay=0.01, relaunch=10)
     assert runner._idle is not None
