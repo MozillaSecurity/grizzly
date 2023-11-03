@@ -231,7 +231,7 @@ class Job:
 
     def is_forbidden(self, target, is_include=False):
         """Check if a path is forbidden. Anything outside of wwwroot and not
-        added by an included is forbidden.
+        added by an include is forbidden.
 
         Note: It is assumed that the files exist on disk and that the
         paths are absolute and sanitized.
