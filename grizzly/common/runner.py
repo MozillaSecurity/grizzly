@@ -288,7 +288,7 @@ class Runner:
         )
         duration = time() - serve_start
         result = RunResult(
-            served,
+            list(served),
             duration,
             attempted=testcase.entry_point in served,
             timeout=server_status == Served.TIMEOUT,

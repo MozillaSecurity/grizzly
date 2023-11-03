@@ -1,7 +1,7 @@
 """
 Job unit tests
 """
-
+# pylint: disable=protected-access
 from pathlib import Path
 from platform import system
 
@@ -60,21 +60,27 @@ def test_job_02(tmp_path):
     assert not job.remove_pending("no_file.test")
     assert job.pending == 2
     assert not job.remove_pending(str(req[0]))
-    job.mark_served(req[0])
+    job.mark_served(resource)
+    assert len(job._served.files) == 1
     assert job.status == Served.REQUEST
     assert job.pending == 1
+    resource = job.lookup_resource("nested/req_file_2.txt")
     assert job.remove_pending(str(req[1]))
-    job.mark_served(req[1])
+    job.mark_served(resource)
+    assert len(job._served.files) == 2
     assert job.status == Served.ALL
     assert job.pending == 0
     assert job.remove_pending(str(req[0]))
-    job.mark_served(req[0])
+    job.mark_served(resource)
+    assert len(job._served.files) == 2
     resource = job.lookup_resource("opt_file_1.txt")
     assert not resource.required
     assert resource.target == opt[0]
     assert resource.type == Resource.URL_FILE
     assert job.remove_pending(str(opt[0]))
-    job.mark_served(opt[0])
+    job.mark_served(resource)
+    assert len(job._served.files) == 3
+    assert len(job.served) == 3
     resource = job.lookup_resource("nested/opt_file_2.txt")
     assert resource.target == opt[1]
     assert resource.type == Resource.URL_FILE
@@ -138,21 +144,29 @@ def test_job_04(mocker, tmp_path):
     for incl, inc_path in smap.include.items():
         if inc_path != str(srv_include):  # only check 'srv_include' mappings
             continue
-        resource = job.lookup_resource("/".join([incl, "test_file.txt"]))
+        request = "/".join([incl, "test_file.txt"])
+        resource = job.lookup_resource(request)
         assert resource.type == Resource.URL_INCLUDE
         assert resource.target == inc_1
+        assert resource.url == request.lstrip("/")
     # test nested include path pointing to a different include
-    resource = job.lookup_resource("testinc/inc2/test_file_2.txt")
+    request = "testinc/inc2/test_file_2.txt"
+    resource = job.lookup_resource(request)
     assert resource.type == Resource.URL_INCLUDE
     assert resource.target == inc_2
+    assert resource.url == request
     # test redirect root without leading '/'
-    resource = job.lookup_resource("test_file.txt")
+    request = "test_file.txt"
+    resource = job.lookup_resource(request)
     assert resource.type == Resource.URL_INCLUDE
     assert resource.target == srv_include / "test_file.txt"
+    assert resource.url == request
     # test redirect with file in a nested directory
-    resource = job.lookup_resource("/".join(["testinc", "nested", "nested_file.txt"]))
+    request = "/".join(["testinc", "nested", "nested_file.txt"])
+    resource = job.lookup_resource(request)
     assert resource.type == Resource.URL_INCLUDE
     assert resource.target == nst_1
+    assert resource.url == request
     assert not job.is_forbidden(
         (srv_root / ".." / "test" / "test_file.txt").resolve(), is_include=True
     )
@@ -167,7 +181,7 @@ def test_job_05(tmp_path):
     srv_root.mkdir()
     req = srv_root / "req_file.txt"
     req.write_bytes(b"a")
-    inc_dir = tmp_path / "inc"
+    inc_dir = tmp_path / "inc_dir"
     inc_dir.mkdir()
     (inc_dir / "sub").mkdir()
     inc_file1 = inc_dir / "sub" / "include.js"
@@ -176,13 +190,13 @@ def test_job_05(tmp_path):
     inc_file2.write_bytes(b"a")
     # test url matching part of the file name
     smap = ServerMap()
-    smap.include["inc"] = Resource(Resource.URL_INCLUDE, str(inc_dir))
+    smap.include["inc_url"] = Resource(Resource.URL_INCLUDE, str(inc_dir))
     job = Job(srv_root, server_map=smap, required_files=[req.name])
-    resource = job.lookup_resource("inc/sub/include.js")
+    resource = job.lookup_resource("inc_url/sub/include.js")
     assert resource.type == Resource.URL_INCLUDE
     assert resource.target == inc_file1
     # test checking only the include url
-    assert job.lookup_resource("inc") is None
+    assert job.lookup_resource("inc_url") is None
     # file and include file collision (files should always win)
     smap.include.clear()
     inc_a = inc_dir / "a.bin"
@@ -268,12 +282,39 @@ def test_job_11(tmp_path):
     (tmp_path / "test.txt").touch()
     job = Job(tmp_path, required_files=["test.txt"])
     assert not any(job.served)
-    job.mark_served(tmp_path / "a.bin")
+    # add first resource
+    resource = Resource(Resource.URL_FILE, tmp_path / "a.bin", url="a.bin")
+    job.mark_served(resource)
     assert "a.bin" in job.served
-    job.mark_served(tmp_path / "nested" / "b.bin")
+    assert job.served[resource.url] == resource.target
+    assert len(job.served) == 1
+    # add a resource with the same url
+    job.mark_served(Resource(Resource.URL_FILE, tmp_path / "a.bin", url="a.bin"))
+    assert len(job.served) == 1
+    # add a nested resource
+    resource = Resource(
+        Resource.URL_FILE, tmp_path / "nested" / "b.bin", url="nested/b.bin"
+    )
+    job.mark_served(resource)
     assert "nested/b.bin" in job.served
-    job.mark_served(Path("/some/include/path/inc.bin"))
-    assert "/some/include/path/inc.bin" in job.served
+    assert job.served[resource.url] == resource.target
+    assert len(job.served) == 2
+    # add an include resource
+    resource = Resource(
+        Resource.URL_INCLUDE, Path("/some/include/path/inc.bin"), url="inc.bin"
+    )
+    job.mark_served(resource)
+    assert "inc.bin" in job.served
+    assert job.served[resource.url] == resource.target
+    assert len(job.served) == 3
+    # add an include resource pointing to a common file with unique url
+    resource = Resource(
+        Resource.URL_INCLUDE, Path("/some/include/path/inc.bin"), url="alt_path"
+    )
+    job.mark_served(resource)
+    assert "alt_path" in job.served
+    assert len(job.served) == 4
+    assert job.served[resource.url] == resource.target
 
 
 def test_job_12():

@@ -236,7 +236,7 @@ class Worker:
                         conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
                         offset = in_fp.tell()
                 LOG.debug("200 %r (%d to go)", request.url.path, serv_job.pending)
-                serv_job.mark_served(resource.target)
+                serv_job.mark_served(resource)
 
         except (OSError, sock_timeout):
             _, exc_obj, exc_tb = exc_info()

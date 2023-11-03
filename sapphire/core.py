@@ -207,7 +207,7 @@ class Sapphire:
             server_map (ServerMap):
 
         Returns:
-            tuple(int, tuple(str)): Status code and files served.
+            tuple(int, dict[str, Path]): Status code and files served.
         """
         assert isinstance(path, Path)
         assert self.timeout >= 0
@@ -222,7 +222,7 @@ class Sapphire:
         with ConnectionManager(job, self._socket, limit=self._max_workers) as mgr:
             timed_out = not mgr.serve(self.timeout, continue_cb=continue_cb)
         LOG.debug("%s, timed out: %r", job.status, timed_out)
-        return (Served.TIMEOUT if timed_out else job.status, tuple(job.served))
+        return (Served.TIMEOUT if timed_out else job.status, job.served)
 
     @classmethod
     def main(cls, args):
