@@ -189,8 +189,8 @@ class Sapphire:
         required_files=None,
         server_map=None,
     ):
-        """Serve files in path. On completion a of list served files and a status
-        code will be returned.
+        """Serve files in path.
+
         The status codes include:
             - Served.ALL: All required files were served
             - Served.NONE: No files were served
