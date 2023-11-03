@@ -392,43 +392,6 @@ def test_testcase_15(tmp_path):
 
 
 def test_testcase_16(tmp_path):
-    """test TestCase.add_batch()"""
-    include = tmp_path / "inc_path"
-    include.mkdir()
-    inc_1 = include / "file.bin"
-    inc_1.write_bytes(b"a")
-    (include / "nested").mkdir()
-    inc_2 = include / "nested" / "nested.js"
-    inc_2.write_bytes(b"a")
-    other_path = tmp_path / "other_path"
-    other_path.mkdir()
-    (other_path / "no_include.bin").write_bytes(b"a")
-    with TestCase("a.b", "simple") as tcase:
-        # missing directory
-        tcase.add_batch("/missing/path/", tuple())
-        assert not any(tcase.contents)
-        # missing file
-        with raises(IOError):
-            tcase.add_batch(tmp_path, [tmp_path / "missing.bin"])
-        assert not any(tcase.contents)
-        # relative file name
-        tcase.add_batch(include, ["file.bin"])
-        assert not any(tcase.contents)
-        # valid list
-        tcase.add_batch(include, [inc_1, inc_2, tmp_path / "inc_path2" / "extra.bin"])
-        assert "file.bin" in tcase.contents
-        assert "nested/nested.js" in tcase.contents
-        assert len(list(tcase.contents)) == 2
-        # nested url
-        tcase.add_batch(include, [inc_1], prefix="test")
-        assert "test/file.bin" in tcase.contents
-        assert len(list(tcase.contents)) == 3
-        # collision
-        with raises(TestFileExists, match="'file.bin' exists in test"):
-            tcase.add_batch(include, [inc_1])
-
-
-def test_testcase_17(tmp_path):
     """test TestCase.scan_path()"""
     # empty path
     (tmp_path / "not-test").mkdir()
@@ -446,7 +409,7 @@ def test_testcase_17(tmp_path):
     assert len(tc_paths) == 1
 
 
-def test_testcase_18():
+def test_testcase_17():
     """test TestCase.get_file()"""
     with TestCase("test.htm", "test-adapter") as src:
         src.add_from_bytes(b"test", "test.htm")
@@ -454,7 +417,7 @@ def test_testcase_18():
         assert src.get_file("test.htm")
 
 
-def test_testcase_19():
+def test_testcase_18():
     """test TestCase.clone()"""
     with TestCase("a.htm", "adpt", input_fname="fn", time_limit=2) as src:
         src.duration = 1.2
@@ -506,7 +469,7 @@ def test_testcase_19():
         ".",
     ],
 )
-def test_testcase_20(path):
+def test_testcase_19(path):
     """test TestCase.sanitize_path() with invalid paths"""
     with raises(ValueError, match="invalid path"):
         TestCase.sanitize_path(path)
@@ -527,6 +490,6 @@ def test_testcase_20(path):
         ("./a/./b/../c", "a/c"),
     ],
 )
-def test_testcase_21(path, expected_result):
+def test_testcase_20(path, expected_result):
     """test TestCase.sanitize_path()"""
     assert TestCase.sanitize_path(path) == expected_result

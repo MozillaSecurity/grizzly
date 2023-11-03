@@ -84,33 +84,6 @@ class TestCase:
     def __exit__(self, *exc):
         self.cleanup()
 
-    def add_batch(self, path, include_files, prefix=None, copy=True):
-        """Iterate over files in include_files and attach the files that are
-        located in path to TestCase.
-
-        Args:
-            path (str): Path to the root of the directory that contains files.
-            include_files (iterable(str)): Paths of the files to be added to the
-                                           TestCase if they exist in path.
-            prefix (str): Path prefix to prepend to file when adding to
-                          the TestCase.
-            copy (bool): File will be copied if True otherwise the file will be moved.
-
-        Returns:
-            None
-        """
-        path = Path(path)
-        for fname in include_files:
-            file = Path(fname)
-            try:
-                relative = file.relative_to(path)
-            except ValueError:
-                # cannot add files outside path
-                continue
-            if prefix:
-                relative = prefix / relative
-            self.add_from_file(file, file_name=relative.as_posix(), copy=copy)
-
     def add_from_bytes(self, data, file_name, required=False):
         """Create a file and add it to the TestCase.
 
