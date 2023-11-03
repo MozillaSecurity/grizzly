@@ -328,9 +328,15 @@ def test_runner_10(mocker, tmp_path):
     smap = ServerMap()
     smap.set_include("/", str(inc_path1))
     smap.set_include("/test", str(inc_path2))
-    serv_files = ["a.b", str(inc1), str(inc2), str(inc3)]
-    server.serve_path.return_value = (Served.ALL, serv_files)
     with TestCase("a.b", "x") as tcase:
+        tcase.add_from_bytes(b"a", tcase.entry_point, required=True)
+        serv_files = {
+            "a.b": tcase.data_path / "a.b",
+            "inc_file.bin": inc1,
+            "nested/nested_inc.bin": inc2,
+            "test/inc_file3.txt": inc3,
+        }
+        server.serve_path.return_value = (Served.ALL, serv_files)
         result = runner.run([], smap, tcase)
         assert result.attempted
         assert result.status == Result.NONE

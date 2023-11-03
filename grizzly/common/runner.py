@@ -293,15 +293,13 @@ class Runner:
             attempted=testcase.entry_point in served,
             timeout=server_status == Served.TIMEOUT,
         )
-        # TODO: fix calling TestCase.add_batch() for multi-test replay
-        # add all include files that were served
-        for url, resource in server_map.include.items():
-            testcase.add_batch(
-                resource.target,
-                # only pass files that appear to be in current include path
-                (x for x in result.served if x.startswith(resource.target)),
-                prefix=url,
-            )
+        # add all include files that were served to test case
+        if server_map.include:
+            existing = set(testcase.contents)
+            for url, local_file in served.items():
+                if url in existing:
+                    continue
+                testcase.add_from_file(local_file, file_name=url, copy=True)
         # record use of https in testcase
         testcase.https = self._server.scheme == "https"
         if result.timeout:
