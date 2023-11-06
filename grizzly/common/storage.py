@@ -51,8 +51,8 @@ class TestCase:
         "time_limit",
         "timestamp",
         "version",
-        "_data_path",
         "_files",
+        "_root",
     )
 
     def __init__(
@@ -76,7 +76,7 @@ class TestCase:
         self.timestamp = time() if timestamp is None else timestamp
         self.version = __version__
         self._files = TestFileMap(optional=[], required=[])
-        self._data_path = Path(mkdtemp(prefix="testcase_", dir=grz_tmp("storage")))
+        self._root = Path(mkdtemp(prefix="testcase_", dir=grz_tmp("storage")))
 
     def __enter__(self):
         return self
@@ -107,8 +107,7 @@ class TestCase:
         finally:
             # the temporary file should have been moved to the data path of the TestCase
             # unless an exception occurred so remove it if needed
-            if data_file.is_file():
-                data_file.unlink()
+            data_file.unlink(missing_ok=True)
 
     def add_from_file(self, src_file, file_name=None, required=False, copy=False):
         """Add a file to the TestCase by either copying or moving an existing file.
@@ -129,7 +128,7 @@ class TestCase:
             file_name = src_file.name
         file_name = self.sanitize_path(file_name)
 
-        test_file = TestFile(file_name, self._data_path / file_name)
+        test_file = TestFile(file_name, self._root / file_name)
         if test_file.file_name in self.contents:
             raise TestFileExists(f"{test_file.file_name!r} exists in test")
 
@@ -154,7 +153,7 @@ class TestCase:
         Returns:
             None
         """
-        rmtree(self._data_path, ignore_errors=True)
+        rmtree(self._root, ignore_errors=True)
 
     def clone(self):
         """Make a copy of the TestCase.
@@ -202,7 +201,7 @@ class TestCase:
             yield tfile.file_name
 
     @property
-    def data_path(self):
+    def root(self):
         """Location test data is stored on disk. This is intended to be used as wwwroot.
 
         Args:
@@ -211,7 +210,7 @@ class TestCase:
         Returns:
             Path: Directory containing test case files.
         """
-        return self._data_path
+        return self._root
 
     @property
     def data_size(self):

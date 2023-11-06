@@ -237,7 +237,7 @@ class Runner:
                     LOG.info("Browser launched, continuing in %ds...", delay)
                 # serve prompt page
                 server_status, _ = self._server.serve_path(
-                    content.data_path,
+                    content.root,
                     continue_cb=self._target.monitor.is_healthy,
                     server_map=srv_map,
                 )
@@ -280,7 +280,7 @@ class Runner:
         # serve the test case
         serve_start = time()
         server_status, served = self._server.serve_path(
-            testcase.data_path,
+            testcase.root,
             continue_cb=self._keep_waiting,
             forever=wait_for_callback,
             required_files=tuple(testcase.required),
