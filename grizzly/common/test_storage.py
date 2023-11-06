@@ -27,7 +27,7 @@ def test_testcase_01(tmp_path):
         assert tcase.input_fname is None
         assert tcase.timestamp > 0
         assert not tcase.env_vars
-        assert tcase.data_path
+        assert tcase.root
         assert not tcase._files.optional
         assert not tcase._files.required
         assert not any(tcase.contents)
