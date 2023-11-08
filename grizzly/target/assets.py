@@ -19,6 +19,7 @@ class AssetError(Exception):
     """Raised by AssetManager"""
 
 
+# TODO: use pathlib
 class AssetManager:
     __slots__ = ("assets", "path")
 
@@ -37,7 +38,7 @@ class AssetManager:
 
         Args:
             asset (str): Name of asset.
-            path (str): Path of content to use as asset.
+            path (str): Location on disk.
             copy (bool): Copy or move the content.
 
         Returns:
@@ -52,14 +53,14 @@ class AssetManager:
         # only copy files from outside working path
         if path.startswith(self.path):
             raise AssetError(f"Cannot add existing asset content {path!r}")
-        # remove existing asset with the same name
-        if asset in self.assets:
-            LOG.debug("asset %r exists, removing existing", asset)
-            self.remove(asset)
         dst_path = pathjoin(self.path, basename(path))
         # avoid overwriting data that is part of an existing asset
         if exists(dst_path):
             raise AssetError(f"{basename(path)!r} is an existing asset")
+        # remove existing asset with the same name
+        if asset in self.assets:
+            LOG.debug("asset %r exists, removing existing", asset)
+            self.remove(asset)
         if copy:
             if isfile(path):
                 copyfile(path, dst_path)
@@ -67,7 +68,7 @@ class AssetManager:
                 copytree(path, dst_path)
         else:
             move(path, self.path)
-        self.assets[asset] = dst_path
+        self.assets[asset] = basename(path)
         LOG.debug(
             "added asset %r %s to %r", asset, "copied" if copy else "moved", dst_path
         )
@@ -114,16 +115,16 @@ class AssetManager:
             if subdir:
                 dst_path = pathjoin(dst_path, subdir)
             makedirs(dst_path, exist_ok=not subdir)
-            for asset, src in self.assets.items():
-                dst_name = basename(src)
-                dumped[asset] = dst_name
+            for name, path in self.assets.items():
+                dumped[name] = path
+                src = pathjoin(self.path, path)
                 if isfile(src):
-                    copyfile(src, pathjoin(dst_path, dst_name))
+                    copyfile(src, pathjoin(dst_path, path))
                 elif isdir(src):
-                    copytree(src, pathjoin(dst_path, dst_name))
+                    copytree(src, pathjoin(dst_path, path))
                 else:
-                    dumped.pop(asset)
-                    LOG.warning("Failed to dump asset %r from %r", asset, src)
+                    dumped.pop(name)
+                    LOG.warning("Failed to dump asset %r from %r", name, src)
         return dumped
 
     def get(self, asset):
@@ -135,7 +136,10 @@ class AssetManager:
         Returns:
             str: Path to asset content or None if asset does not exist.
         """
-        return self.assets.get(asset, None)
+        item = self.assets.get(asset, None)
+        if item is not None:
+            return pathjoin(self.path, item)
+        return None
 
     def is_empty(self):
         """Check if AssetManager contains entries.
@@ -177,6 +181,7 @@ class AssetManager:
         """
         path = self.assets.pop(asset, None)
         if path:
+            path = pathjoin(self.path, path)
             if isfile(path):
                 unlink(path)
             else:

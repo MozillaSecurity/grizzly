@@ -1,7 +1,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from os.path import isfile
 from pathlib import Path
 from shutil import rmtree
 
@@ -18,17 +17,26 @@ def test_asset_manager_01(tmp_path):
         assert assets.is_empty()
         # add file (move)
         example = tmp_path / "example.txt"
-        example.write_text("example")
+        example.write_text("foo")
         asset_location = assets.add("example_file", str(example), copy=False)
+        assert assets.assets["example_file"] == "example.txt"
         assert str(Path(assets.path) / "example.txt") == asset_location
+        assert assets.get("example_file") == asset_location
         assert len(assets.assets) == 1
         assert not assets.is_empty()
         assert not example.is_file()
-        assert any(Path(assets.path).glob("**/example.txt"))
+        assert (Path(assets.path) / "example.txt").is_file()
+        # add file - file name collision
+        example.write_text("foo")
+        with raises(AssetError, match="'example.txt' is an existing asset"):
+            assets.add("example_file", str(example))
+        assert len(assets.assets) == 1
         # add existing asset - update asset (copy)
-        example.write_text("example")
+        example = tmp_path / "example_2.txt"
+        example.write_text("foo")
         assets.add("example_file", str(example))
         assert example.is_file()
+        assert len(assets.assets) == 1
         # add directory
         example = tmp_path / "example_path"
         example.mkdir()
@@ -37,17 +45,18 @@ def test_asset_manager_01(tmp_path):
         (example / "b").mkdir()
         (example / "b" / "2.txt").write_text("2")
         assets.add("example_path", str(example))
-        rmtree(str(example))
-        assert any(Path(assets.path).glob("**/example_path/a/1.txt"))
-        assert any(Path(assets.path).glob("**/example_path/b/2.txt"))
+        rmtree(example)
+        assert (Path(assets.path) / "example_path/a/1.txt").is_file()
+        assert (Path(assets.path) / "example_path/b/2.txt").is_file()
         assert len(assets.assets) == 2
         # get
-        assert "example.txt" in assets.get("example_file")
-        assert "example_path" in assets.get("example_path")
+        assert Path(assets.path) / "example_2.txt" == Path(assets.get("example_file"))
+        assert Path(assets.path) / "example_path" == Path(assets.get("example_path"))
         # remove directory
         assets.remove("example_path")
         assert len(assets.assets) == 1
-        assert not any(Path(assets.path).glob("**/example_path"))
+        assert Path(assets.path).is_dir()
+        assert not (Path(assets.path) / "example_path").is_dir()
         # remove file
         assets.remove("example_file")
         assert len(assets.assets) == 0
@@ -117,7 +126,7 @@ def test_asset_manager_03(tmp_path):
         dumped, str(dump_path / "sub"), base_path=str(tmp_path)
     ) as assets:
         assert len(assets.assets) == 2
-        assert isfile(assets.assets["example_file"])
+        assert (Path(assets.path) / assets.assets["example_file"]).is_file()
 
 
 def test_asset_manager_04(tmp_path):

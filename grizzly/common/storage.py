@@ -8,13 +8,12 @@ from itertools import chain, product
 from logging import getLogger
 from os.path import normpath, split
 from pathlib import Path
-from shutil import copyfile, move, rmtree
+from shutil import copyfile, copytree, move, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
 from zipfile import BadZipfile, ZipFile
 from zlib import error as zlib_error
 
-from ..target import AssetError, AssetManager
 from .utils import __version__, grz_tmp
 
 __all__ = ("TestCase", "TestCaseLoadFailure", "TestFileExists")
@@ -42,6 +41,7 @@ class TestCase:
     __slots__ = (
         "adapter_name",
         "assets",
+        "assets_path",
         "duration",
         "entry_point",
         "env_vars",
@@ -65,7 +65,8 @@ class TestCase:
     ):
         assert entry_point
         self.adapter_name = adapter_name
-        self.assets = None
+        self.assets = {}
+        self.assets_path = None
         self.duration = None
         self.env_vars = {}
         self.hang = False
@@ -167,11 +168,21 @@ class TestCase:
         result = type(self)(
             self.entry_point,
             self.adapter_name,
-            self.input_fname,
-            self.time_limit,
-            self.timestamp,
+            input_fname=self.input_fname,
+            time_limit=self.time_limit,
+            timestamp=self.timestamp,
         )
-        result.assets = self.assets
+        result.assets = dict(self.assets)
+        if result.assets:
+            assert self.assets_path
+            org_path = Path(self.assets_path)
+            try:
+                # copy asset data from test case
+                result.assets_path = result.root / org_path.relative_to(self.root)
+                copytree(org_path, result.assets_path)
+            except ValueError:
+                # asset data is not part of the test case
+                result.assets_path = self.assets_path
         result.duration = self.duration
         result.env_vars = dict(self.env_vars)
         result.hang = self.hang
@@ -260,11 +271,12 @@ class TestCase:
                 "version": self.version,
             }
             # save target assets and update meta data
-            if self.assets and not self.assets.is_empty():
+            if self.assets:
+                assert isinstance(self.assets, dict)
+                assert isinstance(self.assets_path, (Path, str))
+                info["assets"] = self.assets
                 info["assets_path"] = "_assets_"
-                info["assets"] = self.assets.dump(
-                    str(dst_path), subdir=info["assets_path"]
-                )
+                copytree(self.assets_path, dst_path / info["assets_path"])
             with (dst_path / "test_info.json").open("w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
 
@@ -335,21 +347,8 @@ class TestCase:
                 tests = [cls.load_single(path, adjacent=adjacent)]
             elif path.is_dir():
                 tests = []
-                assets = None
                 for tc_path in TestCase.scan_path(path):
-                    tests.append(
-                        cls.load_single(
-                            tc_path, load_assets=assets is None, copy=unpacked is None
-                        )
-                    )
-                    # only load assets once
-                    if not assets and tests[-1].assets:
-                        assets = tests[-1].assets
-                # reuse AssetManager on all tests
-                if assets:
-                    for test in tests:
-                        if test.assets is None:
-                            test.assets = assets
+                    tests.append(cls.load_single(tc_path, copy=unpacked is None))
                 tests.sort(key=lambda tc: tc.timestamp)
             else:
                 raise TestCaseLoadFailure("Invalid TestCase path")
@@ -359,7 +358,7 @@ class TestCase:
         return tests
 
     @classmethod
-    def load_single(cls, path, adjacent=False, load_assets=True, copy=True):
+    def load_single(cls, path, adjacent=False, copy=True):
         """Load contents of a TestCase from disk. If `path` is a directory it must
         contain a valid 'test_info.json' file.
 
@@ -368,7 +367,6 @@ class TestCase:
             adjacent (bool): Load adjacent files as part of the TestCase.
                              This is always true when loading a directory.
                              WARNING: This should be used with caution!
-            load_assets (bool): Load assets files.
             copy (bool): Files will be copied if True otherwise the they will be moved.
 
         Returns:
@@ -406,55 +404,54 @@ class TestCase:
             time_limit=info.get("time_limit", None),
             timestamp=info.get("timestamp", 0),
         )
+        test.assets = info.get("assets", {})
         test.duration = info.get("duration", None)
+        test.env_vars = info.get("env", {})
         test.hang = info.get("hang", False)
         test.https = info.get("https", False)
         test.version = info.get("version", None)
+        # sanity check assets data
+        assert isinstance(test.assets, dict)
+        for name, value in test.assets.items():
+            if not isinstance(name, str) or not isinstance(value, str):
+                test.cleanup()
+                raise TestCaseLoadFailure("'assets' contains invalid entry")
+        # copy asset data
+        src_asset_path = None
+        if test.assets:
+            assets_path = info.get("assets_path", None)
+            if assets_path and (path / assets_path).is_dir():
+                src_asset_path = path / assets_path
+                test.assets_path = test._root / "_assets_"
+                copytree(src_asset_path, test.assets_path)
+            else:
+                LOG.warning("Could not find assets in test case")
+                test.assets = {}
+        # sanity check environment variable data
+        assert isinstance(test.env_vars, dict)
+        for name, value in test.env_vars.items():
+            if not isinstance(name, str) or not isinstance(value, str):
+                test.cleanup()
+                raise TestCaseLoadFailure("'env' contains invalid entry")
+        # add entry point
         test.add_from_file(
             entry_point, file_name=test.entry_point, required=True, copy=copy
         )
-        if info:
-            # load assets
-            try:
-                if load_assets and info.get("assets", None):
-                    test.assets = AssetManager.load(
-                        info.get("assets"),
-                        str(entry_point.parent / info.get("assets_path", "")),
-                    )
-            except (AssetError, OSError) as exc:
-                test.cleanup()
-                raise TestCaseLoadFailure(str(exc)) from None
-            # load environment variables
-            test.env_vars = info.get("env", {})
-            assert isinstance(test.env_vars, dict)
-            # sanity check environment variable data
-            for name, value in test.env_vars.items():
-                if not isinstance(name, str) or not isinstance(value, str):
-                    test.cleanup()
-                    if test.assets:
-                        test.assets.cleanup()
-                    raise TestCaseLoadFailure("'env' contains invalid entries")
         # load all adjacent data from directory
         if adjacent:
-            asset_path = info.get("assets_path", None)
             for entry in Path(entry_point.parent).rglob("*"):
                 if not entry.is_file():
                     continue
-                location = entry.relative_to(entry_point.parent).as_posix()
                 # ignore asset path
-                if asset_path and location.startswith(asset_path):
+                if entry.parent == src_asset_path:
                     continue
+                location = entry.relative_to(entry_point.parent).as_posix()
                 # ignore files that have been previously loaded
                 if location in (test.entry_point, "test_info.json"):
                     continue
                 # NOTE: when loading all files except the entry point are
                 # marked as `required=False`
-                test.add_from_file(
-                    entry,
-                    file_name=location,
-                    required=False,
-                    copy=copy,
-                )
+                test.add_from_file(entry, file_name=location, required=False, copy=copy)
         return test
 
     @property
@@ -469,22 +466,6 @@ class TestCase:
         """
         for test in self._files.optional:
             yield test.file_name
-
-    def pop_assets(self):
-        """Remove AssetManager from TestCase.
-
-        Args:
-            None
-
-        Returns:
-            AssetManager: AssetManager if exists otherwise None.
-        """
-        if self.assets is None:
-            assets = None
-        else:
-            assets = self.assets
-            self.assets = None
-        return assets
 
     def purge_optional(self, keep):
         """Remove optional files that are not in keep.

@@ -5,6 +5,7 @@
 
 from itertools import chain
 from json import dumps, loads
+from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from pytest import mark, raises
@@ -19,7 +20,8 @@ def test_testcase_01(tmp_path):
     adpt_name = "test-adapter"
     with TestCase(entry_point, adpt_name) as tcase:
         assert tcase.entry_point == entry_point
-        assert tcase.assets is None
+        assert not tcase.assets
+        assert not tcase.assets_path
         assert tcase.adapter_name == adpt_name
         assert tcase.duration is None
         assert tcase.data_size == 0
@@ -31,7 +33,6 @@ def test_testcase_01(tmp_path):
         assert not tcase._files.optional
         assert not tcase._files.required
         assert not any(tcase.contents)
-        assert tcase.pop_assets() is None
         assert not any(tcase.optional)
         assert not any(tcase.required)
         tcase.dump(tmp_path)
@@ -173,29 +174,41 @@ def test_testcase_07(tmp_path):
     entry_point.unlink()
     with raises(TestCaseLoadFailure, match="Entry point 'target.bin' not found in"):
         TestCase.load_single(src_dir)
-    # bad 'env' entry in test_info.json
+    # bad 'assets' entry in test_info.json
     entry_point.touch()
-    with AssetManager(base_path=str(tmp_path)) as assets:
-        (tmp_path / "example_asset").touch()
-        assets.add("example", str(tmp_path / "example_asset"), copy=False)
-        with TestCase("target.bin", "test-adapter") as src:
-            src.assets = assets
-            src.dump(src_dir, include_details=True)
+    with TestCase("target.bin", "test-adapter") as src:
+        src.dump(src_dir, include_details=True)
+    test_info = loads((src_dir / "test_info.json").read_text())
+    test_info["assets"] = {"bad": 1}
+    (src_dir / "test_info.json").write_text(dumps(test_info))
+    with raises(TestCaseLoadFailure, match="'assets' contains invalid entry"):
+        TestCase.load_single(src_dir)
+    # bad 'env' entry in test_info.json
+    with TestCase("target.bin", "test-adapter") as src:
+        src.dump(src_dir, include_details=True)
     test_info = loads((src_dir / "test_info.json").read_text())
     test_info["env"] = {"bad": 1}
     (src_dir / "test_info.json").write_text(dumps(test_info))
-    with raises(TestCaseLoadFailure, match="'env' contains invalid entries"):
+    with raises(TestCaseLoadFailure, match="'env' contains invalid entry"):
         TestCase.load_single(src_dir)
+    # missing asset data
+    test_info["env"].clear()
+    test_info["assets"] = {"a": "a"}
+    test_info["assets_path"] = "missing"
+    (src_dir / "test_info.json").write_text(dumps(test_info))
+    with TestCase.load_single(src_dir) as loaded:
+        assert not loaded.assets
+        assert not loaded.assets_path
 
 
-def test_testcase_08(mocker, tmp_path):
+def test_testcase_08(tmp_path):
     """test TestCase.load_single() using a directory"""
     # build a valid test case
     src_dir = tmp_path / "src"
     src_dir.mkdir()
     entry_point = src_dir / "target.bin"
     entry_point.touch()
-    asset_file = src_dir / "example_asset"
+    asset_file = src_dir / "asset.bin"
     asset_file.touch()
     (src_dir / "optional.bin").touch()
     (src_dir / "x.bin").touch()
@@ -205,6 +218,7 @@ def test_testcase_08(mocker, tmp_path):
     (nested / "x.bin").touch()
     (tmp_path / "src" / "nested" / "empty").mkdir()
     dst_dir = tmp_path / "dst"
+    # build test case
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("example", str(asset_file))
         with TestCase("target.bin", "test-adapter") as src:
@@ -217,14 +231,15 @@ def test_testcase_08(mocker, tmp_path):
                 file_name=str((nested / "x.bin").relative_to(src_dir)),
                 required=False,
             )
-            src.assets = assets
+            src.assets = dict(assets.assets)
+            src.assets_path = assets.path
             src.dump(dst_dir, include_details=True)
     # test loading test case from test_info.json
     with TestCase.load_single(dst_dir) as dst:
-        asset = dst.pop_assets()
-        assert asset
-        with asset:
-            assert "example" in asset.assets
+        assert "example" in dst.assets
+        assert dst.assets_path is not None
+        assert (Path(dst.assets_path) / "asset.bin").is_file()
+        assert "_assets_/asset.bin" not in (x.file_name for x in dst._files.optional)
         assert dst.entry_point == "target.bin"
         assert "target.bin" in (x.file_name for x in dst._files.required)
         assert "optional.bin" in (x.file_name for x in dst._files.optional)
@@ -232,10 +247,6 @@ def test_testcase_08(mocker, tmp_path):
         assert "nested/x.bin" in (x.file_name for x in dst._files.optional)
         assert dst.env_vars["TEST_ENV_VAR"] == "100"
         assert dst.timestamp > 0
-    # test load with missing asset
-    mocker.patch("grizzly.common.storage.AssetManager.load", side_effect=OSError)
-    with raises(TestCaseLoadFailure):
-        TestCase.load_single(dst_dir)
 
 
 def test_testcase_09(tmp_path):
@@ -251,7 +262,7 @@ def test_testcase_09(tmp_path):
     (src_dir / "optional.bin").touch()
     # load single file test case
     with TestCase.load_single(entry_point, adjacent=False) as tcase:
-        assert tcase.assets is None
+        assert not tcase.assets
         assert not tcase.env_vars
         assert tcase.entry_point == "target.bin"
         assert "target.bin" in (x.file_name for x in tcase._files.required)
@@ -266,6 +277,10 @@ def test_testcase_09(tmp_path):
 
 def test_testcase_10(tmp_path):
     """test TestCase - dump, load and compare"""
+    asset_path = tmp_path / "assets"
+    asset_path.mkdir()
+    asset = asset_path / "asset_file.txt"
+    asset.touch()
     working = tmp_path / "working"
     working.mkdir()
     with TestCase("a.html", "adpt") as org:
@@ -277,25 +292,17 @@ def test_testcase_10(tmp_path):
         org.input_fname = "infile"
         org.time_limit = 10
         org.add_from_bytes(b"a", "a.html")
-        with AssetManager(base_path=str(tmp_path)) as assets:
-            fake = tmp_path / "fake_asset"
-            fake.touch()
-            assets.add("fake", str(fake))
-            org.assets = assets
-            org.dump(working, include_details=True)
-        org.assets = None
+        org.assets = {"sample": asset.name}
+        org.assets_path = str(asset_path)
+        org.dump(working, include_details=True)
+        assert (working / "_assets_" / asset.name).is_file()
         with TestCase.load_single(working, adjacent=False) as loaded:
-            try:
-                for prop in TestCase.__slots__:
-                    if prop.startswith("_") or prop == "assets":
-                        continue
+            for prop in TestCase.__slots__:
+                if not prop.startswith("_") and prop != "assets_path":
                     assert getattr(loaded, prop) == getattr(org, prop)
-                assert not set(org.contents) ^ set(loaded.contents)
-                assert loaded.assets
-                assert "fake" in loaded.assets.assets
-            finally:
-                if loaded.assets:
-                    loaded.assets.cleanup()
+            assert not set(org.contents) ^ set(loaded.contents)
+            assert "sample" in loaded.assets
+            assert loaded.assets["sample"] == asset.name
 
 
 def test_testcase_11(tmp_path):
@@ -311,12 +318,7 @@ def test_testcase_12(tmp_path):
     """test TestCase.load() - single file"""
     tfile = tmp_path / "testcase.html"
     tfile.touch()
-    testcases = TestCase.load(tfile, adjacent=False)
-    try:
-        assert len(testcases) == 1
-        assert all(x.assets is None for x in testcases)
-    finally:
-        any(x.cleanup() for x in testcases)
+    assert len(TestCase.load(tfile, adjacent=False)) == 1
 
 
 def test_testcase_13(tmp_path):
@@ -324,12 +326,7 @@ def test_testcase_13(tmp_path):
     with TestCase("target.bin", "test-adapter") as src:
         src.add_from_bytes(b"test", "target.bin")
         src.dump(tmp_path, include_details=True)
-    testcases = TestCase.load(tmp_path)
-    try:
-        assert len(testcases) == 1
-        assert all(x.assets is None for x in testcases)
-    finally:
-        any(x.cleanup() for x in testcases)
+    assert len(TestCase.load(tmp_path)) == 1
 
 
 def test_testcase_14(tmp_path):
@@ -341,23 +338,15 @@ def test_testcase_14(tmp_path):
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("example", str(asset_file))
         with TestCase("target.bin", "test-adapter") as src:
-            src.assets = assets
+            src.assets = assets.assets
+            src.assets_path = assets.path
             src.add_from_bytes(b"test", "target.bin")
             src.dump(nested / "test-1", include_details=True)
             src.dump(nested / "test-2", include_details=True)
             src.dump(nested / "test-3", include_details=True)
     testcases = TestCase.load(nested)
-    try:
-        assert len(testcases) == 3
-        assert all(x.assets is not None for x in testcases)
-        asset = testcases[-1].pop_assets()
-        assert asset is not None
-        assert "example" in asset.assets
-    finally:
-        any(x.cleanup() for x in testcases)
-        for test in testcases:
-            if test.assets:
-                test.assets.cleanup()
+    assert len(testcases) == 3
+    assert "example" in testcases[0].assets
     # try loading testcases that are nested too deep
     assert not TestCase.load(tmp_path)
 
@@ -383,12 +372,8 @@ def test_testcase_15(tmp_path):
             if entry.is_file():
                 zfp.write(str(entry), arcname=str(entry.relative_to(tmp_path)))
     testcases = TestCase.load(archive)
-    try:
-        assert len(testcases) == 3
-        assert all(x.assets is None for x in testcases)
-        assert all("target.bin" in x.contents for x in testcases)
-    finally:
-        any(x.cleanup() for x in testcases)
+    assert len(testcases) == 3
+    assert all("target.bin" in x.contents for x in testcases)
 
 
 def test_testcase_16(tmp_path):
@@ -417,9 +402,29 @@ def test_testcase_17():
         assert src.get_file("test.htm")
 
 
-def test_testcase_18():
+@mark.parametrize(
+    "remote_assets",
+    [
+        # No assets
+        None,
+        # Remote assets
+        True,
+        # Local assets (assets only exist in test case)
+        False,
+    ],
+)
+def test_testcase_18(tmp_path, remote_assets):
     """test TestCase.clone()"""
-    with TestCase("a.htm", "adpt", input_fname="fn", time_limit=2) as src:
+    with TestCase("test.htm", "adpt", input_fname="fn", time_limit=2) as src:
+        if remote_assets:
+            src.assets = {"foo": "asset.file"}
+            src.assets_path = tmp_path
+            (tmp_path / "asset.file").touch()
+        elif remote_assets is not None:
+            src.assets = {"foo": "asset.file"}
+            src.assets_path = src.root / "_assets_"
+            src.assets_path.mkdir()
+            (src.assets_path / "asset.file").touch()
         src.duration = 1.2
         src.hang = True
         src.https = True
@@ -429,6 +434,9 @@ def test_testcase_18():
         with src.clone() as dst:
             for prop in TestCase.__slots__:
                 if prop.startswith("_"):
+                    continue
+                if remote_assets is False and prop == "assets_path":
+                    assert src.assets_path != dst.assets_path
                     continue
                 assert getattr(src, prop) == getattr(dst, prop)
             assert src.data_size == dst.data_size
@@ -444,6 +452,8 @@ def test_testcase_18():
             assert dst.env_vars == {"foo": "bar"}
             assert not set(src.optional) ^ set(dst.optional)
             assert not set(src.required) ^ set(dst.required)
+            if remote_assets is not None:
+                assert (dst.assets_path / dst.assets["foo"]).is_file()
 
 
 @mark.parametrize(

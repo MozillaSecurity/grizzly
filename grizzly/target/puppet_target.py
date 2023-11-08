@@ -387,7 +387,7 @@ class PuppetTarget(Target):
         abort_tokens = self.assets.get("abort-tokens")
         if abort_tokens:
             LOG.debug("loading 'abort tokens' from %r", abort_tokens)
-            with open(abort_tokens) as in_fp:
+            with (Path(self.assets.path) / abort_tokens).open() as in_fp:
                 for line in in_fp:
                     line = line.strip()
                     if line:

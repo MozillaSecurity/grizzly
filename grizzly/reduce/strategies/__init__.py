@@ -157,12 +157,12 @@ class Strategy(ABC):
             None
         """
         if recreate_tcroot:
-            rmtree(str(self._testcase_root))
+            rmtree(self._testcase_root)
             self._testcase_root.mkdir()
         for idx, testcase in enumerate(testcases):
             LOG.debug("Extracting testcase %d/%d", idx + 1, len(testcases))
-            testpath = self._testcase_root / f"{idx:0>3d}"
-            testcase.dump(str(testpath), include_details=True)
+            testpath = self._testcase_root / f"{idx:03d}"
+            testcase.dump(testpath, include_details=True)
 
     @classmethod
     def sanity_check_cls_attrs(cls):
