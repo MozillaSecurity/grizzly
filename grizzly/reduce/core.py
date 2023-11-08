@@ -559,7 +559,10 @@ class ReduceManager:
                                     # add target assets to test cases
                                     if not self.target.assets.is_empty():
                                         for test in reduction:
-                                            test.assets = self.target.assets
+                                            test.assets = dict(
+                                                self.target.assets.assets
+                                            )
+                                            test.assets_path = self.target.assets.path
                                     # add target environment variables
                                     if self.target.filtered_environ():
                                         for test in reduction:

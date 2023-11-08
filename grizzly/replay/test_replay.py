@@ -628,15 +628,50 @@ def test_replay_20(mocker, tmp_path):
     assert (path / "reports" / "expected_logs").is_dir()
 
 
-def test_replay_21(mocker, tmp_path):
+def test_replay_21(tmp_path):
     """test ReplayManager.load_testcases()"""
+    (tmp_path / "src").mkdir()
+    data = tmp_path / "src" / "testcase.html"
+    data.write_text("test")
+    dst = tmp_path / "dst"
+    # build test case
+    with AssetManager() as assets:
+        (tmp_path / "prefs.js").touch()
+        assets.add("prefs", str(tmp_path / "prefs.js"), copy=False)
+        with TestCase(data.name, "foo") as src:
+            src.env_vars = {"foo": "bar"}
+            src.assets = dict(assets.assets)
+            src.assets_path = assets.path
+            src.add_from_file(data, data.name)
+            src.dump(dst, include_details=True)
+    # load single file
+    tests, assets, env_vars = ReplayManager.load_testcases(dst / "testcase.html")
+    assert len(tests) == 1
+    assert not env_vars
+    assert assets is None
+    # load directory
+    tests, assets, env_vars = ReplayManager.load_testcases(dst)
+    assert len(tests) == 1
+    assert env_vars == {"foo": "bar"}
+    assert assets
+    assert "prefs" in assets.assets
+
+
+def test_replay_22(mocker, tmp_path):
+    """test ReplayManager.load_testcases()"""
+    mocker.patch("grizzly.replay.replay.AssetManager.load", autospec=True)
     fake_load = mocker.patch("grizzly.replay.replay.TestCase.load")
-    test0 = mocker.Mock(spec_set=TestCase, env_vars={"env": "var"})
-    test0.pop_assets.return_value = None
-    test1 = mocker.Mock(spec_set=TestCase, env_vars={}, entry_point="x.html")
-    test1.pop_assets.return_value = None
-    test2 = mocker.Mock(spec_set=TestCase, env_vars={})
-    test2.pop_assets.return_value = None
+    test0 = mocker.Mock(
+        spec_set=TestCase, assets={}, assets_path=None, env_vars={"env": "var"}
+    )
+    test1 = mocker.Mock(
+        spec_set=TestCase,
+        assets={},
+        assets_path=None,
+        env_vars={},
+        entry_point="x.html",
+    )
+    test2 = mocker.Mock(spec_set=TestCase, assets={}, assets_path=None, env_vars={})
     # failure
     fake_load.return_value = ()
     with raises(TestCaseLoadFailure, match="Failed to load TestCases"):
@@ -652,19 +687,21 @@ def test_replay_21(mocker, tmp_path):
     assert tests[1].cleanup.call_count == 0
     assert assets is None
     # success select
-    test0.pop_assets.return_value = mocker.Mock(spec_set=AssetManager)
-    fake_load.return_value = [test0, test1, test2, mocker.MagicMock(spec_set=TestCase)]
+    fake_load.return_value = [
+        test0,
+        test1,
+        test2,
+        mocker.MagicMock(spec_set=TestCase, assets={}, assets_path=None, env_vars={}),
+    ]
     tests, assets, _ = ReplayManager.load_testcases(tmp_path, subset=[1, 3])
     assert len(tests) == 2
     assert tests[0].entry_point == "x.html"
     assert test0.cleanup.call_count == 1
     assert test1.cleanup.call_count == 0
     assert test2.cleanup.call_count == 1
-    assert assets is not None
     test0.reset_mock()
     test2.reset_mock()
     # select (first and last) with invalid input
-    test0.pop_assets.return_value = None
     fake_load.return_value = [test0, test1, test2]
     tests, _a, _e = ReplayManager.load_testcases(tmp_path, subset=[0, 10, -10, -1])
     assert len(tests) == 2
@@ -690,7 +727,7 @@ def test_replay_21(mocker, tmp_path):
         (False, False, True, False, 1, 0),
     ],
 )
-def test_replay_22(
+def test_replay_23(
     mocker, server, expect_hang, is_hang, use_sig, match_sig, ignored, results
 ):
     """test ReplayManager.run() - detect hangs"""
@@ -736,7 +773,7 @@ def test_replay_22(
         found[0].report.cleanup()
 
 
-def test_replay_23(mocker):
+def test_replay_24(mocker):
     """test ReplayManager.report_to_fuzzmanager()"""
     reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter")
     # no reports or tests
@@ -765,7 +802,7 @@ def test_replay_23(mocker):
     assert reporter.return_value.submit.call_count == 2
 
 
-def test_replay_24(mocker, server, tmp_path):
+def test_replay_25(mocker, server, tmp_path):
     """test ReplayManager.run() - signature - matching stacks"""
     sig_file = tmp_path / "sig.json"
     sig_file.write_text(
@@ -838,7 +875,7 @@ def test_replay_24(mocker, server, tmp_path):
         (["STDERR log\n", "STDERR log\n"], 1, 1, [True, False]),
     ],
 )
-def test_replay_25(mocker, server, stderr_log, ignored, total, include_stack):
+def test_replay_26(mocker, server, stderr_log, ignored, total, include_stack):
     """test ReplayManager.run() - no signature - match first result"""
     # NOTE: this is similar to "no signature - use first crash" test
     # but this is more of an integration test

@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 from itertools import count
-from os.path import isfile
+from pathlib import Path
 from platform import system
 
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, Debugger, Reason
@@ -304,14 +304,14 @@ def test_puppet_target_08(mocker, tmp_path):
     with PuppetTarget(fake_file, 300, 25, 5000) as target:
         assert target.assets.get("prefs") is None
         target.process_assets()
-        assert isfile(target.assets.get("prefs"))
+        assert (Path(target.assets.path) / target.assets.get("prefs")).is_file()
         assert target.assets.get("prefs").endswith("prefs.js")
     # prefs file provided
     with AssetManager(base_path=str(tmp_path)) as assets:
         assets.add("prefs", str(fake_file))
         with PuppetTarget(fake_file, 300, 25, 5000, assets=assets) as target:
             target.process_assets()
-            assert isfile(target.assets.get("prefs"))
+            assert (Path(target.assets.path) / target.assets.get("prefs")).is_file()
             assert target.assets.get("prefs").endswith("fake")
     # abort tokens file provided
     with AssetManager(base_path=str(tmp_path)) as assets:
@@ -322,7 +322,9 @@ def test_puppet_target_08(mocker, tmp_path):
             # pylint: disable=no-member
             assert target._puppet.add_abort_token.call_count == 0
             target.process_assets()
-            assert isfile(target.assets.get("abort-tokens"))
+            assert (
+                Path(target.assets.path) / target.assets.get("abort-tokens")
+            ).is_file()
             assert target.assets.get("abort-tokens").endswith("fake")
             assert target._puppet.add_abort_token.call_count == 2
 

@@ -49,7 +49,7 @@ def test_main_01(mocker, server, tmp_path):
     with TestCase("test.html", "adpt") as src:
         src.env_vars["TEST_VAR"] = "100"
         src.add_from_bytes(b"test", "test.html")
-        src.dump(str(tmp_path / "testcase"), include_details=True)
+        src.dump(tmp_path / "testcase", include_details=True)
     # setup args
     log_path = tmp_path / "logs"
     (tmp_path / "sig.json").write_bytes(
@@ -158,7 +158,7 @@ def test_main_02(mocker, server, tmp_path, repro_results):
     assert target.cleanup.call_count == 1
 
 
-def test_main_03(mocker):
+def test_main_03(mocker, tmp_path):
     """test ReplayManager.main() error cases"""
     fake_sig = mocker.patch("grizzly.replay.replay.CrashSignature", autospec=True)
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
@@ -199,23 +199,50 @@ def test_main_03(mocker):
     fake_load_target.reset_mock()
     # multiple test cases with --no-harness
     fake_tc.load.return_value = [
-        mocker.Mock(spec_set=TestCase, env_vars={}, hang=False) for _ in range(2)
+        mocker.Mock(
+            spec_set=TestCase, assets={}, assets_path=None, env_vars={}, hang=False
+        )
+        for _ in range(2)
     ]
     assert ReplayManager.main(args) == Exit.ARGS
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # signature required replaying hang
-    fake_tc.load.return_value = [mocker.Mock(spec_set=TestCase, env_vars={}, hang=True)]
+    fake_tc.load.return_value = [
+        mocker.Mock(
+            spec_set=TestCase, assets={}, assets_path=None, env_vars={}, hang=True
+        )
+    ]
     assert ReplayManager.main(args) == Exit.ERROR
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # can't ignore timeout replaying hang
     args.ignore = ["timeout"]
     args.sig = "sig"
-    fake_tc.load.return_value = [mocker.Mock(spec_set=TestCase, env_vars={}, hang=True)]
+    fake_tc.load.return_value = [
+        mocker.Mock(
+            spec_set=TestCase, assets={}, assets_path=None, env_vars={}, hang=True
+        )
+    ]
     assert ReplayManager.main(args) == Exit.ERROR
     assert fake_sig.fromFile.call_count == 1
     assert fake_load_target.call_count == 0
+    fake_load_target.reset_mock()
+    # cleanup assets loaded from test case
+    fake_load_target.side_effect = KeyboardInterrupt
+    (tmp_path / "asset.bin").touch()
+    fake_tc.load.return_value = [
+        mocker.Mock(
+            spec_set=TestCase,
+            assets={"asset": "asset.bin"},
+            assets_path=tmp_path,
+            env_vars={},
+            hang=False,
+            root=tmp_path,
+        )
+    ]
+    assert ReplayManager.main(args) == Exit.ABORT
+    assert fake_load_target.call_count == 1
     fake_load_target.reset_mock()
 
 
@@ -312,8 +339,8 @@ def test_main_05(mocker, server, tmp_path):
     entry_point = input_path / "test.html"
     entry_point.touch()
     with TestCase("test.html", "test-adapter") as src:
-        src.add_from_file(str(entry_point))
-        src.dump(str(input_path), include_details=True)
+        src.add_from_file(entry_point)
+        src.dump(input_path, include_details=True)
     args.input = input_path
     with AssetManager(base_path=str(tmp_path)) as assets:
         target.assets = assets
@@ -406,7 +433,7 @@ def test_main_07(mocker, server, tmp_path):
     load_target.return_value.return_value = target
     with TestCase("test.html", "adpt") as src:
         src.add_from_bytes(b"test", "test.html")
-        src.dump(str(tmp_path / "testcase"), include_details=True)
+        src.dump(tmp_path / "testcase", include_details=True)
     # setup args
     args = mocker.Mock(
         any_crash=False,

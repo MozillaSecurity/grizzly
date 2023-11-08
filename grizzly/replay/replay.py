@@ -4,6 +4,7 @@
 
 from logging import getLogger
 from pathlib import Path
+from shutil import rmtree
 from tempfile import mkdtemp
 
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -30,7 +31,13 @@ from ..common.utils import (
     grz_tmp,
     time_limits,
 )
-from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
+from ..target import (
+    AssetManager,
+    Result,
+    Target,
+    TargetLaunchError,
+    TargetLaunchTimeout,
+)
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -167,17 +174,21 @@ class ReplayManager:
         testcases = TestCase.load(path)
         if not testcases:
             raise TestCaseLoadFailure("Failed to load TestCases")
-        # remove loaded assets and environment variables from test cases
+        # load and remove assets and environment variables from test cases
         assets = None
         env_vars = None
         for test in testcases:
-            if assets is None:
-                assets = test.pop_assets()
-            else:
-                test.pop_assets()
+            if assets is None and test.assets and test.assets_path:
+                assets = AssetManager.load(
+                    test.assets, str(test.root / test.assets_path)
+                )
             if not env_vars and test.env_vars:
                 env_vars = dict(test.env_vars)
             test.env_vars.clear()
+            test.assets.clear()
+            if test.assets_path is not None:
+                rmtree(test.assets_path)
+                test.assets_path = None
         LOG.debug(
             "loaded TestCase(s): %d, assets: %r, env vars: %r",
             len(testcases),
@@ -693,7 +704,8 @@ class ReplayManager:
                 # add target assets to test cases
                 if not target.assets.is_empty():
                     for test in testcases:
-                        test.assets = target.assets
+                        test.assets = dict(target.assets.assets)
+                        test.assets_path = target.assets.path
                 # add target environment variables
                 if target.filtered_environ():
                     for test in testcases:

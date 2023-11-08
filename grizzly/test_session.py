@@ -196,7 +196,7 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters, has
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
+        assets=mocker.Mock(spec_set=AssetManager, assets={}),
         environ={},
         launch_timeout=30,
     )
@@ -279,7 +279,7 @@ def test_session_05(mocker, harness, report_size):
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
+        assets=mocker.Mock(spec_set=AssetManager, assets={}),
         environ={},
         launch_timeout=30,
     )
@@ -383,7 +383,7 @@ def test_session_08(mocker):
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
+        assets=mocker.Mock(spec_set=AssetManager, assets={}),
         environ={},
     )
     target.monitor.launches = 1
@@ -418,7 +418,7 @@ def test_session_09(mocker, harness, report_size, relaunch, iters, report_limit)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
+        assets=mocker.Mock(spec_set=AssetManager, assets={}),
         environ={},
         launch_timeout=30,
     )
@@ -465,7 +465,7 @@ def test_session_10(mocker, harness, iters, result_limit, results):
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(
         spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
+        assets=mocker.Mock(spec_set=AssetManager, assets={}),
         environ={},
         launch_timeout=30,
     )
