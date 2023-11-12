@@ -35,6 +35,7 @@ def test_main_01(mocker, server, tmp_path):
     # Of the four attempts only the first and third will 'reproduce' the result
     # and the forth attempt should be skipped.
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
+    mocker.patch("grizzly.replay.replay.WebServices", autospec=True)
     server.serve_path.return_value = (Served.ALL, ["test.html"])
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
@@ -149,6 +150,7 @@ def test_main_02(mocker, server, tmp_path, repro_results):
         test_index=None,
         time_limit=10,
         timeout=None,
+        use_https=False,
         valgrind=False,
     )
     assert ReplayManager.main(args) == Exit.FAILURE
@@ -181,6 +183,7 @@ def test_main_03(mocker):
         test_index=None,
         time_limit=10,
         timeout=None,
+        use_https=False,
         valgrind=False,
     )
     # user abort
@@ -247,6 +250,7 @@ def test_main_04(mocker):
         test_index=None,
         time_limit=10,
         timeout=None,
+        use_https=False,
         valgrind=False,
     )
     # target launch error
@@ -302,6 +306,7 @@ def test_main_05(mocker, server, tmp_path):
         test_index=None,
         time_limit=1,
         timeout=None,
+        use_https=False,
         valgrind=False,
     )
     log_path = tmp_path / "logs"
@@ -377,6 +382,7 @@ def test_main_06(
         test_index=None,
         time_limit=10,
         timeout=None,
+        use_https=False,
         valgrind=valgrind,
     )
     # maximum one debugger allowed at a time
@@ -430,6 +436,7 @@ def test_main_07(mocker, server, tmp_path):
         time_limit=10,
         timeout=None,
         tool=None,
+        use_https=False,
         valgrind=False,
     )
     assert ReplayManager.main(args) == Exit.SUCCESS

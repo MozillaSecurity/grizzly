@@ -15,6 +15,7 @@ from sapphire import Sapphire, Served
 from .adapter import Adapter
 from .common.reporter import Report, Reporter
 from .common.runner import RunResult
+from .services.core import WebServices
 from .session import LogOutputLimiter, Session, SessionError
 from .target import AssetManager, Result, Target
 
@@ -98,12 +99,14 @@ def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runti
             Served.ALL,
             [session.iomanager.page_name(offset=-1)],
         )
+        services = mocker.Mock(spec_set=WebServices)
         session.run(
             [],
             10,
             input_path="file.bin",
             iteration_limit=iters,
             runtime_limit=runtime,
+            services=services,
         )
         assert session.status.iteration == max_iters
         assert session.status.test_name == "file.bin"

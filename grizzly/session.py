@@ -13,7 +13,6 @@ __all__ = ("SessionError", "LogOutputLimiter", "Session")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-
 LOG = getLogger(__name__)
 
 
@@ -150,6 +149,7 @@ class Session:
         display_mode=DISPLAY_NORMAL,
         launch_attempts=3,
         post_launch_delay=0,
+        services=None,
     ):
         assert iteration_limit >= 0
         assert launch_attempts > 0
@@ -173,6 +173,8 @@ class Session:
             self.iomanager.server_map.set_redirect(
                 "grz_start", "grz_harness", required=False
             )
+        if services:
+            services.map_locations(self.iomanager.server_map)
 
         log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
         # limit relaunch to max iterations if needed

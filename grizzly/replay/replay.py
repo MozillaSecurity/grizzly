@@ -30,6 +30,7 @@ from ..common.utils import (
     grz_tmp,
     time_limits,
 )
+from ..services import WebServices
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -261,6 +262,7 @@ class ReplayManager:
         launch_attempts=3,
         on_iteration_cb=None,
         post_launch_delay=0,
+        services=None,
     ):
         """Run testcase replay.
 
@@ -308,6 +310,9 @@ class ReplayManager:
                 "grz_harness", lambda _: self._harness, mime_type="text/html"
             )
             server_map.set_redirect("grz_start", "grz_harness", required=False)
+
+        if services:
+            services.map_locations(server_map)
 
         # track unprocessed results
         reports = {}
@@ -605,6 +610,7 @@ class ReplayManager:
         certs = None
         results = None
         target = None
+        ext_services = None
         try:
             if args.no_harness and len(testcases) > 1:
                 LOG.error(
@@ -660,6 +666,10 @@ class ReplayManager:
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
+                if certs is not None:
+                    LOG.debug("starting additional web services")
+                    ext_services = WebServices.start_services(certs.host, certs.key)
+
                 target.reverse(server.port, server.port)
                 with cls(
                     args.ignore,
@@ -680,6 +690,7 @@ class ReplayManager:
                         min_results=args.min_crashes,
                         post_launch_delay=args.post_launch_delay,
                         repeat=repeat,
+                        services=ext_services,
                     )
             # handle results
             success = any(x.expected for x in results)
@@ -735,4 +746,6 @@ class ReplayManager:
                 assets.cleanup()
             if certs is not None:
                 certs.cleanup()
+            if ext_services is not None:
+                ext_services.cleanup()
             LOG.info("Done.")

@@ -20,6 +20,7 @@ from .common.utils import (
     display_time_limits,
     time_limits,
 )
+from .services import WebServices
 from .session import Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -48,6 +49,7 @@ def main(args):
     adapter = None
     certs = None
     complete_with_results = False
+    ext_services = None
     target = None
     try:
         LOG.debug("initializing Adapter %r", args.adapter)
@@ -109,6 +111,9 @@ def main(args):
         # launch http server used to serve test cases
         LOG.debug("starting Sapphire server")
         with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
+            if certs is not None:
+                ext_services = WebServices.start_services(certs.host, certs.key)
+
             target.reverse(server.port, server.port)
             LOG.debug("initializing the Session")
             with Session(
@@ -137,6 +142,7 @@ def main(args):
                     display_mode=display_mode,
                     launch_attempts=args.launch_attempts,
                     post_launch_delay=args.post_launch_delay,
+                    services=ext_services,
                 )
                 complete_with_results = session.status.results.total > 0
 
@@ -157,6 +163,8 @@ def main(args):
         if adapter is not None:
             LOG.debug("calling adapter.cleanup()")
             adapter.cleanup()
+        if ext_services is not None:
+            ext_services.cleanup()
         if certs is not None:
             certs.cleanup()
         LOG.info("Done.")
