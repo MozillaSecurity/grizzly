@@ -2,9 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
-from os import makedirs, unlink
-from os.path import abspath, basename, exists, isdir, isfile
-from os.path import join as pathjoin
+from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import mkdtemp
 
@@ -19,13 +17,12 @@ class AssetError(Exception):
     """Raised by AssetManager"""
 
 
-# TODO: use pathlib
 class AssetManager:
     __slots__ = ("assets", "path")
 
     def __init__(self, base_path=None):
         self.assets = {}
-        self.path = mkdtemp(prefix="assets_", dir=base_path)
+        self.path = Path(mkdtemp(prefix="assets_", dir=base_path))
 
     def __enter__(self):
         return self
@@ -38,41 +35,36 @@ class AssetManager:
 
         Args:
             asset (str): Name of asset.
-            path (str): Location on disk.
+            path (Path): Location on disk.
             copy (bool): Copy or move the content.
 
         Returns:
             str: Path to the asset on the filesystem.
         """
         assert isinstance(asset, str)
-        assert isinstance(path, str)
+        assert isinstance(path, Path)
         assert self.path, "cleanup() was called"
-        if not exists(path):
-            raise OSError(f"{path!r} does not exist")
-        path = abspath(path)
-        # only copy files from outside working path
-        if path.startswith(self.path):
-            raise AssetError(f"Cannot add existing asset content {path!r}")
-        dst_path = pathjoin(self.path, basename(path))
-        # avoid overwriting data that is part of an existing asset
-        if exists(dst_path):
-            raise AssetError(f"{basename(path)!r} is an existing asset")
+        if not path.exists():
+            raise OSError(f"'{path}' does not exist")
+        dst = self.path / path.name
         # remove existing asset with the same name
         if asset in self.assets:
             LOG.debug("asset %r exists, removing existing", asset)
             self.remove(asset)
+        # avoid overwriting data that is part of an existing asset
+        if dst.exists():
+            raise AssetError(f"{asset}: '{path.name}' already exists")
         if copy:
-            if isfile(path):
-                copyfile(path, dst_path)
+            if path.is_file():
+                copyfile(path, dst)
             else:
-                copytree(path, dst_path)
+                copytree(path, dst)
         else:
-            move(path, self.path)
-        self.assets[asset] = basename(path)
-        LOG.debug(
-            "added asset %r %s to %r", asset, "copied" if copy else "moved", dst_path
-        )
-        return dst_path
+            # TODO: move() only accepts str in Python 3.8
+            move(str(path), str(self.path))
+        self.assets[asset] = path.name
+        LOG.debug("%s asset %r to '%s'", "copied" if copy else "moved", asset, dst)
+        return dst
 
     def add_batch(self, assets):
         """Add collection of assets to the AssetManager.
@@ -84,7 +76,7 @@ class AssetManager:
             None
         """
         for asset, path in assets:
-            self.add(asset, path)
+            self.add(asset, Path(path))
 
     def cleanup(self):
         """Remove asset files from filesystem.
@@ -100,33 +92,6 @@ class AssetManager:
             self.assets.clear()
             self.path = None
 
-    def dump(self, dst_path, subdir="_assets_"):
-        """Copy assets content to a given path.
-
-        Args:
-            dst_path (str): Path to copy assets content to.
-            subdir (str): Create and use as destination if given.
-
-        Returns:
-            dict: Collection asset paths keyed by asset name.
-        """
-        dumped = {}
-        if self.assets:
-            if subdir:
-                dst_path = pathjoin(dst_path, subdir)
-            makedirs(dst_path, exist_ok=not subdir)
-            for name, path in self.assets.items():
-                dumped[name] = path
-                src = pathjoin(self.path, path)
-                if isfile(src):
-                    copyfile(src, pathjoin(dst_path, path))
-                elif isdir(src):
-                    copytree(src, pathjoin(dst_path, path))
-                else:
-                    dumped.pop(name)
-                    LOG.warning("Failed to dump asset %r from %r", name, src)
-        return dumped
-
     def get(self, asset):
         """Get path to content on filesystem for given asset.
 
@@ -134,12 +99,10 @@ class AssetManager:
             asset (str): Asset to lookup.
 
         Returns:
-            str: Path to asset content or None if asset does not exist.
+            Path: Path to asset content or None if asset does not exist.
         """
         item = self.assets.get(asset, None)
-        if item is not None:
-            return pathjoin(self.path, item)
-        return None
+        return self.path / item if item else None
 
     def is_empty(self):
         """Check if AssetManager contains entries.
@@ -159,7 +122,7 @@ class AssetManager:
         Args:
             asset (dict): Asset paths on filesystem relative to src_path, keyed on
                           asset name.
-            src_path (str): Path to scan for assets.
+            src_path (Path): Path to scan for assets.
             base_path (str): Base path to use to create local storage.
 
         Returns:
@@ -167,7 +130,7 @@ class AssetManager:
         """
         obj = cls(base_path=base_path)
         for asset, src_name in assets.items():
-            obj.add(asset, pathjoin(src_path, src_name))
+            obj.add(asset, src_path / src_name)
         return obj
 
     def remove(self, asset):
@@ -179,10 +142,10 @@ class AssetManager:
         Returns:
             None
         """
-        path = self.assets.pop(asset, None)
-        if path:
-            path = pathjoin(self.path, path)
-            if isfile(path):
-                unlink(path)
+        local_path = self.assets.pop(asset, None)
+        if local_path:
+            path = self.path / local_path
+            if path.is_file():
+                path.unlink()
             else:
                 rmtree(path, ignore_errors=True)

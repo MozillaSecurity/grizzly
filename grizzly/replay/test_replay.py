@@ -637,7 +637,7 @@ def test_replay_21(tmp_path):
     # build test case
     with AssetManager() as assets:
         (tmp_path / "prefs.js").touch()
-        assets.add("prefs", str(tmp_path / "prefs.js"), copy=False)
+        assets.add("prefs", tmp_path / "prefs.js", copy=False)
         with TestCase(data.name, "foo") as src:
             src.env_vars = {"foo": "bar"}
             src.assets = dict(assets.assets)

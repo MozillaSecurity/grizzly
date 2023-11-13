@@ -5,7 +5,6 @@
 
 from itertools import chain
 from json import dumps, loads
-from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from pytest import mark, raises
@@ -219,8 +218,8 @@ def test_testcase_08(tmp_path):
     (tmp_path / "src" / "nested" / "empty").mkdir()
     dst_dir = tmp_path / "dst"
     # build test case
-    with AssetManager(base_path=str(tmp_path)) as assets:
-        assets.add("example", str(asset_file))
+    with AssetManager(base_path=tmp_path) as assets:
+        assets.add("example", asset_file)
         with TestCase("target.bin", "test-adapter") as src:
             src.env_vars["TEST_ENV_VAR"] = "100"
             src.add_from_file(entry_point)
@@ -238,7 +237,7 @@ def test_testcase_08(tmp_path):
     with TestCase.load_single(dst_dir) as dst:
         assert "example" in dst.assets
         assert dst.assets_path is not None
-        assert (Path(dst.assets_path) / "asset.bin").is_file()
+        assert (dst.assets_path / "asset.bin").is_file()
         assert "_assets_/asset.bin" not in (x.file_name for x in dst._files.optional)
         assert dst.entry_point == "target.bin"
         assert "target.bin" in (x.file_name for x in dst._files.required)
@@ -293,7 +292,7 @@ def test_testcase_10(tmp_path):
         org.time_limit = 10
         org.add_from_bytes(b"a", "a.html")
         org.assets = {"sample": asset.name}
-        org.assets_path = str(asset_path)
+        org.assets_path = asset_path
         org.dump(working, include_details=True)
         assert (working / "_assets_" / asset.name).is_file()
         with TestCase.load_single(working, adjacent=False) as loaded:
@@ -335,8 +334,8 @@ def test_testcase_14(tmp_path):
     nested.mkdir()
     asset_file = tmp_path / "example_asset"
     asset_file.touch()
-    with AssetManager(base_path=str(tmp_path)) as assets:
-        assets.add("example", str(asset_file))
+    with AssetManager(base_path=tmp_path) as assets:
+        assets.add("example", asset_file)
         with TestCase("target.bin", "test-adapter") as src:
             src.assets = assets.assets
             src.assets_path = assets.path

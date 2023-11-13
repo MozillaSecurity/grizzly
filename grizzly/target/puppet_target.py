@@ -4,7 +4,6 @@
 from itertools import chain
 from logging import getLogger
 from os import kill
-from os.path import isfile
 from pathlib import Path
 from platform import system
 from signal import SIGABRT
@@ -383,11 +382,11 @@ class PuppetTarget(Target):
                 prefs = Path(tmp_path) / "prefs.js"
                 template = PrefPicker.lookup_template("browser-fuzzing.yml")
                 PrefPicker.load_template(template).create_prefsjs(prefs)
-                self._prefs = self.assets.add("prefs", str(prefs), copy=False)
+                self._prefs = self.assets.add("prefs", prefs, copy=False)
         abort_tokens = self.assets.get("abort-tokens")
         if abort_tokens:
             LOG.debug("loading 'abort tokens' from %r", abort_tokens)
-            with (Path(self.assets.path) / abort_tokens).open() as in_fp:
+            with (self.assets.path / abort_tokens).open() as in_fp:
                 for line in in_fp:
                     line = line.strip()
                     if line:
@@ -402,21 +401,19 @@ class PuppetTarget(Target):
             opts.load_options(self.environ.get(var_name, ""))
             if self.assets.get(asset):
                 # use suppression file if provided as asset
-                opts.add("suppressions", repr(self.assets.get(asset)), overwrite=True)
+                opts.add("suppressions", f"'{self.assets.get(asset)}'", overwrite=True)
             elif opts.get("suppressions"):
-                supp_file = opts.pop("suppressions")
-                if SanitizerOptions.is_quoted(supp_file):
-                    supp_file = supp_file[1:-1]
-                if isfile(supp_file):
+                path = Path(opts.pop("suppressions").strip("\"'"))
+                if path.is_file():
                     # use environment specified suppression file
                     LOG.debug("using %r from environment", asset)
                     opts.add(
                         "suppressions",
-                        repr(self.assets.add(asset, supp_file)),
+                        f"'{self.assets.add(asset, path)}'",
                         overwrite=True,
                     )
                 else:
-                    LOG.warning("Missing %s suppressions file %r", sanitizer, supp_file)
+                    LOG.warning("Missing %s suppressions file '%s'", sanitizer, path)
             else:
                 LOG.debug("%r does not contain suppressions", var_name)
                 continue
