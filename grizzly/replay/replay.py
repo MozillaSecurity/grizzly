@@ -175,11 +175,11 @@ class ReplayManager:
         if not testcases:
             raise TestCaseLoadFailure("Failed to load TestCases")
         # load and remove assets and environment variables from test cases
-        assets = None
+        asset_mgr = None
         env_vars = None
         for test in testcases:
-            if assets is None and test.assets and test.assets_path:
-                assets = AssetManager.load(test.assets, test.root / test.assets_path)
+            if asset_mgr is None and test.assets and test.assets_path:
+                asset_mgr = AssetManager.load(test.assets, test.root / test.assets_path)
             if not env_vars and test.env_vars:
                 env_vars = dict(test.env_vars)
             test.env_vars.clear()
@@ -190,7 +190,7 @@ class ReplayManager:
         LOG.debug(
             "loaded TestCase(s): %d, assets: %r, env vars: %r",
             len(testcases),
-            assets is not None,
+            asset_mgr is not None,
             env_vars is not None,
         )
         if subset:
@@ -205,7 +205,7 @@ class ReplayManager:
             for test in testcases:
                 test.cleanup()
             testcases = selected
-        return testcases, assets, env_vars
+        return testcases, asset_mgr, env_vars
 
     @staticmethod
     def report_to_filesystem(path, results, tests=None):
@@ -604,7 +604,7 @@ class ReplayManager:
         signature = CrashSignature.fromFile(args.sig) if args.sig else None
 
         try:
-            testcases, assets, env_vars = cls.load_testcases(
+            testcases, asset_mgr, env_vars = cls.load_testcases(
                 args.input, subset=args.test_index
             )
         except TestCaseLoadFailure as exc:
@@ -645,7 +645,6 @@ class ReplayManager:
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
-                assets=assets,
                 certs=certs,
                 headless=args.headless,
                 pernosco=args.pernosco,
@@ -656,8 +655,13 @@ class ReplayManager:
                 LOG.debug("adding environment loaded from test case")
                 target.merge_environment(env_vars)
 
+            # use asset manager created from test case content if available
+            if asset_mgr:
+                target.asset_mgr = asset_mgr
+                # target is now responsible for `asset_mgr`
+                asset_mgr = None
             # TODO: prioritize specified assets over included
-            target.assets.add_batch(args.asset)
+            target.asset_mgr.add_batch(args.asset)
             target.process_assets()
 
             if certs and not target.https():
@@ -699,10 +703,10 @@ class ReplayManager:
                 LOG.info("No results detected")
             if results and (args.logs or args.fuzzmanager):
                 # add target assets to test cases
-                if not target.assets.is_empty():
+                if not target.asset_mgr.is_empty():
                     for test in testcases:
-                        test.assets = dict(target.assets.assets)
-                        test.assets_path = target.assets.path
+                        test.assets = dict(target.asset_mgr.assets)
+                        test.assets_path = target.asset_mgr.path
                 # add target environment variables
                 if target.filtered_environ():
                     for test in testcases:
@@ -740,8 +744,8 @@ class ReplayManager:
                 target.cleanup()
             for testcase in testcases:
                 testcase.cleanup()
-            if assets:
-                assets.cleanup()
+            if asset_mgr:
+                asset_mgr.cleanup()
             if certs is not None:
                 certs.cleanup()
             LOG.info("Done.")

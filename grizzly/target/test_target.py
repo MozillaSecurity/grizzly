@@ -53,10 +53,10 @@ def test_target_01(tmp_path):
     fake_file.touch()
     with SimpleTarget(fake_file, 10, 2, 3) as target:
         assert target.binary == fake_file
-        assert target.assets
-        org_path = target.assets.path
-        target.assets = AssetManager(base_path=str(tmp_path))
-        assert target.assets.path != org_path
+        assert target.asset_mgr
+        org_path = target.asset_mgr.path
+        target.asset_mgr = AssetManager(base_path=tmp_path)
+        assert target.asset_mgr.path != org_path
         assert not target.environ
         assert not target.filtered_environ()
         assert not target.is_idle(0)

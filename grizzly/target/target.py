@@ -47,7 +47,7 @@ class Target(metaclass=ABCMeta):
     TRACKED_ENVVARS = ()
 
     __slots__ = (
-        "_assets",
+        "_asset_mgr",
         "_https",
         "_lock",
         "_monitor",
@@ -65,16 +65,14 @@ class Target(metaclass=ABCMeta):
         launch_timeout,
         log_limit,
         memory_limit,
-        assets=None,
         certs=None,
     ):
         assert launch_timeout > 0
         assert log_limit >= 0
         assert memory_limit >= 0
         assert binary is not None and binary.is_file()
-        assert assets is None or isinstance(assets, AssetManager)
         assert certs is None or isinstance(certs, CertificateBundle)
-        self._assets = assets if assets else AssetManager(base_path=grz_tmp("target"))
+        self._asset_mgr = AssetManager(base_path=grz_tmp("target"))
         self._https = False
         self._lock = Lock()
         self._monitor = None
@@ -92,14 +90,14 @@ class Target(metaclass=ABCMeta):
         self.cleanup()
 
     @property
-    def assets(self):
-        return self._assets
+    def asset_mgr(self):
+        return self._asset_mgr
 
-    @assets.setter
-    def assets(self, assets):
-        self._assets.cleanup()
-        assert isinstance(assets, AssetManager)
-        self._assets = assets
+    @asset_mgr.setter
+    def asset_mgr(self, asset_mgr):
+        self._asset_mgr.cleanup()
+        assert isinstance(asset_mgr, AssetManager)
+        self._asset_mgr = asset_mgr
 
     @abstractmethod
     def _cleanup(self):
@@ -112,7 +110,7 @@ class Target(metaclass=ABCMeta):
     def cleanup(self):
         # call target specific _cleanup first
         self._cleanup()
-        self._assets.cleanup()
+        self._asset_mgr.cleanup()
 
     @abstractmethod
     def close(self, force_close=False):

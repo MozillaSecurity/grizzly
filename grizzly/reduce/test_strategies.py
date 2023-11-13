@@ -180,7 +180,7 @@ def test_list(
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
-    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -361,7 +361,7 @@ def test_purge_unserved(
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
-    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -421,7 +421,7 @@ def test_dd_only(mocker, tmp_path):
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
-    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],

@@ -566,7 +566,7 @@ def test_repro(
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
-    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -650,7 +650,7 @@ def test_report_01(mocker, tmp_path):
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
-    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -722,7 +722,7 @@ def test_report_02(mocker, tmp_path):
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
-    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -783,7 +783,7 @@ def test_quality_update(mocker, tmp_path):
     update_coll = mocker.patch("grizzly.common.fuzzmanager.Collector")
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
-    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     try:
         mgr = ReduceManager(
             [],
@@ -855,10 +855,10 @@ def test_include_assets_and_environ(mocker, tmp_path):
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {"test": "abc"}
-    with AssetManager(base_path=str(tmp_path)) as assets:
+    with AssetManager(base_path=tmp_path) as asset_mgr:
         (tmp_path / "example_asset").touch()
-        assets.add("example", tmp_path / "example_asset", copy=False)
-        target.assets = assets
+        asset_mgr.add("example", tmp_path / "example_asset", copy=False)
+        target.asset_mgr = asset_mgr
         try:
             mgr = ReduceManager(
                 [],
@@ -979,7 +979,7 @@ def test_timeout_update(
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
-    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     server = mocker.Mock(spec_set=Sapphire, timeout=iter_input)
     try:
         mgr = ReduceManager(

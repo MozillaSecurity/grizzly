@@ -41,7 +41,7 @@ def test_main_01(mocker, server, tmp_path):
     target = mocker.Mock(
         spec_set=Target, binary=Path("bin"), environ={}, launch_timeout=30
     )
-    target.assets = mocker.Mock(spec_set=AssetManager)
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     target.check_result.side_effect = (Result.FOUND, Result.NONE, Result.FOUND)
     target.filtered_environ.return_value = {"ENV": "123"}
     target.save_logs = _fake_save_logs
@@ -88,8 +88,8 @@ def test_main_01(mocker, server, tmp_path):
     assert target.close.call_count == 4
     assert target.filtered_environ.call_count == 2
     assert target.cleanup.call_count == 1
-    assert target.assets.add.call_count == 0
-    assert target.assets.is_empty.call_count == 1
+    assert target.asset_mgr.add.call_count == 0
+    assert target.asset_mgr.is_empty.call_count == 1
     assert log_path.is_dir()
     assert any(log_path.glob("reports/*/log_asan_blah.txt"))
     assert any(log_path.glob("reports/*/log_stderr.txt"))
@@ -342,10 +342,10 @@ def test_main_05(mocker, server, tmp_path):
         src.add_from_file(entry_point)
         src.dump(input_path, include_details=True)
     args.input = input_path
-    with AssetManager(base_path=str(tmp_path)) as assets:
-        target.assets = assets
+    with AssetManager(base_path=tmp_path) as asset_mgr:
+        target.asset_mgr = asset_mgr
         assert ReplayManager.main(args) == Exit.SUCCESS
-        assert "from_cmdline" in target.assets.assets
+        assert "from_cmdline" in target.asset_mgr.assets
     assert target.launch.call_count == 1
     assert target.check_result.call_count == 1
     assert target.filtered_environ.call_count == 1
@@ -424,10 +424,9 @@ def test_main_07(mocker, server, tmp_path):
     reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
-    target = mocker.Mock(
+    target = mocker.MagicMock(
         spec_set=Target, binary=Path("bin"), environ={}, launch_timeout=30
     )
-    target.assets = mocker.Mock(spec_set=AssetManager)
     target.check_result.side_effect = (Result.FOUND,)
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
@@ -467,8 +466,6 @@ def test_main_07(mocker, server, tmp_path):
     assert load_target.call_count == 1
     assert target.close.call_count == 2
     assert target.cleanup.call_count == 1
-    assert target.assets.add.call_count == 0
-    assert target.assets.is_empty.call_count == 1
     assert reporter.return_value.submit.call_count == 1
 
 
@@ -498,3 +495,63 @@ def test_main_08(mocker, tmp_path, https_supported):
     mocker.patch("grizzly.replay.replay.ReplayManager.run", return_value=[])
     assert ReplayManager.main(args) == Exit.FAILURE
     assert target.https.call_count == 1
+
+
+def test_main_09(mocker, server, tmp_path):
+    """test ReplayManager.main() - load test case assets"""
+    server.serve_path.return_value = (None, ["test.html"])
+    # setup Target
+    target = mocker.NonCallableMock(
+        spec_set=Target, binary=Path("bin"), launch_timeout=30
+    )
+    target.check_result.return_value = Result.NONE
+    target.monitor.is_healthy.return_value = False
+    mocker.patch(
+        "grizzly.replay.replay.load_plugin",
+        autospec=True,
+        return_value=mocker.Mock(spec_set=Target, return_value=target),
+    )
+    # setup args
+    input_path = tmp_path / "input"
+    input_path.mkdir()
+    args = mocker.MagicMock(
+        adapter="fake",
+        binary=Path("bin"),
+        fuzzmanager=False,
+        idle_delay=0,
+        idle_threshold=0,
+        input=input_path,
+        launch_attempts=1,
+        logs=None,
+        min_crashes=1,
+        post_launch_delay=-1,
+        relaunch=1,
+        repeat=1,
+        sig=None,
+        use_http=False,
+        test_index=None,
+        time_limit=1,
+        timeout=1,
+    )
+    # build a test case
+    entry_point = input_path / "test.html"
+    entry_point.touch()
+    # build test case and asset
+    asset = tmp_path / "sample_asset"
+    asset.touch()
+    with AssetManager(base_path=tmp_path) as asset_mgr:
+        asset_mgr.add("sample", asset)
+        with TestCase("test.html", "test-adapter") as src:
+            src.assets = asset_mgr.assets
+            src.assets_path = asset_mgr.path
+            src.add_from_file(entry_point)
+            src.dump(input_path, include_details=True)
+    # this will load the previously created test case and asset from the filesystem
+    try:
+        assert ReplayManager.main(args) == Exit.FAILURE
+        assert target.launch.call_count == 1
+        assert "sample" in target.asset_mgr.assets
+        assert target.asset_mgr.path is not None
+    finally:
+        if target.asset_mgr:
+            target.asset_mgr.cleanup()

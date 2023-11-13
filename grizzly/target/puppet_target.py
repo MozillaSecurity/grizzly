@@ -97,7 +97,6 @@ class PuppetTarget(Target):
             launch_timeout,
             log_limit,
             memory_limit,
-            assets=kwds.pop("assets", None),
             certs=certs,
         )
         self._https = certs is not None
@@ -373,8 +372,8 @@ class PuppetTarget(Target):
         self.environ = output
 
     def process_assets(self):
-        self._extension = self.assets.get("extension")
-        self._prefs = self.assets.get("prefs")
+        self._extension = self.asset_mgr.get("extension")
+        self._prefs = self.asset_mgr.get("prefs")
         # generate temporary prefs.js with prefpicker
         if self._prefs is None:
             LOG.debug("using prefpicker to generate prefs.js")
@@ -382,11 +381,11 @@ class PuppetTarget(Target):
                 prefs = Path(tmp_path) / "prefs.js"
                 template = PrefPicker.lookup_template("browser-fuzzing.yml")
                 PrefPicker.load_template(template).create_prefsjs(prefs)
-                self._prefs = self.assets.add("prefs", prefs, copy=False)
-        abort_tokens = self.assets.get("abort-tokens")
+                self._prefs = self.asset_mgr.add("prefs", prefs, copy=False)
+        abort_tokens = self.asset_mgr.get("abort-tokens")
         if abort_tokens:
             LOG.debug("loading 'abort tokens' from %r", abort_tokens)
-            with (self.assets.path / abort_tokens).open() as in_fp:
+            with (self.asset_mgr.path / abort_tokens).open() as in_fp:
                 for line in in_fp:
                     line = line.strip()
                     if line:
@@ -399,9 +398,11 @@ class PuppetTarget(Target):
             # load existing sanitizer options from environment
             var_name = f"{sanitizer.upper()}_OPTIONS"
             opts.load_options(self.environ.get(var_name, ""))
-            if self.assets.get(asset):
+            if self.asset_mgr.get(asset):
                 # use suppression file if provided as asset
-                opts.add("suppressions", f"'{self.assets.get(asset)}'", overwrite=True)
+                opts.add(
+                    "suppressions", f"'{self.asset_mgr.get(asset)}'", overwrite=True
+                )
             elif opts.get("suppressions"):
                 path = Path(opts.pop("suppressions").strip("\"'"))
                 if path.is_file():
@@ -409,7 +410,7 @@ class PuppetTarget(Target):
                     LOG.debug("using %r from environment", asset)
                     opts.add(
                         "suppressions",
-                        f"'{self.assets.add(asset, path)}'",
+                        f"'{self.asset_mgr.add(asset, path)}'",
                         overwrite=True,
                     )
                 else:

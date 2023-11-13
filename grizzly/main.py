@@ -81,7 +81,7 @@ def main(args):
             valgrind=args.valgrind,
         )
         # add specified assets
-        target.assets.add_batch(args.asset)
+        target.asset_mgr.add_batch(args.asset)
         target.process_assets()
         adapter.monitor = target.monitor
 
