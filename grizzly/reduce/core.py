@@ -557,12 +557,14 @@ class ReduceManager:
                                     for testcase in self.testcases:
                                         testcase.cleanup()
                                     # add target assets to test cases
-                                    if not self.target.assets.is_empty():
+                                    if not self.target.asset_mgr.is_empty():
                                         for test in reduction:
                                             test.assets = dict(
-                                                self.target.assets.assets
+                                                self.target.asset_mgr.assets
                                             )
-                                            test.assets_path = self.target.assets.path
+                                            test.assets_path = (
+                                                self.target.asset_mgr.path
+                                            )
                                     # add target environment variables
                                     if self.target.filtered_environ():
                                         for test in reduction:
@@ -783,7 +785,7 @@ class ReduceManager:
         elif args.valgrind:
             LOG.info("Running with Valgrind. This will be SLOW!")
 
-        assets = None
+        asset_mgr = None
         certs = None
         signature = None
         signature_desc = None
@@ -798,7 +800,7 @@ class ReduceManager:
                     signature_desc = meta["shortDescription"]
 
             try:
-                testcases, assets, env_vars = ReplayManager.load_testcases(
+                testcases, asset_mgr, env_vars = ReplayManager.load_testcases(
                     args.input, subset=args.test_index
                 )
             except TestCaseLoadFailure as exc:
@@ -834,7 +836,6 @@ class ReduceManager:
                 args.launch_timeout,
                 args.log_limit,
                 args.memory,
-                assets=assets,
                 certs=certs,
                 headless=args.headless,
                 pernosco=args.pernosco,
@@ -848,7 +849,7 @@ class ReduceManager:
                 env_vars = None
             # TODO: support overriding existing assets
             # prioritize specified assets over included
-            target.assets.add_batch(args.asset)
+            target.asset_mgr.add_batch(args.asset)
             target.process_assets()
 
             if certs and not target.https():
@@ -919,8 +920,8 @@ class ReduceManager:
                 target.cleanup()
             for testcase in testcases:
                 testcase.cleanup()
-            if assets:
-                assets.cleanup()
+            if asset_mgr:
+                asset_mgr.cleanup()
             if certs is not None:
                 certs.cleanup()
             LOG.info("Done.")

@@ -21,7 +21,7 @@ def test_puppet_target_01(mocker, tmp_path):
     fake_file = tmp_path / "fake"
     fake_file.touch()
     with PuppetTarget(fake_file, 300, 25, 5000) as target:
-        assert target.assets
+        assert target.asset_mgr
         assert target.closed
         assert target.launch_timeout == 300
         assert target.log_limit == 25
@@ -301,28 +301,30 @@ def test_puppet_target_08(mocker, tmp_path):
     fake_file.write_text("1\n2\n")
     # no prefs file provided
     with PuppetTarget(fake_file, 300, 25, 5000) as target:
-        assert target.assets.get("prefs") is None
+        assert target.asset_mgr.get("prefs") is None
         target.process_assets()
-        assert target.assets.get("prefs").is_file()
-        assert target.assets.get("prefs").name == "prefs.js"
+        assert target.asset_mgr.get("prefs").is_file()
+        assert target.asset_mgr.get("prefs").name == "prefs.js"
     # prefs file provided
-    with AssetManager(base_path=str(tmp_path)) as assets:
-        assets.add("prefs", fake_file)
-        with PuppetTarget(fake_file, 300, 25, 5000, assets=assets) as target:
+    with AssetManager(base_path=tmp_path) as asset_mgr:
+        asset_mgr.add("prefs", fake_file)
+        with PuppetTarget(fake_file, 300, 25, 5000) as target:
+            target.asset_mgr = asset_mgr
             target.process_assets()
-            assert target.assets.get("prefs").is_file()
-            assert target.assets.get("prefs").name == "fake"
+            assert target.asset_mgr.get("prefs").is_file()
+            assert target.asset_mgr.get("prefs").name == "fake"
     # abort tokens file provided
-    with AssetManager(base_path=str(tmp_path)) as assets:
-        assets.add("abort-tokens", fake_file)
-        with PuppetTarget(fake_file, 300, 25, 5000, assets=assets) as target:
+    with AssetManager(base_path=tmp_path) as asset_mgr:
+        asset_mgr.add("abort-tokens", fake_file)
+        with PuppetTarget(fake_file, 300, 25, 5000) as target:
             # ignore E1101: (pylint 2.9.3 bug?)
             #    Method 'add_abort_token' has no 'call_count' member (no-member)
             # pylint: disable=no-member
             assert target._puppet.add_abort_token.call_count == 0
+            target.asset_mgr = asset_mgr
             target.process_assets()
-            assert target.assets.get("abort-tokens").is_file()
-            assert target.assets.get("abort-tokens").name == "fake"
+            assert target.asset_mgr.get("abort-tokens").is_file()
+            assert target.asset_mgr.get("abort-tokens").name == "fake"
             assert target._puppet.add_abort_token.call_count == 2
 
 
@@ -379,31 +381,32 @@ def test_puppet_target_10(tmp_path, asset, env):
     fake_file.touch()
     supp_asset = tmp_path / "supp_asset"
     supp_env = tmp_path / "supp_env"
-    with AssetManager(base_path=str(tmp_path)) as assets:
-        assets.add("prefs", fake_file)
+    with AssetManager(base_path=tmp_path) as asset_mgr:
+        asset_mgr.add("prefs", fake_file)
         if asset:
             supp_asset.touch()
-            assets.add("lsan-suppressions", supp_asset)
-        with PuppetTarget(fake_file, 300, 25, 5000, assets=assets) as target:
+            asset_mgr.add("lsan-suppressions", supp_asset)
+        with PuppetTarget(fake_file, 300, 25, 5000) as target:
             target.environ["TSAN_OPTIONS"] = "a=1"
             if env:
                 supp_env.touch()
                 target.environ["LSAN_OPTIONS"] = f"suppressions='{supp_env}'"
             else:
                 target.environ["LSAN_OPTIONS"] = "suppressions='missing'"
+            target.asset_mgr = asset_mgr
             target.process_assets()
             if asset:
                 assert (
-                    f"suppressions='{target.assets.path / supp_asset.name}'"
+                    f"suppressions='{target.asset_mgr.path / supp_asset.name}'"
                     in target.environ["LSAN_OPTIONS"]
                 )
             elif env:
                 assert (
-                    f"suppressions='{target.assets.path / supp_env.name}'"
+                    f"suppressions='{target.asset_mgr.path / supp_env.name}'"
                     in target.environ["LSAN_OPTIONS"]
                 )
             else:
-                assert not assets.get("lsan-suppressions")
+                assert not asset_mgr.get("lsan-suppressions")
 
 
 def test_puppet_target_11(tmp_path):

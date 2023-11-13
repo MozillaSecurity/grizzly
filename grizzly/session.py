@@ -270,8 +270,8 @@ class Session:
                 if initial or not self.status.results.is_frequent(bucket_hash):
                     # add target info to test cases
                     for test in self.iomanager.tests:
-                        test.assets = dict(self.target.assets.assets)
-                        test.assets_path = self.target.assets.path
+                        test.assets = dict(self.target.asset_mgr.assets)
+                        test.assets_path = self.target.asset_mgr.path
                         test.env_vars = self.target.filtered_environ()
                     self.reporter.submit(self.iomanager.tests, report, force=initial)
                 else:

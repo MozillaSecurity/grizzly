@@ -16,7 +16,7 @@ from .adapter import Adapter
 from .common.reporter import Report, Reporter
 from .common.runner import RunResult
 from .session import LogOutputLimiter, Session, SessionError
-from .target import AssetManager, Result, Target
+from .target import Result, Target
 
 pytestmark = mark.usefixtures("patch_collector", "tmp_path_status_db_fuzz")
 
@@ -68,12 +68,7 @@ def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runti
     """test Session with typical fuzzer Adapter"""
     mocker.patch("grizzly.common.status.time", side_effect=count(start=1.0, step=1.0))
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
-        environ={},
-        launch_timeout=30,
-    )
+    target = mocker.Mock(spec_set=Target, environ={}, launch_timeout=30)
     target.log_size.return_value = 1000
     target.monitor.launches = 1
     # avoid shutdown delay
@@ -138,12 +133,7 @@ def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runti
 def test_session_02(mocker, harness, relaunch, remaining):
     """test Session with playback Adapter"""
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
-        environ={},
-        launch_timeout=30,
-    )
+    target = mocker.Mock(spec_set=Target, environ={}, launch_timeout=30)
     # calculate if the target is 'closed' based on relaunch
     type(target).closed = mocker.PropertyMock(
         side_effect=((x % relaunch == 0) for x in range(remaining))
@@ -194,12 +184,7 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters, has
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager, assets={}),
-        environ={},
-        launch_timeout=30,
-    )
+    target = mocker.MagicMock(spec_set=Target, environ={}, launch_timeout=30)
     target.monitor.launches = 1
     # avoid shutdown delay
     target.monitor.is_healthy.return_value = False
@@ -246,12 +231,7 @@ def test_session_04(mocker):
 
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     server.serve_path.return_value = (Served.NONE, [])
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
-        environ={},
-        launch_timeout=30,
-    )
+    target = mocker.Mock(spec_set=Target, environ={}, launch_timeout=30)
     target.monitor.launches = 1
     with Session(FuzzAdapter("fuzz"), None, server, target) as session:
         with raises(SessionError, match="Test case is missing entry point"):
@@ -277,12 +257,7 @@ def test_session_05(mocker, harness, report_size):
     )
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager, assets={}),
-        environ={},
-        launch_timeout=30,
-    )
+    target = mocker.MagicMock(spec_set=Target, environ={}, launch_timeout=30)
     target.monitor.launches = 1
     type(target).closed = mocker.PropertyMock(side_effect=(True, False))
     target.check_result.side_effect = (Result.NONE, Result.FOUND)
@@ -323,12 +298,8 @@ def test_session_06(mocker, srv_results, target_result, ignored, results):
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     reporter = mocker.Mock(spec_set=Reporter)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager),
-        closed=True,
-        environ={},
-        launch_timeout=30,
+    target = mocker.MagicMock(
+        spec_set=Target, closed=True, environ={}, launch_timeout=10
     )
     target.log_size.return_value = 1
     target.monitor.launches = 1
@@ -355,9 +326,7 @@ def test_session_07(mocker):
     adapter = mocker.Mock(spec_set=Adapter, remaining=None)
     adapter.IGNORE_UNSERVED = False
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(
-        spec_set=Target, assets=mocker.Mock(spec_set=AssetManager), environ={}
-    )
+    target = mocker.MagicMock(spec_set=Target, environ={})
     target.monitor.launches = 1
     with Session(adapter, None, server, target) as session:
         session.run([], 10, iteration_limit=1)
@@ -381,11 +350,7 @@ def test_session_08(mocker):
     report = mocker.Mock(spec_set=Report, major="major123", minor="minor456")
     reporter = mocker.Mock(spec_set=Reporter)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager, assets={}),
-        environ={},
-    )
+    target = mocker.MagicMock(spec_set=Target, environ={})
     target.monitor.launches = 1
     target.create_report.return_value = report
     with Session(adapter, reporter, server, target) as session:
@@ -416,12 +381,7 @@ def test_session_09(mocker, harness, report_size, relaunch, iters, report_limit)
     report = mocker.Mock(spec_set=Report, major="abc", minor="def", crash_hash="123")
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager, assets={}),
-        environ={},
-        launch_timeout=30,
-    )
+    target = mocker.MagicMock(spec_set=Target, environ={}, launch_timeout=30)
     target.monitor.launches = 1
     # avoid shutdown delay
     target.monitor.is_healthy.return_value = False
@@ -463,12 +423,7 @@ def test_session_10(mocker, harness, iters, result_limit, results):
     report = mocker.Mock(spec_set=Report, major="abc", minor="def", crash_hash="123")
     report.crash_info.createShortSignature.return_value = "[@ sig]"
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    target = mocker.Mock(
-        spec_set=Target,
-        assets=mocker.Mock(spec_set=AssetManager, assets={}),
-        environ={},
-        launch_timeout=30,
-    )
+    target = mocker.MagicMock(spec_set=Target, environ={}, launch_timeout=30)
     target.monitor.launches = 1
     # avoid shutdown delay
     target.monitor.is_healthy.return_value = False

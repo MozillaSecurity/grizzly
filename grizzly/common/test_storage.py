@@ -218,8 +218,8 @@ def test_testcase_08(tmp_path):
     (tmp_path / "src" / "nested" / "empty").mkdir()
     dst_dir = tmp_path / "dst"
     # build test case
-    with AssetManager(base_path=tmp_path) as assets:
-        assets.add("example", asset_file)
+    with AssetManager(base_path=tmp_path) as asset_mgr:
+        asset_mgr.add("example", asset_file)
         with TestCase("target.bin", "test-adapter") as src:
             src.env_vars["TEST_ENV_VAR"] = "100"
             src.add_from_file(entry_point)
@@ -230,8 +230,8 @@ def test_testcase_08(tmp_path):
                 file_name=str((nested / "x.bin").relative_to(src_dir)),
                 required=False,
             )
-            src.assets = dict(assets.assets)
-            src.assets_path = assets.path
+            src.assets = dict(asset_mgr.assets)
+            src.assets_path = asset_mgr.path
             src.dump(dst_dir, include_details=True)
     # test loading test case from test_info.json
     with TestCase.load_single(dst_dir) as dst:
@@ -334,11 +334,11 @@ def test_testcase_14(tmp_path):
     nested.mkdir()
     asset_file = tmp_path / "example_asset"
     asset_file.touch()
-    with AssetManager(base_path=tmp_path) as assets:
-        assets.add("example", asset_file)
+    with AssetManager(base_path=tmp_path) as asset_mgr:
+        asset_mgr.add("example", asset_file)
         with TestCase("target.bin", "test-adapter") as src:
-            src.assets = assets.assets
-            src.assets_path = assets.path
+            src.assets = asset_mgr.assets
+            src.assets_path = asset_mgr.path
             src.add_from_bytes(b"test", "target.bin")
             src.dump(nested / "test-1", include_details=True)
             src.dump(nested / "test-2", include_details=True)

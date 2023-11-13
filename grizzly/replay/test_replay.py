@@ -635,26 +635,26 @@ def test_replay_21(tmp_path):
     data.write_text("test")
     dst = tmp_path / "dst"
     # build test case
-    with AssetManager() as assets:
+    with AssetManager() as asset_mgr:
         (tmp_path / "prefs.js").touch()
-        assets.add("prefs", tmp_path / "prefs.js", copy=False)
+        asset_mgr.add("prefs", tmp_path / "prefs.js", copy=False)
         with TestCase(data.name, "foo") as src:
             src.env_vars = {"foo": "bar"}
-            src.assets = dict(assets.assets)
-            src.assets_path = assets.path
+            src.assets = dict(asset_mgr.assets)
+            src.assets_path = asset_mgr.path
             src.add_from_file(data, data.name)
             src.dump(dst, include_details=True)
     # load single file
-    tests, assets, env_vars = ReplayManager.load_testcases(dst / "testcase.html")
+    tests, asset_mgr, env_vars = ReplayManager.load_testcases(dst / "testcase.html")
     assert len(tests) == 1
     assert not env_vars
-    assert assets is None
+    assert asset_mgr is None
     # load directory
-    tests, assets, env_vars = ReplayManager.load_testcases(dst)
+    tests, asset_mgr, env_vars = ReplayManager.load_testcases(dst)
     assert len(tests) == 1
     assert env_vars == {"foo": "bar"}
-    assert assets
-    assert "prefs" in assets.assets
+    assert asset_mgr
+    assert "prefs" in asset_mgr.assets
 
 
 def test_replay_22(mocker, tmp_path):
@@ -678,14 +678,14 @@ def test_replay_22(mocker, tmp_path):
         ReplayManager.load_testcases(tmp_path)
     # success
     fake_load.return_value = [test0, test1]
-    tests, assets, env_vars = ReplayManager.load_testcases(tmp_path)
+    tests, asset_mgr, env_vars = ReplayManager.load_testcases(tmp_path)
     assert env_vars
     assert env_vars["env"] == "var"
     assert not any(x.env_vars for x in tests)
     assert len(tests) == 2
     assert tests[0].cleanup.call_count == 0
     assert tests[1].cleanup.call_count == 0
-    assert assets is None
+    assert asset_mgr is None
     # success select
     fake_load.return_value = [
         test0,
@@ -693,7 +693,7 @@ def test_replay_22(mocker, tmp_path):
         test2,
         mocker.MagicMock(spec_set=TestCase, assets={}, assets_path=None, env_vars={}),
     ]
-    tests, assets, _ = ReplayManager.load_testcases(tmp_path, subset=[1, 3])
+    tests, asset_mgr, _ = ReplayManager.load_testcases(tmp_path, subset=[1, 3])
     assert len(tests) == 2
     assert tests[0].entry_point == "x.html"
     assert test0.cleanup.call_count == 1
