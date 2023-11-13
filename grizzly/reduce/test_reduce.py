@@ -857,7 +857,7 @@ def test_include_assets_and_environ(mocker, tmp_path):
     target.filtered_environ.return_value = {"test": "abc"}
     with AssetManager(base_path=str(tmp_path)) as assets:
         (tmp_path / "example_asset").touch()
-        assets.add("example", str(tmp_path / "example_asset"), copy=False)
+        assets.add("example", tmp_path / "example_asset", copy=False)
         target.assets = assets
         try:
             mgr = ReduceManager(

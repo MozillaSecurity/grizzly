@@ -179,9 +179,7 @@ class ReplayManager:
         env_vars = None
         for test in testcases:
             if assets is None and test.assets and test.assets_path:
-                assets = AssetManager.load(
-                    test.assets, str(test.root / test.assets_path)
-                )
+                assets = AssetManager.load(test.assets, test.root / test.assets_path)
             if not env_vars and test.env_vars:
                 env_vars = dict(test.env_vars)
             test.env_vars.clear()
@@ -658,8 +656,7 @@ class ReplayManager:
                 LOG.debug("adding environment loaded from test case")
                 target.merge_environment(env_vars)
 
-            # TODO: support overriding existing assets
-            # prioritize specified assets over included
+            # TODO: prioritize specified assets over included
             target.assets.add_batch(args.asset)
             target.process_assets()
 

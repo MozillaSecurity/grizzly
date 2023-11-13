@@ -175,7 +175,7 @@ class TestCase:
         result.assets = dict(self.assets)
         if result.assets:
             assert self.assets_path
-            org_path = Path(self.assets_path)
+            org_path = self.assets_path
             try:
                 # copy asset data from test case
                 result.assets_path = result.root / org_path.relative_to(self.root)
@@ -273,7 +273,7 @@ class TestCase:
             # save target assets and update meta data
             if self.assets:
                 assert isinstance(self.assets, dict)
-                assert isinstance(self.assets_path, (Path, str))
+                assert isinstance(self.assets_path, Path)
                 info["assets"] = self.assets
                 info["assets_path"] = "_assets_"
                 copytree(self.assets_path, dst_path / info["assets_path"])
@@ -439,7 +439,7 @@ class TestCase:
         )
         # load all adjacent data from directory
         if adjacent:
-            for entry in Path(entry_point.parent).rglob("*"):
+            for entry in entry_point.parent.rglob("*"):
                 if not entry.is_file():
                     continue
                 # ignore asset path
