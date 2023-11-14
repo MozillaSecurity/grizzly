@@ -105,7 +105,7 @@ class Job:
                 entry = self._wwwroot / required
                 if entry.is_file():
                     self._pending.files.add(str(entry.resolve()))
-                    LOG.debug("required: %r", entry)
+                    LOG.debug("required: %r", required)
         # if nothing was found check if the path exists
         if not self._pending.files and not self._wwwroot.is_dir():
             raise OSError(f"wwwroot '{self._wwwroot}' does not exist")
