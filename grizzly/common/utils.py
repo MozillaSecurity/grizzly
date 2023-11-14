@@ -213,11 +213,11 @@ def generate_certificates(cert_dir: Path):
         .sign(root_key, hashes.SHA256(), default_backend())
     )
 
-    root_file = Path(cert_dir / "root.pem")
+    root_file = cert_dir / "root.pem"
     root_file.write_bytes(root_cert.public_bytes(serialization.Encoding.PEM))
-    cert_file = Path(cert_dir / "host.pem")
+    cert_file = cert_dir / "host.pem"
     cert_file.write_bytes(host_cert.public_bytes(serialization.Encoding.PEM))
-    key_file = Path(cert_dir / "host.key")
+    key_file = cert_dir / "host.key"
     key_file.write_bytes(
         host_key.private_bytes(
             encoding=serialization.Encoding.PEM,
