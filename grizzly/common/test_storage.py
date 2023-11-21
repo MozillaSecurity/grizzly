@@ -3,9 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 
-from itertools import chain
 from json import dumps, loads
-from zipfile import ZIP_DEFLATED, ZipFile
 
 from pytest import mark, raises
 
@@ -31,6 +29,7 @@ def test_testcase_01(tmp_path):
         assert tcase.root
         assert not tcase._files.optional
         assert not tcase._files.required
+        assert not tcase._in_place
         assert not any(tcase.contents)
         assert not any(tcase.optional)
         assert not any(tcase.required)
@@ -38,6 +37,26 @@ def test_testcase_01(tmp_path):
         assert not any(tmp_path.iterdir())
         tcase.dump(tmp_path, include_details=True)
         assert (tmp_path / "test_info.json").is_file()
+        tcase.cleanup()
+        assert not tcase.root.is_dir()
+
+
+def test_testcase_02():
+    """test TestCase.add_from_file() - add files with existing, in place data"""
+    with TestCase("test.html", "adpt") as tcase:
+        (tcase.root / "test.html").touch()
+        (tcase.root / "opt.html").touch()
+        tcase.add_from_file(tcase.root / "test.html", required=True)
+        assert len(tuple(tcase.contents)) == 1
+        assert len(tuple(tcase.required)) == 1
+        assert not any(tcase.optional)
+        tcase.add_from_file(tcase.root / "opt.html", required=False)
+        assert len(tuple(tcase.contents)) == 2
+        assert len(tuple(tcase.required)) == 1
+        assert len(tuple(tcase.optional)) == 1
+        # add previously added file
+        with raises(TestFileExists, match="'opt.html' exists in test"):
+            tcase.add_from_file(tcase.root / "opt.html", required=False)
 
 
 @mark.parametrize(
@@ -49,7 +68,7 @@ def test_testcase_01(tmp_path):
         (False, False),
     ],
 )
-def test_testcase_02(tmp_path, copy, required):
+def test_testcase_03(tmp_path, copy, required):
     """test TestCase.add_from_file()"""
     with TestCase("land_page.html", "adpt", input_fname="in.bin") as tcase:
         in_file = tmp_path / "file.bin"
@@ -80,7 +99,7 @@ def test_testcase_02(tmp_path, copy, required):
         ("a.bin", "b/c.bin", "b/d.bin"),
     ],
 )
-def test_testcase_03(tmp_path, file_paths):
+def test_testcase_04(tmp_path, file_paths):
     """test TestCase.add_from_file()"""
     with TestCase("land_page.html", "adpt") as tcase:
         for file_path in file_paths:
@@ -91,9 +110,10 @@ def test_testcase_03(tmp_path, file_paths):
             assert file_path in tcase.contents
             assert file_path in tcase.required
             assert file_path not in tcase.optional
+            assert (tcase.root / file_path).is_file()
 
 
-def test_testcase_04():
+def test_testcase_05():
     """test TestCase.add_from_bytes()"""
     with TestCase("a.html", "adpt") as tcase:
         tcase.add_from_bytes(b"foo", "a.html", required=True)
@@ -103,37 +123,6 @@ def test_testcase_04():
         # add file with invalid file name
         with raises(ValueError, match="invalid path ''"):
             tcase.add_from_bytes(b"foo", "", required=False)
-
-
-def test_testcase_05():
-    """test TestCase.purge_optional()"""
-    with TestCase("land_page.html", "test-adapter") as tcase:
-        # no optional files
-        tcase.purge_optional(["foo"])
-        # setup
-        tcase.add_from_bytes(b"foo", "testfile1.bin", required=True)
-        tcase.add_from_bytes(b"foo", "testfile2.bin", required=False)
-        tcase.add_from_bytes(b"foo", "testfile3.bin", required=False)
-        tcase.add_from_bytes(b"foo", "not_served.bin", required=False)
-        assert len(tcase._files.optional) == 3
-        # nothing to remove - with required
-        tcase.purge_optional(chain(["testfile1.bin"], tcase.optional))
-        assert len(tcase._files.optional) == 3
-        # nothing to remove - use relative path (forced)
-        tcase.purge_optional(x.file_name for x in tcase._files.optional)
-        assert len(tcase._files.optional) == 3
-        # nothing to remove - use absolute path
-        tcase.purge_optional(x.data_file.as_posix() for x in tcase._files.optional)
-        assert len(tcase._files.optional) == 3
-        # remove not_served.bin
-        tcase.purge_optional(["testfile2.bin", "testfile3.bin"])
-        assert len(tcase._files.optional) == 2
-        assert "testfile2.bin" in tcase.optional
-        assert "testfile3.bin" in tcase.optional
-        assert "not_served.bin" not in tcase.optional
-        # remove remaining optional
-        tcase.purge_optional(["testfile1.bin"])
-        assert not tcase._files.optional
 
 
 def test_testcase_06():
@@ -147,232 +136,249 @@ def test_testcase_06():
 
 
 def test_testcase_07(tmp_path):
-    """test TestCase.load_single() using a directory - fail cases"""
+    """test TestCase.read_info()"""
     # missing test_info.json
-    with raises(TestCaseLoadFailure, match="Missing 'test_info.json'"):
-        TestCase.load_single(tmp_path)
+    assert not TestCase.read_info(tmp_path)
     # invalid test_info.json
-    (tmp_path / "test_info.json").write_bytes(b"X")
+    (tmp_path / "test_info.json").write_text("X")
     with raises(TestCaseLoadFailure, match="Invalid 'test_info.json'"):
-        TestCase.load_single(tmp_path)
+        TestCase.read_info(tmp_path)
     # test_info.json missing 'target' entry
-    (tmp_path / "test_info.json").write_bytes(b"{}")
+    (tmp_path / "test_info.json").write_text("{}")
     with raises(
-        TestCaseLoadFailure, match="'test_info.json' has invalid 'target' entry"
+        TestCaseLoadFailure, match="Invalid 'target' entry in 'test_info.json'"
     ):
-        TestCase.load_single(tmp_path)
+        TestCase.read_info(tmp_path)
+    # success
+    (tmp_path / "test_info.json").write_text('{"target": "foo"}')
+    assert TestCase.read_info(tmp_path) == {"target": "foo"}
+
+
+def test_testcase_08(tmp_path):
+    """test TestCase._find_entry_point()"""
+    # empty directory
+    with raises(TestCaseLoadFailure, match="Could not determine entry point"):
+        TestCase._find_entry_point(tmp_path)
+    # missing potential entry point
+    (tmp_path / "test_info.json").touch()
+    with raises(TestCaseLoadFailure, match="Could not determine entry point"):
+        TestCase._find_entry_point(tmp_path)
+    # success
+    (tmp_path / "poc.html").touch()
+    assert TestCase._find_entry_point(tmp_path) == (tmp_path / "poc.html")
+    # Ambiguous entry point
+    (tmp_path / "other.html").touch()
+    with raises(TestCaseLoadFailure, match="Ambiguous entry point"):
+        TestCase._find_entry_point(tmp_path)
+
+
+def test_testcase_09(tmp_path):
+    """test TestCase.load_meta()"""
+    # empty directory
+    with raises(TestCaseLoadFailure, match="Could not determine entry point"):
+        TestCase.load_meta(tmp_path)
+    # missing directory
+    with raises(TestCaseLoadFailure, match="Missing or invalid TestCase"):
+        TestCase.load_meta(tmp_path / "missing")
+    # success (directory)
+    (tmp_path / "test_01.html").touch()
+    entry_point, info = TestCase.load_meta(tmp_path)
+    assert entry_point == tmp_path / "test_01.html"
+    assert not info
+    # success (file)
+    entry_point, info = TestCase.load_meta(tmp_path / "test_01.html")
+    assert entry_point == tmp_path / "test_01.html"
+    assert not info
+    # success (test_info.json)
+    (tmp_path / "test_info.json").write_text('{"target": "test_01.html"}')
+    (tmp_path / "other.html").touch()
+    entry_point, info = TestCase.load_meta(tmp_path)
+    assert entry_point == (tmp_path / "test_01.html")
+    assert info.get("target") == "test_01.html"
+    # success (test_info.json) override entry point
+    entry_point, info = TestCase.load_meta(
+        tmp_path, entry_point=(tmp_path / "other.html")
+    )
+    assert entry_point == tmp_path / "other.html"
+    assert info.get("target") == "other.html"
+    # invalid test_info.json (will fallback to searching for test)
+    (tmp_path / "other.html").unlink()
+    (tmp_path / "test_info.json").write_text("{}")
+    entry_point, info = TestCase.load_meta(tmp_path)
+    assert entry_point == (tmp_path / "test_01.html")
+    assert not info
+
+
+def test_testcase_10(tmp_path):
+    """test TestCase.load()"""
+    data = tmp_path / "test-data"
+    data.mkdir()
+    # empty directory
+    with raises(TestCaseLoadFailure, match="Could not determine entry point"):
+        TestCase.load(tmp_path)
+    # missing directory
+    with raises(TestCaseLoadFailure, match="Missing or invalid TestCase"):
+        TestCase.load(tmp_path / "missing")
+    # directory with test case
+    (data / "poc.html").touch()
+    loaded = TestCase.load(data)
+    assert loaded._in_place
+    assert loaded.entry_point == "poc.html"
+    assert loaded.root == data
+    # directory with test case invalid entry point
+    (tmp_path / "external.html").touch()
+    with raises(TestCaseLoadFailure, match="Entry point must be in root of given path"):
+        TestCase.load(data, entry_point=tmp_path / "external.html")
+    # single file directory
+    loaded = TestCase.load(data / "poc.html")
+    assert loaded._in_place
+    assert loaded.entry_point == "poc.html"
+    assert loaded.root == data
+
+
+def test_testcase_11(tmp_path):
+    """test TestCase.load() existing test case with simple test_info.json"""
     # build a test case
+    src = tmp_path / "src"
+    with TestCase("test.html", "test-adapter") as test:
+        test.add_from_bytes(b"", test.entry_point, required=True)
+        test.dump(src, include_details=True)
+    # successful load
+    loaded = TestCase.load(src)
+    assert loaded._in_place
+    assert loaded.entry_point == "test.html"
+    assert loaded.root.samefile(src)
+    assert len(tuple(loaded.required)) == 1
+    assert not any(loaded.optional)
+
+
+@mark.parametrize("catalog", [False, True])
+def test_testcase_12(tmp_path, catalog):
+    """test TestCase.load() existing test case with test_info.json"""
+    # build a test case
+    asset_file = tmp_path / "asset.txt"
+    asset_file.touch()
+    src = tmp_path / "src"
+    with AssetManager(base_path=tmp_path) as asset_mgr:
+        asset_mgr.add("example", asset_file)
+        with TestCase("test.html", "test-adapter") as test:
+            test.add_from_bytes(b"", test.entry_point, required=True)
+            test.add_from_bytes(b"", "optional.bin", required=False)
+            test.add_from_bytes(b"", file_name="nested/a.html", required=False)
+            test.assets = dict(asset_mgr.assets)
+            test.assets_path = asset_mgr.path
+            test.env_vars["TEST_ENV_VAR"] = "100"
+            test.dump(src, include_details=True)
+    # successful load
+    loaded = TestCase.load(src, catalog=catalog)
+    assert loaded.entry_point == "test.html"
+    assert loaded.root.samefile(src)
+    assert (loaded.root / "optional.bin").is_file()
+    assert (loaded.root / "nested" / "a.html").is_file()
+    if catalog:
+        assert "optional.bin" in loaded.optional
+        assert "nested/a.html" in loaded.optional
+        assert "_assets_/asset.txt" not in loaded.optional
+        assert "test_info.json" not in loaded.optional
+    else:
+        assert not any(loaded.optional)
+    assert loaded.assets == {"example": "asset.txt"}
+    assert (loaded.root / loaded.assets_path / "asset.txt").is_file()
+    assert loaded.env_vars.get("TEST_ENV_VAR") == "100"
+    assert len(tuple(loaded.required)) == 1
+    # this should do nothing
+    loaded.cleanup()
+    assert loaded.root.is_dir()
+
+
+def test_testcase_13(tmp_path):
+    """test TestCase.load() test_info.json error cases"""
+    # bad 'assets' entry in test_info.json
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    entry_point = src_dir / "target.bin"
+    entry_point = src_dir / "target.html"
     entry_point.touch()
-    with TestCase("target.bin", "test-adapter") as src:
-        src.add_from_file(entry_point)
-        src.dump(src_dir, include_details=True)
-    # bad 'target' entry in test_info.json
-    entry_point.unlink()
-    with raises(TestCaseLoadFailure, match="Entry point 'target.bin' not found in"):
-        TestCase.load_single(src_dir)
-    # bad 'assets' entry in test_info.json
-    entry_point.touch()
-    with TestCase("target.bin", "test-adapter") as src:
+    with TestCase("target.html", "test-adapter") as src:
         src.dump(src_dir, include_details=True)
     test_info = loads((src_dir / "test_info.json").read_text())
     test_info["assets"] = {"bad": 1}
     (src_dir / "test_info.json").write_text(dumps(test_info))
     with raises(TestCaseLoadFailure, match="'assets' contains invalid entry"):
-        TestCase.load_single(src_dir)
+        TestCase.load(src_dir)
     # bad 'env' entry in test_info.json
-    with TestCase("target.bin", "test-adapter") as src:
+    with TestCase("target.html", "test-adapter") as src:
         src.dump(src_dir, include_details=True)
     test_info = loads((src_dir / "test_info.json").read_text())
     test_info["env"] = {"bad": 1}
     (src_dir / "test_info.json").write_text(dumps(test_info))
     with raises(TestCaseLoadFailure, match="'env' contains invalid entry"):
-        TestCase.load_single(src_dir)
+        TestCase.load(src_dir)
     # missing asset data
     test_info["env"].clear()
     test_info["assets"] = {"a": "a"}
     test_info["assets_path"] = "missing"
     (src_dir / "test_info.json").write_text(dumps(test_info))
-    with TestCase.load_single(src_dir) as loaded:
+    with TestCase.load(src_dir) as loaded:
         assert not loaded.assets
-        assert not loaded.assets_path
+        assert loaded.assets_path is None
 
 
-def test_testcase_08(tmp_path):
-    """test TestCase.load_single() using a directory"""
-    # build a valid test case
-    src_dir = tmp_path / "src"
-    src_dir.mkdir()
-    entry_point = src_dir / "target.bin"
-    entry_point.touch()
-    asset_file = src_dir / "asset.bin"
+def test_testcase_14(tmp_path):
+    """test TestCase.load() and TestCase.dump() with assets"""
+    # build a test case
+    asset_file = tmp_path / "asset.txt"
     asset_file.touch()
-    (src_dir / "optional.bin").touch()
-    (src_dir / "x.bin").touch()
-    nested = src_dir / "nested"
-    nested.mkdir()
-    # overlap file name in different directories
-    (nested / "x.bin").touch()
-    (tmp_path / "src" / "nested" / "empty").mkdir()
-    dst_dir = tmp_path / "dst"
-    # build test case
-    with AssetManager(base_path=tmp_path) as asset_mgr:
+    src = tmp_path / "src"
+    with AssetManager() as asset_mgr:
         asset_mgr.add("example", asset_file)
-        with TestCase("target.bin", "test-adapter") as src:
-            src.env_vars["TEST_ENV_VAR"] = "100"
-            src.add_from_file(entry_point)
-            src.add_from_file(src_dir / "optional.bin", required=False)
-            src.add_from_file(src_dir / "x.bin", required=False)
-            src.add_from_file(
-                nested / "x.bin",
-                file_name=str((nested / "x.bin").relative_to(src_dir)),
-                required=False,
-            )
-            src.assets = dict(asset_mgr.assets)
-            src.assets_path = asset_mgr.path
-            src.dump(dst_dir, include_details=True)
-    # test loading test case from test_info.json
-    with TestCase.load_single(dst_dir) as dst:
-        assert "example" in dst.assets
-        assert dst.assets_path is not None
-        assert (dst.assets_path / "asset.bin").is_file()
-        assert "_assets_/asset.bin" not in (x.file_name for x in dst._files.optional)
-        assert dst.entry_point == "target.bin"
-        assert "target.bin" in (x.file_name for x in dst._files.required)
-        assert "optional.bin" in (x.file_name for x in dst._files.optional)
-        assert "x.bin" in (x.file_name for x in dst._files.optional)
-        assert "nested/x.bin" in (x.file_name for x in dst._files.optional)
-        assert dst.env_vars["TEST_ENV_VAR"] == "100"
-        assert dst.timestamp > 0
+        with TestCase("test.html", "test-adapter") as test:
+            test.add_from_bytes(b"", test.entry_point, required=True)
+            test.assets = dict(asset_mgr.assets)
+            test.assets_path = asset_mgr.path
+            test.dump(src, include_details=True)
+    # load
+    loaded = TestCase.load(src)
+    assert loaded.assets
+    assert loaded.assets_path
+    with AssetManager.load(loaded.assets, loaded.assets_path) as asset_mgr:
+        # dump the AssetManager's assets (simulate how this works in replay)
+        loaded.assets = dict(asset_mgr.assets)
+        loaded.assets_path = asset_mgr.path
+        # dump loaded test case
+        dst = tmp_path / "dst"
+        loaded.dump(dst, include_details=True)
+    assert (dst / "test.html").is_file()
+    assert (dst / "_assets_" / "asset.txt").is_file()
 
 
-def test_testcase_09(tmp_path):
-    """test TestCase.load_single() using a file"""
-    # invalid entry_point specified
-    with raises(TestCaseLoadFailure, match="Missing or invalid TestCase"):
-        TestCase.load_single(tmp_path / "missing_file", adjacent=False)
-    # valid test case
-    src_dir = tmp_path / "src"
-    src_dir.mkdir()
-    entry_point = src_dir / "target.bin"
-    entry_point.touch()
-    (src_dir / "optional.bin").touch()
-    # load single file test case
-    with TestCase.load_single(entry_point, adjacent=False) as tcase:
-        assert not tcase.assets
-        assert not tcase.env_vars
-        assert tcase.entry_point == "target.bin"
-        assert "target.bin" in (x.file_name for x in tcase._files.required)
-        assert "optional.bin" not in (x.file_name for x in tcase._files.optional)
-        assert tcase.timestamp == 0
-    # load full test case
-    with TestCase.load_single(entry_point, adjacent=True) as tcase:
-        assert tcase.entry_point == "target.bin"
-        assert "target.bin" in (x.file_name for x in tcase._files.required)
-        assert "optional.bin" in (x.file_name for x in tcase._files.optional)
-
-
-def test_testcase_10(tmp_path):
+def test_testcase_15(tmp_path):
     """test TestCase - dump, load and compare"""
     asset_path = tmp_path / "assets"
     asset_path.mkdir()
     asset = asset_path / "asset_file.txt"
     asset.touch()
     working = tmp_path / "working"
-    working.mkdir()
     with TestCase("a.html", "adpt") as org:
         # set non default values
         org.duration = 1.23
         org.env_vars = {"en1": "1", "en2": "2"}
-        org.https = True
-        org.hang = True
+        org.https = not org.https
+        org.hang = not org.hang
         org.input_fname = "infile"
-        org.time_limit = 10
+        org.time_limit = 456
         org.add_from_bytes(b"a", "a.html")
         org.assets = {"sample": asset.name}
         org.assets_path = asset_path
+        org.version = "1.2.3"
         org.dump(working, include_details=True)
         assert (working / "_assets_" / asset.name).is_file()
-        with TestCase.load_single(working, adjacent=False) as loaded:
+        with TestCase.load(working) as loaded:
             for prop in TestCase.__slots__:
                 if not prop.startswith("_") and prop != "assets_path":
                     assert getattr(loaded, prop) == getattr(org, prop)
             assert not set(org.contents) ^ set(loaded.contents)
             assert "sample" in loaded.assets
             assert loaded.assets["sample"] == asset.name
-
-
-def test_testcase_11(tmp_path):
-    """test TestCase.load() - missing file and empty directory"""
-    # missing file
-    with raises(TestCaseLoadFailure, match="Invalid TestCase path"):
-        TestCase.load(tmp_path / "missing")
-    # empty path
-    assert not TestCase.load(tmp_path, adjacent=True)
-
-
-def test_testcase_12(tmp_path):
-    """test TestCase.load() - single file"""
-    tfile = tmp_path / "testcase.html"
-    tfile.touch()
-    assert len(TestCase.load(tfile, adjacent=False)) == 1
-
-
-def test_testcase_13(tmp_path):
-    """test TestCase.load() - single directory"""
-    with TestCase("target.bin", "test-adapter") as src:
-        src.add_from_bytes(b"test", "target.bin")
-        src.dump(tmp_path, include_details=True)
-    assert len(TestCase.load(tmp_path)) == 1
-
-
-def test_testcase_14(tmp_path):
-    """test TestCase.load() - multiple directories (with assets)"""
-    nested = tmp_path / "nested"
-    nested.mkdir()
-    asset_file = tmp_path / "example_asset"
-    asset_file.touch()
-    with AssetManager(base_path=tmp_path) as asset_mgr:
-        asset_mgr.add("example", asset_file)
-        with TestCase("target.bin", "test-adapter") as src:
-            src.assets = asset_mgr.assets
-            src.assets_path = asset_mgr.path
-            src.add_from_bytes(b"test", "target.bin")
-            src.dump(nested / "test-1", include_details=True)
-            src.dump(nested / "test-2", include_details=True)
-            src.dump(nested / "test-3", include_details=True)
-    testcases = TestCase.load(nested)
-    assert len(testcases) == 3
-    assert "example" in testcases[0].assets
-    # try loading testcases that are nested too deep
-    assert not TestCase.load(tmp_path)
-
-
-def test_testcase_15(tmp_path):
-    """test TestCase.load() - archive"""
-    archive = tmp_path / "testcase.zip"
-    # bad archive
-    archive.write_bytes(b"x")
-    with raises(TestCaseLoadFailure, match="Testcase archive is corrupted"):
-        TestCase.load(archive)
-    # build archive containing multiple testcases
-    with TestCase("target.bin", "test-adapter") as src:
-        src.add_from_bytes(b"test", "target.bin")
-        src.dump(tmp_path / "test-0", include_details=True)
-        src.dump(tmp_path / "test-1", include_details=True)
-        src.dump(tmp_path / "test-2", include_details=True)
-    (tmp_path / "log_dummy.txt").touch()
-    (tmp_path / "not_a_tc").mkdir()
-    (tmp_path / "not_a_tc" / "file.txt").touch()
-    with ZipFile(archive, mode="w", compression=ZIP_DEFLATED) as zfp:
-        for entry in tmp_path.rglob("*"):
-            if entry.is_file():
-                zfp.write(str(entry), arcname=str(entry.relative_to(tmp_path)))
-    testcases = TestCase.load(archive)
-    assert len(testcases) == 3
-    assert all("target.bin" in x.contents for x in testcases)
 
 
 def test_testcase_16(tmp_path):

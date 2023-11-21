@@ -240,9 +240,6 @@ class Session:
                 if result.timeout:
                     LOG.warning("Browser hung? Timeout too short? System too busy?")
             else:
-                if self.adapter.IGNORE_UNSERVED:
-                    LOG.debug("removing unserved files from the test case")
-                    current_test.purge_optional(result.served)
                 self.iomanager.commit()
             # process results
             if result.status == Result.FOUND:

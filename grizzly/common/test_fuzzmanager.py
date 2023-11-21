@@ -1,8 +1,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
 """Tests for interface for getting Crash and Bucket data from CrashManager API"""
 import json
+from zipfile import ZipFile
 
 from FTB.ProgramConfiguration import ProgramConfiguration
 from pytest import mark, raises
@@ -160,7 +162,7 @@ def test_crash_2(mocker):
     assert coll.return_value.get.call_count == 1
 
 
-def test_crash_3(mocker):
+def test_crash_3(mocker, tmp_path):
     """crash testcase_path writes and returns testcase zip"""
     coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     coll.return_value.serverProtocol = "http"
@@ -168,22 +170,41 @@ def test_crash_3(mocker):
     coll.return_value.serverHost = "allizom.org"
     coll.return_value.get.return_value.json.return_value = {
         "id": 234,
-        "testcase": "test.bz2",
+        "testcase": "test.zip",
     }
+    # build archive containing test cases
+    with ZipFile(tmp_path / "test.zip", "w") as zip_fp:
+        # add files out of order
+        for i in (1, 3, 2, 0):
+            test = tmp_path / f"test-{i}"
+            test.mkdir()
+            (test / "test_info.json").touch()
+            zip_fp.write(test / "test_info.json", arcname=f"test-{i}/test_info.json")
     with CrashEntry(234) as crash:
-        assert crash.testcase == "test.bz2"  # pre-load data dict so I can re-patch get
+        assert crash.testcase == "test.zip"  # pre-load data dict so I can re-patch get
         coll.return_value.get.return_value = mocker.Mock(
-            content=b"\x01\x02\x03",
+            content=(tmp_path / "test.zip").read_bytes(),
             headers={"content-disposition"},
         )
         assert coll.return_value.get.call_count == 1
-        tc_path = crash.testcase_path()
-        assert tc_path.is_file()
-        assert tc_path.suffix == ".bz2"
-        assert tc_path.read_bytes() == b"\x01\x02\x03"
+        tests = crash.testcases()
+        assert len(tests) == 4
+        # check order
+        assert tests[0].name == "test-3"
+        assert tests[1].name == "test-2"
+        assert tests[2].name == "test-1"
+        assert tests[3].name == "test-0"
         assert coll.return_value.get.call_count == 2
         # second call returns same path
-        assert crash.testcase_path() == tc_path
+        assert crash.testcases() == tests
+        # subsets
+        assert crash.testcases(subset=[0]) == [tests[0]]
+        # remove second oldest test case (oldest = 0, most recent = n-1)
+        tests = crash.testcases(subset=[0, 2, 3])
+        assert len(tests) == 3
+        assert tests[0].name == "test-3"
+        assert tests[1].name == "test-1"
+        assert tests[2].name == "test-0"
     assert coll.return_value.get.call_count == 2
 
 
@@ -241,6 +262,31 @@ def test_crash_5(mocker):
             crash.create_signature(None)
     assert "failed to generate" in str(exc).lower()
     assert coll.return_value.get.call_count == 1
+
+
+def test_crash_6(tmp_path):
+    """test CrashEntry._subset()"""
+    # test single entry
+    paths = [tmp_path / "0"]
+    assert CrashEntry._subset(paths.copy(), [0]) == paths
+    assert CrashEntry._subset(paths.copy(), [-1]) == paths
+    # out of range (should be min/max'ed)
+    assert CrashEntry._subset(paths.copy(), [1]) == paths
+    # duplicate index
+    assert CrashEntry._subset(paths.copy(), [1, 1]) == paths
+    # test multiple entries select single
+    paths = [tmp_path / "0", tmp_path / "1", tmp_path / "2"]
+    assert CrashEntry._subset(paths.copy(), [0]) == [paths[0]]
+    assert CrashEntry._subset(paths.copy(), [1]) == [paths[1]]
+    assert CrashEntry._subset(paths.copy(), [2]) == [paths[2]]
+    # out of range (should be min/max'ed)
+    assert CrashEntry._subset(paths.copy(), [3]) == [paths[2]]
+    assert CrashEntry._subset(paths.copy(), [-3]) == [paths[0]]
+    # test multiple entries select multiple
+    assert CrashEntry._subset(paths.copy(), [0, 1]) == paths[:2]
+    assert CrashEntry._subset(paths.copy(), [2, 1]) == paths[1:]
+    assert CrashEntry._subset(paths.copy(), [0, -1]) == [paths[0], paths[-1]]
+    assert CrashEntry._subset(paths.copy(), [0, 1, -1]) == paths
 
 
 @mark.parametrize(

@@ -157,6 +157,24 @@ class ReduceManager:
         self._use_analysis = use_analysis
         self._use_harness = use_harness
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
+
+    def cleanup(self):
+        """Remove temporary files from disk.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        for test in self.testcases:
+            test.cleanup()
+
     def update_timeout(self, results):
         """Tune idle/server timeout values based on actual duration of expected results.
 
@@ -543,10 +561,7 @@ class ReduceManager:
                                         sig = crash.createShortSignature()
                                         self._signature_desc = sig
                                 self._status.report()
-                                served = None
-                                if success and not self._any_crash:
-                                    served = first_expected.served
-                                strategy.update(success, served=served)
+                                strategy.update(success)
                                 if strategy.name == "check" and not success:
                                     raise NotReproducible("Not reproducible at 'check'")
                                 any_success = any_success or success
@@ -571,7 +586,8 @@ class ReduceManager:
                                             test.env_vars = (
                                                 self.target.filtered_environ()
                                             )
-                                    self.testcases = reduction
+                                    # clone results from strategy local copy
+                                    self.testcases = [x.clone() for x in reduction]
                                     keep_reduction = True
                                     # cleanup old best results
                                     for result in best_results:
@@ -651,6 +667,8 @@ class ReduceManager:
                                     LOG.info("Best results reported (periodic)")
 
                             finally:
+                                # TODO: TS: I'm not sure this is required anymore
+                                # reduction should only contain strategy local copies
                                 if not keep_reduction:
                                     for testcase in reduction:
                                         testcase.cleanup()
@@ -738,21 +756,11 @@ class ReduceManager:
                 )
             if self._report_to_fuzzmanager:
                 status.add_to_reporter(reporter, expected=result.expected)
-            # clone the tests so we can safely call purge_optional here for each report
-            # (report.served may be different for non-expected or any-crash results)
-            clones = [test.clone() for test in testcases]
-            try:
-                if result.served is not None:
-                    for clone, served in zip(clones, result.served):
-                        clone.purge_optional(served)
-                result = reporter.submit(clones, result.report, force=result.expected)
-                if result is not None:
-                    if isinstance(result, Path):
-                        result = str(result)
-                    new_reports.append(result)
-            finally:
-                for clone in clones:
-                    clone.cleanup()
+            result = reporter.submit(testcases, result.report, force=result.expected)
+            if result is not None:
+                if isinstance(result, Path):
+                    result = str(result)
+                new_reports.append(result)
         # only write new reports if not empty, otherwise previous reports may be
         # overwritten with an empty list if later reports are ignored
         if update_status and new_reports:
@@ -791,7 +799,16 @@ class ReduceManager:
         signature_desc = None
         target = None
         testcases = []
+
         try:
+            try:
+                testcases, asset_mgr, env_vars = ReplayManager.load_testcases(
+                    args.input, catalog=True
+                )
+            except TestCaseLoadFailure as exc:
+                LOG.error("Error: %s", str(exc))
+                return Exit.ERROR
+
             if args.sig:
                 signature = CrashSignature.fromFile(args.sig)
                 meta = args.sig.with_suffix(".metadata")
@@ -799,27 +816,11 @@ class ReduceManager:
                     meta = json.loads(meta.read_text())
                     signature_desc = meta["shortDescription"]
 
-            try:
-                testcases, asset_mgr, env_vars = ReplayManager.load_testcases(
-                    args.input, subset=args.test_index
-                )
-            except TestCaseLoadFailure as exc:
-                LOG.error("Error: %s", str(exc))
-                return Exit.ERROR
-
             if not args.tool and testcases[0].adapter_name:
                 args.tool = f"grizzly-{testcases[0].adapter_name}"
                 LOG.warning("Setting default --tool=%s from testcase", args.tool)
 
             expect_hang = ReplayManager.expect_hang(args.ignore, signature, testcases)
-
-            if args.no_harness:
-                if len(testcases) > 1:
-                    LOG.error(
-                        "Error: '--no-harness' cannot be used with multiple "
-                        "testcases. Perhaps '--test-index' can help."
-                    )
-                    return Exit.ARGS
 
             # check test time limit and timeout
             # TODO: add support for test time limit, use timeout in both cases for now
@@ -861,7 +862,7 @@ class ReduceManager:
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
                 target.reverse(server.port, server.port)
-                mgr = ReduceManager(
+                with ReduceManager(
                     args.ignore,
                     server,
                     target,
@@ -882,13 +883,13 @@ class ReduceManager:
                     tool=args.tool,
                     use_analysis=not args.no_analysis,
                     use_harness=not args.no_harness,
-                )
-                return_code = mgr.run(
-                    repeat=args.repeat,
-                    launch_attempts=args.launch_attempts,
-                    min_results=args.min_crashes,
-                    post_launch_delay=args.post_launch_delay,
-                )
+                ) as mgr:
+                    return_code = mgr.run(
+                        repeat=args.repeat,
+                        launch_attempts=args.launch_attempts,
+                        min_results=args.min_crashes,
+                        post_launch_delay=args.post_launch_delay,
+                    )
             return return_code
 
         except ConfigError as exc:

@@ -291,49 +291,47 @@ def test_analysis(
                 log_path.mkdir(exist_ok=True)
                 _fake_save_logs_foo(log_path)
                 report = Report(log_path, Path("bin"))
-                results.append(ReplayResult(report, [["test.html"]], [], True))
+                results.append(ReplayResult(report, [], True))
         return results
 
     replayer.run.side_effect = replay_run
 
-    test = TestCase("test.html", "test-adapter")
-    test.add_from_bytes(b"1", "test.html")
-    tests = [test]
+    with TestCase("test.html", "test-adapter") as test:
+        test.add_from_bytes(b"1", file_name=test.entry_point)
+        test.dump(tmp_path / "src1", include_details=True)
+    tests = [test.load(tmp_path / "src1")]
     if harness_last_crashes is not None:
-        test = TestCase("test.html", "test-adapter")
-        test.add_from_bytes(b"2", "test.html")
-        tests.append(test.clone())
+        with TestCase("test.html", "test-adapter") as test:
+            test.add_from_bytes(b"2", file_name=test.entry_point)
+            test.dump(tmp_path / "src2", include_details=True)
+        tests.append(test.load(tmp_path / "src2"))
     log_path = tmp_path / "logs"
 
-    try:
-        mgr = ReduceManager(
-            None,
-            mocker.Mock(spec_set=Sapphire, timeout=30),
-            mocker.Mock(spec_set=Target),
-            tests,
-            None,
-            log_path,
-            use_harness=use_harness,
-        )
+    with ReduceManager(
+        None,
+        mocker.Mock(spec_set=Sapphire, timeout=30),
+        mocker.Mock(spec_set=Target),
+        tests,
+        None,
+        log_path,
+        use_harness=use_harness,
+    ) as mgr:
         repeat, min_crashes = mgr.run_reliability_analysis()
-    finally:
-        for test in tests:
-            test.cleanup()
 
-    observed = {
-        "replay_iters": replayer.run.call_count,
-        "repeat": repeat,
-        "min_crashes": min_crashes,
-        "use_harness": mgr._use_harness,
-        "launch_iters": mgr._status.iterations,
-    }
-    expected = {
-        "replay_iters": expected_iters,
-        "repeat": expected_repeat,
-        "min_crashes": expected_min_crashes,
-        "use_harness": result_harness,
-        "launch_iters": expected_iters * 11,
-    }
+        observed = {
+            "replay_iters": replayer.run.call_count,
+            "repeat": repeat,
+            "min_crashes": min_crashes,
+            "use_harness": mgr._use_harness,
+            "launch_iters": mgr._status.iterations,
+        }
+        expected = {
+            "replay_iters": expected_iters,
+            "repeat": expected_repeat,
+            "min_crashes": expected_min_crashes,
+            "use_harness": result_harness,
+            "launch_iters": expected_iters * 11,
+        }
     assert observed == expected
 
 
@@ -554,37 +552,35 @@ def test_repro(
                 else:
                     _fake_save_logs_bar(log_path)
                 report = Report(log_path, Path("bin"))
-                return [ReplayResult(report, [["test.html"]], [], expected)]
+                return [ReplayResult(report, [], expected)]
         return []
 
     replayer.run.side_effect = replay_run
 
-    test = TestCase("test.html", "test-adapter")
-    test.add_from_bytes(original, "test.html")
-    tests = [test]
+    with TestCase("test.html", "test-adapter") as test:
+        test.add_from_bytes(original, file_name=test.entry_point)
+        test.dump(tmp_path / "src")
+    tests = [TestCase.load(tmp_path / "src")]
+
     log_path = tmp_path / "logs"
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
-    try:
-        mgr = ReduceManager(
-            [],
-            mocker.Mock(spec_set=Sapphire, timeout=30),
-            target,
-            tests,
-            strategies,
-            log_path,
-            use_analysis=False,
-        )
+    with ReduceManager(
+        [],
+        mocker.Mock(spec_set=Sapphire, timeout=30),
+        target,
+        tests,
+        strategies,
+        log_path,
+        use_analysis=False,
+    ) as mgr:
         if isinstance(result, type) and issubclass(result, BaseException):
             with raises(result):
                 mgr.run()
         else:
             assert mgr.run() == result
-    finally:
-        for test in tests:
-            test.cleanup()
 
     expected_dirs = set()
     if n_reports:
@@ -624,14 +620,14 @@ def test_report_01(mocker, tmp_path):
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
             report = Report(log_path, Path("bin"))
-            return [ReplayResult(report, [["test.html"]], [], True)]
+            return [ReplayResult(report, [], True)]
         return []
 
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").touch()
-    testcases = TestCase.load(tmp_path / "test.html")
-    assert testcases
+    testcase = TestCase.load(tmp_path / "test.html")
+    assert testcase
     log_path = tmp_path / "logs"
 
     fake_strat = mocker.MagicMock(spec_set=Strategy)
@@ -641,7 +637,7 @@ def test_report_01(mocker, tmp_path):
         for count_ in range(1, 61):
             LOG.debug("fake_iter() %d", count_)
             (tmp_path / "test.html").write_text(str(count_))
-            testcases = TestCase.load(tmp_path / "test.html")
+            testcases = [TestCase.load(tmp_path / "test.html")]
             assert testcases
             yield testcases
 
@@ -651,21 +647,17 @@ def test_report_01(mocker, tmp_path):
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
-    try:
-        mgr = ReduceManager(
-            [],
-            mocker.Mock(spec_set=Sapphire, timeout=30),
-            target,
-            testcases,
-            ["fake"],
-            log_path,
-            use_analysis=False,
-            report_period=30,
-        )
+    with ReduceManager(
+        [],
+        mocker.Mock(spec_set=Sapphire, timeout=30),
+        target,
+        [testcase],
+        ["fake"],
+        log_path,
+        use_analysis=False,
+        report_period=30,
+    ) as mgr:
         assert mgr.run() == 0
-    finally:
-        for test in testcases:
-            test.cleanup()
 
     # should be 2 reports: one made at time=30 (for crash on 20th iter),
     # and one at time=60 (for crash on 40th iter)
@@ -695,14 +687,14 @@ def test_report_02(mocker, tmp_path):
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
             report = Report(log_path, Path("bin"))
-            return [ReplayResult(report, [["test.html"]], [], True)]
+            return [ReplayResult(report, [], True)]
         return []
 
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").touch()
-    testcases = TestCase.load(tmp_path / "test.html")
-    assert testcases
+    testcase = TestCase.load(tmp_path / "test.html")
+    assert testcase
     log_path = tmp_path / "logs"
 
     fake_strat = mocker.MagicMock(spec_set=Strategy)
@@ -712,7 +704,7 @@ def test_report_02(mocker, tmp_path):
         for count_ in range(1, 31):
             LOG.debug("fake_iter() %d", count_)
             (tmp_path / "test.html").write_text(str(count_))
-            testcases = TestCase.load(tmp_path / "test.html")
+            testcases = [TestCase.load(tmp_path / "test.html")]
             assert testcases
             yield testcases
         raise KeyboardInterrupt()
@@ -723,21 +715,18 @@ def test_report_02(mocker, tmp_path):
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
-    try:
-        mgr = ReduceManager(
-            [],
-            mocker.Mock(spec_set=Sapphire, timeout=30),
-            target,
-            testcases,
-            ["fake"],
-            log_path,
-            use_analysis=False,
-        )
+
+    with ReduceManager(
+        [],
+        mocker.Mock(spec_set=Sapphire, timeout=30),
+        target,
+        [testcase],
+        ["fake"],
+        log_path,
+        use_analysis=False,
+    ) as mgr:
         with raises(KeyboardInterrupt):
             mgr.run()
-    finally:
-        for test in testcases:
-            test.cleanup()
 
     n_reports = 1
     reports = {"20"}
@@ -767,14 +756,14 @@ def test_quality_update(mocker, tmp_path):
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
             report = Report(log_path, Path("bin"))
-            return [ReplayResult(report, [["test.html"]], [], True)]
+            return [ReplayResult(report, [], True)]
         return []
 
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").write_text("123\n")
-    testcases = TestCase.load(tmp_path / "test.html")
-    assert testcases
+    testcase = TestCase.load(tmp_path / "test.html")
+    assert testcase
     log_path = tmp_path / "logs"
 
     mocker.patch("grizzly.common.reporter.Collector", autospec=True)
@@ -784,21 +773,17 @@ def test_quality_update(mocker, tmp_path):
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
-    try:
-        mgr = ReduceManager(
-            [],
-            mocker.Mock(spec_set=Sapphire, timeout=30),
-            target,
-            testcases,
-            ["check", "lines"],
-            log_path,
-            use_analysis=False,
-            report_to_fuzzmanager=True,
-        )
+    with ReduceManager(
+        [],
+        mocker.Mock(spec_set=Sapphire, timeout=30),
+        target,
+        [testcase],
+        ["check", "lines"],
+        log_path,
+        use_analysis=False,
+        report_to_fuzzmanager=True,
+    ) as mgr:
         assert mgr.run() == 0
-    finally:
-        for test in testcases:
-            test.cleanup()
 
     assert reporter.return_value.submit.call_count == 1
     report_args, _ = reporter.return_value.submit.call_args
@@ -830,14 +815,14 @@ def test_include_assets_and_environ(mocker, tmp_path):
             log_path.mkdir()
             _fake_save_logs_foo(log_path)
             report = Report(log_path, Path("bin"))
-            return [ReplayResult(report, [["test.html"]], [], True)]
+            return [ReplayResult(report, [], True)]
         return []
 
     replayer.run.side_effect = replay_run
 
     (tmp_path / "test.html").write_text("123\n")
-    testcases = TestCase.load(tmp_path / "test.html")
-    assert testcases
+    testcase = TestCase.load(tmp_path / "test.html")
+    assert testcase
     log_path = tmp_path / "logs"
 
     reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
@@ -849,7 +834,6 @@ def test_include_assets_and_environ(mocker, tmp_path):
         for test in test_cases:
             assert test.assets.get("example")
             assert test.env_vars == {"test": "abc"}
-            test.cleanup()
 
     reporter.return_value.submit.side_effect = submit
 
@@ -859,20 +843,16 @@ def test_include_assets_and_environ(mocker, tmp_path):
         (tmp_path / "example_asset").touch()
         asset_mgr.add("example", tmp_path / "example_asset", copy=False)
         target.asset_mgr = asset_mgr
-        try:
-            mgr = ReduceManager(
-                [],
-                mocker.Mock(spec_set=Sapphire, timeout=30),
-                target,
-                testcases,
-                ["check", "lines"],
-                log_path,
-                use_analysis=False,
-            )
+        with ReduceManager(
+            [],
+            mocker.Mock(spec_set=Sapphire, timeout=30),
+            target,
+            [testcase],
+            ["check", "lines"],
+            log_path,
+            use_analysis=False,
+        ) as mgr:
             assert mgr.run() == 0
-        finally:
-            for test in testcases:
-                test.cleanup()
 
     assert reporter.return_value.submit.call_count == 1
 
@@ -968,39 +948,34 @@ def test_timeout_update(
         log_path.mkdir()
         _fake_save_logs_foo(log_path)
         report = Report(log_path, Path("bin"))
-        return [ReplayResult(report, [["test.html"]], durations, interesting)]
+        return [ReplayResult(report, durations, interesting)]
 
     replayer.run.side_effect = replay_run
 
-    test = TestCase("test.html", "test-adapter")
-    test.add_from_bytes(b"123\n", "test.html")
-    tests = [test]
+    (tmp_path / "test.html").touch()
+    test = TestCase.load(tmp_path / "test.html")
     log_path = tmp_path / "logs"
 
     target = mocker.Mock(spec_set=Target)
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     server = mocker.Mock(spec_set=Sapphire, timeout=iter_input)
-    try:
-        mgr = ReduceManager(
-            [],
-            server,
-            target,
-            tests,
-            ["check"],
-            log_path,
-            use_analysis=False,
-            idle_delay=idle_input,
-            static_timeout=static_timeout,
-        )
+    with ReduceManager(
+        [],
+        server,
+        target,
+        [test],
+        ["check"],
+        log_path,
+        use_analysis=False,
+        idle_delay=idle_input,
+        static_timeout=static_timeout,
+    ) as mgr:
         if isinstance(result, type) and issubclass(result, BaseException):
             with raises(result):
                 mgr.run()
         else:
             assert mgr.run() == result
-    finally:
-        for test in tests:
-            test.cleanup()
 
     assert server.timeout == iter_output
     assert mgr._idle_delay == idle_output

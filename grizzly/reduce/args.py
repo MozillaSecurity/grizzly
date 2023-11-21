@@ -111,6 +111,21 @@ class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
             "(default: %(default)s).",
         )
 
+        self.parser.add_argument(
+            "--test-index",
+            type=int,
+            nargs="+",
+            help="Select a testcase to run when multiple testcases are loaded. "
+            "Testscases are ordered oldest to newest. "
+            "0 == oldest, n-1 == most recent (default: run all testcases)",
+        )
+
+    def sanity_check(self, args):
+        super().sanity_check(args)
+
+        if args.no_harness and not args.test_index:
+            self.parser.error("'--no-harness' requires '--test-index'")
+
 
 class ReduceFuzzManagerIDQualityArgs(ReduceFuzzManagerIDArgs):
     def __init__(self):

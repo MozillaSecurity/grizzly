@@ -5,10 +5,10 @@
 import json
 from contextlib import contextmanager
 from logging import getLogger
-from os import unlink
 from pathlib import Path
 from shutil import rmtree
-from tempfile import mkdtemp, mkstemp
+from tempfile import NamedTemporaryFile, mkdtemp
+from zipfile import ZipFile
 
 from Collector.Collector import Collector
 from FTB.ProgramConfiguration import ProgramConfiguration
@@ -197,6 +197,16 @@ class CrashEntry:
 
     RAW_FIELDS = frozenset({"rawCrashData", "rawStderr", "rawStdout"})
 
+    __slots__ = (
+        "_crash_id",
+        "_coll",
+        "_contents",
+        "_data",
+        "_storage",
+        "_sig_filename",
+        "_url",
+    )
+
     def __init__(self, crash_id):
         """Initialize CrashEntry.
 
@@ -206,13 +216,14 @@ class CrashEntry:
         assert isinstance(crash_id, int)
         self._crash_id = crash_id
         self._coll = Collector()
+        self._contents = None
+        self._data = None
+        self._storage = None
+        self._sig_filename = None
         self._url = (
             f"{self._coll.serverProtocol}://{self._coll.serverHost}:"
             f"{self._coll.serverPort}/crashmanager/rest/crashes/{crash_id}/"
         )
-        self._data = None
-        self._tc_filename = None
-        self._sig_filename = None
 
     @property
     def crash_id(self):
@@ -257,46 +268,79 @@ class CrashEntry:
         Returns:
             None
         """
-        if self._tc_filename is not None:
-            self._tc_filename.unlink()
+        if self._storage is not None:
+            rmtree(self._storage, ignore_errors=True)
         if self._sig_filename is not None:
             rmtree(self._sig_filename.parent)
 
-    def testcase_path(self):
+    @staticmethod
+    def _subset(tests, subset):
+        """Select a subset of tests directories. Subset values are sanitized to
+        avoid raising.
+
+        Arguments:
+            tests list(Path): Directories on disk where testcases exists.
+            subset list(int): Indices of corresponding directories to select.
+
+        Returns:
+            list(Path): Directories that have been selected.
+        """
+        assert isinstance(subset, list)
+        assert tests
+        count = len(tests)
+        # deduplicate and limit requested indices to valid range
+        keep = {max(count + x, 0) if x < 0 else min(x, count - 1) for x in subset}
+        LOG.debug("using TestCase(s) with index %r", keep)
+        # build list of items to preserve
+        return [tests[i] for i in sorted(keep)]
+
+    def testcases(self, subset=None):
         """Download the testcase data from CrashManager.
 
         Arguments:
-            None
+            subset list(int): Indices of corresponding directories to select.
 
         Returns:
-            Path: Path on disk where testcase exists_
+            list(Path): Directories on disk where testcases exists.
         """
-        if self._tc_filename is not None:
-            return self._tc_filename
+        if self._contents is None:
+            assert self._storage is None
+            response = self._coll.get(f"{self._url}download/")
 
-        dlurl = self._url + "download/"
-        response = self._coll.get(dlurl)
+            if "content-disposition" not in response.headers:
+                raise RuntimeError(
+                    f"Server sent malformed response: {response!r}"
+                )  # pragma: no cover
 
-        if "content-disposition" not in response.headers:
-            raise RuntimeError(
-                f"Server sent malformed response: {response!r}"
-            )  # pragma: no cover
+            with NamedTemporaryFile(
+                dir=grz_tmp("fuzzmanager"),
+                prefix=f"crash-{self.crash_id}-",
+                suffix=Path(self.testcase).suffix,
+            ) as archive:
+                archive.write(response.content)
+                archive.seek(0)
+                # self._storage should be removed when self.cleanup() is called
+                self._storage = Path(
+                    mkdtemp(
+                        prefix=f"crash-{self.crash_id}-", dir=grz_tmp("fuzzmanager")
+                    )
+                )
+                with ZipFile(archive) as zip_fp:
+                    zip_fp.extractall(path=self._storage)
+                # test case directories are named sequentially, a zip with three test
+                # directories would have:
+                # - 'foo-2' (oldest)
+                # - 'foo-1'
+                # - 'foo-0' (most recent)
+                # see FuzzManagerReporter for more info
+                self._contents = sorted(
+                    (x.parent for x in self._storage.rglob("test_info.json")),
+                    reverse=True,
+                )
 
-        handle, filename = mkstemp(
-            dir=grz_tmp("fuzzmanager"),
-            prefix=f"crash-{self.crash_id}-",
-            suffix=Path(self.testcase).suffix,
-        )
-        try:
-            with open(handle, "wb") as output:
-                output.write(response.content)
-            result = Path(filename)
-            filename = None
-        finally:  # pragma: no cover
-            if filename:
-                unlink(filename)
-        self._tc_filename = result
-        return self._tc_filename
+        if subset and self._contents:
+            return self._subset(self._contents, subset)
+        return self._contents
 
     def create_signature(self, binary):
         """Create a CrashManager signature from this crash.

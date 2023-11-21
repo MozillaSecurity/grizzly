@@ -54,24 +54,24 @@ def test_adapter_03(tmp_path):
     # empty path
     assert not any(SimpleAdapter.scan_path(str(tmp_path)))
     # missing path
-    assert not any(SimpleAdapter.scan_path(str(tmp_path / "none")))
+    assert not any(SimpleAdapter.scan_path(tmp_path / "none"))
     # path to file
     file1 = tmp_path / "test1.txt"
     file1.touch()
-    found = tuple(SimpleAdapter.scan_path(str(file1)))
+    found = tuple(SimpleAdapter.scan_path(file1))
     assert str(file1) in found
     assert len(found) == 1
     # path to directory
-    assert len(tuple(SimpleAdapter.scan_path(str(tmp_path)))) == 1
+    assert len(tuple(SimpleAdapter.scan_path(tmp_path))) == 1
     # path to directory (w/ ignored)
     (tmp_path / ".ignored").touch()
     nested = tmp_path / "nested"
     nested.mkdir()
     file2 = nested / "test2.bin"
     file2.touch()
-    assert len(tuple(SimpleAdapter.scan_path(str(tmp_path)))) == 1
+    assert len(tuple(SimpleAdapter.scan_path(tmp_path))) == 1
     # path to directory (recursive)
-    found = tuple(SimpleAdapter.scan_path(str(tmp_path), recursive=True))
+    found = tuple(SimpleAdapter.scan_path(tmp_path, recursive=True))
     assert str(file1) in found
     assert str(file2) in found
     assert len(found) == 2

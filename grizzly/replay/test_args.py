@@ -29,33 +29,42 @@ def test_replay_args_01(capsys, mocker, tmp_path):
 
 
 @mark.parametrize(
-    "args, msg",
+    "args, msg, inputs",
     [
         # test any-crash with signature
         (
             ["--any-crash", "--sig", "x"],
             "error: signature is ignored when running with --any-crash",
+            1,
         ),
         # test in valid idle_delay
         (
             ["--idle-threshold", "1", "--idle-delay", "-1"],
             "error: --idle-delay value must be positive",
+            1,
         ),
         # test invalid min-crashes value
-        (["--min-crashes", "0"], "error: --min-crashes value must be positive"),
+        (["--min-crashes", "0"], "error: --min-crashes value must be positive", 1),
         # test invalid repeat value
-        (["--repeat", "-1"], "error: --repeat value must be positive"),
+        (["--repeat", "-1"], "error: --repeat value must be positive", 1),
         # test running with rr without --logs set
         param(
             ["--rr"],
             "error: --logs must be set when using rr",
+            1,
             marks=[mark.skipif(system() != "Linux", reason="Linux only")],
         ),
         # test missing signature file
-        (["--sig", "missing"], "error: signature file not found"),
+        (["--sig", "missing"], "error: signature file not found", 1),
+        # test --no-harness with multiple inputs
+        (
+            ["--no-harness"],
+            "error: '--no-harness' cannot be used with multiple testcases",
+            3,
+        ),
     ],
 )
-def test_replay_args_02(capsys, mocker, tmp_path, args, msg):
+def test_replay_args_02(capsys, mocker, tmp_path, args, msg, inputs):
     """test ReplayArgs.parse_args() - sanity checks"""
     mocker.patch("grizzly.args.Path.read_text", autospec=True, return_value="0")
     target = "target1"
@@ -64,16 +73,23 @@ def test_replay_args_02(capsys, mocker, tmp_path, args, msg):
     fake_bin.touch()
     with raises(SystemExit):
         ReplayArgs().parse_args(
-            argv=[str(fake_bin), str(fake_bin), "--platform", target] + args
+            argv=[str(fake_bin)]
+            + [str(fake_bin) for _ in range(inputs)]
+            + ["--platform", target]
+            + args
         )
     assert msg in capsys.readouterr()[-1]
 
 
-def test_replay_args_03(tmp_path):
+def test_replay_args_03(tmp_path, capsys):
     """test ReplayFuzzManagerIDArgs"""
     exe = tmp_path / "binary"
     exe.touch()
     ReplayFuzzManagerIDArgs().parse_args([str(exe), "123"])
+    # error cases
+    with raises(SystemExit):
+        ReplayFuzzManagerIDArgs().parse_args([str(exe), "123", "--no-harness"])
+    assert "error: '--no-harness' requires '--test-index'" in capsys.readouterr()[-1]
 
 
 def test_replay_args_04(capsys, tmp_path):

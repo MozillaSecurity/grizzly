@@ -6,12 +6,9 @@ from pathlib import Path
 
 from ..args import CommonArgs
 
-LOCAL_INPUT_HELP = """Accepted input:
-A directory containing testcase data;
-A directory with one or more subdirectories containing testcase data;
-A zip archive containing testcase data or subdirectories containing testcase data;
-or a single file to be used as a testcase.
-NOTE: When using a directory it must contain a 'test_info.json' file."""
+LOCAL_INPUT_HELP = (
+    "A directory containing testcase data or a single file to use as a testcase."
+)
 
 
 class ReplayCommonArgs(CommonArgs):
@@ -58,14 +55,6 @@ class ReplayCommonArgs(CommonArgs):
         replay_args.add_argument(
             "--sig", type=Path, help="Signature (JSON) file to match."
         )
-        replay_args.add_argument(
-            "--test-index",
-            type=int,
-            nargs="+",
-            help="Select a testcase to run when multiple testcases are loaded. "
-            "Testscases are ordered oldest to newest. Indexing is 0 based. "
-            "0 == Oldest, n-1 == Newest (default: run all testcases)",
-        )
 
         self.reporter_grp.add_argument(
             "--include-test",
@@ -98,13 +87,17 @@ class ReplayCommonArgs(CommonArgs):
 class ReplayArgs(ReplayCommonArgs):
     def __init__(self):
         super().__init__()
-        self.parser.add_argument("input", type=Path, help=LOCAL_INPUT_HELP)
+        self.parser.add_argument("input", type=Path, nargs="+", help=LOCAL_INPUT_HELP)
 
     def sanity_check(self, args):
         super().sanity_check(args)
 
-        if not args.input.exists():
-            self.parser.error(f"'{args.input}' does not exist")
+        for test in args.input:
+            if not test.exists():
+                self.parser.error(f"'{test}' does not exist")
+
+        if args.no_harness and len(args.input) > 1:
+            self.parser.error("'--no-harness' cannot be used with multiple testcases")
 
 
 class ReplayFuzzManagerIDArgs(ReplayCommonArgs):
@@ -112,6 +105,21 @@ class ReplayFuzzManagerIDArgs(ReplayCommonArgs):
         """Initialize argument parser."""
         super().__init__()
         self.parser.add_argument("input", type=int, help="FuzzManager ID to replay")
+
+        self.parser.add_argument(
+            "--test-index",
+            type=int,
+            nargs="+",
+            help="Select a testcase to run when multiple testcases are loaded. "
+            "Testscases are ordered oldest to newest. "
+            "0 == oldest, n-1 == most recent (default: run all testcases)",
+        )
+
+    def sanity_check(self, args):
+        super().sanity_check(args)
+
+        if args.no_harness and not args.test_index:
+            self.parser.error("'--no-harness' requires '--test-index'")
 
 
 class ReplayFuzzManagerIDQualityArgs(ReplayFuzzManagerIDArgs):
