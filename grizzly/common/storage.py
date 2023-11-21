@@ -11,8 +11,6 @@ from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
-from zipfile import BadZipfile, ZipFile
-from zlib import error as zlib_error
 
 from .utils import __version__, grz_tmp
 
@@ -52,6 +50,7 @@ class TestCase:
         "timestamp",
         "version",
         "_files",
+        "_in_place",
         "_root",
     )
 
@@ -59,6 +58,7 @@ class TestCase:
         self,
         entry_point,
         adapter_name,
+        data_path=None,
         input_fname=None,
         time_limit=None,
         timestamp=None,
@@ -77,7 +77,12 @@ class TestCase:
         self.timestamp = time() if timestamp is None else timestamp
         self.version = __version__
         self._files = TestFileMap(optional=[], required=[])
-        self._root = Path(mkdtemp(prefix="testcase_", dir=grz_tmp("storage")))
+        if data_path:
+            self._root = data_path
+            self._in_place = True
+        else:
+            self._root = Path(mkdtemp(prefix="testcase_", dir=grz_tmp("storage")))
+            self._in_place = False
 
     def __enter__(self):
         return self
@@ -111,33 +116,37 @@ class TestCase:
             data_file.unlink(missing_ok=True)
 
     def add_from_file(self, src_file, file_name=None, required=False, copy=False):
-        """Add a file to the TestCase by either copying or moving an existing file.
+        """Add a file to the TestCase. Copy or move an existing file if needed.
 
         Args:
             src_file (str): Path to existing file to use.
             file_name (str): Used as file path on disk and URI. Relative to wwwroot.
                              If file_name is not given the name of the src_file
                              will be used.
-            required (bool): Indicates whether the file must be served.
-            copy (bool): File will be copied if True otherwise the file will be moved.
+            required (bool): Indicates whether the file must be served. Typically this
+                             is only used for the entry point.
+            copy (bool): Copy existing file data. Existing data is moved by default.
 
         Returns:
             None
         """
         src_file = Path(src_file)
         if file_name is None:
-            file_name = src_file.name
-        file_name = self.sanitize_path(file_name)
-
-        test_file = TestFile(file_name, self._root / file_name)
-        if test_file.file_name in self.contents:
-            raise TestFileExists(f"{test_file.file_name!r} exists in test")
-
-        test_file.data_file.parent.mkdir(parents=True, exist_ok=True)
-        if copy:
-            copyfile(src_file, test_file.data_file)
+            url_path = self.sanitize_path(src_file.name)
         else:
-            move(src_file, test_file.data_file)
+            url_path = self.sanitize_path(file_name)
+        if url_path in self.contents:
+            raise TestFileExists(f"{url_path!r} exists in test")
+
+        test_file = TestFile(url_path, self._root / url_path)
+        # don't move/copy data is already in place
+        if src_file.resolve() != test_file.data_file.resolve():
+            assert not self._in_place
+            test_file.data_file.parent.mkdir(parents=True, exist_ok=True)
+            if copy:
+                copyfile(src_file, test_file.data_file)
+            else:
+                move(src_file, test_file.data_file)
 
         # entry_point is always 'required'
         if required or test_file.file_name == self.entry_point:
@@ -154,7 +163,19 @@ class TestCase:
         Returns:
             None
         """
-        rmtree(self._root, ignore_errors=True)
+        if not self._in_place:
+            rmtree(self._root, ignore_errors=True)
+
+    def clear_optional(self):
+        """Clear optional files. This does not remove data from the file system.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        self._files.optional.clear()
 
     def clone(self):
         """Make a copy of the TestCase.
@@ -175,11 +196,12 @@ class TestCase:
         result.assets = dict(self.assets)
         if result.assets:
             assert self.assets_path
-            org_path = self.assets_path
             try:
                 # copy asset data from test case
-                result.assets_path = result.root / org_path.relative_to(self.root)
-                copytree(org_path, result.assets_path)
+                result.assets_path = result.root / self.assets_path.relative_to(
+                    self.root
+                )
+                copytree(self.assets_path, result.assets_path)
             except ValueError:
                 # asset data is not part of the test case
                 result.assets_path = self.assets_path
@@ -187,7 +209,6 @@ class TestCase:
         result.env_vars = dict(self.env_vars)
         result.hang = self.hang
         result.https = self.https
-
         # copy test data files
         for entry, required in chain(
             product(self._files.required, [True]),
@@ -210,18 +231,6 @@ class TestCase:
         """
         for tfile in chain(self._files.required, self._files.optional):
             yield tfile.file_name
-
-    @property
-    def root(self):
-        """Location test data is stored on disk. This is intended to be used as wwwroot.
-
-        Args:
-            None
-
-        Returns:
-            Path: Directory containing test case files.
-        """
-        return self._root
 
     @property
     def data_size(self):
@@ -280,6 +289,26 @@ class TestCase:
             with (dst_path / "test_info.json").open("w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
 
+    @staticmethod
+    def _find_entry_point(path):
+        """Locate potential entry point.
+
+        Args:
+            path (Path): Directory to scan.
+
+        Returns:
+            Path: Entry point.
+        """
+        entry_point = None
+        for entry in path.iterdir():
+            if entry.suffix.lower() in (".htm", ".html"):
+                if entry_point is not None:
+                    raise TestCaseLoadFailure("Ambiguous entry point")
+                entry_point = entry
+        if entry_point is None:
+            raise TestCaseLoadFailure("Could not determine entry point")
+        return entry_point
+
     def get_file(self, path):
         """Lookup and return the TestFile with the specified file name.
 
@@ -297,13 +326,13 @@ class TestCase:
     @property
     def landing_page(self):
         """TestCase.landing_page is deprecated!
-        Should be replaced with TestCase.entry_page.
+        Should be replaced with TestCase.entry_point.
 
         Args:
             None
 
         Returns:
-            str: TestCase.entry_page.
+            str: TestCase.entry_point.
         """
         LOG.warning(
             "'TestCase.landing_page' deprecated, use 'TestCase.entry_point' in adapter"
@@ -311,95 +340,29 @@ class TestCase:
         return self.entry_point
 
     @classmethod
-    def load(cls, path, adjacent=False):
-        """Load TestCases from disk.
+    def load(cls, path, entry_point=None, catalog=False):
+        """Load a TestCase.
 
         Args:
             path (Path): Path can be:
-                        1) A directory containing `test_info.json` and data.
-                        2) A directory with one or more subdirectories of 1.
-                        3) A zip archive containing testcase data or
-                           subdirectories containing testcase data.
-                        4) A single file to be used as a test case.
-            adjacent (bool): Load adjacent files as part of the test case.
-                             This is always the case when loading a directory.
-                             WARNING: This should be used with caution!
-
-        Returns:
-            list: TestCases successfully loaded from path.
-        """
-        assert isinstance(path, Path)
-        # unpack archive if needed
-        if path.name.lower().endswith(".zip"):
-            unpacked = mkdtemp(prefix="unpack_", dir=grz_tmp("storage"))
-            try:
-                with ZipFile(path) as zip_fp:
-                    zip_fp.extractall(path=unpacked)
-            except (BadZipfile, zlib_error):
-                rmtree(unpacked, ignore_errors=True)
-                raise TestCaseLoadFailure("Testcase archive is corrupted") from None
-            path = Path(unpacked)
-        else:
-            unpacked = None
-        # load testcase data from disk
-        try:
-            if path.is_file():
-                tests = [cls.load_single(path, adjacent=adjacent)]
-            elif path.is_dir():
-                tests = []
-                for tc_path in TestCase.scan_path(path):
-                    tests.append(cls.load_single(tc_path, copy=unpacked is None))
-                tests.sort(key=lambda tc: tc.timestamp)
-            else:
-                raise TestCaseLoadFailure("Invalid TestCase path")
-        finally:
-            if unpacked is not None:
-                rmtree(unpacked, ignore_errors=True)
-        return tests
-
-    @classmethod
-    def load_single(cls, path, adjacent=False, copy=True):
-        """Load contents of a TestCase from disk. If `path` is a directory it must
-        contain a valid 'test_info.json' file.
-
-        Args:
-            path (Path): Path to the directory or file to load.
-            adjacent (bool): Load adjacent files as part of the TestCase.
-                             This is always true when loading a directory.
-                             WARNING: This should be used with caution!
-            copy (bool): Files will be copied if True otherwise the they will be moved.
+                - A single file to be used as a test case.
+                - A directory containing the test case data.
+            entry_point (Path): File to use as entry point.
+            catalog (bool): Scan contents of TestCase.root and track files.
+                Untracked files will be missed when using clone() or dump().
+                Only the entry point will be marked as 'required'.
 
         Returns:
             TestCase: A TestCase.
         """
         assert isinstance(path, Path)
-        if path.is_dir():
-            # load using test_info.json
-            try:
-                with (path / "test_info.json").open("r") as in_fp:
-                    info = json.load(in_fp)
-            except OSError:
-                raise TestCaseLoadFailure("Missing 'test_info.json'") from None
-            except ValueError:
-                raise TestCaseLoadFailure("Invalid 'test_info.json'") from None
-            if not isinstance(info.get("target"), str):
-                raise TestCaseLoadFailure("'test_info.json' has invalid 'target' entry")
-            entry_point = Path(path / info["target"])
-            if not entry_point.is_file():
-                raise TestCaseLoadFailure(
-                    f"Entry point {info['target']!r} not found in {path}"
-                )
-            # always load all contents of a directory if a 'test_info.json' is loaded
-            adjacent = True
-        elif path.is_file():
-            entry_point = path
-            info = {}
-        else:
-            raise TestCaseLoadFailure(f"Missing or invalid TestCase '{path}'")
-        # create testcase and add data
+        # load test case info
+        entry_point, info = cls.load_meta(path, entry_point=entry_point)
+        # create test case
         test = cls(
             entry_point.relative_to(entry_point.parent).as_posix(),
             info.get("adapter", None),
+            data_path=entry_point.parent,
             input_fname=info.get("input", None),
             time_limit=info.get("time_limit", None),
             timestamp=info.get("timestamp", 0),
@@ -414,45 +377,74 @@ class TestCase:
         assert isinstance(test.assets, dict)
         for name, value in test.assets.items():
             if not isinstance(name, str) or not isinstance(value, str):
-                test.cleanup()
                 raise TestCaseLoadFailure("'assets' contains invalid entry")
-        # copy asset data
-        src_asset_path = None
         if test.assets:
             assets_path = info.get("assets_path", None)
-            if assets_path and (path / assets_path).is_dir():
-                src_asset_path = path / assets_path
-                test.assets_path = test._root / "_assets_"
-                copytree(src_asset_path, test.assets_path)
-            else:
+            if not assets_path or not (test.root / assets_path).is_dir():
                 LOG.warning("Could not find assets in test case")
                 test.assets = {}
+            else:
+                test.assets_path = test.root / assets_path
         # sanity check environment variable data
         assert isinstance(test.env_vars, dict)
         for name, value in test.env_vars.items():
             if not isinstance(name, str) or not isinstance(value, str):
-                test.cleanup()
                 raise TestCaseLoadFailure("'env' contains invalid entry")
-        # add entry point
-        test.add_from_file(
-            entry_point, file_name=test.entry_point, required=True, copy=copy
-        )
-        # load all adjacent data from directory
-        if adjacent:
-            for entry in entry_point.parent.rglob("*"):
-                if not entry.is_file():
-                    continue
-                # ignore asset path
-                if entry.parent == src_asset_path:
-                    continue
-                location = entry.relative_to(entry_point.parent).as_posix()
-                # ignore files that have been previously loaded
-                if location in (test.entry_point, "test_info.json"):
-                    continue
-                # NOTE: when loading all files except the entry point are
-                # marked as `required=False`
-                test.add_from_file(entry, file_name=location, required=False, copy=copy)
+        # add contents of directory to test case 'contents' (excluding assets)
+        # data is not copied/moved because it is already in place
+        if catalog and path.is_dir():
+            # NOTE: only entry point will be marked as 'required'
+            for entry in test.root.rglob("*"):
+                if (
+                    not entry.is_dir()
+                    and test.assets_path not in entry.parents
+                    and entry.name != "test_info.json"
+                ):
+                    test.add_from_file(entry, entry.relative_to(test.root).as_posix())
+        else:
+            # add entry point
+            test.add_from_file(entry_point, required=True)
         return test
+
+    @classmethod
+    def load_meta(cls, path, entry_point=None):
+        """Process and sanitize TestCase meta data.
+
+        Args:
+            path (Path): Directory containing test_info.json file.
+            entry_point (): See TestCase.load().
+
+        Returns:
+            tuple(Path, dict): Test case entry point and loaded test info.
+        """
+        assert entry_point is None or isinstance(entry_point, Path)
+
+        # load test case info if available
+        if path.is_dir():
+            try:
+                info = cls.read_info(path)
+            except TestCaseLoadFailure as exc:
+                LOG.info(exc)
+                info = {}
+            if entry_point is not None:
+                info["target"] = entry_point.name
+            elif info:
+                entry_point = path / info["target"]
+            else:
+                # attempt to determine entry point
+                entry_point = cls._find_entry_point(path)
+            if path not in entry_point.parents:
+                raise TestCaseLoadFailure("Entry point must be in root of given path")
+        else:
+            # single file test case
+            assert entry_point is None
+            entry_point = path
+            info = {}
+
+        if not entry_point.exists():
+            raise TestCaseLoadFailure(f"Missing or invalid TestCase '{path}'")
+
+        return (entry_point, info)
 
     @property
     def optional(self):
@@ -467,25 +459,26 @@ class TestCase:
         for test in self._files.optional:
             yield test.file_name
 
-    def purge_optional(self, keep):
-        """Remove optional files that are not in keep.
+    @staticmethod
+    def read_info(path):
+        """Attempt to load test info.
 
         Args:
-            keep (iterable(str)): Files that will not be removed. This can contain
-                                  absolute (includes) and relative paths.
+            path (Path): Directory containing test_info.json.
 
-        Returns:
-            None
+        Yields:
+            dict: Test info.
         """
-        to_remove = []
-        # iterate over optional files
-        for idx, opt in enumerate(self._files.optional):
-            # check entries in 'keep' for a match
-            if not any(x.endswith(opt.file_name) for x in keep):
-                to_remove.append(idx)
-        # purge
-        for idx in reversed(to_remove):
-            self._files.optional.pop(idx).data_file.unlink()
+        try:
+            with (path / "test_info.json").open("r") as in_fp:
+                info = json.load(in_fp)
+        except FileNotFoundError:
+            info = None
+        except ValueError:
+            raise TestCaseLoadFailure("Invalid 'test_info.json'") from None
+        if info is not None and not isinstance(info.get("target"), str):
+            raise TestCaseLoadFailure("Invalid 'target' entry in 'test_info.json'")
+        return info or {}
 
     @property
     def required(self):
@@ -499,6 +492,18 @@ class TestCase:
         """
         for test in self._files.required:
             yield test.file_name
+
+    @property
+    def root(self):
+        """Location test data is stored on disk. This is intended to be used as wwwroot.
+
+        Args:
+            None
+
+        Returns:
+            Path: Directory containing test case files.
+        """
+        return self._root
 
     @staticmethod
     def sanitize_path(path):

@@ -115,19 +115,15 @@ class _BeautifyStrategy(Strategy, ABC):
         assert isinstance(cls.native_extension, str)
         assert isinstance(cls.tag_name, str)
 
-    def update(self, success, served=None):
+    def update(self, success):
         """Inform the strategy whether or not the last beautification yielded was good.
 
         Arguments:
             success (bool): Whether or not the last beautification was acceptable.
-            served (list(list(str))): The list of served files for each testcase in the
-                                      last beautification.
 
         Returns:
             None
         """
-        # beautify does nothing with served. it's unlikely a beautify operation alone
-        # would render a file unserved.
         assert self._current_feedback is None
         self._current_feedback = success
 
@@ -277,7 +273,10 @@ class _BeautifyStrategy(Strategy, ABC):
                 lith_tc.dump(file)
                 continue
 
-            yield TestCase.load(self._testcase_root, True)
+            testcases = []
+            for test in sorted(self._testcase_root.iterdir()):
+                testcases.append(TestCase.load(test))
+            yield testcases
 
             assert self._current_feedback is not None, "No feedback for last iteration"
             if self._current_feedback:

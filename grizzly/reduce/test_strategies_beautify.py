@@ -13,12 +13,13 @@ from .strategies.beautify import CSSBeautify, JSBeautify
 LOG = getLogger(__name__)
 
 
-def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker):
+def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker, tmp_path):
     mocker.patch("grizzly.reduce.strategies.beautify._contains_dd", return_value=True)
 
-    best_test = TestCase(test_name, "test-adapter")
-    best_test.add_from_bytes(test_data.encode("ascii"), test_name)
-    best_tests = [best_test]
+    with TestCase(test_name, "test-adapter") as test:
+        test.add_from_bytes(test_data.encode("ascii"), test.entry_point)
+        test.dump(tmp_path / "src", include_details=True)
+    best_tests = [TestCase.load(tmp_path / "src")]
 
     def _interesting(testcases):
         for test in testcases:
@@ -30,17 +31,12 @@ def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker):
     try:
         with cls(best_tests) as sgy:
             for tests in sgy:
-                try:
-                    result = _interesting(tests)
-                    sgy.update(result)
-                    if result:
-                        for test in best_tests:
-                            test.cleanup()
-                        best_tests = tests
-                        tests = []
-                finally:
-                    for test in tests:
+                result = _interesting(tests)
+                sgy.update(result)
+                if result:
+                    for test in best_tests:
                         test.cleanup()
+                    best_tests = [x.clone() for x in tests]
         assert len(best_tests) == 1
         contents = (
             best_tests[0].get_file(test_name).data_file.read_bytes().decode("ascii")
@@ -86,9 +82,9 @@ def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker):
         ),
     ],
 )
-def test_beautify_js_1(test_data, reduced, mocker):
+def test_beautify_js_1(test_data, reduced, mocker, tmp_path):
     _test_beautify(
-        JSBeautify, lambda x: "R" in x, "test.js", test_data, reduced, mocker
+        JSBeautify, lambda x: "R" in x, "test.js", test_data, reduced, mocker, tmp_path
     )
 
 
@@ -102,9 +98,15 @@ def test_beautify_js_1(test_data, reduced, mocker):
         ),
     ],
 )
-def test_beautify_js_2(test_data, reduced, mocker):
+def test_beautify_js_2(test_data, reduced, mocker, tmp_path):
     _test_beautify(
-        JSBeautify, lambda x: "'R'+'R'" in x, "test.js", test_data, reduced, mocker
+        JSBeautify,
+        lambda x: "'R'+'R'" in x,
+        "test.js",
+        test_data,
+        reduced,
+        mocker,
+        tmp_path,
     )
 
 
@@ -161,9 +163,15 @@ def test_beautify_js_2(test_data, reduced, mocker):
         ),
     ],
 )
-def test_beautify_js_3(test_data, reduced, mocker):
+def test_beautify_js_3(test_data, reduced, mocker, tmp_path):
     _test_beautify(
-        JSBeautify, lambda x: "R" in x, "test.html", test_data, reduced, mocker
+        JSBeautify,
+        lambda x: "R" in x,
+        "test.html",
+        test_data,
+        reduced,
+        mocker,
+        tmp_path,
     )
 
 
@@ -178,7 +186,7 @@ def test_beautify_js_3(test_data, reduced, mocker):
         ),
     ],
 )
-def test_beautify_js_4(test_data, reduced, mocker):
+def test_beautify_js_4(test_data, reduced, mocker, tmp_path):
     _test_beautify(
         JSBeautify,
         lambda x: "Q" in x and "R" in x,
@@ -186,6 +194,7 @@ def test_beautify_js_4(test_data, reduced, mocker):
         test_data,
         reduced,
         mocker,
+        tmp_path,
     )
 
 
@@ -214,9 +223,15 @@ def test_beautify_js_4(test_data, reduced, mocker):
         ),
     ],
 )
-def test_beautify_css_1(test_data, reduced, mocker):
+def test_beautify_css_1(test_data, reduced, mocker, tmp_path):
     _test_beautify(
-        CSSBeautify, lambda x: "R" in x, "test.css", test_data, reduced, mocker
+        CSSBeautify,
+        lambda x: "R" in x,
+        "test.css",
+        test_data,
+        reduced,
+        mocker,
+        tmp_path,
     )
 
 
@@ -245,9 +260,15 @@ def test_beautify_css_1(test_data, reduced, mocker):
         ),
     ],
 )
-def test_beautify_css_2(test_data, reduced, mocker):
+def test_beautify_css_2(test_data, reduced, mocker, tmp_path):
     _test_beautify(
-        CSSBeautify, lambda x: "R" in x, "test.html", test_data, reduced, mocker
+        CSSBeautify,
+        lambda x: "R" in x,
+        "test.html",
+        test_data,
+        reduced,
+        mocker,
+        tmp_path,
     )
 
 
@@ -258,9 +279,15 @@ def test_beautify_css_2(test_data, reduced, mocker):
         (CSSBeautify, "<style>*,#a{a:0;R:1}\n"),
     ],
 )
-def test_no_beautify(beautify, test_data, mocker):
+def test_no_beautify(beautify, test_data, mocker, tmp_path):
     """test that when beautifiers are not available, the strategies have no effect"""
     mocker.patch.object(beautify, "import_available", False)
     _test_beautify(
-        beautify, lambda x: "R" in x, "test.html", test_data, test_data, mocker
+        beautify,
+        lambda x: "R" in x,
+        "test.html",
+        test_data,
+        test_data,
+        mocker,
+        tmp_path,
     )

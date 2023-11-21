@@ -4,7 +4,6 @@
 
 from logging import getLogger
 from pathlib import Path
-from shutil import rmtree
 from tempfile import mkdtemp
 
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -48,12 +47,11 @@ LOG = getLogger(__name__)
 class ReplayResult:
     __slots__ = ("count", "durations", "expected", "report", "served")
 
-    def __init__(self, report, served, durations, expected):
+    def __init__(self, report, durations, expected):
         self.count = 1
         self.durations = durations
         self.expected = expected
         self.report = report
-        self.served = served
 
 
 class ReplayManager:
@@ -79,6 +77,8 @@ class ReplayManager:
         signature=None,
         use_harness=True,
     ):
+        # target must relaunch every iteration when not using harness
+        assert use_harness or relaunch == 1
         self.ignore = ignore
         self.server = server
         self.status = None
@@ -87,8 +87,6 @@ class ReplayManager:
         self._harness = HARNESS_FILE.read_bytes() if use_harness else None
         self._relaunch = relaunch
         self._signature = signature
-        # target must relaunch every iteration when not using harness
-        assert use_harness or relaunch == 1
 
     def __enter__(self):
         return self
@@ -160,52 +158,40 @@ class ReplayManager:
         return is_hang
 
     @classmethod
-    def load_testcases(cls, path, subset=None):
+    def load_testcases(cls, paths, catalog=False):
         """Load TestCases.
 
         Args:
-            path (Path): Path to load.
-            subset (list(int)): Indices of tests to load when loading multiple
-                                tests.
+            paths (list(Path)): Testcases to load.
+            catalog (bool): See TestCase.load().
         Returns:
-            tuple (list(TestCase), AssetManager): Loaded TestCases and AssetManager.
+            tuple(list(TestCase), AssetManager, dict):
+                Loaded TestCases, AssetManager and environment variables.
         """
         LOG.debug("loading the TestCases")
-        testcases = TestCase.load(path)
-        if not testcases:
+        tests = []
+        for entry in paths:
+            tests.append(TestCase.load(entry, catalog=catalog))
+        if not tests:
             raise TestCaseLoadFailure("Failed to load TestCases")
         # load and remove assets and environment variables from test cases
         asset_mgr = None
         env_vars = None
-        for test in testcases:
+        for test in tests:
             if asset_mgr is None and test.assets and test.assets_path:
-                asset_mgr = AssetManager.load(test.assets, test.root / test.assets_path)
+                asset_mgr = AssetManager.load(test.assets, test.assets_path)
             if not env_vars and test.env_vars:
                 env_vars = dict(test.env_vars)
             test.env_vars.clear()
             test.assets.clear()
-            if test.assets_path is not None:
-                rmtree(test.assets_path)
-                test.assets_path = None
+            test.assets_path = None
         LOG.debug(
             "loaded TestCase(s): %d, assets: %r, env vars: %r",
-            len(testcases),
+            len(tests),
             asset_mgr is not None,
             env_vars is not None,
         )
-        if subset:
-            count = len(testcases)
-            # deduplicate and limit requested indices to valid range
-            reqs = {max(count + x, 0) if x < 0 else min(x, count - 1) for x in subset}
-            LOG.debug("using TestCase(s) with index %r", reqs)
-            selected = []
-            for idx in sorted(reqs, reverse=True):
-                selected.append(testcases.pop(idx))
-            selected.reverse()
-            for test in testcases:
-                test.cleanup()
-            testcases = selected
-        return testcases, asset_mgr, env_vars
+        return tests, asset_mgr, env_vars
 
     @staticmethod
     def report_to_filesystem(path, results, tests=None):
@@ -220,22 +206,16 @@ class ReplayManager:
         Returns:
             None
         """
-        others = list(x.report for x in results if not x.expected)
+        others = tuple(x.report for x in results if not x.expected)
         if others:
             reporter = FilesystemReporter(path / "other_reports", major_bucket=False)
             for report in others:
                 reporter.submit(tests or [], report=report)
-        expected = list(x for x in results if x.expected)
+        expected = tuple(x.report for x in results if x.expected)
         if expected:
-            if tests and len(expected) == 1:
-                # only purge optional is reporting a single testcase
-                assert len(tests) >= len(expected[0].served)
-                for test, served in zip(tests, expected[0].served):
-                    LOG.debug("calling test.purge_optional() with %r", served)
-                    test.purge_optional(served)
             reporter = FilesystemReporter(path / "reports", major_bucket=False)
             for result in expected:
-                reporter.submit(tests or [], report=result.report)
+                reporter.submit(tests or [], report=result)
 
     @staticmethod
     def report_to_fuzzmanager(results, tests, tool=None):
@@ -274,7 +254,7 @@ class ReplayManager:
         """Run testcase replay.
 
         Args:
-            testcases (list): One or more TestCases to run.
+            testcases (list(TestCase)): One or more TestCases to run.
             time_limit (int): Maximum time in seconds a test should take to complete.
             repeat (int): Maximum number of times to run the TestCase.
             min_results (int): Minimum number of results needed before run can
@@ -352,7 +332,6 @@ class ReplayManager:
                     # TODO: avoid running test case if runner.startup_failure is True
                 # run tests
                 durations = []
-                served = []
                 run_result = None
                 for test_idx in range(test_count):
                     if test_count > 1:
@@ -388,7 +367,6 @@ class ReplayManager:
                         wait_for_callback=self._harness is None,
                     )
                     durations.append(run_result.duration)
-                    served.append(run_result.served)
                     if run_result.status != Result.NONE or not run_result.attempted:
                         break
                 assert run_result is not None
@@ -456,9 +434,7 @@ class ReplayManager:
                             report.minor[:8],
                         )
                         if bucket_hash not in reports:
-                            reports[bucket_hash] = ReplayResult(
-                                report, served, durations, True
-                            )
+                            reports[bucket_hash] = ReplayResult(report, durations, True)
                             LOG.debug("now tracking %s", bucket_hash)
                             report = None  # don't remove report
                         else:
@@ -474,7 +450,7 @@ class ReplayManager:
                         self.status.ignored += 1
                         if report.crash_hash not in reports:
                             reports[report.crash_hash] = ReplayResult(
-                                report, served, durations, False
+                                report, durations, False
                             )
                             LOG.debug("now tracking %s", report.crash_hash)
                             report = None  # don't remove report
@@ -604,9 +580,7 @@ class ReplayManager:
         signature = CrashSignature.fromFile(args.sig) if args.sig else None
 
         try:
-            testcases, asset_mgr, env_vars = cls.load_testcases(
-                args.input, subset=args.test_index
-            )
+            testcases, asset_mgr, env_vars = cls.load_testcases(args.input)
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return Exit.ERROR
@@ -615,12 +589,6 @@ class ReplayManager:
         results = None
         target = None
         try:
-            if args.no_harness and len(testcases) > 1:
-                LOG.error(
-                    "'--no-harness' cannot be used with multiple testcases. "
-                    "Perhaps '--test-index' can help."
-                )
-                return Exit.ARGS
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)
             # calculate test time limit and timeout

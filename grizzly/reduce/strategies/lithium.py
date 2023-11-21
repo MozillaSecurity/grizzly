@@ -43,13 +43,15 @@ class _LithiumStrategy(Strategy, ABC):
                 testcases.
         """
         super().__init__(testcases)
+        self._current_feedback = None
         self._current_reducer = None
         self._files_to_reduce = []
-        self.rescan_files_to_reduce()
-        self._current_feedback = None
-        self._current_served = None
+        local_tests = []
+        for test in sorted(self._testcase_root.iterdir()):
+            local_tests.append(TestCase.load(test, catalog=True))
+        self.rescan_files_to_reduce(local_tests)
 
-    def rescan_files_to_reduce(self):
+    def rescan_files_to_reduce(self, testcases):
         """Repopulate the private `files_to_reduce` attribute by scanning the testcase
         root.
 
@@ -57,8 +59,8 @@ class _LithiumStrategy(Strategy, ABC):
             None
         """
         self._files_to_reduce.clear()
-        for path in self._testcase_root.glob("**/*"):
-            if path.is_file() and path.name not in {"test_info.json", "prefs.js"}:
+        for test in testcases:
+            for path in (test.root / x for x in test.contents):
                 if _contains_dd(path):
                     self._files_to_reduce.append(path)
 
@@ -76,13 +78,11 @@ class _LithiumStrategy(Strategy, ABC):
         assert issubclass(cls.strategy_cls, LithStrategy)
         assert issubclass(cls.testcase_cls, LithTestcase)
 
-    def update(self, success, served=None):
+    def update(self, success):
         """Inform the strategy whether or not the last reduction yielded was good.
 
         Arguments:
             success (bool): Whether or not the last reduction was acceptable.
-            served (list(list(str))): The list of served files for each testcase in the
-                                      last reduction.
 
         Returns:
             None
@@ -90,7 +90,6 @@ class _LithiumStrategy(Strategy, ABC):
         if self._current_reducer is not None:
             self._current_reducer.feedback(success)
         self._current_feedback = success
-        self._current_served = served
 
     def __iter__(self):
         """Iterate over potential reductions of testcases according to this strategy.
@@ -107,11 +106,13 @@ class _LithiumStrategy(Strategy, ABC):
         file_no = 0
         reduce_queue = self._files_to_reduce.copy()
         reduce_queue.sort()  # not necessary, but helps make tests more predictable
-        # indicates that self._testcase_root contains changes that haven't been yielded
-        # (if iteration ends, changes would be lost)
-        testcase_root_dirty = False
         while reduce_queue:
-            LOG.debug("Reduce queue: %r", reduce_queue)
+            LOG.debug(
+                "Reduce queue: %r",
+                ", ".join(
+                    str(x.relative_to(self._testcase_root)) for x in reduce_queue
+                ),
+            )
             file = reduce_queue.pop(0)
             file_no += 1
             LOG.info(
@@ -141,27 +142,31 @@ class _LithiumStrategy(Strategy, ABC):
 
             for reduction in self._current_reducer:
                 reduction.dump()
-                testcases = TestCase.load(self._testcase_root, True)
+                testcases = []
+                for test in sorted(self._testcase_root.iterdir()):
+                    testcases.append(TestCase.load(test, catalog=True))
                 LOG.info("[%s] %s", self.name, self._current_reducer.description)
                 yield testcases
-                if self._current_feedback:
-                    testcase_root_dirty = False
-                else:
+                if not self._current_feedback:
                     self._tried.add(self._calculate_testcase_hash())
-                if self._current_feedback and self._current_served is not None:
-                    testcases = TestCase.load(self._testcase_root, True)
-                    try:
-                        self.purge_unserved(testcases, self._current_served)
-                    finally:
-                        for testcase in testcases:
-                            testcase.cleanup()
-                    num_files_before = len(self._files_to_reduce)
-                    LOG.debug("files being reduced before: %r", self._files_to_reduce)
-                    self.rescan_files_to_reduce()
-                    LOG.debug("files being reduced after: %r", self._files_to_reduce)
+                else:
+                    LOG.debug(
+                        "files being reduced before: %r",
+                        ", ".join(
+                            str(x.relative_to(self._testcase_root))
+                            for x in self._files_to_reduce
+                        ),
+                    )
+                    self.rescan_files_to_reduce(testcases)
+                    LOG.debug(
+                        "files being reduced after: %r",
+                        ", ".join(
+                            str(x.relative_to(self._testcase_root))
+                            for x in self._files_to_reduce
+                        ),
+                    )
                     files_to_reduce = set(self._files_to_reduce)
                     reduce_queue = sorted(set(reduce_queue) & files_to_reduce)
-                    testcase_root_dirty = len(self._files_to_reduce) != num_files_before
                     if file not in files_to_reduce:
                         # current reduction was for a purged file
                         break
@@ -169,14 +174,6 @@ class _LithiumStrategy(Strategy, ABC):
                 # write out the best found testcase
                 self._current_reducer.testcase.dump()
             self._current_reducer = None
-        if testcase_root_dirty:
-            # purging unserved files enabled us to exit early from the loop.
-            # need to yield once more to set this trimmed version to the current best
-            # in ReduceManager
-            testcases = TestCase.load(self._testcase_root, True)
-            LOG.info("[%s] final iteration triggered by purge_optional", self.name)
-            yield testcases
-            assert self._current_feedback, "Purging unserved files broke the testcase."
 
 
 class Check(_LithiumStrategy):
