@@ -2,13 +2,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Unit tests for `grizzly.reduce.main`."""
-from unittest.mock import Mock
-
 from pytest import mark, raises
 
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import ConfigError, Exit
-from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
+from ..target import Target, TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
 from .exceptions import GrizzlyReduceBaseException
@@ -74,7 +72,7 @@ def test_args_04(tmp_path):
             TargetLaunchError("error", None),
             None,
             {},
-            Exit.ERROR,
+            Exit.LAUNCH_FAILURE,
             False,
         ),
         (
@@ -82,7 +80,7 @@ def test_args_04(tmp_path):
             TargetLaunchTimeout,
             None,
             {},
-            Exit.ERROR,
+            Exit.LAUNCH_FAILURE,
             False,
         ),
         (
@@ -111,26 +109,18 @@ def test_args_04(tmp_path):
         ),
         (
             "grizzly.reduce.core.ReplayManager.load_testcases",
-            None,
-            [],
-            {},
-            Exit.ERROR,
-            False,
-        ),
-        (
-            "grizzly.reduce.core.ReplayManager.load_testcases",
-            None,
-            ([Mock(hang=False), Mock(hang=False)], Mock(spec_set=AssetManager), {}),
-            {"no_harness": True},
-            Exit.ARGS,
-            False,
-        ),
-        (
-            "grizzly.reduce.core.ReplayManager.load_testcases",
             ConfigError("", 999),
             None,
-            {},
+            {"no_harness": False},
             999,
+            False,
+        ),
+        (
+            "grizzly.reduce.core.ReplayManager.load_testcases",
+            RuntimeError,
+            None,
+            {},
+            Exit.ERROR,
             False,
         ),
     ],
@@ -141,6 +131,7 @@ def test_main_exit(
     """test ReduceManager.main() failure cases"""
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)
+    mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
 
     if use_sig:
@@ -154,7 +145,7 @@ def test_main_exit(
     # setup args
     args = mocker.Mock(
         ignore=["fake"],
-        input=(tmp_path / "test.html"),
+        input=[tmp_path / "test.html"],
         min_crashes=1,
         relaunch=1,
         repeat=1,
@@ -194,8 +185,9 @@ def test_main_launch_error(mocker, exc_type):
     # setup args
     args = mocker.Mock(
         ignore=["fake"],
-        input="test",
+        input=["test"],
         min_crashes=1,
+        no_harness=False,
         relaunch=1,
         repeat=1,
         sig=None,
@@ -227,7 +219,7 @@ def test_main_https_support(mocker, tmp_path, https_supported):
     # setup args
     args = mocker.Mock(
         ignore=["fake"],
-        input=tmp_path / "test.html",
+        input=[tmp_path / "test.html"],
         min_crashes=1,
         relaunch=1,
         repeat=1,

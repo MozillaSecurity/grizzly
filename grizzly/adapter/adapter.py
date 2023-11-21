@@ -16,11 +16,11 @@ class AdapterError(Exception):
 
 
 class Adapter(metaclass=ABCMeta):
-    """An Adapter is an interface between Grizzly and a fuzzer. A subclass must
+    """An Adapter is the interface between Grizzly and a fuzzer. A subclass must
     be created in order to add support for additional fuzzers. The Adapter is
     responsible for handling input/output data and executing the fuzzer.
     It is expected that any processes launched or file created on file system
-    in the adapter will also be cleaned up in the adapter.
+    by the adapter will also be cleaned up by the adapter.
     NOTE: Some methods must not be overloaded doing so will prevent Grizzly from
     operating correctly.
 
@@ -34,8 +34,6 @@ class Adapter(metaclass=ABCMeta):
                          remaining to process.
     """
 
-    # Only report test cases with served content.
-    IGNORE_UNSERVED = True
     # Maximum iterations between Target relaunches (<1 use default)
     RELAUNCH = 0
     # Maximum execution time per test (used as minimum timeout). The iteration is

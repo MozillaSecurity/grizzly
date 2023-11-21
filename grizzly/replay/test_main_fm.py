@@ -34,10 +34,9 @@ def test_modify_args(tmp_path, mocker, arg_tool, signature):
     """test modify_args()"""
     args = mocker.Mock(input="org_input", tool=arg_tool, sig=None)
     crash = mocker.Mock(spec=CrashEntry, tool="crash_tool")
-    crash.testcase_path.return_value = "crash_input"
+    crash.testcases.return_value = [tmp_path / "foo-0"]
     if signature == "bucket_sig":
-        bucket = mocker.Mock(spec=Bucket)
-        bucket.bucket_id = 1234
+        bucket = mocker.Mock(spec=Bucket, bucket_id=1234)
         bucket.signature_path.return_value = signature
         crash.create_signature.side_effect = RuntimeError("no sig to create")
     elif signature == "crash_auto_sig":
@@ -55,7 +54,7 @@ def test_modify_args(tmp_path, mocker, arg_tool, signature):
         crash.create_signature.side_effect = RuntimeError("no sig to create")
     mod = modify_args(args, crash, bucket)
     assert mod.original_crash_id == "org_input"
-    assert mod.input == "crash_input"
+    assert mod.input == [tmp_path / "foo-0"]
     assert mod.tool == ("crash_tool" if arg_tool is None else arg_tool)
     assert mod.sig == signature
 

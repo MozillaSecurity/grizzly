@@ -11,7 +11,7 @@ from pytest import mark
 from sapphire import Served
 
 from ..common.reporter import Report
-from ..common.storage import TestCase, TestCaseLoadFailure
+from ..common.storage import TestCase
 from ..common.utils import Exit
 from ..target import (
     AssetManager,
@@ -35,7 +35,7 @@ def test_main_01(mocker, server, tmp_path):
     # Of the four attempts only the first and third will 'reproduce' the result
     # and the forth attempt should be skipped.
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server.serve_path.return_value = (Served.ALL, ["test.html"])
+    server.serve_path.return_value = (Served.ALL, {"test.html": "/fake/path"})
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
     target = mocker.Mock(
@@ -62,7 +62,7 @@ def test_main_01(mocker, server, tmp_path):
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
-        input=tmp_path / "testcase",
+        input=[tmp_path / "testcase"],
         launch_attempts=3,
         logs=log_path,
         min_crashes=2,
@@ -110,7 +110,7 @@ def test_main_01(mocker, server, tmp_path):
 def test_main_02(mocker, server, tmp_path, repro_results):
     """test ReplayManager.main() - no repro"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server.serve_path.return_value = (Served.ALL, ["test.html"])
+    server.serve_path.return_value = (Served.ALL, {"test.html": "/fake/path"})
     # setup Target
     target = mocker.Mock(
         spec_set=Target, binary=Path("bin"), environ={}, launch_timeout=30
@@ -135,7 +135,7 @@ def test_main_02(mocker, server, tmp_path, repro_results):
         idle_delay=0,
         idle_threshold=0,
         ignore=[],
-        input=tmp_path / "test.html",
+        input=[tmp_path / "test.html"],
         launch_attempts=3,
         logs=tmp_path / "logs",
         min_crashes=2,
@@ -161,15 +161,15 @@ def test_main_02(mocker, server, tmp_path, repro_results):
 def test_main_03(mocker, tmp_path):
     """test ReplayManager.main() error cases"""
     fake_sig = mocker.patch("grizzly.replay.replay.CrashSignature", autospec=True)
-    mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
     fake_load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
     mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
     fake_tc = mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
     # setup args
     args = mocker.Mock(
         asset=[],
+        fuzzmanager=False,
         ignore=[],
-        input="test",
+        input=["test"],
         min_crashes=1,
         no_harness=True,
         pernosco=False,
@@ -184,46 +184,20 @@ def test_main_03(mocker, tmp_path):
         valgrind=False,
     )
     # user abort
+    fake_tc.load.return_value = mocker.MagicMock(spec_set=TestCase, hang=False)
     fake_load_target.side_effect = KeyboardInterrupt
     assert ReplayManager.main(args) == Exit.ABORT
-    fake_load_target.reset_mock()
-    # invalid test case
-    fake_tc.load.side_effect = TestCaseLoadFailure
-    assert ReplayManager.main(args) == Exit.ERROR
-    assert fake_load_target.call_count == 0
-    # no test cases
-    fake_tc.load.side_effect = None
-    fake_tc.load.return_value = []
-    assert ReplayManager.main(args) == Exit.ERROR
-    assert fake_load_target.call_count == 0
-    fake_load_target.reset_mock()
-    # multiple test cases with --no-harness
-    fake_tc.load.return_value = [
-        mocker.Mock(
-            spec_set=TestCase, assets={}, assets_path=None, env_vars={}, hang=False
-        )
-        for _ in range(2)
-    ]
-    assert ReplayManager.main(args) == Exit.ARGS
-    assert fake_load_target.call_count == 0
+    fake_load_target.side_effect = None
     fake_load_target.reset_mock()
     # signature required replaying hang
-    fake_tc.load.return_value = [
-        mocker.Mock(
-            spec_set=TestCase, assets={}, assets_path=None, env_vars={}, hang=True
-        )
-    ]
+    fake_tc.load.return_value = mocker.MagicMock(spec_set=TestCase)
     assert ReplayManager.main(args) == Exit.ERROR
     assert fake_load_target.call_count == 0
     fake_load_target.reset_mock()
     # can't ignore timeout replaying hang
     args.ignore = ["timeout"]
     args.sig = "sig"
-    fake_tc.load.return_value = [
-        mocker.Mock(
-            spec_set=TestCase, assets={}, assets_path=None, env_vars={}, hang=True
-        )
-    ]
+    fake_tc.load.return_value = mocker.MagicMock(spec_set=TestCase)
     assert ReplayManager.main(args) == Exit.ERROR
     assert fake_sig.fromFile.call_count == 1
     assert fake_load_target.call_count == 0
@@ -231,16 +205,14 @@ def test_main_03(mocker, tmp_path):
     # cleanup assets loaded from test case
     fake_load_target.side_effect = KeyboardInterrupt
     (tmp_path / "asset.bin").touch()
-    fake_tc.load.return_value = [
-        mocker.Mock(
-            spec_set=TestCase,
-            assets={"asset": "asset.bin"},
-            assets_path=tmp_path,
-            env_vars={},
-            hang=False,
-            root=tmp_path,
-        )
-    ]
+    fake_tc.load.return_value = mocker.Mock(
+        spec_set=TestCase,
+        assets={"asset": "asset.bin"},
+        assets_path=tmp_path,
+        env_vars={},
+        hang=False,
+        root=tmp_path,
+    )
     assert ReplayManager.main(args) == Exit.ABORT
     assert fake_load_target.call_count == 1
     fake_load_target.reset_mock()
@@ -251,7 +223,8 @@ def test_main_04(mocker):
     mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
     reporter = mocker.patch("grizzly.replay.replay.FailedLaunchReporter", autospec=True)
     mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
-    mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
+    fake_tc = mocker.patch("grizzly.replay.replay.TestCase", autospec=True)
+    fake_tc.load.return_value = mocker.MagicMock(spec_set=TestCase, hang=False)
     mocker.patch(
         "grizzly.replay.replay.load_plugin",
         autospec=True,
@@ -262,7 +235,7 @@ def test_main_04(mocker):
     )
     # setup args
     args = mocker.MagicMock(
-        input="test",
+        input=["test"],
         min_crashes=1,
         no_harness=True,
         post_launch_delay=-1,
@@ -294,7 +267,7 @@ def test_main_04(mocker):
 
 def test_main_05(mocker, server, tmp_path):
     """test ReplayManager.main() loading specified assets"""
-    server.serve_path.return_value = (None, ["test.html"])
+    server.serve_path.return_value = (None, {"test.html": "/fake/path"})
     # setup Target
     target = mocker.NonCallableMock(
         spec_set=Target, binary=Path("bin"), launch_timeout=30
@@ -341,7 +314,7 @@ def test_main_05(mocker, server, tmp_path):
     with TestCase("test.html", "test-adapter") as src:
         src.add_from_file(entry_point)
         src.dump(input_path, include_details=True)
-    args.input = input_path
+    args.input = [input_path]
     with AssetManager(base_path=tmp_path) as asset_mgr:
         target.asset_mgr = asset_mgr
         assert ReplayManager.main(args) == Exit.SUCCESS
@@ -374,7 +347,7 @@ def test_main_06(
 ):  # pylint: disable=invalid-name
     """test ReplayManager.main() enable debuggers"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server.serve_path.return_value = (Served.ALL, ["test.html"])
+    server.serve_path.return_value = (Served.ALL, {"test.html": "/fake/path"})
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
     target.check_result.return_value = Result.NONE
@@ -391,7 +364,7 @@ def test_main_06(
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
-        input=tmp_path / "test.html",
+        input=[tmp_path / "test.html"],
         launch_attempts=3,
         min_crashes=2,
         no_harness=no_harness,
@@ -420,7 +393,7 @@ def test_main_06(
 def test_main_07(mocker, server, tmp_path):
     """test ReplayManager.main() - report to FuzzManager"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server.serve_path.return_value = (Served.ALL, ["test.html"])
+    server.serve_path.return_value = (Served.ALL, {"test.html": "/fake/path"})
     reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
@@ -441,7 +414,7 @@ def test_main_07(mocker, server, tmp_path):
         idle_delay=0,
         idle_threshold=0,
         ignore=[],
-        input=tmp_path / "testcase",
+        input=[tmp_path / "testcase"],
         launch_attempts=1,
         logs=None,
         min_crashes=1,
@@ -476,7 +449,7 @@ def test_main_08(mocker, tmp_path, https_supported):
     args = mocker.MagicMock(
         adapter="fake",
         binary=Path("bin"),
-        input=tmp_path / "test.html",
+        input=[tmp_path / "test.html"],
         fuzzmanager=False,
         launch_attempts=1,
         min_crashes=1,
@@ -499,7 +472,7 @@ def test_main_08(mocker, tmp_path, https_supported):
 
 def test_main_09(mocker, server, tmp_path):
     """test ReplayManager.main() - load test case assets"""
-    server.serve_path.return_value = (None, ["test.html"])
+    server.serve_path.return_value = (None, {"test.html": "/fake/path"})
     # setup Target
     target = mocker.NonCallableMock(
         spec_set=Target, binary=Path("bin"), launch_timeout=30
@@ -520,7 +493,7 @@ def test_main_09(mocker, server, tmp_path):
         fuzzmanager=False,
         idle_delay=0,
         idle_threshold=0,
-        input=input_path,
+        input=[input_path],
         launch_attempts=1,
         logs=None,
         min_crashes=1,

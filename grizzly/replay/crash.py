@@ -52,7 +52,7 @@ def modify_args(args, crash, bucket):
             LOG.warning("Failed to generate signature from crash data: %s", exc)
 
     args.original_crash_id = args.input
-    args.input = crash.testcase_path()
+    args.input = crash.testcases(subset=args.test_index)
     if args.tool is None:
         LOG.info("Setting default --tool=%s from CrashEntry", crash.tool)
         args.tool = crash.tool

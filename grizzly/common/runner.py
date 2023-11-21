@@ -277,6 +277,9 @@ class Runner:
             # overwrite instead of replace 'grz_next_test' for consistency
             server_map.set_redirect("grz_next_test", "grz_empty", required=True)
             server_map.set_dynamic_response("grz_empty", lambda _: b"", required=True)
+        # clear optional contents from test case
+        # it will be repopulated with served contests
+        testcase.clear_optional()
         # serve the test case
         serve_start = time()
         server_status, served = self._server.serve_path(
@@ -293,13 +296,13 @@ class Runner:
             attempted=testcase.entry_point in served,
             timeout=server_status == Served.TIMEOUT,
         )
-        # add all include files that were served to test case
-        if server_map.include:
-            existing = set(testcase.contents)
-            for url, local_file in served.items():
-                if url in existing:
-                    continue
-                testcase.add_from_file(local_file, file_name=url, copy=True)
+        # add all files that were served (includes, etc...) to test
+        existing = set(testcase.required)
+        for url, local_file in served.items():
+            if url in existing:
+                continue
+            # use copy here so include files are copied
+            testcase.add_from_file(local_file, file_name=url, copy=True)
         # record use of https in testcase
         testcase.https = self._server.scheme == "https"
         if result.timeout:

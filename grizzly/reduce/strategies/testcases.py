@@ -38,13 +38,11 @@ class MinimizeTestcaseList(Strategy):
         self._current_feedback = None
         self._current_served = None
 
-    def update(self, success, served=None):
+    def update(self, success):
         """Inform the strategy whether or not the last reduction yielded was good.
 
         Arguments:
             success (bool): Whether or not the last reduction was acceptable.
-            served (list(list(str))): The list of served files for each testcase in the
-                                      last reduction.
 
         Returns:
             None
@@ -52,7 +50,6 @@ class MinimizeTestcaseList(Strategy):
         assert self._current_feedback is None
         assert self._current_served is None
         self._current_feedback = success
-        self._current_served = served
 
     def __iter__(self):
         """Iterate over potential reductions of testcases according to this strategy.
@@ -69,11 +66,10 @@ class MinimizeTestcaseList(Strategy):
         idx = 0
         testcases = None
         try:
-            testcases = TestCase.load(self._testcase_root, True)
+            testcases = []
+            for test in sorted(self._testcase_root.iterdir()):
+                testcases.append(TestCase.load(test, catalog=True).clone())
             n_testcases = len(testcases)
-            # indicates that self._testcase_root contains changes that haven't been
-            # yielded (if iteration ends, changes would be lost)
-            testcase_root_dirty = False
             while True:
                 if n_testcases <= 1:
                     LOG.info(
@@ -86,7 +82,9 @@ class MinimizeTestcaseList(Strategy):
                     break
                 # try removing the testcase at idx
                 if testcases is None:
-                    testcases = TestCase.load(self._testcase_root, True)
+                    testcases = []
+                    for test in sorted(self._testcase_root.iterdir()):
+                        testcases.append(TestCase.load(test, catalog=True).clone())
                     assert n_testcases == len(testcases)
                 testcases.pop(idx).cleanup()
                 yield testcases
@@ -94,24 +92,22 @@ class MinimizeTestcaseList(Strategy):
                 assert self._current_feedback is not None, "no feedback received!"
 
                 if self._current_feedback:
-                    testcase_root_dirty = False
                     LOG.info(
                         "Removing testcase %d/%d was successful!", idx + 1, n_testcases
                     )
-                    testcases = TestCase.load(self._testcase_root, True)
+                    testcases = []
+                    for test in sorted(self._testcase_root.iterdir()):
+                        testcases.append(TestCase.load(test, catalog=True).clone())
                     try:
                         # remove the actual testcase we were reducing
                         testcases.pop(idx).cleanup()
-                        if testcases and self._current_served is not None:
-                            testcase_root_dirty = self.purge_unserved(
-                                testcases, self._current_served
-                            )
-                        else:
-                            self.dump_testcases(testcases, recreate_tcroot=True)
+                        self.dump_testcases(testcases, recreate_tcroot=True)
                     finally:
                         for testcase in testcases:
                             testcase.cleanup()
-                    testcases = TestCase.load(self._testcase_root, True)
+                    testcases = []
+                    for test in sorted(self._testcase_root.iterdir()):
+                        testcases.append(TestCase.load(test, catalog=True).clone())
                     n_testcases = len(testcases)
                 else:
                     LOG.info("No result without testcase %d/%d", idx + 1, n_testcases)
@@ -119,17 +115,6 @@ class MinimizeTestcaseList(Strategy):
                 # reset
                 self._current_feedback = None
                 self._current_served = None
-            if testcase_root_dirty:
-                # purging unserved files enabled us to exit early from the loop.
-                # need to yield once more to set this trimmed version to the current
-                # best in ReduceManager
-                testcases = TestCase.load(self._testcase_root, True)
-                LOG.info("[%s] final iteration triggered by purge_optional", self.name)
-                yield testcases
-                testcases = None  # caller owns testcases now
-                assert (
-                    self._current_feedback
-                ), "Purging unserved files broke the testcase."
         finally:
             if testcases is not None:
                 for testcase in testcases:

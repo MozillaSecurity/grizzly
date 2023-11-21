@@ -161,8 +161,8 @@ class Strategy(ABC):
             self._testcase_root.mkdir()
         for idx, testcase in enumerate(testcases):
             LOG.debug("Extracting testcase %d/%d", idx + 1, len(testcases))
-            testpath = self._testcase_root / f"{idx:03d}"
-            testcase.dump(testpath, include_details=True)
+            # NOTE: naming determines load order
+            testcase.dump(self._testcase_root / f"{idx:03d}", include_details=True)
 
     @classmethod
     def sanity_check_cls_attrs(cls):
@@ -192,13 +192,11 @@ class Strategy(ABC):
         """
 
     @abstractmethod
-    def update(self, success, served=None):
+    def update(self, success):
         """Inform the strategy whether or not the last reduction yielded was good.
 
         Arguments:
             success (bool): Whether or not the last reduction was acceptable.
-            served (list(list(str))): The list of served files for each testcase in the
-                                      last reduction.
 
         Returns:
             None
@@ -231,44 +229,7 @@ class Strategy(ABC):
         Returns:
             None
         """
-        rmtree(str(self._testcase_root))
-
-    def purge_unserved(self, testcases, served):
-        """Given the testcase list yielded and list of what was served, purge
-        everything in testcase root to hold only what was served.
-
-        Arguments:
-            testcases (list(grizzly.common.storage.TestCase): testcases last replayed
-            served (list(list(str))): list of files served for each testcase.
-
-        Returns:
-            bool: True if anything was purged
-        """
-        LOG.debug("purging from %d testcases", len(testcases))
-        anything_purged = False
-        while len(served) < len(testcases):
-            LOG.debug(
-                "not all %d testcases served (%d served), popping one",
-                len(testcases),
-                len(served),
-            )
-            testcases.pop().cleanup()
-            anything_purged = True
-        remove_testcases = []
-        for idx, (testcase, tc_served) in enumerate(zip(testcases, served)):
-            LOG.debug("testcase %d served %r", idx, tc_served)
-            if testcase.entry_point not in tc_served:
-                LOG.debug("entry point not served (%r)", testcase.entry_point)
-                remove_testcases.append(idx)
-                anything_purged = True
-            else:
-                size_before = testcase.data_size
-                testcase.purge_optional(tc_served)
-                anything_purged = anything_purged or testcase.data_size != size_before
-        for idx in reversed(remove_testcases):
-            testcases.pop(idx).cleanup()
-        self.dump_testcases(testcases, recreate_tcroot=True)
-        return anything_purged
+        rmtree(self._testcase_root)
 
 
 STRATEGIES = _load_strategies()
