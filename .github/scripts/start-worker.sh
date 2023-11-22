@@ -48,7 +48,9 @@ TC_VERSION="$({ retry_curl --head "https://github.com/taskcluster/taskcluster/re
 retry_curl -L "https://github.com/taskcluster/taskcluster/releases/download/$TC_VERSION/generic-worker-simple-darwin-amd64" -o generic-worker
 retry_curl -L "https://github.com/taskcluster/taskcluster/releases/download/$TC_VERSION/livelog-darwin-amd64" -o livelog
 retry_curl -L "https://github.com/taskcluster/taskcluster/releases/download/$TC_VERSION/taskcluster-proxy-darwin-amd64" -o taskcluster-proxy
-chmod 0755 generic-worker livelog taskcluster-proxy
+chmod a+x generic-worker livelog taskcluster-proxy
+ls -l generic-worker livelog taskcluster-proxy
+id
 
 ./generic-worker new-ed25519-keypair --file worker.key
 mkdir tasks
