@@ -525,21 +525,3 @@ class TestCase:
         if path.startswith("../"):
             raise ValueError(f"invalid path {path!r}")
         return path.lstrip("/")
-
-    @staticmethod
-    def scan_path(path):
-        """Check path and subdirectories for potential test cases. Subdirectories are
-        only scanned one level deep.
-
-        Args:
-            path (Path): Path to scan.
-
-        Yields:
-            Path: Directory containing 'test_info.json' (potential testcase).
-        """
-        if (path / "test_info.json").is_file():
-            yield path
-        else:
-            for entry in path.iterdir():
-                if (entry / "test_info.json").is_file():
-                    yield entry

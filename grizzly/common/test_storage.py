@@ -381,25 +381,7 @@ def test_testcase_15(tmp_path):
             assert loaded.assets["sample"] == asset.name
 
 
-def test_testcase_16(tmp_path):
-    """test TestCase.scan_path()"""
-    # empty path
-    (tmp_path / "not-test").mkdir()
-    assert not any(TestCase.scan_path(tmp_path))
-    # multiple test case directories
-    paths = [tmp_path / f"test-{i}" for i in range(3)]
-    with TestCase("test.htm", "test-adapter") as src:
-        src.add_from_bytes(b"test", "test.htm")
-        for path in paths:
-            src.dump(path, include_details=True)
-    tc_paths = list(TestCase.scan_path(tmp_path))
-    assert len(tc_paths) == 3
-    # single test case directory
-    tc_paths = list(TestCase.scan_path(paths[0]))
-    assert len(tc_paths) == 1
-
-
-def test_testcase_17():
+def test_testcase_16():
     """test TestCase.get_file()"""
     with TestCase("test.htm", "test-adapter") as src:
         src.add_from_bytes(b"test", "test.htm")
@@ -418,7 +400,7 @@ def test_testcase_17():
         False,
     ],
 )
-def test_testcase_18(tmp_path, remote_assets):
+def test_testcase_17(tmp_path, remote_assets):
     """test TestCase.clone()"""
     with TestCase("test.htm", "adpt", input_fname="fn", time_limit=2) as src:
         if remote_assets:
@@ -484,7 +466,7 @@ def test_testcase_18(tmp_path, remote_assets):
         ".",
     ],
 )
-def test_testcase_19(path):
+def test_testcase_18(path):
     """test TestCase.sanitize_path() with invalid paths"""
     with raises(ValueError, match="invalid path"):
         TestCase.sanitize_path(path)
@@ -505,6 +487,6 @@ def test_testcase_19(path):
         ("./a/./b/../c", "a/c"),
     ],
 )
-def test_testcase_20(path, expected_result):
+def test_testcase_19(path, expected_result):
     """test TestCase.sanitize_path()"""
     assert TestCase.sanitize_path(path) == expected_result
