@@ -27,7 +27,7 @@ try:
 except ImportError:  # pragma: no cover
     HAVE_JSBEAUTIFIER = False
 
-from ...common.storage import TestCase
+from ...common.storage import TEST_INFO, TestCase
 from . import Strategy, _contains_dd
 
 LOG = getLogger(__name__)
@@ -64,7 +64,7 @@ class _BeautifyStrategy(Strategy, ABC):
     """
 
     all_extensions = None
-    ignore_files = {"test_info.json", "prefs.js"}
+    ignore_files = {TEST_INFO, "prefs.js"}
     import_available = None
     import_name = None
     native_extension = None
