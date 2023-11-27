@@ -297,12 +297,12 @@ def test_analysis(
     replayer.run.side_effect = replay_run
 
     with TestCase("test.html", "test-adapter") as test:
-        test.add_from_bytes(b"1", file_name=test.entry_point)
+        test.add_from_bytes(b"1", test.entry_point)
         test.dump(tmp_path / "src1", include_details=True)
     tests = [test.load(tmp_path / "src1")]
     if harness_last_crashes is not None:
         with TestCase("test.html", "test-adapter") as test:
-            test.add_from_bytes(b"2", file_name=test.entry_point)
+            test.add_from_bytes(b"2", test.entry_point)
             test.dump(tmp_path / "src2", include_details=True)
         tests.append(test.load(tmp_path / "src2"))
     log_path = tmp_path / "logs"
@@ -540,7 +540,7 @@ def test_repro(
     def replay_run(testcases, _time_limit, **kw):
         kw["on_iteration_cb"]()
         for test in testcases:
-            contents = test.get_file("test.html").data_file.read_text()
+            contents = test["test.html"].read_text()
             # pylint: disable=logging-not-lazy
             LOG.debug("interesting if " + interesting_str, contents)
             if detect_failure(contents):
@@ -558,7 +558,7 @@ def test_repro(
     replayer.run.side_effect = replay_run
 
     with TestCase("test.html", "test-adapter") as test:
-        test.add_from_bytes(original, file_name=test.entry_point)
+        test.add_from_bytes(original, test.entry_point)
         test.dump(tmp_path / "src")
     tests = [TestCase.load(tmp_path / "src")]
 
@@ -749,7 +749,7 @@ def test_quality_update(mocker, tmp_path):
     def replay_run(testcases, _time_limit, **kw):
         kw["on_iteration_cb"]()
         for test in testcases:
-            contents = test.get_file("test.html").data_file.read_text()
+            contents = test["test.html"].read_text()
             if not contents.strip():
                 continue
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
@@ -808,7 +808,7 @@ def test_include_assets_and_environ(mocker, tmp_path):
     def replay_run(testcases, _time_limit, **kw):
         kw["on_iteration_cb"]()
         for test in testcases:
-            contents = test.get_file("test.html").data_file.read_text()
+            contents = test["test.html"].read_text()
             if not contents.strip():
                 continue
             log_path = tmp_path / f"crash{replayer.run.call_count}_logs"

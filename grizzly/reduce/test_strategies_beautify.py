@@ -23,7 +23,7 @@ def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker, tmp_
 
     def _interesting(testcases):
         for test in testcases:
-            contents = test.get_file(test_name).data_file.read_bytes().decode("ascii")
+            contents = test[test_name].read_bytes().decode("ascii")
             if interesting(contents):
                 return True
         return False
@@ -38,9 +38,7 @@ def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker, tmp_
                         test.cleanup()
                     best_tests = [x.clone() for x in tests]
         assert len(best_tests) == 1
-        contents = (
-            best_tests[0].get_file(test_name).data_file.read_bytes().decode("ascii")
-        )
+        contents = best_tests[0][test_name].read_bytes().decode("ascii")
         assert contents == reduced
     finally:
         for test in best_tests:

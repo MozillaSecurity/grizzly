@@ -60,7 +60,7 @@ class _LithiumStrategy(Strategy, ABC):
         """
         self._files_to_reduce.clear()
         for test in testcases:
-            for path in (test.root / x for x in test.contents):
+            for path in (test.root / x for x in test):
                 if _contains_dd(path):
                     self._files_to_reduce.append(path)
 

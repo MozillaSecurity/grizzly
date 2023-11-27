@@ -31,7 +31,6 @@ class TestFileExists(Exception):
     TestFile with the same name"""
 
 
-TestFile = namedtuple("TestFile", "file_name data_file")
 TestFileMap = namedtuple("TestFileMap", "optional required")
 
 
@@ -76,7 +75,7 @@ class TestCase:
         self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
         self.version = __version__
-        self._files = TestFileMap(optional=[], required=[])
+        self._files = TestFileMap(optional={}, required={})
         if data_path:
             self._root = data_path
             self._in_place = True
@@ -84,11 +83,58 @@ class TestCase:
             self._root = Path(mkdtemp(prefix="testcase_", dir=grz_tmp("storage")))
             self._in_place = False
 
+    def __contains__(self, item):
+        """Scan TestCase contents for a URL.
+
+        Args:
+            item (str): URL.
+
+        Returns:
+            bool: URL found in contents.
+        """
+        return item in self._files.required or item in self._files.optional
+
+    def __getitem__(self, key):
+        """Lookup file path by URL.
+
+        Args:
+            key (str): URL.
+
+        Returns:
+            Path: Test file.
+        """
+        if key in self._files.required:
+            return self._files.required[key]
+        return self._files.optional[key]
+
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
         self.cleanup()
+
+    def __iter__(self):
+        """TestCase contents.
+
+        Args:
+            None
+
+        Yields:
+            str: URLs of contents.
+        """
+        yield from self._files.required
+        yield from self._files.optional
+
+    def __len__(self):
+        """Number files in TestCase.
+
+        Args:
+            None
+
+        Returns:
+            int: Number files in TestCase.
+        """
+        return len(self._files.optional) + len(self._files.required)
 
     def add_from_bytes(self, data, file_name, required=False):
         """Create a file and add it to the TestCase.
@@ -135,24 +181,24 @@ class TestCase:
             url_path = self.sanitize_path(src_file.name)
         else:
             url_path = self.sanitize_path(file_name)
-        if url_path in self.contents:
+        if url_path in self:
             raise TestFileExists(f"{url_path!r} exists in test")
 
-        test_file = TestFile(url_path, self._root / url_path)
+        dst_file = self._root / url_path
         # don't move/copy data is already in place
-        if src_file.resolve() != test_file.data_file.resolve():
+        if src_file.resolve() != dst_file.resolve():
             assert not self._in_place
-            test_file.data_file.parent.mkdir(parents=True, exist_ok=True)
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
             if copy:
-                copyfile(src_file, test_file.data_file)
+                copyfile(src_file, dst_file)
             else:
-                move(src_file, test_file.data_file)
+                move(src_file, dst_file)
 
         # entry_point is always 'required'
-        if required or test_file.file_name == self.entry_point:
-            self._files.required.append(test_file)
+        if required or url_path == self.entry_point:
+            self._files.required[url_path] = dst_file
         else:
-            self._files.optional.append(test_file)
+            self._files.optional[url_path] = dst_file
 
     def cleanup(self):
         """Remove all the test files.
@@ -210,27 +256,14 @@ class TestCase:
         result.hang = self.hang
         result.https = self.https
         # copy test data files
-        for entry, required in chain(
-            product(self._files.required, [True]),
-            product(self._files.optional, [False]),
+        for (file_name, data_file), required in chain(
+            product(self._files.required.items(), [True]),
+            product(self._files.optional.items(), [False]),
         ):
             result.add_from_file(
-                entry.data_file, file_name=entry.file_name, required=required, copy=True
+                data_file, file_name=file_name, required=required, copy=True
             )
         return result
-
-    @property
-    def contents(self):
-        """All files in TestCase.
-
-        Args:
-            None
-
-        Yields:
-            str: File path (relative to wwwroot).
-        """
-        for tfile in chain(self._files.required, self._files.optional):
-            yield tfile.file_name
 
     @property
     def data_size(self):
@@ -243,8 +276,11 @@ class TestCase:
             int: Total size of the TestCase in bytes.
         """
         total = 0
-        for group in self._files:
-            total += sum(x.data_file.stat().st_size for x in group)
+        for data_file in chain(
+            self._files.required.values(),
+            self._files.optional.values(),
+        ):
+            total += data_file.stat().st_size
         return total
 
     def dump(self, dst_path, include_details=False):
@@ -259,10 +295,13 @@ class TestCase:
         """
         dst_path = Path(dst_path)
         # save test files to dst_path
-        for test_file in chain(self._files.required, self._files.optional):
-            dst_file = dst_path / test_file.file_name
+        for src_url, src_file in chain(
+            self._files.required.items(),
+            self._files.optional.items(),
+        ):
+            dst_file = dst_path / src_url
             dst_file.parent.mkdir(parents=True, exist_ok=True)
-            copyfile(test_file.data_file, dst_file)
+            copyfile(src_file, dst_file)
         # save test case files and meta data including:
         # adapter used, input file, environment info and files
         if include_details:
@@ -308,20 +347,6 @@ class TestCase:
         if entry_point is None:
             raise TestCaseLoadFailure("Could not determine entry point")
         return entry_point
-
-    def get_file(self, path):
-        """Lookup and return the TestFile with the specified file name.
-
-        Args:
-            path (str): Path (relative to wwwroot) of TestFile to retrieve.
-
-        Returns:
-            TestFile: TestFile with matching path otherwise None.
-        """
-        for tfile in chain(self._files.optional, self._files.required):
-            if tfile.file_name == path:
-                return tfile
-        return None
 
     @property
     def landing_page(self):
@@ -400,7 +425,9 @@ class TestCase:
                     and test.assets_path not in entry.parents
                     and entry.name != "test_info.json"
                 ):
-                    test.add_from_file(entry, entry.relative_to(test.root).as_posix())
+                    test.add_from_file(
+                        entry, file_name=entry.relative_to(test.root).as_posix()
+                    )
         else:
             # add entry point
             test.add_from_file(entry_point, required=True)
@@ -456,8 +483,7 @@ class TestCase:
         Yields:
             str: File path of each optional file.
         """
-        for test in self._files.optional:
-            yield test.file_name
+        yield from self._files.optional
 
     @staticmethod
     def read_info(path):
@@ -490,8 +516,7 @@ class TestCase:
         Yields:
             str: File path of each file.
         """
-        for test in self._files.required:
-            yield test.file_name
+        yield from self._files.required
 
     @property
     def root(self):

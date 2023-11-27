@@ -17,6 +17,7 @@ def test_testcase_01(tmp_path):
     adpt_name = "test-adapter"
     with TestCase(entry_point, adpt_name) as tcase:
         assert tcase.entry_point == entry_point
+        assert entry_point not in tcase
         assert not tcase.assets
         assert not tcase.assets_path
         assert tcase.adapter_name == adpt_name
@@ -30,7 +31,8 @@ def test_testcase_01(tmp_path):
         assert not tcase._files.optional
         assert not tcase._files.required
         assert not tcase._in_place
-        assert not any(tcase.contents)
+        assert len(tcase) == 0
+        assert not any(tcase)
         assert not any(tcase.optional)
         assert not any(tcase.required)
         tcase.dump(tmp_path)
@@ -47,11 +49,13 @@ def test_testcase_02():
         (tcase.root / "test.html").touch()
         (tcase.root / "opt.html").touch()
         tcase.add_from_file(tcase.root / "test.html", required=True)
-        assert len(tuple(tcase.contents)) == 1
+        assert len(tcase) == 1
+        assert "test.html" in tcase
         assert len(tuple(tcase.required)) == 1
         assert not any(tcase.optional)
         tcase.add_from_file(tcase.root / "opt.html", required=False)
-        assert len(tuple(tcase.contents)) == 2
+        assert len(tcase) == 2
+        assert "opt.html" in tcase
         assert len(tuple(tcase.required)) == 1
         assert len(tuple(tcase.optional)) == 1
         # add previously added file
@@ -70,12 +74,13 @@ def test_testcase_02():
 )
 def test_testcase_03(tmp_path, copy, required):
     """test TestCase.add_from_file()"""
-    with TestCase("land_page.html", "adpt", input_fname="in.bin") as tcase:
-        in_file = tmp_path / "file.bin"
-        in_file.write_text("data")
+    in_file = tmp_path / "file.bin"
+    in_file.write_text("data")
+    with TestCase("test.html", "adpt", input_fname="in.bin") as tcase:
         tcase.add_from_file(in_file, copy=copy, required=required)
         assert tcase.data_size == 4
-        assert "file.bin" in tcase.contents
+        assert "file.bin" in tcase
+        assert tcase["file.bin"].is_file()
         if required:
             assert in_file.name not in tcase.optional
         else:
@@ -101,13 +106,13 @@ def test_testcase_03(tmp_path, copy, required):
 )
 def test_testcase_04(tmp_path, file_paths):
     """test TestCase.add_from_file()"""
-    with TestCase("land_page.html", "adpt") as tcase:
+    with TestCase("test.html", "adpt") as tcase:
         for file_path in file_paths:
             src_file = tmp_path / file_path
             src_file.parent.mkdir(exist_ok=True, parents=True)
             src_file.write_text("data")
             tcase.add_from_file(src_file, file_name=file_path, required=True)
-            assert file_path in tcase.contents
+            assert file_path in tcase
             assert file_path in tcase.required
             assert file_path not in tcase.optional
             assert (tcase.root / file_path).is_file()
@@ -118,8 +123,8 @@ def test_testcase_05():
     with TestCase("a.html", "adpt") as tcase:
         tcase.add_from_bytes(b"foo", "a.html", required=True)
         tcase.add_from_bytes(b"foo", "b.html", required=False)
-        assert "a.html" in (x.file_name for x in tcase._files.required)
-        assert "b.html" in (x.file_name for x in tcase._files.optional)
+        assert "a.html" in tcase._files.required
+        assert "b.html" in tcase._files.optional
         # add file with invalid file name
         with raises(ValueError, match="invalid path ''"):
             tcase.add_from_bytes(b"foo", "", required=False)
@@ -127,7 +132,7 @@ def test_testcase_05():
 
 def test_testcase_06():
     """test TestCase.data_size"""
-    with TestCase("land_page.html", "test-adapter") as tcase:
+    with TestCase("test.html", "test-adapter") as tcase:
         assert tcase.data_size == 0
         tcase.add_from_bytes(b"1", "testfile1.bin", required=True)
         assert tcase.data_size == 1
@@ -264,7 +269,7 @@ def test_testcase_12(tmp_path, catalog):
         with TestCase("test.html", "test-adapter") as test:
             test.add_from_bytes(b"", test.entry_point, required=True)
             test.add_from_bytes(b"", "optional.bin", required=False)
-            test.add_from_bytes(b"", file_name="nested/a.html", required=False)
+            test.add_from_bytes(b"", "nested/a.html", required=False)
             test.assets = dict(asset_mgr.assets)
             test.assets_path = asset_mgr.path
             test.env_vars["TEST_ENV_VAR"] = "100"
@@ -366,7 +371,7 @@ def test_testcase_15(tmp_path):
         org.hang = not org.hang
         org.input_fname = "infile"
         org.time_limit = 456
-        org.add_from_bytes(b"a", "a.html")
+        org.add_from_bytes(b"a", org.entry_point)
         org.assets = {"sample": asset.name}
         org.assets_path = asset_path
         org.version = "1.2.3"
@@ -376,17 +381,18 @@ def test_testcase_15(tmp_path):
             for prop in TestCase.__slots__:
                 if not prop.startswith("_") and prop != "assets_path":
                     assert getattr(loaded, prop) == getattr(org, prop)
-            assert not set(org.contents) ^ set(loaded.contents)
+            assert not set(org) ^ set(loaded)
             assert "sample" in loaded.assets
             assert loaded.assets["sample"] == asset.name
 
 
 def test_testcase_16():
-    """test TestCase.get_file()"""
+    """test TestCase.__getitem__()"""
     with TestCase("test.htm", "test-adapter") as src:
-        src.add_from_bytes(b"test", "test.htm")
-        assert src.get_file("missing") is None
-        assert src.get_file("test.htm")
+        src.add_from_bytes(b"test", src.entry_point)
+        with raises(KeyError, match="missing"):
+            src["missing"]  # pylint: disable=pointless-statement
+        assert src["test.htm"]
 
 
 @mark.parametrize(
@@ -431,11 +437,9 @@ def test_testcase_17(tmp_path, remote_assets):
                 ("test.htm", b"123"),
                 ("opt.htm", b"456"),
             ):
-                src_file = src.get_file(file).data_file
-                dst_file = dst.get_file(file).data_file
-                assert src_file.read_bytes() == data
-                assert dst_file.read_bytes() == data
-                assert not dst_file.samefile(src_file)
+                assert src[file].read_bytes() == data
+                assert dst[file].read_bytes() == data
+                assert not dst[file].samefile(src[file])
             assert dst.env_vars == {"foo": "bar"}
             assert not set(src.optional) ^ set(dst.optional)
             assert not set(src.required) ^ set(dst.required)
