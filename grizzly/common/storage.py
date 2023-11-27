@@ -20,6 +20,7 @@ __credits__ = ["Tyson Smith"]
 
 
 LOG = getLogger(__name__)
+TEST_INFO = "test_info.json"
 
 
 class TestCaseLoadFailure(Exception):
@@ -288,7 +289,7 @@ class TestCase:
 
         Args:
             dst_path (str): Path to directory to output data.
-            include_details (bool): Output "test_info.json" file.
+            include_details (bool): Output test info file.
 
         Returns:
             None
@@ -325,7 +326,7 @@ class TestCase:
                 info["assets"] = self.assets
                 info["assets_path"] = "_assets_"
                 copytree(self.assets_path, dst_path / info["assets_path"])
-            with (dst_path / "test_info.json").open("w") as out_fp:
+            with (dst_path / TEST_INFO).open("w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
 
     @staticmethod
@@ -423,7 +424,7 @@ class TestCase:
                 if (
                     not entry.is_dir()
                     and test.assets_path not in entry.parents
-                    and entry.name != "test_info.json"
+                    and entry.name != TEST_INFO
                 ):
                     test.add_from_file(
                         entry, file_name=entry.relative_to(test.root).as_posix()
@@ -438,7 +439,7 @@ class TestCase:
         """Process and sanitize TestCase meta data.
 
         Args:
-            path (Path): Directory containing test_info.json file.
+            path (Path): Directory containing test info file.
             entry_point (): See TestCase.load().
 
         Returns:
@@ -490,20 +491,20 @@ class TestCase:
         """Attempt to load test info.
 
         Args:
-            path (Path): Directory containing test_info.json.
+            path (Path): Directory containing test info file.
 
         Yields:
             dict: Test info.
         """
         try:
-            with (path / "test_info.json").open("r") as in_fp:
+            with (path / TEST_INFO).open("r") as in_fp:
                 info = json.load(in_fp)
         except FileNotFoundError:
             info = None
         except ValueError:
-            raise TestCaseLoadFailure("Invalid 'test_info.json'") from None
+            raise TestCaseLoadFailure(f"Invalid '{TEST_INFO}'") from None
         if info is not None and not isinstance(info.get("target"), str):
-            raise TestCaseLoadFailure("Invalid 'target' entry in 'test_info.json'")
+            raise TestCaseLoadFailure(f"Invalid 'target' entry in '{TEST_INFO}'")
         return info or {}
 
     @property

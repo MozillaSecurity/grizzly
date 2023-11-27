@@ -10,6 +10,7 @@ from FTB.ProgramConfiguration import ProgramConfiguration
 from pytest import mark, raises
 
 from .fuzzmanager import Bucket, CrashEntry, load_fm_data
+from .storage import TEST_INFO
 
 
 def test_bucket_1(mocker):
@@ -178,8 +179,8 @@ def test_crash_3(mocker, tmp_path):
         for i in (1, 3, 2, 0):
             test = tmp_path / f"test-{i}"
             test.mkdir()
-            (test / "test_info.json").touch()
-            zip_fp.write(test / "test_info.json", arcname=f"test-{i}/test_info.json")
+            (test / TEST_INFO).touch()
+            zip_fp.write(test / TEST_INFO, arcname=f"test-{i}/{TEST_INFO}")
     with CrashEntry(234) as crash:
         assert crash.testcase == "test.zip"  # pre-load data dict so I can re-patch get
         coll.return_value.get.return_value = mocker.Mock(

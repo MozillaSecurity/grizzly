@@ -15,6 +15,7 @@ from FTB.ProgramConfiguration import ProgramConfiguration
 from FTB.Signatures.CrashInfo import CrashInfo
 
 from .reporter import Quality
+from .storage import TEST_INFO
 from .utils import grz_tmp
 
 FM_CONFIG = Path.home() / ".fuzzmanagerconf"
@@ -334,7 +335,7 @@ class CrashEntry:
                 # - 'foo-0' (most recent)
                 # see FuzzManagerReporter for more info
                 self._contents = sorted(
-                    (x.parent for x in self._storage.rglob("test_info.json")),
+                    (x.parent for x in self._storage.rglob(TEST_INFO)),
                     reverse=True,
                 )
 

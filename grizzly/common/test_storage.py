@@ -8,7 +8,7 @@ from json import dumps, loads
 from pytest import mark, raises
 
 from ..target import AssetManager
-from .storage import TestCase, TestCaseLoadFailure, TestFileExists
+from .storage import TEST_INFO, TestCase, TestCaseLoadFailure, TestFileExists
 
 
 def test_testcase_01(tmp_path):
@@ -38,7 +38,7 @@ def test_testcase_01(tmp_path):
         tcase.dump(tmp_path)
         assert not any(tmp_path.iterdir())
         tcase.dump(tmp_path, include_details=True)
-        assert (tmp_path / "test_info.json").is_file()
+        assert (tmp_path / TEST_INFO).is_file()
         tcase.cleanup()
         assert not tcase.root.is_dir()
 
@@ -142,20 +142,18 @@ def test_testcase_06():
 
 def test_testcase_07(tmp_path):
     """test TestCase.read_info()"""
-    # missing test_info.json
+    # missing test info file
     assert not TestCase.read_info(tmp_path)
-    # invalid test_info.json
-    (tmp_path / "test_info.json").write_text("X")
-    with raises(TestCaseLoadFailure, match="Invalid 'test_info.json'"):
+    # invalid test info file
+    (tmp_path / TEST_INFO).write_text("X")
+    with raises(TestCaseLoadFailure, match=f"Invalid '{TEST_INFO}'"):
         TestCase.read_info(tmp_path)
-    # test_info.json missing 'target' entry
-    (tmp_path / "test_info.json").write_text("{}")
-    with raises(
-        TestCaseLoadFailure, match="Invalid 'target' entry in 'test_info.json'"
-    ):
+    # test info file missing 'target' entry
+    (tmp_path / TEST_INFO).write_text("{}")
+    with raises(TestCaseLoadFailure, match=f"Invalid 'target' entry in '{TEST_INFO}'"):
         TestCase.read_info(tmp_path)
     # success
-    (tmp_path / "test_info.json").write_text('{"target": "foo"}')
+    (tmp_path / TEST_INFO).write_text('{"target": "foo"}')
     assert TestCase.read_info(tmp_path) == {"target": "foo"}
 
 
@@ -165,7 +163,7 @@ def test_testcase_08(tmp_path):
     with raises(TestCaseLoadFailure, match="Could not determine entry point"):
         TestCase._find_entry_point(tmp_path)
     # missing potential entry point
-    (tmp_path / "test_info.json").touch()
+    (tmp_path / TEST_INFO).touch()
     with raises(TestCaseLoadFailure, match="Could not determine entry point"):
         TestCase._find_entry_point(tmp_path)
     # success
@@ -194,21 +192,21 @@ def test_testcase_09(tmp_path):
     entry_point, info = TestCase.load_meta(tmp_path / "test_01.html")
     assert entry_point == tmp_path / "test_01.html"
     assert not info
-    # success (test_info.json)
-    (tmp_path / "test_info.json").write_text('{"target": "test_01.html"}')
+    # success (with test info file)
+    (tmp_path / TEST_INFO).write_text('{"target": "test_01.html"}')
     (tmp_path / "other.html").touch()
     entry_point, info = TestCase.load_meta(tmp_path)
     assert entry_point == (tmp_path / "test_01.html")
     assert info.get("target") == "test_01.html"
-    # success (test_info.json) override entry point
+    # success (with test info file) override entry point
     entry_point, info = TestCase.load_meta(
         tmp_path, entry_point=(tmp_path / "other.html")
     )
     assert entry_point == tmp_path / "other.html"
     assert info.get("target") == "other.html"
-    # invalid test_info.json (will fallback to searching for test)
+    # invalid test info file (will fallback to searching for test)
     (tmp_path / "other.html").unlink()
-    (tmp_path / "test_info.json").write_text("{}")
+    (tmp_path / TEST_INFO).write_text("{}")
     entry_point, info = TestCase.load_meta(tmp_path)
     assert entry_point == (tmp_path / "test_01.html")
     assert not info
@@ -242,7 +240,7 @@ def test_testcase_10(tmp_path):
 
 
 def test_testcase_11(tmp_path):
-    """test TestCase.load() existing test case with simple test_info.json"""
+    """test TestCase.load() existing test case with simple test info file"""
     # build a test case
     src = tmp_path / "src"
     with TestCase("test.html", "test-adapter") as test:
@@ -259,7 +257,7 @@ def test_testcase_11(tmp_path):
 
 @mark.parametrize("catalog", [False, True])
 def test_testcase_12(tmp_path, catalog):
-    """test TestCase.load() existing test case with test_info.json"""
+    """test TestCase.load() existing test case with test info file"""
     # build a test case
     asset_file = tmp_path / "asset.txt"
     asset_file.touch()
@@ -284,7 +282,7 @@ def test_testcase_12(tmp_path, catalog):
         assert "optional.bin" in loaded.optional
         assert "nested/a.html" in loaded.optional
         assert "_assets_/asset.txt" not in loaded.optional
-        assert "test_info.json" not in loaded.optional
+        assert TEST_INFO not in loaded.optional
     else:
         assert not any(loaded.optional)
     assert loaded.assets == {"example": "asset.txt"}
@@ -297,32 +295,32 @@ def test_testcase_12(tmp_path, catalog):
 
 
 def test_testcase_13(tmp_path):
-    """test TestCase.load() test_info.json error cases"""
-    # bad 'assets' entry in test_info.json
+    """test TestCase.load() test info file error cases"""
+    # bad 'assets' entry in test info file
     src_dir = tmp_path / "src"
     src_dir.mkdir()
     entry_point = src_dir / "target.html"
     entry_point.touch()
     with TestCase("target.html", "test-adapter") as src:
         src.dump(src_dir, include_details=True)
-    test_info = loads((src_dir / "test_info.json").read_text())
+    test_info = loads((src_dir / TEST_INFO).read_text())
     test_info["assets"] = {"bad": 1}
-    (src_dir / "test_info.json").write_text(dumps(test_info))
+    (src_dir / TEST_INFO).write_text(dumps(test_info))
     with raises(TestCaseLoadFailure, match="'assets' contains invalid entry"):
         TestCase.load(src_dir)
-    # bad 'env' entry in test_info.json
+    # bad 'env' entry in test info file
     with TestCase("target.html", "test-adapter") as src:
         src.dump(src_dir, include_details=True)
-    test_info = loads((src_dir / "test_info.json").read_text())
+    test_info = loads((src_dir / TEST_INFO).read_text())
     test_info["env"] = {"bad": 1}
-    (src_dir / "test_info.json").write_text(dumps(test_info))
+    (src_dir / TEST_INFO).write_text(dumps(test_info))
     with raises(TestCaseLoadFailure, match="'env' contains invalid entry"):
         TestCase.load(src_dir)
     # missing asset data
     test_info["env"].clear()
     test_info["assets"] = {"a": "a"}
     test_info["assets_path"] = "missing"
-    (src_dir / "test_info.json").write_text(dumps(test_info))
+    (src_dir / TEST_INFO).write_text(dumps(test_info))
     with TestCase.load(src_dir) as loaded:
         assert not loaded.assets
         assert loaded.assets_path is None
