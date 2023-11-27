@@ -169,9 +169,7 @@ class ReplayManager:
                 Loaded TestCases, AssetManager and environment variables.
         """
         LOG.debug("loading the TestCases")
-        tests = []
-        for entry in paths:
-            tests.append(TestCase.load(entry, catalog=catalog))
+        tests = [TestCase.load(entry, catalog=catalog) for entry in paths]
         if not tests:
             raise TestCaseLoadFailure("Failed to load TestCases")
         # load and remove assets and environment variables from test cases
@@ -214,8 +212,8 @@ class ReplayManager:
         expected = tuple(x.report for x in results if x.expected)
         if expected:
             reporter = FilesystemReporter(path / "reports", major_bucket=False)
-            for result in expected:
-                reporter.submit(tests or [], report=result)
+            for report in expected:
+                reporter.submit(tests or [], report=report)
 
     @staticmethod
     def report_to_fuzzmanager(results, tests, tool=None):
@@ -710,8 +708,6 @@ class ReplayManager:
                     result.report.cleanup()
             if target is not None:
                 target.cleanup()
-            for testcase in testcases:
-                testcase.cleanup()
             if asset_mgr:
                 asset_mgr.cleanup()
             if certs is not None:
