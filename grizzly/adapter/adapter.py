@@ -55,6 +55,12 @@ class Adapter(metaclass=ABCMeta):
         self.name = name
         self.remaining = None
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()
+
     def cleanup(self):
         """Automatically called once at shutdown. Used internally by Grizzly.
         *** DO NOT OVERLOAD! ***
