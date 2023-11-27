@@ -33,7 +33,7 @@ def test_iomanager_02(report_size, iters):
         for current in range(1, iters + 1):
             tcase = iom.create_testcase("test-adapter", 10)
             assert iom._generated == current
-            assert iom._test
+            assert iom._test is not None
             precommit_size = len(iom.tests)
             iom.commit()
             assert iom._test is None

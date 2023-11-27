@@ -70,7 +70,7 @@ def test_runner_02(mocker):
     server.serve_path.return_value = (Served.ALL, {"a.bin": ""})
     testcase = mocker.Mock(
         spec_set=TestCase,
-        contents=serv_files,
+        __iter__=serv_files,
         entry_point=serv_files[0],
         required=serv_files,
     )
@@ -172,13 +172,13 @@ def test_runner_04(mocker, ignore, status, idle, check_result):
     """test reporting timeout"""
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
+    serv_files = {"a.bin": ""}
     test = mocker.Mock(
         spec_set=TestCase,
-        contents=["a.bin"],
+        __iter__=tuple(serv_files),
         entry_point="a.bin",
         required=["a.bin"],
     )
-    serv_files = {"a.bin": ""}
     server.serve_path.return_value = (Served.TIMEOUT, serv_files)
     target.check_result.return_value = Result.FOUND
     target.handle_hang.return_value = idle
@@ -349,9 +349,9 @@ def test_runner_10(mocker, tmp_path):
         result = runner.run([], smap, test)
         assert result.attempted
         assert result.status == Result.NONE
-        assert "inc_file.bin" in test.contents
-        assert "nested/nested_inc.bin" in test.contents
-        assert "test/inc_file3.txt" in test.contents
+        assert "inc_file.bin" in test
+        assert "nested/nested_inc.bin" in test
+        assert "test/inc_file3.txt" in test
 
 
 def test_runner_11(mocker):
@@ -366,8 +366,8 @@ def test_runner_11(mocker):
         test.add_from_bytes(b"", "other.html")
         # add untracked file
         (test.root / "extra.js").touch()
-        assert "extra.html" not in test.contents
-        assert "other.html" in test.contents
+        assert "extra.html" not in test
+        assert "other.html" in test
         server.serve_path.return_value = (
             Served.ALL,
             {
@@ -378,9 +378,9 @@ def test_runner_11(mocker):
         result = runner.run([], ServerMap(), test)
         assert result.attempted
         assert result.status == Result.NONE
-        assert "test.html" in test.contents
-        assert "extra.js" in test.contents
-        assert "other.html" not in test.contents
+        assert "test.html" in test
+        assert "extra.js" in test
+        assert "other.html" not in test
 
 
 @mark.parametrize(

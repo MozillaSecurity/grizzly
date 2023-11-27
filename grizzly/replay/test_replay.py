@@ -915,15 +915,15 @@ def test_replay_27(mocker, server, tmp_path):
             ),
         )
         with ReplayManager([], server, target, use_harness=True) as replay:
-            assert "include.js" not in test.contents
+            assert "include.js" not in test
             results = replay.run([test], 30, post_launch_delay=-1)
             assert replay.status.ignored == 0
             assert replay.status.iteration == 1
             assert replay.status.results.total == 1
             assert len(results) == 1
-            assert "test.html" in test.contents
-            assert "include.js" in test.contents
-            assert "no-serve.html" not in test.contents
+            assert "test.html" in test
+            assert "include.js" in test
+            assert "no-serve.html" not in test
             replay.report_to_filesystem(tmp_path / "dst", results, [test])
     assert (tmp_path / "dst").rglob("test.html")
     assert (tmp_path / "dst").rglob("include.js")

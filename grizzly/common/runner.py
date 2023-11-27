@@ -224,7 +224,7 @@ class Runner:
             with TestCase("post_launch_delay.html", "None") as content:
                 content.add_from_file(
                     Path(__file__).parent / "post_launch_delay.html",
-                    content.entry_point,
+                    file_name=content.entry_point,
                     copy=True,
                 )
                 srv_map = ServerMap()

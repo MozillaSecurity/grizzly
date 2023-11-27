@@ -159,7 +159,7 @@ def test_list(
         kw["on_iteration_cb"]()
         required_seen = False
         for test in testcases:
-            contents = test.get_file("test.html").data_file.read_text()
+            contents = test["test.html"].read_text()
             LOG.debug("interesting if %r == '123'", contents)
             if contents == "required" and required_first:
                 required_seen = True
@@ -176,7 +176,7 @@ def test_list(
     tests = []
     for num, data in enumerate(test_data):
         with TestCase("test.html", "test-adapter") as test:
-            test.add_from_bytes(data, file_name=test.entry_point)
+            test.add_from_bytes(data, test.entry_point)
             test.dump(tmp_path / "src" / f"{num:02d}", include_details=True)
         tests.append(TestCase.load(tmp_path / "src" / f"{num:02d}"))
     log_path = tmp_path / "logs"
@@ -212,7 +212,7 @@ def test_dd_only(mocker, tmp_path):
     def replay_run(testcases, _time_limit, **kw):
         kw["on_iteration_cb"]()
         for test in testcases:
-            contents = test.get_file("test.html").data_file.read_text()
+            contents = test["test.html"].read_text()
             LOG.debug("interesting if 'required' in %r", contents)
             interesting = "required" in contents
             if interesting:
@@ -226,8 +226,8 @@ def test_dd_only(mocker, tmp_path):
     replayer.run.side_effect = replay_run
 
     with TestCase("test.html", "test-adapter") as test:
-        test.add_from_bytes(b"DDBEGIN\n123\nrequired\nDDEND\n", file_name="test.html")
-        test.add_from_bytes(b"blah\n", file_name="other.html")
+        test.add_from_bytes(b"DDBEGIN\n123\nrequired\nDDEND\n", "test.html")
+        test.add_from_bytes(b"blah\n", "other.html")
         test.dump(tmp_path / "src", include_details=True)
     test = TestCase.load(tmp_path / "src", catalog=True)
     tests = [test]

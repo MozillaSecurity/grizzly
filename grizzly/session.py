@@ -227,7 +227,7 @@ class Session:
             if not result.attempted:
                 LOG.warning("Test case was not served")
                 LOG.debug("ignoring test case since nothing was served")
-                if current_test.entry_point not in current_test.contents:
+                if current_test.entry_point not in current_test:
                     LOG.error("Check adapter, test case is missing entry point")
                     raise SessionError("Test case is missing entry point")
                 if runner.initial and result.status != Result.NONE:
