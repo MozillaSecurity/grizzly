@@ -85,15 +85,20 @@ class ReduceCommonArgs(ReplayCommonArgs):
 
 
 class ReduceArgs(ReduceCommonArgs):
+    # NOTE: If updated changes may also need to be added to ReplayArgs
     def __init__(self):
         super().__init__()
-        self.parser.add_argument("input", type=Path, help=LOCAL_INPUT_HELP)
+        self.parser.add_argument("input", type=Path, nargs="+", help=LOCAL_INPUT_HELP)
 
     def sanity_check(self, args):
         super().sanity_check(args)
 
-        if not args.input.exists():
-            self.parser.error(f"'{args.input}' does not exist")
+        for test in args.input:
+            if not test.exists():
+                self.parser.error(f"'{test}' does not exist")
+
+        if args.no_harness and len(args.input) > 1:
+            self.parser.error("'--no-harness' cannot be used with multiple testcases")
 
 
 class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
