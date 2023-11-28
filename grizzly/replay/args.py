@@ -89,6 +89,13 @@ class ReplayArgs(ReplayCommonArgs):
         super().__init__()
         self.parser.add_argument("input", type=Path, nargs="+", help=LOCAL_INPUT_HELP)
 
+        self.parser.add_argument(
+            "--entry-point",
+            type=Path,
+            help="Specify file to use as testcase entry-point when it cannot be"
+            " automatically determined.",
+        )
+
     def sanity_check(self, args):
         super().sanity_check(args)
 
