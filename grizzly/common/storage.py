@@ -288,13 +288,12 @@ class TestCase:
         """Write all the test case data to the filesystem.
 
         Args:
-            dst_path (str): Path to directory to output data.
+            dst_path (Path): Path to directory to output data.
             include_details (bool): Output test info file.
 
         Returns:
             None
         """
-        dst_path = Path(dst_path)
         # save test files to dst_path
         for src_url, src_file in chain(
             self._files.required.items(),
