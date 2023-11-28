@@ -90,7 +90,7 @@ class ReduceArgs(ReduceCommonArgs):
         super().__init__()
         self.parser.add_argument("input", type=Path, nargs="+", help=LOCAL_INPUT_HELP)
 
-        self.parser.add_argument(
+        self.launcher_grp.add_argument(
             "--entry-point",
             type=Path,
             help="Specify file to use as testcase entry-point when it cannot be"

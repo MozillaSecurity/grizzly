@@ -17,6 +17,7 @@ class ReplayCommonArgs(CommonArgs):
         self.parser.set_defaults(logs=None)
 
         replay_args = self.parser.add_argument_group("Replay Arguments")
+        replay_args.set_defaults(entry_point=None)
         replay_args.add_argument(
             "--any-crash",
             action="store_true",
@@ -85,11 +86,12 @@ class ReplayCommonArgs(CommonArgs):
 
 
 class ReplayArgs(ReplayCommonArgs):
+    # NOTE: If updated changes may also need to be added to ReduceArgs
     def __init__(self):
         super().__init__()
         self.parser.add_argument("input", type=Path, nargs="+", help=LOCAL_INPUT_HELP)
 
-        self.parser.add_argument(
+        self.launcher_grp.add_argument(
             "--entry-point",
             type=Path,
             help="Specify file to use as testcase entry-point when it cannot be"
