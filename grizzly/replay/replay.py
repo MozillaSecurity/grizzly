@@ -158,18 +158,22 @@ class ReplayManager:
         return is_hang
 
     @classmethod
-    def load_testcases(cls, paths, catalog=False):
+    def load_testcases(cls, paths, catalog=False, entry_point=None):
         """Load TestCases.
 
         Args:
             paths (list(Path)): Testcases to load.
             catalog (bool): See TestCase.load().
+            entry_point (Path): See TestCase.load().
         Returns:
             tuple(list(TestCase), AssetManager, dict):
                 Loaded TestCases, AssetManager and environment variables.
         """
         LOG.debug("loading the TestCases")
-        tests = [TestCase.load(entry, catalog=catalog) for entry in paths]
+        tests = [
+            TestCase.load(entry, catalog=catalog, entry_point=entry_point)
+            for entry in paths
+        ]
         if not tests:
             raise TestCaseLoadFailure("Failed to load TestCases")
         # load and remove assets and environment variables from test cases
@@ -578,7 +582,9 @@ class ReplayManager:
         signature = CrashSignature.fromFile(args.sig) if args.sig else None
 
         try:
-            testcases, asset_mgr, env_vars = cls.load_testcases(args.input)
+            testcases, asset_mgr, env_vars = cls.load_testcases(
+                args.input, entry_point=args.entry_point
+            )
         except TestCaseLoadFailure as exc:
             LOG.error("Error: %s", str(exc))
             return Exit.ERROR

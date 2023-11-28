@@ -440,13 +440,11 @@ class TestCase:
 
         Args:
             path (Path): Directory containing test info file.
-            entry_point (): See TestCase.load().
+            entry_point (Path): See TestCase.load().
 
         Returns:
             tuple(Path, dict): Test case entry point and loaded test info.
         """
-        assert entry_point is None or isinstance(entry_point, Path)
-
         # load test case info if available
         if path.is_dir():
             try:
@@ -465,7 +463,6 @@ class TestCase:
                 raise TestCaseLoadFailure("Entry point must be in root of given path")
         else:
             # single file test case
-            assert entry_point is None
             entry_point = path
             info = {}
 
