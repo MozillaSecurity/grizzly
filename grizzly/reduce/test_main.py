@@ -23,7 +23,7 @@ def test_args_01(capsys, tmp_path, mocker):
     real_test(capsys, mocker, tmp_path)
 
 
-def test_args_02(tmp_path):
+def test_args_02(capsys, tmp_path):
     """test parsing args specific to grizzly.reduce"""
     exe = tmp_path / "binary"
     exe.touch()
@@ -36,9 +36,22 @@ def test_args_02(tmp_path):
     # test invalid strategy
     with raises(SystemExit):
         ReduceArgs().parse_args([str(exe), str(inp), "--strategy", "cosmic_radiation"])
+    assert (
+        "error: argument --strategy: invalid choice: 'cosmic_radiation'"
+        in capsys.readouterr()[-1]
+    )
     # test no-analysis
     ReduceArgs().parse_args(
         [str(exe), str(inp), "--no-analysis", "--repeat", "99", "--min-crashes", "99"]
+    )
+    # test multiple inputs
+    ReduceArgs().parse_args([str(exe), str(inp), str(inp)])
+    # test no-harness
+    with raises(SystemExit):
+        ReduceArgs().parse_args([str(exe), str(inp), str(inp), "--no-harness"])
+    assert (
+        "error: '--no-harness' cannot be used with multiple testcases"
+        in capsys.readouterr()[-1]
     )
     # these should both log a warning that the args will be ignored due to analysis
     ReduceArgs().parse_args([str(exe), str(inp), "--repeat", "99"])
@@ -46,8 +59,10 @@ def test_args_02(tmp_path):
     ReduceArgs().parse_args([str(exe), str(inp), "--report-period", "99"])
     with raises(SystemExit):
         ReduceArgs().parse_args([str(exe), str(inp), "--report-period", "0"])
+    assert "error: Invalid --report-period" in capsys.readouterr()[-1]
     with raises(SystemExit):
         ReduceArgs().parse_args([str(exe), str(inp), "--report-period", "15"])
+    assert "error: Very short --report-period" in capsys.readouterr()[-1]
 
 
 def test_args_03(tmp_path, capsys):
