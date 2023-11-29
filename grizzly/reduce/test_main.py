@@ -6,7 +6,7 @@ from pytest import mark, raises
 
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import ConfigError, Exit
-from ..target import Target, TargetLaunchError, TargetLaunchTimeout
+from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
 from .exceptions import GrizzlyReduceBaseException
@@ -255,3 +255,40 @@ def test_main_https_support(mocker, tmp_path, https_supported):
     mocker.patch("grizzly.reduce.core.load_plugin", return_value=target_cls)
     assert ReduceManager.main(args) == 0
     assert target.https.call_count == 1
+
+
+def test_main_load_assets_and_env(mocker, tmp_path):
+    """test ReduceManager.main() - Use assets and env vars from loaded TestCase"""
+    asset_mgr = mocker.Mock(spec_set=AssetManager)
+    mocker.patch(
+        "grizzly.reduce.core.ReplayManager.load_testcases",
+        autospec=True,
+        return_value=([], asset_mgr, {"FOO_ENV": "123"}),
+    )
+    mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True, return_value=0)
+    mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
+    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
+    (tmp_path / "test.html").touch()
+    # setup args
+    args = mocker.Mock(
+        ignore=["fake"],
+        input=[tmp_path / "test.html"],
+        min_crashes=1,
+        relaunch=1,
+        repeat=1,
+        sig=None,
+        test_index=None,
+        time_limit=1,
+        timeout=1,
+    )
+
+    target = mocker.Mock(spec_set=Target)
+    target_cls = mocker.MagicMock(spec_set=Target, return_value=target)
+    mocker.patch("grizzly.reduce.core.load_plugin", return_value=target_cls)
+    assert ReduceManager.main(args) == 0
+    assert target.merge_environment.call_count == 1
+    assert target.merge_environment.call_args.args == ({"FOO_ENV": "123"},)
+    assert asset_mgr.add_batch.call_count == 1
+    # this should not be called since the AssetManager was given to the target
+    # and the target is a mock
+    assert asset_mgr.cleanup.call_count == 0

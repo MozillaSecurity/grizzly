@@ -843,12 +843,14 @@ class ReduceManager:
                 rr=args.rr,
                 valgrind=args.valgrind,
             )
-            # local environ takes priority over environ loaded from test case
             if env_vars is not None:
-                env_vars.update(target.environ)
-                target.environ = env_vars
-                env_vars = None
-            # TODO: support overriding existing assets
+                LOG.debug("adding environment loaded from test case")
+                target.merge_environment(env_vars)
+            # use asset manager created from test case content if available
+            if asset_mgr:
+                target.asset_mgr = asset_mgr
+                # target is now responsible for `asset_mgr`
+                asset_mgr = None
             # prioritize specified assets over included
             target.asset_mgr.add_batch(args.asset)
             target.process_assets()
