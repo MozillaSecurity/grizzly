@@ -170,10 +170,14 @@ class ReplayManager:
                 Loaded TestCases, AssetManager and environment variables.
         """
         LOG.debug("loading the TestCases")
-        tests = [
-            TestCase.load(entry, catalog=catalog, entry_point=entry_point)
-            for entry in paths
-        ]
+        tests = []
+        for entry in paths:
+            try:
+                tests.append(
+                    TestCase.load(entry, catalog=catalog, entry_point=entry_point)
+                )
+            except TestCaseLoadFailure as exc:
+                LOG.warning("Failed to load: '%s' (%s)", entry, exc)
         if not tests:
             raise TestCaseLoadFailure("Failed to load TestCases")
         # load and remove assets and environment variables from test cases
