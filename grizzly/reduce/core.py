@@ -593,14 +593,8 @@ class ReduceManager:
                                     for result in best_results:
                                         result.report.cleanup()
                                     # filter expected results out into `best_results`
-                                    best_results = [
-                                        result for result in results if result.expected
-                                    ]
-                                    results = [
-                                        result
-                                        for result in results
-                                        if not result.expected
-                                    ]
+                                    best_results = [x for x in results if x.expected]
+                                    results = [x for x in results if not x.expected]
                                 else:
                                     LOG.info("Attempt failed")
 
@@ -816,9 +810,9 @@ class ReduceManager:
                     meta = json.loads(meta.read_text())
                     signature_desc = meta["shortDescription"]
 
-            if not args.tool and testcases[0].adapter_name:
-                args.tool = f"grizzly-{testcases[0].adapter_name}"
-                LOG.warning("Setting default --tool=%s from testcase", args.tool)
+            if not args.tool:
+                args.tool = ReplayManager.lookup_tool(testcases) or "grizzly-reduce"
+                LOG.info("Setting default --tool=%s", args.tool)
 
             expect_hang = ReplayManager.expect_hang(args.ignore, signature, testcases)
 

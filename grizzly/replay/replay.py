@@ -196,6 +196,22 @@ class ReplayManager:
         return tests, asset_mgr, env_vars
 
     @staticmethod
+    def lookup_tool(tests):
+        """Lookup tool name from test cases. Find the adapter name used by the given
+        test cases.
+
+        Args:
+            tests (list(TestCase)): TestCase to scan.
+
+        Returns:
+            str: Name or None.
+        """
+        adapter_name = {x.adapter_name for x in tests if x.adapter_name}
+        if adapter_name:
+            return f"grizzly-{adapter_name.pop()}"
+        return None
+
+    @staticmethod
     def report_to_filesystem(path, results, tests=None):
         """Use FilesystemReporter to write reports and testcase to disk in a
         known location.
@@ -220,7 +236,7 @@ class ReplayManager:
                 reporter.submit(tests or [], report=report)
 
     @staticmethod
-    def report_to_fuzzmanager(results, tests, tool=None):
+    def report_to_fuzzmanager(results, tests, tool):
         """Use FuzzManagerReporter to send reports to a FuzzManager server.
 
         Args:
@@ -231,9 +247,7 @@ class ReplayManager:
         Returns:
             None
         """
-        if not tool and tests and tests[0].adapter_name:
-            tool = f"grizzly-{tests[0].adapter_name}"
-        reporter = FuzzManagerReporter(tool or "grizzly-replay")
+        reporter = FuzzManagerReporter(tool)
         for result in results:
             # always report expected results
             # avoid reporting unexpected frequent results
@@ -589,6 +603,9 @@ class ReplayManager:
             LOG.error("Error: %s", str(exc))
             return Exit.ERROR
 
+        if not args.tool:
+            args.tool = cls.lookup_tool(testcases) or "grizzly-replay"
+
         certs = None
         results = None
         target = None
@@ -685,7 +702,7 @@ class ReplayManager:
                         test.env_vars = target.filtered_environ()
                 # report results
                 if args.fuzzmanager:
-                    cls.report_to_fuzzmanager(results, testcases, tool=args.tool)
+                    cls.report_to_fuzzmanager(results, testcases, args.tool)
                 else:
                     cls.report_to_filesystem(
                         args.logs, results, testcases if args.include_test else None
