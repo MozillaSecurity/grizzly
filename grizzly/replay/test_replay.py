@@ -742,7 +742,7 @@ def test_replay_24(mocker):
     """test ReplayManager.report_to_fuzzmanager()"""
     reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter")
     # no reports or tests
-    ReplayManager.report_to_fuzzmanager([], [])
+    ReplayManager.report_to_fuzzmanager([], [], "grizzly-replay")
     assert reporter.call_args == (("grizzly-replay",),)
     assert reporter.return_value.submit.call_count == 0
     reporter.reset_mock()
@@ -755,15 +755,9 @@ def test_replay_24(mocker):
             spec_set=ReplayResult, report=mocker.Mock(spec_set=Report), expected=False
         ),
     ]
-    test = mocker.Mock(spec_set=TestCase, adapter_name="test-tool-name")
-    ReplayManager.report_to_fuzzmanager(results, [test])
-    # check 'grizzy-' prefix is added
-    assert reporter.call_args == (("grizzly-test-tool-name",),)
-    assert reporter.return_value.submit.call_count == 2
-    reporter.reset_mock()
-    # with reports and no tests
-    ReplayManager.report_to_fuzzmanager(results, [], tool="test-override")
-    assert reporter.call_args == (("test-override",),)
+    ReplayManager.report_to_fuzzmanager(
+        results, [mocker.Mock(spec_set=TestCase)], "grizzly-replay"
+    )
     assert reporter.return_value.submit.call_count == 2
 
 
@@ -928,3 +922,20 @@ def test_replay_27(mocker, server, tmp_path):
     assert (tmp_path / "dst").rglob("test.html")
     assert (tmp_path / "dst").rglob("include.js")
     assert not any((tmp_path / "dst").rglob("no-serve.html"))
+
+
+@mark.parametrize(
+    "adapters, expected",
+    [
+        # no test cases
+        ([], None),
+        # empty adapter name
+        ([""], None),
+        # multiple test cases
+        (["test-adapter", "", None, "test-adapter"], "grizzly-test-adapter"),
+    ],
+)
+def test_replay_28(mocker, adapters, expected):
+    """test ReplayManager.lookup_tool()"""
+    testcases = [mocker.Mock(spec_set=TestCase, adapter_name=name) for name in adapters]
+    assert ReplayManager.lookup_tool(testcases) == expected
