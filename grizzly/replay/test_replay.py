@@ -659,6 +659,9 @@ def test_replay_21(tmp_path):
     assert not tests[-1].env_vars
     assert not env_vars
     assert asset_mgr is None
+    # skip invalid
+    tests, _, _ = ReplayManager.load_testcases([Path("missing"), input_path])
+    assert len(tests) == 1
 
 
 def test_replay_22(tmp_path):
@@ -673,7 +676,7 @@ def test_replay_22(tmp_path):
             test.assets = dict(asset_mgr.assets)
             test.assets_path = asset_mgr.path
             test.dump(tmp_path / "src", include_details=True)
-    # load directory
+    # load directory with test info file
     tests, asset_mgr, env_vars = ReplayManager.load_testcases([tmp_path / "src"])
     assert asset_mgr
     with asset_mgr:
