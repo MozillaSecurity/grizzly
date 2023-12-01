@@ -334,16 +334,29 @@ def test_report_13(mocker, tmp_path, sig_cache, has_sig):
     assert report.crash_hash
 
 
-def test_report_14(mocker):
+@mark.parametrize(
+    "backtrace, lines",
+    [
+        # baseline
+        ((), 5),
+        # not ignored
+        (("1",), 5),
+        # ignore frame
+        (("std::panicking::rust_panic",), 6),
+        # ignore frame
+        (("alloc::alloc",), 6),
+        # ignore frame and other frames
+        (("1", "std::panicking::rust_panic", "3"), 6),
+        # ignored frames is last ignorable frame
+        (("1", "2", "3", "4", "std::panicking::rust_panic", "6"), 6),
+        # ignored frames is too deep
+        (("1", "2", "3", "4", "5", "std::panicking::rust_panic"), 5),
+    ],
+)
+def test_report_14(mocker, backtrace, lines):
     """test Report.crash_signature_max_frames()"""
-    info = mocker.Mock(spec=CrashInfo)
-    info.backtrace = ("blah",)
-    assert Report.crash_signature_max_frames(info) == 8
-    info.backtrace = (
-        "std::panicking::rust_panic",
-        "std::panicking::rust_panic_with_hook",
-    )
-    assert Report.crash_signature_max_frames(info) == 14
+    info = mocker.Mock(spec=CrashInfo, backtrace=backtrace)
+    assert Report.crash_signature_max_frames(info, suggested_frames=5) == lines
 
 
 @mark.parametrize(

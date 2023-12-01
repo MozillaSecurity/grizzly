@@ -19,7 +19,7 @@ from fasteners.process_lock import InterProcessLock
 from FTB.ProgramConfiguration import ProgramConfiguration
 from FTB.Signatures.CrashInfo import CrashInfo, CrashSignature
 
-from .stack_hasher import Stack
+from .stack_hasher import IGNORED_FRAMES, Stack
 from .utils import grz_tmp
 
 __all__ = ("Report",)
@@ -193,14 +193,18 @@ class Report:
         Returns:
             int: Number of frames to use when creating a signature.
         """
-        if any(
-            entry.startswith("std::panicking") or entry.startswith("alloc::alloc")
-            for entry in crash_info.backtrace
-        ):
+        ignore = 0
+        for count, entry in enumerate(crash_info.backtrace, start=1):
             # Rust panics add frames of noise to the top of the stack (std::panicking)
+            if any(entry.startswith(x) for x in IGNORED_FRAMES):
+                ignore += 1
             # Sanitizer heap profile also have more noise on the stack (alloc::alloc)
-            suggested_frames += 6
-        return suggested_frames
+            elif entry.startswith("alloc::alloc"):
+                ignore += 1
+            # only look at the top of the stack
+            if count - ignore == suggested_frames:
+                break
+        return suggested_frames + ignore
 
     @staticmethod
     def _find_ffpuppet_worker(logs):
