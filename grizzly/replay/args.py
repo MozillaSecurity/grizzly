@@ -109,6 +109,13 @@ class ReplayArgs(ReplayCommonArgs):
             self.parser.error("'--no-harness' cannot be used with multiple testcases")
 
 
+class ReplayFuzzBugzillaArgs(ReplayCommonArgs):
+    def __init__(self):
+        """Initialize argument parser."""
+        super().__init__()
+        self.parser.add_argument("input", type=int, help="Bugzilla BugID to replay")
+
+
 class ReplayFuzzManagerIDArgs(ReplayCommonArgs):
     def __init__(self):
         """Initialize argument parser."""
