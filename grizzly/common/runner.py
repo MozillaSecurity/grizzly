@@ -230,9 +230,12 @@ class Runner:
                 srv_map = ServerMap()
                 srv_map.set_redirect("grz_start", content.entry_point, required=False)
                 srv_map.set_redirect("grz_continue", "grz_start", required=True)
-                # temporarily disable server timeout
-                srv_timeout = self._server.timeout
-                self._server.timeout = 0
+                # temporarily override server timeout
+                org_timeout = self._server.timeout
+                # add time buffer to redirect delay
+                # in practice this should take a few seconds (~10s)
+                # in extreme cases ~40s (slow build + debugger)
+                self._server.timeout = delay + 180
                 if delay > 0:
                     LOG.info("Browser launched, continuing in %ds...", delay)
                 # serve prompt page
@@ -241,12 +244,16 @@ class Runner:
                     continue_cb=self._target.monitor.is_healthy,
                     server_map=srv_map,
                 )
-                # reset server timeout
-                self._server.timeout = srv_timeout
+                # restore server timeout
+                self._server.timeout = org_timeout
                 if server_status != Served.ALL:
                     self.startup_failure = True
+                    if server_status == Served.TIMEOUT:
+                        # this should never happen with a correctly functioning build
+                        LOG.warning("Target hung after launch")
 
         if self.startup_failure:
+            # TODO: we need a better way to handle delayed startup failures
             LOG.warning("Post launch check failed!")
 
     def run(

@@ -394,6 +394,8 @@ def test_runner_11(mocker):
         (-1, None, False),
         # startup failure
         (0, (Served.NONE, None), True),
+        # target hang while loading content
+        (0, (Served.TIMEOUT, None), True),
     ],
 )
 def test_runner_12(mocker, delay, srv_result, startup_failure):
