@@ -18,6 +18,7 @@ from .utils import grz_tmp
 
 # attachments that can be ignored
 IGNORE_EXTS = frozenset({"c", "cpp", "diff", "exe", "log", "patch", "php", "py", "txt"})
+# TODO: support all target assets
 KNOWN_ASSETS = {"prefs": "prefs.js"}
 LOG = getLogger(__name__)
 
