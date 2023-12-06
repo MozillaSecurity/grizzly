@@ -74,7 +74,7 @@ class Strategy(ABC):
     """A strategy is a procedure for repeatedly running a testcase to find the smallest
     equivalent test.
 
-    Implementors must define these class attributes:
+    Implementers must define these class attributes:
 
     Class Attributes:
         name (str): The strategy name.

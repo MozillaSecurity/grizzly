@@ -51,7 +51,7 @@ def _split_normal_lines(data):
 class _BeautifyStrategy(Strategy, ABC):
     """A strategy that beautifies code in the testcase to make it more reducible.
 
-    Implementors must define these class attributes:
+    Implementers must define these class attributes:
 
     Class attributes:
         all_extensions (set(str)): Set of all file extensions to beautify.
