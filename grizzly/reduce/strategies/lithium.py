@@ -23,7 +23,7 @@ class _LithiumStrategy(Strategy, ABC):
     """Use a Lithium `Strategy`/`Testcase` pair to reduce the given Grizzly `TestCase`
     set.
 
-    Implementors must define these class attributes:
+    Implementers must define these class attributes:
 
     Class attributes:
         name (str): The strategy name.
