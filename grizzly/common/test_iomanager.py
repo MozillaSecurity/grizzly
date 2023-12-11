@@ -31,7 +31,7 @@ def test_iomanager_02(report_size, iters):
     with IOManager(report_size=report_size) as iom:
         assert not iom.tests
         for current in range(1, iters + 1):
-            tcase = iom.create_testcase("test-adapter", 10)
+            tcase = iom.create_testcase("test-adapter")
             assert iom._generated == current
             assert iom._test is not None
             precommit_size = len(iom.tests)
@@ -58,7 +58,6 @@ def test_iomanager_03():
 
 def test_iomanager_04():
     """test IOManager.create_testcase()"""
-    time_limit = 10
     with IOManager() as iom:
         assert iom._generated == 0
         assert iom._report_size == 1
@@ -66,10 +65,9 @@ def test_iomanager_04():
         assert not iom.server_map.dynamic
         assert not iom.server_map.include
         assert not iom.server_map.redirect
-        tcase = iom.create_testcase("test-adapter", time_limit)
+        tcase = iom.create_testcase("test-adapter")
         assert tcase is not None
         assert not any(tcase.optional)
-        assert tcase.time_limit == time_limit
         assert "grz_current_test" in iom.server_map.redirect
         assert iom.server_map.redirect["grz_current_test"].target == tcase.entry_point
         assert "grz_next_test" in iom.server_map.redirect

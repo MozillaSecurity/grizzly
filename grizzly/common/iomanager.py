@@ -46,9 +46,9 @@ class IOManager:
         if len(self.tests) > self._report_size:
             self.tests.pop(0).cleanup()
 
-    def create_testcase(self, adapter_name, time_limit):
+    def create_testcase(self, adapter_name):
         assert self._test is None
-        self._test = TestCase(self.page_name(), adapter_name, time_limit=time_limit)
+        self._test = TestCase(self.page_name(), adapter_name)
         # reset redirect map
         self.server_map.set_redirect(
             "grz_current_test", self.page_name(), required=False

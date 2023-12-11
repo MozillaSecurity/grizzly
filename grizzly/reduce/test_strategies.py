@@ -40,7 +40,7 @@ def test_strategy_tc_load(tmp_path, is_hang):
             pass
 
     # create testcase
-    with TestCase("a.htm", "adpt", input_fname="fn", time_limit=2) as test:
+    with TestCase("a.htm", "adpt", input_fname="fn") as test:
         test.duration = 1.2
         test.hang = is_hang
         test.add_from_bytes(b"123", test.entry_point)
