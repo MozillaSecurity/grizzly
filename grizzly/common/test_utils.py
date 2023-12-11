@@ -66,9 +66,9 @@ def test_configure_logging_01(mocker, env, log_level):
         # use defaults instead of low test values
         (None, None, [1], (DEFAULT_TIME_LIMIT, DEFAULT_TIME_LIMIT + TIMEOUT_DELAY)),
         # use duration from test case
-        (None, None, [99.1], (100, 100 + TIMEOUT_DELAY)),
+        (None, None, [90.1], (100, 100 + TIMEOUT_DELAY)),
         # multiple tests
-        (None, None, [99.9, 10, 25], (100, 100 + TIMEOUT_DELAY)),
+        (None, None, [90.9, 10, 25], (100, 100 + TIMEOUT_DELAY)),
         # specify time limit
         (100, None, [0], (100, 100 + TIMEOUT_DELAY)),
         # specify timeout (> DEFAULT_TIME_LIMIT)
