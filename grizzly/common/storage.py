@@ -303,16 +303,23 @@ class TestCase:
         if include_details:
             assert isinstance(self.env_vars, dict)
             info = {
-                "adapter": self.adapter_name,
-                "duration": self.duration,
-                "env": self.env_vars,
-                "hang": self.hang,
                 "https": self.https,
-                "input": Path(self.input_fname).name if self.input_fname else None,
                 "target": self.entry_point,
-                "timestamp": self.timestamp,
-                "version": self.version,
             }
+            if self.adapter_name:
+                info["adapter"] = self.adapter_name
+            if self.duration:
+                info["duration"] = self.duration
+            if self.env_vars:
+                info["env"] = self.env_vars
+            if self.hang:
+                info["hang"] = self.hang
+            if self.input_fname:
+                info["input"] = Path(self.input_fname).name
+            if self.timestamp:
+                info["timestamp"] = self.timestamp
+            if self.version:
+                info["version"] = self.version
             # save target assets and update meta data
             if self.assets:
                 assert isinstance(self.assets, dict)
