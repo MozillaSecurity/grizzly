@@ -6,7 +6,6 @@ from enum import IntEnum, unique
 from importlib.metadata import PackageNotFoundError, version
 from ipaddress import IPv4Address
 from logging import DEBUG, basicConfig, getLogger
-from math import ceil
 from os import getenv, getpid
 from pathlib import Path
 from shutil import rmtree
@@ -243,8 +242,8 @@ def time_limits(
         time_limit (int): Test time limit.
         timeout (int): Iteration timeout.
         tests (iterable): Testcases that may contain time limit values.
-        default_limit (int): Value to used as default time limit.
-        timeout_delay (int): Value to used as delay when calculating timeout.
+        default_limit (int): Value to use as default time limit.
+        timeout_delay (int): Value to use as delay when calculating timeout.
 
     Returns:
         tuple (int, int): Time limit and timeout.
@@ -257,7 +256,8 @@ def time_limits(
         # use default_limit as a minimum
         test_limits = [default_limit]
         if tests:
-            test_limits.extend(int(ceil(x.duration)) for x in tests if x.duration)
+            # add small time buffer to duration
+            test_limits.extend(int(x.duration) + 10 for x in tests if x.duration)
         time_limit = max(test_limits)
     assert time_limit > 0
     # calculate timeout
