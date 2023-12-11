@@ -46,7 +46,6 @@ class TestCase:
         "hang",
         "https",
         "input_fname",
-        "time_limit",
         "timestamp",
         "version",
         "_files",
@@ -60,7 +59,6 @@ class TestCase:
         adapter_name,
         data_path=None,
         input_fname=None,
-        time_limit=None,
         timestamp=None,
     ):
         assert entry_point
@@ -73,7 +71,6 @@ class TestCase:
         self.https = False
         self.input_fname = input_fname  # file that was used to create the test case
         self.entry_point = self.sanitize_path(entry_point)
-        self.time_limit = time_limit
         self.timestamp = time() if timestamp is None else timestamp
         self.version = __version__
         self._files = TestFileMap(optional={}, required={})
@@ -237,7 +234,6 @@ class TestCase:
             self.entry_point,
             self.adapter_name,
             input_fname=self.input_fname,
-            time_limit=self.time_limit,
             timestamp=self.timestamp,
         )
         result.assets = dict(self.assets)
@@ -314,7 +310,6 @@ class TestCase:
                 "https": self.https,
                 "input": Path(self.input_fname).name if self.input_fname else None,
                 "target": self.entry_point,
-                "time_limit": self.time_limit,
                 "timestamp": self.timestamp,
                 "version": self.version,
             }
@@ -389,7 +384,6 @@ class TestCase:
             info.get("adapter", None),
             data_path=entry_point.parent,
             input_fname=info.get("input", None),
-            time_limit=info.get("time_limit", None),
             timestamp=info.get("timestamp", 0),
         )
         test.assets = info.get("assets", {})

@@ -368,7 +368,6 @@ def test_testcase_15(tmp_path):
         org.https = not org.https
         org.hang = not org.hang
         org.input_fname = "infile"
-        org.time_limit = 456
         org.add_from_bytes(b"a", org.entry_point)
         org.assets = {"sample": asset.name}
         org.assets_path = asset_path
@@ -406,7 +405,7 @@ def test_testcase_16():
 )
 def test_testcase_17(tmp_path, remote_assets):
     """test TestCase.clone()"""
-    with TestCase("test.htm", "adpt", input_fname="fn", time_limit=2) as src:
+    with TestCase("test.htm", "adpt", input_fname="fn") as src:
         if remote_assets:
             src.assets = {"foo": "asset.file"}
             src.assets_path = tmp_path

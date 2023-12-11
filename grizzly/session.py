@@ -129,9 +129,9 @@ class Session:
         elif log_limiter.ready(self.status.iteration, self.target.monitor.launches):
             LOG.info("I%04d-R%02d ", self.status.iteration, self.status.results.total)
 
-    def generate_testcase(self, time_limit):
+    def generate_testcase(self):
         LOG.debug("calling iomanager.create_testcase()")
-        test = self.iomanager.create_testcase(self.adapter.name, time_limit)
+        test = self.iomanager.create_testcase(self.adapter.name)
         LOG.debug("calling adapter.generate()")
         with self.status.measure("generate"):
             self.adapter.generate(test, self.iomanager.server_map)
@@ -204,7 +204,7 @@ class Session:
                 # TODO: avoid running test case if runner.startup_failure is True
 
             # create and populate a test case
-            current_test = self.generate_testcase(time_limit)
+            current_test = self.generate_testcase()
             # display status
             self.display_status(log_limiter=log_limiter)
             # run test case
