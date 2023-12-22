@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import pytest
+from pytest import raises
 
 from .server_map import InvalidURLError, MapCollisionError, Resource, ServerMap
 
@@ -28,23 +28,23 @@ def test_servermap_02(tmp_path):
     assert len(srv_map.dynamic) == 2
     assert not srv_map.include
     assert not srv_map.redirect
-    with pytest.raises(TypeError, match="callback must be callable"):
+    with raises(TypeError, match="callback must be callable"):
         srv_map.set_dynamic_response("x", None)
-    with pytest.raises(TypeError, match="callback requires 1 argument"):
+    with raises(TypeError, match="callback requires 1 argument"):
         srv_map.set_dynamic_response("x", lambda: 0)
-    with pytest.raises(TypeError, match="mime_type must be of type 'str'"):
+    with raises(TypeError, match="mime_type must be of type 'str'"):
         srv_map.set_dynamic_response("x", lambda _: 0, None)
     # test detecting collisions
-    with pytest.raises(MapCollisionError):
+    with raises(MapCollisionError):
         srv_map.set_include("url_01", str(tmp_path))
-    with pytest.raises(MapCollisionError):
+    with raises(MapCollisionError):
         srv_map.set_redirect("url_01", "test_file")
 
 
 def test_servermap_03(tmp_path):
     """test ServerMap includes"""
     srv_map = ServerMap()
-    with pytest.raises(IOError, match="Include path not found: no_dir"):
+    with raises(IOError, match="Include path not found: no_dir"):
         srv_map.set_include("test_url", "no_dir")
     assert not srv_map.include
     srv_map.set_include("url_01", str(tmp_path))
@@ -64,16 +64,16 @@ def test_servermap_03(tmp_path):
     assert not srv_map.dynamic
     assert not srv_map.redirect
     # test detecting collisions
-    with pytest.raises(MapCollisionError, match="URL collision on 'url_01'"):
+    with raises(MapCollisionError, match="URL collision on 'url_01'"):
         srv_map.set_redirect("url_01", "test_file")
-    with pytest.raises(MapCollisionError):
+    with raises(MapCollisionError):
         srv_map.set_dynamic_response("url_01", lambda _: 0, mime_type="test/type")
     # test overlapping includes
-    with pytest.raises(MapCollisionError, match=r"'url_01' and '\w+' include"):
+    with raises(MapCollisionError, match=r"'url_01' and '\w+' include"):
         srv_map.set_include("url_01", str(tmp_path))
     inc3 = tmp_path / "includes" / "b" / "c"
     inc3.mkdir()
-    with pytest.raises(MapCollisionError, match=r"'url_01' and '\w+' include"):
+    with raises(MapCollisionError, match=r"'url_01' and '\w+' include"):
         srv_map.set_include("url_01", str(inc3))
 
 
@@ -90,14 +90,14 @@ def test_servermap_04(tmp_path):
     assert not srv_map.redirect["url_02"].required
     assert not srv_map.dynamic
     assert not srv_map.include
-    with pytest.raises(TypeError, match="target must not be an empty string"):
+    with raises(TypeError, match="target must not be an empty string"):
         srv_map.set_redirect("x", "")
-    with pytest.raises(TypeError, match="target must be of type 'str'"):
+    with raises(TypeError, match="target must be of type 'str'"):
         srv_map.set_redirect("x", None)
     # test detecting collisions
-    with pytest.raises(MapCollisionError):
+    with raises(MapCollisionError):
         srv_map.set_include("url_01", str(tmp_path))
-    with pytest.raises(MapCollisionError):
+    with raises(MapCollisionError):
         srv_map.set_dynamic_response("url_01", lambda _: 0, mime_type="test/type")
 
 
@@ -107,11 +107,11 @@ def test_servermap_05():
     assert ServerMap._check_url("test") == "test"
     assert ServerMap._check_url("") == ""
     # only alphanumeric is allowed
-    with pytest.raises(InvalidURLError):
+    with raises(InvalidURLError):
         ServerMap._check_url("asd!@#")
     # '..' should not be accepted
-    with pytest.raises(InvalidURLError):
+    with raises(InvalidURLError):
         ServerMap._check_url("/..")
     # cannot map more than one '/' deep
-    with pytest.raises(InvalidURLError):
+    with raises(InvalidURLError):
         ServerMap._check_url("/test/test")

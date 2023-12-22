@@ -4,14 +4,14 @@ Sapphire unit tests
 # pylint: disable=protected-access
 
 import socket
-from hashlib import md5
+from hashlib import sha1
 from itertools import repeat
 from os import urandom
 from pathlib import Path
 from platform import system
 from random import choices, getrandbits
 from threading import Lock
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlsplit
 
 from pytest import mark, raises
 
@@ -35,10 +35,10 @@ class _TestFile:
         self.len_org = 0  # original file length
         self.len_srv = 0  # served file length
         self.lock = Lock()
-        self.md5_org = None
-        self.md5_srv = None
+        self.hash_org = None
+        self.hash_srv = None
         self.requested = 0  # number of time file was requested
-        url = urlparse(self.file.replace("\\", "/"))
+        url = urlsplit(self.file.replace("\\", "/"))
         self.url = (
             "?".join((quote(url.path), url.query)) if url.query else quote(url.path)
         )
@@ -51,7 +51,7 @@ def _create_test(fname, path, data=b"Test!", calc_hash=False, url_prefix=None):
         test.len_org = out_fp.tell()
         if calc_hash:
             out_fp.seek(0)
-            test.md5_org = md5(out_fp.read()).hexdigest()
+            test.hash_org = sha1(out_fp.read()).hexdigest()
     return test
 
 
@@ -184,7 +184,7 @@ def test_sapphire_06(client, tmp_path):
         test["file"] = _TestFile(test["name"])
         t_data = "".join(choices("ABCD1234", k=test["size"])).encode("ascii")
         (tmp_path / test["file"].file).write_bytes(t_data)
-        test["file"].md5_org = md5(t_data).hexdigest()
+        test["file"].hash_org = sha1(t_data).hexdigest()
     required = [test["file"].file for test in tests]
     with Sapphire(timeout=10) as serv:
         client.launch("127.0.0.1", serv.port, [test["file"] for test in tests])
@@ -195,27 +195,27 @@ def test_sapphire_06(client, tmp_path):
     for test in tests:
         assert test["file"].code == 200
         assert test["file"].len_srv == test["size"]
-        assert test["file"].md5_srv == test["file"].md5_org
+        assert test["file"].hash_srv == test["file"].hash_org
 
 
 def test_sapphire_07(client, tmp_path):
     """test serving a large (100MB) file"""
     t_file = _TestFile("test_case.html")
-    data_hash = md5()
+    data_hash = sha1()
     with (tmp_path / t_file.file).open("wb") as test_fp:
         # write 100MB of 'A'
         data = b"A" * (100 * 1024)  # 100KB of 'A'
         for _ in range(1024):
             test_fp.write(data)
             data_hash.update(data)
-    t_file.md5_org = data_hash.hexdigest()
+    t_file.hash_org = data_hash.hexdigest()
     with Sapphire(timeout=10) as serv:
         client.launch("127.0.0.1", serv.port, [t_file])
         assert serv.serve_path(tmp_path, required_files=[t_file.file])[0] == Served.ALL
     assert client.wait(timeout=10)
     assert t_file.code == 200
     assert t_file.len_srv == (100 * 1024 * 1024)
-    assert t_file.md5_srv == t_file.md5_org
+    assert t_file.hash_srv == t_file.hash_org
 
 
 def test_sapphire_08(client, tmp_path):
@@ -227,7 +227,7 @@ def test_sapphire_08(client, tmp_path):
     assert client.wait(timeout=10)
     assert t_file.code == 200
     assert t_file.len_srv == t_file.len_org
-    assert t_file.md5_srv == t_file.md5_org
+    assert t_file.hash_srv == t_file.hash_org
 
 
 def test_sapphire_09():
@@ -431,7 +431,7 @@ def test_sapphire_15(client, tmp_path, query, required):
     # create files
     test_dr = _TestFile(request)
     test_dr.len_org = len(_data)
-    test_dr.md5_org = md5(_data).hexdigest()
+    test_dr.hash_org = sha1(_data).hexdigest()
     test = _create_test("test_case.html", tmp_path)
     if required:
         req_files = []
@@ -452,7 +452,7 @@ def test_sapphire_15(client, tmp_path, query, required):
         assert test.len_srv == test.len_org
     assert test_dr.code == 200
     assert test_dr.len_srv == test_dr.len_org
-    assert test_dr.md5_srv == test_dr.md5_org
+    assert test_dr.hash_srv == test_dr.hash_org
 
 
 def test_sapphire_16(client_factory, tmp_path):
@@ -608,7 +608,7 @@ def test_sapphire_22(client, tmp_path):
     assert client.wait(timeout=10)
     assert t_file.code == 200
     assert t_file.len_srv == t_file.len_org
-    assert t_file.md5_srv == t_file.md5_org
+    assert t_file.hash_srv == t_file.hash_org
 
 
 def test_sapphire_23(client, tmp_path):

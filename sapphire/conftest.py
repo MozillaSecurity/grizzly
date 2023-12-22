@@ -1,20 +1,20 @@
 """
 Sapphire unit test fixtures
 """
-import hashlib
-import logging
-import random
-import re
 import socket
-import sys
-import threading
+from hashlib import sha1
 from http.client import BadStatusLine
+from logging import getLogger
+from random import shuffle
+from re import match
+from sys import exc_info
+from threading import Event, Thread
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 import pytest
 
-LOG = logging.getLogger(__name__)
+LOG = getLogger(__name__)
 
 
 @pytest.fixture
@@ -32,9 +32,9 @@ def client_factory():
             self.rx_size = rx_size
             # use this event to add delays instead of sleep
             # this will help avoid shutdown hangs when there are test failures
-            self._closed = threading.Event()
+            self._closed = Event()
             self._closed.set()
-            self._idle = threading.Event()
+            self._idle = Event()
             self._idle.set()
 
         def close(self):
@@ -60,7 +60,7 @@ def client_factory():
             assert self.thread is None
             self._closed.clear()
             self._idle.clear()
-            self.thread = threading.Thread(
+            self.thread = Thread(
                 target=self._handle_request,
                 args=(addr, port, files_to_serve),
                 kwargs={
@@ -90,16 +90,16 @@ def client_factory():
             indexes = list(range(len(files_to_request)))
             if not in_order:
                 # request files in random order
-                random.shuffle(indexes)
+                shuffle(indexes)
             for index in indexes:
                 t_file = files_to_request[index]
                 with t_file.lock:
                     # check if the file has been served
                     if skip_served and t_file.code is not None:
                         continue
-                    # if t_file.md5_org is set to anything but None the test client
-                    # will calculate the md5 hash
-                    data_hash = hashlib.md5() if t_file.md5_org is not None else None
+                    # if t_file.hash_org is set to anything but None the test client
+                    # will calculate the hash
+                    data_hash = sha1() if t_file.hash_org is not None else None
                 try:
                     if t_file.custom_request is None:
                         with urlopen(
@@ -144,7 +144,7 @@ def client_factory():
                         data_length = len(data)
                         try:
                             resp_code = int(
-                                re.match(
+                                match(
                                     r"HTTP/1\.\d\s(?P<code>\d+)\s", data.decode("ascii")
                                 ).group("code")
                             )
@@ -162,7 +162,7 @@ def client_factory():
                         if resp_code == 200:
                             t_file.content_type = content_type
                             t_file.len_srv = data_length
-                            t_file.md5_srv = data_hash
+                            t_file.hash_srv = data_hash
 
                 except HTTPError as http_err:
                     with t_file.lock:
@@ -170,7 +170,7 @@ def client_factory():
                         if not skip_served or t_file.code is None:
                             t_file.code = http_err.code
                 except (BadStatusLine, OSError, URLError):
-                    exc_type, exc_obj, exc_tb = sys.exc_info()
+                    exc_type, exc_obj, exc_tb = exc_info()
                     # set code to zero to help testing
                     with t_file.lock:
                         LOG.debug(
