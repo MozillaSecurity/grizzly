@@ -708,9 +708,7 @@ class ReplayManager:
                 if args.fuzzmanager:
                     cls.report_to_fuzzmanager(results, testcases, args.tool)
                 else:
-                    cls.report_to_filesystem(
-                        args.logs, results, testcases if args.include_test else None
-                    )
+                    cls.report_to_filesystem(args.logs, results, testcases)
             return Exit.SUCCESS if success else Exit.FAILURE
 
         except ConfigError as exc:

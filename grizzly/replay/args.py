@@ -57,12 +57,6 @@ class ReplayCommonArgs(CommonArgs):
             "--sig", type=Path, help="Signature (JSON) file to match."
         )
 
-        self.reporter_grp.add_argument(
-            "--include-test",
-            action="store_true",
-            help="Include the testcase when reporting results.",
-        )
-
     def sanity_check(self, args):
         super().sanity_check(args)
 

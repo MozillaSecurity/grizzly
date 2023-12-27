@@ -24,7 +24,7 @@ class ReduceCommonArgs(ReplayCommonArgs):
         super().__init__()
 
         # these arguments have defaults that vary from ReplayCommonArgs
-        self.parser.set_defaults(include_test=True, logs=Path.cwd())
+        self.parser.set_defaults(logs=Path.cwd())
 
         reduce_args = self.parser.add_argument_group("Reduce Arguments")
         reduce_args.add_argument(
