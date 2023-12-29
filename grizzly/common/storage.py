@@ -350,22 +350,6 @@ class TestCase:
             raise TestCaseLoadFailure("Could not determine entry point")
         return entry_point
 
-    @property
-    def landing_page(self):
-        """TestCase.landing_page is deprecated!
-        Should be replaced with TestCase.entry_point.
-
-        Args:
-            None
-
-        Returns:
-            str: TestCase.entry_point.
-        """
-        LOG.warning(
-            "'TestCase.landing_page' deprecated, use 'TestCase.entry_point' in adapter"
-        )
-        return self.entry_point
-
     @classmethod
     def load(cls, path, entry_point=None, catalog=False):
         """Load a TestCase.
