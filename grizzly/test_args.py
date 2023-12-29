@@ -143,14 +143,14 @@ def test_common_args_03(capsys, mocker, tmp_path, args, msg, targets):
 
 
 def test_common_args_04(tmp_path):
-    """test CommonArgs.parse_args() '--logs' must be dir"""
+    """test CommonArgs.parse_args() '--output' must be dir"""
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
     # test with file
     with raises(SystemExit):
-        CommonArgs().parse_args([str(fake_bin), "--logs", str(fake_bin)])
+        CommonArgs().parse_args([str(fake_bin), "--output", str(fake_bin)])
     # test with dir
-    CommonArgs().parse_args([str(fake_bin), "--logs", str(tmp_path)])
+    CommonArgs().parse_args([str(fake_bin), "--output", str(tmp_path)])
 
 
 def test_common_args_05(mocker):

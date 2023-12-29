@@ -213,8 +213,8 @@ class CommonArgs:
             " only applies to OOMs detected by Grizzly. (default: %(default)s)",
         )
         self.reporter_grp.add_argument(
-            "-l",
-            "--logs",
+            "-o",
+            "--output",
             default=Path.cwd(),
             type=Path,
             help="Location to save logs and test cases. (default: %(default)s)",
@@ -287,13 +287,13 @@ class CommonArgs:
             self.parser.error("--log-limit must be >= 0")
         args.log_limit *= 1_048_576
 
-        # if logs is specified, we need it to be a directory (whether existent or not)
-        if args.logs and args.logs.is_file():
-            self.parser.error("--logs cannot be a file")
-
         if args.memory < 0:
             self.parser.error("--memory must be >= 0")
         args.memory *= 1_048_576
+
+        # if output is specified, it must be a directory (if it exists)
+        if args.output and args.output.is_file():
+            self.parser.error("--output cannot be a file")
 
         if args.no_harness:
             if args.time_limit is not None:

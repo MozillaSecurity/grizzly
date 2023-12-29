@@ -14,7 +14,7 @@ LOCAL_INPUT_HELP = (
 class ReplayCommonArgs(CommonArgs):
     def __init__(self):
         super().__init__()
-        self.parser.set_defaults(logs=None)
+        self.parser.set_defaults(output=None)
 
         replay_args = self.parser.add_argument_group("Replay Arguments")
         replay_args.set_defaults(entry_point=None)
@@ -66,8 +66,8 @@ class ReplayCommonArgs(CommonArgs):
         if args.idle_threshold and args.idle_delay <= 0:
             self.parser.error("--idle-delay value must be positive")
 
-        if args.logs is None and (args.pernosco or args.rr):
-            self.parser.error("--logs must be set when using rr")
+        if args.output is None and (args.pernosco or args.rr):
+            self.parser.error("--output must be set when using rr")
 
         if args.min_crashes < 1:
             self.parser.error("--min-crashes value must be positive")

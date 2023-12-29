@@ -49,7 +49,7 @@ def test_main_01(mocker, server, tmp_path):
     load_target.return_value.return_value = target
     with TestCase("test.html", "adpt") as src:
         src.env_vars["TEST_VAR"] = "100"
-        src.add_from_bytes(b"test", "test.html")
+        src.add_from_bytes(b"test", src.entry_point)
         src.dump(tmp_path / "testcase", include_details=True)
     # setup args
     log_path = tmp_path / "logs"
@@ -66,9 +66,9 @@ def test_main_01(mocker, server, tmp_path):
         ignore=["fake", "timeout"],
         input=[tmp_path / "testcase"],
         launch_attempts=3,
-        logs=log_path,
         min_crashes=2,
         no_harness=False,
+        output=log_path,
         pernosco=False,
         post_launch_delay=0,
         relaunch=1,
@@ -139,9 +139,9 @@ def test_main_02(mocker, server, tmp_path, repro_results):
         ignore=[],
         input=[tmp_path / "test.html"],
         launch_attempts=3,
-        logs=tmp_path / "logs",
         min_crashes=2,
         no_harness=True,
+        output=tmp_path / "logs",
         pernosco=False,
         post_launch_delay=-1,
         relaunch=1,
@@ -292,6 +292,9 @@ def test_main_05(mocker, server, tmp_path):
     )
     asset = tmp_path / "sample_asset"
     asset.touch()
+    input_path = tmp_path / "input"
+    input_path.mkdir()
+    log_path = tmp_path / "logs"
     # setup args
     args = mocker.Mock(
         asset=[["from_cmdline", str(asset)]],
@@ -300,9 +303,11 @@ def test_main_05(mocker, server, tmp_path):
         idle_delay=0,
         idle_threshold=0,
         ignore=[],
+        input=[input_path],
         launch_attempts=3,
         min_crashes=1,
         no_harness=True,
+        output=log_path,
         pernosco=False,
         post_launch_delay=-1,
         relaunch=1,
@@ -314,17 +319,10 @@ def test_main_05(mocker, server, tmp_path):
         timeout=None,
         valgrind=False,
     )
-    log_path = tmp_path / "logs"
-    args.logs = log_path
-    input_path = tmp_path / "input"
-    input_path.mkdir()
     # build a test case
-    entry_point = input_path / "test.html"
-    entry_point.touch()
     with TestCase("test.html", "test-adapter") as src:
-        src.add_from_file(entry_point)
+        src.add_from_bytes(b"test", src.entry_point)
         src.dump(input_path, include_details=True)
-    args.input = [input_path]
     with AssetManager(base_path=tmp_path) as asset_mgr:
         target.asset_mgr = asset_mgr
         assert ReplayManager.main(args) == Exit.SUCCESS
@@ -414,7 +412,7 @@ def test_main_07(mocker, server, tmp_path):
     target.save_logs = _fake_save_logs
     load_target.return_value.return_value = target
     with TestCase("test.html", "adpt") as src:
-        src.add_from_bytes(b"test", "test.html")
+        src.add_from_bytes(b"test", src.entry_point)
         src.dump(tmp_path / "testcase", include_details=True)
     # setup args
     args = mocker.Mock(
@@ -427,9 +425,9 @@ def test_main_07(mocker, server, tmp_path):
         ignore=[],
         input=[tmp_path / "testcase"],
         launch_attempts=1,
-        logs=None,
         min_crashes=1,
         no_harness=False,
+        output=None,
         pernosco=False,
         post_launch_delay=-1,
         relaunch=1,
@@ -507,8 +505,8 @@ def test_main_09(mocker, server, tmp_path):
         idle_threshold=0,
         input=[input_path],
         launch_attempts=1,
-        logs=None,
         min_crashes=1,
+        output=None,
         post_launch_delay=-1,
         relaunch=1,
         repeat=1,
@@ -518,9 +516,6 @@ def test_main_09(mocker, server, tmp_path):
         time_limit=1,
         timeout=1,
     )
-    # build a test case
-    entry_point = input_path / "test.html"
-    entry_point.touch()
     # build test case and asset
     asset = tmp_path / "sample_asset"
     asset.touch()
@@ -529,7 +524,7 @@ def test_main_09(mocker, server, tmp_path):
         with TestCase("test.html", "test-adapter") as src:
             src.assets = asset_mgr.assets
             src.assets_path = asset_mgr.path
-            src.add_from_file(entry_point)
+            src.add_from_bytes(b"", src.entry_point)
             src.dump(input_path, include_details=True)
     # this will load the previously created test case and asset from the filesystem
     try:

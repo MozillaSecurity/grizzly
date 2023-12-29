@@ -694,7 +694,7 @@ class ReplayManager:
                 LOG.info("Results detected, signature does not match")
             else:
                 LOG.info("No results detected")
-            if results and (args.logs or args.fuzzmanager):
+            if results and (args.output or args.fuzzmanager):
                 # add target assets to test cases
                 if not target.asset_mgr.is_empty():
                     for test in testcases:
@@ -708,7 +708,7 @@ class ReplayManager:
                 if args.fuzzmanager:
                     cls.report_to_fuzzmanager(results, testcases, args.tool)
                 else:
-                    cls.report_to_filesystem(args.logs, results, testcases)
+                    cls.report_to_filesystem(args.output, results, testcases)
             return Exit.SUCCESS if success else Exit.FAILURE
 
         except ConfigError as exc:
