@@ -47,10 +47,10 @@ def test_replay_args_01(capsys, mocker, tmp_path):
         (["--min-crashes", "0"], "error: --min-crashes value must be positive", 1),
         # test invalid repeat value
         (["--repeat", "-1"], "error: --repeat value must be positive", 1),
-        # test running with rr without --logs set
+        # test running with rr without --output set
         param(
             ["--rr"],
-            "error: --logs must be set when using rr",
+            "error: --output must be set when using rr",
             1,
             marks=[mark.skipif(system() != "Linux", reason="Linux only")],
         ),

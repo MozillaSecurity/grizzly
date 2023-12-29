@@ -95,7 +95,7 @@ def main(args):
             reporter = FuzzManagerReporter(args.tool or f"grizzly-{adapter.name}")
             LOG.info("Results will be reported via FuzzManager (%s)", reporter.tool)
         else:
-            reporter = FilesystemReporter(args.logs / "results")
+            reporter = FilesystemReporter(args.output / "results")
             LOG.info("Results will be stored in '%s'", reporter.report_path)
         reporter.display_logs = args.smoke_test or reporter.display_logs
 

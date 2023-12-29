@@ -864,7 +864,7 @@ class ReduceManager:
                     target,
                     testcases,
                     args.strategies,
-                    args.logs,
+                    args.output,
                     any_crash=args.any_crash,
                     expect_hang=expect_hang,
                     idle_delay=args.idle_delay,
