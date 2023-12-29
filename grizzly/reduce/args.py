@@ -112,7 +112,7 @@ class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
     def __init__(self):
         """Initialize argument parser."""
         super().__init__()
-        self.parser.add_argument("input", type=int, help="FuzzManager ID to replay")
+        self.parser.add_argument("input", type=int, help="FuzzManager ID to reduce")
 
         self.parser.add_argument(
             "--no-repro-quality",
@@ -125,6 +125,7 @@ class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
 
         self.parser.add_argument(
             "--test-index",
+            default=[],
             type=int,
             nargs="+",
             help="Select a testcase to run when multiple testcases are loaded. "
@@ -135,8 +136,10 @@ class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
     def sanity_check(self, args):
         super().sanity_check(args)
 
-        if args.no_harness and not args.test_index:
-            self.parser.error("'--no-harness' requires '--test-index'")
+        if args.no_harness and len(args.test_index) > 1:
+            self.parser.error(
+                "'--test-index' only supports a single value with '--no-harness'"
+            )
 
 
 class ReduceFuzzManagerIDQualityArgs(ReduceFuzzManagerIDArgs):

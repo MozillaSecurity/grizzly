@@ -72,8 +72,13 @@ def test_args_03(tmp_path, capsys):
     ReduceFuzzManagerIDArgs().parse_args([str(exe), "123"])
     # error cases
     with raises(SystemExit):
-        ReduceFuzzManagerIDArgs().parse_args([str(exe), "123", "--no-harness"])
-    assert "error: '--no-harness' requires '--test-index'" in capsys.readouterr()[-1]
+        ReduceFuzzManagerIDArgs().parse_args(
+            [str(exe), "123", "--no-harness", "--test-index", "0", "1"]
+        )
+    assert (
+        "error: '--test-index' only supports a single value with '--no-harness'"
+        in capsys.readouterr()[-1]
+    )
 
 
 def test_args_04(tmp_path):
@@ -169,7 +174,7 @@ def test_main_exit(
         relaunch=1,
         repeat=1,
         sig=sig,
-        test_index=None,
+        test_index=[],
         timeout=10,
         **kwargs
     )
@@ -243,7 +248,7 @@ def test_main_https_support(mocker, tmp_path, https_supported):
         relaunch=1,
         repeat=1,
         sig=None,
-        test_index=None,
+        test_index=[],
         use_http=False,
         time_limit=1,
         timeout=1,
@@ -277,7 +282,7 @@ def test_main_load_assets_and_env(mocker, tmp_path):
         relaunch=1,
         repeat=1,
         sig=None,
-        test_index=None,
+        test_index=[],
         time_limit=1,
         timeout=1,
     )

@@ -52,11 +52,14 @@ def modify_args(args, crash, bucket):
             LOG.warning("Failed to generate signature from crash data: %s", exc)
 
     args.original_crash_id = args.input
+    # use the newest test case when not using a harness and test_index is not specified
+    if args.no_harness and not args.test_index:
+        args.test_index = [-1]
     args.input = crash.testcases(subset=args.test_index)
+    # set tool name using crash entry
     if args.tool is None:
         LOG.info("Setting default --tool=%s from CrashEntry", crash.tool)
         args.tool = crash.tool
-
     # load signature if needed
     if bucket is not None:
         args.sig = bucket.signature_path()

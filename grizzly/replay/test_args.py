@@ -88,8 +88,13 @@ def test_replay_args_03(tmp_path, capsys):
     ReplayFuzzManagerIDArgs().parse_args([str(exe), "123"])
     # error cases
     with raises(SystemExit):
-        ReplayFuzzManagerIDArgs().parse_args([str(exe), "123", "--no-harness"])
-    assert "error: '--no-harness' requires '--test-index'" in capsys.readouterr()[-1]
+        ReplayFuzzManagerIDArgs().parse_args(
+            [str(exe), "123", "--no-harness", "--test-index", "0", "1"]
+        )
+    assert (
+        "error: '--test-index' only supports a single value with '--no-harness'"
+        in capsys.readouterr()[-1]
+    )
 
 
 def test_replay_args_04(capsys, tmp_path):
