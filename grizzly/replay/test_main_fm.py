@@ -60,6 +60,26 @@ def test_modify_args(tmp_path, mocker, arg_tool, signature):
 
 
 @mark.parametrize(
+    "no_harness, org_index, expected",
+    [
+        # no harness default
+        (True, [], [-1]),
+        # no harness user specified
+        (True, [1], [1]),
+        # harness default
+        (False, [], []),
+        # harness user specified
+        (False, [1], [1]),
+    ],
+)
+def test_modify_args_test_index(mocker, no_harness, org_index, expected):
+    """test modify_args()"""
+    args = mocker.Mock(no_harness=no_harness, test_index=org_index)
+    crash = mocker.Mock(spec=CrashEntry, tool="crash_tool")
+    assert modify_args(args, crash, None).test_index == expected
+
+
+@mark.parametrize(
     "crashes, main_exit_codes, result, arg_sig, arg_tool",
     [
         # no crashes -> success
