@@ -409,15 +409,6 @@ class ReplayManager:
                     report = Report(
                         log_path, self.target.binary, is_hang=run_result.timeout
                     )
-                    # check signatures
-                    if run_result.timeout:
-                        short_sig = "Potential hang detected"
-                    elif report.crash_signature is not None:
-                        short_sig = report.crash_info.createShortSignature()
-                    else:
-                        # FM crash signature creation failed
-                        short_sig = "Signature creation failed"
-
                     # set active signature
                     if (
                         not runner.startup_failure
@@ -427,7 +418,10 @@ class ReplayManager:
                     ):
                         assert not expect_hang
                         assert self._signature is None
-                        LOG.debug("no signature given, using short sig %r", short_sig)
+                        LOG.debug(
+                            "no signature given, using short sig %r",
+                            report.short_signature,
+                        )
                         self._signature = report.crash_signature
                         sig_set = True
                         if self._signature is not None:
@@ -446,10 +440,10 @@ class ReplayManager:
                             bucket_hash = sig_hash
                         else:
                             bucket_hash = report.crash_hash
-                        self.status.results.count(bucket_hash, short_sig)
+                        self.status.results.count(bucket_hash, report.short_signature)
                         LOG.info(
                             "Result: %s (%s:%s)",
-                            short_sig,
+                            report.short_signature,
                             report.major[:8],
                             report.minor[:8],
                         )
@@ -463,7 +457,7 @@ class ReplayManager:
                     else:
                         LOG.info(
                             "Result: Different signature: %s (%s:%s)",
-                            short_sig,
+                            report.short_signature,
                             report.major[:8],
                             report.minor[:8],
                         )

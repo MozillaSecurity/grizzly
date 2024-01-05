@@ -42,6 +42,7 @@ class Report:
         "_crash_info",
         "_logs",
         "_signature",
+        "_short_signature",
         "_target_binary",
         "is_hang",
         "path",
@@ -55,6 +56,7 @@ class Report:
         self._crash_info = None
         self._logs = self._select_logs(log_path)
         assert self._logs is not None
+        self._short_signature = None
         self._signature = None
         self._target_binary = target_binary
         self.is_hang = is_hang
@@ -118,6 +120,9 @@ class Report:
         Returns:
             str: Hash of the raw signature of the crash.
         """
+        if self.is_hang:
+            # TODO: we cannot create a unique bucket hash for hangs atm
+            return "hang"
         return self.calc_hash(self.crash_signature)
 
     @property
@@ -410,6 +415,27 @@ class Report:
                 log_out = log_files
         result = LogMap(log_aux, log_err, log_out)
         return result if any(result) else None
+
+    @property
+    def short_signature(self):
+        """Short signature of the report created by FuzzManager.
+
+        Args:
+            None
+
+        Returns:
+            str: Short signature.
+        """
+        if self._short_signature is None:
+            if self.is_hang:
+                # TODO: remove once we can create accurate signatures for hangs
+                self._short_signature = "Potential hang detected"
+            elif self.crash_signature is None:
+                # FM crash signature creation failed
+                self._short_signature = "Signature creation failed"
+            else:
+                self._short_signature = self.crash_info.createShortSignature()
+        return self._short_signature
 
     @staticmethod
     def tail(in_file, size_limit):

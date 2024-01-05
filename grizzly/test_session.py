@@ -253,9 +253,12 @@ def test_session_05(mocker, harness, report_size):
     """test Session - handle Target delayed failures"""
     reporter = mocker.Mock(spec_set=Reporter)
     report = mocker.Mock(
-        spec_set=Report, major="major123", minor="minor456", crash_hash="1234"
+        spec_set=Report,
+        major="major123",
+        minor="minor456",
+        crash_hash="1234",
+        short_signature="[@ sig]",
     )
-    report.crash_info.createShortSignature.return_value = "[@ sig]"
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.MagicMock(spec_set=Target, launch_timeout=30)
     target.monitor.launches = 1
@@ -293,9 +296,12 @@ def test_session_05(mocker, harness, report_size):
 def test_session_06(mocker, srv_results, target_result, ignored, results):
     """test Session.run() - initial test case was not served"""
     report = mocker.Mock(
-        spec_set=Report, major="major123", minor="minor456", crash_hash="123"
+        spec_set=Report,
+        major="major123",
+        minor="minor456",
+        crash_hash="123",
+        short_signature="[@ sig]",
     )
-    report.crash_info.createShortSignature.return_value = "[@ sig]"
     reporter = mocker.Mock(spec_set=Reporter)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.MagicMock(spec_set=Target, closed=True, launch_timeout=10)
@@ -344,7 +350,13 @@ def test_session_08(mocker):
     runner.return_value.run.return_value = result
     runner.return_value.startup_failure = False
     adapter = mocker.Mock(spec_set=Adapter, remaining=None)
-    report = mocker.Mock(spec_set=Report, major="major123", minor="minor456")
+    report = mocker.Mock(
+        spec_set=Report,
+        major="major123",
+        minor="minor456",
+        crash_hash="hang",
+        short_signature="[@ sig]",
+    )
     reporter = mocker.Mock(spec_set=Reporter)
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.MagicMock(spec_set=Target, environ={})
@@ -375,8 +387,13 @@ def test_session_09(mocker, harness, report_size, relaunch, iters, report_limit)
     """test Session - limit report submission"""
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
-    report = mocker.Mock(spec_set=Report, major="abc", minor="def", crash_hash="123")
-    report.crash_info.createShortSignature.return_value = "[@ sig]"
+    report = mocker.Mock(
+        spec_set=Report,
+        major="abc",
+        minor="def",
+        crash_hash="123",
+        short_signature="[@ sig]",
+    )
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.MagicMock(spec_set=Target, launch_timeout=30)
     target.monitor.launches = 1
@@ -417,8 +434,13 @@ def test_session_10(mocker, harness, iters, result_limit, results):
     """test Session - limit results"""
     adapter = SimpleAdapter(harness)
     reporter = mocker.Mock(spec_set=Reporter)
-    report = mocker.Mock(spec_set=Report, major="abc", minor="def", crash_hash="123")
-    report.crash_info.createShortSignature.return_value = "[@ sig]"
+    report = mocker.Mock(
+        spec_set=Report,
+        major="abc",
+        minor="def",
+        crash_hash="123",
+        short_signature="[@ sig]",
+    )
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.MagicMock(spec_set=Target, launch_timeout=30)
     target.monitor.launches = 1

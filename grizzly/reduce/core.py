@@ -330,9 +330,7 @@ class ReduceManager:
                         first_expected = next(
                             (report for report in results if report.expected), None
                         )
-                        self._signature_desc = (
-                            first_expected.report.crash_info.createShortSignature()
-                        )
+                        self._signature_desc = first_expected.report.short_signature
                     self.report(
                         [result for result in results if not result.expected],
                         testcases,
@@ -543,8 +541,7 @@ class ReduceManager:
                                         not self._any_crash
                                         and self._signature_desc is None
                                     ):
-                                        crash = first_expected.report.crash_info
-                                        sig = crash.createShortSignature()
+                                        sig = first_expected.report.short_signature
                                         self._signature_desc = sig
                                 self._status.report()
                                 strategy.update(success)

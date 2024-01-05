@@ -245,26 +245,17 @@ class Session:
             if result.status == Result.FOUND:
                 LOG.debug("result detected")
                 report = self.target.create_report(is_hang=result.timeout)
-                if result.timeout:
-                    # TODO: we cannot create a unique bucket hash for hangs atm
-                    bucket_hash = "hang"
-                    short_sig = "Potential hang detected"
-                else:
-                    bucket_hash = report.crash_hash
-                    if report.crash_signature is not None:
-                        short_sig = report.crash_info.createShortSignature()
-                    else:
-                        # FM crash signature creation failed
-                        short_sig = "Signature creation failed"
-                seen, initial = self.status.results.count(bucket_hash, short_sig)
+                seen, initial = self.status.results.count(
+                    report.crash_hash, report.short_signature
+                )
                 LOG.info(
                     "Result: %s (%s:%s) - %d",
-                    short_sig,
+                    report.short_signature,
                     report.major[:8],
                     report.minor[:8],
                     seen,
                 )
-                if initial or not self.status.results.is_frequent(bucket_hash):
+                if initial or not self.status.results.is_frequent(report.crash_hash):
                     # add target info to test cases
                     for test in self.iomanager.tests:
                         test.assets = dict(self.target.asset_mgr.assets)

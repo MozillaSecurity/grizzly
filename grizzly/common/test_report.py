@@ -6,7 +6,7 @@
 from pathlib import Path
 
 from FTB.Signatures.CrashInfo import CrashInfo
-from pytest import mark, raises
+from pytest import mark
 
 from .report import Report
 
@@ -62,10 +62,10 @@ def test_report_03(tmp_path):
     tmp_file = tmp_path / "file.txt"
     tmp_file.write_bytes(b"blah\ntest\n123\xEF\x00FOO")
     length = tmp_file.stat().st_size
-    # no size limit
-    with raises(AssertionError):
-        Report.tail(tmp_file, 0)
+    # don't trim
+    Report.tail(tmp_file, length + 1)
     assert tmp_file.stat().st_size == length
+    # perform trim
     Report.tail(tmp_file, 3)
     log_data = tmp_file.read_bytes()
     assert log_data.startswith(b"[LOG TAILED]\n")
@@ -286,16 +286,19 @@ def test_report_12(tmp_path):
     assert report._crash_info is None
     assert report.crash_info is not None
     assert report._crash_info is not None
+    assert report._crash_info.configuration.product == "bin"
     # with binary.fuzzmanagerconf
-    with (tmp_path / "fake_bin.fuzzmanagerconf").open("wb") as conf:
+    with (tmp_path / "bin.fuzzmanagerconf").open("wb") as conf:
         conf.write(b"[Main]\n")
         conf.write(b"platform = x86-64\n")
-        conf.write(b"product = mozilla-central\n")
+        conf.write(b"product = grizzly-test\n")
         conf.write(b"os = linux\n")
     report = Report(tmp_path, Path("bin"))
+    report._target_binary = tmp_path / "bin"
     assert report._crash_info is None
     assert report.crash_info is not None
     assert report._crash_info is not None
+    assert report._crash_info.configuration.product == "grizzly-test"
 
 
 @mark.parametrize(
@@ -382,3 +385,27 @@ def test_report_15(tmp_path, data, lines):
         log = tmp_path / "test-log.txt"
         log.write_text(data)
         assert len(Report._load_log(log)) == lines
+
+
+@mark.parametrize(
+    "hang, has_log, expected",
+    [
+        # process log and create short signature
+        (False, True, "[@ foo]"),
+        # no log available to create short signature
+        (False, False, "Signature creation failed"),
+        # result is a hang
+        (True, True, "Potential hang detected"),
+    ],
+)
+def test_report_16(mocker, tmp_path, hang, has_log, expected):
+    """test Report.short_signature"""
+    mocker.patch("grizzly.common.report.ProgramConfiguration", autospec=True)
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    if has_log:
+        _create_crash_log(tmp_path / "log_asan_blah.txt")
+    report = Report(tmp_path, Path("bin"), is_hang=hang)
+    assert report.short_signature == expected
+    if hang:
+        assert report.crash_hash == "hang"
