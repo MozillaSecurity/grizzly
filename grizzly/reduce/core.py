@@ -268,34 +268,26 @@ class ReduceManager:
         # N.B. We only use `last_test_only` if `len(self.testcases) > 1` ..
         # if `self.testcases` only has 1 entry to begin with, we don't need
         # `last_test_only` to trim it
-        for use_harness, last_test_only in (
-            (True, True),
-            (True, False),
-            # only one of the two use_harness=False cases will run:
-            # input is len(self.testcases)>1 and we will only try the last testcase
-            (False, True),
-            # input is len(self.testcases)==1 already and there's no need to trim
-            (False, False),
+        for use_harness, last_test_only, relaunch in (
+            # don't relaunch between iterations (be quick)
+            (True, True, self.ANALYSIS_ITERATIONS),
+            # relaunch between iterations regardless of testcase count (be thorough)
+            (True, False, 1),
+            # without the harness we only try the last testcase
+            # relaunch between iterations is implied
+            (False, True, 1),
         ):
-            if use_harness and (not self._original_use_harness or harness_crashes):
-                # Don't test with harness again if we already found crashes with the
-                # harness (last_test_only) or if it was disabled by command-line.
+            harness_best = max(harness_crashes, harness_last_crashes)
+            if use_harness and (
+                not self._original_use_harness
+                or harness_last_crashes >= self.ANALYSIS_ITERATIONS / 2
+            ):
+                # Don't test with harness again if we already found enough crashes with
+                # the harness (last_test_only) or if it was disabled by command-line.
                 continue
-            if not use_harness and harness_crashes >= self.ANALYSIS_ITERATIONS / 2:
+            if not use_harness and harness_best >= self.ANALYSIS_ITERATIONS / 2:
                 # Don't test without harness if harness found > 50% crashes
                 continue
-            if last_test_only and len(self.testcases) == 1:
-                # Only set `last_test_only` if we initially have more than one testcase
-                continue
-            if not use_harness and (not last_test_only and len(self.testcases) > 1):
-                # Can't run without harness if we have more than one testcase
-                # (`last_test_only` will run)
-                continue
-
-            if use_harness and (last_test_only or len(self.testcases) == 1):
-                relaunch = self.ANALYSIS_ITERATIONS
-            else:
-                relaunch = 1
 
             with ReplayManager(
                 self.ignore,
@@ -312,7 +304,7 @@ class ReduceManager:
                     "using" if use_harness else "without",
                 )
                 testcases = self.testcases
-                if last_test_only:
+                if last_test_only and len(testcases) > 1:
                     if use_harness:
                         LOG.warning("Checking reliability with only the last testcase.")
                     else:
@@ -346,12 +338,10 @@ class ReduceManager:
                         testcases,
                     )
                     if use_harness:
-                        # set harness_crashes in both cases (last_test True/False)
-                        # we only want to iterate through all testcases if the last
-                        # testcase alone never reproduced (crashes == 0).
-                        harness_crashes = crashes
                         if last_test_only:
                             harness_last_crashes = crashes
+                        else:
+                            harness_crashes = crashes
                     else:
                         non_harness_crashes = crashes
                 finally:
@@ -379,24 +369,20 @@ class ReduceManager:
                 # ensure same signature is always used
                 self._signature = replay.signature
 
-        if not (harness_crashes or non_harness_crashes):
+        if not (harness_last_crashes or harness_crashes or non_harness_crashes):
             raise NotReproducible("Did not reproduce during analysis")
-
-        # if harness is selected, we'll only use the last testcase
-        if harness_last_crashes:
-            harness_crashes = harness_last_crashes
 
         # should we use the harness? go with harness unless no-harness crashed 50% more
         self._use_harness = not (
-            non_harness_crashes > harness_crashes
+            non_harness_crashes > harness_best
             and (
-                harness_crashes == 0
-                or (non_harness_crashes - harness_crashes) / harness_crashes >= 0.5
+                harness_best == 0
+                or (non_harness_crashes - harness_best) / harness_best >= 0.5
             )
         )
 
-        if (self._use_harness and harness_last_crashes) or (
-            not self._use_harness and len(self.testcases) > 1
+        if len(self.testcases) > 1 and (
+            not self._use_harness or harness_last_crashes >= harness_crashes
         ):
             LOG.warning(
                 "Last testcase %s harness was selected, other %d "
@@ -408,7 +394,7 @@ class ReduceManager:
                 self.testcases.pop(0).cleanup()
 
         crashes_percent = (
-            harness_crashes if self._use_harness else non_harness_crashes
+            harness_best if self._use_harness else non_harness_crashes
         ) / self.ANALYSIS_ITERATIONS
 
         # adjust repeat/min-crashes depending on how reliable the testcase was
@@ -428,19 +414,19 @@ class ReduceManager:
         )
 
         LOG.info("Analysis results:")
-        if harness_crashes >= self.ANALYSIS_ITERATIONS / 2:
+        if harness_best >= self.ANALYSIS_ITERATIONS / 2:
             LOG.info(
                 "* testcase was better than 50% reliable with the harness "
                 "(--no-harness not assessed)"
             )
-        elif harness_crashes == non_harness_crashes:
+        elif harness_best == non_harness_crashes:
             LOG.info("* testcase was equally reliable with/without the harness")
         elif not self._original_use_harness:
             LOG.info("* --no-harness was already set")
         else:
             LOG.info(
                 "* testcase was %s reliable with the harness",
-                "more" if harness_crashes > non_harness_crashes else "less",
+                "more" if harness_best > non_harness_crashes else "less",
             )
         return (repeat, min_crashes)
 
