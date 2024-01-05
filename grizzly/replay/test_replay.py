@@ -299,11 +299,8 @@ def test_replay_09(mocker, server):
     """test ReplayManager.run() - test signatures - fail to meet minimum"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
-    report_1.crash_info.createShortSignature.return_value = "[@ test1]"
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
-    report_2.crash_info.createShortSignature.return_value = "[@ test2]"
     report_3 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
-    report_3.crash_info.createShortSignature.return_value = "[@ test2]"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2, report_3)
     fake_report.calc_hash.return_value = "bucketHASH"
@@ -335,9 +332,7 @@ def test_replay_09(mocker, server):
 def test_replay_10(mocker, server):
     """test ReplayManager.run() - test signatures - multiple matches"""
     report_0 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
-    report_0.crash_info.createShortSignature.return_value = "[@ test1]"
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
-    report_1.crash_info.createShortSignature.return_value = "[@ test2]"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_0, report_1)
     fake_report.calc_hash.return_value = "bucketHASH"
@@ -367,9 +362,7 @@ def test_replay_10(mocker, server):
 def test_replay_11(mocker, server):
     """test ReplayManager.run() - any crash - success"""
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
-    report_1.crash_info.createShortSignature.return_value = "[@ test1]"
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
-    report_2.crash_info.createShortSignature.return_value = "[@ test2]"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2)
     server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
@@ -395,9 +388,7 @@ def test_replay_11(mocker, server):
 def test_replay_12(mocker, server):
     """test ReplayManager.run() - any crash - fail to meet minimum"""
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
-    report_1.crash_info.createShortSignature.return_value = "[@ test1]"
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
-    report_2.crash_info.createShortSignature.return_value = "[@ test2]"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2)
     server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
@@ -446,14 +437,11 @@ def test_replay_14(mocker, server):
     auto_sig.matches.side_effect = (True, False, True)
     # original
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="012", minor="999")
-    report_1.crash_info.createShortSignature.return_value = "[@ test1]"
     report_1.crash_signature = auto_sig
     # non matching report
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="abc", minor="987")
-    report_2.crash_info.createShortSignature.return_value = "[@ test2]"
     # matching report
     report_3 = mocker.Mock(spec_set=Report, crash_hash="h1", major="012", minor="999")
-    report_3.crash_info.createShortSignature.return_value = "[@ test1]"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2, report_3)
     fake_report.calc_hash.return_value = "bucket_hash"
@@ -481,7 +469,6 @@ def test_replay_14(mocker, server):
 def test_replay_15(mocker, server):
     """test ReplayManager.run() - unexpected exception"""
     report_0 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
-    report_0.crash_info.createShortSignature.return_value = "[@ test1]"
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_0,)
     server.serve_path.side_effect = (
