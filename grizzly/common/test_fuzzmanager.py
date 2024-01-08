@@ -261,7 +261,7 @@ def test_crash_5(mocker):
     with raises(RuntimeError) as exc:
         with CrashEntry(123) as crash:
             crash.create_signature(None)
-    assert "failed to generate" in str(exc).lower()
+    assert "insufficient data to generate" in str(exc).lower()
     assert coll.return_value.get.call_count == 1
 
 
