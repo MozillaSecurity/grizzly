@@ -6,9 +6,10 @@ import json
 from contextlib import contextmanager
 from logging import getLogger
 from pathlib import Path
-from shutil import rmtree
+from re import search
+from shutil import copyfileobj, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
-from zipfile import ZipFile
+from zipfile import BadZipFile, ZipFile
 
 from Collector.Collector import Collector
 from FTB.ProgramConfiguration import ProgramConfiguration
@@ -295,11 +296,12 @@ class CrashEntry:
         # build list of items to preserve
         return [tests[i] for i in sorted(keep)]
 
-    def testcases(self, subset=None):
+    def testcases(self, subset=None, ext=None):
         """Download the testcase data from CrashManager.
 
         Arguments:
             subset list(int): Indices of corresponding directories to select.
+            ext (str): Overwrite file extension used with downloaded testcase.
 
         Returns:
             list(Path): Directories on disk where testcases exists.
@@ -317,27 +319,52 @@ class CrashEntry:
                 dir=grz_tmp("fuzzmanager"),
                 prefix=f"crash-{self.crash_id}-",
                 suffix=Path(self.testcase).suffix,
-            ) as archive:
-                archive.write(response.content)
-                archive.seek(0)
+            ) as data:
+                data.write(response.content)
+                data.seek(0)
                 # self._storage should be removed when self.cleanup() is called
                 self._storage = Path(
                     mkdtemp(
                         prefix=f"crash-{self.crash_id}-", dir=grz_tmp("fuzzmanager")
                     )
                 )
-                with ZipFile(archive) as zip_fp:
-                    zip_fp.extractall(path=self._storage)
-                # test case directories are named sequentially, a zip with three test
-                # directories would have:
-                # - 'foo-2' (oldest)
-                # - 'foo-1'
-                # - 'foo-0' (most recent)
-                # see FuzzManagerReporter for more info
-                self._contents = sorted(
-                    (x.parent for x in self._storage.rglob(TEST_INFO)),
-                    reverse=True,
-                )
+                try:
+                    with ZipFile(data) as zip_fp:
+                        zip_fp.extractall(path=self._storage)
+                    # test case directories are named sequentially
+                    # an archive with three test directories would have:
+                    # - 'foo-2' (oldest)
+                    # - 'foo-1'
+                    # - 'foo-0' (most recent)
+                    # see FuzzManagerReporter for more info
+                    self._contents = sorted(
+                        (x.parent for x in self._storage.rglob(TEST_INFO)),
+                        reverse=True,
+                    )
+                except BadZipFile as exc:
+                    LOG.debug("downloaded data is not a valid zip")
+                    if ext is None:
+                        match = search(
+                            r'filename="(?P<name>.+)"',
+                            response.headers["content-disposition"],
+                        )
+                        if match:
+                            # if nothing is found fallback to html
+                            file_name = match.group("name")
+                            if "." in file_name:
+                                ext = file_name.split(".")[-1] or "html"
+                            else:
+                                ext = "html"
+                    if ext.lower().endswith("zip"):
+                        LOG.error("Error loading test case: %s", exc)
+                        self._contents = []
+                    else:
+                        # load raw test case
+                        test_file = self._storage / f"test.{ext}"
+                        data.seek(0)
+                        with test_file.open("wb") as dst:
+                            copyfileobj(data, dst)
+                        self._contents = [test_file]
 
         if subset and self._contents:
             return self._subset(self._contents, subset)
