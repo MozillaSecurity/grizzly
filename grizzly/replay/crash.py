@@ -55,7 +55,7 @@ def modify_args(args, crash, bucket):
     # use the newest test case when not using a harness and test_index is not specified
     if args.no_harness and not args.test_index:
         args.test_index = [-1]
-    args.input = crash.testcases(subset=args.test_index)
+    args.input = crash.testcases(subset=args.test_index, ext=args.test_ext)
     # set tool name using crash entry
     if args.tool is None:
         LOG.info("Setting default --tool=%s from CrashEntry", crash.tool)

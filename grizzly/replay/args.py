@@ -116,6 +116,8 @@ class ReplayFuzzManagerIDArgs(ReplayCommonArgs):
         super().__init__()
         self.parser.add_argument("input", type=int, help="FuzzManager ID to replay")
 
+        self.parser.add_argument("--test-ext", help="Overwrite testcase file extension")
+
         self.parser.add_argument(
             "--test-index",
             default=[],

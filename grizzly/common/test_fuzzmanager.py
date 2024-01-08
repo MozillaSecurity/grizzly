@@ -13,7 +13,7 @@ from .fuzzmanager import Bucket, CrashEntry, load_fm_data
 from .storage import TEST_INFO
 
 
-def test_bucket_1(mocker):
+def test_bucket_01(mocker):
     """bucket getattr uses data from get"""
     coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     coll.return_value.get.return_value.json.return_value = {"testcase": "data"}
@@ -28,7 +28,7 @@ def test_bucket_1(mocker):
     assert coll.return_value.get.call_count == 1
 
 
-def test_bucket_2(mocker):
+def test_bucket_02(mocker):
     """bucket setattr raises"""
     coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     coll.return_value.serverProtocol = "http"
@@ -40,7 +40,7 @@ def test_bucket_2(mocker):
     assert coll.return_value.get.call_count == 0
 
 
-def test_bucket_3(mocker):
+def test_bucket_03(mocker):
     """bucket iter_crashes flattens across pages"""
     coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     coll.return_value.serverProtocol = "http"
@@ -80,7 +80,7 @@ def test_bucket_3(mocker):
     assert crashes[1].crash_id == 456
 
 
-def test_bucket_4(mocker):
+def test_bucket_04(mocker):
     """bucket signature_path writes and returns sig json and metadata"""
     coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     coll.return_value.serverProtocol = "http"
@@ -111,7 +111,7 @@ def test_bucket_4(mocker):
     assert coll.return_value.get.call_count == 1
 
 
-def test_crash_1(mocker):
+def test_crash_01(mocker):
     """crash getattr uses data from get"""
     coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     coll.return_value.get.return_value.json.return_value = {"testcase": "data"}
@@ -133,7 +133,7 @@ def test_crash_1(mocker):
     assert coll.return_value.get.call_args[1]["params"] == {"include_raw": "1"}
 
 
-def test_crash_2(mocker):
+def test_crash_02(mocker):
     """crash setattr raises except testcase_quality"""
     coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     coll.return_value.get.return_value.json.return_value = {"testcase": "data"}
@@ -163,7 +163,52 @@ def test_crash_2(mocker):
     assert coll.return_value.get.call_count == 1
 
 
-def test_crash_3(mocker, tmp_path):
+@mark.parametrize(
+    "file_name, passed_ext, expected",
+    [
+        # using existing name
+        ("foo.html", None, "test.html"),
+        # use default extension
+        ("foo", None, "test.html"),
+        # use default extension
+        ("foo.", None, "test.html"),
+        # add missing extension
+        ("foo", "svg", "test.svg"),
+        # overwrite extension
+        ("foo.zip", "svg", "test.svg"),
+        # bad zipfile
+        ("foo.zip", None, None),
+    ],
+)
+def test_crash_03(mocker, tmp_path, file_name, passed_ext, expected):
+    """test case is not zipfile"""
+    coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
+    coll.return_value.serverProtocol = "http"
+    coll.return_value.serverPort = 123
+    coll.return_value.serverHost = "allizom.org"
+    coll.return_value.get.return_value.json.return_value = {
+        "id": 234,
+        "testcase": file_name,
+    }
+    with open(tmp_path / file_name, "w") as zip_fp:
+        zip_fp.write("data")
+    with CrashEntry(234) as crash:
+        assert crash.testcase == file_name  # pre-load data dict so I can re-patch get
+        coll.return_value.get.return_value = mocker.Mock(
+            content=(tmp_path / file_name).read_bytes(),
+            headers={"content-disposition": f'attachment; filename="bar/{file_name}"'},
+        )
+        assert coll.return_value.get.call_count == 1
+        tests = crash.testcases(ext=passed_ext)
+        assert crash._contents is not None
+        if expected is not None:
+            assert tests
+            assert tests[-1].name == expected
+        else:
+            assert not tests
+
+
+def test_crash_04(mocker, tmp_path):
     """crash testcase_path writes and returns testcase zip"""
     coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     coll.return_value.serverProtocol = "http"
@@ -185,7 +230,7 @@ def test_crash_3(mocker, tmp_path):
         assert crash.testcase == "test.zip"  # pre-load data dict so I can re-patch get
         coll.return_value.get.return_value = mocker.Mock(
             content=(tmp_path / "test.zip").read_bytes(),
-            headers={"content-disposition"},
+            headers={"content-disposition": 'attachment; filename="tests/test.zip"'},
         )
         assert coll.return_value.get.call_count == 1
         tests = crash.testcases()
@@ -209,7 +254,7 @@ def test_crash_3(mocker, tmp_path):
     assert coll.return_value.get.call_count == 2
 
 
-def test_crash_4(mocker):
+def test_crash_05(mocker):
     """crash create_signature writes and returns signature path"""
     cfg = ProgramConfiguration("product", "platform", "os")
     mocker.patch(
@@ -243,7 +288,7 @@ def test_crash_4(mocker):
     assert coll.return_value.get.call_count == 1
 
 
-def test_crash_5(mocker):
+def test_crash_06(mocker):
     """crash create_signature raises when it can't create a signature"""
     cfg = ProgramConfiguration("product", "platform", "os")
     mocker.patch(
@@ -265,7 +310,7 @@ def test_crash_5(mocker):
     assert coll.return_value.get.call_count == 1
 
 
-def test_crash_6(tmp_path):
+def test_crash_07(tmp_path):
     """test CrashEntry._subset()"""
     # test single entry
     paths = [tmp_path / "0"]
@@ -303,7 +348,7 @@ def test_crash_6(tmp_path):
         (111, True),
     ],
 )
-def test_load_fm_data_1(mocker, bucket_id, load_bucket):
+def test_load_fm_data_01(mocker, bucket_id, load_bucket):
     """test load_fm_data()"""
     coll = mocker.patch("grizzly.common.fuzzmanager.Collector", autospec=True)
     coll.return_value.serverProtocol = "http"
