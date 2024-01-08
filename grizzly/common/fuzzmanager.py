@@ -369,10 +369,7 @@ class CrashEntry:
             )
             fm_sig = fm_crash.createCrashSignature()
             if fm_sig is None:
-                raise RuntimeError(
-                    "Failed to generate signature from crash data: "
-                    f"{fm_crash.failureReason}"
-                )
+                raise RuntimeError(str(fm_crash.failureReason))
             sig_filename.write_text(fm_sig.rawSignature)
 
             sigmeta_filename = sig_filename.with_suffix(".metadata")
