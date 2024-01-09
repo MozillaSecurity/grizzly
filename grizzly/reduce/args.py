@@ -123,6 +123,8 @@ class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
             "(default: %(default)s).",
         )
 
+        self.parser.add_argument("--test-ext", help="Overwrite testcase file extension")
+
         self.parser.add_argument(
             "--test-index",
             default=[],
