@@ -34,7 +34,7 @@ def test_loki_fuzz_file(tmp_path, in_size, aggression, byte_order):
 
     fuzzer = Loki(aggression=aggression, byte_order=byte_order)
     for _ in range(100):
-        assert fuzzer.fuzz_file(str(tmp_fn), 1, str(out_path))
+        assert fuzzer.fuzz_file(tmp_fn, 1, out_path)
         out_files = list(out_path.iterdir())
         assert len(out_files) == 1
         out_data = out_files[0].read_bytes()
@@ -49,14 +49,14 @@ def test_loki_01(tmp_path):
     """test Loki.fuzz_file() error cases"""
     fuzzer = Loki(aggression=0.1)
     # test missing file
-    assert not fuzzer.fuzz_file("nofile.test", 1, str(tmp_path))
+    assert not fuzzer.fuzz_file(tmp_path / "nofile.test", 1, tmp_path)
     assert not list(tmp_path.iterdir())
     # test empty file
     tmp_fn = tmp_path / "input"
     tmp_fn.touch()
     out_path = tmp_path / "out"
     out_path.mkdir()
-    assert not fuzzer.fuzz_file(str(tmp_fn), 1, str(out_path))
+    assert not fuzzer.fuzz_file(tmp_fn, 1, out_path)
     assert not list(out_path.iterdir())
 
 
@@ -158,12 +158,17 @@ def test_main_01(mocker, tmp_path):
     sample = tmp_path / "file.bin"
     sample.write_bytes(b"test!")
     args = mocker.Mock(
-        aggression=0.1, byte_order=None, count=15, input=str(sample), output=None
+        aggression=0.1, byte_order=None, count=15, input=sample, output=None
     )
     assert Loki.main(args) == 0
     assert fake_mkdtemp.call_count == 1
 
 
-def test_args_01():
+def test_args_01(capsys, tmp_path):
     """test parse_args()"""
-    assert parse_args(argv=["sample"])
+    with raises(SystemExit):
+        parse_args(argv=["missing.file"])
+    assert "error: 'missing.file' is not a file" in capsys.readouterr()[-1]
+    sample = tmp_path / "foo.txt"
+    sample.touch()
+    assert parse_args(argv=[str(sample)])
