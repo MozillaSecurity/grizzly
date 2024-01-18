@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from argparse import ArgumentParser
+from pathlib import Path
 
 from loki import Loki
 
@@ -10,7 +11,9 @@ __author__ = "Tyson Smith"
 
 def parse_args(argv=None):
     parser = ArgumentParser(description="Loki fuzzing library")
-    parser.add_argument("input", help="Output will be generated based on this file")
+    parser.add_argument(
+        "input", type=Path, help="Output will be generated based on this file"
+    )
     parser.add_argument(
         "-a",
         "--aggression",
@@ -31,7 +34,13 @@ def parse_args(argv=None):
         "--count",
         default=1,
         type=int,
-        help="Number test cases to generate, minimum 1 (default: %(default)s)",
+        help="Number of test cases to generate, minimum 1 (default: %(default)s)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        help="Output directory for fuzzed test cases (default: '.')",
     )
     parser.add_argument(
         "-q",
@@ -40,12 +49,9 @@ def parse_args(argv=None):
         action="store_true",
         help="Display limited output (default: %(default)s)",
     )
-    parser.add_argument(
-        "-o",
-        "--output",
-        default=None,
-        help="Output directory for fuzzed test cases (default: '.')",
-    )
     args = parser.parse_args(argv)
+
+    if not args.input.is_file():
+        parser.error(f"'{args.input}' is not a file")
 
     return args

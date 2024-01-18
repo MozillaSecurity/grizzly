@@ -5,15 +5,13 @@
 Loki fuzzing library
 """
 from logging import ERROR, INFO, basicConfig, getLogger
-from os import SEEK_END, makedirs
-from os.path import abspath, getsize
-from os.path import join as pathjoin
-from os.path import splitext
+from os import SEEK_END
+from pathlib import Path
 from random import choice, getrandbits, randint, sample
 from shutil import copy
 from struct import pack, unpack
 from tempfile import SpooledTemporaryFile, mkdtemp
-from time import strftime, time
+from time import perf_counter, strftime
 
 __author__ = "Tyson Smith"
 
@@ -103,7 +101,6 @@ class Loki:
             tgt_fp.write(out_data)
 
     def fuzz_data(self, data):
-        assert data
         assert isinstance(data, bytes)
         # open a temp file in memory for fuzzing
         with SpooledTemporaryFile(max_size=0x800000, mode="r+b") as tmp_fp:
@@ -114,18 +111,18 @@ class Loki:
 
     def fuzz_file(self, in_file, count, out_dir, ext=None):
         try:
-            if getsize(in_file) < 1:
+            if in_file.stat().st_size < 1:
                 LOG.error("Input must be at least 1 byte long")
                 return False
-        except OSError:
-            LOG.error("%r does not exists!", in_file)
+        except FileNotFoundError:
+            LOG.error("'%s' does not exist!", in_file)
             return False
         if ext is None:
-            ext = splitext(in_file)[1]
+            ext = in_file.suffix
         for i in range(count):
-            out_file = pathjoin(out_dir, f"{i:0>6d}_fuzzed{ext}")
+            out_file = out_dir / f"{i:06d}_fuzzed{ext}"
             copy(in_file, out_file)
-            with open(out_file, "r+b") as out_fp:
+            with out_file.open("r+b") as out_fp:
                 self._fuzz(out_fp)
         return True
 
@@ -133,19 +130,19 @@ class Loki:
     def main(cls, args):
         basicConfig(format="", level=INFO if not args.quiet else ERROR)
         LOG.info("Starting Loki @ %s", strftime("%Y-%m-%d %H:%M:%S"))
-        LOG.info("Target template is %r", abspath(args.input))
+        LOG.info("Target template is '%s'", args.input.resolve())
         out_dir = args.output
         if out_dir is None:
-            out_dir = mkdtemp(prefix=strftime("loki_%m-%d_%H-%M_"), dir=".")
-        makedirs(out_dir, exist_ok=True)
-        LOG.info("Output directory is %r", abspath(out_dir))
+            out_dir = Path(mkdtemp(prefix=strftime("loki_%m-%d_%H-%M_"), dir="."))
+        out_dir.mkdir(exist_ok=True)
+        LOG.info("Output directory is '%s'", out_dir.resolve())
         count = max(args.count, 1)
         LOG.info("Generating %d fuzzed test cases...", count)
         loki = Loki(aggression=args.aggression, byte_order=args.byte_order)
         try:
-            start_time = time()
+            start_time = perf_counter()
             success = loki.fuzz_file(args.input, count, out_dir)
-            finish_time = time() - start_time
+            finish_time = perf_counter() - start_time
             LOG.info("Done. Total run time %gs", finish_time)
             if success:
                 LOG.info("About %gs per file", finish_time / count)
