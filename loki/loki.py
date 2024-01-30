@@ -48,7 +48,7 @@ class Loki:
         elif fuzz_op == 1:  # arithmetic
             out_data = unpack(pack_unit, in_data)[0] + randint(-10, 10)
         elif fuzz_op == 2:  # interesting byte, short or int
-            out_data = choice((0, 1, int(mask / 2), int(mask / 2) + 1, mask))
+            out_data = choice((0, 1, mask // 2, (mask // 2) + 1, mask))
         elif fuzz_op == 3:  # random byte, short or int
             out_data = getrandbits(32)
         elif fuzz_op == 4:
