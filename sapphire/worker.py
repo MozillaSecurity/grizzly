@@ -6,14 +6,19 @@ Sapphire HTTP server worker
 """
 from logging import getLogger
 from re import compile as re_compile
-from socket import SHUT_RDWR
+from socket import SHUT_RDWR, socket
 from socket import timeout as sock_timeout  # Py3.10 socket.timeout => TimeoutError
 from sys import exc_info
 from threading import Thread, ThreadError, active_count
 from time import sleep
-from urllib.parse import quote, unquote, urlparse
+from typing import Optional
+from urllib.parse import ParseResult, quote, unquote, urlparse
 
-from .server_map import Resource
+from .job import Job
+from .server_map import DynamicResource, FileResource, RedirectResource
+
+# TODO: urlparse -> urlsplit
+
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -26,12 +31,12 @@ class Request:
 
     __slots__ = ("method", "url")
 
-    def __init__(self, method, url):
+    def __init__(self, method: str, url: ParseResult) -> None:
         self.method = method
         self.url = url
 
     @classmethod
-    def parse(cls, raw_data):
+    def parse(cls, raw_data: bytes) -> Optional["Request"]:
         assert isinstance(raw_data, bytes)
         req_match = cls.REQ_PATTERN.match(raw_data)
         if not req_match:
@@ -64,12 +69,12 @@ class Worker:
 
     __slots__ = ("_conn", "_thread")
 
-    def __init__(self, conn, thread):
+    def __init__(self, conn: socket, thread: Thread) -> None:
         self._conn = conn
-        self._thread = thread
+        self._thread: Optional[Thread] = thread
 
     @staticmethod
-    def _200_header(c_length, c_type, encoding="ascii"):
+    def _200_header(c_length: int, c_type: str) -> bytes:
         assert c_type is not None
         data = (
             "HTTP/1.1 200 OK\r\n"
@@ -78,19 +83,19 @@ class Worker:
             f"Content-Type: {c_type}\r\n"
             "Connection: close\r\n\r\n"
         )
-        return data.encode(encoding)
+        return data.encode(encoding="ascii")
 
     @staticmethod
-    def _307_redirect(redirect_to, encoding="ascii"):
+    def _307_redirect(redirect_to: str) -> bytes:
         data = (
             "HTTP/1.1 307 Temporary Redirect\r\n"
             f"Location: {redirect_to}\r\n"
             "Connection: close\r\n\r\n"
         )
-        return data.encode(encoding)
+        return data.encode(encoding="ascii")
 
     @staticmethod
-    def _4xx_page(code, hdr_msg, close=-1, encoding="ascii"):
+    def _4xx_page(code: int, hdr_msg: str, close: int = -1) -> bytes:
         if close < 0:
             content = f"<h3>{code}!</h3>"
         else:
@@ -109,9 +114,9 @@ class Worker:
             "Content-Type: text/html\r\n"
             f"Connection: close\r\n\r\n{content}"
         )
-        return data.encode(encoding)
+        return data.encode(encoding="ascii")
 
-    def close(self):
+    def close(self) -> None:
         # workers that are no longer running will have had close() called
         if self.is_alive():
             # shutdown socket to avoid hang
@@ -122,11 +127,11 @@ class Worker:
                 LOG.debug("close - shutdown(): %s", exc)
             self._conn.close()
 
-    def is_alive(self):
+    def is_alive(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
     @classmethod
-    def handle_request(cls, conn, serv_job):
+    def handle_request(cls, conn: socket, serv_job: Job) -> None:
         finish_job = False  # call finish() on return
         try:
             # socket operations should not block forever
@@ -162,9 +167,9 @@ class Worker:
             LOG.debug("lookup resource %r", request.url.path)
             resource = serv_job.lookup_resource(request.url.path)
             if resource:
-                if resource.type in (Resource.URL_FILE, Resource.URL_INCLUDE):
+                if isinstance(resource, FileResource):
                     finish_job = serv_job.remove_pending(str(resource.target))
-                elif resource.type in (Resource.URL_DYNAMIC, Resource.URL_REDIRECT):
+                elif isinstance(resource, (DynamicResource, RedirectResource)):
                     finish_job = serv_job.remove_pending(request.url.path.lstrip("/"))
                 else:  # pragma: no cover
                     # this should never happen
@@ -186,7 +191,7 @@ class Worker:
                     request.url.path[-40:],
                     serv_job.pending,
                 )
-            elif resource.type == Resource.URL_REDIRECT:
+            elif isinstance(resource, RedirectResource):
                 redirect_to = [quote(resource.target)]
                 if request.url.query:
                     LOG.debug("appending query %r", request.url.query)
@@ -198,7 +203,7 @@ class Worker:
                     resource.target,
                     serv_job.pending,
                 )
-            elif resource.type == Resource.URL_DYNAMIC:
+            elif isinstance(resource, DynamicResource):
                 # pass query string to callback
                 data = resource.target(request.url.query)
                 if not isinstance(data, bytes):
@@ -211,16 +216,8 @@ class Worker:
                     request.url.path,
                     serv_job.pending,
                 )
-            elif serv_job.is_forbidden(
-                resource.target, is_include=resource.type == Resource.URL_INCLUDE
-            ):
-                # NOTE: this does info leak if files exist on disk.
-                # We could replace 403 with 404 if it turns out we care.
-                # However this is meant to only be accessible via localhost.
-                LOG.debug("target %r", str(resource.target))
-                conn.sendall(cls._4xx_page(403, "Forbidden", serv_job.auto_close))
-                LOG.debug("403 %r (%d to go)", request.url.path, serv_job.pending)
             else:
+                assert isinstance(resource, FileResource)
                 # serve the file
                 data_size = resource.target.stat().st_size
                 LOG.debug(
@@ -229,6 +226,7 @@ class Worker:
                     resource.mime,
                     resource.target,
                 )
+                assert resource.mime is not None
                 with resource.target.open("rb") as in_fp:
                     conn.sendall(cls._200_header(data_size, resource.mime))
                     offset = 0
@@ -257,7 +255,7 @@ class Worker:
                 serv_job.finish()
             serv_job.worker_complete.set()
 
-    def join(self, timeout=30):
+    def join(self, timeout: float = 30) -> bool:
         assert timeout >= 0
         if self._thread is not None:
             self._thread.join(timeout=timeout)
@@ -266,7 +264,9 @@ class Worker:
         return self._thread is None
 
     @classmethod
-    def launch(cls, listen_sock, job, timeout=30):
+    def launch(
+        cls, listen_sock: socket, job: Job, timeout: float = 30
+    ) -> Optional["Worker"]:
         assert timeout >= 0
         assert job.accepting.is_set()
         conn = None

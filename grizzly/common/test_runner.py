@@ -335,8 +335,8 @@ def test_runner_10(mocker, tmp_path):
     inc3.write_bytes(b"a")
     # build server map
     smap = ServerMap()
-    smap.set_include("/", str(inc_path1))
-    smap.set_include("/test", str(inc_path2))
+    smap.set_include("/", inc_path1)
+    smap.set_include("/test", inc_path2)
     with TestCase("a.b", "x") as test:
         test.add_from_bytes(b"", test.entry_point)
         serv_files = {

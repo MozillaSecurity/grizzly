@@ -2,9 +2,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
+from socket import socket
 from time import time
 from traceback import format_exception
+from typing import Any, Callable, List, Optional, Union
 
+from .job import Job
 from .worker import Worker
 
 __author__ = "Tyson Smith"
@@ -27,24 +30,26 @@ class ConnectionManager:
         "_socket",
     )
 
-    def __init__(self, job, srv_socket, limit=1, poll=0.5):
+    def __init__(
+        self, job: Job, srv_socket: socket, limit: int = 1, poll: float = 0.5
+    ) -> None:
         assert limit > 0
         assert poll > 0
-        self._deadline = None
+        self._deadline: Optional[float] = None
         self._deadline_exceeded = False
         self._job = job
         self._limit = limit
-        self._next_poll = 0
+        self._next_poll = 0.0
         self._poll = poll
         self._socket = srv_socket
 
-    def __enter__(self):
+    def __enter__(self) -> "ConnectionManager":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.close()
 
-    def _can_continue(self, continue_cb):
+    def _can_continue(self, continue_cb: Union[Callable[[], bool], None]) -> bool:
         """Check timeout and callback status.
 
         Args:
@@ -68,7 +73,7 @@ class ConnectionManager:
             return False
         return True
 
-    def close(self):
+    def close(self) -> None:
         """Set job state to finished and raise any errors encountered by workers.
 
         Args:
@@ -88,7 +93,7 @@ class ConnectionManager:
             raise exc_obj
 
     @staticmethod
-    def _join_workers(workers, timeout=0):
+    def _join_workers(workers: List[Worker], timeout: float = 0) -> List[Worker]:
         """Attempt to join workers.
 
         Args:
@@ -106,7 +111,12 @@ class ConnectionManager:
                 alive.append(worker)
         return alive
 
-    def serve(self, timeout, continue_cb=None, shutdown_delay=SHUTDOWN_DELAY):
+    def serve(
+        self,
+        timeout: int,
+        continue_cb: Optional[Callable[[], bool]] = None,
+        shutdown_delay: float = SHUTDOWN_DELAY,
+    ) -> bool:
         """Manage workers and serve job contents.
 
         Args:
