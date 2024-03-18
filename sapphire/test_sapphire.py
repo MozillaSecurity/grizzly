@@ -25,19 +25,17 @@ from .worker import Worker
 
 class _TestFile:
     def __init__(self, url, url_prefix=None):
+        assert isinstance(url, str)
         self.code = None
         self.content_type = None
         self.custom_request = None
-        if url_prefix:
-            self.file = "".join((url_prefix, url))
-        else:
-            self.file = url
+        self.file = f"{url_prefix}{url}" if url_prefix else url
         self.len_org = 0  # original file length
         self.len_srv = 0  # served file length
         self.lock = Lock()
         self.hash_org = None
         self.hash_srv = None
-        self.requested = 0  # number of time file was requested
+        self.requested = 0  # number of times file was requested
         url = urlsplit(self.file.replace("\\", "/"))
         self.url = (
             "?".join((quote(url.path), url.query)) if url.query else quote(url.path)
@@ -45,6 +43,7 @@ class _TestFile:
 
 
 def _create_test(fname, path, data=b"Test!", calc_hash=False, url_prefix=None):
+    assert isinstance(path, Path)
     test = _TestFile(fname, url_prefix=url_prefix)
     with (path / fname).open("w+b") as out_fp:
         out_fp.write(data)
@@ -117,13 +116,13 @@ def test_sapphire_03(client, tmp_path):
     root_dir.mkdir()
     invalid = Path(__file__)
     to_serve = [
-        # missing file
+        # 0 - missing file
         _TestFile("does_not_exist.html"),
-        # add invalid file
+        # 1 - add invalid file
         _TestFile(str(invalid.resolve())),
-        # add file in parent of root_dir
+        # 2 - add file in parent of root_dir
         _create_test("no_access.html", tmp_path, data=b"no_access", url_prefix="../"),
-        # add valid test
+        # 3 - add valid test
         _create_test("test_case.html", root_dir),
     ]
     required = [to_serve[-1].file]
@@ -138,7 +137,7 @@ def test_sapphire_03(client, tmp_path):
     assert invalid.name in to_serve[1].file
     assert to_serve[1].code == 404
     assert "no_access.html" in to_serve[2].file
-    assert to_serve[2].code == 403
+    assert to_serve[2].code == 404
     assert to_serve[3].code == 200
 
 
@@ -362,18 +361,18 @@ def test_sapphire_14(client, tmp_path):
         inc404 = _TestFile("inc_test/included_file_404.html")
         assert not (nest_path / "included_file_404.html").is_file()
         to_serve.append(inc404)
-        # test 403
-        inc403 = _create_test(
+        # test 404 with file outside of include path
+        inc_ext = _create_test(
             "no_access.html", tmp_path, data=b"no_access", url_prefix="inc_test/../"
         )
         assert (tmp_path / "no_access.html").is_file()
-        to_serve.append(inc403)
+        to_serve.append(inc_ext)
         # test file (used to keep sever job alive)
         test = _create_test("test_case.html", root_path)
         to_serve.append(test)
         # add include paths
-        smap.set_include("/", str(inc1_path))  # mount at '/'
-        smap.set_include("inc_test", str(inc2_path))  # mount at '/inc_test'
+        smap.set_include("/", inc1_path)  # mount at '/'
+        smap.set_include("inc_test", inc2_path)  # mount at '/inc_test'
         client.launch("127.0.0.1", serv.port, to_serve, in_order=True)
         status, served = serv.serve_path(
             root_path, server_map=smap, required_files=[x.file for x in to_serve]
@@ -393,7 +392,7 @@ def test_sapphire_14(client, tmp_path):
     assert test.code == 200
     assert nest_404.code == 404
     assert inc404.code == 404
-    assert inc403.code == 403
+    assert inc_ext.code == 404
 
 
 @mark.parametrize(
@@ -590,7 +589,7 @@ def test_sapphire_21(client, tmp_path):
     test = _create_test("test_case.html", tmp_path)
     with Sapphire(timeout=10) as serv:
         client.launch("127.0.0.1", serv.port, [test_dr, test], in_order=True)
-        with raises(TypeError):
+        with raises(TypeError, match="dynamic request callback must return 'bytes'"):
             serv.serve_path(tmp_path, server_map=smap, required_files=[test.file])
 
 

@@ -202,6 +202,7 @@ class Session:
                     runner.launch(location, max_retries=launch_attempts, retry_delay=0)
                 runner.post_launch(delay=post_launch_delay)
                 # TODO: avoid running test case if runner.startup_failure is True
+                # especially if it is a hang!
 
             # create and populate a test case
             current_test = self.generate_testcase()

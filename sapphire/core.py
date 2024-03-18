@@ -4,14 +4,17 @@
 """
 Sapphire HTTP server
 """
+from argparse import Namespace
 from logging import getLogger
 from pathlib import Path
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
-from ssl import PROTOCOL_TLS_SERVER, SSLContext
+from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
 from time import sleep, time
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
 
 from .connection_manager import ConnectionManager
 from .job import Job, Served
+from .server_map import ServerMap
 
 __all__ = (
     "BLOCKED_PORTS",
@@ -47,16 +50,21 @@ BLOCKED_PORTS = (
 LOG = getLogger(__name__)
 
 
-def create_listening_socket(attempts=10, port=0, remote=False, timeout=None):
+def create_listening_socket(
+    attempts: int = 10,
+    port: int = 0,
+    remote: bool = False,
+    timeout: Optional[float] = None,
+) -> socket:
     """Create listening socket. Search for an open socket if needed and
     configure the socket. If a specific port is unavailable or no
     available ports can be found socket.error will be raised.
 
     Args:
-        attempts (int): Number of attempts to configure the socket.
-        port (int): Port to listen on. Use 0 for system assigned port.
-        remote (bool): Accept all (non-local) incoming connections.
-        timeout (float): Used to set socket timeout.
+        attempts: Number of attempts to configure the socket.
+        port: Port to listen on. Use 0 for system assigned port.
+        remote: Accept all (non-local) incoming connections.
+        timeout: Used to set socket timeout.
 
     Returns:
         socket: A listening socket.
@@ -100,13 +108,13 @@ class Sapphire:
 
     def __init__(
         self,
-        allow_remote=False,
-        auto_close=-1,
+        allow_remote: bool = False,
+        auto_close: int = -1,
         certs=None,
-        max_workers=10,
-        port=0,
-        timeout=60,
-    ):
+        max_workers: int = 10,
+        port: int = 0,
+        timeout: int = 60,
+    ) -> None:
         assert timeout >= 0
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
@@ -119,20 +127,22 @@ class Sapphire:
         if certs:
             context = SSLContext(PROTOCOL_TLS_SERVER)
             context.load_cert_chain(certs.host, certs.key)
-            self._socket = context.wrap_socket(sock, server_side=True)
+            self._socket: Union[socket, SSLSocket] = context.wrap_socket(
+                sock, server_side=True
+            )
             self.scheme = "https"
         else:
             self._socket = sock
             self.scheme = "http"
         self.timeout = timeout
 
-    def __enter__(self):
+    def __enter__(self) -> "Sapphire":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.close()
 
-    def clear_backlog(self):
+    def clear_backlog(self) -> None:
         """Remove all pending connections from backlog. This should only be
         called when there isn't anything actively trying to connect.
 
@@ -158,7 +168,7 @@ class Sapphire:
             assert deadline > time()
         self._socket.settimeout(self.LISTEN_TIMEOUT)
 
-    def close(self):
+    def close(self) -> None:
         """Close listening server socket.
 
         Args:
@@ -170,25 +180,25 @@ class Sapphire:
         self._socket.close()
 
     @property
-    def port(self):
+    def port(self) -> int:
         """Port number of listening socket.
 
         Args:
             None
 
         Returns:
-            int: Listening port number.
+            Listening port number.
         """
-        return self._socket.getsockname()[1]
+        return int(self._socket.getsockname()[1])
 
     def serve_path(
         self,
-        path,
-        continue_cb=None,
-        forever=False,
-        required_files=None,
-        server_map=None,
-    ):
+        path: Path,
+        continue_cb: Optional[Callable[[], bool]] = None,
+        forever: bool = False,
+        required_files: Optional[Iterable[str]] = None,
+        server_map: Optional[ServerMap] = None,
+    ) -> Tuple[Served, Dict[str, Path]]:
         """Serve files in path.
 
         The status codes include:
@@ -197,17 +207,17 @@ class Sapphire:
             - Served.REQUEST: Some files were requested
 
         Args:
-            path (Path): Directory to use as wwwroot.
-            continue_cb (callable): A callback that can be used to exit the serve loop.
-                                    This must be a callable that returns a bool.
-            forever (bool): Continue to handle requests even after all files have
-                            been served. This is meant to be used with continue_cb.
-            required_files (list(str)): Files that need to be served in order to exit
-                                        the serve loop.
+            path: Directory to use as wwwroot.
+            continue_cb: A callback that can be used to exit the serve loop.
+                This must be a callable that returns a bool.
+            forever: Continue to handle requests even after all files have been served.
+                This is meant to be used with continue_cb.
+            required_files: Files that need to be served in order to exit the
+                serve loop.
             server_map (ServerMap):
 
         Returns:
-            tuple(int, dict[str, Path]): Status code and files served.
+            Status code and files served.
         """
         assert isinstance(path, Path)
         assert self.timeout >= 0
@@ -225,7 +235,7 @@ class Sapphire:
         return (Served.TIMEOUT if timed_out else job.status, job.served)
 
     @classmethod
-    def main(cls, args):
+    def main(cls, args: Namespace) -> None:
         try:
             with cls(
                 allow_remote=args.remote, port=args.port, timeout=args.timeout
