@@ -128,7 +128,7 @@ def test_loki_fuzz_02(mocker):
     fake_randint.side_effect = (4, 1)
     Loki._fuzz_data(b"1234", ">")
     # invalid data size
-    with raises(AssertionError, match=r"Unsupported data size:"):
+    with raises(RuntimeError, match=r"Unsupported data size:"):
         Loki._fuzz_data(b"", ">")
 
 
