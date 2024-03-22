@@ -1,15 +1,16 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
+from typing import List, Optional
 
 from loki import Loki
 
 __author__ = "Tyson Smith"
 
 
-def parse_args(argv=None):
+def parse_args(argv: Optional[List[str]] = None) -> Namespace:
     parser = ArgumentParser(description="Loki fuzzing library")
     parser.add_argument(
         "input", type=Path, help="Output will be generated based on this file"
@@ -24,7 +25,7 @@ def parse_args(argv=None):
     parser.add_argument(
         "-b",
         "--byte-order",
-        choices=Loki.BYTE_ORDERS,
+        choices=sorted(Loki.BYTE_ORDERS),
         default=None,
         help="Byte order to use when mutating multiple bytes at once. "
         "Use '>' for big-endian or '<' for little-endian (default: random)",
