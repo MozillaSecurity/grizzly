@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import datetime
+from datetime import datetime, timedelta, timezone
 from enum import IntEnum, unique
 from importlib.metadata import PackageNotFoundError, version
 from ipaddress import IPv4Address
@@ -180,8 +180,8 @@ def generate_certificates(cert_dir: Path):
         .public_key(root_key.public_key())
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.datetime.utcnow())
-        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=30))
+        .not_valid_before(datetime.now(timezone.utc))
+        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=30))
         .sign(root_key, hashes.SHA256(), default_backend())
     )
 
@@ -198,8 +198,8 @@ def generate_certificates(cert_dir: Path):
         .issuer_name(root_cert.issuer)
         .public_key(host_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.datetime.utcnow())
-        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=30))
+        .not_valid_before(datetime.now(timezone.utc))
+        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=30))
         .add_extension(
             x509.SubjectAlternativeName(
                 [
