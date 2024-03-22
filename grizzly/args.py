@@ -190,7 +190,7 @@ class CommonArgs:
             "--version",
             "-V",
             action="version",
-            version=__version__ if __version__ else "Unknown - Package not installed.",
+            version=__version__,
             help="Show version number",
         )
         if system().startswith("Linux"):
