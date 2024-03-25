@@ -286,6 +286,7 @@ def test_testcase_12(tmp_path, catalog):
     else:
         assert not any(loaded.optional)
     assert loaded.assets == {"example": "asset.txt"}
+    assert loaded.assets_path is not None
     assert (loaded.root / loaded.assets_path / "asset.txt").is_file()
     assert loaded.env_vars.get("TEST_ENV_VAR") == "100"
     assert len(tuple(loaded.required)) == 1
@@ -441,6 +442,7 @@ def test_testcase_17(tmp_path, remote_assets):
             assert not set(src.optional) ^ set(dst.optional)
             assert not set(src.required) ^ set(dst.required)
             if remote_assets is not None:
+                assert dst.assets_path
                 assert (dst.assets_path / dst.assets["foo"]).is_file()
 
 
