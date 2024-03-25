@@ -75,7 +75,7 @@ class Report:
                 assert stack.minor is not None
                 # limit the hash calculations to the first n frames if a hang
                 # was detected to attempt to help local bucketing
-                stack.height_limit = self.HANG_STACK_HEIGHT if is_hang else None
+                stack.height_limit = self.HANG_STACK_HEIGHT if is_hang else 0
                 self.prefix = f"{stack.minor[:8]}_{strftime('%Y-%m-%d_%H-%M-%S')}"
                 self.stack = stack
                 break
