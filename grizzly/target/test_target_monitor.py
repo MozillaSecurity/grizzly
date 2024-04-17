@@ -16,6 +16,9 @@ def test_target_monitor_01(tmp_path):
         def is_healthy(self):
             return True
 
+        def is_idle(self, threshold):
+            return False
+
         def is_running(self):
             return True
 
@@ -30,7 +33,7 @@ def test_target_monitor_01(tmp_path):
     test_log = mon.clone_log("test_log", offset=0)
     assert test_log.is_file()
     assert mon.is_healthy()
+    assert not mon.is_idle(0)
     assert mon.is_running()
     assert mon.launches == 1
-    assert mon.log_data("test_log") == b"test"
     assert mon.log_length("test_log") == 100

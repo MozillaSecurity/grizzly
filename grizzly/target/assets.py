@@ -5,6 +5,7 @@ from logging import getLogger
 from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import mkdtemp
+from typing import Any, Dict, List, Optional
 
 __all__ = ("AssetError", "AssetManager")
 __author__ = "Tyson Smith"
@@ -20,30 +21,28 @@ class AssetError(Exception):
 class AssetManager:
     __slots__ = ("assets", "path")
 
-    def __init__(self, base_path=None):
-        self.assets = {}
+    def __init__(self, base_path: Optional[Path] = None) -> None:
+        self.assets: Dict[str, str] = {}
         self.path = Path(mkdtemp(prefix="assets_", dir=base_path))
 
-    def __enter__(self):
+    def __enter__(self) -> "AssetManager":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.cleanup()
 
-    def add(self, asset, path, copy=True):
+    def add(self, asset: str, path: Path, copy: bool = True) -> Path:
         """Add asset to the AssetManager.
 
         Args:
-            asset (str): Name of asset.
-            path (Path): Location on disk.
-            copy (bool): Copy or move the content.
+            asset: Name of asset.
+            path: Location on disk.
+            copy: Copy or move the content.
 
         Returns:
-            str: Path to the asset on the filesystem.
+            Path to the asset on the filesystem.
         """
-        assert isinstance(asset, str)
-        assert isinstance(path, Path)
-        assert self.path, "cleanup() was called"
+        assert asset
         if not path.exists():
             raise OSError(f"'{path}' does not exist")
         dst = self.path / path.name
@@ -66,11 +65,11 @@ class AssetManager:
         LOG.debug("%s asset %r to '%s'", "copied" if copy else "moved", asset, dst)
         return dst
 
-    def add_batch(self, assets):
+    def add_batch(self, assets: List[List[str]]) -> None:
         """Add collection of assets to the AssetManager.
 
         Args:
-            assets (list(list(str, str))): List of list that contain asset, path pairs.
+            assets: List of list that contain asset, path pairs.
 
         Returns:
             None
@@ -78,7 +77,7 @@ class AssetManager:
         for asset, path in assets:
             self.add(asset, Path(path))
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Remove asset files from filesystem.
 
         Args:
@@ -90,54 +89,54 @@ class AssetManager:
         if self.path:
             rmtree(self.path, ignore_errors=True)
             self.assets.clear()
-            self.path = None
 
-    def get(self, asset):
+    def get(self, asset: str) -> Optional[Path]:
         """Get path to content on filesystem for given asset.
 
         Args:
-            asset (str): Asset to lookup.
+            asset: Asset to lookup.
 
         Returns:
-            Path: Path to asset content or None if asset does not exist.
+            Path to asset content or None if asset does not exist.
         """
         item = self.assets.get(asset, None)
         return self.path / item if item else None
 
-    def is_empty(self):
+    def is_empty(self) -> bool:
         """Check if AssetManager contains entries.
 
         Args:
             None
 
         Returns:
-            bool: True if AssetManager contains entries else False.
+            True if AssetManager contains entries else False.
         """
         return not self.assets
 
     @classmethod
-    def load(cls, assets, src_path, base_path=None):
+    def load(
+        cls, assets: Dict[str, str], src_path: Path, base_path: Optional[Path] = None
+    ) -> "AssetManager":
         """Load assets from filesystem.
 
         Args:
-            asset (dict): Asset paths on filesystem relative to src_path, keyed on
-                          asset name.
-            src_path (Path): Path to scan for assets.
-            base_path (str): Base path to use to create local storage.
+            asset: Asset paths on filesystem relative to src_path, keyed on asset name.
+            src_path: Path to scan for assets.
+            base_path: Base path to use to create local storage.
 
         Returns:
-            AssetManager: Populated with contents provided by assets argument.
+            AssetManager populated with contents provided by assets argument.
         """
         obj = cls(base_path=base_path)
         for asset, src_name in assets.items():
             obj.add(asset, src_path / src_name)
         return obj
 
-    def remove(self, asset):
+    def remove(self, asset: str) -> None:
         """Remove asset from AssetManager if asset exists.
 
         Args:
-            asset (str): Asset to remove.
+            asset: Asset to remove.
 
         Returns:
             None

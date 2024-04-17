@@ -2,13 +2,17 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod
-from enum import Enum, unique
+from enum import IntEnum, unique
 from logging import getLogger
 from os import environ
+from pathlib import Path
 from threading import Lock
+from typing import Any, Dict, Optional, Set, Tuple
 
+from ..common.report import Report
 from ..common.utils import CertificateBundle, grz_tmp
 from .assets import AssetManager
+from .target_monitor import TargetMonitor
 
 __all__ = ("Result", "Target", "TargetError", "TargetLaunchError")
 __author__ = "Tyson Smith"
@@ -18,8 +22,8 @@ LOG = getLogger(__name__)
 
 
 @unique
-class Result(Enum):
-    """Target results codes"""
+class Result(IntEnum):
+    """Target result codes"""
 
     NONE = 0
     FOUND = 1
@@ -33,7 +37,7 @@ class TargetError(Exception):
 class TargetLaunchError(TargetError):
     """Raised if a failure during launch occurs"""
 
-    def __init__(self, message, report):
+    def __init__(self, message: str, report: Report) -> None:
         super().__init__(message)
         self.report = report
 
@@ -43,8 +47,8 @@ class TargetLaunchTimeout(TargetError):
 
 
 class Target(metaclass=ABCMeta):
-    SUPPORTED_ASSETS = None
-    TRACKED_ENVVARS = ()
+    SUPPORTED_ASSETS: Tuple[str, ...] = ()
+    TRACKED_ENVVARS: Tuple[str, ...] = ()
 
     __slots__ = (
         "_asset_mgr",
@@ -61,12 +65,12 @@ class Target(metaclass=ABCMeta):
 
     def __init__(
         self,
-        binary,
-        launch_timeout,
-        log_limit,
-        memory_limit,
-        certs=None,
-    ):
+        binary: Path,
+        launch_timeout: int,
+        log_limit: int,
+        memory_limit: int,
+        certs: Optional[CertificateBundle] = None,
+    ) -> None:
         assert launch_timeout > 0
         assert log_limit >= 0
         assert memory_limit >= 0
@@ -75,7 +79,7 @@ class Target(metaclass=ABCMeta):
         self._asset_mgr = AssetManager(base_path=grz_tmp("target"))
         self._https = False
         self._lock = Lock()
-        self._monitor = None
+        self._monitor: Optional[TargetMonitor] = None
         self.binary = binary
         self.certs = certs
         self.environ = self.scan_environment(dict(environ), self.TRACKED_ENVVARS)
@@ -83,103 +87,246 @@ class Target(metaclass=ABCMeta):
         self.log_limit = log_limit
         self.memory_limit = memory_limit
 
-    def __enter__(self):
+    def __enter__(self) -> "Target":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.cleanup()
 
     @property
-    def asset_mgr(self):
+    def asset_mgr(self) -> AssetManager:
+        """Get current AssetManager.
+
+        Args:
+            None
+
+        Returns:
+            AssetManager.
+        """
         return self._asset_mgr
 
     @asset_mgr.setter
-    def asset_mgr(self, asset_mgr):
+    def asset_mgr(self, asset_mgr: AssetManager) -> None:
+        """Set AssetManager and cleanup previous AssetManager.
+
+        Args:
+            None
+
+        Returns:
+            AssetManager.
+        """
         self._asset_mgr.cleanup()
         assert isinstance(asset_mgr, AssetManager)
         self._asset_mgr = asset_mgr
 
     @abstractmethod
-    def _cleanup(self):
-        pass
+    def _cleanup(self) -> None:
+        """Cleanup method to be implemented by subclass.
+
+        Args:
+            None
+
+        Returns:
+            None.
+        """
 
     @abstractmethod
-    def check_result(self, ignored):
-        pass
+    def check_result(self, ignored: Set[str]) -> Result:
+        """Check for results.
 
-    def cleanup(self):
-        # call target specific _cleanup first
+        Args:
+            ignored: Result types that are currently ignored.
+
+        Returns:
+            Result code.
+        """
+
+    def cleanup(self) -> None:
+        """Perform necessary cleanup. DO NOT OVERRIDE.
+
+        Args:
+            ignored: Types of results to ignore.
+
+        Returns:
+            Result code.
+        """
+        # call target specific _cleanup method first
         self._cleanup()
         self._asset_mgr.cleanup()
 
     @abstractmethod
-    def close(self, force_close=False):
-        pass
+    def close(self, force_close: bool = False) -> None:
+        """Close target.
+
+        Args:
+            force_close: Close as quickly as possible. Logs will not be collected.
+
+        Returns:
+            None.
+        """
 
     @property
     @abstractmethod
-    def closed(self):
-        pass
+    def closed(self) -> bool:
+        """Check if the target is closed.
+
+        Args:
+            None
+
+        Returns:
+            True if closed otherwise False.
+        """
 
     @abstractmethod
-    def create_report(self, is_hang=False):
-        pass
+    def create_report(self, is_hang: bool = False) -> Report:
+        """Process logs and create a Report.
 
-    def dump_coverage(self, _timeout=0):
-        LOG.warning("dump_coverage() is not supported!")
+        Args:
+            is_hang: Indicate whether the results is due to a hang/timeout.
 
-    def filtered_environ(self):
-        """Used to collect the environment to add to a testcase"""
+        Returns:
+            Report object.
+        """
+
+    @abstractmethod
+    def dump_coverage(self, timeout: int = 0) -> None:
+        """Trigger target coverage data dump.
+
+        Args:
+            timeout: Amount of time to wait for data to be written.
+
+        Returns:
+            None.
+        """
+
+    def filtered_environ(self) -> Dict[str, str]:
+        """Used to collect the environment to add to a testcase.
+
+        Args:
+            None
+
+        Returns:
+            Environment variables.
+        """
         return dict(self.environ)
 
     @abstractmethod
-    def handle_hang(self, ignore_idle=True, ignore_timeout=False):
-        pass
+    def handle_hang(
+        self,
+        ignore_idle: bool = True,
+        ignore_timeout: bool = False,
+    ) -> bool:
+        """Handle a target hang.
+
+        Args:
+            ignore_idle: Do not treat as a hang if target is idle.
+            ignore_timeout: Indicates if a timeout will be ignored.
+
+        Returns:
+            True if the target was idle otherwise False.
+        """
 
     @abstractmethod
-    def https(self):
-        pass
+    def https(self) -> bool:
+        """Target configured for HTTPS.
 
-    # TODO: move to monitor?
-    def is_idle(self, _threshold):
-        LOG.debug("Target.is_idle() not implemented! returning False")
-        return False
+        Args:
+            None
 
-    @abstractmethod
-    def launch(self, location):
-        pass
-
-    def log_size(self):
-        LOG.debug("log_size() not implemented! returning 0")
-        return 0
+        Returns:
+            True if HTTPS can be used otherwise False.
+        """
 
     @abstractmethod
-    def merge_environment(self, extra):
-        pass
+    def launch(self, location: str) -> None:
+        """Launch the target.
+
+        Args:
+            location: URL to load.
+
+        Returns:
+            None.
+        """
+
+    @abstractmethod
+    def log_size(self) -> int:
+        """Calculate the amount of data contained in target log files.
+
+        Args:
+            None
+
+        Returns:
+            Total data size of log files in bytes.
+        """
+
+    @abstractmethod
+    def merge_environment(self, extra: Dict[str, str]) -> None:
+        """Add to existing environment.
+
+        Args:
+            extra: Environment variables to add.
+
+        Returns:
+            None.
+        """
 
     @property
     @abstractmethod
-    def monitor(self):
-        pass
+    def monitor(self) -> TargetMonitor:
+        """TargetMonitor.
+
+        Args:
+            extra: Environment variables to add.
+
+        Returns:
+            TargetMonitor
+        """
 
     @abstractmethod
-    def process_assets(self):
-        pass
+    def process_assets(self) -> None:
+        """Prepare assets for use by the target.
 
-    def reverse(self, remote, local):
-        # remote->device, local->desktop
-        pass
+        Args:
+            None
+
+        Returns:
+            None.
+        """
+
+    def reverse(self, remote: int, local: int) -> None:
+        """Configure port mappings. Remote -> device, local -> desktop (current system).
+
+        Args:
+            remote: Port on remote device.
+            local: Port on local machine.
+
+        Returns:
+            None.
+        """
 
     @staticmethod
-    def scan_environment(to_scan, tracked):
-        # scan environment for tracked environment variables
-        env = {}
-        if tracked:
-            for var in tracked:
-                if var in to_scan:
-                    env[var] = to_scan[var]
-        return env
+    def scan_environment(
+        env: Dict[str, str],
+        include: Optional[Tuple[str, ...]],
+    ) -> Dict[str, str]:
+        """Scan environment for tracked environment variables.
+
+        Args:
+            env: Environment to scan.
+            include: Variables to include in output.
+
+        Returns:
+            Tracked variables found in scanned environment.
+        """
+        return {var: env[var] for var in include if var in env} if include else {}
 
     @abstractmethod
-    def save_logs(self, *args, **kwargs):
-        pass
+    def save_logs(self, dst: Path) -> None:
+        """Save logs to specified location.
+
+        Args:
+            dst: Location to save logs.
+
+        Returns:
+            None.
+        """

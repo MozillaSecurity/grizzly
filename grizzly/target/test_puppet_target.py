@@ -9,8 +9,9 @@ from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, Debugger, Reas
 from pytest import mark, raises
 
 from ..common.utils import CertificateBundle
+from .assets import AssetManager
 from .puppet_target import PuppetTarget
-from .target import AssetManager, Result, TargetLaunchError, TargetLaunchTimeout
+from .target import Result, TargetLaunchError, TargetLaunchTimeout
 
 
 def test_puppet_target_01(mocker, tmp_path):
@@ -26,7 +27,7 @@ def test_puppet_target_01(mocker, tmp_path):
         assert target.launch_timeout == 300
         assert target.log_limit == 25
         assert target.memory_limit == 5000
-        assert target.check_result([]) == Result.NONE
+        assert target.check_result(set()) == Result.NONE
         assert not target.https()
         assert target.log_size() == 1124
         fake_ffp.return_value.log_length.assert_any_call("stderr")
@@ -260,18 +261,6 @@ def test_puppet_target_05(mocker, tmp_path):
 
 
 def test_puppet_target_06(mocker, tmp_path):
-    """test PuppetTarget.is_idle()"""
-    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
-    fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with PuppetTarget(fake_file, 300, 25, 5000) as target:
-        assert not target.is_idle(0)
-        assert not target.is_idle(25)
-        assert target.is_idle(50)
-
-
-def test_puppet_target_07(mocker, tmp_path):
     """test PuppetTarget.monitor"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
@@ -294,6 +283,18 @@ def test_puppet_target_07(mocker, tmp_path):
         assert fake_ffp.return_value.clone_log.call_count == 1
 
 
+def test_puppet_target_07(mocker, tmp_path):
+    """test PuppetTarget.monitor.is_idle()"""
+    fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
+    fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
+    fake_file = tmp_path / "fake"
+    fake_file.touch()
+    with PuppetTarget(fake_file, 300, 25, 5000) as target:
+        assert not target.monitor.is_idle(0)
+        assert not target.monitor.is_idle(25)
+        assert target.monitor.is_idle(50)
+
+
 def test_puppet_target_08(mocker, tmp_path):
     """test PuppetTarget.process_assets()"""
     mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
@@ -303,16 +304,19 @@ def test_puppet_target_08(mocker, tmp_path):
     with PuppetTarget(fake_file, 300, 25, 5000) as target:
         assert target.asset_mgr.get("prefs") is None
         target.process_assets()
-        assert target.asset_mgr.get("prefs").is_file()
-        assert target.asset_mgr.get("prefs").name == "prefs.js"
+        asset = target.asset_mgr.get("prefs")
+        assert asset
+        assert asset.is_file()
+        assert asset.name == "prefs.js"
     # prefs file provided
     with AssetManager(base_path=tmp_path) as asset_mgr:
         asset_mgr.add("prefs", fake_file)
         with PuppetTarget(fake_file, 300, 25, 5000) as target:
             target.asset_mgr = asset_mgr
             target.process_assets()
-            assert target.asset_mgr.get("prefs").is_file()
-            assert target.asset_mgr.get("prefs").name == "fake"
+            asset = target.asset_mgr.get("prefs")
+            assert asset
+            assert asset.name == "fake"
     # abort tokens file provided
     with AssetManager(base_path=tmp_path) as asset_mgr:
         asset_mgr.add("abort-tokens", fake_file)
@@ -323,8 +327,10 @@ def test_puppet_target_08(mocker, tmp_path):
             assert target._puppet.add_abort_token.call_count == 0
             target.asset_mgr = asset_mgr
             target.process_assets()
-            assert target.asset_mgr.get("abort-tokens").is_file()
-            assert target.asset_mgr.get("abort-tokens").name == "fake"
+            asset = target.asset_mgr.get("abort-tokens")
+            assert asset
+            assert asset.is_file()
+            assert asset.name == "fake"
             assert target._puppet.add_abort_token.call_count == 2
 
 

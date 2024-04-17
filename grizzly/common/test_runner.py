@@ -75,7 +75,7 @@ def test_runner_02(mocker):
         required=serv_files,
     )
     # single run/iteration relaunch (not idle exit)
-    target.is_idle.return_value = False
+    target.monitor.is_idle.return_value = False
     runner = Runner(server, target, relaunch=1)
     assert runner._relaunch == 1
     smap = ServerMap()
@@ -83,7 +83,7 @@ def test_runner_02(mocker):
     assert runner.initial
     assert result.attempted
     assert target.close.call_count == 1
-    assert target.is_idle.call_count > 0
+    assert target.monitor.is_idle.call_count > 0
     assert target.monitor.is_healthy.call_count > 0
     assert result.status == Result.NONE
     assert result.served == serv_files
@@ -93,7 +93,7 @@ def test_runner_02(mocker):
     target.reset_mock()
     testcase.reset_mock()
     # single run/iteration relaunch (idle exit)
-    target.is_idle.return_value = True
+    target.monitor.is_idle.return_value = True
     runner = Runner(server, target, relaunch=1)
     assert runner._relaunch == 1
     result = runner.run([], ServerMap(), testcase)
@@ -122,7 +122,7 @@ def test_runner_02(mocker):
     assert not runner.initial
     assert result.attempted
     assert target.close.call_count == 1
-    assert target.is_idle.call_count == 0
+    assert target.monitor.is_idle.call_count == 0
     assert target.monitor.is_healthy.call_count == 1
     assert result.status == Result.NONE
     assert result.served == serv_files
