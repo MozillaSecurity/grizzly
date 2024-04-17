@@ -19,19 +19,25 @@ class SimpleTarget(Target):
 
     @property
     def closed(self):
-        pass
+        return True
 
     def create_report(self, is_hang=False):
         pass
 
-    def handle_hang(self, ignore_idle=True, ignore_timeout=False):
+    def dump_coverage(self, timeout=0):
         pass
+
+    def handle_hang(self, ignore_idle=True, ignore_timeout=False):
+        return False
 
     def https(self):
         return self._https
 
     def launch(self, location):
         pass
+
+    def log_size(self):
+        return 0
 
     @property
     def monitor(self):
@@ -43,7 +49,7 @@ class SimpleTarget(Target):
     def process_assets(self):
         pass
 
-    def save_logs(self, *_args, **_kwargs):
+    def save_logs(self, dst):
         pass
 
 
@@ -59,14 +65,12 @@ def test_target_01(tmp_path):
         assert target.asset_mgr.path != org_path
         assert not target.environ
         assert not target.filtered_environ()
-        assert not target.is_idle(0)
         assert target.launch_timeout == 10
         assert target.log_size() == 0
         assert target.log_limit == 2
         assert target.memory_limit == 3
         assert target.monitor is None
         # test stubs
-        target.dump_coverage()
         target.reverse(1, 2)
 
 
@@ -87,6 +91,6 @@ def test_target_02(mocker, tmp_path):
 
 def test_target_03():
     """test Target.scan_environment()"""
-    assert not Target.scan_environment({"a": "1"}, [])
-    assert not Target.scan_environment({}, ["a"])
-    assert Target.scan_environment({"a": "1", "b": "2"}, ["a"]) == {"a": "1"}
+    assert not Target.scan_environment({"a": "1"}, ())
+    assert not Target.scan_environment({}, ("a",))
+    assert Target.scan_environment({"a": "1", "b": "2"}, ("a",)) == {"a": "1"}

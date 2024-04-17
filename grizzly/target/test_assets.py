@@ -45,10 +45,12 @@ def test_asset_manager_01(tmp_path):
         assert (asset_mgr.path / "example_path/b/2.txt").is_file()
         assert len(asset_mgr.assets) == 2
         # get
-        assert (asset_mgr.path / "example_2.txt").samefile(
-            asset_mgr.get("example_file")
-        )
-        assert (asset_mgr.path / "example_path").samefile(asset_mgr.get("example_path"))
+        example = asset_mgr.get("example_file")
+        assert example
+        assert (asset_mgr.path / "example_2.txt").samefile(example)
+        example = asset_mgr.get("example_path")
+        assert example
+        assert (asset_mgr.path / "example_path").samefile(example)
         # remove directory
         asset_mgr.remove("example_path")
         assert len(asset_mgr.assets) == 1
@@ -61,7 +63,7 @@ def test_asset_manager_01(tmp_path):
         # cleanup
         asset_mgr.cleanup()
         assert not asset_mgr.assets
-        assert asset_mgr.path is None
+        assert not asset_mgr.path.is_dir()
 
 
 def test_asset_manager_02(tmp_path):

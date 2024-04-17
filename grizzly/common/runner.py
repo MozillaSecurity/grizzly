@@ -95,7 +95,9 @@ class Runner:
         if idle_threshold > 0:
             assert idle_delay > 0
             LOG.debug("using idle check, th %d, delay %ds", idle_threshold, idle_delay)
-            self._idle = _IdleChecker(target.is_idle, idle_threshold, idle_delay)
+            self._idle = _IdleChecker(
+                target.monitor.is_idle, idle_threshold, idle_delay
+            )
         else:
             self._idle = None
         assert close_delay > 0
@@ -332,13 +334,13 @@ class Runner:
                 LOG.debug("relaunch/shutdown limit hit")
                 # ideally all browser tabs should be closed at this point
                 # and the browser should exit on its own
-                # NOTE: this will take the full duration if target.is_idle()
-                # is not implemented
+                # NOTE: this will take the full duration if target.monitor.is_idle()
+                # is unable to detect if the target is idle
                 for close_delay in range(max(int(self._close_delay / 0.5), 1)):
                     if not self._target.monitor.is_healthy():
                         break
                     # wait 3 seconds (6 passes) before attempting idle exit
-                    if close_delay > 5 and self._target.is_idle(10):
+                    if close_delay > 5 and self._target.monitor.is_idle(10):
                         # NOTE: this will always trigger on systems where the
                         # browser does not exit when the last window is closed
                         LOG.debug("target idle")
