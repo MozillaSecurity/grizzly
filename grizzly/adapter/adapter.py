@@ -3,8 +3,12 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
+from typing import Any, Dict, Generator, Optional, Tuple
 
+from grizzly.common.storage import TestCase
 from grizzly.common.utils import DEFAULT_TIME_LIMIT, HARNESS_FILE
+from grizzly.target.target_monitor import TargetMonitor
+from sapphire import ServerMap
 
 __all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"
@@ -19,21 +23,21 @@ class Adapter(metaclass=ABCMeta):
     """An Adapter is the interface between Grizzly and a fuzzer. A subclass must
     be created in order to add support for additional fuzzers. The Adapter is
     responsible for handling input/output data and executing the fuzzer.
-    It is expected that any processes launched or file created on file system
+    It is expected that any processes launched or files created on file system
     by the adapter will also be cleaned up by the adapter.
-    NOTE: Some methods must not be overloaded doing so will prevent Grizzly from
+
+    NOTE: Some methods must not be overridden doing so will prevent Grizzly from
     operating correctly.
 
     Attributes:
-        _harness (Path): Harness file that will be used.
-        fuzz (dict): Available as a safe scratch pad for the end-user.
-        monitor (TargetMonitor): Used to provide Target status information to
-                                 the adapter.
-        name (str): Name of the adapter.
-        remaining (int): Can be used to indicate the number of TestCases
-                         remaining to process.
+        _harness: Harness file that will be used.
+        fuzz: Available as a safe scratch pad for the end-user.
+        monitor: Used to provide Target status information to the adapter.
+        name: Name of the adapter.
+        remaining: Can be used to indicate the number of TestCases remaining to process.
     """
 
+    IGNORE_FILES = ("desktop.ini", "thumbs.db")
     # Maximum iterations between Target relaunches (<1 use default)
     RELAUNCH = 0
     # Maximum execution time per test (used as minimum timeout). The iteration is
@@ -43,27 +47,27 @@ class Adapter(metaclass=ABCMeta):
 
     __slots__ = ("_harness", "fuzz", "monitor", "name", "remaining")
 
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         assert isinstance(name, str)
         if not name:
             raise AdapterError("name must not be empty")
         if len(name.split()) != 1 or name.strip() != name:
             raise AdapterError("name must not contain whitespace")
-        self._harness = None
-        self.fuzz = {}
-        self.monitor = None
+        self._harness: Optional[bytes] = None
+        self.fuzz: Dict[str, Any] = {}
+        self.monitor: Optional[TargetMonitor] = None
         self.name = name
-        self.remaining = None
+        self.remaining: Optional[int] = None
 
-    def __enter__(self):
+    def __enter__(self) -> "Adapter":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.cleanup()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Automatically called once at shutdown. Used internally by Grizzly.
-        *** DO NOT OVERLOAD! ***
+        *** DO NOT OVERRIDE! ***
 
         Args:
             None
@@ -73,96 +77,99 @@ class Adapter(metaclass=ABCMeta):
         """
         self.shutdown()
 
-    def enable_harness(self, file_path=HARNESS_FILE):
+    def enable_harness(self, path: Path = HARNESS_FILE) -> None:
         """Enable use of a harness during fuzzing. By default no harness is used.
-        *** DO NOT OVERLOAD! ***
+        *** DO NOT OVERRIDE! ***
 
         Args:
-            file_path (StrPath): HTML file to use as a harness.
+            path: HTML file to use as a harness.
 
         Returns:
             None
         """
-        path = Path(file_path)
-        assert path.is_file(), f"missing harness file '{path.resolve()}'"
         self._harness = path.read_bytes()
         assert self._harness, f"empty harness file '{path.resolve()}'"
 
-    def get_harness(self):
+    def get_harness(self) -> Optional[bytes]:
         """Get the harness. Used internally by Grizzly.
-        *** DO NOT OVERLOAD! ***
+        *** DO NOT OVERRIDE! ***
 
         Args:
             None
 
         Returns:
-            bytes: The active harness.
+            The active harness data.
         """
         return self._harness
 
+    # TODO: change return type from str to Path and accept Path instead of str
     @staticmethod
-    def scan_path(path, ignore=("desktop.ini", "thumbs.db"), recursive=False):
+    def scan_path(
+        path: str,
+        ignore: Tuple[str, ...] = IGNORE_FILES,
+        recursive: bool = False,
+    ) -> Generator[str, None, None]:
         """Scan a path and yield the files within it. This is available as
         a helper method.
 
         Args:
-            path (str): Path to file or directory.
-            ignore (iterable(str)): Files to ignore.
-            recursive (bool): Scan recursively into directories.
+            path: Path to file or directory.
+            ignore: File names to ignore.
+            recursive: Scan recursively into directories.
 
         Yields:
-            str: Absolute path to files.
+            Absolute path to files.
         """
-        path = Path(path).resolve()
-        if path.is_dir():
-            path_iter = path.rglob("*") if recursive else path.glob("*")
+        src = Path(path)
+        if src.is_dir():
+            path_iter = src.rglob("*") if recursive else src.glob("*")
             for entry in path_iter:
                 if not entry.is_file():
                     continue
-                if entry.name in ignore or entry.name.startswith("."):
+                if entry.name.lower() in ignore or entry.name.startswith("."):
                     # skip ignored and hidden system files
                     continue
-                yield str(entry)
-        elif path.is_file():
-            yield str(path)
+                yield str(entry.resolve())
+        elif src.is_file():
+            yield str(src.resolve())
 
     @abstractmethod
-    def generate(self, testcase, server_map):
+    def generate(self, testcase: TestCase, server_map: ServerMap) -> None:
         """Automatically called. Populate testcase here.
 
         Args:
-            testcase (TestCase): TestCase intended to be populated.
-            server_map (ServerMap): A ServerMap.
+            testcase: TestCase intended to be populated.
+            server_map: A ServerMap.
 
         Returns:
             None
         """
 
-    def on_served(self, testcase, served):
+    def on_served(self, testcase: TestCase, served: Tuple[str, ...]) -> None:
         """Optional. Automatically called after a test case is successfully served.
 
         Args:
-            testcase (TestCase): TestCase that was served.
-            served (tuple(str)): Files served from testcase.
+            testcase: TestCase that was served.
+            served: Files served from testcase.
 
         Returns:
             None
         """
 
-    def on_timeout(self, testcase, served):
+    def on_timeout(self, testcase: TestCase, served: Tuple[str, ...]) -> None:
         """Optional. Automatically called if timeout occurs while attempting to
         serve a test case. By default it calls `self.on_served()`.
 
         Args:
-            testcase (TestCase): TestCase that was served.
-            served (tuple(str)): Files served from testcase.
+            testcase: TestCase that was served.
+            served: Files served from testcase.
 
         Returns:
             None
         """
         self.on_served(testcase, served)
 
-    def pre_launch(self):
+    def pre_launch(self) -> None:
         """Optional. Automatically called before launching the Target.
 
         Args:
@@ -172,19 +179,19 @@ class Adapter(metaclass=ABCMeta):
             None
         """
 
-    def setup(self, input_path, server_map):
+    # TODO: update input_path type (str -> Path)
+    def setup(self, input_path: Optional[str], server_map: ServerMap) -> None:
         """Optional. Automatically called once at startup.
 
         Args:
-            input_path (str): Points to a file or directory passed by the user.
-                              None is passed by default.
-            server_map (ServerMap): A ServerMap
+            input_path: File or directory passed by the user.
+            server_map: A ServerMap
 
         Returns:
             None
         """
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Optional. Automatically called once at shutdown.
 
         Args:

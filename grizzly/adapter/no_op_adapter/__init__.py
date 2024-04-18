@@ -2,7 +2,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from typing import Optional
+
 from grizzly.adapter import Adapter
+from grizzly.common.storage import TestCase
+from sapphire import ServerMap
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -15,15 +19,15 @@ class NoOpAdapter(Adapter):
 
     NAME = "no-op"
 
-    def setup(self, _input, _server_map):
+    def setup(self, input_path: Optional[str], server_map: ServerMap) -> None:
         """Generate a static test case that calls `window.close()` when run.
         Normally this is done in generate() but since the test is static only
         do it once. Use the default harness to allow running multiple test cases
         in a row without closing the browser after each one.
 
         Args:
-            _input (str): Unused.
-            _server_map (sapphire.server_map.ServerMap): Unused.
+            _input: Unused.
+            _server_map: Unused.
 
         Returns:
             None
@@ -38,7 +42,7 @@ class NoOpAdapter(Adapter):
             b"</html>"
         )
 
-    def generate(self, testcase, _server_map):
+    def generate(self, testcase: TestCase, server_map: ServerMap) -> None:
         """The test case contents have been created now add the data to the TestCase.
 
         All TestCases require an entry point and the one expected by Grizzly
@@ -46,10 +50,10 @@ class NoOpAdapter(Adapter):
         the test.
 
         Args:
-            testcase (grizzly.common.storage.TestCase): TestCase to be populated.
-            _server_map (sapphire.server_map.ServerMap): Unused in this example.
+            testcase: TestCase to be populated.
+            _server_map: Unused in this example.
 
         Returns:
             None
         """
-        testcase.add_from_bytes(self.fuzz["test"], testcase.entry_point)
+        testcase.add_from_bytes(self.fuzz["test"], testcase.entry_point, required=True)
