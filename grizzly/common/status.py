@@ -2,16 +2,32 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
-from collections import defaultdict, namedtuple
+from abc import ABC
+from collections import defaultdict
 from contextlib import closing, contextmanager
 from copy import deepcopy
+from dataclasses import dataclass
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
-from sqlite3 import OperationalError, connect
+from pathlib import Path
+from sqlite3 import Connection, OperationalError, connect
 from time import perf_counter, time
+from typing import (
+    Callable,
+    Dict,
+    Generator,
+    List,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
-from ..common.utils import grz_tmp
+from .reporter import FuzzManagerReporter
+from .utils import grz_tmp
 
 __all__ = ("ReadOnlyStatus", "ReductionStatus", "Status", "SimpleStatus")
 __author__ = "Tyson Smith"
@@ -33,20 +49,32 @@ STATUS_DB_REDUCE = grz_tmp() / "reduce-status.db"
 
 LOG = getLogger(__name__)
 
-ProfileEntry = namedtuple("ProfileEntry", "count max min name total")
 
-ResultEntry = namedtuple("ResultEntry", "rid count desc")
+@dataclass(eq=False, frozen=True)
+class ProfileEntry:
+    count: int
+    max: float
+    min: float
+    name: str
+    total: float
 
 
-def _db_version_check(con, expected=DB_VERSION):
+@dataclass(frozen=True)
+class ResultEntry:
+    rid: str
+    count: int
+    desc: Optional[str]
+
+
+def _db_version_check(con: Connection, expected: int = DB_VERSION) -> bool:
     """Perform version check and remove obsolete tables if required.
 
     Args:
-        con (sqlite3.Connection): An open database connection.
-        expected (int): The latest database version.
+        con: An open database connection.
+        expected: The latest database version.
 
     Returns:
-        bool: True if database was reset otherwise False.
+        True if database was reset otherwise False.
     """
     assert expected > 0
     cur = con.cursor()
@@ -57,7 +85,7 @@ def _db_version_check(con, expected=DB_VERSION):
         cur.execute("BEGIN EXCLUSIVE;")
         # check db version again while locked to avoid race
         cur.execute("PRAGMA user_version;")
-        version = cur.fetchone()[0]
+        version = cast(int, cur.fetchone()[0])
         if version < expected:
             LOG.debug("db version %d < %d", version, expected)
             # remove ALL tables from the database
@@ -73,18 +101,308 @@ def _db_version_check(con, expected=DB_VERSION):
     return False
 
 
-class BaseStatus:
+class SimpleResultCounter:
+    __slots__ = ("_count", "_desc", "pid")
+
+    def __init__(self, pid: int) -> None:
+        assert pid >= 0
+        self._count: Dict[str, int] = defaultdict(int)
+        self._desc: Dict[str, str] = {}
+        self.pid = pid
+
+    def __iter__(self) -> Generator[ResultEntry, None, None]:
+        """Yield all result data.
+
+        Args:
+            None
+
+        Yields:
+            Contains ID, count and description for each result entry.
+        """
+        for result_id, count in self._count.items():
+            if count > 0:
+                yield ResultEntry(result_id, count, self._desc.get(result_id, None))
+
+    def blockers(
+        self, iterations: int, iters_per_result: int = 100
+    ) -> Generator[ResultEntry, None, None]:
+        """Any result with an iterations-per-result ratio of less than or equal the
+        given limit are considered 'blockers'. Results with a count <= 1 are not
+        included.
+
+        Args:
+            iterations: Total iterations.
+            iters_per_result: Iterations-per-result threshold.
+
+        Yields:
+            ResultEntry: ID, count and description of blocking result.
+        """
+        assert iters_per_result > 0
+        if iterations > 0:
+            for entry in self:
+                if entry.count > 1 and iterations / entry.count <= iters_per_result:
+                    yield entry
+
+    def count(self, result_id: str, desc: str) -> Tuple[int, bool]:
+        """
+
+        Args:
+            result_id: Result ID.
+            desc: User friendly description.
+
+        Returns:
+            Current count for given result_id.
+        """
+        assert isinstance(result_id, str)
+        self._count[result_id] += 1
+        initial = False
+        if result_id not in self._desc:
+            self._desc[result_id] = desc
+            initial = True
+        return self._count[result_id], initial
+
+    def get(self, result_id: str) -> ResultEntry:
+        """Get count and description for given result id.
+
+        Args:
+            result_id: Result ID.
+
+        Returns:
+            ResultEntry: Count and description.
+        """
+        assert isinstance(result_id, str)
+        return ResultEntry(
+            result_id, self._count.get(result_id, 0), self._desc.get(result_id, None)
+        )
+
+    @property
+    def total(self) -> int:
+        """Get total count of all results.
+
+        Args:
+            None
+
+        Returns:
+            Total result count.
+        """
+        return sum(self._count.values())
+
+
+class ReadOnlyResultCounter(SimpleResultCounter):
+    def count(self, result_id: str, desc: str) -> Tuple[int, bool]:
+        raise NotImplementedError("Read only!")  # pragma: no cover
+
+    @classmethod
+    def load(
+        cls, db_file: Path, time_limit: float = 0
+    ) -> List["ReadOnlyResultCounter"]:
+        """Load existing entries for database and populate a ReadOnlyResultCounter.
+
+        Args:
+            db_file: Database file.
+            time_limit: Used to filter older entries.
+
+        Returns:
+            Loaded ReadOnlyResultCounter objects.
+        """
+        assert time_limit >= 0
+        with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
+            cur = con.cursor()
+            try:
+                # collect entries
+                if time_limit:
+                    cur.execute(
+                        """SELECT pid,
+                                result_id,
+                                description,
+                                count
+                           FROM results
+                           WHERE timestamp > ?;""",
+                        (time() - time_limit,),
+                    )
+                else:
+                    cur.execute(
+                        """SELECT pid, result_id, description, count FROM results"""
+                    )
+                entries = cur.fetchall()
+            except OperationalError as exc:
+                if not str(exc).startswith("no such table:"):
+                    raise  # pragma: no cover
+                entries = []
+
+        loaded = {}
+        for pid, result_id, desc, count in entries:
+            if pid not in loaded:
+                loaded[pid] = cls(pid)
+            loaded[pid]._desc[result_id] = desc  # pylint: disable=protected-access
+            loaded[pid]._count[result_id] = count  # pylint: disable=protected-access
+
+        return list(loaded.values())
+
+
+class ResultCounter(SimpleResultCounter):
+    __slots__ = ("_db_file", "_frequent", "_limit", "last_found")
+
+    def __init__(
+        self,
+        pid: int,
+        db_file: Path,
+        life_time: int = RESULTS_EXPIRE,
+        report_limit: int = 0,
+    ) -> None:
+        super().__init__(pid)
+        assert db_file
+        assert report_limit >= 0
+        self._db_file = db_file
+        self._frequent: Set[str] = set()
+        # use zero to disable report limit
+        self._limit = report_limit
+        self.last_found = 0.0
+        self._init_db(db_file, pid, life_time)
+
+    @staticmethod
+    def _init_db(db_file: Path, pid: int, life_time: float) -> None:
+        # prepare database
+        LOG.debug("resultcounter using db %s", db_file)
+        with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
+            _db_version_check(con)
+            cur = con.cursor()
+            with con:
+                # create table if needed
+                cur.execute(
+                    """CREATE TABLE IF NOT EXISTS results (
+                        count INTEGER NOT NULL,
+                        description TEXT NOT NULL,
+                        pid INTEGER NOT NULL,
+                        result_id TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        PRIMARY KEY(pid, result_id));"""
+                )
+                # remove expired entries
+                if life_time > 0:
+                    cur.execute(
+                        """DELETE FROM results WHERE timestamp <= ?;""",
+                        (time() - life_time,),
+                    )
+                # avoid (unlikely) pid reuse collision
+                cur.execute("""DELETE FROM results WHERE pid = ?;""", (pid,))
+                # remove results for jobs that have been removed
+                try:
+                    cur.execute(
+                        """DELETE FROM results
+                           WHERE pid NOT IN (SELECT pid FROM status);"""
+                    )
+                except OperationalError as exc:
+                    if not str(exc).startswith("no such table:"):
+                        raise  # pragma: no cover
+
+    def count(self, result_id: str, desc: str) -> Tuple[int, bool]:
+        """Count results and write results to the database.
+
+        Args:
+            result_id: Result ID.
+            desc: User friendly description.
+
+        Returns:
+            Local count and initial report flag (includes parallel instances)
+            for given result_id.
+        """
+        super().count(result_id, desc)
+        timestamp = time()
+        initial = False
+        with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
+            cur = con.cursor()
+            with con:
+                cur.execute(
+                    """UPDATE results
+                        SET timestamp = ?,
+                            count = ?
+                        WHERE pid = ?
+                        AND result_id = ?;""",
+                    (timestamp, self._count[result_id], self.pid, result_id),
+                )
+                if cur.rowcount < 1:
+                    cur.execute(
+                        """SELECT pid FROM results WHERE result_id = ?;""",
+                        (result_id,),
+                    )
+                    initial = cur.fetchone() is None
+                    cur.execute(
+                        """INSERT INTO results(
+                                pid,
+                                result_id,
+                                description,
+                                timestamp,
+                                count)
+                            VALUES (?, ?, ?, ?, ?);""",
+                        (self.pid, result_id, desc, timestamp, self._count[result_id]),
+                    )
+        self.last_found = timestamp
+        return self._count[result_id], initial
+
+    def is_frequent(self, result_id: str) -> bool:
+        """Scan all results including results from other running instances
+        to determine if the limit has been exceeded. Local count must be >1 before
+        limit is checked.
+
+        Args:
+            result_id: Result ID.
+
+        Returns:
+            True if limit has been exceeded otherwise False.
+        """
+        assert isinstance(result_id, str)
+        if self._limit < 1:
+            return False
+        if result_id in self._frequent:
+            return True
+        # get local total
+        total = self._count.get(result_id, 0)
+        # only check the db for parallel results if
+        # - result has been found locally more than once
+        # - limit has not been exceeded locally
+        if self._limit >= total > 1:
+            with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
+                cur = con.cursor()
+                # look up total count from all processes
+                cur.execute(
+                    """SELECT COALESCE(SUM(count), 0)
+                        FROM results WHERE result_id = ?;""",
+                    (result_id,),
+                )
+                global_total = cur.fetchone()[0]
+            assert global_total >= total
+            total = global_total
+        if total > self._limit:
+            self._frequent.add(result_id)
+            return True
+        return False
+
+    def mark_frequent(self, result_id: str) -> None:
+        """Mark given results ID as frequent locally.
+
+        Args:
+            result_id: Result ID.
+
+        Returns:
+            None
+        """
+        assert isinstance(result_id, str)
+        if result_id not in self._frequent:
+            self._frequent.add(result_id)
+
+
+class BaseStatus(ABC):
     """Record and manage status information.
 
     Attributes:
-        _profiles (dict): Profiling data.
-        ignored (int): Ignored result count.
-        iteration (int): Iteration count.
-        log_size (int): Log size in bytes.
-        pid (int): Python process ID.
-        results (None): Placeholder for result data.
-        start_time (float): Start time of session.
-        test_name (str): Current test name.
+        _profiles: Profiling data.
+        ignored: Ignored result count.
+        iteration: Iteration count.
+        log_size: Log size in bytes.
+        pid: Python process ID.
+        start_time: Start time of session.
+        test_name: Current test name.
     """
 
     __slots__ = (
@@ -93,28 +411,32 @@ class BaseStatus:
         "iteration",
         "log_size",
         "pid",
-        "results",
         "start_time",
         "test_name",
     )
 
-    def __init__(self, pid, start_time, ignored=0, iteration=0, log_size=0):
+    def __init__(
+        self,
+        pid: int,
+        start_time: float,
+        ignored: int = 0,
+        iteration: int = 0,
+        log_size: int = 0,
+    ) -> None:
         assert pid >= 0
         assert ignored >= 0
         assert iteration >= 0
         assert log_size >= 0
-        assert isinstance(start_time, float)
         assert start_time >= 0
-        self._profiles = {}
+        self._profiles: Dict[str, Dict[str, Union[float, int]]] = {}
         self.ignored = ignored
         self.iteration = iteration
         self.log_size = log_size
         self.pid = pid
-        self.results = None
         self.start_time = start_time
         self.test_name = None
 
-    def profile_entries(self):
+    def profile_entries(self) -> Generator[ProfileEntry, None, None]:
         """Used to retrieve profiling data.
 
         Args:
@@ -125,30 +447,34 @@ class BaseStatus:
         """
         for name, entry in self._profiles.items():
             yield ProfileEntry(
-                entry["count"], entry["max"], entry["min"], name, entry["total"]
+                cast(int, entry["count"]),
+                entry["max"],
+                entry["min"],
+                name,
+                entry["total"],
             )
 
     @property
-    def rate(self):
+    def rate(self) -> float:
         """Calculate the average iteration rate in seconds.
 
         Args:
             None
 
         Returns:
-            float: Number of iterations performed per second.
+            Number of iterations performed per second.
         """
         return self.iteration / self.runtime if self.runtime else 0
 
     @property
-    def runtime(self):
+    def runtime(self) -> float:
         """Calculate the number of seconds since start() was called.
 
         Args:
             None
 
         Returns:
-            int: Total runtime in seconds.
+            Total runtime in seconds.
         """
         return max(time() - self.start_time, 0)
 
@@ -157,34 +483,49 @@ class ReadOnlyStatus(BaseStatus):
     """Store status information.
 
     Attributes:
-        _profiles (dict): Profiling data.
-        ignored (int): Ignored result count.
-        iteration (int): Iteration count.
-        log_size (int): Log size in bytes.
-        pid (int): Python process ID.
-        results (None): Placeholder for result data.
-        start_time (float): Start time of session.
-        test_name (str): Test name.
-        timestamp (float): Last time data was saved to database.
+        _profiles: Profiling data.
+        ignored: Ignored result count.
+        iteration: Iteration count.
+        log_size: Log size in bytes.
+        pid: Python process ID.
+        results: Result data.
+        start_time: Start time of session.
+        test_name: Test name.
+        timestamp: Last time data was saved to database.
     """
 
-    __slots__ = ("timestamp",)
+    __slots__ = ("results", "timestamp")
 
-    def __init__(self, pid, start_time, timestamp, ignored=0, iteration=0, log_size=0):
+    def __init__(
+        self,
+        pid: int,
+        start_time: float,
+        timestamp: float,
+        ignored: int = 0,
+        iteration: int = 0,
+        log_size: int = 0,
+        results: Optional[ReadOnlyResultCounter] = None,
+    ) -> None:
         super().__init__(
-            pid, start_time, ignored=ignored, iteration=iteration, log_size=log_size
+            pid,
+            start_time,
+            ignored=ignored,
+            iteration=iteration,
+            log_size=log_size,
         )
-        assert isinstance(timestamp, float)
         assert timestamp >= start_time
+        self.results = results or ReadOnlyResultCounter(pid)
         self.timestamp = timestamp
 
     @classmethod
-    def load_all(cls, db_file, time_limit=300):
+    def load_all(
+        cls, db_file: Path, time_limit: float = 300
+    ) -> Generator["ReadOnlyStatus", None, None]:
         """Load all status reports found in `db_file`.
 
         Args:
-            db_file (Path): Database containing status data.
-            time_limit (int): Filter entries by age. Use zero for no limit.
+            db_file: Database containing status data.
+            time_limit: Filter entries by age. Use zero for no limit.
 
         Yields:
             ReadOnlyStatus: Successfully loaded objects.
@@ -210,11 +551,18 @@ class ReadOnlyStatus(BaseStatus):
             except OperationalError as exc:
                 if not str(exc).startswith("no such table:"):
                     raise  # pragma: no cover
-                entries = ()
+                entries = []
 
         # Load all results
         results = ReadOnlyResultCounter.load(db_file, time_limit=0)
         for entry in entries:
+            # look up counter
+            current_counter = None
+            for counter in results:
+                if counter.pid == cast(int, entry[0]):
+                    current_counter = counter
+                    break
+
             status = cls(
                 entry[0],
                 entry[5],
@@ -222,26 +570,20 @@ class ReadOnlyStatus(BaseStatus):
                 ignored=entry[2],
                 iteration=entry[3],
                 log_size=entry[4],
+                results=current_counter,
             )
             status._profiles = loads(entry[1])
-            for counter in results:
-                if counter.pid == status.pid:
-                    status.results = counter
-                    break
-            else:
-                # no existing ReadOnlyResultCounter with matching pid found
-                status.results = ReadOnlyResultCounter(status.pid)
             yield status
 
     @property
-    def runtime(self):
+    def runtime(self) -> float:
         """Calculate total runtime in seconds relative to 'timestamp'.
 
         Args:
             None
 
         Returns:
-            int: Total runtime in seconds.
+            Total runtime in seconds.
         """
         return self.timestamp - self.start_time
 
@@ -250,29 +592,31 @@ class SimpleStatus(BaseStatus):
     """Record and manage status information.
 
     Attributes:
-        _profiles (dict): Profiling data.
-        ignored (int): Ignored result count.
-        iteration (int): Iteration count.
-        log_size (int): Log size in bytes.
-        pid (int): Python process ID.
-        results (None): Placeholder for result data.
-        start_time (float): Start time of session.
-        test_name (str): Current test name.
+        _profiles: Profiling data.
+        ignored: Ignored result count.
+        iteration: Iteration count.
+        log_size: Log size in bytes.
+        pid: Python process ID.
+        results:
+        start_time: Start time of session.
+        test_name: Current test name.
     """
 
-    def __init__(self, pid, start_time):
+    __slots__ = ("results",)
+
+    def __init__(self, pid: int, start_time: float) -> None:
         super().__init__(pid, start_time)
         self.results = SimpleResultCounter(pid)
 
     @classmethod
-    def start(cls):
+    def start(cls) -> "SimpleStatus":
         """Create a unique SimpleStatus object.
 
         Args:
             None
 
         Returns:
-            SimpleStatus: Active status report.
+            Active status report.
         """
         return cls(getpid(), time())
 
@@ -281,30 +625,30 @@ class Status(BaseStatus):
     """Status records status information and stores it in a database.
 
     Attributes:
-        _db_file (Path): Database file containing data.
-        _enable_profiling (bool): Profiling support status.
-        _profiles (dict): Profiling data.
-        ignored (int): Ignored result count.
-        iteration (int): Iteration count.
-        log_size (int): Log size in bytes.
-        pid (int): Python process ID.
-        results (ResultCounter): Results data. Used to count occurrences of results.
-        start_time (float): Start time of session.
-        test_name (str): Current test name.
-        timestamp (float): Last time data was saved to database.
+        _db_file: Database file containing data.
+        _enable_profiling: Profiling support status.
+        _profiles: Profiling data.
+        ignored: Ignored result count.
+        iteration: Iteration count.
+        log_size: Log size in bytes.
+        pid: Python process ID.
+        results: Results data. Used to count occurrences of results.
+        start_time: Start time of session.
+        test_name: Current test name.
+        timestamp: Last time data was saved to database.
     """
 
-    __slots__ = ("_db_file", "_enable_profiling", "timestamp")
+    __slots__ = ("_db_file", "_enable_profiling", "results", "timestamp")
 
     def __init__(
         self,
-        pid,
-        start_time,
-        db_file,
-        enable_profiling=False,
-        life_time=REPORTS_EXPIRE,
-        report_limit=0,
-    ):
+        pid: int,
+        start_time: float,
+        db_file: Path,
+        enable_profiling: bool = False,
+        life_time: float = REPORTS_EXPIRE,
+        report_limit: int = 0,
+    ) -> None:
         super().__init__(pid, start_time)
         assert life_time >= 0
         assert report_limit >= 0
@@ -315,7 +659,7 @@ class Status(BaseStatus):
         self.timestamp = start_time
 
     @staticmethod
-    def _init_db(db_file, pid, life_time):
+    def _init_db(db_file: Path, pid: int, life_time: float) -> None:
         # prepare database
         LOG.debug("status using db %s", db_file)
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
@@ -343,11 +687,11 @@ class Status(BaseStatus):
                 cur.execute("""DELETE FROM status WHERE pid = ?;""", (pid,))
 
     @contextmanager
-    def measure(self, name):
+    def measure(self, name: str) -> Generator[None, None, None]:
         """Used to simplify collecting profiling data.
 
         Args:
-            name (str): Used to group the entries.
+            name: Used to group the entries.
 
         Yields:
             None
@@ -359,13 +703,13 @@ class Status(BaseStatus):
         else:
             yield
 
-    def record(self, name, duration):
+    def record(self, name: str, duration: float) -> None:
         """Used to add profiling data. This is intended to be used to make rough
         calculations to identify major configuration issues.
 
         Args:
-            name (str): Used to group the entries.
-            duration (int, float): Stored to be later used for measurements.
+            name: Used to group the entries.
+            duration: Stored to be later used for measurements.
 
         Returns:
             None
@@ -388,22 +732,23 @@ class Status(BaseStatus):
                     "total": duration,
                 }
 
-    def report(self, force=False, report_rate=REPORT_RATE):
+    def report(self, force: bool = False, report_rate: int = REPORT_RATE) -> bool:
         """Write status report to database. Reports are only written periodically.
         It is limited by `report_rate`. The specified number of seconds must
         elapse before another write will be performed unless `force` is True.
 
         Args:
-            force (bool): Ignore report frequency limiting.
-            report_rate (int): Minimum number of seconds between writes to database.
+            force: Ignore report frequency limiting.
+            report_rate: Minimum number of seconds between writes to database.
 
         Returns:
-            bool: True if the report was successful otherwise False.
+            True if the report was successful otherwise False.
         """
         now = time()
         if self.results.last_found > self.timestamp:
             LOG.debug("results have been found since last report, force update")
             force = True
+        assert report_rate >= 0
         if not force and now < (self.timestamp + report_rate):
             return False
         assert self.start_time <= now
@@ -456,13 +801,15 @@ class Status(BaseStatus):
         return True
 
     @classmethod
-    def start(cls, db_file, enable_profiling=False, report_limit=0):
+    def start(
+        cls, db_file: Path, enable_profiling: bool = False, report_limit: int = 0
+    ) -> "Status":
         """Create a unique Status object.
 
         Args:
-            db_file (Path): Database containing status data.
-            enable_profiling (bool): Record profiling data.
-            report_limit (int): Number of times a unique result will be reported.
+            db_file: Database containing status data.
+            enable_profiling: Record profiling data.
+            report_limit: Number of times a unique result will be reported.
 
         Returns:
             Status: Active status report.
@@ -478,288 +825,21 @@ class Status(BaseStatus):
         return status
 
 
-class SimpleResultCounter:
-    __slots__ = ("_count", "_desc", "pid")
-
-    def __init__(self, pid):
-        assert pid >= 0
-        self._count = defaultdict(int)
-        self._desc = {}
-        self.pid = pid
-
-    def __iter__(self):
-        """Yield all result data.
-
-        Args:
-            None
-
-        Yields:
-            ResultEntry: Contains ID, count and description for each result entry.
-        """
-        for result_id, count in self._count.items():
-            if count > 0:
-                yield ResultEntry(result_id, count, self._desc.get(result_id, None))
-
-    def blockers(self, iterations, iters_per_result=100):
-        """Any result with an iterations-per-result ratio of less than or equal the
-        given limit are considered 'blockers'. Results with a count <= 1 are not
-        included.
-
-        Args:
-            iterations (int): Total iterations.
-            iters_per_result (int): Iterations-per-result threshold.
-
-        Yields:
-            ResultEntry: ID, count and description of blocking result.
-        """
-        assert iters_per_result > 0
-        if iterations > 0:
-            for entry in self:
-                if entry.count > 1 and iterations / entry.count <= iters_per_result:
-                    yield entry
-
-    def count(self, result_id, desc):
-        """
-
-        Args:
-            result_id (str): Result ID.
-            desc (str): User friendly description.
-
-        Returns:
-            int: Current count for given result_id.
-        """
-        assert isinstance(result_id, str)
-        self._count[result_id] += 1
-        if result_id not in self._desc:
-            self._desc[result_id] = desc
-        return self._count[result_id]
-
-    def get(self, result_id):
-        """Get count and description for given result id.
-
-        Args:
-            result_id (str): Result ID.
-
-        Returns:
-            ResultEntry: Count and description.
-        """
-        assert isinstance(result_id, str)
-        return ResultEntry(
-            result_id, self._count.get(result_id, 0), self._desc.get(result_id, None)
-        )
-
-    @property
-    def total(self):
-        """Get total count of all results.
-
-        Args:
-            None
-
-        Returns:
-            int: Total result count.
-        """
-        return sum(self._count.values())
+class ReductionStep(NamedTuple):
+    name: str
+    duration: Optional[float]
+    successes: Optional[int]
+    attempts: Optional[int]
+    size: Optional[int]
+    iterations: Optional[int]
 
 
-class ReadOnlyResultCounter(SimpleResultCounter):
-    def count(self, result_id, desc):
-        raise NotImplementedError("Read only!")  # pragma: no cover
-
-    @classmethod
-    def load(cls, db_file, time_limit=0):
-        """Load existing entries for database and populate a ReadOnlyResultCounter.
-
-        Args:
-            db_file (Path): Database file.
-            time_limit (int): Used to filter older entries.
-
-        Returns:
-            list: Loaded ReadOnlyResultCounter objects.
-        """
-        assert time_limit >= 0
-        with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
-            cur = con.cursor()
-            try:
-                # collect entries
-                if time_limit:
-                    cur.execute(
-                        """SELECT pid,
-                                result_id,
-                                description,
-                                count
-                           FROM results
-                           WHERE timestamp > ?;""",
-                        (time() - time_limit,),
-                    )
-                else:
-                    cur.execute(
-                        """SELECT pid, result_id, description, count FROM results"""
-                    )
-                entries = cur.fetchall()
-            except OperationalError as exc:
-                if not str(exc).startswith("no such table:"):
-                    raise  # pragma: no cover
-                entries = ()
-
-        loaded = {}
-        for pid, result_id, desc, count in entries:
-            if pid not in loaded:
-                loaded[pid] = cls(pid)
-            loaded[pid]._desc[result_id] = desc  # pylint: disable=protected-access
-            loaded[pid]._count[result_id] = count  # pylint: disable=protected-access
-
-        return list(loaded.values())
-
-
-class ResultCounter(SimpleResultCounter):
-    __slots__ = ("_db_file", "_frequent", "_limit", "last_found")
-
-    def __init__(self, pid, db_file, life_time=RESULTS_EXPIRE, report_limit=0):
-        super().__init__(pid)
-        assert db_file
-        assert report_limit >= 0
-        self._db_file = db_file
-        self._frequent = set()
-        # use zero to disable report limit
-        self._limit = report_limit
-        self.last_found = 0
-        self._init_db(db_file, pid, life_time)
-
-    @staticmethod
-    def _init_db(db_file, pid, life_time):
-        # prepare database
-        LOG.debug("resultcounter using db %s", db_file)
-        with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
-            _db_version_check(con)
-            cur = con.cursor()
-            with con:
-                # create table if needed
-                cur.execute(
-                    """CREATE TABLE IF NOT EXISTS results (
-                        count INTEGER NOT NULL,
-                        description TEXT NOT NULL,
-                        pid INTEGER NOT NULL,
-                        result_id TEXT NOT NULL,
-                        timestamp INTEGER NOT NULL,
-                        PRIMARY KEY(pid, result_id));"""
-                )
-                # remove expired entries
-                if life_time > 0:
-                    cur.execute(
-                        """DELETE FROM results WHERE timestamp <= ?;""",
-                        (time() - life_time,),
-                    )
-                # avoid (unlikely) pid reuse collision
-                cur.execute("""DELETE FROM results WHERE pid = ?;""", (pid,))
-                # remove results for jobs that have been removed
-                try:
-                    cur.execute(
-                        """DELETE FROM results
-                           WHERE pid NOT IN (SELECT pid FROM status);"""
-                    )
-                except OperationalError as exc:
-                    if not str(exc).startswith("no such table:"):
-                        raise  # pragma: no cover
-
-    def count(self, result_id, desc):
-        """Count results and write results to the database.
-
-        Args:
-            result_id (str): Result ID.
-            desc (str): User friendly description.
-
-        Returns:
-            tuple (int, bool): Local count and initial report (includes
-                               parallel instances) for given result_id.
-        """
-        super().count(result_id, desc)
-        timestamp = time()
-        initial = False
-        with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
-            cur = con.cursor()
-            with con:
-                cur.execute(
-                    """UPDATE results
-                        SET timestamp = ?,
-                            count = ?
-                        WHERE pid = ?
-                        AND result_id = ?;""",
-                    (timestamp, self._count[result_id], self.pid, result_id),
-                )
-                if cur.rowcount < 1:
-                    cur.execute(
-                        """SELECT pid FROM results WHERE result_id = ?;""",
-                        (result_id,),
-                    )
-                    initial = cur.fetchone() is None
-                    cur.execute(
-                        """INSERT INTO results(
-                                pid,
-                                result_id,
-                                description,
-                                timestamp,
-                                count)
-                            VALUES (?, ?, ?, ?, ?);""",
-                        (self.pid, result_id, desc, timestamp, self._count[result_id]),
-                    )
-        self.last_found = timestamp
-        return self._count[result_id], initial
-
-    def is_frequent(self, result_id):
-        """Scan all results including results from other running instances
-        to determine if the limit has been exceeded. Local count must be >1 before
-        limit is checked.
-
-        Args:
-            result_id (str): Result ID.
-
-        Returns:
-            bool: True if limit has been exceeded otherwise False.
-        """
-        assert isinstance(result_id, str)
-        if self._limit < 1:
-            return False
-        if result_id in self._frequent:
-            return True
-        # get local total
-        total = self._count.get(result_id, 0)
-        # only check the db for parallel results if
-        # - result has been found locally more than once
-        # - limit has not been exceeded locally
-        if self._limit >= total > 1:
-            with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
-                cur = con.cursor()
-                # look up total count from all processes
-                cur.execute(
-                    """SELECT COALESCE(SUM(count), 0)
-                        FROM results WHERE result_id = ?;""",
-                    (result_id,),
-                )
-                global_total = cur.fetchone()[0]
-            assert global_total >= total
-            total = global_total
-        if total > self._limit:
-            self._frequent.add(result_id)
-            return True
-        return False
-
-    def mark_frequent(self, result_id):
-        """Mark given results ID as frequent locally.
-
-        Args:
-            result_id (str): Result ID.
-
-        Returns:
-            None
-        """
-        assert isinstance(result_id, str)
-        if result_id not in self._frequent:
-            self._frequent.add(result_id)
-
-
-ReductionStep = namedtuple(
-    "ReductionStep", "name, duration, successes, attempts, size, iterations"
-)
+class _MilestoneTimer(NamedTuple):
+    name: str
+    start: float
+    attempts: int
+    iterations: int
+    successes: int
 
 
 class ReductionStatus:
@@ -767,40 +847,44 @@ class ReductionStatus:
 
     def __init__(
         self,
-        strategies=None,
-        testcase_size_cb=None,
-        crash_id=None,
-        db_file=None,
-        pid=None,
-        tool=None,
-        life_time=REPORTS_EXPIRE,
-    ):
+        strategies: Optional[List[str]] = None,
+        testcase_size_cb: Optional[Callable[[], int]] = None,
+        crash_id: Optional[int] = None,
+        db_file: Optional[Path] = None,
+        pid: Optional[int] = None,
+        tool: Optional[str] = None,
+        life_time: float = REPORTS_EXPIRE,
+    ) -> None:
         """Initialize a ReductionStatus instance.
 
         Arguments:
-            strategies (list(str)): List of strategies to be run.
-            testcase_size_cb (callable): Callback to get testcase size
-            crash_id (int): CrashManager ID of original testcase
-            db_file (Path): Database file containing data.
-            tool (str): The tool name used for reporting to FuzzManager.
+            strategies: List of strategies to be run.
+            testcase_size_cb: Callback to get testcase size.
+            crash_id: CrashManager ID of original testcase.
+            db_file: Database file containing data.
+            tool: The tool name used for reporting to FuzzManager.
+            life_time:
         """
-        self.analysis = {}
+        self.analysis: Dict[str, float] = {}
         self.attempts = 0
         self.iterations = 0
-        self.run_params = {}
-        self.signature_info = {}
+        # TODO: make RunParams dataclass?
+        self.run_params: Dict[str, Union[bool, int]] = {}
+        # TODO: make SigInfo dataclass?
+        self.signature_info: Dict[str, Union[bool, str]] = {}
         self.successes = 0
         self.current_strategy_idx = None
         self._testcase_size_cb = testcase_size_cb
         self.crash_id = crash_id
-        self.finished_steps = []
-        self._in_progress_steps = []
+        self.finished_steps: List[ReductionStep] = []
+        self._in_progress_steps: List[_MilestoneTimer] = []
         self.strategies = strategies
         self._db_file = db_file
         self.pid = pid
         self.timestamp = time()
         self.tool = tool
-        self._current_size = None
+        self._current_size: Optional[int] = None
+        # this holds results from Reporter.submit()
         self.last_reports = []
 
         # prepare database
@@ -842,23 +926,23 @@ class ReductionStatus:
     @classmethod
     def start(
         cls,
-        db_file,
-        strategies=None,
-        testcase_size_cb=None,
-        crash_id=None,
-        tool=None,
-    ):
+        db_file: Path,
+        strategies: Optional[List[str]] = None,
+        testcase_size_cb: Optional[Callable[[], int]] = None,
+        crash_id: Optional[int] = None,
+        tool: Optional[str] = None,
+    ) -> "ReductionStatus":
         """Create a unique ReductionStatus object.
 
         Args:
-            db_file (Path): Database containing status data.
-            strategies (list(str)): List of strategies to be run.
-            testcase_size_cb (callable): Callback to get testcase size
-            crash_id (int): CrashManager ID of original testcase
-            tool (str): The tool name used for reporting to FuzzManager.
+            db_file: Database containing status data.
+            strategies: List of strategies to be run.
+            testcase_size_cb: Callback to get testcase size.
+            crash_id: CrashManager ID of original testcase.
+            tool: The tool name used for reporting to FuzzManager.
 
         Returns:
-            ReductionStatus: Active status report.
+            Active status report.
         """
         status = cls(
             crash_id=crash_id,
@@ -871,17 +955,17 @@ class ReductionStatus:
         status.report(force=True)
         return status
 
-    def report(self, force=False, report_rate=REPORT_RATE):
+    def report(self, force: bool = False, report_rate: float = REPORT_RATE) -> bool:
         """Write status report to database. Reports are only written periodically.
         It is limited by `report_rate`. The specified number of seconds must
         elapse before another write will be performed unless `force` is True.
 
         Args:
-            force (bool): Ignore report frequently limiting.
-            report_rate (int): Minimum number of seconds between writes.
+            force: Ignore report frequently limiting.
+            report_rate: Minimum number of seconds between writes.
 
         Returns:
-            bool: Returns true if the report was successful otherwise false.
+            True if the report was successful otherwise false.
         """
         now = time()
         if not force and now < (self.timestamp + report_rate):
@@ -896,7 +980,7 @@ class ReductionStatus:
                 run_params = dumps(self.run_params)
                 sig_info = dumps(self.signature_info)
                 finished = dumps(self.finished_steps)
-                in_prog = dumps([step.serialize() for step in self._in_progress_steps])
+                in_prog = dumps(self._in_progress_steps)
                 strategies = dumps(self.strategies)
                 last_reports = dumps(self.last_reports)
 
@@ -980,16 +1064,18 @@ class ReductionStatus:
         return True
 
     @classmethod
-    def load_all(cls, db_file, time_limit=300):
+    def load_all(
+        cls, db_file: Path, time_limit: float = 300
+    ) -> Generator["ReductionStatus", None, None]:
         """Load all reduction status reports found in `db_file`.
 
         Args:
-            db_file (Path): Database containing status data.
-            time_limit (int): Only include entries with a timestamp that is within the
-                              given number of seconds. Use zero for no limit.
+            db_file: Database containing status data.
+            time_limit: Only include entries with a timestamp that is within the
+                        given number of seconds. Use zero for no limit.
 
         Yields:
-            Status: Successfully loaded read-only status objects.
+            Successfully loaded read-only status objects.
         """
         assert time_limit >= 0
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
@@ -1022,7 +1108,7 @@ class ReductionStatus:
             except OperationalError as exc:
                 if not str(exc).startswith("no such table:"):
                     raise  # pragma: no cover
-                entries = ()
+                entries = []
 
         for entry in entries:
             pid = entry[0]
@@ -1043,7 +1129,7 @@ class ReductionStatus:
                 ReductionStep._make(step) for step in loads(entry[8])
             ]
             status._in_progress_steps = [
-                status._construct_milestone(*step) for step in loads(entry[9])
+                _MilestoneTimer(*step) for step in loads(entry[9])
             ]
             status._current_size = entry[11]
             status.current_strategy_idx = entry[12]
@@ -1051,9 +1137,10 @@ class ReductionStatus:
             status.last_reports = loads(entry[15])
             yield status
 
-    def _testcase_size(self):
+    def _testcase_size(self) -> Optional[int]:
         if self._db_file is None:
             return self._current_size
+        assert self._testcase_size_cb is not None
         return self._testcase_size_cb()
 
     def __deepcopy__(self, memo):
@@ -1077,7 +1164,8 @@ class ReductionStatus:
         result.finished_steps = deepcopy(self.finished_steps, memo)
         result.last_reports = deepcopy(self.last_reports, memo)
         # finish open timers
-        for step in reversed(self._in_progress_steps):
+        for tmr in reversed(self._in_progress_steps):
+            step = self._tmr_to_step(tmr)
             result.record(
                 step.name,
                 attempts=step.attempts,
@@ -1088,37 +1176,51 @@ class ReductionStatus:
             )
         return result
 
+    def _tmr_to_step(self, tmr: _MilestoneTimer) -> ReductionStep:
+        if self._db_file is None:
+            duration = self.timestamp - tmr.start
+        else:
+            duration = time() - tmr.start
+        return ReductionStep(
+            tmr.name,
+            duration=duration,
+            successes=self.successes - tmr.successes,
+            attempts=self.attempts - tmr.attempts,
+            size=None,
+            iterations=self.iterations - tmr.iterations,
+        )
+
     @property
-    def current_strategy(self):
+    def current_strategy(self) -> Optional[ReductionStep]:
         if self._in_progress_steps:
-            return self._in_progress_steps[-1]
+            return self._tmr_to_step(self._in_progress_steps[-1])
         if self.finished_steps:
             return self.finished_steps[-1]
         return None
 
     @property
-    def total(self):
+    def total(self) -> Optional[ReductionStep]:
         if self._in_progress_steps:
-            return self._in_progress_steps[0]
+            return self._tmr_to_step(self._in_progress_steps[0])
         if self.finished_steps:
             return self.finished_steps[-1]
         return None
 
     @property
-    def original(self):
+    def original(self) -> Optional[ReductionStep]:
         if self.finished_steps:
             return self.finished_steps[0]
         return None
 
     def record(
         self,
-        name,
-        duration=None,
-        iterations=None,
-        attempts=None,
-        successes=None,
-        report=True,
-    ):
+        name: str,
+        duration: Optional[float] = None,
+        iterations: Optional[int] = None,
+        attempts: Optional[int] = None,
+        successes: Optional[int] = None,
+        report: bool = True,
+    ) -> None:
         """Record reduction status for a given point in time:
 
         - name of the milestone (eg. init, strategy name completed)
@@ -1128,12 +1230,12 @@ class ReductionStatus:
         - # of successful attempts
 
         Arguments:
-            name (str): name of milestone
-            duration (float or None): seconds elapsed for period recorded
-            iterations (int or None): # of iterations performed
-            attempts (int or None): # of attempts performed
-            successes (int or None): # of attempts successful
-            report (bool): Automatically force a report.
+            name: name of milestone
+            duration: seconds elapsed for period recorded
+            iterations: # of iterations performed
+            attempts: # of attempts performed
+            successes: # of attempts successful
+            report: Automatically force a report.
 
         Returns:
             None
@@ -1151,94 +1253,54 @@ class ReductionStatus:
         if report:
             self.report(force=True)
 
-    def _construct_milestone(self, name, start, attempts, iterations, successes):
-        # pylint: disable=no-self-argument
-        class _MilestoneTimer:
-            def __init__(sub):
-                sub.name = name
-                sub._start_time = start
-                sub._start_attempts = attempts
-                sub._start_iterations = iterations
-                sub._start_successes = successes
-
-            @property
-            def size(sub):
-                return self._testcase_size()  # pylint: disable=protected-access
-
-            @property
-            def attempts(sub):
-                return self.attempts - sub._start_attempts
-
-            @property
-            def iterations(sub):
-                return self.iterations - sub._start_iterations
-
-            @property
-            def successes(sub):
-                return self.successes - sub._start_successes
-
-            @property
-            def duration(sub):
-                if self._db_file is None:  # pylint: disable=protected-access
-                    return self.timestamp - sub._start_time
-                return time() - sub._start_time
-
-            def serialize(sub):
-                return (
-                    sub.name,
-                    sub._start_time,
-                    sub._start_attempts,
-                    sub._start_iterations,
-                    sub._start_successes,
-                )
-
-        return _MilestoneTimer()
-
     @contextmanager
-    def measure(self, name, report=True):
+    def measure(self, name: str, report: bool = True) -> Generator[None, None, None]:
         """Time and record the period leading up to a reduction milestone.
         eg. a strategy being run.
 
         Arguments:
-            name (str): name of milestone
-            report (bool): Automatically force a report.
+            name: name of milestone
+            report: Automatically force a report.
 
         Yields:
             None
         """
 
-        tmr = self._construct_milestone(
+        tmr = _MilestoneTimer(
             name, time(), self.attempts, self.iterations, self.successes
         )
         self._in_progress_steps.append(tmr)
         yield
         assert self._in_progress_steps.pop() is tmr
+        step = self._tmr_to_step(tmr)
         self.record(
             name,
-            attempts=tmr.attempts,
-            duration=tmr.duration,
-            iterations=tmr.iterations,
-            successes=tmr.successes,
+            attempts=step.attempts,
+            duration=step.duration,
+            iterations=step.iterations,
+            successes=step.successes,
             report=report,
         )
 
-    def copy(self):
+    def copy(self) -> "ReductionStatus":
         """Create a deep copy of this instance.
 
         Arguments:
             None
 
         Returns:
-            ReductionStatus: Clone of self
+            Clone of self
         """
         return deepcopy(self)
 
-    def add_to_reporter(self, reporter, expected=True):
+    def add_to_reporter(
+        self, reporter: FuzzManagerReporter, expected: bool = True
+    ) -> None:
         """Add the reducer status to reported metadata for the given reporter.
 
         Arguments:
-            reporter (FuzzManagerReporter): Reporter to update.
-            expected (bool): Add detailed stats.
+            reporter: Reporter to update.
+            expected: Add detailed stats.
 
         Returns:
             None

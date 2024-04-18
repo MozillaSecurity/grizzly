@@ -9,19 +9,15 @@ from datetime import timedelta
 from functools import partial
 from itertools import zip_longest
 from logging import DEBUG, INFO, basicConfig, getLogger
-
-try:
-    from os import getloadavg
-except ImportError:  # pragma: no cover
-    # os.getloadavg() is not available on all platforms
-    getloadavg = None
 from os import SEEK_CUR, getenv
 from pathlib import Path
+from platform import system
 from re import match
 from re import sub as re_sub
 from time import gmtime, localtime, strftime
+from typing import Callable, Dict, Generator, List, Optional, Set, Tuple, Type, Union
 
-from psutil import cpu_count, cpu_percent, disk_usage, virtual_memory
+from psutil import cpu_count, cpu_percent, disk_usage, getloadavg, virtual_memory
 
 from .status import (
     REPORT_RATE,
@@ -39,6 +35,116 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
+class TracebackReport:
+    """Read Python tracebacks from log files and store it in a manner that is helpful
+    when generating reports.
+    """
+
+    MAX_LINES = 16  # should be no less than 6
+    READ_LIMIT = 0x20000  # 128KB
+
+    def __init__(
+        self,
+        log_file: Path,
+        lines: List[str],
+        is_kbi: bool = False,
+        prev_lines: Optional[List[str]] = None,
+    ) -> None:
+        self.is_kbi = is_kbi
+        self.lines = lines
+        self.log_file = log_file
+        self.prev_lines = prev_lines or []
+
+    @classmethod
+    def from_file(
+        cls, log_file: Path, max_preceding: int = 5, ignore_kbi: bool = False
+    ) -> Optional["TracebackReport"]:
+        """Create TracebackReport from a text file containing a Python traceback.
+        Only the first traceback in the file will be parsed.
+
+        Args:
+            log_file: File to parse.
+            max_preceding: Number of lines to collect leading up to the traceback.
+            ignore_kbi: Skip/ignore KeyboardInterrupt.
+
+        Returns:
+            TracebackReport containing data from givin log file.
+        """
+        token = b"Traceback (most recent call last):"
+        assert len(token) < cls.READ_LIMIT
+        try:
+            with log_file.open("rb") as in_fp:
+                for chunk in iter(partial(in_fp.read, cls.READ_LIMIT), b""):
+                    idx = chunk.find(token)
+                    if idx > -1:
+                        # calculate offset of data in the file
+                        pos = in_fp.tell() - len(chunk) + idx
+                        break
+                    if len(chunk) == cls.READ_LIMIT:
+                        # seek back to avoid missing beginning of token
+                        in_fp.seek(len(token) * -1, SEEK_CUR)
+                else:
+                    # no traceback here, move along
+                    return None
+                # seek back 2KB to collect preceding lines
+                in_fp.seek(max(pos - 2048, 0))
+                data = in_fp.read(cls.READ_LIMIT)
+        except OSError:  # pragma: no cover
+            # in case the file goes away
+            return None
+
+        data_lines = data.decode("ascii", errors="ignore").splitlines()
+        token_str = token.decode()
+        is_kbi = False
+        tb_start = None
+        tb_end = None
+        line_count = len(data_lines)
+        for line_num, log_line in enumerate(data_lines):
+            if tb_start is None and token_str in log_line:
+                tb_start = line_num
+                continue
+            if tb_start is not None:
+                log_line = log_line.strip()
+                if not log_line:
+                    # stop at first empty line
+                    tb_end = min(line_num, line_count)
+                    break
+                if match(r"^\w+(\.\w+)*\:\s|^\w+(Interrupt|Error)$", log_line):
+                    is_kbi = log_line.startswith("KeyboardInterrupt")
+                    if is_kbi and ignore_kbi:
+                        # ignore this exception since it is a KeyboardInterrupt
+                        return None
+                    # stop after error message
+                    tb_end = min(line_num + 1, line_count)
+                    break
+        assert tb_start is not None
+        if max_preceding > 0:
+            prev_start = max(tb_start - max_preceding, 0)
+            prev_lines = data_lines[prev_start:tb_start]
+        else:
+            prev_lines = None
+        if tb_end is None:
+            # limit if the end is not identified (failsafe)
+            tb_end = max(line_count, cls.MAX_LINES)
+        if tb_end - tb_start > cls.MAX_LINES:
+            # add first entry
+            lines = data_lines[tb_start : tb_start + 3]
+            lines += ["<--- TRACEBACK TRIMMED--->"]
+            # add end entries
+            lines += data_lines[tb_end - (cls.MAX_LINES - 3) : tb_end]
+        else:
+            lines = data_lines[tb_start:tb_end]
+        return cls(log_file, lines, is_kbi=is_kbi, prev_lines=prev_lines)
+
+    def __len__(self) -> int:
+        return len(str(self))
+
+    def __str__(self) -> str:
+        return "\n".join(
+            [f"Log: '{self.log_file.name}'"] + self.prev_lines + self.lines
+        )
+
+
 class StatusReporter:
     """Read and merge Grizzly status reports, including tracebacks if found.
     Output is a single textual report, e.g. for submission to EC2SpotManager.
@@ -50,26 +156,35 @@ class StatusReporter:
     SUMMARY_LIMIT = 4095  # summary output must be no more than 4KB
     TIME_LIMIT = 120  # ignore older reports
 
-    def __init__(self, reports, tracebacks=None):
+    def __init__(
+        self,
+        reports: List[ReadOnlyStatus],
+        tracebacks: Optional[List[TracebackReport]] = None,
+    ) -> None:
         self.reports = reports
         self.tracebacks = tracebacks
 
     @property
-    def has_results(self):
-        return any(x.results.total for x in self.reports)
+    def has_results(self) -> bool:
+        return any(x.results.total for x in self.reports if x.results)
 
     @classmethod
-    def load(cls, db_file, tb_path=None, time_limit=TIME_LIMIT):
+    def load(
+        cls,
+        db_file: Path,
+        tb_path: Optional[Path] = None,
+        time_limit: float = TIME_LIMIT,
+    ) -> "StatusReporter":
         """Read Grizzly status reports and create a StatusReporter object.
 
         Args:
-            db_file (str): Status data file to load.
-            tb_path (Path): Directory to scan for files containing Python tracebacks.
-            time_limit (int): Only include entries with a timestamp that is within the
-                              given number of seconds. Use zero for no limit.
+            db_file: Status data file to load.
+            tb_path: Directory to scan for files containing Python tracebacks.
+            time_limit: Only include entries with a timestamp that is within the
+                        given number of seconds. Use zero for no limit.
 
         Returns:
-            StatusReporter: Contains available status reports and traceback reports.
+            Available status reports and traceback reports.
         """
         return cls(
             list(ReadOnlyStatus.load_all(db_file, time_limit=time_limit)),
@@ -77,7 +192,7 @@ class StatusReporter:
         )
 
     @staticmethod
-    def format_entries(entries):
+    def format_entries(entries: List[Tuple[str, Optional[str]]]) -> str:
         """Generate formatted output from (label, body) pairs.
         Each entry must have a label and an optional body.
 
@@ -95,33 +210,33 @@ class StatusReporter:
          third : 3.0
 
         Args:
-            entries list(2-tuple(str, str)): Data to merge.
+            entries: Data to merge.
 
         Returns:
-            str: Formatted output.
+            Formatted output.
         """
         label_lengths = tuple(len(x[0]) for x in entries if x[1])
         max_len = max(label_lengths) if label_lengths else 0
         out = []
         for label, body in entries:
-            if body:
-                out.append(f"{label}".rjust(max_len) + f" : {body}")
-            else:
+            if body is None:
                 out.append(label)
+            else:
+                out.append(f"{label}".rjust(max_len) + f" : {body}")
         return "\n".join(out)
 
-    def results(self, max_len=85):
+    def results(self, max_len: int = 85) -> str:
         """Merged and generate formatted output from results.
 
         Args:
-            max_len (int): Maximum length of result description.
+            max_len: Maximum length of result description.
 
         Returns:
-            str: A formatted report.
+            A formatted report.
         """
-        blockers = set()
-        counts = defaultdict(int)
-        descs = {}
+        blockers: Set[str] = set()
+        counts: Dict[str, int] = defaultdict(int)
+        descs: Dict[str, Optional[str]] = {}
         # calculate totals
         for report in self.reports:
             for result in report.results:
@@ -129,11 +244,12 @@ class StatusReporter:
                 counts[result.rid] += result.count
             blockers.update(x.rid for x in report.results.blockers(report.iteration))
         # generate output
-        entries = []
+        entries: List[Tuple[str, Optional[str]]] = []
         for rid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
             desc = descs[rid]
+            assert desc is not None
             # trim long descriptions
-            if len(descs[rid]) > max_len:
+            if len(desc) > max_len:
                 desc = f"{desc[: max_len - 3]}..."
             label = f"*{count}" if rid in blockers else str(count)
             entries.append((label, desc))
@@ -144,19 +260,19 @@ class StatusReporter:
         entries.append(("", None))
         return self.format_entries(entries)
 
-    def specific(self, iters_per_result=100):
+    def specific(self, iters_per_result: int = 100) -> str:
         """Merged and generate formatted output from status reports.
 
         Args:
-            iters_per_result (int): Threshold for warning of potential blockers.
+            iters_per_result: Threshold for warning of potential blockers.
 
         Returns:
-            str: A formatted report.
+            A formatted report.
         """
         if not self.reports:
             return "No status reports available"
         self.reports.sort(key=lambda x: x.start_time)
-        entries = []
+        entries: List[Tuple[str, Optional[str]]] = []
         for report in self.reports:
             label = (
                 f"PID {report.pid} started at "
@@ -213,25 +329,25 @@ class StatusReporter:
 
     def summary(
         self,
-        rate=True,
-        runtime=True,
-        sysinfo=False,
-        timestamp=False,
-        iters_per_result=100,
-    ):
+        rate: bool = True,
+        runtime: bool = True,
+        sysinfo: bool = False,
+        timestamp: bool = False,
+        iters_per_result: int = 100,
+    ) -> str:
         """Merge and generate a summary from status reports.
 
         Args:
-            rate (bool): Include iteration rate.
-            runtime (bool): Include total runtime in output.
-            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output.
-            timestamp (bool): Include time stamp in output.
-            iters_per_result (int): Threshold for warning of potential blockers.
+            rate: Include iteration rate.
+            runtime: Include total runtime in output.
+            sysinfo: Include system info (CPU, disk, RAM... etc) in output.
+            timestamp: Include time stamp in output.
+            iters_per_result: Threshold for warning of potential blockers.
 
         Returns:
-            str: A summary of merged reports.
+            A summary of merged reports.
         """
-        entries = []
+        entries: List[Tuple[str, Optional[str]]] = []
         # Job specific status
         if self.reports:
             # calculate totals
@@ -262,7 +378,7 @@ class StatusReporter:
             if total_iters:
                 total_results = sum(results)
                 result_pct = total_results / total_iters * 100
-                buckets = set()
+                buckets: Set[str] = set()
                 for report in self.reports:
                     buckets.update(x.rid for x in report.results)
                 disp = [f"{total_results} ({len(buckets)})"]
@@ -320,15 +436,15 @@ class StatusReporter:
         return msg
 
     @staticmethod
-    def _merge_tracebacks(tracebacks, size_limit):
+    def _merge_tracebacks(tracebacks: List[TracebackReport], size_limit: int) -> str:
         """Merge traceback without exceeding size_limit.
 
         Args:
-            tracebacks (iterable): TracebackReport to merge.
-            size_limit (int): Maximum size in bytes of output.
+            tracebacks: TracebackReports to merge.
+            size_limit: Maximum size in bytes of output.
 
         Returns:
-            str: merged tracebacks.
+            Merged tracebacks.
         """
         txt = []
         txt.append(f"\n\nWARNING Tracebacks ({len(tracebacks)}) detected!")
@@ -341,24 +457,26 @@ class StatusReporter:
         return "\n".join(txt)
 
     @staticmethod
-    def _sys_info():
+    def _sys_info() -> List[Tuple[str, str]]:
         """Collect system information.
 
         Args:
             None
 
         Returns:
-            list(tuple): System information in tuples (label, display data).
+            System information.
         """
-        entries = []
+        entries: List[Tuple[str, str]] = []
 
         # CPU and load
-        disp = []
+        disp: List[str] = []
         disp.append(
             f"{cpu_count(logical=True)} ({cpu_count(logical=False)}) @ "
             f"{cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL):0.0f}%"
         )
-        if getloadavg is not None:
+        # getloadavg() on Windows does not return anything useful in this case
+        # https://psutil.readthedocs.io/en/latest/#psutil.getloadavg
+        if system() != "Windows":
             disp.append(" (")
             # round the results of getloadavg(), precision varies across platforms
             disp.append(", ".join(f"{x:0.1f}" for x in getloadavg()))
@@ -369,7 +487,7 @@ class StatusReporter:
         disp = []
         mem_usage = virtual_memory()
         if mem_usage.available < 1_073_741_824:  # < 1GB
-            disp.append(f"{int(mem_usage.available / 1_048_576)}MB")
+            disp.append(f"{mem_usage.available // 1_048_576}MB")
         else:
             disp.append(f"{mem_usage.available / 1_073_741_824:0.1f}GB")
         disp.append(f" of {mem_usage.total / 1_073_741_824:0.1f}GB free")
@@ -379,7 +497,7 @@ class StatusReporter:
         disp = []
         usage = disk_usage("/")
         if usage.free < 1_073_741_824:  # < 1GB
-            disp.append(f"{int(usage.free / 1_048_576)}MB")
+            disp.append(f"{usage.free // 1_048_576}MB")
         else:
             disp.append(f"{usage.free / 1_073_741_824:0.1f}GB")
         disp.append(f" of {usage.total / 1_073_741_824:0.1f}GB free")
@@ -388,17 +506,18 @@ class StatusReporter:
         return entries
 
     @staticmethod
-    def _tracebacks(path, ignore_kbi=True, max_preceding=5):
+    def _tracebacks(
+        path: Path, ignore_kbi: bool = True, max_preceding: int = 5
+    ) -> List[TracebackReport]:
         """Search screen logs for tracebacks.
 
         Args:
-            path (Path): Directory containing log files.
-            ignore_kbi (bool): Do not include KeyboardInterrupts in results
-            max_preceding (int): Maximum number of lines preceding traceback to
-                                  include.
+            path: Directory containing log files.
+            ignore_kbi: Do not include KeyboardInterrupts in results
+            max_preceding: Maximum number of lines preceding traceback to include.
 
         Returns:
-            list: A list of TracebackReports.
+            TracebackReports.
         """
         tracebacks = []
         for screen_log in (x for x in path.glob("screenlog.*") if x.is_file()):
@@ -410,123 +529,24 @@ class StatusReporter:
         return tracebacks
 
 
-class TracebackReport:
-    """Read Python tracebacks from log files and store it in a manner that is helpful
-    when generating reports.
-    """
-
-    MAX_LINES = 16  # should be no less than 6
-    READ_LIMIT = 0x20000  # 128KB
-
-    def __init__(self, log_file, lines, is_kbi=False, prev_lines=None):
-        assert isinstance(lines, list)
-        assert isinstance(log_file, Path)
-        assert isinstance(prev_lines, list) or prev_lines is None
-        self.is_kbi = is_kbi
-        self.lines = lines
-        self.log_file = log_file
-        self.prev_lines = prev_lines or []
-
-    @classmethod
-    def from_file(cls, log_file, max_preceding=5, ignore_kbi=False):
-        """Create TracebackReport from a text file containing a Python traceback.
-        Only the first traceback in the file will be parsed.
-
-        Args:
-            log_file (Path): File to parse.
-            max_preceding (int): Number of lines to collect leading up to the traceback.
-            ignore_kbi (bool): Skip/ignore KeyboardInterrupt.
-
-        Returns:
-            TracebackReport: Contains data from log_file.
-        """
-        token = b"Traceback (most recent call last):"
-        assert len(token) < cls.READ_LIMIT
-        try:
-            with log_file.open("rb") as in_fp:
-                for chunk in iter(partial(in_fp.read, cls.READ_LIMIT), b""):
-                    idx = chunk.find(token)
-                    if idx > -1:
-                        # calculate offset of data in the file
-                        pos = in_fp.tell() - len(chunk) + idx
-                        break
-                    if len(chunk) == cls.READ_LIMIT:
-                        # seek back to avoid missing beginning of token
-                        in_fp.seek(len(token) * -1, SEEK_CUR)
-                else:
-                    # no traceback here, move along
-                    return None
-                # seek back 2KB to collect preceding lines
-                in_fp.seek(max(pos - 2048, 0))
-                data = in_fp.read(cls.READ_LIMIT)
-        except OSError:  # pragma: no cover
-            # in case the file goes away
-            return None
-
-        data = data.decode("ascii", errors="ignore").splitlines()
-        token = token.decode()
-        is_kbi = False
-        tb_start = None
-        tb_end = None
-        line_count = len(data)
-        for line_num, log_line in enumerate(data):
-            if tb_start is None and token in log_line:
-                tb_start = line_num
-                continue
-            if tb_start is not None:
-                log_line = log_line.strip()
-                if not log_line:
-                    # stop at first empty line
-                    tb_end = min(line_num, line_count)
-                    break
-                if match(r"^\w+(\.\w+)*\:\s|^\w+(Interrupt|Error)$", log_line):
-                    is_kbi = log_line.startswith("KeyboardInterrupt")
-                    if is_kbi and ignore_kbi:
-                        # ignore this exception since it is a KeyboardInterrupt
-                        return None
-                    # stop after error message
-                    tb_end = min(line_num + 1, line_count)
-                    break
-        assert tb_start is not None
-        if max_preceding > 0:
-            prev_start = max(tb_start - max_preceding, 0)
-            prev_lines = data[prev_start:tb_start]
-        else:
-            prev_lines = None
-        if tb_end is None:
-            # limit if the end is not identified (failsafe)
-            tb_end = max(line_count, cls.MAX_LINES)
-        if tb_end - tb_start > cls.MAX_LINES:
-            # add first entry
-            lines = data[tb_start : tb_start + 3]
-            lines += ["<--- TRACEBACK TRIMMED--->"]
-            # add end entries
-            lines += data[tb_end - (cls.MAX_LINES - 3) : tb_end]
-        else:
-            lines = data[tb_start:tb_end]
-        return cls(log_file, lines, is_kbi=is_kbi, prev_lines=prev_lines)
-
-    def __len__(self):
-        return len(str(self))
-
-    def __str__(self):
-        return "\n".join(
-            [f"Log: '{self.log_file.name}'"] + self.prev_lines + self.lines
-        )
-
-
 class _TableFormatter:
     """Format data in a table."""
 
-    def __init__(self, columns, formatters, vsep=" | ", hsep="-"):
+    def __init__(
+        self,
+        columns: Tuple[str, ...],
+        formatters: Tuple[Optional[Callable[..., str]]],
+        vsep: str = " | ",
+        hsep: str = "-",
+    ) -> None:
         """Initialize a TableFormatter instance.
 
         Arguments:
-            columns (iterable(str)): List of column names for the table header.
-            formatters (iterable(callable)): List of format functions for each column.
-                                             None will result in hiding that column.
-            vsep (str): Vertical separation between columns.
-            hsep (str): Horizontal separation between header and data.
+            columns: List of column names for the table header.
+            formatters: List of format functions for each column.
+                        None will result in hiding that column.
+            vsep: Vertical separation between columns.
+            hsep: Horizontal separation between header and data.
         """
         assert len(columns) == len(formatters)
         self._columns = tuple(
@@ -536,18 +556,18 @@ class _TableFormatter:
         self._vsep = vsep
         self._hsep = hsep
 
-    def format_rows(self, rows):
+    def format_rows(self, rows: List[ReductionStep]) -> Generator[str, None, None]:
         """Format rows as a table and return a line generator.
 
         Arguments:
-            rows (list(list(str))): Tabular data. Each row must be the same length as
-                                    `columns` passed to `__init__`.
+            rows: Tabular data. Each row must be the same length as
+                  `columns` passed to `__init__`.
 
         Yields:
-            str: Each line of formatted tabular data.
+            Each line of formatted tabular data.
         """
         max_width = [len(col) for col in self._columns]
-        formatted = []
+        formatted: List[List[str]] = []
         for row in rows:
             assert len(row) == len(self._formatters)
             formatted.append([])
@@ -568,15 +588,15 @@ class _TableFormatter:
         )
         yield format_str % self._columns
         yield self._hsep * (len(self._vsep) * (len(self._columns) - 1) + sum(max_width))
-        for row in formatted:
-            yield format_str % tuple(row)
+        for fmt_row in formatted:
+            yield format_str % tuple(fmt_row)
 
 
-def _format_seconds(duration):
+def _format_seconds(duration: float) -> str:
     # format H:M:S, and then remove all leading zeros with regex
     minutes, seconds = divmod(int(duration), 60)
     hours, minutes = divmod(minutes, 60)
-    result = re_sub("^[0:]*", "", f"{hours}:{minutes:0>2d}:{seconds:0>2d}")
+    result = re_sub("^[0:]*", "", f"{hours}:{minutes:02d}:{seconds:02d}")
     # if the result is all zeroes, ensure one zero is output
     if not result:
         result = "0"
@@ -586,7 +606,7 @@ def _format_seconds(duration):
     return result
 
 
-def _format_duration(duration, total=0):
+def _format_duration(duration: Optional[int], total: float = 0) -> str:
     result = ""
     if duration is not None:
         if total == 0:
@@ -594,11 +614,11 @@ def _format_duration(duration, total=0):
         else:
             percent = int(100 * duration / total)
         result = _format_seconds(duration)
-        result += f" ({percent:>3d}%)"
+        result += f" ({percent:3d}%)"
     return result
 
 
-def _format_number(number, total=0):
+def _format_number(number: Optional[int], total: float = 0) -> str:
     result = ""
     if number is not None:
         if total == 0:
@@ -617,28 +637,37 @@ class ReductionStatusReporter(StatusReporter):
     TIME_LIMIT = 120  # ignore older reports
 
     # pylint: disable=super-init-not-called
-    def __init__(self, reports, tracebacks=None):
-        self.reports = reports
+    def __init__(
+        self,
+        reports: List[ReductionStatus],
+        tracebacks: Optional[List[TracebackReport]] = None,
+    ) -> None:
+        self.reports: List[ReductionStatus] = reports
         self.tracebacks = tracebacks
 
     @property
-    def has_results(self):
+    def has_results(self) -> bool:
         return False  # TODO
 
     @classmethod
-    def load(cls, db_file, tb_path=None, time_limit=TIME_LIMIT):
+    def load(
+        cls,
+        db_file: Path,
+        tb_path: Optional[Path] = None,
+        time_limit: float = TIME_LIMIT,
+    ) -> "ReductionStatusReporter":
         """Read Grizzly reduction status reports and create a ReductionStatusReporter
         object.
 
         Args:
-            path (str): Path to scan for status data files.
-            tb_path (str): Directory to scan for files containing Python tracebacks.
-            time_limit (int): Only include entries with a timestamp that is within the
-                              given number of seconds. Use zero for no limit.
+            path: Path to scan for status data files.
+            tb_path: Directory to scan for files containing Python tracebacks.
+            time_limit: Only include entries with a timestamp that is within the
+                        given number of seconds. Use zero for no limit.
 
         Returns:
-            ReductionStatusReporter: Contains available status reports and traceback
-                                     reports.
+            ReductionStatusReporter containing available status reports and traceback
+            reports.
         """
         tracebacks = None if tb_path is None else cls._tracebacks(tb_path)
         return cls(
@@ -647,7 +676,7 @@ class ReductionStatusReporter(StatusReporter):
         )
 
     @staticmethod
-    def _analysis_entry(report):
+    def _analysis_entry(report: ReductionStatus) -> Tuple[str, str]:
         return (
             "Analysis",
             ", ".join(
@@ -657,18 +686,18 @@ class ReductionStatusReporter(StatusReporter):
         )
 
     @staticmethod
-    def _crash_id_entry(report):
+    def _crash_id_entry(report: ReductionStatus) -> Tuple[str, str]:
         crash_str = str(report.crash_id)
         if report.tool:
             crash_str += f" ({report.tool})"
         return ("Crash ID", crash_str)
 
     @staticmethod
-    def _last_reports_entry(report):
+    def _last_reports_entry(report: ReductionStatus) -> Tuple[str, str]:
         return ("Latest Reports", ", ".join(str(r) for r in report.last_reports))
 
     @staticmethod
-    def _run_params_entry(report):
+    def _run_params_entry(report: ReductionStatus) -> Tuple[str, str]:
         return (
             "Run Parameters",
             ", ".join(
@@ -677,7 +706,7 @@ class ReductionStatusReporter(StatusReporter):
         )
 
     @staticmethod
-    def _signature_info_entry(report):
+    def _signature_info_entry(report: ReductionStatus) -> Tuple[str, str]:
         return (
             "Signature",
             ", ".join(
@@ -685,25 +714,25 @@ class ReductionStatusReporter(StatusReporter):
             ),
         )
 
-    def specific(
+    def specific(  # pylint: disable=arguments-renamed
         self,
-        sysinfo=False,
-        timestamp=False,
-    ):  # pylint: disable=arguments-renamed
+        sysinfo: bool = False,
+        timestamp: bool = False,
+    ) -> str:
         """Generate formatted output from status report.
 
         Args:
             None
 
         Returns:
-            str: A formatted report.
+            A formatted report.
         """
         if not self.reports:
             return "No status reports available"
 
-        reports = []
+        reports: List[str] = []
         for report in self.reports:
-            entries = []
+            entries: List[Tuple[str, Optional[str]]] = []
             if report.crash_id:
                 entries.append(self._crash_id_entry(report))
             if report.analysis:
@@ -718,7 +747,7 @@ class ReductionStatusReporter(StatusReporter):
                         "Current Strategy",
                         f"{report.current_strategy.name} "
                         f"({report.current_strategy_idx!r} of "
-                        f"{len(report.strategies)})",
+                        f"{len(report.strategies) if report.strategies else 0})",
                     )
                 )
             if report.current_strategy and report.original:
@@ -741,11 +770,13 @@ class ReductionStatusReporter(StatusReporter):
                     )
                 )
             if report.total and report.current_strategy:
+                strategy_duration = report.current_strategy.duration or 0
+                total_duration = report.total.duration or 0
                 entries.append(
                     (
                         "Time Elapsed",
-                        f"{_format_seconds(report.current_strategy.duration)} in "
-                        f"strategy, {_format_seconds(report.total.duration)} total",
+                        f"{_format_seconds(strategy_duration)} in "
+                        f"strategy, {_format_seconds(total_duration)} total",
                     )
                 )
 
@@ -760,31 +791,31 @@ class ReductionStatusReporter(StatusReporter):
             reports.append(self.format_entries(entries))
         return "\n\n".join(reports)
 
-    def summary(
+    def summary(  # pylint: disable=arguments-differ
         self,
-        rate=False,
-        runtime=False,
-        sysinfo=False,
-        timestamp=False,
-    ):  # pylint: disable=arguments-differ
+        rate: bool = False,
+        runtime: bool = False,
+        sysinfo: bool = False,
+        timestamp: bool = False,
+    ) -> str:
         """Merge and generate a summary from status reports.
 
         Args:
-            rate (bool): Ignored (compatibility).
-            runtime (bool): Ignored (compatibility).
-            sysinfo (bool): Include system info (CPU, disk, RAM... etc) in output.
-            timestamp (bool): Include time stamp in output.
+            rate: Ignored (compatibility).
+            runtime: Ignored (compatibility).
+            sysinfo: Include system info (CPU, disk, RAM... etc) in output.
+            timestamp: Include time stamp in output.
 
         Returns:
-            str: A summary of merged reports.
+            A summary of merged reports.
         """
         if not self.reports:
             return "No status reports available"
 
-        reports = []
+        reports: List[str] = []
         for report in self.reports:
-            entries = []
-            lines = []
+            entries: List[Tuple[str, Optional[str]]] = []
+            lines: List[str] = []
             if report.crash_id:
                 entries.append(self._crash_id_entry(report))
             if report.analysis:
@@ -838,14 +869,14 @@ class ReductionStatusReporter(StatusReporter):
         return msg
 
 
-def main(args=None):
+def main(argv: Optional[List[str]] = None) -> int:
     """Merge Grizzly status files into a single report (main entrypoint).
 
     Args:
-        args (list/None): Argument list to parse instead of sys.argv (for testing).
+        argv: Argument list to parse instead of sys.argv (for testing).
 
     Returns:
-        None
+        int
     """
     if bool(getenv("DEBUG")):  # pragma: no cover
         log_level = DEBUG
@@ -855,7 +886,9 @@ def main(args=None):
         log_fmt = "%(message)s"
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    modes = {
+    modes: Dict[
+        str, Tuple[Union[Type[StatusReporter], Type[ReductionStatusReporter]], Path]
+    ] = {
         "fuzzing": (StatusReporter, STATUS_DB_FUZZ),
         "reducing": (ReductionStatusReporter, STATUS_DB_REDUCE),
     }
@@ -903,12 +936,12 @@ def main(args=None):
         type=Path,
         help="Scan path for Python tracebacks found in screenlog.# files",
     )
-    args = parser.parse_args(args)
+    args = parser.parse_args(argv)
     if args.tracebacks and not args.tracebacks.is_dir():
         parser.error("--tracebacks must be a directory")
 
     time_limit = report_types[args.type] if args.time_limit is None else args.time_limit
-    reporter_cls, status_db = modes.get(args.scan_mode)
+    reporter_cls, status_db = modes[args.scan_mode]
     reporter = reporter_cls.load(
         status_db,
         tb_path=args.tracebacks,

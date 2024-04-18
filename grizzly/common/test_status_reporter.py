@@ -5,6 +5,7 @@
 # pylint: disable=protected-access
 
 from itertools import count
+from platform import system
 from re import match
 from unittest.mock import Mock
 
@@ -224,48 +225,36 @@ def test_status_reporter_02(tmp_path):
 @mark.parametrize(
     "disk, memory, getloadavg",
     [
-        (Mock(free=12, total=GBYTES), Mock(available=12, total=GBYTES), None),
+        (
+            Mock(free=12, total=GBYTES),
+            Mock(available=12, total=GBYTES),
+            (0.12, 0.34, 0.56),
+        ),
         (
             Mock(free=10.23 * GBYTES, total=100 * GBYTES),
             Mock(available=1.1 * GBYTES, total=2 * GBYTES),
-            None,
+            (0.12, 0.34, 0.56),
         ),
         (
             Mock(free=12, total=GBYTES),
             Mock(available=12, total=GBYTES),
-            lambda: (0.12, 0.34, 0.56),
+            (0.12, 0.34, 0.56),
         ),
     ],
 )
 def test_status_reporter_03(mocker, disk, memory, getloadavg):
     """test StatusReporter._sys_info()"""
-    mocker.patch(
-        "grizzly.common.status_reporter.cpu_count", autospec=True, return_value=4
-    )
-    mocker.patch(
-        "grizzly.common.status_reporter.cpu_percent", autospec=True, return_value=10
-    )
-    mocker.patch(
-        "grizzly.common.status_reporter.disk_usage", autospec=True, return_value=disk
-    )
-    mocker.patch(
-        "grizzly.common.status_reporter.virtual_memory",
-        autospec=True,
-        return_value=memory,
-    )
-    if getloadavg is None:
-        # simulate platform that does not have os.getloadavg()
-        mocker.patch("grizzly.common.status_reporter.getloadavg", None)
-    else:
-        mocker.patch(
-            "grizzly.common.status_reporter.getloadavg", side_effect=getloadavg
-        )
+    mocker.patch("grizzly.common.status_reporter.cpu_count", return_value=4)
+    mocker.patch("grizzly.common.status_reporter.cpu_percent", return_value=10)
+    mocker.patch("grizzly.common.status_reporter.disk_usage", return_value=disk)
+    mocker.patch("grizzly.common.status_reporter.virtual_memory", return_value=memory)
+    mocker.patch("grizzly.common.status_reporter.getloadavg", return_value=getloadavg)
     sysinfo = StatusReporter._sys_info()
     assert len(sysinfo) == 3
     assert sysinfo[0][0] == "CPU & Load"
     assert sysinfo[1][0] == "Memory"
     assert sysinfo[2][0] == "Disk"
-    if getloadavg is not None:
+    if system() != "Windows":
         assert sysinfo[0][-1].endswith(" (0.1, 0.3, 0.6)")
     if disk.free < GBYTES or memory.available < GBYTES:
         assert "MB" in sysinfo[1][-1]
@@ -747,19 +736,8 @@ def test_main_03(mocker, tmp_path, report_type, report_mode):
         status.iteration = 1
         status.report(force=True)
     dump_file = tmp_path / "output.txt"
-    assert (
-        main(
-            [
-                "--dump",
-                str(dump_file),
-                "--type",
-                report_type,
-                "--scan-mode",
-                report_mode,
-            ]
-        )
-        == 0
-    )
+    cmd = ["--dump", str(dump_file), "--type", report_type, "--scan-mode", report_mode]
+    assert main(cmd) == 0
     assert dump_file.is_file()
     if report_type == "active":
         assert b"Runtime" not in dump_file.read_bytes()
@@ -788,19 +766,8 @@ def test_main_04(mocker, tmp_path, report_type):
         status.iteration = 1
         status.report(force=True)
     dump_file = tmp_path / "output.txt"
-    assert (
-        main(
-            [
-                "--dump",
-                str(dump_file),
-                "--type",
-                report_type,
-                "--scan-mode",
-                "reducing",
-            ]
-        )
-        == 0
-    )
+    cmd = ["--dump", str(dump_file), "--type", report_type, "--scan-mode", "reducing"]
+    assert main(cmd) == 0
     assert dump_file.is_file()
     if report_type == "active":
         assert b"Runtime" not in dump_file.read_bytes()
