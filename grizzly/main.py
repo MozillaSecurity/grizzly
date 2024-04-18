@@ -129,7 +129,7 @@ def main(args):
                 session.run(
                     args.ignore,
                     time_limit,
-                    input_path=str(args.input) if args.input else None,
+                    input_path=str(args.input.resolve()) if args.input else None,
                     iteration_limit=args.limit,
                     no_harness=args.no_harness,
                     result_limit=1 if args.smoke_test else 0,

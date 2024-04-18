@@ -11,8 +11,8 @@ def test_no_op_01():
     """test a simple Adapter"""
     with NoOpAdapter("no-op") as adapter:
         adapter.setup(None, None)
-        with TestCase("a", adapter.name) as test:
+        with TestCase("a.html", adapter.name) as test:
             assert not test.data_size
-            assert "a" not in test
+            assert "a.html" not in test
             adapter.generate(test, None)
-            assert "a" in test
+            assert "a.html" in test
