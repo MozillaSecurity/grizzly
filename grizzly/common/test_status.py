@@ -22,6 +22,7 @@ from .status import (
     ReductionStatus,
     ReductionStep,
     ResultCounter,
+    ResultEntry,
     SimpleResultCounter,
     SimpleStatus,
     Status,
@@ -38,7 +39,6 @@ def test_basic_status_01():
     assert status.ignored == 0
     assert status.iteration == 0
     assert status.log_size == 0
-    assert status.results is None
     assert not status._profiles
     assert status.runtime > 0
     assert status.rate == 0
@@ -141,7 +141,7 @@ def test_status_03(tmp_path):
     assert status.iteration == loaded.iteration
     assert status.log_size == loaded.log_size
     assert status.pid == loaded.pid
-    assert loaded.results.get("uid1") == ("uid1", 1, "sig1")
+    assert loaded.results.get("uid1") == ResultEntry("uid1", 1, "sig1")
     assert "test" in loaded._profiles
 
 
@@ -183,7 +183,7 @@ def test_status_05(mocker, tmp_path):
     assert status.iteration == loaded.iteration
     assert status.log_size == loaded.log_size
     assert status.pid == loaded.pid
-    assert loaded.results.get("uid1") == ("uid1", 1, "sig1")
+    assert loaded.results.get("uid1") == ResultEntry("uid1", 1, "sig1")
 
 
 # NOTE: this function must be at the top level to work on Windows
@@ -572,16 +572,16 @@ def test_report_counter_01(tmp_path, keys, counts, limit):
     db_path = tmp_path / "storage.db"
     counter = ResultCounter(1, db_path, report_limit=limit)
     for report_id, counted in zip(keys, counts):
-        assert counter.get(report_id) == (report_id, 0, None)
+        assert counter.get(report_id) == ResultEntry(report_id, 0, None)
         assert not counter.is_frequent(report_id)
         # call count() with report_id 'counted' times
         for current in range(1, counted + 1):
             assert counter.count(report_id, "desc") == (current, (current == 1))
         # test get()
         if sum(counts) > 0:
-            assert counter.get(report_id) == (report_id, counted, "desc")
+            assert counter.get(report_id) == ResultEntry(report_id, counted, "desc")
         else:
-            assert counter.get(report_id) == (report_id, counted, None)
+            assert counter.get(report_id) == ResultEntry(report_id, counted, None)
         # test is_frequent()
         if counted > limit > 0:
             assert counter.is_frequent(report_id)
@@ -592,8 +592,8 @@ def test_report_counter_01(tmp_path, keys, counts, limit):
             assert counter.is_frequent(report_id)
         else:
             assert limit == 0
-    for _report_id, counted, _desc in counter:
-        assert counted > 0
+    for result in counter:
+        assert result.count > 0
     assert counter.total == sum(counts)
 
 
@@ -670,17 +670,17 @@ def test_report_counter_03(mocker, tmp_path):
     # last 2 seconds
     loaded = ReadOnlyResultCounter.load(db_path, 2)[0]
     assert loaded.total == 1
-    assert loaded.get("b") == ("b", 1, "desc_b")
+    assert loaded.get("b") == ResultEntry("b", 1, "desc_b")
     # last 3 seconds
     loaded = ReadOnlyResultCounter.load(db_path, 3)[0]
-    assert loaded.get("a") == ("a", 2, "desc_a")
+    assert loaded.get("a") == ResultEntry("a", 2, "desc_a")
     assert loaded.total == 3
     # increase time limit
     fake_time.return_value = 4
     loaded = ReadOnlyResultCounter.load(db_path, 10)[0]
     assert loaded.total == counter.total == 3
-    assert loaded.get("a") == ("a", 2, "desc_a")
-    assert loaded.get("b") == ("b", 1, "desc_b")
+    assert loaded.get("a") == ResultEntry("a", 2, "desc_a")
+    assert loaded.get("b") == ResultEntry("b", 1, "desc_b")
 
 
 def test_report_counter_04(mocker, tmp_path):
