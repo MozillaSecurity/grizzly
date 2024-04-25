@@ -7,7 +7,7 @@ from logging import getLogger
 from os import environ
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Set, Tuple, final
 
 from ..common.report import Report
 from ..common.utils import CertificateBundle, grz_tmp
@@ -141,6 +141,7 @@ class Target(metaclass=ABCMeta):
             Result code.
         """
 
+    @final
     def cleanup(self) -> None:
         """Perform necessary cleanup. DO NOT OVERRIDE.
 

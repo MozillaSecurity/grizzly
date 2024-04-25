@@ -27,6 +27,7 @@ def test_report_01(tmp_path):
     report = Report(tmp_path, Path("a.bin"), size_limit=0)
     assert report._target_binary.name == "a.bin"
     assert report.path == tmp_path
+    assert report._logs
     assert report._logs.aux is None
     assert report._logs.stderr.name == "log_stderr.txt"
     assert report._logs.stdout.name == "log_stdout.txt"
@@ -46,6 +47,7 @@ def test_report_02(tmp_path):
     _create_crash_log(tmp_path / "log_asan_blah.txt")
     report = Report(tmp_path, Path("bin"))
     assert report.path == tmp_path
+    assert report._logs
     assert report._logs.aux.name == "log_asan_blah.txt"
     assert report._logs.stderr.name == "log_stderr.txt"
     assert report._logs.stdout.name == "log_stdout.txt"
@@ -117,6 +119,7 @@ def test_report_05(tmp_path):
     # should be ignored in favor of "GOOD LOG"
     (tmp_path / "log_ffp_worker_blah.txt").write_bytes(b"worker log")
     log_map = Report._select_logs(tmp_path)
+    assert log_map
     assert "GOOD LOG" in log_map.aux.read_text()
     assert "STDERR" in log_map.stderr.read_text()
     assert "STDOUT" in log_map.stdout.read_text()
@@ -132,6 +135,7 @@ def test_report_06(tmp_path):
         log_fp.write(b"minidump log\n")
     (tmp_path / "log_ffp_worker_blah.txt").write_bytes(b"worker log")
     log_map = Report._select_logs(tmp_path)
+    assert log_map
     assert log_map.stderr.is_file()
     assert log_map.stdout.is_file()
     assert "minidump log" in log_map.aux.read_text()
@@ -163,6 +167,7 @@ def test_report_07(tmp_path):
         log_fp.write(b"0|0|bar.so|sadf|a.cc:1234|3066|0x0\n")
         log_fp.write(b"0|1|gar.so|fdsa|b.cc:4323|1644|0x12\n")
     log_map = Report._select_logs(tmp_path)
+    assert log_map
     assert log_map.stderr.is_file()
     assert log_map.stdout.is_file()
     assert "google_breakpad::ExceptionHandler::WriteMinidump" in log_map.aux.read_text()
@@ -176,6 +181,7 @@ def test_report_08(tmp_path):
     # we should only ever see one but if we see multiple we warn, so test that.
     (tmp_path / "log_ffp_worker_2.txt").write_bytes(b"worker log")
     log_map = Report._select_logs(tmp_path)
+    assert log_map
     assert log_map.stderr.is_file()
     assert log_map.stdout.is_file()
     assert "worker log" in log_map.aux.read_text()
@@ -252,6 +258,7 @@ def test_report_10(tmp_path):
     size_limit = len("STDERR log\n")
     report = Report(tmp_path, Path("bin"), size_limit=size_limit)
     assert report.path == tmp_path
+    assert report._logs
     assert report._logs.aux is None
     assert report._logs.stderr.name == "log_stderr.txt"
     assert report._logs.stdout.name == "log_stdout.txt"
@@ -271,6 +278,7 @@ def test_report_11(tmp_path):
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     (tmp_path / "log_valgrind.txt").write_bytes(b"valgrind log")
     log_map = Report._select_logs(tmp_path)
+    assert log_map
     assert log_map.stderr.is_file()
     assert log_map.stdout.is_file()
     assert "valgrind log" in log_map.aux.read_text()
@@ -371,20 +379,15 @@ def test_report_14(mocker, backtrace, lines):
         ("a\nb", 2),
         # empty log
         ("", 0),
-        # no log
-        (None, 0),
         # log with bad chars
         ("a\n\0", 2),
     ],
 )
 def test_report_15(tmp_path, data, lines):
     """test Report._load_log()"""
-    if data is None:
-        assert Report._load_log(None) is None
-    else:
-        log = tmp_path / "test-log.txt"
-        log.write_text(data)
-        assert len(Report._load_log(log)) == lines
+    log = tmp_path / "test-log.txt"
+    log.write_text(data)
+    assert len(Report._load_log(log)) == lines
 
 
 @mark.parametrize(

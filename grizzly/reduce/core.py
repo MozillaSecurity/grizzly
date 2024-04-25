@@ -724,7 +724,7 @@ class ReduceManager:
             else:
                 report_dir = "reports" if result.expected else "other_reports"
                 reporter = FilesystemReporter(
-                    report_path=self._log_path / report_dir, major_bucket=False
+                    self._log_path / report_dir, major_bucket=False
                 )
             # write reduction stats for expected results
             if result.expected:
@@ -735,9 +735,10 @@ class ReduceManager:
                 status.add_to_reporter(reporter, expected=result.expected)
             result = reporter.submit(testcases, result.report, force=result.expected)
             if result is not None:
-                if isinstance(result, Path):
-                    result = str(result)
-                new_reports.append(result)
+                if self._report_to_fuzzmanager:
+                    new_reports.append(result)
+                else:
+                    new_reports.append(str(result.resolve()))
         # only write new reports if not empty, otherwise previous reports may be
         # overwritten with an empty list if later reports are ignored
         if update_status and new_reports:
