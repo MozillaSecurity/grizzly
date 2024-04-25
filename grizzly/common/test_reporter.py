@@ -69,7 +69,7 @@ def test_filesystem_reporter_01(tmp_path):
     report_path = tmp_path / "reports"
     report_path.mkdir()
     reporter = FilesystemReporter(report_path)
-    reporter.submit([], Report(log_path, Path("bin")))
+    assert reporter.submit([], Report(log_path, Path("bin")))
     buckets = tuple(report_path.iterdir())
     # check major bucket
     assert len(buckets) == 1

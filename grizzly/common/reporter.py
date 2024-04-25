@@ -9,6 +9,7 @@ from os import getenv
 from pathlib import Path
 from shutil import copyfile, move, rmtree
 from tempfile import TemporaryDirectory
+from typing import Any, Dict, List, Optional, cast, final
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from Collector.Collector import Collector
@@ -16,6 +17,7 @@ from fasteners.process_lock import InterProcessLock
 from psutil import disk_usage
 
 from .report import Report
+from .storage import TestCase
 from .utils import grz_tmp
 
 __all__ = ("FilesystemReporter", "FuzzManagerReporter", "Quality")
@@ -54,35 +56,39 @@ class Quality(IntEnum):
 class Reporter(metaclass=ABCMeta):
     __slots__ = ("display_logs",)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.display_logs = getenv("GRZ_DISPLAY_REPORT") == "1"
 
     @abstractmethod
-    def _post_submit(self):
+    def _post_submit(self) -> None:
         pass
 
     @abstractmethod
-    def _pre_submit(self, report):
+    def _pre_submit(self, report: Report) -> None:
         pass
 
     @abstractmethod
-    def _submit_report(self, report, test_cases, force):
+    def _submit_report(
+        self, report: Report, test_cases: List[TestCase], force: bool
+    ) -> Any:
         pass
 
-    def submit(self, test_cases, report, force=False):
+    @final
+    def submit(
+        self, test_cases: List[TestCase], report: Report, force: bool = False
+    ) -> Any:
         """Submit report containing results.
 
         Args:
-            test_cases (iterable): A collection of testcases, ordered oldest to newest,
-                                   the newest being the mostly likely to trigger
-                                   the result (crash, assert... etc).
-            report (Report): Report to submit.
-            force (bool): Ignore any limits.
+            test_cases: A collection of testcases, ordered oldest to newest,
+                the newest being the mostly likely to trigger
+                the result (crash, assert... etc).
+            report: Report to submit.
+            force: Ignore any limits.
 
         Returns:
-            *: implementation specific result indicating where the report was created
+            Implementation specific result indicating where the report was created.
         """
-        assert isinstance(report, Report)
         assert report.path is not None
         assert (
             not test_cases or test_cases[0].timestamp <= test_cases[-1].timestamp
@@ -91,6 +97,7 @@ class Reporter(metaclass=ABCMeta):
         # output report contents to console
         if self.display_logs:
             if not report.is_hang:
+                assert report.preferred
                 LOG.info(
                     "=== BEGIN REPORT ===\n%s",
                     report.preferred.read_text("utf-8", errors="ignore"),
@@ -110,20 +117,22 @@ class FilesystemReporter(Reporter):
 
     __slots__ = ("major_bucket", "min_space", "report_path", "report_prefix")
 
-    def __init__(self, report_path, major_bucket=True):
+    def __init__(self, report_path: Path, major_bucket: bool = True) -> None:
         super().__init__()
         self.major_bucket = major_bucket
         self.min_space = FilesystemReporter.DISK_SPACE_ABORT
-        self.report_path = Path(report_path)
-        self.report_prefix = None
+        self.report_path = report_path
+        self.report_prefix: Optional[str] = None
 
-    def _pre_submit(self, report):
+    def _pre_submit(self, report: Report) -> None:
         self.report_prefix = report.prefix
 
-    def _post_submit(self):
+    def _post_submit(self) -> None:
         pass
 
-    def _submit_report(self, report, test_cases, force):
+    def _submit_report(
+        self, report: Report, test_cases: List[TestCase], force: bool
+    ) -> Path:
         # create major bucket directory in working directory if needed
         if self.major_bucket:
             dest = self.report_path / report.major[:16]
@@ -141,7 +150,7 @@ class FilesystemReporter(Reporter):
             LOG.warning("Report log path exists '%s'", log_path)
         move(report.path, log_path)
         # avoid filling the disk
-        free_space = disk_usage(str(log_path)).free
+        free_space = disk_usage(str(log_path.resolve())).free
         if free_space < self.min_space:
             raise RuntimeError(f"Low disk space: {free_space / 1_048_576:0.1f}MBs")
         return dest
@@ -150,13 +159,13 @@ class FilesystemReporter(Reporter):
 class FailedLaunchReporter(FilesystemReporter):
     """Save launch failure reports to disk."""
 
-    def __init__(self, display=False):
+    def __init__(self, display: bool = False) -> None:
         super().__init__(grz_tmp("launch_failures"), major_bucket=False)
         self.display_logs = display
         if not display:
             LOG.info("Display logs with --display-launch-failures")
 
-    def _post_submit(self):
+    def _post_submit(self) -> None:
         super()._post_submit()
         LOG.info(
             "Logs for %r can be found here '%s'", self.report_prefix, self.report_path
@@ -166,25 +175,24 @@ class FailedLaunchReporter(FilesystemReporter):
 class FuzzManagerReporter(Reporter):
     __slots__ = ("_extra_metadata", "quality", "tool")
 
-    def __init__(self, tool):
+    def __init__(self, tool: str) -> None:
         super().__init__()
-        assert isinstance(tool, str)
-        self._extra_metadata = {}
+        self._extra_metadata: Dict[str, Any] = {}
         self.quality = Quality.UNREDUCED
         # remove whitespace and use only lowercase
         self.tool = "-".join(tool.lower().split())
         assert self.tool, "tool value cannot be empty"
 
-    def _post_submit(self):
+    def _post_submit(self) -> None:
         self._extra_metadata.clear()
 
-    def add_extra_metadata(self, key, value):
-        """Add extra metadata to be reported with any CrashEntrys reported.
+    def add_extra_metadata(self, key: str, value: Any) -> None:
+        """Add extra metadata to be reported with any CrashEntry objects reported.
 
         Arguments:
-            key (str): key for this data in the metadata dict
-            value (object): JSON serializable object to be included in the FM crash
-                            metadata. The object will be deep-copied.
+            key: key for this data in the metadata dict.
+            value: JSON serializable object to be included in the FM crash
+                   metadata. The object will be deep-copied.
 
         Returns:
             None
@@ -194,10 +202,10 @@ class FuzzManagerReporter(Reporter):
         # deep copy and ensure that value is JSON serializable
         self._extra_metadata[key] = loads(dumps(value))
 
-    def _pre_submit(self, report):
+    def _pre_submit(self, report: Report) -> None:
         self._process_rr_trace(report)
 
-    def _process_rr_trace(self, report):
+    def _process_rr_trace(self, report: Report) -> None:
         # don't report large files to FuzzManager
         trace_path = report.path / "rr-traces"
         if trace_path.is_dir():
@@ -206,7 +214,9 @@ class FuzzManagerReporter(Reporter):
             # remove traces so they are not uploaded to FM (because they are huge)
             rmtree(trace_path)
 
-    def _submit_report(self, report, test_cases, force):
+    def _submit_report(
+        self, report: Report, test_cases: List[TestCase], force: bool
+    ) -> Optional[int]:
         collector = Collector(tool=self.tool)
 
         if not force:
@@ -248,7 +258,6 @@ class FuzzManagerReporter(Reporter):
             self.quality = Quality.NO_TESTCASE
         report.crash_info.configuration.addMetadata(self._extra_metadata)
 
-        # TODO: this should likely move to ffpuppet
         # grab screen log (used in automation)
         if getenv("WINDOW") is not None:
             screen_log = Path.cwd() / f"screenlog.{getenv('WINDOW')}"
@@ -276,5 +285,4 @@ class FuzzManagerReporter(Reporter):
             self.quality.name,
             collector.tool,
         )
-
-        return new_entry["id"]
+        return cast(int, new_entry["id"])
