@@ -8,9 +8,10 @@ from os import environ
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
+from typing import Any, Generator, List, Optional, Tuple
 from zipfile import ZipFile
 
-from bugsy import Bugsy
+from bugsy import Bug, Bugsy
 from bugsy.errors import BugsyException
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
@@ -26,15 +27,15 @@ LOG = getLogger(__name__)
 class BugzillaBug:
     __slots__ = ("_bug", "_data")
 
-    def __init__(self, bug):
+    def __init__(self, bug: Bug) -> None:
         self._bug = bug
         self._data = Path(mkdtemp(prefix=f"bug{bug.id}-", dir=grz_tmp("bugzilla")))
         self._fetch_attachments()
 
-    def __enter__(self):
+    def __enter__(self) -> "BugzillaBug":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.cleanup()
 
     def _fetch_attachments(self) -> None:
@@ -62,7 +63,7 @@ class BugzillaBug:
                 continue
             (self._data / attachment.file_name).write_bytes(data)
 
-    def _unpack_archives(self):
+    def _unpack_archives(self) -> None:
         """Unpack and remove archives.
 
         Arguments:
@@ -80,14 +81,16 @@ class BugzillaBug:
                 entry.unlink()
             # TODO: add support for other archive types
 
-    def assets(self, ignore=None):
+    def assets(
+        self, ignore: Optional[Tuple[str]] = None
+    ) -> Generator[Tuple[str, Path], None, None]:
         """Scan files for assets.
 
         Arguments:
-            ignore (list(str)): Assets not to include in output.
+            ignore: Assets not to include in output.
 
         Yields:
-            tuple(str, Path): Name and path to asset.
+            Asset name and path.
         """
         for asset, file in KNOWN_ASSETS.items():
             if not ignore or asset not in ignore:
@@ -95,7 +98,7 @@ class BugzillaBug:
                 if asset_path.is_file():
                     yield asset, asset_path
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Remove attachment data.
 
         Arguments:
@@ -107,11 +110,11 @@ class BugzillaBug:
         rmtree(self._data)
 
     @classmethod
-    def load(cls, bug_id):
+    def load(cls, bug_id: int) -> Optional["BugzillaBug"]:
         """Load bug information from a Bugzilla instance.
 
         Arguments:
-            bug_id (int): Bug to load.
+            bug_id: Bug to load.
 
         Returns:
             BugzillaBug
@@ -128,14 +131,14 @@ class BugzillaBug:
             LOG.error("Unable to connect to %r (%s)", bugzilla.bugzilla_url, exc)
         return None
 
-    def testcases(self):
+    def testcases(self) -> List[Path]:
         """Create a list of potential test cases.
 
         Arguments:
             None
 
         Returns:
-            list(Path): Files and directories that could potentially be test cases.
+            Files and directories that could potentially be test cases.
         """
         # unpack archives
         self._unpack_archives()

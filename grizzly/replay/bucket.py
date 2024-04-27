@@ -1,7 +1,9 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from argparse import Namespace
 from logging import getLogger
+from typing import Callable
 
 from ..common.fuzzmanager import Bucket
 from ..common.utils import Exit
@@ -12,15 +14,15 @@ from .crash import main as crash_main
 LOG = getLogger(__name__)
 
 
-def bucket_main(args, tool_main):
+def bucket_main(args: Namespace, tool_main: Callable[[Namespace], int]) -> int:
     """CLI for `grizzly.reduce.bucket` and `grizzly.replay.bucket`.
 
     Arguments:
-        args (argparse.Namespace): Result from `parse_args()`.
-        tool_main (callable): Main function from a supported Grizzly tool.
+        args: Result from `parse_args()`.
+        tool_main: Main function from a supported Grizzly tool.
 
     Returns:
-        int: 0 for success. non-0 indicates a problem.
+        0 for success. non-0 indicates a problem.
     """
     assert callable(tool_main)
     configure_logging(args.log_level)
