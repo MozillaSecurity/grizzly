@@ -1,13 +1,15 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from time import sleep, time
+from time import perf_counter, sleep
+from typing import Callable, Optional, Set, Tuple
 
-from sapphire import Served, ServerMap
+from sapphire import Sapphire, Served, ServerMap
 
-from ..target import Result, TargetLaunchError, TargetLaunchTimeout
+from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .storage import TestCase
 
 __all__ = ("Runner", "RunResult")
@@ -30,7 +32,13 @@ class _IdleChecker:
 
     __slots__ = ("_check_cb", "_init_delay", "_poll_delay", "_threshold", "_next_poll")
 
-    def __init__(self, check_cb, threshold, initial_delay, poll_delay=1):
+    def __init__(
+        self,
+        check_cb: Callable[[int], bool],
+        threshold: int,
+        initial_delay: int,
+        poll_delay: float = 1,
+    ) -> None:
         assert callable(check_cb)
         assert initial_delay >= 0
         assert poll_delay >= 0
@@ -39,9 +47,9 @@ class _IdleChecker:
         self._init_delay = initial_delay  # time to wait before the initial idle poll
         self._poll_delay = poll_delay  # time to wait between subsequent polls
         self._threshold = threshold  # CPU usage threshold
-        self._next_poll = None
+        self._next_poll: Optional[float] = None
 
-    def is_idle(self):
+    def is_idle(self) -> bool:
         """Check the target idle callback. This is throttled by '_next_poll'
         which specifies the time at which the next callback call is allowed.
 
@@ -49,32 +57,53 @@ class _IdleChecker:
             None
 
         Returns:
-            bool: True if the target idle callback returned True otherwise False
+            True if the target idle callback returned True otherwise False
         """
         assert self._next_poll is not None, "schedule_poll() must be called first"
-        now = time()
+        now = perf_counter()
         if now >= self._next_poll:
             if self._check_cb(self._threshold):
                 return True
             self.schedule_poll(now=now)
         return False
 
-    def schedule_poll(self, initial=False, now=None):
+    def schedule_poll(self, initial: int = False, now: Optional[float] = None) -> None:
         """Update `_next_poll`.
 
         Args:
-            initial (int): Use `_init_delay` to schedule next poll
-            now (int): time in seconds
+            initial: Use `_init_delay` to schedule next poll.
+            now: Time in seconds.
 
         Returns:
             None
         """
         if now is None:
-            now = time()
+            now = perf_counter()
         if initial:
             self._next_poll = now + self._init_delay
         else:
             self._next_poll = now + self._poll_delay
+
+
+@dataclass(eq=False)
+class RunResult:
+    """A RunResult holds result details from a call to Runner.run().
+
+    Attributes:
+        attempted: Test entry point was requested.
+        duration: Time spent waiting for test contents to be served.
+        served: Files that were served.
+        status: Result status of test.
+        timeout: A timeout occurred waiting for test to complete.
+        idle: Target was idle (only applies to timeout).
+    """
+
+    served: Tuple[str, ...]
+    duration: float
+    attempted: bool = False
+    status: Result = Result.NONE
+    timeout: bool = False
+    idle: bool = False
 
 
 class Runner:
@@ -89,13 +118,19 @@ class Runner:
     )
 
     def __init__(
-        self, server, target, close_delay=30, idle_threshold=0, idle_delay=0, relaunch=1
-    ):
+        self,
+        server: Sapphire,
+        target: Target,
+        close_delay: int = 30,
+        idle_threshold: int = 0,
+        idle_delay: int = 0,
+        relaunch: int = 1,
+    ) -> None:
         self._close_delay = close_delay
         if idle_threshold > 0:
             assert idle_delay > 0
             LOG.debug("using idle check, th %d, delay %ds", idle_threshold, idle_delay)
-            self._idle = _IdleChecker(
+            self._idle: Optional[_IdleChecker] = _IdleChecker(
                 target.monitor.is_idle, idle_threshold, idle_delay
             )
         else:
@@ -108,14 +143,14 @@ class Runner:
         self._tests_run = 0  # number of tests run since target (re)launched
         self.startup_failure = False  # failure before first test was served
 
-    def launch(self, location, max_retries=3, retry_delay=0):
+    def launch(self, location: str, max_retries: int = 3, retry_delay: int = 0) -> None:
         """Launch a target and open `location`.
 
         Args:
-            location (str): URL to open via Target.
-            max_retries (int): Number of retries to perform before re-raising
-                               TargetLaunchTimeout.
-            retry_delay (int): Time in seconds to wait between retries.
+            location: URL to open via Target.
+            max_retries: Number of retries to perform before re-raising
+                         TargetLaunchTimeout.
+            retry_delay: Time in seconds to wait between retries.
 
         Returns:
             None
@@ -127,13 +162,13 @@ class Runner:
         self._server.clear_backlog()
         self._tests_run = 0
         self.startup_failure = False
-        launch_duration = 0
+        launch_duration: float = 0
         LOG.debug("launching target (timeout %ds)", self._target.launch_timeout)
         for retries in reversed(range(max_retries)):
             try:
-                launch_start = time()
+                launch_start = perf_counter()
                 self._target.launch(location)
-                launch_duration = time() - launch_start
+                launch_duration = perf_counter() - launch_start
             except (TargetLaunchError, TargetLaunchTimeout) as exc:
                 is_timeout = isinstance(exc, TargetLaunchTimeout)
                 if not retries:
@@ -149,6 +184,7 @@ class Runner:
                     # consecutive timeouts something is likely wrong so raise.
                     LOG.warning("Timeout during launch (retries %d)", retries)
                 else:
+                    assert isinstance(exc, TargetLaunchError)
                     # This is likely due to a bad build or environment configuration.
                     LOG.warning("Failure during launch (retries %d)", retries)
                     exc.report.cleanup()
@@ -165,25 +201,25 @@ class Runner:
 
     @staticmethod
     def location(
-        srv_path,
-        srv_port,
-        close_after=None,
-        post_launch_delay=-1,
-        scheme="http",
-        time_limit=None,
-    ):
+        srv_path: str,
+        srv_port: int,
+        close_after: Optional[int] = None,
+        post_launch_delay: int = -1,
+        scheme: str = "http",
+        time_limit: Optional[int] = None,
+    ) -> str:
         """Build a valid URL to pass to a browser.
 
         Args:
-            srv_path (str): Path segment of the URL
-            srv_port (int): Server listening port
-            close_after (int): Harness argument.
-            post_launch_delay (int): Post-launch delay page argument.
-            scheme (str): URL scheme component (http or https).
-            time_limit (int): Harness argument.
+            srv_path: Path segment of the URL
+            srv_port: Server listening port
+            close_after: Harness argument.
+            post_launch_delay: Post-launch delay page argument.
+            scheme: URL scheme component (http or https).
+            time_limit: Harness argument.
 
         Returns:
-            str: A valid URL.
+            A valid URL.
         """
         location = f"{scheme}://localhost:{srv_port}/{srv_path.lstrip('/')}"
         # set harness related arguments
@@ -201,23 +237,22 @@ class Runner:
         return location
 
     @property
-    def initial(self):
-        """Check if more than one test has been run since the previous relaunch.
+    def initial(self) -> bool:
+        """Check if more than one test has been run since the previous target launch.
 
         Args:
             None
 
         Returns:
-            bool: True if at most one test has been run.
+            True if at most one test has been run.
         """
         return self._tests_run < 2
 
-    def post_launch(self, delay=-1):
+    def post_launch(self, delay: int = -1) -> None:
         """Perform actions after launching browser before loading test cases.
 
         Args:
-            post_launch_delay (int): Amount of time in seconds before the target will
-                                     continue.
+            post_launch_delay: Time in seconds before the target will continue.
 
         Returns:
             None
@@ -260,24 +295,24 @@ class Runner:
 
     def run(
         self,
-        ignore,
-        server_map,
-        testcase,
-        coverage=False,
-        wait_for_callback=False,
-    ):
+        ignore: Set[str],
+        server_map: ServerMap,
+        testcase: TestCase,
+        coverage: bool = False,
+        wait_for_callback: bool = False,
+    ) -> RunResult:
         """Serve a testcase and monitor the target for results.
 
         Args:
-            ignore (list): List of failure types to ignore.
-            server_map (sapphire.ServerMap): A ServerMap.
-            testcase (grizzly.TestCase): The test case that will be served.
-            coverage (bool): Trigger coverage dump.
-            wait_for_callback (bool): Use `_keep_waiting()` to indicate when
-                                      framework should move on.
+            ignore: Failure types to ignore.
+            server_map: A ServerMap.
+            testcase: The test case that will be served.
+            coverage: Trigger coverage dump.
+            wait_for_callback: Use `_keep_waiting()` to indicate when framework
+                               should move on.
 
         Returns:
-            RunResult: Files served, status and timeout flag from the run.
+            Files served, status and timeout flag from the run.
         """
         self._tests_run += 1
         if self._idle is not None:
@@ -290,7 +325,7 @@ class Runner:
         # it will be repopulated with served contests
         testcase.clear_optional()
         # serve the test case
-        serve_start = time()
+        serve_start = perf_counter()
         server_status, served = self._server.serve_path(
             testcase.root,
             continue_cb=self._keep_waiting,
@@ -298,7 +333,7 @@ class Runner:
             required_files=tuple(testcase.required),
             server_map=server_map,
         )
-        duration = time() - serve_start
+        duration = perf_counter() - serve_start
         result = RunResult(
             tuple(served),
             duration,
@@ -364,7 +399,7 @@ class Runner:
             result.status = self._target.check_result(ignore)
         return result
 
-    def _keep_waiting(self):
+    def _keep_waiting(self) -> bool:
         """Callback used by the server to determine if it should continue to
         wait for the requests from the target.
 
@@ -372,40 +407,9 @@ class Runner:
             None
 
         Returns:
-            bool: Continue to serve the test case.
+            Continue to serve the test case.
         """
         if self._idle is not None and self._idle.is_idle():
             LOG.debug("idle target detected")
             return False
         return self._target.monitor.is_healthy()
-
-
-class RunResult:
-    """A RunResult holds result details from a call to Runner.run().
-
-    Attributes:
-        attempted (bool): Test entry point was requested.
-        duration (float): Time spent waiting for test contents to be served.
-        served (tuple(str)): Files that were served.
-        status (int): Result status of test.
-        timeout (bool): A timeout occurred waiting for test to complete.
-        idle (bool): Target was idle (only applies to timeout).
-    """
-
-    __slots__ = ("attempted", "duration", "idle", "served", "status", "timeout")
-
-    def __init__(
-        self,
-        served,
-        duration,
-        attempted=False,
-        status=Result.NONE,
-        timeout=False,
-        idle=False,
-    ):
-        self.attempted = attempted
-        self.duration = duration
-        self.idle = idle
-        self.served = served
-        self.status = status
-        self.timeout = timeout

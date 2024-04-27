@@ -9,7 +9,7 @@ from pytest import mark, raises
 from sapphire import Sapphire, Served, ServerMap
 
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
-from .reporter import Report
+from .report import Report
 from .runner import Runner, _IdleChecker
 from .storage import TestCase
 
@@ -27,7 +27,9 @@ from .storage import TestCase
 )
 def test_runner_01(mocker, coverage, scheme):
     """test Runner()"""
-    mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
+    mocker.patch(
+        "grizzly.common.runner.perf_counter", autospec=True, side_effect=count()
+    )
     server = mocker.Mock(spec_set=Sapphire, scheme=scheme)
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
@@ -61,7 +63,7 @@ def test_runner_01(mocker, coverage, scheme):
 
 def test_runner_02(mocker):
     """test Runner.run() relaunch"""
-    mocker.patch("grizzly.common.runner.time", autospec=True, return_value=1)
+    mocker.patch("grizzly.common.runner.perf_counter", autospec=True, return_value=1)
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
@@ -88,7 +90,9 @@ def test_runner_02(mocker):
     assert result.status == Result.NONE
     assert result.served == serv_files
     assert not smap.dynamic
-    assert smap.redirect.get("grz_next_test").target == "grz_empty"
+    resource = smap.redirect.get("grz_next_test")
+    assert resource
+    assert resource.target == "grz_empty"
     assert not result.timeout
     target.reset_mock()
     testcase.reset_mock()
@@ -124,10 +128,13 @@ def test_runner_02(mocker):
     assert target.close.call_count == 1
     assert target.monitor.is_idle.call_count == 0
     assert target.monitor.is_healthy.call_count == 1
+    assert result
     assert result.status == Result.NONE
     assert result.served == serv_files
     assert not smap.dynamic
-    assert smap.redirect.get("grz_next_test").target == "grz_empty"
+    resource = smap.redirect.get("grz_next_test")
+    assert resource
+    assert resource.target == "grz_empty"
 
 
 @mark.parametrize(
@@ -150,6 +157,7 @@ def test_runner_03(mocker, srv_result, served):
     result = runner.run([], ServerMap(), test)
     assert runner.initial
     assert runner.startup_failure
+    assert result
     assert result.status == Result.NONE
     assert not result.attempted
     assert set(result.served) == set(served)
@@ -161,11 +169,11 @@ def test_runner_03(mocker, srv_result, served):
     "ignore, status, idle, check_result",
     [
         # detect a hang
-        (["foo"], Result.FOUND, False, 1),
+        ({"foo"}, Result.FOUND, False, 1),
         # ignore a hang
-        (["timeout"], Result.IGNORED, False, 0),
+        ({"timeout"}, Result.IGNORED, False, 0),
         # ignore idle hang
-        ([], Result.IGNORED, True, 0),
+        (set(), Result.IGNORED, True, 0),
     ],
 )
 def test_runner_04(mocker, ignore, status, idle, check_result):
@@ -250,6 +258,7 @@ def test_runner_07(mocker):
 
     target.monitor.is_healthy.return_value = True
     runner = Runner(server, target)
+    assert runner._idle is None
     assert runner._keep_waiting()
 
     target.monitor.is_healthy.return_value = False
@@ -289,7 +298,9 @@ def test_runner_09(mocker):
     """test Runner.launch()"""
     # set SLOW_LAUNCH_THRESHOLD for test coverage
     mocker.patch("grizzly.common.runner.SLOW_LAUNCH_THRESHOLD", 0)
-    mocker.patch("grizzly.common.runner.time", autospec=True, side_effect=count())
+    mocker.patch(
+        "grizzly.common.runner.perf_counter", autospec=True, side_effect=count()
+    )
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     runner = Runner(server, target)
@@ -416,7 +427,7 @@ def test_runner_12(mocker, delay, srv_result, startup_failure):
 
 def test_idle_check_01(mocker):
     """test simple _IdleChecker"""
-    fake_time = mocker.patch("grizzly.common.runner.time", autospec=True)
+    fake_time = mocker.patch("grizzly.common.runner.perf_counter", autospec=True)
     ichk = _IdleChecker(mocker.Mock(), 95, 10, poll_delay=1)
     assert ichk._threshold == 95
     assert ichk._init_delay == 10
@@ -431,7 +442,7 @@ def test_idle_check_01(mocker):
 
 def test_idle_check_02(mocker):
     """test _IdleChecker.is_idle()"""
-    fake_time = mocker.patch("grizzly.common.runner.time", autospec=True)
+    fake_time = mocker.patch("grizzly.common.runner.perf_counter", autospec=True)
     callbk = mocker.Mock()
     callbk.return_value = False
     ichk = _IdleChecker(callbk, 99, 10, poll_delay=1)
