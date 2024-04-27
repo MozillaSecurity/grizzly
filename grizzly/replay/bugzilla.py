@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from argparse import Namespace
 from logging import getLogger
 
 from ..common.bugzilla import BugzillaBug
@@ -11,14 +12,14 @@ from .replay import ReplayManager
 LOG = getLogger(__name__)
 
 
-def main(args):
+def main(args: Namespace) -> int:
     """CLI for `grizzly.replay.bugzilla`.
 
     Arguments:
-        args (argparse.Namespace): Result from `ReplayArgs.parse_args`.
+        args: Result from `ReplayArgs.parse_args`.
 
     Returns:
-        int: 0 for success. non-0 indicates a problem.
+        0 for success. non-0 indicates a problem.
     """
     configure_logging(args.log_level)
     bug = BugzillaBug.load(args.input)

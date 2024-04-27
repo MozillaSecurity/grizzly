@@ -1,10 +1,12 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import json
+from argparse import Namespace
+from json import loads
 from logging import getLogger
+from typing import Optional
 
-from ..common.fuzzmanager import load_fm_data
+from ..common.fuzzmanager import Bucket, CrashEntry, load_fm_data
 from ..main import configure_logging
 from .args import ReplayFuzzManagerIDArgs
 from .replay import ReplayManager
@@ -12,14 +14,14 @@ from .replay import ReplayManager
 LOG = getLogger(__name__)
 
 
-def main(args):
+def main(args: Namespace) -> int:
     """CLI for `grizzly.replay.crash`.
 
     Arguments:
-        args (argparse.Namespace): Result from `ReplayArgs.parse_args`.
+        args: Result from `ReplayArgs.parse_args`.
 
     Returns:
-        int: 0 for success. non-0 indicates a problem.
+        0 for success. non-0 indicates a problem.
     """
     configure_logging(args.log_level)
     with load_fm_data(args.input, load_bucket=not args.sig) as (crash, bucket):
@@ -28,21 +30,25 @@ def main(args):
         return ReplayManager.main(modify_args(args, crash, bucket))
 
 
-def modify_args(args, crash, bucket):
+def modify_args(
+    args: Namespace, crash: CrashEntry, bucket: Optional[Bucket]
+) -> Namespace:
     """
 
     Arguments:
-        args (argparse.Namespace): Result from `ReplayArgs.parse_args`.
+        args: Result from `ReplayArgs.parse_args`.
+        crash: Crash entry to process.
+        bucket: Bucket that contains crash.
 
     Returns:
-        args (argparse.Namespace): Modified arguments.
+        Modified arguments.
     """
     # if we did not pass --sig, and the crash is not bucketed
     # auto-generate a signature from crash data so we know what to expect
     if not args.sig and not bucket:
         try:
             fm_sig_file = crash.create_signature(args.binary)
-            meta = json.loads(fm_sig_file.with_suffix(".metadata").read_text())
+            meta = loads(fm_sig_file.with_suffix(".metadata").read_text())
             LOG.info(
                 "Using crash data to generate signature: %s",
                 meta["shortDescription"],
