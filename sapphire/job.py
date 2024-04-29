@@ -4,7 +4,7 @@
 """
 Sapphire HTTP server job
 """
-from enum import Enum, unique
+from enum import IntEnum, unique
 from errno import ENAMETOOLONG
 from itertools import chain
 from logging import getLogger
@@ -24,7 +24,7 @@ LOG = getLogger(__name__)
 
 
 @unique
-class Served(Enum):
+class Served(IntEnum):
     """Server Job status codes"""
 
     # all expected requests for required files have been received
