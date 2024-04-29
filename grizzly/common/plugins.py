@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import getLogger
+from typing import Any, Dict, List, Tuple
 
 from pkg_resources import iter_entry_points
 
@@ -15,16 +16,16 @@ class PluginLoadError(Exception):
     """Raised if loading a plug-in fails"""
 
 
-def load(name, group, base_type):
+def load(name: str, group: str, base_type: type) -> Any:
     """Load a plug-in.
 
     Args:
-        name (str): Name of entry point to load.
-        group (str): Group containing entry point.
-        base_type (type): Used to validate loaded objects.
+        name: Name of entry point to load.
+        group: Group containing entry point.
+        base_type: Used to validate loaded objects.
 
     Returns:
-        *: Python object.
+        Loaded plug-in object.
     """
     assert isinstance(base_type, type)
     for entry in iter_entry_points(group):
@@ -39,14 +40,14 @@ def load(name, group, base_type):
     return plugin
 
 
-def scan(group):
+def scan(group: str) -> List[str]:
     """Scan for installed plug-ins.
 
     Args:
-        group (str): Entry point group to scan.
+        group: Entry point group to scan.
 
     Returns:
-        list: Names of installed entry points.
+        Names of installed entry points.
     """
     found = []
     LOG.debug("scanning %r", group)
@@ -58,14 +59,14 @@ def scan(group):
     return found
 
 
-def scan_target_assets():
-    """Scan targets and load list of supported assets (minimal sanity checking).
+def scan_target_assets() -> Dict[str, Tuple[str, ...]]:
+    """Scan targets and load collection of supported assets (minimal sanity checking).
 
     Args:
         None
 
     Returns:
-        dict: Name of target and list of supported assets.
+        Name of target and list of supported assets.
     """
     assets = {}
     for entry in iter_entry_points("grizzly_targets"):
