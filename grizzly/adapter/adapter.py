@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional, Tuple
+from typing import Any, Dict, Generator, Optional, Tuple, final
 
 from grizzly.common.storage import TestCase
 from grizzly.common.utils import DEFAULT_TIME_LIMIT, HARNESS_FILE
@@ -65,6 +65,7 @@ class Adapter(metaclass=ABCMeta):
     def __exit__(self, *exc: Any) -> None:
         self.cleanup()
 
+    @final
     def cleanup(self) -> None:
         """Automatically called once at shutdown. Used internally by Grizzly.
         *** DO NOT OVERRIDE! ***
@@ -77,6 +78,7 @@ class Adapter(metaclass=ABCMeta):
         """
         self.shutdown()
 
+    @final
     def enable_harness(self, path: Path = HARNESS_FILE) -> None:
         """Enable use of a harness during fuzzing. By default no harness is used.
         *** DO NOT OVERRIDE! ***
@@ -90,6 +92,7 @@ class Adapter(metaclass=ABCMeta):
         self._harness = path.read_bytes()
         assert self._harness, f"empty harness file '{path.resolve()}'"
 
+    @final
     def get_harness(self) -> Optional[bytes]:
         """Get the harness. Used internally by Grizzly.
         *** DO NOT OVERRIDE! ***
