@@ -205,7 +205,7 @@ class PuppetTarget(Target):
                 result = Result.IGNORED
                 LOG.debug("log size limit exceeded")
             else:
-                assert self._puppet.reason
+                assert self._puppet.reason is not None
                 # crash or hang (forced SIGABRT) has been detected
                 LOG.debug("result detected (%s)", self._puppet.reason.name)
                 result = Result.FOUND
