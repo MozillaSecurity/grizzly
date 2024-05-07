@@ -101,7 +101,7 @@ class ConnectionManager:
             timeout: Maximum time in seconds to wait.
 
         Returns:
-            list: Workers that do not join before the timeout is reached.
+            Workers that do not join before the timeout is reached.
         """
         assert timeout >= 0
         alive = []
@@ -126,7 +126,7 @@ class ConnectionManager:
                             sockets of active workers.
 
         Returns:
-            bool: True unless the timeout is exceeded.
+            True unless the timeout is exceeded.
         """
         assert self._job.pending or self._job.forever
         assert self._socket.gettimeout() is not None
@@ -141,7 +141,7 @@ class ConnectionManager:
 
         launches = 0
         running = 0
-        workers = []
+        workers: List[Worker] = []
         LOG.debug("accepting requests (workers: %d, timeout: %r)", self._limit, timeout)
         try:
             while not self._job.is_complete() and self._can_continue(continue_cb):
