@@ -129,7 +129,6 @@ class ConnectionManager:
             True unless the timeout is exceeded.
         """
         assert self._job.pending or self._job.forever
-        assert self._socket.gettimeout() is not None
         assert shutdown_delay >= 0
         assert timeout >= 0
         if continue_cb is not None and not callable(continue_cb):

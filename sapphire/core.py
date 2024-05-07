@@ -54,7 +54,6 @@ def create_listening_socket(
     attempts: int = 10,
     port: int = 0,
     remote: bool = False,
-    timeout: Optional[float] = None,
 ) -> socket:
     """Create listening socket. Search for an open socket if needed and
     configure the socket. If a specific port is unavailable or no
@@ -64,20 +63,16 @@ def create_listening_socket(
         attempts: Number of attempts to configure the socket.
         port: Port to listen on. Use 0 for system assigned port.
         remote: Accept all (non-local) incoming connections.
-        timeout: Used to set socket timeout.
 
     Returns:
         A listening socket.
     """
     assert attempts > 0
     assert 0 <= port <= 65535
-    assert timeout is None or timeout > 0
 
     for remaining in reversed(range(attempts)):
         sock = socket()
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        if timeout is not None:
-            sock.settimeout(timeout)
         # attempt to bind/listen
         try:
             sock.bind(("0.0.0.0" if remote else "127.0.0.1", port))
@@ -118,11 +113,7 @@ class Sapphire:
         assert timeout >= 0
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
-        sock = create_listening_socket(
-            port=port,
-            remote=allow_remote,
-            timeout=self.LISTEN_TIMEOUT,
-        )
+        sock = create_listening_socket(port=port, remote=allow_remote)
         # enable https if certificates are provided
         if certs:
             context = SSLContext(PROTOCOL_TLS_SERVER)
@@ -166,7 +157,7 @@ class Sapphire:
                 LOG.debug("pending socket closed")
             # if this fires something is likely actively trying to connect
             assert deadline > time()
-        self._socket.settimeout(self.LISTEN_TIMEOUT)
+        self._socket.settimeout(None)
 
     def close(self) -> None:
         """Close listening server socket.

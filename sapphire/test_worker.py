@@ -51,6 +51,7 @@ def test_worker_02(mocker, exc):
     serv_con = mocker.Mock(spec_set=socket.socket)
     serv_job = mocker.Mock(spec_set=Job)
     serv_con.accept.side_effect = exc
+    mocker.patch("sapphire.worker.select", return_value=([serv_con], None, None))
     assert Worker.launch(serv_con, serv_job) is None
     assert serv_job.accepting.clear.call_count == 0
     assert serv_job.accepting.set.call_count == 0
@@ -64,6 +65,7 @@ def test_worker_03(mocker):
     serv_job = mocker.Mock(spec_set=Job)
     conn = mocker.Mock(spec_set=socket.socket)
     serv_con.accept.return_value = (conn, None)
+    mocker.patch("sapphire.worker.select", return_value=([serv_con], None, None))
     assert Worker.launch(serv_con, serv_job) is None
     assert conn.close.call_count == 1
     assert serv_job.accepting.clear.call_count == 0
@@ -88,6 +90,7 @@ def test_worker_04(mocker, tmp_path, url):
     clnt_sock.recv.return_value = f"GET {url} HTTP/1.1".encode()
     serv_sock = mocker.Mock(spec_set=socket.socket)
     serv_sock.accept.return_value = (clnt_sock, None)
+    mocker.patch("sapphire.worker.select", return_value=([serv_sock], None, None))
     worker = Worker.launch(serv_sock, job)
     assert worker is not None
     try:
@@ -117,6 +120,7 @@ def test_worker_05(mocker, tmp_path, req, response):
     clnt_sock.recv.return_value = req
     serv_sock = mocker.Mock(spec_set=socket.socket)
     serv_sock.accept.return_value = (clnt_sock, None)
+    mocker.patch("sapphire.worker.select", return_value=([serv_sock], None, None))
     worker = Worker.launch(serv_sock, job)
     assert worker is not None
     assert worker.join(timeout=10)
