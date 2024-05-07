@@ -10,7 +10,7 @@ from pathlib import Path
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
 from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
 from time import sleep, time
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union, cast
 
 from .connection_manager import ConnectionManager
 from .job import Job, Served
@@ -67,7 +67,7 @@ def create_listening_socket(
         timeout: Used to set socket timeout.
 
     Returns:
-        socket: A listening socket.
+        A listening socket.
     """
     assert attempts > 0
     assert 0 <= port <= 65535
@@ -189,7 +189,7 @@ class Sapphire:
         Returns:
             Listening port number.
         """
-        return int(self._socket.getsockname()[1])
+        return cast(int, self._socket.getsockname()[1])
 
     def serve_path(
         self,

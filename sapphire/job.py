@@ -235,13 +235,13 @@ class Job:
 
     @property
     def pending(self) -> int:
-        """Number of pending files.
+        """Number of files that have not been served.
 
         Args:
             None
 
         Returns:
-            int: Number of pending file.
+            Number of pending files.
         """
         with self._pending.lock:
             return len(self._pending.files)
@@ -253,7 +253,7 @@ class Job:
             file_name (str): File to remove from pending list.
 
         Returns:
-            bool: True when all files have been removed otherwise False.
+            True when all files have been removed otherwise False.
         """
         with self._pending.lock:
             self._pending.files.discard(file_name)
