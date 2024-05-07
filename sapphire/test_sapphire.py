@@ -745,10 +745,9 @@ def test_create_listening_socket_01(mocker, bind):
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
     fake_sock.return_value.bind.side_effect = bind
     bind_calls = len(bind)
-    assert create_listening_socket(timeout=0.25)
+    assert create_listening_socket()
     assert fake_sock.return_value.close.call_count == bind_calls - 1
     assert fake_sock.return_value.setsockopt.call_count == bind_calls
-    assert fake_sock.return_value.settimeout.call_count == bind_calls
     assert fake_sock.return_value.bind.call_count == bind_calls
     assert fake_sock.return_value.listen.call_count == 1
     assert fake_sleep.call_count == bind_calls - 1

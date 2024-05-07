@@ -6,6 +6,7 @@ Sapphire HTTP server worker
 """
 from logging import getLogger
 from re import compile as re_compile
+from select import select
 from socket import SHUT_RDWR, socket
 from socket import timeout as sock_timeout  # Py3.10 socket.timeout => TimeoutError
 from sys import exc_info
@@ -269,26 +270,26 @@ class Worker:
     ) -> Optional["Worker"]:
         assert timeout >= 0
         assert job.accepting.is_set()
-        conn = None
-        try:
-            conn, _ = listen_sock.accept()
-            conn.settimeout(timeout)
-            # create a worker thread to handle client request
-            w_thread = Thread(target=cls.handle_request, args=(conn, job))
-            job.accepting.clear()
-            w_thread.start()
-            return cls(conn, w_thread)
-        except sock_timeout:
-            # no connections to accept
-            pass
-        except OSError as exc:
-            LOG.debug("worker thread not launched: %s", exc)
-        except ThreadError:
-            # reset accepting status
-            job.accepting.set()
-            LOG.warning("ThreadError (worker), threads: %d", active_count())
-            # wait for system resources to free up
-            sleep(0.1)
-        if conn is not None:
-            conn.close()
+        # TODO: is select() timeout value too short, too long?
+        readable, _, _ = select([listen_sock], (), (), 0.25)
+        if listen_sock in readable:
+            conn = None
+            try:
+                conn, _ = listen_sock.accept()
+                conn.settimeout(timeout)
+                # create a worker thread to handle client request
+                w_thread = Thread(target=cls.handle_request, args=(conn, job))
+                job.accepting.clear()
+                w_thread.start()
+                return cls(conn, w_thread)
+            except OSError as exc:
+                LOG.debug("worker thread not launched: %s", exc)
+            except ThreadError:
+                # reset accepting status
+                job.accepting.set()
+                LOG.warning("ThreadError (worker), threads: %d", active_count())
+                # wait for system resources to free up
+                sleep(0.1)
+            if conn is not None:
+                conn.close()
         return None

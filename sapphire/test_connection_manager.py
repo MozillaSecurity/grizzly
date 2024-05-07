@@ -22,6 +22,7 @@ def test_connection_manager_01(mocker, tmp_path, timeout):
     clnt_sock.recv.return_value = b"GET /testfile HTTP/1.1"
     serv_sock = mocker.Mock(spec_set=socket)
     serv_sock.accept.return_value = (clnt_sock, None)
+    mocker.patch("sapphire.worker.select", return_value=([serv_sock], None, None))
     assert not job.is_complete()
     with ConnectionManager(job, serv_sock) as mgr:
         assert mgr.serve(timeout)
@@ -51,6 +52,7 @@ def test_connection_manager_02(mocker, tmp_path, worker_limit):
     )
     serv_sock = mocker.Mock(spec_set=socket)
     serv_sock.accept.return_value = (clnt_sock, None)
+    mocker.patch("sapphire.worker.select", return_value=([serv_sock], None, None))
     assert not job.is_complete()
     with ConnectionManager(job, serv_sock, limit=worker_limit) as mgr:
         assert mgr.serve(10)
@@ -66,6 +68,7 @@ def test_connection_manager_03(mocker, tmp_path):
     clnt_sock.recv.side_effect = Exception("worker exception")
     serv_sock = mocker.Mock(spec_set=socket)
     serv_sock.accept.return_value = (clnt_sock, None)
+    mocker.patch("sapphire.worker.select", return_value=([serv_sock], None, None))
     with raises(Exception, match="worker exception"):
         with ConnectionManager(job, serv_sock) as mgr:
             mgr.serve(10)
@@ -97,6 +100,7 @@ def test_connection_manager_05(mocker, tmp_path):
     clnt_sock.recv.return_value = b""
     serv_sock = mocker.Mock(spec_set=socket)
     serv_sock.accept.return_value = (clnt_sock, None)
+    mocker.patch("sapphire.worker.select", return_value=([serv_sock], None, None))
     job = Job(tmp_path, required_files=["file"])
     with ConnectionManager(job, serv_sock, poll=0.01) as mgr:
         assert not mgr.serve(10)
@@ -111,6 +115,7 @@ def test_connection_manager_06(mocker, tmp_path):
     clnt_sock = mocker.Mock(spec_set=socket)
     serv_sock = mocker.Mock(spec_set=socket)
     serv_sock.accept.return_value = (clnt_sock, None)
+    mocker.patch("sapphire.worker.select", return_value=([serv_sock], None, None))
     job = Job(tmp_path, required_files=["file"])
     mocker.patch.object(job, "worker_complete")
     with ConnectionManager(job, serv_sock) as mgr:
