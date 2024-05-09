@@ -97,8 +97,6 @@ def create_listening_socket(
 
 
 class Sapphire:
-    LISTEN_TIMEOUT = 0.25
-
     __slots__ = ("_auto_close", "_max_workers", "_socket", "scheme", "timeout")
 
     def __init__(
