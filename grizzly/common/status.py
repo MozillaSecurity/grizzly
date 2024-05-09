@@ -14,6 +14,7 @@ from pathlib import Path
 from sqlite3 import Connection, OperationalError, connect
 from time import perf_counter, time
 from typing import (
+    Any,
     Callable,
     Dict,
     Generator,
@@ -434,7 +435,7 @@ class BaseStatus(ABC):
         self.log_size = log_size
         self.pid = pid
         self.start_time = start_time
-        self.test_name = None
+        self.test_name: Optional[str] = None
 
     def profile_entries(self) -> Generator[ProfileEntry, None, None]:
         """Used to retrieve profiling data.
@@ -1143,7 +1144,7 @@ class ReductionStatus:
         assert self._testcase_size_cb is not None
         return self._testcase_size_cb()
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo: Optional[Dict[int, Any]]) -> "ReductionStatus":
         """Return a deep copy of this instance."""
         # pylint: disable=protected-access
         result = type(self)(
