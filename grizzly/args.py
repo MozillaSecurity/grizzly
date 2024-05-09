@@ -1,12 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from argparse import ArgumentParser, HelpFormatter
+from argparse import ArgumentParser, HelpFormatter, Namespace
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import getenv
 from os.path import exists
 from pathlib import Path
 from platform import system
+from typing import List, Optional
 
 from .common.fuzzmanager import FM_CONFIG, ProgramConfiguration
 from .common.plugins import scan as scan_plugins
@@ -36,7 +37,7 @@ class CommonArgs:
     IGNORABLE = ("log-limit", "memory", "timeout")
     DEFAULT_IGNORE = ("log-limit", "timeout")
 
-    def __init__(self):
+    def __init__(self) -> None:
         # log levels for console logging
         self._level_map = {
             "CRIT": CRITICAL,
@@ -64,7 +65,7 @@ class CommonArgs:
 
         # build 'asset' help string
         assets = scan_target_assets()
-        asset_msg = []
+        asset_msg: List[str] = []
         for target in sorted(assets):
             if assets[target]:
                 asset_msg.append(f"{target}: {', '.join(sorted(assets[target]))}.")
@@ -248,7 +249,7 @@ class CommonArgs:
         )
 
     @staticmethod
-    def is_headless():
+    def is_headless() -> bool:
         if (
             system().startswith("Linux")
             and not getenv("DISPLAY")
@@ -257,12 +258,12 @@ class CommonArgs:
             return True
         return False
 
-    def parse_args(self, argv=None):
+    def parse_args(self, argv: Optional[List[str]] = None) -> Namespace:
         args = self.parser.parse_args(argv)
         self.sanity_check(args)
         return args
 
-    def sanity_check(self, args):
+    def sanity_check(self, args: Namespace) -> None:
         if not args.binary.is_file():
             self.parser.error(f"file not found: '{args.binary!s}'")
 
@@ -352,7 +353,7 @@ class CommonArgs:
 
 
 class GrizzlyArgs(CommonArgs):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
         adapters = scan_plugins("grizzly_adapters")
@@ -426,7 +427,7 @@ class GrizzlyArgs(CommonArgs):
             " (default: %(default)s) - Use 0 for 'no limit'",
         )
 
-    def sanity_check(self, args):
+    def sanity_check(self, args: Namespace) -> None:
         super().sanity_check(args)
 
         if args.collect < 1:

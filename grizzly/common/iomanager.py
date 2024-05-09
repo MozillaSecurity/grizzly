@@ -1,6 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from typing import Any, List, Optional
+
 from sapphire.server_map import ServerMap
 
 from .storage import TestCase
@@ -19,26 +21,26 @@ class IOManager:
         "tests",
     )
 
-    def __init__(self, report_size=1):
+    def __init__(self, report_size: int = 1) -> None:
         assert report_size > 0
         self.server_map = ServerMap()
         # tests will be ordered oldest to newest
-        self.tests = []
+        self.tests: List[TestCase] = []
         # total number of test cases generated
         self._generated = 0
         self._report_size = report_size
-        self._test = None
+        self._test: Optional[TestCase] = None
 
-    def __enter__(self):
+    def __enter__(self) -> "IOManager":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.cleanup()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         self.purge()
 
-    def commit(self):
+    def commit(self) -> None:
         assert self._test is not None
         self.tests.append(self._test)
         self._test = None
@@ -46,7 +48,7 @@ class IOManager:
         if len(self.tests) > self._report_size:
             self.tests.pop(0).cleanup()
 
-    def create_testcase(self, adapter_name):
+    def create_testcase(self, adapter_name: str) -> TestCase:
         assert self._test is None
         self._test = TestCase(self.page_name(), adapter_name)
         # reset redirect map
@@ -57,10 +59,10 @@ class IOManager:
         self._generated += 1
         return self._test
 
-    def page_name(self, offset=0):
-        return f"test_{self._generated + offset:0>4d}.html"
+    def page_name(self, offset: int = 0) -> str:
+        return f"test_{self._generated + offset:04d}.html"
 
-    def purge(self):
+    def purge(self) -> None:
         if self._test is not None:
             self._test.cleanup()
             self._test = None
