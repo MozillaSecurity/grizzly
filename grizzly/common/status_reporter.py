@@ -15,7 +15,7 @@ from platform import system
 from re import match
 from re import sub as re_sub
 from time import gmtime, localtime, strftime
-from typing import Callable, Dict, Generator, List, Optional, Set, Tuple, Type, Union
+from typing import Callable, Dict, Generator, List, Optional, Set, Tuple, Type
 
 from psutil import cpu_count, cpu_percent, disk_usage, getloadavg, virtual_memory
 
@@ -886,9 +886,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         log_fmt = "%(message)s"
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    modes: Dict[
-        str, Tuple[Union[Type[StatusReporter], Type[ReductionStatusReporter]], Path]
-    ] = {
+    modes: Dict[str, Tuple[Type[StatusReporter], Path]] = {
         "fuzzing": (StatusReporter, STATUS_DB_FUZZ),
         "reducing": (ReductionStatusReporter, STATUS_DB_REDUCE),
     }
