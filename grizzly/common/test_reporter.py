@@ -55,7 +55,7 @@ def test_reporter_01(mocker, tmp_path, display_logs, is_hang):
     )
     reporter = SimpleReporter()
     reporter.display_logs = display_logs
-    reporter.submit([], report=report)
+    reporter.submit([], report)
     assert report.cleanup.call_count == 1
 
 
