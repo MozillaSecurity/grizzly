@@ -15,7 +15,7 @@ from sapphire import Sapphire, Served
 from .adapter import Adapter
 from .common.reporter import Report, Reporter
 from .common.runner import RunResult
-from .session import LogOutputLimiter, Session, SessionError
+from .session import LogOutputLimiter, LogRate, Session, SessionError
 from .target import Result, Target
 
 pytestmark = mark.usefixtures("patch_collector", "tmp_path_status_db_fuzz")
@@ -477,13 +477,13 @@ def test_log_output_limiter_01(mocker):
     assert lol._launches == 1
     assert lol._multiplier == 2
     assert lol._time == 1.0
-    assert not lol._verbose
+    assert lol._rate == LogRate.NORMAL
     fake_time.return_value = 1.1
     assert not lol.ready(0, 0)
     assert lol._iterations == 1
     assert lol._launches == 1
     assert lol._time == 1.0
-    lol._verbose = True
+    lol._rate = LogRate.VERBOSE
     assert lol.ready(0, 0)
 
 

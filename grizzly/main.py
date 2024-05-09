@@ -1,8 +1,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from argparse import Namespace
 from logging import DEBUG, getLogger
 from os import getpid
+from typing import Optional, cast
 
 from sapphire import Sapphire
 
@@ -12,6 +14,7 @@ from .common.reporter import (
     FailedLaunchReporter,
     FilesystemReporter,
     FuzzManagerReporter,
+    Reporter,
 )
 from .common.utils import (
     CertificateBundle,
@@ -20,7 +23,7 @@ from .common.utils import (
     display_time_limits,
     time_limits,
 )
-from .session import Session
+from .session import LogRate, Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
 __author__ = "Tyson Smith"
@@ -30,7 +33,7 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 LOG = getLogger(__name__)
 
 
-def main(args):
+def main(args: Namespace) -> Exit:
     configure_logging(args.log_level)
     LOG.info("Starting Grizzly (%d)", getpid())
 
@@ -45,13 +48,16 @@ def main(args):
     elif args.valgrind:
         LOG.info("Running with Valgrind. This will be SLOW!")
 
-    adapter = None
-    certs = None
+    adapter: Optional[Adapter] = None
+    certs: Optional[CertificateBundle] = None
     complete_with_results = False
-    target = None
+    target: Optional[Target] = None
     try:
         LOG.debug("initializing Adapter %r", args.adapter)
-        adapter = load_plugin(args.adapter, "grizzly_adapters", Adapter)(args.adapter)
+        adapter = cast(
+            Adapter,
+            load_plugin(args.adapter, "grizzly_adapters", Adapter)(args.adapter),
+        )
 
         # calculate time limit and timeout
         time_limit, timeout = time_limits(
@@ -61,7 +67,7 @@ def main(args):
 
         if adapter.RELAUNCH > 0:
             LOG.info("Relaunch (%d) set in Adapter", adapter.RELAUNCH)
-            relaunch = adapter.RELAUNCH
+            relaunch: int = adapter.RELAUNCH
         else:
             relaunch = args.relaunch
 
@@ -69,16 +75,19 @@ def main(args):
             certs = CertificateBundle.create()
 
         LOG.debug("initializing the Target %r", args.platform)
-        target = load_plugin(args.platform, "grizzly_targets", Target)(
-            args.binary,
-            args.launch_timeout,
-            args.log_limit,
-            args.memory,
-            certs=certs,
-            headless=args.headless,
-            pernosco=args.pernosco,
-            rr=args.rr,
-            valgrind=args.valgrind,
+        target = cast(
+            Target,
+            load_plugin(args.platform, "grizzly_targets", Target)(
+                args.binary,
+                args.launch_timeout,
+                args.log_limit,
+                args.memory,
+                certs=certs,
+                headless=args.headless,
+                pernosco=args.pernosco,
+                rr=args.rr,
+                valgrind=args.valgrind,
+            ),
         )
         # add specified assets
         target.asset_mgr.add_batch(args.asset)
@@ -92,11 +101,13 @@ def main(args):
 
         LOG.debug("initializing the Reporter")
         if args.fuzzmanager:
-            reporter = FuzzManagerReporter(args.tool or f"grizzly-{adapter.name}")
-            LOG.info("Results will be reported via FuzzManager (%s)", reporter.tool)
+            tool = args.tool or f"grizzly-{adapter.name}"
+            reporter: Reporter = FuzzManagerReporter(tool)
+            LOG.info("Results will be reported via FuzzManager (%s)", tool)
         else:
-            reporter = FilesystemReporter(args.output / "results")
-            LOG.info("Results will be stored in '%s'", reporter.report_path)
+            report_path = args.output / "results"
+            reporter = FilesystemReporter(report_path)
+            LOG.info("Results will be stored in '%s'", report_path.resolve())
         reporter.display_logs = args.smoke_test or reporter.display_logs
 
         if args.limit:
@@ -123,9 +134,9 @@ def main(args):
                 report_size=args.collect,
             ) as session:
                 if args.log_level == DEBUG or args.verbose:
-                    display_mode = Session.DISPLAY_VERBOSE
+                    log_rate = LogRate.VERBOSE
                 else:
-                    display_mode = Session.DISPLAY_NORMAL
+                    log_rate = LogRate.NORMAL
                 session.run(
                     args.ignore,
                     time_limit,
@@ -134,7 +145,7 @@ def main(args):
                     no_harness=args.no_harness,
                     result_limit=1 if args.smoke_test else 0,
                     runtime_limit=args.runtime,
-                    display_mode=display_mode,
+                    log_rate=log_rate,
                     launch_attempts=args.launch_attempts,
                     post_launch_delay=args.post_launch_delay,
                 )

@@ -1,13 +1,20 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from enum import IntEnum, unique
 from logging import getLogger
 from time import time
+from typing import Any, Optional, Set
 
+from sapphire import Sapphire
+
+from .adapter import Adapter
 from .common.iomanager import IOManager
+from .common.reporter import Reporter
 from .common.runner import Runner
 from .common.status import STATUS_DB_FUZZ, Status
-from .target import Result
+from .common.storage import TestCase
+from .target import Result, Target
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
 __author__ = "Tyson Smith"
@@ -21,27 +28,40 @@ class SessionError(Exception):
     """The base class for exceptions raised by Session"""
 
 
+@unique
+class LogRate(IntEnum):
+    # quickly reduce the amount of output
+    NORMAL = 0
+    # display status every iteration
+    VERBOSE = 1
+
+
 class LogOutputLimiter:
     __slots__ = (
         "_delay",
         "_iterations",
         "_launches",
         "_multiplier",
+        "_rate",
         "_time",
-        "_verbose",
     )
 
-    def __init__(self, delay=300, delta_multiplier=2, verbose=False):
+    def __init__(
+        self,
+        delay: int = 300,
+        delta_multiplier: int = 2,
+        rate: LogRate = LogRate.NORMAL,
+    ) -> None:
         self._delay = delay  # maximum time delay between output
         self._iterations = 1  # next iteration to trigger output
         self._launches = 1  # next launch to trigger output
         self._multiplier = delta_multiplier  # rate to decrease output (iterations)
+        self._rate = rate
         self._time = time()
-        self._verbose = verbose  # always output
 
-    def ready(self, cur_iter, launches):
+    def ready(self, cur_iter: int, launches: int) -> bool:
         # calculate if a status line should be output
-        if self._verbose:
+        if self._rate == LogRate.VERBOSE:
             return True
         ready = False
         if cur_iter >= self._iterations:
@@ -58,9 +78,6 @@ class LogOutputLimiter:
 
 
 class Session:
-    DISPLAY_VERBOSE = 0  # display status every iteration
-    DISPLAY_NORMAL = 1  # quickly reduce the amount of output
-
     # display warning when target log files exceed limit (25MB)
     TARGET_LOG_SIZE_WARN = 0x1900000
 
@@ -78,16 +95,16 @@ class Session:
 
     def __init__(
         self,
-        adapter,
-        reporter,
-        server,
-        target,
-        coverage=False,
-        enable_profiling=False,
-        relaunch=1,
-        report_limit=0,
-        report_size=1,
-    ):
+        adapter: Adapter,
+        reporter: Reporter,
+        server: Sapphire,
+        target: Target,
+        coverage: bool = False,
+        enable_profiling: bool = False,
+        relaunch: int = 1,
+        report_limit: int = 0,
+        report_size: int = 1,
+    ) -> None:
         assert relaunch > 0
         assert report_limit >= 0
         assert report_size > 0
@@ -104,20 +121,18 @@ class Session:
         )
         self.target = target
 
-    def __enter__(self):
+    def __enter__(self) -> "Session":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.close()
 
-    def close(self):
-        if self.status is not None:
-            # perform final status report
-            self.status.report(force=True)
-        if self.iomanager is not None:
-            self.iomanager.cleanup()
+    def close(self) -> None:
+        # perform final status report
+        self.status.report(force=True)
+        self.iomanager.cleanup()
 
-    def display_status(self, log_limiter):
+    def display_status(self, log_limiter: LogOutputLimiter) -> None:
         if self.adapter.remaining is not None:
             LOG.info(
                 "[I%04d-L%02d-R%02d] %s",
@@ -129,7 +144,7 @@ class Session:
         elif log_limiter.ready(self.status.iteration, self.target.monitor.launches):
             LOG.info("I%04d-R%02d ", self.status.iteration, self.status.results.total)
 
-    def generate_testcase(self):
+    def generate_testcase(self) -> TestCase:
         LOG.debug("calling iomanager.create_testcase()")
         test = self.iomanager.create_testcase(self.adapter.name)
         LOG.debug("calling adapter.generate()")
@@ -140,17 +155,17 @@ class Session:
 
     def run(
         self,
-        ignore,
-        time_limit,
-        input_path=None,
-        iteration_limit=0,
-        no_harness=False,
-        result_limit=0,
-        runtime_limit=0,
-        display_mode=DISPLAY_NORMAL,
-        launch_attempts=3,
-        post_launch_delay=0,
-    ):
+        ignore: Set[str],
+        time_limit: int,
+        input_path: Optional[str] = None,
+        iteration_limit: int = 0,
+        no_harness: bool = False,
+        result_limit: int = 0,
+        runtime_limit: int = 0,
+        log_rate: LogRate = LogRate.NORMAL,
+        launch_attempts: int = 3,
+        post_launch_delay: int = 0,
+    ) -> None:
         assert iteration_limit >= 0
         assert launch_attempts > 0
         assert runtime_limit >= 0
@@ -174,7 +189,7 @@ class Session:
                 "grz_start", "grz_harness", required=False
             )
 
-        log_limiter = LogOutputLimiter(verbose=display_mode == self.DISPLAY_VERBOSE)
+        log_limiter = LogOutputLimiter(rate=log_rate)
         # limit relaunch to max iterations if needed
         relaunch = min(self._relaunch, iteration_limit) or self._relaunch
         if self.adapter.remaining is not None:
