@@ -17,6 +17,13 @@ from .stack_hasher import (
 )
 
 
+class BasicStackFrame(StackFrame):
+    @classmethod
+    def from_line(cls, input_line):
+        # unused
+        pass
+
+
 def test_stack_01():
     """test creating an empty Stack"""
     stack = Stack([])
@@ -27,7 +34,7 @@ def test_stack_01():
 
 def test_stack_02():
     """test creating a Stack with 1 generic frame"""
-    frames = [StackFrame(function="a", location="b", offset="c", stack_line="0")]
+    frames = [BasicStackFrame(function="a", location="b", offset="c", stack_line="0")]
     stack = Stack(frames)
     assert stack.minor is not None
     assert stack.major is not None
@@ -44,7 +51,7 @@ def test_stack_02():
 def test_stack_03():
     """test creating a Stack with 2 frames"""
     frames = [
-        StackFrame(function="a", location="b", offset="c", stack_line="0")
+        BasicStackFrame(function="a", location="b", offset="c", stack_line="0")
         for _ in range(2)
     ]
     stack = Stack(frames, major_depth=2)
@@ -59,7 +66,7 @@ def test_stack_03():
 def test_stack_04():
     """test creating a Stack with 2 frames with a major depth of 0"""
     frames = [
-        StackFrame(function="a", location="b", offset="c", stack_line=str(line))
+        BasicStackFrame(function="a", location="b", offset="c", stack_line=str(line))
         for line in range(2)
     ]
     stack = Stack(frames, major_depth=0)
@@ -74,7 +81,7 @@ def test_stack_04():
 def test_stack_05():
     """test creating a Stack with 10 frames exceeding major depth"""
     frames = [
-        StackFrame(function="a", location="b", offset="c", stack_line=str(line))
+        BasicStackFrame(function="a", location="b", offset="c", stack_line=str(line))
         for line in range(10)
     ]
     stack = Stack(frames, major_depth=5)
@@ -284,7 +291,9 @@ def test_stack_13():
 def test_stack_14():
     """test Stack.height_limit"""
     frames = [
-        StackFrame(function=str(num), location="b", offset="c", stack_line=str(num))
+        BasicStackFrame(
+            function=str(num), location="b", offset="c", stack_line=str(num)
+        )
         for num in range(10)
     ]
     stack = Stack(frames, major_depth=3)
@@ -379,8 +388,8 @@ def test_stack_18():
 
 
 def test_stackframe_01():
-    """test creating an empty generic StackFrame"""
-    stack = StackFrame()
+    """test creating an empty generic BasicStackFrame"""
+    stack = BasicStackFrame()
     assert not str(stack)
 
 

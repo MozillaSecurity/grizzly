@@ -11,12 +11,13 @@ entries on the top of the stack with the offsets removed. This returns a unique
 crash id (1st hash) and a bug id (2nd hash). This is not perfect but works very
 well in most cases.
 """
+from abc import ABC, abstractmethod
 from hashlib import sha1
 from logging import DEBUG, INFO, basicConfig, getLogger
 from os.path import basename
 from re import compile as re_compile
 from re import match as re_match
-from typing import List, Optional
+from typing import List, Optional, Type
 
 __all__ = ("Stack",)
 __author__ = "Tyson Smith"
@@ -37,7 +38,7 @@ MAJOR_DEPTH = 5
 _RE_FUNC_NAME = re_compile(r"(?P<func>.+?)[\(|\s|\<]{1}")
 
 
-class StackFrame:
+class StackFrame(ABC):
     __slots__ = ("function", "location", "offset", "stack_line")
 
     def __init__(
@@ -63,6 +64,18 @@ class StackFrame:
         if self.offset is not None:
             out.append(f"offset: {self.offset!r}")
         return " - ".join(out)
+
+    @classmethod
+    @abstractmethod
+    def from_line(cls, input_line: str) -> Optional["StackFrame"]:
+        """Parse stack frame details.
+
+        Args:
+            input_line: A single line of text.
+
+        Returns:
+            StackFrame
+        """
 
 
 class MinidumpStackFrame(StackFrame):
@@ -402,13 +415,13 @@ class Stack:
         """
 
         frames: List[StackFrame] = []
-        parser_class = None
+        parser_class: Optional[Type[StackFrame]] = None
         for line in input_text.split("\n"):
             line = line.rstrip()
             if not line:
                 # skip empty lines
                 continue
-            frame = None
+            frame: Optional[StackFrame] = None
             try:
                 # only use a single StackFrame type
                 if parser_class is None:
@@ -424,8 +437,8 @@ class Stack:
                     ):
                         frame = frame_parser.from_line(line)
                         if frame is not None:
+                            LOG.debug("frame parser: %s", frame_parser.__name__)
                             parser_class = frame_parser
-                            LOG.debug("frame parser: %s", parser_class.__name__)
                             break
                 else:
                     frame = parser_class.from_line(line)
