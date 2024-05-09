@@ -232,12 +232,12 @@ class ReplayManager:
         if others:
             reporter = FilesystemReporter(path / "other_reports", major_bucket=False)
             for report in others:
-                reporter.submit(tests or [], report=report)
+                reporter.submit(tests or [], report)
         expected = tuple(x.report for x in results if x.expected)
         if expected:
             reporter = FilesystemReporter(path / "reports", major_bucket=False)
             for report in expected:
-                reporter.submit(tests or [], report=report)
+                reporter.submit(tests or [], report)
 
     @staticmethod
     def report_to_fuzzmanager(results, tests, tool):

@@ -61,17 +61,40 @@ class Reporter(metaclass=ABCMeta):
 
     @abstractmethod
     def _post_submit(self) -> None:
-        pass
+        """Called after _submit_report() is called.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
 
     @abstractmethod
     def _pre_submit(self, report: Report) -> None:
-        pass
+        """Called before _submit_report() is called.
+
+        Args:
+            report: Report to submit.
+
+        Returns:
+            None
+        """
 
     @abstractmethod
     def _submit_report(
         self, report: Report, test_cases: List[TestCase], force: bool
     ) -> Any:
-        pass
+        """Implementation specific report submission code.
+
+        Args:
+            report: Report to submit.
+            test_cases: Testcases to be submitted.
+            force: Ignore any limits and always submit report.
+
+        Returns:
+            Implementation specific result indicating where the report was created.
+        """
 
     @final
     def submit(
@@ -84,12 +107,11 @@ class Reporter(metaclass=ABCMeta):
                 the newest being the mostly likely to trigger
                 the result (crash, assert... etc).
             report: Report to submit.
-            force: Ignore any limits.
+            force: Ignore any limits and always submit report.
 
         Returns:
             Implementation specific result indicating where the report was created.
         """
-        assert report.path is not None
         assert (
             not test_cases or test_cases[0].timestamp <= test_cases[-1].timestamp
         ), "tests must be ordered oldest to newest"
