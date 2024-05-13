@@ -6,8 +6,7 @@ from logging import getLogger
 from typing import Callable
 
 from ..common.fuzzmanager import Bucket
-from ..common.utils import Exit
-from ..main import configure_logging
+from ..common.utils import Exit, configure_logging
 from .args import ReplayFuzzManagerIDQualityArgs
 from .crash import main as crash_main
 

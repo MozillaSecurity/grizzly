@@ -2,22 +2,25 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from argparse import Namespace
+from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 from tempfile import mkdtemp
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
 from sapphire import Sapphire, ServerMap
 
 from ..common.plugins import load as load_plugin
+from ..common.report import Report
 from ..common.reporter import (
     FailedLaunchReporter,
     FilesystemReporter,
     FuzzManagerReporter,
-    Report,
 )
-from ..common.runner import Runner
+from ..common.runner import Runner, RunResult
 from ..common.status import SimpleStatus
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import (
@@ -44,14 +47,21 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
+@dataclass(eq=False)
 class ReplayResult:
-    __slots__ = ("count", "durations", "expected", "report", "served")
+    """Contains information related to the replay of testcases.
 
-    def __init__(self, report, durations, expected):
-        self.count = 1
-        self.durations = durations
-        self.expected = expected
-        self.report = report
+    Attributes:
+        report: Report containing logs.
+        durations: Number of seconds spent running each testcase.
+        expected: Signature match.
+        count: Number of times detected.
+    """
+
+    report: Report
+    durations: List[float]
+    expected: bool
+    count: int = 1
 
 
 class ReplayManager:
@@ -69,47 +79,49 @@ class ReplayManager:
 
     def __init__(
         self,
-        ignore,
-        server,
-        target,
-        any_crash=False,
-        relaunch=1,
-        signature=None,
-        use_harness=True,
-    ):
+        ignore: Set[str],
+        server: Sapphire,
+        target: Target,
+        any_crash: bool = False,
+        relaunch: int = 1,
+        signature: Optional[CrashSignature] = None,
+        use_harness: bool = True,
+    ) -> None:
         # target must relaunch every iteration when not using harness
         assert use_harness or relaunch == 1
         self.ignore = ignore
         self.server = server
-        self.status = None
+        self.status: Optional[SimpleStatus] = None
         self.target = target
         self._any_crash = any_crash
         self._harness = HARNESS_FILE.read_bytes() if use_harness else None
         self._relaunch = relaunch
         self._signature = signature
 
-    def __enter__(self):
+    def __enter__(self) -> "ReplayManager":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.cleanup()
 
     @property
-    def signature(self):
+    def signature(self) -> Optional[CrashSignature]:
         return self._signature
 
     @staticmethod
-    def check_match(signature, report, expect_hang, check_failed):
+    def check_match(
+        signature: CrashSignature, report: Report, expect_hang: bool, check_failed: bool
+    ) -> bool:
         """Check if report matches signature.
 
         Args:
-            signature (CrashSignature): Signature to match.
-            report (Report): Report to check matches signature.
-            expect_hang (bool): A hang is expected.
-            check_failed (bool): Check if report signature creation failed.
+            signature: Signature to match.
+            report: Report to check against signature.
+            expect_hang: Indicates if a hang is expected.
+            check_failed: Check if report signature creation failed.
 
         Returns:
-            bool: True if report matches signature otherwise False.
+            True if report matches signature otherwise False.
         """
         if signature is None:
             if check_failed and not report.is_hang:
@@ -120,9 +132,10 @@ class ReplayManager:
         if expect_hang and not report.is_hang:
             # avoid catching other crashes with forgiving hang signatures
             return False
-        return signature.matches(report.crash_info)
+        # Fuzzmanager is missing type hints, use cast()
+        return cast(bool, signature.matches(report.crash_info))
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Remove temporary files from disk.
 
         Args:
@@ -134,18 +147,20 @@ class ReplayManager:
         # TODO: Do we need this anymore?
 
     @staticmethod
-    def expect_hang(ignore, signature, tests):
+    def expect_hang(
+        ignore: List[str], signature: CrashSignature, tests: List[TestCase]
+    ) -> bool:
         """Check if any test is expected to trigger a hang. If a hang is expected
         a sanity check is performed. A ConfigError is raised if a configuration
         issue is detected.
 
         Args:
-            ignore (list(str)): Failure types to ignore.
-            signature (CrashSignature): Signature to use for bucketing.
-            tests list(TestCase): Testcases to check.
+            ignore: Failure types to ignore.
+            signature: Signature to use for bucketing.
+            tests: Testcases to check.
 
         Returns:
-            bool: True if a hang is expected otherwise False.
+            True if a hang is expected otherwise False.
         """
         is_hang = any(x.hang for x in tests)
         if is_hang:
@@ -158,19 +173,24 @@ class ReplayManager:
         return is_hang
 
     @classmethod
-    def load_testcases(cls, paths, catalog=False, entry_point=None):
+    def load_testcases(
+        cls,
+        paths: List[Path],
+        catalog: bool = False,
+        entry_point: Optional[Path] = None,
+    ) -> Tuple[List[TestCase], Optional[AssetManager], Optional[Dict[str, str]]]:
         """Load TestCases.
 
         Args:
-            paths (list(Path)): Testcases to load.
-            catalog (bool): See TestCase.load().
-            entry_point (Path): See TestCase.load().
+            paths: Testcases to load.
+            catalog: See TestCase.load().
+            entry_point: See TestCase.load().
+
         Returns:
-            tuple(list(TestCase), AssetManager, dict):
-                Loaded TestCases, AssetManager and environment variables.
+            Loaded TestCases, AssetManager and environment variables.
         """
         LOG.debug("loading the TestCases")
-        tests = []
+        tests: List[TestCase] = []
         for entry in paths:
             try:
                 tests.append(
@@ -200,15 +220,15 @@ class ReplayManager:
         return tests, asset_mgr, env_vars
 
     @staticmethod
-    def lookup_tool(tests):
+    def lookup_tool(tests: List[TestCase]) -> Optional[str]:
         """Lookup tool name from test cases. Find the adapter name used by the given
         test cases.
 
         Args:
-            tests (list(TestCase)): TestCase to scan.
+            tests: TestCase to scan.
 
         Returns:
-            str: Name or None.
+            TestCase adapter name or None.
         """
         adapter_name = {x.adapter_name for x in tests if x.adapter_name}
         if adapter_name:
@@ -216,37 +236,41 @@ class ReplayManager:
         return None
 
     @staticmethod
-    def report_to_filesystem(path, results, tests=None):
+    def report_to_filesystem(
+        dst: Path, results: List[ReplayResult], tests: List[TestCase]
+    ) -> None:
         """Use FilesystemReporter to write reports and testcase to disk in a
         known location.
 
         Args:
-            path (Path): Location to write data.
-            results (iterable): ReplayResult to output.
-            tests (iterable): Testcases to output.
+            dst: Location to write data.
+            results: ReplayResult to output.
+            tests: Testcases to output.
 
         Returns:
             None
         """
         others = tuple(x.report for x in results if not x.expected)
         if others:
-            reporter = FilesystemReporter(path / "other_reports", major_bucket=False)
+            reporter = FilesystemReporter(dst / "other_reports", major_bucket=False)
             for report in others:
                 reporter.submit(tests or [], report)
         expected = tuple(x.report for x in results if x.expected)
         if expected:
-            reporter = FilesystemReporter(path / "reports", major_bucket=False)
+            reporter = FilesystemReporter(dst / "reports", major_bucket=False)
             for report in expected:
                 reporter.submit(tests or [], report)
 
     @staticmethod
-    def report_to_fuzzmanager(results, tests, tool):
+    def report_to_fuzzmanager(
+        results: List[ReplayResult], tests: List[TestCase], tool: str
+    ) -> None:
         """Use FuzzManagerReporter to send reports to a FuzzManager server.
 
         Args:
-            results (iterable): ReplayResult to output.
-            tests (iterable): Testcases to output.
-            tool (str): Name used by FuzzManager.
+            results: ReplayResult to output.
+            tests: Testcases to output.
+            tool: Name used by FuzzManager.
 
         Returns:
             None
@@ -259,41 +283,40 @@ class ReplayManager:
 
     def run(
         self,
-        testcases,
-        time_limit,
-        repeat=1,
-        min_results=1,
-        exit_early=True,
-        expect_hang=False,
-        idle_delay=0,
-        idle_threshold=0,
-        launch_attempts=3,
-        on_iteration_cb=None,
-        post_launch_delay=0,
-    ):
+        testcases: List[TestCase],
+        time_limit: int,
+        repeat: int = 1,
+        min_results: int = 1,
+        exit_early: bool = True,
+        expect_hang: bool = False,
+        idle_delay: int = 0,
+        idle_threshold: int = 0,
+        launch_attempts: int = 3,
+        on_iteration_cb: Optional[Callable[[], None]] = None,
+        post_launch_delay: int = 0,
+    ) -> List[ReplayResult]:
         """Run testcase replay.
 
         Args:
-            testcases (list(TestCase)): One or more TestCases to run.
-            time_limit (int): Maximum time in seconds a test should take to complete.
-            repeat (int): Maximum number of times to run the TestCase.
-            min_results (int): Minimum number of results needed before run can
-                               be considered successful.
-            expect_hang (bool): Running testcases is expected to result in a hang.
-            exit_early (bool): If True the minimum required number of iterations
-                               are performed to either meet `min_results` or
-                               determine that it is not possible to do so.
-                               If False `repeat` number of iterations are
-                               performed.
-            idle_delay (int): Number of seconds to wait before polling for idle.
-            idle_threshold (int): CPU usage threshold to mark the process as idle.
-            launch_attempts (int): Number of attempts to launch the browser.
-            on_iteration_cb (callable): Called every time a single iteration is run.
-            post_launch_delay (int): Time in seconds before continuing after the
-                                     browser is launched.
+            testcases: One or more TestCases to run.
+            time_limit: Maximum time in seconds a test should take to complete.
+            repeat: Maximum number of times to run the TestCase.
+            min_results: Minimum number of results needed before run can be considered
+                         successful.
+            expect_hang: Running testcases is expected to result in a hang.
+            exit_early: If True the minimum required number of iterations are performed
+                        to either meet `min_results` or determine that it is not
+                        possible to do so. If False `repeat` number of iterations are
+                        performed.
+            idle_delay: Number of seconds to wait before polling for idle.
+            idle_threshold: CPU usage threshold to mark the process as idle.
+            launch_attempts: Number of attempts to launch the browser.
+            on_iteration_cb: Called every time a single iteration is run.
+            post_launch_delay: Number of seconds to wait before continuing after the
+                               browser is launched.
 
         Returns:
-            list: ReplayResults that were found running testcases.
+            ReplayResults that were found running provided testcases.
         """
         assert idle_delay >= 0
         assert idle_threshold >= 0
@@ -303,7 +326,6 @@ class ReplayManager:
         assert repeat >= min_results
         assert testcases
         assert time_limit > 0 or self._harness is None
-        assert self._harness or self._harness is None
         assert self._harness is not None or len(testcases) == 1
         assert not expect_hang or self._signature is not None
 
@@ -313,13 +335,22 @@ class ReplayManager:
         if self._harness is None:
             server_map.set_redirect("grz_start", "grz_current_test", required=False)
         else:
+            assert isinstance(self._harness, bytes)
+            assert self._harness, "harness must contain data"
+
+            def harness_fn(_: str) -> bytes:  # pragma: no cover
+                assert self._harness
+                return self._harness
+
             server_map.set_dynamic_response(
-                "grz_harness", lambda _: self._harness, mime_type="text/html"
+                "grz_harness",
+                harness_fn,
+                mime_type="text/html",
             )
             server_map.set_redirect("grz_start", "grz_harness", required=False)
 
         # track unprocessed results
-        reports = {}
+        reports: Dict[str, ReplayResult] = {}
         try:
             sig_hash = Report.calc_hash(self._signature) if self._signature else None
             # an attempt has been made to set self._signature
@@ -351,8 +382,8 @@ class ReplayManager:
                     runner.post_launch(delay=post_launch_delay)
                     # TODO: avoid running test case if runner.startup_failure is True
                 # run tests
-                durations = []
-                run_result = None
+                durations: List[float] = []
+                run_result: Optional[RunResult] = None
                 for test_idx in range(test_count):
                     if test_count > 1:
                         LOG.info(
@@ -400,6 +431,7 @@ class ReplayManager:
                             LOG.warning("Timeout too short? System too busy?")
                 # process run results
                 if run_result.status == Result.FOUND:
+                    report: Optional[Report] = None
                     # processing the result may take a few minutes (rr)
                     # update console to show progress
                     LOG.info("Processing result...")
@@ -524,15 +556,15 @@ class ReplayManager:
             if self._any_crash:
                 # add all results if min_results was reached
                 if sum(x.count for x in reports.values() if x.expected) >= min_results:
-                    results = list(reports.values())
+                    results: List[ReplayResult] = list(reports.values())
                 else:
                     # add only unexpected results since min_results was not reached
                     results = []
-                    for report in reports.values():
-                        if report.expected:
-                            report.report.cleanup()
+                    for result in reports.values():
+                        if result.expected:
+                            result.report.cleanup()
                         else:
-                            results.append(report)
+                            results.append(result)
                     LOG.debug(
                         "%d (any_crash) less than minimum %d",
                         self.status.results.total,
@@ -543,17 +575,17 @@ class ReplayManager:
                 assert sum(x.expected for x in reports.values()) <= 1
                 # filter out unreliable expected results
                 results = []
-                for crash_hash, report in reports.items():
-                    if report.expected and report.count < min_results:
+                for crash_hash, result in reports.items():
+                    if result.expected and result.count < min_results:
                         LOG.debug(
                             "%r less than minimum (%d/%d)",
                             crash_hash,
-                            report.count,
+                            result.count,
                             min_results,
                         )
-                        report.report.cleanup()
+                        result.report.cleanup()
                         continue
-                    results.append(report)
+                    results.append(result)
             # this should only be displayed when both conditions are met:
             # 1) runner does not close target (no delay was given before shutdown)
             # 2) result has not been successfully reproduced
@@ -572,11 +604,11 @@ class ReplayManager:
             # we don't want to clean up but we are not checking results
             self.target.close(force_close=True)
             # remove unprocessed reports
-            for report in reports.values():
-                report.report.cleanup()
+            for result in reports.values():
+                result.report.cleanup()
 
     @classmethod
-    def main(cls, args):
+    def main(cls, args: Namespace) -> int:
         configure_logging(args.log_level)
         LOG.info("Starting Grizzly Replay")
 
@@ -605,8 +637,8 @@ class ReplayManager:
             args.tool = cls.lookup_tool(testcases) or "grizzly-replay"
 
         certs = None
-        results = None
-        target = None
+        results: Optional[List[ReplayResult]] = None
+        target: Optional[Target] = None
         try:
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)
@@ -638,6 +670,7 @@ class ReplayManager:
                 rr=args.rr,
                 valgrind=args.valgrind,
             )
+            assert target
             if env_vars is not None:
                 LOG.debug("adding environment loaded from test case")
                 target.merge_environment(env_vars)
@@ -661,7 +694,7 @@ class ReplayManager:
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
                 target.reverse(server.port, server.port)
                 with cls(
-                    args.ignore,
+                    set(args.ignore),
                     server,
                     target,
                     any_crash=args.any_crash,
