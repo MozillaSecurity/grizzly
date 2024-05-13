@@ -5,7 +5,7 @@ from argparse import Namespace
 from logging import getLogger
 
 from ..common.bugzilla import BugzillaBug
-from ..main import configure_logging
+from ..common.utils import configure_logging
 from .args import ReplayFuzzBugzillaArgs
 from .replay import ReplayManager
 

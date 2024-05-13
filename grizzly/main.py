@@ -33,7 +33,7 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 LOG = getLogger(__name__)
 
 
-def main(args: Namespace) -> Exit:
+def main(args: Namespace) -> int:
     configure_logging(args.log_level)
     LOG.info("Starting Grizzly (%d)", getpid())
 
@@ -138,7 +138,7 @@ def main(args: Namespace) -> Exit:
                 else:
                     log_rate = LogRate.NORMAL
                 session.run(
-                    args.ignore,
+                    set(args.ignore),
                     time_limit,
                     input_path=str(args.input.resolve()) if args.input else None,
                     iteration_limit=args.limit,

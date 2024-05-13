@@ -7,7 +7,7 @@ from logging import getLogger
 from typing import Optional
 
 from ..common.fuzzmanager import Bucket, CrashEntry, load_fm_data
-from ..main import configure_logging
+from ..common.utils import configure_logging
 from .args import ReplayFuzzManagerIDArgs
 from .replay import ReplayManager
 

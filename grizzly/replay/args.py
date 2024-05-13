@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from argparse import SUPPRESS
+from argparse import SUPPRESS, Namespace
 from pathlib import Path
 
 from ..args import CommonArgs
@@ -12,7 +12,7 @@ LOCAL_INPUT_HELP = (
 
 
 class ReplayCommonArgs(CommonArgs):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.parser.set_defaults(output=None)
 
@@ -57,7 +57,7 @@ class ReplayCommonArgs(CommonArgs):
             "--sig", type=Path, help="Signature (JSON) file to match."
         )
 
-    def sanity_check(self, args):
+    def sanity_check(self, args: Namespace) -> None:
         super().sanity_check(args)
 
         if args.any_crash and args.sig is not None:
@@ -81,7 +81,7 @@ class ReplayCommonArgs(CommonArgs):
 
 class ReplayArgs(ReplayCommonArgs):
     # NOTE: If updated changes may also need to be added to ReduceArgs
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.parser.add_argument("input", type=Path, nargs="+", help=LOCAL_INPUT_HELP)
 
@@ -92,7 +92,7 @@ class ReplayArgs(ReplayCommonArgs):
             " automatically determined.",
         )
 
-    def sanity_check(self, args):
+    def sanity_check(self, args: Namespace) -> None:
         super().sanity_check(args)
 
         for test in args.input:
@@ -104,14 +104,14 @@ class ReplayArgs(ReplayCommonArgs):
 
 
 class ReplayFuzzBugzillaArgs(ReplayCommonArgs):
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize argument parser."""
         super().__init__()
         self.parser.add_argument("input", type=int, help="Bugzilla BugID to replay")
 
 
 class ReplayFuzzManagerIDArgs(ReplayCommonArgs):
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize argument parser."""
         super().__init__()
         self.parser.add_argument("input", type=int, help="FuzzManager ID to replay")
@@ -128,7 +128,7 @@ class ReplayFuzzManagerIDArgs(ReplayCommonArgs):
             "0 == oldest, n-1 == most recent (default: run all testcases)",
         )
 
-    def sanity_check(self, args):
+    def sanity_check(self, args: Namespace) -> None:
         super().sanity_check(args)
 
         if args.no_harness and len(args.test_index) > 1:
@@ -138,14 +138,14 @@ class ReplayFuzzManagerIDArgs(ReplayCommonArgs):
 
 
 class ReplayFuzzManagerIDQualityArgs(ReplayFuzzManagerIDArgs):
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize argument parser."""
         super().__init__()
         self.parser.add_argument(
             "--quality", type=int, help="Only try crashes with a given quality value"
         )
 
-    def sanity_check(self, args):
+    def sanity_check(self, args: Namespace) -> None:
         super().sanity_check(args)
 
         if args.quality is not None and args.quality < 0:
