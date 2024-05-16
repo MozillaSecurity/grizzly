@@ -9,7 +9,8 @@ from datetime import timedelta
 from functools import partial
 from itertools import zip_longest
 from logging import DEBUG, INFO, basicConfig, getLogger
-from os import SEEK_CUR, getenv
+from mmap import ACCESS_READ, mmap
+from os import getenv
 from pathlib import Path
 from platform import system
 from re import match
@@ -73,24 +74,18 @@ class TracebackReport:
         token = b"Traceback (most recent call last):"
         assert len(token) < cls.READ_LIMIT
         try:
-            with log_file.open("rb") as in_fp:
-                for chunk in iter(partial(in_fp.read, cls.READ_LIMIT), b""):
-                    idx = chunk.find(token)
-                    if idx > -1:
-                        # calculate offset of data in the file
-                        pos = in_fp.tell() - len(chunk) + idx
-                        break
-                    if len(chunk) == cls.READ_LIMIT:
-                        # seek back to avoid missing beginning of token
-                        in_fp.seek(len(token) * -1, SEEK_CUR)
-                else:
-                    # no traceback here, move along
-                    return None
-                # seek back 2KB to collect preceding lines
-                in_fp.seek(max(pos - 2048, 0))
-                data = in_fp.read(cls.READ_LIMIT)
-        except OSError:  # pragma: no cover
-            # in case the file goes away
+            with log_file.open("rb") as lfp:
+                with mmap(lfp.fileno(), 0, access=ACCESS_READ) as lmm:
+                    idx = lmm.find(token)
+                    if idx == -1:
+                        # no traceback here, move along
+                        return None
+                    # seek back 2KB to collect preceding lines
+                    lmm.seek(max(idx - len(token) - 2048, 0))
+                    data = lmm.read(cls.READ_LIMIT)
+        except (OSError, ValueError):  # pragma: no cover
+            # OSError: in case the file goes away
+            # ValueError: cannot mmap an empty file on Windows
             return None
 
         data_lines = data.decode("ascii", errors="ignore").splitlines()
