@@ -412,3 +412,21 @@ def test_report_16(mocker, tmp_path, hang, has_log, expected):
     assert report.short_signature == expected
     if hang:
         assert report.crash_hash == "hang"
+
+
+@mark.parametrize(
+    "log_data",
+    [
+        # empty stderr log
+        b"",
+        # contains rr traceback
+        b"foo\n=== Start rr backtrace:\nfoo",
+        # no traceback
+        b"foo\nfoo",
+    ],
+)
+def test_report_17(tmp_path, log_data):
+    """test Report check for rr traceback"""
+    (tmp_path / "log_stderr.txt").write_bytes(log_data)
+    (tmp_path / "rr-traces").mkdir()
+    assert Report(tmp_path, Path("bin"))
