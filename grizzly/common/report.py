@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from hashlib import sha1
 from logging import getLogger
+from mmap import ACCESS_READ, mmap
 from os import SEEK_END
 from pathlib import Path
 from platform import machine, system
@@ -76,6 +77,16 @@ class Report:
             for log in log_path.iterdir():
                 if log.is_file() and log.stat().st_size > size_limit:
                     Report.tail(log, size_limit)
+        # check for rr traceback and warn
+        if self._logs.stderr and (log_path / "rr-traces").is_dir():
+            with self._logs.stderr.open("rb") as lfp:
+                try:
+                    with mmap(lfp.fileno(), 0, access=ACCESS_READ) as lmm:
+                        if lmm.find(b"=== Start rr backtrace:") != -1:
+                            LOG.warning("rr traceback detected in stderr log")
+                except ValueError:
+                    # cannot mmap an empty file on Windows
+                    pass
         # look through logs one by one until we find a stack
         for log_file in (x for x in self._logs if x is not None):
             stack = Stack.from_text(log_file.read_text("utf-8", errors="ignore"))
