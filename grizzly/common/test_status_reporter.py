@@ -484,7 +484,7 @@ def test_status_reporter_09(mocker, tmp_path):
                 test_fp.write(
                     '  File "some/long/path/name/foobar.py", line 5000, in <module>\n'
                 )
-                test_fp.write(f"    some_long_name_for_a_func_{j:0>4d}()\n")
+                test_fp.write(f"    some_long_name_for_a_func_{j:04d}()\n")
             test_fp.write("IndexError: list index out of range\n")
     rptr = StatusReporter.load(db_file, tb_path=tmp_path)
     rptr._sys_info = _fake_sys_info
@@ -598,7 +598,7 @@ def test_traceback_report_04(tmp_path):
         test_fp.write("    second()\n")
         for i in reversed(range(TracebackReport.MAX_LINES)):
             test_fp.write('  File "foo.py", line 5, in <module>\n')
-            test_fp.write(f"    func_{i:0>2d}()\n")
+            test_fp.write(f"    func_{i:02d}()\n")
         test_fp.write("END_WITH_BLANK_LINE\n\n")
         test_fp.write("end junk\n")
     tbr = TracebackReport.from_file(test_log)
