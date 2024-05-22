@@ -6,8 +6,7 @@ from logging import getLogger
 
 from ..common.fuzzmanager import load_fm_data
 from ..common.reporter import Quality
-from ..common.utils import Exit
-from ..main import configure_logging
+from ..common.utils import Exit, configure_logging
 from ..replay.crash import modify_args
 from .args import ReduceFuzzManagerIDArgs
 from .core import ReduceManager
@@ -45,7 +44,7 @@ def main(args: Namespace) -> int:
                 Exit.ABORT: Quality(crash.testcase_quality),
                 Exit.SUCCESS: Quality.ORIGINAL,
                 Exit.FAILURE: Quality(args.no_repro_quality),
-            }.get(result, Quality.UNREDUCED)
+            }.get(Exit(result), Quality.UNREDUCED)
             # don't ever set things back to REDUCING, default to UNREDUCED in that case.
             # REDUCING is only used in automation, so ABORT should never happen.
             if quality == Quality.REDUCING:

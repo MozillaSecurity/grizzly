@@ -317,11 +317,11 @@ def test_analysis(
     log_path = tmp_path / "logs"
 
     with ReduceManager(
-        None,
+        set(),
         mocker.Mock(spec_set=Sapphire, timeout=30),
         mocker.Mock(spec_set=Target),
         tests,
-        None,
+        [],
         log_path,
         use_harness=use_harness,
     ) as mgr:
@@ -577,7 +577,7 @@ def test_repro(
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     with ReduceManager(
-        [],
+        set(),
         mocker.Mock(spec_set=Sapphire, timeout=30),
         target,
         tests,
@@ -657,7 +657,7 @@ def test_report_01(mocker, tmp_path):
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     with ReduceManager(
-        [],
+        set(),
         mocker.Mock(spec_set=Sapphire, timeout=30),
         target,
         [testcase],
@@ -726,7 +726,7 @@ def test_report_02(mocker, tmp_path):
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
 
     with ReduceManager(
-        [],
+        set(),
         mocker.Mock(spec_set=Sapphire, timeout=30),
         target,
         [testcase],
@@ -783,7 +783,7 @@ def test_quality_update(mocker, tmp_path):
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     with ReduceManager(
-        [],
+        set(),
         mocker.Mock(spec_set=Sapphire, timeout=30),
         target,
         [testcase],
@@ -853,7 +853,7 @@ def test_include_assets_and_environ(mocker, tmp_path):
         asset_mgr.add("example", tmp_path / "example_asset", copy=False)
         target.asset_mgr = asset_mgr
         with ReduceManager(
-            [],
+            set(),
             mocker.Mock(spec_set=Sapphire, timeout=30),
             target,
             [testcase],
@@ -970,7 +970,7 @@ def test_timeout_update(
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     server = mocker.Mock(spec_set=Sapphire, timeout=iter_input)
     with ReduceManager(
-        [],
+        set(),
         server,
         target,
         [test],

@@ -8,10 +8,8 @@ should evaluate each set of testcases, and keep the best one. The caller is resp
 for cleaning up all testcases that are yielded.
 
 Constants:
-    DEFAULT_STRATEGIES (list(str)): List of strategy names run by default if none are
-                                    specified.
-    STRATEGIES (dict{str: Strategy}): Mapping of available strategy names to
-                                      implementing class.
+    DEFAULT_STRATEGIES: Strategy names run by default if unspecified.
+    STRATEGIES: Mapping of available strategy names to implementing class.
 """
 from abc import ABC, abstractmethod
 from hashlib import sha512
@@ -19,10 +17,22 @@ from logging import DEBUG, getLogger
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-from types import MappingProxyType
+from typing import (
+    Any,
+    Dict,
+    FrozenSet,
+    Generator,
+    Iterable,
+    List,
+    Set,
+    Tuple,
+    Type,
+    cast,
+)
 
 from pkg_resources import iter_entry_points
 
+from ...common.storage import TestCase
 from ...common.utils import grz_tmp
 
 LOG = getLogger(__name__)
@@ -38,38 +48,6 @@ DEFAULT_STRATEGIES = (
 )
 
 
-def _load_strategies():
-    """STRATEGIES is created at the end of this file.
-
-    Returns:
-        mapping: A mapping of strategy names to strategy class.
-    """
-    strategies = {}
-    for entry_point in iter_entry_points("grizzly_reduce_strategies"):
-        try:
-            strategy_cls = entry_point.load()
-            strategy_cls.sanity_check_cls_attrs()
-            assert strategy_cls.name == entry_point.name, (
-                f"entry_point name mismatch, check setup.py and "
-                f"{strategy_cls.__name__.name}"
-            )
-        except Exception as exc:  # pylint: disable=broad-except
-            LOG.debug("error loading strategy type %s: %s", entry_point.name, exc)
-            continue
-        strategies[entry_point.name] = strategy_cls
-    for strategy in DEFAULT_STRATEGIES:
-        assert strategy in strategies, (
-            f"Unknown entry in DEFAULT_STRATEGIES: {strategy} "
-            f"(STRATEGIES: [{','.join(strategies)}])"
-        )
-    return MappingProxyType(strategies)
-
-
-def _contains_dd(path):
-    data = path.read_bytes()
-    return b"DDBEGIN" in data and b"DDEND" in data
-
-
 class Strategy(ABC):
     """A strategy is a procedure for repeatedly running a testcase to find the smallest
     equivalent test.
@@ -77,31 +55,29 @@ class Strategy(ABC):
     Implementers must define these class attributes:
 
     Class Attributes:
-        name (str): The strategy name.
+        name: The strategy name.
     """
 
-    name = None
+    name: str
 
-    def __init__(self, testcases):
+    def __init__(self, testcases: List[TestCase]) -> None:
         """Initialize strategy instance.
 
         Arguments:
-            testcases (list(grizzly.common.storage.TestCase)):
-                List of testcases to reduce. The object does not take ownership of the
-                testcases.
+            testcases: Testcases to reduce. The object does not take ownership of the
+                       testcases.
         """
-        self._tried = set()  # set of tuple(tuple(str(Path), SHA512))
+        self._tried: Set[Tuple[Tuple[str, bytes], ...]] = set()
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
         self.dump_testcases(testcases)
 
-    def _calculate_testcase_hash(self):
+    def _calculate_testcase_hash(self) -> Tuple[Tuple[str, bytes], ...]:
         """Calculate hashes of all files in testcase root.
 
         Returns:
-            tuple(tuple(str, str)): A tuple of 2-tuples mapping str(Path) to SHA-512 of
-                                    each file in testcase root.
+            Mapping of file path to SHA-512 of each file in testcase root.
         """
-        result = []
+        result: List[Tuple[str, bytes]] = []
         for path in self._testcase_root.glob("**/*"):
             if path.is_file():
                 tf_hash = sha512()
@@ -109,49 +85,51 @@ class Strategy(ABC):
                 result.append(
                     (str(path.relative_to(self._testcase_root)), tf_hash.digest())
                 )
-        result = tuple(sorted(result))
+        sorted_result = tuple(sorted(result))
 
         if LOG.getEffectiveLevel() == DEBUG:
             print_hash = sha512()
-            print_hash.update(repr(result).encode("utf-8", errors="surrogateescape"))
-            in_tried = result in self._tried
+            print_hash.update(
+                repr(sorted_result).encode("utf-8", errors="surrogateescape")
+            )
+            in_tried = sorted_result in self._tried
             LOG.debug(
                 "Testcase hash: %s (%sin cache)",
                 print_hash.hexdigest()[:32],
                 "" if in_tried else "not ",
             )
 
-        return result
+        return sorted_result
 
-    def update_tried(self, tried):
+    def update_tried(self, tried: Iterable[Tuple[Tuple[str, bytes], ...]]) -> None:
         """Update the list of tried testcase/hash sets. Testcases are hashed with
         SHA-512 and digested to bytes (`hashlib.sha512(testcase).digest()`)
 
         Arguments:
-            tried (iterable(tuple(tuple(str, str)))): Set of already tried testcase
-                                                      hashes.
+            tried: Collection of already tried testcase hashes.
 
         Returns:
             None
         """
         self._tried.update(frozenset(tried))
 
-    def get_tried(self):
+    def get_tried(self) -> FrozenSet[Tuple[Tuple[str, bytes], ...]]:
         """Return the set of tried testcase hashes. Testcases are hashed with SHA-512
         and digested to bytes (`hashlib.sha512(testcase).digest()`)
 
         Returns:
-            frozenset(tuple(tuple(str, str))): Testcase hashes.
+            Testcase hashes.
         """
         return frozenset(self._tried)
 
-    def dump_testcases(self, testcases, recreate_tcroot=False):
+    def dump_testcases(
+        self, testcases: List[TestCase], recreate_tcroot: bool = False
+    ) -> None:
         """Dump a testcase list to the testcase root on disk.
 
         Arguments:
-            testcases (list(grizzly.common.storage.TestCase)): list of testcases to dump
-            recreate_tcroot (bool): if True, delete testcase root and recreate it before
-                                    dumping
+            testcases: Testcases to dump.
+            recreate_tcroot: if True, delete and recreate tcroot before dumping it.
 
         Returns:
             None
@@ -164,22 +142,8 @@ class Strategy(ABC):
             # NOTE: naming determines load order
             testcase.dump(self._testcase_root / f"{idx:03d}", include_details=True)
 
-    @classmethod
-    def sanity_check_cls_attrs(cls):
-        """Sanity check the strategy class implementation.
-
-        This should assert that any required class attributes are defined and correct.
-
-        Raises:
-            AssertionError: Any required class attributes are missing or wrong type.
-
-        Returns:
-            None
-        """
-        assert isinstance(cls.name, str)
-
     @abstractmethod
-    def __iter__(self):
+    def __iter__(self) -> Generator[List[TestCase], None, None]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each reduction yielded, and call `update` with the
@@ -187,49 +151,75 @@ class Strategy(ABC):
         each.
 
         Yields:
-            list(grizzly.common.storage.TestCase): list of testcases with reduction
-                                                   applied
+            Testcases with reduction applied.
         """
 
     @abstractmethod
-    def update(self, success):
+    def update(self, success: bool) -> None:
         """Inform the strategy whether or not the last reduction yielded was good.
 
         Arguments:
-            success (bool): Whether or not the last reduction was acceptable.
+            success: Whether or not the last reduction was acceptable.
 
         Returns:
             None
         """
 
-    def __enter__(self):
+    def __enter__(self) -> "Strategy":
         """Enter a runtime context that will automatically call `cleanup` on exit.
 
         Returns:
-            Strategy: self
+            self
         """
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *exc: Any) -> None:
         """Exit the runtime context. `cleanup` is called.
 
         Arguments:
-            exc_type (type or None): Type of exception object currently raised.
-            exc_val (Exception or None): Exception object currently raised.
-            exc_tb (traceback or None): Traceback for currently raised exception.
 
         Returns:
             None
         """
         self.cleanup()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Destroy all resources held by the strategy.
 
         Returns:
             None
         """
         rmtree(self._testcase_root)
+
+
+def _load_strategies() -> Dict[str, Type[Strategy]]:
+    """STRATEGIES is created at the end of this file.
+
+    Returns:
+        A mapping of strategy names to strategy class.
+    """
+    strategies: Dict[str, Type[Strategy]] = {}
+    for entry_point in iter_entry_points("grizzly_reduce_strategies"):
+        try:
+            strategy_cls = cast(Type[Strategy], entry_point.load())
+            assert (
+                strategy_cls.name == entry_point.name
+            ), f"entry_point name mismatch, check setup.py and {strategy_cls.__name__}"
+        except Exception as exc:  # pylint: disable=broad-except
+            LOG.debug("error loading strategy type %s: %s", entry_point.name, exc)
+            continue
+        strategies[entry_point.name] = strategy_cls
+    for strategy in DEFAULT_STRATEGIES:
+        assert strategy in strategies, (
+            f"Unknown entry in DEFAULT_STRATEGIES: {strategy} "
+            f"(STRATEGIES: [{','.join(strategies)}])"
+        )
+    return strategies
+
+
+def _contains_dd(path: Path) -> bool:
+    data = path.read_bytes()
+    return b"DDBEGIN" in data and b"DDEND" in data
 
 
 STRATEGIES = _load_strategies()

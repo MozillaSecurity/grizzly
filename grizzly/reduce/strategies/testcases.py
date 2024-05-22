@@ -5,6 +5,7 @@
 
 from logging import getLogger
 from shutil import rmtree
+from typing import Generator, List, Optional
 
 from ...common.storage import TestCase
 from . import Strategy
@@ -27,23 +28,23 @@ class MinimizeTestcaseList(Strategy):
 
     name = "list"
 
-    def __init__(self, testcases):
+    def __init__(self, testcases: List[TestCase]) -> None:
         """Initialize strategy instance.
 
         Arguments:
-            testcases (list(grizzly.common.storage.TestCase)):
-                List of testcases to reduce. The object does not take ownership of the
-                testcases.
+            testcases: Testcases to reduce. The object does not take ownership of the
+                       testcases.
         """
         super().__init__(testcases)
-        self._current_feedback = None
+        self._current_feedback: Optional[bool] = None
+        # TODO: is this unused?
         self._current_served = None
 
-    def update(self, success):
+    def update(self, success: bool) -> None:
         """Inform the strategy whether or not the last reduction yielded was good.
 
         Arguments:
-            success (bool): Whether or not the last reduction was acceptable.
+            success: Whether or not the last reduction was acceptable.
 
         Returns:
             None
@@ -52,7 +53,7 @@ class MinimizeTestcaseList(Strategy):
         assert self._current_served is None
         self._current_feedback = success
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[List[TestCase], None, None]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each testcase set yielded, and call `update` with the
@@ -60,12 +61,11 @@ class MinimizeTestcaseList(Strategy):
         each.
 
         Yields:
-            list(grizzly.common.storage.TestCase): list of testcases with reduction
-                                                   applied
+            Testcases with reduction applied
         """
         assert self._current_feedback is None
         idx = 0
-        testcases = []
+        testcases: List[TestCase] = []
         for test in sorted(self._testcase_root.iterdir()):
             testcases.append(TestCase.load(test))
         n_testcases = len(testcases)

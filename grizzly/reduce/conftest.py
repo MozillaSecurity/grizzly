@@ -16,6 +16,6 @@ def reporter_sequential_strftime(mocker):
     prefix = mocker.patch("grizzly.common.report.strftime")
 
     def report_prefix(_):
-        return f"{prefix.call_count:0>4d}"
+        return f"{prefix.call_count:04d}"
 
     prefix.side_effect = report_prefix

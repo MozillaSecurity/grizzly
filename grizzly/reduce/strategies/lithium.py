@@ -5,10 +5,12 @@
 
 from abc import ABC
 from logging import getLogger
+from pathlib import Path
+from typing import Generator, List, Optional, Type
 
 from lithium.strategies import CheckOnly
 from lithium.strategies import CollapseEmptyBraces as LithCollapseEmptyBraces
-from lithium.strategies import Minimize
+from lithium.strategies import Minimize, ReductionIterator
 from lithium.strategies import Strategy as LithStrategy
 from lithium.testcases import Testcase as LithTestcase
 from lithium.testcases import TestcaseAttrs, TestcaseChar, TestcaseJsStr, TestcaseLine
@@ -26,32 +28,31 @@ class _LithiumStrategy(Strategy, ABC):
     Implementers must define these class attributes:
 
     Class attributes:
-        name (str): The strategy name.
-        strategy_cls (lithium.strategies.Strategy): Lithium strategy type.
-        testcase_cls (lithium.testcases.Testcase): Lithium testcase type.
+        name: The strategy name.
+        strategy_cls: Lithium strategy type.
+        testcase_cls: Lithium testcase type.
     """
 
-    strategy_cls = None
-    testcase_cls = None
+    strategy_cls: Type[LithStrategy]
+    testcase_cls: Type[LithTestcase]
 
-    def __init__(self, testcases):
+    def __init__(self, testcases: List[TestCase]) -> None:
         """Initialize strategy instance.
 
         Arguments:
-            testcases (list(grizzly.common.storage.TestCase)):
-                List of testcases to reduce. The object does not take ownership of the
-                testcases.
+            testcases: Testcases to reduce. The object does not take ownership of the
+                       testcases.
         """
         super().__init__(testcases)
-        self._current_feedback = None
-        self._current_reducer = None
-        self._files_to_reduce = []
-        local_tests = []
+        self._current_feedback: Optional[bool] = None
+        self._current_reducer: Optional[ReductionIterator] = None
+        self._files_to_reduce: List[Path] = []
+        local_tests: List[TestCase] = []
         for test in sorted(self._testcase_root.iterdir()):
             local_tests.append(TestCase.load(test, catalog=True))
         self.rescan_files_to_reduce(local_tests)
 
-    def rescan_files_to_reduce(self, testcases):
+    def rescan_files_to_reduce(self, testcases: List[TestCase]) -> None:
         """Repopulate the private `files_to_reduce` attribute by scanning the testcase
         root.
 
@@ -64,25 +65,11 @@ class _LithiumStrategy(Strategy, ABC):
                 if _contains_dd(path):
                     self._files_to_reduce.append(path)
 
-    @classmethod
-    def sanity_check_cls_attrs(cls):
-        """Sanity check the strategy class implementation.
-
-        Raises:
-            AssertionError: Required class attributes are missing or wrong type.
-
-        Returns:
-            None
-        """
-        super().sanity_check_cls_attrs()
-        assert issubclass(cls.strategy_cls, LithStrategy)
-        assert issubclass(cls.testcase_cls, LithTestcase)
-
-    def update(self, success):
+    def update(self, success: bool) -> None:
         """Inform the strategy whether or not the last reduction yielded was good.
 
         Arguments:
-            success (bool): Whether or not the last reduction was acceptable.
+            success: Whether or not the last reduction was acceptable.
 
         Returns:
             None
@@ -91,7 +78,7 @@ class _LithiumStrategy(Strategy, ABC):
             self._current_reducer.feedback(success)
         self._current_feedback = success
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[List[TestCase], None, None]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each testcase set yielded, and call `update` with the
@@ -99,8 +86,7 @@ class _LithiumStrategy(Strategy, ABC):
         each.
 
         Yields:
-            list(grizzly.common.storage.TestCase): list of testcases with reduction
-                                                   applied
+            Testcases with reduction applied.
         """
         LOG.info("Reducing %d files", len(self._files_to_reduce))
         file_no = 0
@@ -134,15 +120,15 @@ class _LithiumStrategy(Strategy, ABC):
             del current_tc_hash_map[str(file.relative_to(self._testcase_root))]
             this_tc_tried = set()
             for tried in self._tried:
-                tried = dict(tried)
-                tc_tried = tried.pop(str(file.relative_to(self._testcase_root)))
-                if tried == current_tc_hash_map:
+                tried_map = dict(tried)
+                tc_tried = tried_map.pop(str(file.relative_to(self._testcase_root)))
+                if tried_map == current_tc_hash_map:
                     this_tc_tried.add(tc_tried)
             self._current_reducer.update_tried(this_tc_tried)
 
             for reduction in self._current_reducer:
                 reduction.dump()
-                testcases = []
+                testcases: List[TestCase] = []
                 for test in sorted(self._testcase_root.iterdir()):
                     testcases.append(TestCase.load(test, catalog=True))
                 LOG.info("[%s] %s", self.name, self._current_reducer.description)
@@ -187,13 +173,13 @@ class Check(_LithiumStrategy):
     strategy_cls = CheckOnly
     testcase_cls = TestcaseLine
 
-    def __init__(self, *args, **kwds):
-        super().__init__(*args, **kwds)
+    def __init__(self, testcases: List[TestCase]) -> None:
+        super().__init__(testcases)
         # trim files_to_reduce, for check we don't need to run on every file
         # just once per Grizzly TestCase set is enough.
         self._files_to_reduce = self._files_to_reduce[:1]
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[List[TestCase], None, None]:
         yield from super().__iter__()
 
 

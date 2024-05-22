@@ -874,7 +874,7 @@ class ReductionStatus:
         # TODO: make SigInfo dataclass?
         self.signature_info: Dict[str, Union[bool, str]] = {}
         self.successes = 0
-        self.current_strategy_idx = None
+        self.current_strategy_idx: Optional[int] = None
         self._testcase_size_cb = testcase_size_cb
         self.crash_id = crash_id
         self.finished_steps: List[ReductionStep] = []
@@ -886,7 +886,7 @@ class ReductionStatus:
         self.tool = tool
         self._current_size: Optional[int] = None
         # this holds results from Reporter.submit()
-        self.last_reports = []
+        self.last_reports: List[str] = []
 
         # prepare database
         if self._db_file:
