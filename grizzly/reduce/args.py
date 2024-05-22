@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """CLI argument parsing for Grizzly reduction.
 """
+from argparse import Namespace
 from logging import getLogger
 from pathlib import Path
 
@@ -19,7 +20,7 @@ class ReduceCommonArgs(ReplayCommonArgs):
     Takes all arguments defined for `grizzly.replay`, and a few specific to reduction.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize argument parser."""
         super().__init__()
 
@@ -52,11 +53,11 @@ class ReduceCommonArgs(ReplayCommonArgs):
             help="One or more strategies. (default: %(default)s)",
         )
 
-    def sanity_check(self, args):
+    def sanity_check(self, args: Namespace) -> None:
         """Sanity check reducer args.
 
         Arguments:
-            args (argparse.Namespace): Result from `parse_args()`.
+            args: Result from `parse_args()`.
 
         Raises:
             SystemExit: on error, `ArgumentParser.error()` is called, which will exit.
@@ -86,7 +87,7 @@ class ReduceCommonArgs(ReplayCommonArgs):
 
 class ReduceArgs(ReduceCommonArgs):
     # NOTE: If updated changes may also need to be added to ReplayArgs
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.parser.add_argument("input", type=Path, nargs="+", help=LOCAL_INPUT_HELP)
 
@@ -97,7 +98,7 @@ class ReduceArgs(ReduceCommonArgs):
             " automatically determined.",
         )
 
-    def sanity_check(self, args):
+    def sanity_check(self, args: Namespace) -> None:
         super().sanity_check(args)
 
         for test in args.input:
@@ -109,7 +110,7 @@ class ReduceArgs(ReduceCommonArgs):
 
 
 class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize argument parser."""
         super().__init__()
         self.parser.add_argument("input", type=int, help="FuzzManager ID to reduce")
@@ -135,7 +136,7 @@ class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
             "0 == oldest, n-1 == most recent (default: run all testcases)",
         )
 
-    def sanity_check(self, args):
+    def sanity_check(self, args: Namespace) -> None:
         super().sanity_check(args)
 
         if args.no_harness and len(args.test_index) > 1:
@@ -145,7 +146,7 @@ class ReduceFuzzManagerIDArgs(ReduceCommonArgs):
 
 
 class ReduceFuzzManagerIDQualityArgs(ReduceFuzzManagerIDArgs):
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize argument parser."""
         super().__init__()
         self.parser.add_argument(

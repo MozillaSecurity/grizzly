@@ -11,7 +11,7 @@ from pytest import mark, raises
 
 from sapphire import Sapphire
 
-from ..common.reporter import Report
+from ..common.report import Report
 from ..common.storage import TestCase
 from ..replay import ReplayResult
 from ..target import AssetManager, Target
@@ -68,12 +68,8 @@ def _fake_save_logs_foo(result_logs):
 def test_strategy_load_fail(mocker):
     """test that a broken strategy doesn't block other strategies"""
 
-    class _GoodStrategy:
+    class _GoodStrategy(Strategy):
         name = "good"
-
-        @classmethod
-        def sanity_check_cls_attrs(cls):
-            pass
 
         @classmethod
         def load(cls):
@@ -185,7 +181,7 @@ def test_list(
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     with ReduceManager(
-        [],
+        set(),
         mocker.Mock(spec_set=Sapphire, timeout=30),
         target,
         tests,
@@ -237,7 +233,7 @@ def test_dd_only(mocker, tmp_path):
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     with ReduceManager(
-        [],
+        set(),
         mocker.Mock(spec_set=Sapphire, timeout=30),
         target,
         tests,

@@ -10,6 +10,8 @@ Constants:
 import re
 from abc import ABC, abstractmethod
 from logging import getLogger
+from pathlib import Path
+from typing import Generator, List, Match, Optional, Set, Tuple, cast
 
 from lithium.testcases import TestcaseLine
 
@@ -33,15 +35,15 @@ from . import Strategy, _contains_dd
 LOG = getLogger(__name__)
 
 
-def _split_normal_lines(data):
+def _split_normal_lines(data: bytes) -> Generator[bytes, None, None]:
     """Like str.splitlines but only respect \n, \r\n, and \r .. leave other
     potential line break characters intact.
 
     Arguments:
-        data (bytes): Input line to process.
+        data: Input line to process.
 
-    Returns:
-        generator[bytes]: Yield lines split from data, not including line endings.
+    Yields:
+        Lines split from data, not including line endings.
     """
     for win_line in data.split(b"\r\n"):
         for mac_line in win_line.split(b"\r"):
@@ -54,32 +56,31 @@ class _BeautifyStrategy(Strategy, ABC):
     Implementers must define these class attributes:
 
     Class attributes:
-        all_extensions (set(str)): Set of all file extensions to beautify.
-        import_available (bool): Whether or not the beautify module was imported.
-        import_name (str): The name of the beautify module imported (for error
-                           reporting).
-        name (str): The strategy name.
-        native_extension (str): The native file extension for this type.
-        tag_name (str): Tag name to search for in other (non-native) extensions.
+        all_extensions: Set of all file extensions to beautify.
+        import_available: Whether or not the beautify module was imported.
+        import_name: The name of the beautify module imported (for error reporting).
+        name: The strategy name.
+        native_extension: The native file extension for this type.
+        tag_name: Tag name to search for in other (non-native) extensions.
     """
 
-    all_extensions = None
+    all_extensions: Set[str]
     ignore_files = {TEST_INFO, "prefs.js"}
-    import_available = None
-    import_name = None
-    native_extension = None
-    tag_name = None
+    import_available: bool
+    import_name: str
+    native_extension: str
+    tag_name: str
 
-    def __init__(self, testcases):
+    def __init__(self, testcases: List[TestCase]) -> None:
         """Initialize beautification strategy instance.
 
         Arguments:
-            testcases (list(grizzly.common.storage.TestCase)):
-                List of testcases to reduce. The object does not take ownership of the
-                testcases.
+            testcases: Testcases to reduce. The object does not take ownership of the
+                       testcases.
         """
+        assert self.tag_name is not None
         super().__init__(testcases)
-        self._files_to_beautify = []
+        self._files_to_beautify: List[Path] = []
         for path in self._testcase_root.glob("**/*"):
             if (
                 path.is_file()
@@ -88,7 +89,7 @@ class _BeautifyStrategy(Strategy, ABC):
             ):
                 if _contains_dd(path):
                     self._files_to_beautify.append(path)
-        self._current_feedback = None
+        self._current_feedback: Optional[bool] = None
         tag_bytes = self.tag_name.encode("ascii")
         self._re_tag_start = re.compile(
             rb"<\s*" + tag_bytes + rb".*?>", flags=re.DOTALL | re.IGNORECASE
@@ -97,29 +98,11 @@ class _BeautifyStrategy(Strategy, ABC):
             rb"</\s*" + tag_bytes + rb"\s*>", flags=re.IGNORECASE
         )
 
-    @classmethod
-    def sanity_check_cls_attrs(cls):
-        """Sanity check the strategy class implementation.
-
-        Raises:
-            AssertionError: Required class attributes are missing or wrong type.
-
-        Returns:
-            None
-        """
-        super().sanity_check_cls_attrs()
-        assert isinstance(cls.all_extensions, set)
-        assert all(isinstance(ext, str) for ext in cls.all_extensions)
-        assert isinstance(cls.import_available, bool)
-        assert isinstance(cls.import_name, str)
-        assert isinstance(cls.native_extension, str)
-        assert isinstance(cls.tag_name, str)
-
-    def update(self, success):
+    def update(self, success: bool) -> None:
         """Inform the strategy whether or not the last beautification yielded was good.
 
         Arguments:
-            success (bool): Whether or not the last beautification was acceptable.
+            success: Whether or not the last beautification was acceptable.
 
         Returns:
             None
@@ -129,27 +112,29 @@ class _BeautifyStrategy(Strategy, ABC):
 
     @classmethod
     @abstractmethod
-    def beautify_bytes(cls, data):
+    def beautify_bytes(cls, data: bytes) -> bytes:
         """Perform beautification on a code buffer.
 
         Arguments:
-            data (bytes): The code data to be beautified.
+            data: The data to be beautified.
 
         Returns:
-            bytes: The beautified result.
+            The beautified result.
         """
 
-    def _chunks_to_beautify(self, before, to_beautify, file):
+    def _chunks_to_beautify(
+        self, before: bytes, to_beautify: bytes, file: Path
+    ) -> Generator[Tuple[int, int], None, None]:
         """Iterate over `to_beautify` and find chunks of style/script to beautify.
 
         Arguments:
-            before (bytes): The data preceding `to_beautify`. Used to check whether
-                            `to_beautify` is already in an open <script> or <style> tag.
-            to_beautify (bytes): The data to beautify.
-            file (Path): The input file (used only to check if this is a .css/.js file)
+            before: The data preceding `to_beautify`. Used to check whether
+                    `to_beautify` is already in an open <script> or <style> tag.
+            to_beautify: The data to beautify.
+            file: The input file (used only to check if this is a .css/.js file)
 
         Yields:
-            tuple (int,int): Slices of `to_beautify` that should be beautified.
+            Slices of `to_beautify` that should be beautified.
         """
         # native extension, there's no need to search for tags
         if file.suffix == self.native_extension:
@@ -157,7 +142,7 @@ class _BeautifyStrategy(Strategy, ABC):
             return
 
         # find the last <tag> preceding DDBEGIN
-        last_tag_start = None
+        last_tag_start: Optional[Match[bytes]] = None
         for match in self._re_tag_start.finditer(before):
             last_tag_start = match
         in_tag_already = (
@@ -192,7 +177,7 @@ class _BeautifyStrategy(Strategy, ABC):
             yield (chunk_start, chunk_start + tag_end.start(0))
             search_start = chunk_start + tag_end.end(0)
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[List[TestCase], None, None]:
         """Iterate over potential beautifications of testcases according to this
         strategy.
 
@@ -201,8 +186,7 @@ class _BeautifyStrategy(Strategy, ABC):
         each.
 
         Yields:
-            list(grizzly.common.storage.TestCase): list of testcases with beautification
-                                                   applied
+            Testcases with beautification applied.
         """
         if not self.import_available:
             LOG.warning("%s not available, skipping strategy.", self.import_name)
@@ -273,7 +257,7 @@ class _BeautifyStrategy(Strategy, ABC):
                 lith_tc.dump(file)
                 continue
 
-            testcases = []
+            testcases: List[TestCase] = []
             for test in sorted(self._testcase_root.iterdir()):
                 testcases.append(TestCase.load(test))
             yield testcases
@@ -309,21 +293,22 @@ class CSSBeautify(_BeautifyStrategy):
     tag_name = "style"
 
     @classmethod
-    def beautify_bytes(cls, data):
+    def beautify_bytes(cls, data: bytes) -> bytes:
         """Perform CSS beautification on a code buffer.
 
         Arguments:
-            data (bytes): The code data to be beautified.
+            data: The code data to be beautified.
 
         Returns:
-            bytes: The beautified result.
+            The beautified result.
         """
         assert cls.import_available
-        data = data.decode("utf-8", errors="surrogateescape")
         opts = cssbeautifier.css.options.BeautifierOptions(cls.opts)
         opts.eol = "\n"
-        beautified = cssbeautifier.beautify(data, opts)
-        return beautified.encode("utf-8", errors="surrogateescape")
+        beautified = cssbeautifier.beautify(
+            data.decode("utf-8", errors="surrogateescape"), opts
+        )
+        return cast(bytes, beautified.encode("utf-8", errors="surrogateescape"))
 
 
 class JSBeautify(_BeautifyStrategy):
@@ -346,21 +331,22 @@ class JSBeautify(_BeautifyStrategy):
     try_catch_re = re.compile(r"(\s*try {)\r?\n\s*(.*)\r?\n\s*(}\s*catch.*)")
 
     @classmethod
-    def beautify_bytes(cls, data):
+    def beautify_bytes(cls, data: bytes) -> bytes:
         """Perform JS beautification on a code buffer.
 
         Arguments:
-            data (bytes): The code data to be beautified.
+            data: The code data to be beautified.
 
         Returns:
-            bytes: The beautified result.
+            The beautified result.
         """
         assert HAVE_JSBEAUTIFIER
-        data = data.decode("utf-8", errors="surrogateescape")
         opts = jsbeautifier.BeautifierOptions(cls.opts)
         opts.eol = "\n"
-        beautified = jsbeautifier.beautify(data, opts)
+        beautified = jsbeautifier.beautify(
+            data.decode("utf-8", errors="surrogateescape"), opts
+        )
         # All try/catch pairs will be expanded on their own lines
         # Collapse these pairs when only a single instruction is contained within
         beautified = cls.try_catch_re.sub(r"\1 \2 \3", beautified)
-        return beautified.encode("utf-8", errors="surrogateescape")
+        return cast(bytes, beautified.encode("utf-8", errors="surrogateescape"))

@@ -4,12 +4,14 @@
 """`ReduceManager` finds the smallest testcase(s) to reproduce an issue."""
 import json
 import os
+from argparse import Namespace
 from itertools import chain
 from locale import LC_ALL, setlocale
 from logging import getLogger
 from math import ceil, log
 from pathlib import Path
 from time import time
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
@@ -25,7 +27,7 @@ from ..common.reporter import (
 )
 from ..common.status import STATUS_DB_REDUCE, ReductionStatus
 from ..common.status_reporter import ReductionStatusReporter
-from ..common.storage import TestCaseLoadFailure
+from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import (
     CertificateBundle,
     ConfigError,
@@ -33,8 +35,8 @@ from ..common.utils import (
     configure_logging,
     time_limits,
 )
-from ..replay import ReplayManager
-from ..target import Target, TargetLaunchError, TargetLaunchTimeout
+from ..replay import ReplayManager, ReplayResult
+from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
 from .strategies import STRATEGIES
 
@@ -50,13 +52,11 @@ class ReduceManager:
     that reproduces a given issue.
 
     Attributes:
-        ignore (list(str)): Classes of results to ignore (see `--ignore`).
-        server (sapphire.Sapphire): Server instance to serve testcases.
-        strategies (list(str)): List of strategies to use for reducing
-                                testcases (in order).
-        target (grizzly.target.Target): Target instance to run testcases.
-        testcases (list(grizzly.common.storage.TestCase)): List of one or more Grizzly
-                                                           testcases to reduce.
+        ignore: Classes of results to ignore (see `--ignore`).
+        server: Server instance to serve testcases.
+        strategies: List of strategies to use for reducing testcases (in order).
+        target: Target instance to run testcases.
+        testcases: List of one or more Grizzly testcases to reduce.
     """
 
     ANALYSIS_ITERATIONS = 11  # number of iterations to analyze
@@ -75,58 +75,54 @@ class ReduceManager:
 
     def __init__(
         self,
-        ignore,
-        server,
-        target,
-        testcases,
-        strategies,
-        log_path,
-        any_crash=False,
-        expect_hang=False,
-        idle_delay=0,
-        idle_threshold=0,
-        reducer_crash_id=None,
-        relaunch=1,
-        report_period=None,
-        report_to_fuzzmanager=False,
-        signature=None,
-        signature_desc=None,
-        static_timeout=False,
-        tool=None,
-        use_analysis=True,
-        use_harness=True,
+        ignore: Set[str],
+        server: Sapphire,
+        target: Target,
+        testcases: List[TestCase],
+        strategies: List[str],
+        log_path: Path,
+        any_crash: bool = False,
+        expect_hang: bool = False,
+        idle_delay: int = 0,
+        idle_threshold: int = 0,
+        reducer_crash_id: Optional[int] = None,
+        relaunch: int = 1,
+        report_period: Optional[int] = None,
+        report_to_fuzzmanager: bool = False,
+        signature: Optional[CrashSignature] = None,
+        signature_desc: Optional[str] = None,
+        static_timeout: bool = False,
+        tool: Optional[str] = None,
+        use_analysis: bool = True,
+        use_harness: bool = True,
     ):
         """Initialize reduction manager. Many arguments are common with `ReplayManager`.
 
         Args:
-            ignore (list(str)): Value for `self.ignore` attribute.
-            server (sapphire.Sapphire): Value for `self.server` attribute.
-            target (grizzly.target.Target): Value for `self.target` attribute.
-            testcases (list(grizzly.common.storage.TestCase)):
-                Value for `self.testcases` attribute.
-            strategies (list(str)): Value for `self.strategies` attribute.
-            log_path (Path or str): Path to save results when reporting to filesystem.
-            any_crash (bool): Accept any crash when reducing, not just those matching
-                              the specified or first observed signature.
-            expect_hang (bool): Attempt to reduce a test that triggers a hang.
-            idle_delay (int): Number of seconds to wait before polling for idle.
-            idle_threshold (int): CPU usage threshold to mark the process as idle.
-            relaunch (int): Maximum number of iterations performed by Runner
-                            before Target should be relaunched.
-            report_period (int or None): Periodically report best results for
-                                         long-running strategies.
-            report_to_fuzzmanager (bool): Report to FuzzManager rather than filesystem.
-            signature (FTB.Signatures.CrashInfo.CrashSignature or None):
-                Signature for accepting crashes.
-            signature_desc (str): Short description of the given signature.
-            static_timeout (bool): Use only specified timeouts (`--timeout` and
-                                   `--idle-delay`), even if testcase appears to need
-                                   less time.
-            tool (str or None): Override tool when reporting to FuzzManager.
-            use_analysis (bool): Analyse reliability of testcase before running each
-                                 reduction strategy.
-            use_harness (bool): Whether to allow use of harness when navigating
-                                between testcases.
+            ignore: Value for `self.ignore` attribute.
+            server: Value for `self.server` attribute.
+            target: Value for `self.target` attribute.
+            testcases: Value for `self.testcases` attribute.
+            strategies: Value for `self.strategies` attribute.
+            log_path: Path to save results when reporting to filesystem.
+            any_crash: Accept any crash when reducing, not just those matching
+                       the specified or first observed signature.
+            expect_hang: Attempt to reduce a test that triggers a hang.
+            idle_delay: Number of seconds to wait before polling for idle.
+            idle_threshold: CPU usage threshold to mark the process as idle.
+            relaunch: Maximum number of iterations performed by Runner before
+                      Target should be relaunched.
+            report_period: Periodically report best results for long-running strategies.
+            report_to_fuzzmanager: Report to FuzzManager rather than filesystem.
+            signature: Signature for accepting crashes.
+            signature_desc: Short description of the given signature.
+            static_timeout: Use only specified timeouts (`--timeout` and
+                            `--idle-delay`), even if testcase appears to need less time.
+            tool: Override tool when reporting to FuzzManager.
+            use_analysis: Analyse reliability of testcase before running each
+                          reduction strategy.
+            use_harness: Whether to allow use of harness when navigating
+                         between testcases.
         """
         self.ignore = ignore
         self.server = server
@@ -137,7 +133,7 @@ class ReduceManager:
         self._expect_hang = expect_hang
         self._idle_delay = idle_delay
         self._idle_threshold = idle_threshold
-        self._log_path = Path(log_path) if isinstance(log_path, str) else log_path
+        self._log_path = log_path
         # these parameters may be overwritten during analysis, so keep a copy of them
         self._original_relaunch = relaunch
         self._original_use_harness = use_harness
@@ -157,13 +153,13 @@ class ReduceManager:
         self._use_analysis = use_analysis
         self._use_harness = use_harness
 
-    def __enter__(self):
+    def __enter__(self) -> "ReduceManager":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> None:
         self.cleanup()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Remove temporary files from disk.
 
         Args:
@@ -175,7 +171,7 @@ class ReduceManager:
         for test in self.testcases:
             test.cleanup()
 
-    def update_timeout(self, results):
+    def update_timeout(self, results: List[ReplayResult]) -> None:
         """Tune idle/server timeout values based on actual duration of expected results.
 
         Expected durations will be updated if the actual duration is much lower.
@@ -187,9 +183,8 @@ class ReduceManager:
             - Target is running under valgrind (`--valgrind`).
 
         Arguments:
-            results (grizzly.replay.ReplayResult):
-                Observed results. Any given expected results may affect the idle delay
-                and sapphire timeout.
+            results: Observed results. Any given expected results may affect the idle
+                     delay and sapphire timeout.
 
         Returns:
             None
@@ -209,9 +204,7 @@ class ReduceManager:
             return
 
         durations = list(
-            chain.from_iterable(
-                result.durations for result in results if result.expected
-            )
+            chain.from_iterable(x.durations for x in results if x.expected)
         )
         if not durations:
             # no expected results
@@ -222,7 +215,9 @@ class ReduceManager:
         LOG.debug("Run time %r", run_time)
         new_idle_delay = max(
             self.IDLE_DELAY_MIN,
-            min(run_time * self.IDLE_DELAY_DURATION_MULTIPLIER, self._idle_delay),
+            min(
+                round(run_time * self.IDLE_DELAY_DURATION_MULTIPLIER), self._idle_delay
+            ),
         )
         if new_idle_delay < self._idle_delay:
             LOG.info("Updating poll delay to: %r", new_idle_delay)
@@ -231,17 +226,20 @@ class ReduceManager:
         # in other words, decrease the timeout if this ran in less than half the timeout
         new_iter_timeout = max(
             self.ITER_TIMEOUT_MIN,
-            min(run_time * self.ITER_TIMEOUT_DURATION_MULTIPLIER, self.server.timeout),
+            min(
+                round(run_time * self.ITER_TIMEOUT_DURATION_MULTIPLIER),
+                self.server.timeout,
+            ),
         )
         if new_iter_timeout < self.server.timeout:
             LOG.info("Updating max timeout to: %r", new_iter_timeout)
             self.server.timeout = new_iter_timeout
 
-    def _on_replay_iteration(self):
+    def _on_replay_iteration(self) -> None:
         self._status.iterations += 1
         self._status.report()
 
-    def run_reliability_analysis(self):
+    def run_reliability_analysis(self) -> Tuple[int, int]:
         """Run several analysis passes of the current testcase to find `run` parameters.
 
         The number of repetitions and minimum number of crashes are calculated to
@@ -251,10 +249,10 @@ class ReduceManager:
             None
 
         Returns:
-            tuple(int, int): Values for `repeat` and `min_crashes` resulting from
-                             analysis.
+            Values for `repeat` and `min_crashes` resulting from analysis.
         """
         self._status.report(force=True)
+        harness_best = 0
         harness_last_crashes = 0
         harness_crashes = 0
         non_harness_crashes = 0
@@ -327,14 +325,10 @@ class ReduceManager:
                 try:
                     crashes = sum(x.count for x in results if x.expected)
                     if crashes and not self._any_crash and self._signature_desc is None:
-                        first_expected = next(
-                            (report for report in results if report.expected), None
-                        )
+                        first_expected = next((x for x in results if x.expected), None)
+                        assert first_expected
                         self._signature_desc = first_expected.report.short_signature
-                    self.report(
-                        [result for result in results if not result.expected],
-                        testcases,
-                    )
+                    self.report([x for x in results if not x.expected], testcases)
                     if use_harness:
                         if last_test_only:
                             harness_last_crashes = crashes
@@ -428,27 +422,33 @@ class ReduceManager:
             )
         return (repeat, min_crashes)
 
-    def testcase_size(self):
+    def testcase_size(self) -> int:
         """Calculate the current testcase size.
 
         Returns:
-            int: Current size of the testcase(s).
+            Current size of the testcase(s).
         """
         return sum(tc.data_size for tc in self.testcases)
 
-    def run(self, repeat=1, launch_attempts=3, min_results=1, post_launch_delay=0):
+    def run(
+        self,
+        repeat: int = 1,
+        launch_attempts: int = 3,
+        min_results: int = 1,
+        post_launch_delay: int = 0,
+    ) -> Exit:
         """Run testcase reduction.
 
         Args:
-            repeat (int): Maximum number of times to run the TestCase.
-            launch_attempts (int): Number of attempts to launch the browser.
-            min_results (int): Minimum number of results needed before run can
-                               be considered successful.
-            post_launch_delay (int): Time in seconds before continuing after the
-                                     browser is launched.
+            repeat: Maximum number of times to run the TestCase.
+            launch_attempts: Number of attempts to launch the browser.
+            min_results: Minimum number of results needed before run can be considered
+                         successful.
+            post_launch_delay: Time in seconds before continuing after the browser
+                               is launched.
 
         Returns:
-            int: One of the Exit enum values.
+            One of the Exit enum values.
         """
         any_success = False
         sig_given = self._signature is not None
@@ -478,12 +478,12 @@ class ReduceManager:
             self._status.run_params["relaunch"] = relaunch
             self._status.run_params["repeat"] = repeat
 
-            for strategy_no, strategy in enumerate(self.strategies, start=1):
+            for strategy_no, strategy_name in enumerate(self.strategies, start=1):
                 self._status.current_strategy_idx = strategy_no
                 LOG.info("")
                 LOG.info(
                     "Using strategy %s (%d/%d)",
-                    strategy,
+                    strategy_name,
                     strategy_no,
                     len(self.strategies),
                 )
@@ -496,24 +496,23 @@ class ReduceManager:
                     signature=self._signature,
                     use_harness=self._use_harness,
                 )
-                strategy = STRATEGIES[strategy](self.testcases)
+                strategy = STRATEGIES[strategy_name](self.testcases)
                 if last_tried is not None:
                     strategy.update_tried(last_tried)
                     last_tried = None
 
                 strategy_last_report = time()
                 strategy_stats = self._status.measure(strategy.name)
-                best_results = []
-                other_results = {}
+                best_results: List[ReplayResult] = []
+                other_results: Dict[str, Tuple[ReplayResult, List[TestCase]]] = {}
                 try:
                     with replay, strategy, strategy_stats:
                         self._status.report(force=True)
                         for reduction in strategy:
                             keep_reduction = False
-                            results = []
+                            results: List[ReplayResult] = []
                             try:
-                                # reduction is a new list of testcases to be
-                                # replayed
+                                # reduction is a new list of testcases to be replayed
                                 results = replay.run(
                                     reduction,
                                     self.server.timeout,
@@ -531,7 +530,7 @@ class ReduceManager:
                                 # get the first expected result (if any),
                                 #   and update the strategy
                                 first_expected = next(
-                                    (report for report in results if report.expected),
+                                    (x for x in results if x.expected),
                                     None,
                                 )
                                 success = first_expected is not None
@@ -587,7 +586,7 @@ class ReduceManager:
                                 # only save the smallest testcase that has found
                                 # each result
                                 for result in results:
-                                    other_result_exists = bool(
+                                    other_result_exists = (
                                         result.report.minor in other_results
                                     )
 
@@ -619,10 +618,7 @@ class ReduceManager:
                                         # as the other result
                                         other_results[result.report.minor] = (
                                             result,
-                                            [
-                                                testcase.clone()
-                                                for testcase in reduction
-                                            ],
+                                            [x.clone() for x in reduction],
                                         )
 
                                 now = time()
@@ -682,12 +678,12 @@ class ReduceManager:
             if self._report_to_fuzzmanager and self._status.last_reports:
                 for crash_id in self._status.last_reports:
                     LOG.info(
-                        "Updating crash %d to %s (Q%d)",
+                        "Updating crash %s to %s (Q%d)",
                         crash_id,
                         Quality.REDUCED.name,
                         Quality.REDUCED,
                     )
-                    CrashEntry(crash_id).testcase_quality = Quality.REDUCED.value
+                    CrashEntry(int(crash_id)).testcase_quality = Quality.REDUCED.value
 
         # it's possible we made it this far without ever setting signature_desc.
         # this is only possible if --no-analysis is given
@@ -708,51 +704,55 @@ class ReduceManager:
             return Exit.SUCCESS
         return Exit.FAILURE
 
-    def report(self, results, testcases, update_status=False):
+    def report(
+        self,
+        results: List[ReplayResult],
+        testcases: List[TestCase],
+        update_status: bool = False,
+    ) -> None:
         """Report results, either to FuzzManager or to filesystem.
 
         Arguments:
-            results (list(ReplayResult)): Results observed during reduction.
-            testcases (list(TestCase)): Testcases used to trigger results.
-            update_status (bool): Whether to update status "Latest Reports"
+            results: Results observed during reduction.
+            testcases: Testcases used to trigger results.
+            update_status: Whether to update status "Latest Reports"
         """
-        new_reports = []
+        new_reports: List[str] = []
         status = self._status.copy()  # copy implicitly closes open counters
         for result in results:
-            if self._report_to_fuzzmanager:
-                reporter = FuzzManagerReporter(self._report_tool)
-            else:
-                report_dir = "reports" if result.expected else "other_reports"
-                reporter = FilesystemReporter(
-                    self._log_path / report_dir, major_bucket=False
-                )
             # write reduction stats for expected results
             if result.expected:
                 (Path(result.report.path) / "reduce_stats.txt").write_text(
                     ReductionStatusReporter([status]).summary()
                 )
             if self._report_to_fuzzmanager:
+                reporter = FuzzManagerReporter(self._report_tool)
                 status.add_to_reporter(reporter, expected=result.expected)
-            result = reporter.submit(testcases, result.report, force=result.expected)
-            if result is not None:
+            else:
+                report_dir = "reports" if result.expected else "other_reports"
+                reporter = FilesystemReporter(
+                    self._log_path / report_dir, major_bucket=False
+                )
+            submitted = reporter.submit(testcases, result.report, force=result.expected)
+            if submitted is not None:
                 if self._report_to_fuzzmanager:
-                    new_reports.append(result)
+                    new_reports.append(str(submitted))
                 else:
-                    new_reports.append(str(result.resolve()))
+                    new_reports.append(str(submitted.resolve()))
         # only write new reports if not empty, otherwise previous reports may be
         # overwritten with an empty list if later reports are ignored
         if update_status and new_reports:
             self._status.last_reports = new_reports
 
     @classmethod
-    def main(cls, args):
+    def main(cls, args: Namespace) -> int:
         """CLI for `grizzly.reduce`.
 
         Arguments:
-            args (argparse.Namespace): Result from `ReduceArgs.parse_args`.
+            args: Result from `ReduceArgs.parse_args`.
 
         Returns:
-            int: 0 for success. non-0 indicates a problem.
+            0 for success. non-0 indicates a problem.
         """
         # pylint: disable=too-many-return-statements
         configure_logging(args.log_level)
@@ -771,12 +771,12 @@ class ReduceManager:
         elif args.valgrind:
             LOG.info("Running with Valgrind. This will be SLOW!")
 
-        asset_mgr = None
+        asset_mgr: Optional[AssetManager] = None
         certs = None
         signature = None
         signature_desc = None
-        target = None
-        testcases = []
+        target: Optional[Target] = None
+        testcases: List[TestCase] = []
 
         try:
             try:
@@ -821,6 +821,7 @@ class ReduceManager:
                 rr=args.rr,
                 valgrind=args.valgrind,
             )
+            assert target
             if env_vars is not None:
                 LOG.debug("adding environment loaded from test case")
                 target.merge_environment(env_vars)
@@ -843,7 +844,7 @@ class ReduceManager:
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
                 target.reverse(server.port, server.port)
                 with ReduceManager(
-                    args.ignore,
+                    set(args.ignore),
                     server,
                     target,
                     testcases,
