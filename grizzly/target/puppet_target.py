@@ -153,10 +153,10 @@ class PuppetTarget(Target):
     def closed(self) -> bool:
         return self._puppet.reason is not None
 
-    def create_report(self, is_hang: bool = False) -> Report:
+    def create_report(self, is_hang: bool = False, unstable: bool = False) -> Report:
         logs = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
         self.save_logs(logs)
-        return Report(logs, self.binary, is_hang=is_hang)
+        return Report(logs, self.binary, is_hang=is_hang, unstable=unstable)
 
     def filtered_environ(self) -> Dict[str, str]:
         # remove context specific entries from environment
@@ -362,7 +362,9 @@ class PuppetTarget(Target):
             self.close()
             if isinstance(exc, BrowserTimeoutError):
                 raise TargetLaunchTimeout(str(exc)) from None
-            raise TargetLaunchError(str(exc), self.create_report()) from None
+            raise TargetLaunchError(
+                str(exc), self.create_report(unstable=True)
+            ) from None
 
     def log_size(self) -> int:
         total = 0

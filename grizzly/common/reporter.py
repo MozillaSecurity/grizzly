@@ -259,6 +259,9 @@ class FuzzManagerReporter(Reporter):
         if report.is_hang:
             self.add_extra_metadata("is_hang", True)
 
+        if report.unstable:
+            self.add_extra_metadata("unstable_build", True)
+
         # dump test cases and the contained files to working directory
         test_case_meta = []
         for test_number, test_case in enumerate(reversed(test_cases)):
