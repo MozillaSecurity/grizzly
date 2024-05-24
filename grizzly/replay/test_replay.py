@@ -33,24 +33,21 @@ def _fake_save_logs(result_logs):
         log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19\n")
 
 
-def test_replay_01(mocker, server, tmp_path):
+@mark.parametrize("post_launch_delay", [0, -1])
+def test_replay_01(mocker, server, tmp_path, post_launch_delay):
     """test ReplayManager.run() - no repro"""
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     target.check_result.return_value = Result.NONE
     target.monitor.is_healthy.return_value = False
-    iter_cb = mocker.Mock()
-    (tmp_path / "test.html").touch()
-    server.serve_path.return_value = (
-        Served.ALL,
-        {"test.html": str(tmp_path / "test.html")},
-    )
+    (tmp_path / "a.html").touch()
+    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, use_harness=True, relaunch=1) as replay:
-            assert not replay.run([testcase], 10, on_iteration_cb=iter_cb)
+            assert not replay.run([testcase], 10, post_launch_delay=post_launch_delay)
             assert replay.signature is None
             assert replay.status
             assert replay.status.ignored == 0
-            assert replay.status.iteration == iter_cb.call_count == 1
+            assert replay.status.iteration == 1
             assert replay.status.results.total == 0
             assert target.monitor.is_healthy.call_count == 1
             assert target.close.call_count == 2
@@ -66,16 +63,11 @@ def test_replay_02(mocker, server, tmp_path):
     target.check_result.return_value = Result.NONE
     target.monitor.is_healthy.return_value = False
     iter_cb = mocker.Mock()
-    (tmp_path / "test.html").touch()
-    server.serve_path.return_value = (
-        Served.ALL,
-        {"test.html": str(tmp_path / "test.html")},
-    )
+    (tmp_path / "a.html").touch()
+    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, use_harness=True, relaunch=20) as replay:
-            assert not replay.run(
-                [testcase], 10, repeat=10, min_results=1, on_iteration_cb=iter_cb
-            )
+            assert not replay.run([testcase], 10, repeat=10, on_iteration_cb=iter_cb)
             assert replay.signature is None
             assert replay.status
             assert replay.status.ignored == 0
@@ -97,11 +89,8 @@ def test_replay_03(mocker, server, tmp_path):
     )
     target = mocker.Mock(spec_set=Target, closed=False, launch_timeout=30)
     target.check_result.return_value = Result.NONE
-    (tmp_path / "test.html").touch()
-    server.serve_path.return_value = (
-        Served.ALL,
-        {"test.html": str(tmp_path / "test.html")},
-    )
+    (tmp_path / "a.html").touch()
+    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, use_harness=True, relaunch=20) as replay:
             assert not replay.run([testcase], 10, repeat=10, min_results=1)
@@ -114,21 +103,14 @@ def test_replay_03(mocker, server, tmp_path):
             assert target.close.call_count == 1
 
 
-@mark.parametrize(
-    "good_sig",
-    [
-        # success - FM parsed signature
-        True,
-        # signature could not be parsed
-        False,
-    ],
-)
-def test_replay_04(mocker, server, tmp_path, good_sig):
+@mark.parametrize("sig_parsed", [True, False])
+@mark.parametrize("post_launch_delay", [0, -1])
+def test_replay_04(mocker, server, tmp_path, sig_parsed, post_launch_delay):
     """test ReplayManager.run() - successful repro"""
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
-    if good_sig:
+    if sig_parsed:
         target.save_logs = _fake_save_logs
     else:
 
@@ -139,16 +121,13 @@ def test_replay_04(mocker, server, tmp_path, good_sig):
             (log_path / "log_stdout.txt").write_text("STDOUT log\n")
 
         target.save_logs = _save_logs
-    (tmp_path / "test.html").touch()
-    server.serve_path.return_value = (
-        Served.ALL,
-        {"test.html": str(tmp_path / "test.html")},
-    )
+    (tmp_path / "a.html").touch()
+    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, relaunch=10) as replay:
             assert replay.signature is None
-            results = replay.run([testcase], 10)
-            if good_sig:
+            results = replay.run([testcase], 10, post_launch_delay=post_launch_delay)
+            if sig_parsed:
                 assert replay.signature is not None
             else:
                 assert replay.signature is None
@@ -216,7 +195,7 @@ def test_replay_06(mocker, server):
         (Served.REQUEST, {"x": "/fake/path"}),
     )
     with ReplayManager([], server, target, use_harness=True, relaunch=10) as replay:
-        assert replay.run(tests, 10, repeat=2, post_launch_delay=-1)
+        assert replay.run(tests, 10, repeat=2)
         assert replay.status
         assert replay.status.ignored == 0
         assert replay.status.iteration == 2
@@ -500,7 +479,7 @@ def test_replay_15(mocker, server):
         [], server, target, any_crash=True, use_harness=True, relaunch=2
     ) as replay:
         with raises(KeyboardInterrupt):
-            replay.run(tests, 10, repeat=3, min_results=2, post_launch_delay=-1)
+            replay.run(tests, 10, repeat=3, min_results=2)
         assert replay.signature is None
         assert replay.status
         assert replay.status.iteration == 2
@@ -542,7 +521,7 @@ def test_replay_17(mocker, server):
         mocker.MagicMock(spec_set=TestCase, entry_point="a.html") for _ in range(3)
     ]
     with ReplayManager([], server, target, use_harness=True, relaunch=2) as replay:
-        assert not replay.run(tests, 10, repeat=10, post_launch_delay=-1)
+        assert not replay.run(tests, 10, repeat=10)
         assert server.serve_path.call_count == 30
         assert target.close.call_count == 6
         assert target.launch.call_count == 5
@@ -572,7 +551,7 @@ def test_replay_18(mocker, server):
         mocker.MagicMock(spec_set=TestCase, entry_point=f"{i}.html") for i in range(3)
     ]
     with ReplayManager([], server, target, use_harness=True) as replay:
-        results = replay.run(tests, 30, post_launch_delay=-1)
+        results = replay.run(tests, 30)
         assert target.close.call_count == 2
         assert replay.status
         assert replay.status.ignored == 0
@@ -595,13 +574,13 @@ def test_replay_19(mocker, server, tmp_path):
     )
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, use_harness=True) as replay:
-            assert not replay.run([testcase], 30, post_launch_delay=-1)
+            assert not replay.run([testcase], 30)
             assert replay.status
             assert replay.status.iteration == 1
-            assert not replay.run([testcase], 30, post_launch_delay=-1)
+            assert not replay.run([testcase], 30)
             assert replay.status
             assert replay.status.iteration == 1
-            assert not replay.run([testcase], 30, post_launch_delay=-1)
+            assert not replay.run([testcase], 30)
             assert replay.status
             assert replay.status.iteration == 1
     assert server.serve_path.call_count == 3
@@ -736,7 +715,7 @@ def test_replay_23(
     target.monitor.is_healthy.return_value = False
     test = mocker.MagicMock(spec_set=TestCase, entry_point="a.html", hang=is_hang)
     with ReplayManager([], server, target, signature=signature, relaunch=10) as replay:
-        found = replay.run([test], 10, expect_hang=expect_hang, post_launch_delay=-1)
+        found = replay.run([test], 10, expect_hang=expect_hang)
         assert replay.status
         assert replay.status.iteration == 1
         assert replay.status.ignored == ignored
@@ -810,11 +789,8 @@ def test_replay_25(mocker, server, tmp_path):
 
     target.save_logs.side_effect = _save_logs_variation
 
-    (tmp_path / "test.html").touch()
-    server.serve_path.return_value = (
-        Served.ALL,
-        {"test.html": str(tmp_path / "test.html")},
-    )
+    (tmp_path / "a.html").touch()
+    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, relaunch=10, signature=sig) as replay:
             results = replay.run([testcase], 10, min_results=2, repeat=2)
@@ -879,11 +855,8 @@ def test_replay_26(mocker, server, tmp_path, stderr_log, ignored, total, include
     target.save_logs.side_effect = _save_logs_variation
 
     has_sig = include_stack[0]
-    (tmp_path / "test.html").touch()
-    server.serve_path.return_value = (
-        Served.ALL,
-        {"test.html": str(tmp_path / "test.html")},
-    )
+    (tmp_path / "a.html").touch()
+    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, relaunch=10) as replay:
             results = replay.run([testcase], 10, min_results=2, repeat=iters)
@@ -924,7 +897,7 @@ def test_replay_27(mocker, server, tmp_path):
         )
         with ReplayManager([], server, target, use_harness=True) as replay:
             assert "include.js" not in test
-            results = replay.run([test], 30, post_launch_delay=-1)
+            results = replay.run([test], 30)
             assert replay.status
             assert replay.status.ignored == 0
             assert replay.status.iteration == 1
