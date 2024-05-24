@@ -177,7 +177,9 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path, tests, frequent, force, sig_c
         test_cases.append(fake_test)
     reporter = FuzzManagerReporter("fake-tool")
     reporter.submit(
-        test_cases, Report(log_path, Path("bin"), is_hang=True), force=force
+        test_cases,
+        Report(log_path, Path("bin"), is_hang=True, unstable=True),
+        force=force,
     )
     assert not log_path.is_dir()
     assert fake_collector.call_args == ({"tool": "fake-tool"},)

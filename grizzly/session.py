@@ -247,21 +247,24 @@ class Session:
                 if current_test.entry_point not in current_test:
                     LOG.error("Check adapter, test case is missing entry point")
                     raise SessionError("Test case is missing entry point")
-                if runner.initial and result.status != Result.NONE:
+                if result.timeout:
+                    LOG.warning("Browser hung? Timeout too short? System too busy?")
+                elif runner.initial:
                     # since this is the first iteration since the Target launched
                     # something is likely wrong with the Target or Adapter
                     LOG.warning(
                         "Failure detected before running a test case, "
                         "browser build is potentially unstable"
                     )
-                if result.timeout:
-                    LOG.warning("Browser hung? Timeout too short? System too busy?")
             else:
                 self.iomanager.commit()
             # process results
             if result.status == Result.FOUND:
                 LOG.debug("result detected")
-                report = self.target.create_report(is_hang=result.timeout)
+                report = self.target.create_report(
+                    is_hang=result.timeout,
+                    unstable=runner.startup_failure,
+                )
                 seen, initial = self.status.results.count(
                     report.crash_hash, report.short_signature
                 )

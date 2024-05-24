@@ -52,6 +52,7 @@ class Report:
         "path",
         "prefix",
         "stack",
+        "unstable",
     )
 
     def __init__(
@@ -60,6 +61,7 @@ class Report:
         target_binary: Path,
         is_hang: bool = False,
         size_limit: int = MAX_LOG_SIZE,
+        unstable: bool = False,
     ) -> None:
         self._crash_info: Optional[CrashInfo] = None
         self._logs = self._select_logs(log_path)
@@ -69,6 +71,8 @@ class Report:
         self._target_binary = target_binary
         self.is_hang = is_hang
         self.path = log_path
+        # if a build crashes before the initial testcase is served it is unstable
+        self.unstable = unstable
         # tail files in log_path if needed
         if size_limit < 1:
             LOG.warning("No limit set on report log size!")

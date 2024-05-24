@@ -179,11 +179,12 @@ class Target(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def create_report(self, is_hang: bool = False) -> Report:
+    def create_report(self, is_hang: bool = False, unstable: bool = False) -> Report:
         """Process logs and create a Report.
 
         Args:
             is_hang: Indicate whether the results is due to a hang/timeout.
+            unstable: Indicate whether build is unstable.
 
         Returns:
             Report object.
