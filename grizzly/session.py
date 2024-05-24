@@ -215,7 +215,8 @@ class Session:
                 )
                 with self.status.measure("launch"):
                     runner.launch(location, max_retries=launch_attempts, retry_delay=0)
-                runner.post_launch(delay=post_launch_delay)
+                if post_launch_delay >= 0 and not runner.startup_failure:
+                    runner.post_launch(delay=post_launch_delay)
                 # TODO: avoid running test case if runner.startup_failure is True
                 # especially if it is a hang!
 

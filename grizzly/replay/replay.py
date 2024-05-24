@@ -293,7 +293,7 @@ class ReplayManager:
         idle_threshold: int = 0,
         launch_attempts: int = 3,
         on_iteration_cb: Optional[Callable[[], None]] = None,
-        post_launch_delay: int = 0,
+        post_launch_delay: int = -1,
     ) -> List[ReplayResult]:
         """Run testcase replay.
 
@@ -313,7 +313,7 @@ class ReplayManager:
             launch_attempts: Number of attempts to launch the browser.
             on_iteration_cb: Called every time a single iteration is run.
             post_launch_delay: Number of seconds to wait before continuing after the
-                               browser is launched.
+                               browser is launched. A negative number skips redirect.
 
         Returns:
             ReplayResults that were found running provided testcases.
@@ -379,7 +379,8 @@ class ReplayManager:
                         time_limit=time_limit if self._harness else None,
                     )
                     runner.launch(location, max_retries=launch_attempts)
-                    runner.post_launch(delay=post_launch_delay)
+                    if post_launch_delay >= 0 and not runner.startup_failure:
+                        runner.post_launch(delay=post_launch_delay)
                     # TODO: avoid running test case if runner.startup_failure is True
                 # run tests
                 durations: List[float] = []

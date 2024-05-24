@@ -248,7 +248,7 @@ class Runner:
         """
         return self._tests_run < 2
 
-    def post_launch(self, delay: int = -1) -> None:
+    def post_launch(self, delay: int = 0) -> None:
         """Perform actions after launching browser before loading test cases.
 
         Args:
@@ -257,41 +257,38 @@ class Runner:
         Returns:
             None
         """
-        if delay >= 0 and not self.startup_failure:
-            with TestCase("post_launch_delay.html", "None") as content:
-                content.add_from_file(
-                    Path(__file__).parent / "post_launch_delay.html",
-                    file_name=content.entry_point,
-                    copy=True,
-                )
-                srv_map = ServerMap()
-                srv_map.set_redirect("grz_start", content.entry_point, required=False)
-                srv_map.set_redirect("grz_continue", "grz_start", required=True)
-                # temporarily override server timeout
-                org_timeout = self._server.timeout
-                # add time buffer to redirect delay
-                # in practice this should take a few seconds (~10s)
-                # in extreme cases ~40s (slow build + debugger)
-                self._server.timeout = delay + 180
-                if delay > 0:
-                    LOG.info("Browser launched, continuing in %ds...", delay)
-                # serve prompt page
-                server_status, _ = self._server.serve_path(
-                    content.root,
-                    continue_cb=self._target.monitor.is_healthy,
-                    server_map=srv_map,
-                )
-                # restore server timeout
-                self._server.timeout = org_timeout
-                if server_status != Served.ALL:
-                    self.startup_failure = True
-                    if server_status == Served.TIMEOUT:
-                        # this should never happen with a correctly functioning build
-                        LOG.warning("Target hung after launch")
-
-        if self.startup_failure:
-            # TODO: we need a better way to handle delayed startup failures
-            LOG.warning("Post launch check failed!")
+        assert delay >= 0
+        with TestCase("post_launch_delay.html", "None") as content:
+            content.add_from_file(
+                Path(__file__).parent / "post_launch_delay.html",
+                file_name=content.entry_point,
+                copy=True,
+            )
+            srv_map = ServerMap()
+            srv_map.set_redirect("grz_start", content.entry_point, required=False)
+            srv_map.set_redirect("grz_continue", "grz_start", required=True)
+            # temporarily override server timeout
+            org_timeout = self._server.timeout
+            # add time buffer to redirect delay
+            # in practice this should take a few seconds (~10s)
+            # in extreme cases ~40s (slow build + debugger)
+            self._server.timeout = delay + 180
+            if delay > 0:
+                LOG.info("Browser launched, continuing in %ds...", delay)
+            # serve prompt page
+            server_status, _ = self._server.serve_path(
+                content.root,
+                continue_cb=self._target.monitor.is_healthy,
+                server_map=srv_map,
+            )
+            # restore server timeout
+            self._server.timeout = org_timeout
+            if server_status != Served.ALL:
+                self.startup_failure = True
+                if server_status == Served.TIMEOUT:
+                    # this should never happen with a correctly functioning build
+                    LOG.warning("Target hung after launch")
+                LOG.warning("Post launch check failed!")
 
     def run(
         self,
