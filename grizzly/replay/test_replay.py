@@ -164,21 +164,6 @@ def test_replay_05(mocker, server):
         # target.close() called once in runner and once by ReplayManager.run()
         assert target.close.call_count == 2
     target.reset_mock()
-    # test target crashed
-    target.check_result.return_value = Result.FOUND
-    target.save_logs = _fake_save_logs
-    with ReplayManager([], server, target, use_harness=False) as replay:
-        results = replay.run(tests, 10, repeat=1)
-        assert replay.status
-        assert replay.status.ignored == 1
-        assert replay.status.iteration == 1
-        assert replay.status.results.total == 0
-        assert replay._signature is None
-        # target.close() called once in runner and once by ReplayManager.run()
-        assert target.close.call_count == 2
-    assert len(results) == 1
-    assert results[0].count == 1
-    assert not results[0].expected
 
 
 def test_replay_06(mocker, server):
@@ -408,23 +393,57 @@ def test_replay_12(mocker, server):
     assert report_2.cleanup.call_count == 1
 
 
-def test_replay_13(mocker, server):
-    """test ReplayManager.run() - any crash - startup failure"""
-    server.serve_path.return_value = (Served.NONE, {})
+@mark.parametrize(
+    "to_serve, sig_value, expected, unexpected",
+    [
+        # No signature provided
+        (((Served.NONE, {}), (Served.ALL, {"a.html": "/fake/path"})), None, 2, 0),
+        (((Served.ALL, {"a.html": "/fake/path"}), (Served.NONE, {})), None, 2, 0),
+        (((Served.NONE, {}), (Served.NONE, {})), None, 2, 0),
+        # Signature provided (signatures match)
+        (((Served.NONE, {}), (Served.ALL, {"a.html": "/fake/path"})), "STDERR", 2, 0),
+        (((Served.ALL, {"a.html": "/fake/path"}), (Served.NONE, {})), "STDERR", 2, 0),
+        (((Served.NONE, {}), (Served.NONE, {})), "STDERR", 2, 0),
+        # Signature provided (signatures don't match)
+        (((Served.NONE, {}), (Served.ALL, {"a.html": "/fake/path"})), "miss", 0, 1),
+        (((Served.ALL, {"a.html": "/fake/path"}), (Served.NONE, {})), "miss", 0, 1),
+        (((Served.NONE, {}), (Served.NONE, {})), "miss", 0, 1),
+    ],
+)
+def test_replay_13(mocker, server, tmp_path, to_serve, sig_value, expected, unexpected):
+    """test ReplayManager.run() - results triggered after launch before running test"""
+    server.serve_path.side_effect = to_serve
+
+    # prepare signature
+    if sig_value is not None:
+        sig_file = tmp_path / "sig.json"
+        sig_file.write_text(
+            "{\n"
+            '  "symptoms": [\n'
+            "    {\n"
+            '      "src": "stderr",\n'
+            '      "type": "output",\n'
+            f'      "value": "/{sig_value}/"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n"
+        )
+        sig = CrashSignature.fromFile(str(sig_file))
+    else:
+        sig = None
+
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.save_logs = _fake_save_logs
     target.monitor.is_healthy.return_value = False
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
-    with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
-        results = replay.run(tests, 10, repeat=1, min_results=1)
-        assert results
-        assert not any(x.expected for x in results)
-        assert target.close.call_count == 2
-        assert replay.status
-        assert replay.status.iteration == 1
-        assert replay.status.results.total == 0
-        assert replay.status.ignored == 1
+    with ReplayManager(set(), server, target, any_crash=False, signature=sig) as replay:
+        assert replay._relaunch == 1, "test is broken!"
+        results = replay.run(tests, 10, repeat=2, min_results=2)
+        assert sum(x.count for x in results if x.expected) == expected
+        assert sum(x.count for x in results if not x.expected) == unexpected
+        # make sure the serve flag is updated
+        assert any(not x.report.served for x in results) or expected == 0
 
 
 def test_replay_14(mocker, server):

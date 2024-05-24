@@ -51,6 +51,7 @@ class Report:
         "is_hang",
         "path",
         "prefix",
+        "served",
         "stack",
     )
 
@@ -60,6 +61,7 @@ class Report:
         target_binary: Path,
         is_hang: bool = False,
         size_limit: int = MAX_LOG_SIZE,
+        served: bool = True,
     ) -> None:
         self._crash_info: Optional[CrashInfo] = None
         self._logs = self._select_logs(log_path)
@@ -69,6 +71,7 @@ class Report:
         self._target_binary = target_binary
         self.is_hang = is_hang
         self.path = log_path
+        self.served = served
         # tail files in log_path if needed
         if size_limit < 1:
             LOG.warning("No limit set on report log size!")

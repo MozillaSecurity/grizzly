@@ -21,7 +21,7 @@ class SimpleTarget(Target):
     def closed(self):
         return True
 
-    def create_report(self, is_hang=False):
+    def create_report(self, is_hang=False, served=True):
         pass
 
     def dump_coverage(self, timeout=0):

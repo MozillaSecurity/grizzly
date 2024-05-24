@@ -56,6 +56,7 @@ class ReplayResult:
         durations: Number of seconds spent running each testcase.
         expected: Signature match.
         count: Number of times detected.
+        early: Result was detected before a testcase was requested.
     """
 
     report: Report
@@ -381,7 +382,7 @@ class ReplayManager:
                     runner.launch(location, max_retries=launch_attempts)
                     if post_launch_delay >= 0 and not runner.startup_failure:
                         runner.post_launch(delay=post_launch_delay)
-                    # TODO: avoid running test case if runner.startup_failure is True
+                # TODO: avoid running test case if runner.startup_failure is True
                 # run tests
                 durations: List[float] = []
                 run_result: Optional[RunResult] = None
@@ -424,12 +425,11 @@ class ReplayManager:
                 assert run_result is not None
                 if not run_result.attempted:
                     LOG.warning("Test case was not served")
-                    if runner.initial:
-                        if run_result.status == Result.FOUND:
-                            # TODO: what is the best action to take in this case?
-                            LOG.warning("Delayed startup failure detected")
-                        else:
-                            LOG.warning("Timeout too short? System too busy?")
+                    if run_result.timeout:
+                        LOG.warning("Browser hung? Timeout too short? System too busy?")
+                    elif runner.initial:
+                        # TODO: what is the best action to take in this case?
+                        LOG.warning("Delayed startup failure detected")
                 # process run results
                 if run_result.status == Result.FOUND:
                     report: Optional[Report] = None
@@ -440,21 +440,24 @@ class ReplayManager:
                     log_path = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
                     self.target.save_logs(log_path)
                     report = Report(
-                        log_path, self.target.binary, is_hang=run_result.timeout
+                        log_path,
+                        self.target.binary,
+                        is_hang=run_result.timeout,
+                        served=not runner.startup_failure,
                     )
                     # set active signature
-                    if (
-                        not runner.startup_failure
-                        and not self._any_crash
-                        and not run_result.timeout
-                        and not sig_set
-                    ):
+                    if not self._any_crash and not run_result.timeout and not sig_set:
                         assert not expect_hang
                         assert self._signature is None
                         LOG.debug(
                             "no signature given, using short sig %r",
                             report.short_signature,
                         )
+                        if runner.startup_failure:
+                            LOG.warning(
+                                "Using signature from startup failure! "
+                                "Provide a signature to avoid this."
+                            )
                         self._signature = report.crash_signature
                         sig_set = True
                         if self._signature is not None:
@@ -462,11 +465,8 @@ class ReplayManager:
                             sig_hash = Report.calc_hash(self._signature)
 
                     # bucket result
-                    if not runner.startup_failure and (
-                        self._any_crash
-                        or self.check_match(
-                            self._signature, report, expect_hang, sig_set
-                        )
+                    if self._any_crash or self.check_match(
+                        self._signature, report, expect_hang, sig_set
                     ):
                         if sig_hash is not None:
                             LOG.debug("using signature hash (%s) to bucket", sig_hash)
@@ -486,6 +486,9 @@ class ReplayManager:
                             report = None  # don't remove report
                         else:
                             reports[bucket_hash].count += 1
+                            if not report.served and reports[bucket_hash].report.served:
+                                LOG.debug("updating report to unserved")
+                                reports[bucket_hash].report.served = False
                             LOG.debug("already tracking %s", bucket_hash)
                     else:
                         LOG.info(
@@ -503,6 +506,12 @@ class ReplayManager:
                             report = None  # don't remove report
                         else:
                             reports[report.crash_hash].count += 1
+                            if (
+                                not report.served
+                                and reports[report.crash_hash].report.served
+                            ):
+                                LOG.debug("updating report to unserved")
+                                reports[report.crash_hash].report.served = False
                             LOG.debug("already tracking %s", report.crash_hash)
                     # purge untracked report
                     if report is not None:
@@ -555,17 +564,10 @@ class ReplayManager:
 
             # process results
             if self._any_crash:
-                # add all results if min_results was reached
-                if sum(x.count for x in reports.values() if x.expected) >= min_results:
-                    results: List[ReplayResult] = list(reports.values())
-                else:
-                    # add only unexpected results since min_results was not reached
-                    results = []
-                    for result in reports.values():
-                        if result.expected:
-                            result.report.cleanup()
-                        else:
-                            results.append(result)
+                # all reports should be expected when self._any_crash=True
+                assert all(x.expected for x in reports.values())
+                success = sum(x.count for x in reports.values()) >= min_results
+                if not success:
                     LOG.debug(
                         "%d (any_crash) less than minimum %d",
                         self.status.results.total,
@@ -574,19 +576,24 @@ class ReplayManager:
             else:
                 # there should be at most one expected bucket
                 assert sum(x.expected for x in reports.values()) <= 1
-                # filter out unreliable expected results
-                results = []
-                for crash_hash, result in reports.items():
-                    if result.expected and result.count < min_results:
+                success = any(
+                    x.count >= min_results for x in reports.values() if x.expected
+                )
+            results: List[ReplayResult] = []
+            for crash_hash, result in reports.items():
+                # if min_results not met (success=False) cleanup expected reports
+                if not success and result.expected:
+                    if not self._any_crash:
                         LOG.debug(
                             "%r less than minimum (%d/%d)",
                             crash_hash,
                             result.count,
                             min_results,
                         )
-                        result.report.cleanup()
-                        continue
-                    results.append(result)
+                    result.report.cleanup()
+                    continue
+                results.append(result)
+
             # this should only be displayed when both conditions are met:
             # 1) runner does not close target (no delay was given before shutdown)
             # 2) result has not been successfully reproduced
@@ -602,7 +609,7 @@ class ReplayManager:
             return results
 
         finally:
-            # we don't want to clean up but we are not checking results
+            # we don't want to cleanup but we are not checking results
             self.target.close(force_close=True)
             # remove unprocessed reports
             for result in reports.values():
