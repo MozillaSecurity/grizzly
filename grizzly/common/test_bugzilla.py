@@ -58,6 +58,7 @@ def test_bugzilla_01(mocker):
     "exc",
     [
         BugsyException("foo", error_code=101),
+        BugsyException("access denied", error_code=102),
         RequestsConnectionError(),
     ],
 )
