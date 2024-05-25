@@ -127,6 +127,12 @@ class BugzillaBug:
             return cls(bugzilla.get(bug_id))
         except BugsyException as exc:
             LOG.error("%s", exc.msg)
+            # Access Denied
+            if api_key is None and exc.code == 102:
+                LOG.warning(
+                    "Set BZ_API_KEY in your environment or download the testcase "
+                    "manually to run with grizzly.replay."
+                )
         except RequestsConnectionError as exc:
             LOG.error("Unable to connect to %r (%s)", bugzilla.bugzilla_url, exc)
         return None
