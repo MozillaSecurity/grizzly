@@ -9,7 +9,7 @@ from platform import system
 from signal import SIGABRT, Signals
 from tempfile import TemporaryDirectory, mkdtemp
 from time import sleep, time
-from typing import Dict, Optional, Set, cast
+from typing import Any, Dict, Optional, Set, cast
 
 try:
     from signal import SIGUSR1  # pylint: disable=ungrouped-imports
@@ -23,6 +23,8 @@ from ffpuppet.helpers import certutil_available, certutil_find
 from ffpuppet.sanitizer_util import SanitizerOptions
 from prefpicker import PrefPicker
 from psutil import AccessDenied, NoSuchProcess, Process, process_iter, wait_procs
+
+from sapphire import CertificateBundle
 
 from ..common.report import Report
 from ..common.utils import grz_tmp
@@ -100,9 +102,9 @@ class PuppetTarget(Target):
         launch_timeout: int,
         log_limit: int,
         memory_limit: int,
-        **kwds,
+        **kwds: Dict[str, Any],
     ) -> None:
-        certs = kwds.pop("certs", None)
+        certs = cast(Optional[CertificateBundle], kwds.pop("certs", None))
         # only pass certs to FFPuppet if certutil is available
         # otherwise certs can't be used
         if certs and not certutil_available(certutil_find(binary)):
@@ -133,7 +135,7 @@ class PuppetTarget(Target):
         # create Puppet object
         self._puppet = FFPuppet(
             debugger=self._debugger,
-            headless=kwds.pop("headless", None),
+            headless=cast(Optional[str], kwds.pop("headless", None)),
             working_path=str(grz_tmp("target")),
         )
         if kwds:
