@@ -8,7 +8,8 @@ from platform import system
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, Debugger, Reason
 from pytest import mark, raises
 
-from ..common.utils import CertificateBundle
+from sapphire import CertificateBundle
+
 from .assets import AssetManager
 from .puppet_target import PuppetTarget
 from .target import Result, TargetLaunchError, TargetLaunchTimeout

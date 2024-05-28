@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
-from sapphire import Sapphire, ServerMap
+from sapphire import CertificateBundle, Sapphire, ServerMap
 
 from ..common.plugins import load as load_plugin
 from ..common.report import Report
@@ -25,7 +25,6 @@ from ..common.status import SimpleStatus
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import (
     HARNESS_FILE,
-    CertificateBundle,
     ConfigError,
     Exit,
     configure_logging,

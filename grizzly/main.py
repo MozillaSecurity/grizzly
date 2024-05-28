@@ -6,7 +6,7 @@ from logging import DEBUG, getLogger
 from os import getpid
 from typing import Optional, cast
 
-from sapphire import Sapphire
+from sapphire import CertificateBundle, Sapphire
 
 from .adapter import Adapter
 from .common.plugins import load as load_plugin
@@ -16,13 +16,7 @@ from .common.reporter import (
     FuzzManagerReporter,
     Reporter,
 )
-from .common.utils import (
-    CertificateBundle,
-    Exit,
-    configure_logging,
-    display_time_limits,
-    time_limits,
-)
+from .common.utils import Exit, configure_logging, display_time_limits, time_limits
 from .session import LogRate, Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 

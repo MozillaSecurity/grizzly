@@ -9,8 +9,10 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, Optional, Set, Tuple, final
 
+from sapphire import CertificateBundle
+
 from ..common.report import Report
-from ..common.utils import CertificateBundle, grz_tmp
+from ..common.utils import grz_tmp
 from .assets import AssetManager
 from .target_monitor import TargetMonitor
 
