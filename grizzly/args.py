@@ -1,15 +1,23 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from argparse import ArgumentParser, HelpFormatter, Namespace
+from argparse import (
+    Action,
+    ArgumentParser,
+    HelpFormatter,
+    Namespace,
+    _MutuallyExclusiveGroup,
+)
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import getenv
 from os.path import exists
 from pathlib import Path
 from platform import system
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
-from .common.fuzzmanager import FM_CONFIG, ProgramConfiguration
+from FTB.ProgramConfiguration import ProgramConfiguration
+
+from .common.fuzzmanager import FM_CONFIG
 from .common.plugins import scan as scan_plugins
 from .common.plugins import scan_target_assets
 from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, __version__
@@ -18,17 +26,23 @@ from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, __version__
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
 class SortingHelpFormatter(HelpFormatter):
     @staticmethod
-    def __sort_key(action):
+    def __sort_key(action: Action) -> List[str]:
         for opt in action.option_strings:
             if opt.startswith("--"):
                 return [opt]
-        return action.option_strings
+        return list(action.option_strings)
 
-    def add_usage(self, usage, actions, groups, prefix=None):
+    def add_usage(
+        self,
+        usage: Optional[str],
+        actions: Iterable[Action],
+        groups: Iterable[_MutuallyExclusiveGroup],
+        prefix: Optional[str] = None,
+    ) -> None:
         actions = sorted(actions, key=self.__sort_key)
         super().add_usage(usage, actions, groups, prefix)
 
-    def add_arguments(self, actions):
+    def add_arguments(self, actions: Iterable[Action]) -> None:
         actions = sorted(actions, key=self.__sort_key)
         super().add_arguments(actions)
 
