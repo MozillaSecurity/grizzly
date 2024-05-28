@@ -15,8 +15,7 @@ from urllib.parse import quote, urlsplit
 
 from pytest import mark, raises
 
-from grizzly.common.utils import CertificateBundle
-
+from .certificate_bundle import CertificateBundle
 from .core import Sapphire, create_listening_socket
 from .job import Served
 from .server_map import ServerMap

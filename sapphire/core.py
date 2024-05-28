@@ -12,6 +12,7 @@ from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
 from time import sleep, time
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union, cast
 
+from .certificate_bundle import CertificateBundle
 from .connection_manager import ConnectionManager
 from .job import Job, Served
 from .server_map import ServerMap
@@ -103,7 +104,7 @@ class Sapphire:
         self,
         allow_remote: bool = False,
         auto_close: int = -1,
-        certs=None,
+        certs: Optional[CertificateBundle] = None,
         max_workers: int = 10,
         port: int = 0,
         timeout: int = 60,
