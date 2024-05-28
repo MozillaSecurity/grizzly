@@ -483,12 +483,13 @@ ReproTestParams = namedtuple(
             detect_failure=bool,
             interesting_str="%r != ''",
             is_expected=lambda contents: contents == "1\n2\n3\n",
-            expected_run_calls=16,
+            expected_run_calls=12,
             n_reports=1,
             reports={"1\n2\n3\n"},
             n_other=2,
             other_reports={
                 "1\n",
+                "1\n2\n3",
             },
             result=0,
         ),
@@ -511,7 +512,7 @@ ReproTestParams = namedtuple(
             original=b"1\n2\n3\n",
             strategies=["check", "lines", "lines"],
             detect_failure=_ignore_arg(
-                partial([True, False, False, False, False, False, True, True].pop, 0)
+                partial([True, False, False, False, False, True, True, True].pop, 0)
             ),
             interesting_str="%r is anything, only in second strategy",
             is_expected=lambda _: True,

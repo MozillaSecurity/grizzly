@@ -67,6 +67,11 @@ class Strategy(ABC):
             testcases: Testcases to reduce. The object does not take ownership of the
                        testcases.
         """
+        # Tuple[str, bytes] is str(path.relative_to(tc_root)) -> hash(testfile data)
+        #   for each test file in tc_root (see calculate_testcase_hash below)
+        # Tuple[above, ...] is all the test files for a set of test cases meaning:
+        #   0/**, 1/**, etc.
+        # Set[above] is the unique test case sets which have been tried
         self._tried: Set[Tuple[Tuple[str, bytes], ...]] = set()
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
         self.dump_testcases(testcases)
