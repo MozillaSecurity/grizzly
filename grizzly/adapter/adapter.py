@@ -5,10 +5,11 @@ from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, Tuple, final
 
-from grizzly.common.storage import TestCase
-from grizzly.common.utils import DEFAULT_TIME_LIMIT, HARNESS_FILE
-from grizzly.target.target_monitor import TargetMonitor
 from sapphire import ServerMap
+
+from ..common.storage import TestCase
+from ..common.utils import DEFAULT_TIME_LIMIT, HARNESS_FILE
+from ..target.target_monitor import TargetMonitor
 
 __all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"
