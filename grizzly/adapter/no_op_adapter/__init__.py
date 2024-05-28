@@ -4,9 +4,10 @@
 
 from typing import Optional
 
-from grizzly.adapter import Adapter
-from grizzly.common.storage import TestCase
 from sapphire import ServerMap
+
+from ...common.storage import TestCase
+from ..adapter import Adapter
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
