@@ -113,9 +113,9 @@ class _LithiumStrategy(Strategy, ABC):
             strategy = self.strategy_cls()  # pylint: disable=not-callable
             self._current_reducer = strategy.reduce(lithium_testcase)
 
-            # populate the lithium strategy "tried" cache
-            # use all cache values where all hashes other than the current file match
-            # the current testcase_root state.
+            # Populate the lithium strategy "tried" cache.
+            # Use all cache values where all hashes other than the current file match
+            #   the current testcase_root state.
             current_tc_hash_map = dict(self._calculate_testcase_hash())
             del current_tc_hash_map[str(file.relative_to(self._testcase_root))]
             this_tc_tried = set()

@@ -24,6 +24,7 @@ from ..common.reporter import (
     FilesystemReporter,
     FuzzManagerReporter,
     Quality,
+    Reporter,
 )
 from ..common.status import STATUS_DB_REDUCE, ReductionStatus
 from ..common.status_reporter import ReductionStatusReporter
@@ -540,6 +541,7 @@ class ReduceManager:
                                         not self._any_crash
                                         and self._signature_desc is None
                                     ):
+                                        assert first_expected is not None  # mypy bug
                                         sig = first_expected.report.short_signature
                                         self._signature_desc = sig
                                 self._status.report()
@@ -689,7 +691,7 @@ class ReduceManager:
         # this is only possible if --no-analysis is given
         # just give None instead of trying to format the CrashSignature
         self._status.signature_info["any"] = self._any_crash
-        self._status.signature_info["description"] = self._signature_desc
+        self._status.signature_info["description"] = str(self._signature_desc)
         self._status.signature_info["given"] = sig_given
 
         # log a summary of what was done.
@@ -717,6 +719,7 @@ class ReduceManager:
             testcases: Testcases used to trigger results.
             update_status: Whether to update status "Latest Reports"
         """
+        reporter: Reporter
         new_reports: List[str] = []
         status = self._status.copy()  # copy implicitly closes open counters
         for result in results:
