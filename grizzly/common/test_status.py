@@ -5,6 +5,7 @@
 # pylint: disable=protected-access
 
 from contextlib import closing
+from dataclasses import fields
 from itertools import count
 from multiprocessing import Event, Process
 from sqlite3 import connect
@@ -523,10 +524,12 @@ def test_reduce_status_06(mocker, tmp_path):
     assert len(loaded_status.finished_steps) == 2
     assert len(loaded_status._in_progress_steps) == 0
     assert loaded_status.original == status.original
-    for field in ReductionStep._fields:
-        if field == "size":
+    for field in fields(ReductionStep):
+        if field.name == "size":
             continue
-        assert getattr(loaded_status.total, field) == getattr(status.total, field)
+        assert getattr(loaded_status.total, field.name) == getattr(
+            status.total, field.name
+        )
     assert loaded_status.total.size is None
 
 
