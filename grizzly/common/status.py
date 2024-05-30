@@ -6,7 +6,7 @@ from abc import ABC
 from collections import defaultdict
 from contextlib import closing, contextmanager
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import astuple, dataclass
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
@@ -19,7 +19,6 @@ from typing import (
     Dict,
     Generator,
     List,
-    NamedTuple,
     Optional,
     Set,
     Tuple,
@@ -826,7 +825,8 @@ class Status(BaseStatus):
         return status
 
 
-class ReductionStep(NamedTuple):
+@dataclass(frozen=True)
+class ReductionStep:
     name: str
     duration: Optional[float]
     successes: Optional[int]
@@ -835,7 +835,8 @@ class ReductionStep(NamedTuple):
     iterations: Optional[int]
 
 
-class _MilestoneTimer(NamedTuple):
+@dataclass(frozen=True)
+class _MilestoneTimer:
     name: str
     start: float
     attempts: int
@@ -980,8 +981,8 @@ class ReductionStatus:
                 analysis = dumps(self.analysis)
                 run_params = dumps(self.run_params)
                 sig_info = dumps(self.signature_info)
-                finished = dumps(self.finished_steps)
-                in_prog = dumps(self._in_progress_steps)
+                finished = dumps([astuple(step) for step in self.finished_steps])
+                in_prog = dumps([astuple(step) for step in self._in_progress_steps])
                 strategies = dumps(self.strategies)
                 last_reports = dumps(self.last_reports)
 
@@ -1126,9 +1127,7 @@ class ReductionStatus:
             status.run_params = loads(entry[4])
             status.signature_info = loads(entry[5])
             status.successes = entry[6]
-            status.finished_steps = [
-                ReductionStep._make(step) for step in loads(entry[8])
-            ]
+            status.finished_steps = [ReductionStep(*step) for step in loads(entry[8])]
             status._in_progress_steps = [
                 _MilestoneTimer(*step) for step in loads(entry[9])
             ]

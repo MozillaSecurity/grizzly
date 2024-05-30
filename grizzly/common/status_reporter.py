@@ -5,6 +5,7 @@
 """Manage Grizzly status reports."""
 from argparse import ArgumentParser
 from collections import defaultdict
+from dataclasses import astuple, fields
 from datetime import timedelta
 from functools import partial
 from itertools import zip_longest
@@ -14,9 +15,8 @@ from os import getenv
 from pathlib import Path
 from platform import system
 from re import match
-from re import sub as re_sub
 from time import gmtime, localtime, strftime
-from typing import Callable, Dict, Generator, List, Optional, Set, Tuple, Type
+from typing import Callable, Dict, Generator, Iterable, List, Optional, Set, Tuple, Type
 
 from psutil import cpu_count, cpu_percent, disk_usage, getloadavg, virtual_memory
 
@@ -529,34 +529,34 @@ class _TableFormatter:
 
     def __init__(
         self,
-        columns: Tuple[str, ...],
-        formatters: Tuple[Optional[Callable[..., str]]],
+        column_names: Tuple[str, ...],
+        formatters: Tuple[Optional[Callable[..., str]], ...],
         vsep: str = " | ",
         hsep: str = "-",
     ) -> None:
         """Initialize a TableFormatter instance.
 
         Arguments:
-            columns: List of column names for the table header.
+            column_names: List of column names for the table header.
             formatters: List of format functions for each column.
                         None will result in hiding that column.
             vsep: Vertical separation between columns.
             hsep: Horizontal separation between header and data.
         """
-        assert len(columns) == len(formatters)
+        assert len(column_names) == len(formatters)
         self._columns = tuple(
-            column for (column, fmt) in zip(columns, formatters) if fmt is not None
+            column for (column, fmt) in zip(column_names, formatters) if fmt is not None
         )
         self._formatters = formatters
         self._vsep = vsep
         self._hsep = hsep
 
-    def format_rows(self, rows: List[ReductionStep]) -> Generator[str, None, None]:
+    def format_rows(self, rows: Iterable[ReductionStep]) -> Generator[str, None, None]:
         """Format rows as a table and return a line generator.
 
         Arguments:
             rows: Tabular data. Each row must be the same length as
-                  `columns` passed to `__init__`.
+                  `column_names` passed to `__init__`.
 
         Yields:
             Each line of formatted tabular data.
@@ -564,16 +564,17 @@ class _TableFormatter:
         max_width = [len(col) for col in self._columns]
         formatted: List[List[str]] = []
         for row in rows:
-            assert len(row) == len(self._formatters)
+            data = astuple(row)
+            assert len(data) == len(self._formatters)
             formatted.append([])
             offset = 0
-            for idx, (data, formatter) in enumerate(zip(row, self._formatters)):
+            for idx, (datum, formatter) in enumerate(zip(data, self._formatters)):
                 if formatter is None:
                     offset += 1
                     continue
-                data = formatter(data)
-                max_width[idx - offset] = max(max_width[idx - offset], len(data))
-                formatted[-1].append(data)
+                datum_str = formatter(datum)
+                max_width[idx - offset] = max(max_width[idx - offset], len(datum_str))
+                formatted[-1].append(datum_str)
 
         # build a format_str to space out the columns with separators using `max_width`
         # the first column is left-aligned, and other fields are right-aligned.
@@ -588,17 +589,15 @@ class _TableFormatter:
 
 
 def _format_seconds(duration: float) -> str:
-    # format H:M:S, and then remove all leading zeros with regex
+    # format H:M:S, without leading zeros
     minutes, seconds = divmod(int(duration), 60)
     hours, minutes = divmod(minutes, 60)
-    result = re_sub("^[0:]*", "", f"{hours}:{minutes:02d}:{seconds:02d}")
-    # if the result is all zeroes, ensure one zero is output
-    if not result:
-        result = "0"
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    if minutes:
+        return f"{minutes}:{seconds:02d}"
     # a bare number is ambiguous. output 's' for seconds
-    if ":" not in result:
-        result += "s"
-    return result
+    return f"{seconds}s"
 
 
 def _format_duration(duration: Optional[int], total: float = 0) -> str:
@@ -823,15 +822,18 @@ class ReductionStatusReporter(StatusReporter):
                 entries.append(self._last_reports_entry(report))
             if report.total and report.original:
                 tabulator = _TableFormatter(
-                    ReductionStep._fields,
-                    ReductionStep(
-                        name=str,
-                        # duration and attempts are % of total/last, size % of init/1st
-                        duration=partial(_format_duration, total=report.total.duration),
-                        attempts=partial(_format_number, total=report.total.attempts),
-                        successes=partial(_format_number, total=report.total.successes),
-                        iterations=None,  # hide
-                        size=partial(_format_number, total=report.original.size),
+                    tuple(f.name for f in fields(ReductionStep)),
+                    # this tuple must match the order of fields
+                    # defined on ReductionStep!
+                    (
+                        str,  # name
+                        # duration/successes/attempts are % of total/last
+                        partial(_format_duration, total=report.total.duration),
+                        partial(_format_number, total=report.total.successes),
+                        partial(_format_number, total=report.total.attempts),
+                        # size is % of init/1st
+                        partial(_format_number, total=report.original.size),
+                        None,  # iterations (hidden)
                     ),
                 )
                 lines.extend(tabulator.format_rows(report.finished_steps))
