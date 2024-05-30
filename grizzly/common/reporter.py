@@ -261,24 +261,20 @@ class FuzzManagerReporter(Reporter):
         if report.unstable:
             self.add_extra_metadata("unstable_build", True)
 
-        # dump test cases and the contained files to working directory
-        test_case_meta = []
-        for test_number, test_case in enumerate(reversed(test_cases)):
-            test_case_meta.append([test_case.adapter_name, test_case.input_fname])
-            dump_path = report.path / f"{report.prefix}-{test_number}"
-            dump_path.mkdir(exist_ok=True)
-            test_case.dump(dump_path, include_details=True)
-        report.crash_info.configuration.addMetadata(
-            {"grizzly_input": repr(test_case_meta)}
-        )
         if test_cases:
+            self.add_extra_metadata("testcase_count", len(test_cases))
+            # dump test cases and the contained files to working directory
+            for test_number, test_case in enumerate(reversed(test_cases)):
+                dump_path = report.path / f"{report.prefix}-{test_number}"
+                dump_path.mkdir(exist_ok=True)
+                test_case.dump(dump_path, include_details=True)
             quality = Quality.UNREDUCED
-            environ_string = " ".join(
-                "=".join(kv) for kv in test_cases[0].env_vars.items()
-            )
-            report.crash_info.configuration.addMetadata(
-                {"recorded_envvars": environ_string}
-            )
+            if test_cases[0].env_vars:
+                # add environment variables to metadata
+                self.add_extra_metadata(
+                    "recorded_envvars",
+                    " ".join("=".join(kv) for kv in test_cases[0].env_vars.items()),
+                )
         else:
             quality = Quality.NO_TESTCASE
         report.crash_info.configuration.addMetadata(self._extra_metadata)
