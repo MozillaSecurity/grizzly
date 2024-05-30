@@ -195,12 +195,11 @@ class FailedLaunchReporter(FilesystemReporter):
 
 
 class FuzzManagerReporter(Reporter):
-    __slots__ = ("_extra_metadata", "quality", "tool")
+    __slots__ = ("_extra_metadata", "tool")
 
     def __init__(self, tool: str) -> None:
         super().__init__()
         self._extra_metadata: Dict[str, Any] = {}
-        self.quality = Quality.UNREDUCED
         # remove whitespace and use only lowercase
         self.tool = "-".join(tool.lower().split())
         assert self.tool, "tool value cannot be empty"
@@ -273,6 +272,7 @@ class FuzzManagerReporter(Reporter):
             {"grizzly_input": repr(test_case_meta)}
         )
         if test_cases:
+            quality = Quality.UNREDUCED
             environ_string = " ".join(
                 "=".join(kv) for kv in test_cases[0].env_vars.items()
             )
@@ -280,7 +280,7 @@ class FuzzManagerReporter(Reporter):
                 {"recorded_envvars": environ_string}
             )
         else:
-            self.quality = Quality.NO_TESTCASE
+            quality = Quality.NO_TESTCASE
         report.crash_info.configuration.addMetadata(self._extra_metadata)
 
         # grab screen log (used in automation)
@@ -302,12 +302,7 @@ class FuzzManagerReporter(Reporter):
 
             # submit results to the FuzzManager server
             new_entry = collector.submit(
-                report.crash_info, testCase=zip_name, testCaseQuality=self.quality.value
+                report.crash_info, testCase=zip_name, testCaseQuality=quality.value
             )
-        LOG.info(
-            "Reported: %d, %s, %s",
-            new_entry["id"],
-            self.quality.name,
-            collector.tool,
-        )
+        LOG.info("Reported: %d, %s, %s", new_entry["id"], quality.name, collector.tool)
         return cast(int, new_entry["id"])
