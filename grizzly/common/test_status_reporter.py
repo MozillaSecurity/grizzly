@@ -17,6 +17,9 @@ from .status_reporter import (
     ReductionStatusReporter,
     StatusReporter,
     TracebackReport,
+    _format_duration,
+    _format_number,
+    _format_seconds,
     main,
 )
 
@@ -773,3 +776,46 @@ def test_main_04(mocker, tmp_path, report_type):
         assert b"Runtime" not in dump_file.read_bytes()
     else:
         assert b"Timestamp" not in dump_file.read_bytes()
+
+
+@mark.parametrize(
+    "value, expected",
+    [
+        (0, "0s"),
+        (100, "1:40"),
+        (3600, "1:00:00"),
+    ],
+)
+def test_format_seconds(value, expected):
+    """test _format_seconds used by TableFormatter"""
+    assert _format_seconds(value) == expected
+
+
+@mark.parametrize(
+    "value, total, expected",
+    [
+        (None, 0, ""),
+        (0, 0, "0s (  0%)"),
+        (100, 0, "1:40 (  0%)"),
+        (100, 200, "1:40 ( 50%)"),
+        (3600, 3600, "1:00:00 (100%)"),
+    ],
+)
+def test_format_duration(value, total, expected):
+    """test _format_duration used by TableFormatter"""
+    assert _format_duration(value, total) == expected
+
+
+@mark.parametrize(
+    "value, total, expected",
+    [
+        (None, 0, ""),
+        (0, 0, "0 (  0%)"),
+        (100, 0, "100 (  0%)"),
+        (100, 200, "100 ( 50%)"),
+        (3600, 3600, "3600 (100%)"),
+    ],
+)
+def test_format_number(value, total, expected):
+    """test _format_number used by TableFormatter"""
+    assert _format_number(value, total) == expected

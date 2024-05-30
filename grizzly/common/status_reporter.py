@@ -604,7 +604,7 @@ def _format_duration(duration: Optional[int], total: float = 0) -> str:
     result = ""
     if duration is not None:
         if total == 0:
-            percent = 0  # pragma: no cover
+            percent = 0
         else:
             percent = int(100 * duration / total)
         result = _format_seconds(duration)
