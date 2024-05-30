@@ -12,6 +12,7 @@ from .reporter import (
     FailedLaunchReporter,
     FilesystemReporter,
     FuzzManagerReporter,
+    Quality,
     Reporter,
 )
 from .storage import TestCase
@@ -190,6 +191,17 @@ def test_fuzzmanager_reporter_01(mocker, tmp_path, tests, frequent, force, sig_c
         assert fake_collector.return_value.submit.call_count == 1
         if tests:
             assert fake_test.dump.call_count == 1
+    if fake_collector.return_value.submit.call_count:
+        if tests:
+            assert (
+                fake_collector.return_value.submit.call_args.kwargs["testCaseQuality"]
+                != Quality.NO_TESTCASE
+            )
+        else:
+            assert (
+                fake_collector.return_value.submit.call_args.kwargs["testCaseQuality"]
+                == Quality.NO_TESTCASE
+            )
 
 
 @mark.parametrize(
