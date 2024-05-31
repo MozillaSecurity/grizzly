@@ -1307,7 +1307,9 @@ class ReductionStatus:
         """
         # only add detailed stats for expected results
         if expected:
-            reporter.add_extra_metadata("reducer-stats", self.finished_steps)
+            reporter.add_extra_metadata(
+                "reducer-stats", [astuple(step) for step in self.finished_steps]
+            )
         # other parameters
         if self.analysis:
             reporter.add_extra_metadata("reducer-analysis", self.analysis)
