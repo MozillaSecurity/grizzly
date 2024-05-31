@@ -5,7 +5,7 @@
 # pylint: disable=protected-access
 
 from contextlib import closing
-from dataclasses import fields
+from dataclasses import astuple, fields
 from itertools import count
 from multiprocessing import Event, Process
 from sqlite3 import connect
@@ -547,7 +547,7 @@ def test_reduce_status_07(mocker, tmp_path):
     status.signature_info["dumb"] = True
     status.add_to_reporter(reporter)
     assert reporter.add_extra_metadata.call_args_list == [
-        mocker.call("reducer-stats", status.finished_steps),
+        mocker.call("reducer-stats", [astuple(s) for s in status.finished_steps]),
         mocker.call("reducer-analysis", status.analysis),
         mocker.call("reducer-params", status.run_params),
         mocker.call("reducer-sig", status.signature_info),
