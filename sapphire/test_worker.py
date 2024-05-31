@@ -4,6 +4,7 @@ Sapphire unit tests
 # pylint: disable=protected-access
 
 import socket
+from random import randint
 from threading import Thread, ThreadError
 
 from pytest import mark
@@ -196,11 +197,22 @@ def test_response_01(req, method, scheme, path):
     "req",
     [
         b"a",
+        # Invalid IPv6 URL
         b"GET http://[test/ HTTP/1.1",
         b"GET  HTTP/1.1",
         b"GET a a a a a HTTP/1.1",
+        # Invalid characters under NFKC normalization
+        b"GET http://%E2%84%80/ HTTP/1.1",
     ],
 )
 def test_response_02(req):
     """test Request.parse() failures"""
     assert Request.parse(req) is None
+
+
+def test_response_03():
+    """test Request.parse() by passing random urls"""
+    for _ in range(1000):
+        # create random 'netloc', for example '%1A%EF%09'
+        chars = "".join([f"%{randint(0, 255):02X}" for _ in range(randint(1, 8))])
+        Request.parse(f"GET http://{chars}/ HTTP/1.1".encode())
