@@ -47,12 +47,16 @@ class Request:
         # TODO: parse headers if needed
 
         try:
+            url_str = req_match.group("url").decode("ascii", errors="replace")
             # unquote() accepts str | bytes as of Python 3.9
-            url = urlparse(
-                unquote(req_match.group("url").decode("ascii", errors="replace"))
-            )
+            url = urlparse(unquote(url_str))
         except ValueError as exc:
-            if "Invalid IPv6 URL" not in str(exc):  # pragma: no cover
+            msg = str(exc)
+            if (
+                "contains invalid characters under NFKC normalization" not in msg
+                and "Invalid IPv6 URL" not in msg
+            ):
+                LOG.error("Failed to parse URL: %r", url_str)
                 raise
             LOG.debug("failed to parse url from request")
             return None
