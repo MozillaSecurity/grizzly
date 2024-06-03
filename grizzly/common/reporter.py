@@ -271,9 +271,8 @@ class FuzzManagerReporter(Reporter):
             quality = Quality.UNREDUCED
             if test_cases[0].env_vars:
                 # add environment variables to metadata
-                self.add_extra_metadata(
-                    "recorded_envvars",
-                    " ".join("=".join(kv) for kv in test_cases[0].env_vars.items()),
+                report.crash_info.configuration.addEnvironmentVariables(
+                    test_cases[0].env_vars
                 )
         else:
             quality = Quality.NO_TESTCASE
