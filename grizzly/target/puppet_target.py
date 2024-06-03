@@ -90,6 +90,7 @@ class PuppetTarget(Target):
         "GNOME_ACCESSIBILITY",
         "MOZ_CHAOSMODE",
         "MOZ_FUZZ_CRASH_ON_LARGE_ALLOC",
+        "MOZ_FUZZ_HAS_GPU",
         "MOZ_FUZZ_LARGE_ALLOC_LIMIT",
         "XPCOM_DEBUG_BREAK",
     )
