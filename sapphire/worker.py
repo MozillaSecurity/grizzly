@@ -55,6 +55,7 @@ class Request:
             if (
                 "contains invalid characters under NFKC normalization" not in msg
                 and "Invalid IPv6 URL" not in msg
+                and "does not appear to be an IPv4 or IPv6 address" not in msg
             ):
                 LOG.error("Failed to parse URL: %r", url_str)
                 raise
