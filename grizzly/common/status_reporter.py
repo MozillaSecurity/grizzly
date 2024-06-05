@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
+from abc import ABC, abstractmethod
 from argparse import ArgumentParser
 from collections import defaultdict
 from dataclasses import astuple, fields
@@ -16,7 +17,17 @@ from pathlib import Path
 from platform import system
 from re import match
 from time import gmtime, localtime, strftime
-from typing import Callable, Dict, Generator, Iterable, List, Optional, Set, Tuple, Type
+from typing import (
+    Callable,
+    Dict,
+    Generator,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from psutil import cpu_count, cpu_percent, disk_usage, getloadavg, virtual_memory
 
@@ -140,15 +151,206 @@ class TracebackReport:
         )
 
 
-class StatusReporter:
+class BaseReporter(ABC):
+    # summary output must be no more than 4KB
+    SUMMARY_LIMIT = 4096
+
+    @staticmethod
+    def _format_entries(entries: List[Tuple[str, Optional[str]]]) -> str:
+        """Generate formatted output from (label, body) pairs.
+        Each entry must have a label and an optional body.
+
+        Example:
+        entries = (
+            ("Test data output", None),
+            ("first", "1"),
+            ("second", "2"),
+            ("third", "3.0"),
+        )
+        Will generate...
+        Test data output
+         first : 1
+        second : 2
+         third : 3.0
+
+        Args:
+            entries: Data to merge.
+
+        Returns:
+            Formatted output.
+        """
+        label_lengths = tuple(len(x[0]) for x in entries if x[1])
+        max_len = max(label_lengths) if label_lengths else 0
+        out = []
+        for label, body in entries:
+            if body is None:
+                out.append(label)
+            else:
+                out.append(f"{label}".rjust(max_len) + f" : {body}")
+        return "\n".join(out)
+
+    @staticmethod
+    def _merge_tracebacks(tracebacks: List[TracebackReport], size_limit: int) -> str:
+        """Merge traceback without exceeding size_limit.
+
+        Args:
+            tracebacks: TracebackReports to merge.
+            size_limit: Maximum size in bytes of output.
+
+        Returns:
+            Merged tracebacks.
+        """
+        txt = []
+        txt.append(f"\n\nWARNING Tracebacks ({len(tracebacks)}) detected!")
+        tb_size = len(txt[-1])
+        for tbr in tracebacks:
+            tb_size += len(tbr) + 1
+            if tb_size > size_limit:
+                break
+            txt.append(str(tbr))
+        return "\n".join(txt)
+
+    @staticmethod
+    def _sys_info() -> List[Tuple[str, str]]:
+        """Collect system information.
+
+        Args:
+            None
+
+        Returns:
+            System information.
+        """
+        entries: List[Tuple[str, str]] = []
+
+        # CPU and load
+        disp: List[str] = []
+        disp.append(
+            f"{cpu_count(logical=True)} ({cpu_count(logical=False)}) @ "
+            # use minimum interval=0.1 for accuracy
+            f"{cpu_percent(interval=0.25):0.0f}%"
+        )
+        # getloadavg() on Windows does not return anything useful in this case
+        # https://psutil.readthedocs.io/en/latest/#psutil.getloadavg
+        if system() != "Windows":
+            disp.append(" (")
+            # round the results of getloadavg(), precision varies across platforms
+            disp.append(", ".join(f"{x:0.1f}" for x in getloadavg()))
+            disp.append(")")
+        entries.append(("CPU & Load", "".join(disp)))
+
+        # memory usage
+        disp = []
+        mem_usage = virtual_memory()
+        if mem_usage.available < 1_073_741_824:  # < 1GB
+            disp.append(f"{mem_usage.available // 1_048_576}MB")
+        else:
+            disp.append(f"{mem_usage.available / 1_073_741_824:0.1f}GB")
+        disp.append(f" of {mem_usage.total / 1_073_741_824:0.1f}GB free")
+        entries.append(("Memory", "".join(disp)))
+
+        # disk usage
+        disp = []
+        usage = disk_usage("/")
+        if usage.free < 1_073_741_824:  # < 1GB
+            disp.append(f"{usage.free // 1_048_576}MB")
+        else:
+            disp.append(f"{usage.free / 1_073_741_824:0.1f}GB")
+        disp.append(f" of {usage.total / 1_073_741_824:0.1f}GB free")
+        entries.append(("Disk", "".join(disp)))
+
+        return entries
+
+    @staticmethod
+    def _tracebacks(
+        path: Path, ignore_kbi: bool = True, max_preceding: int = 5
+    ) -> List[TracebackReport]:
+        """Search screen logs for tracebacks.
+
+        Args:
+            path: Directory containing log files.
+            ignore_kbi: Do not include KeyboardInterrupts in results
+            max_preceding: Maximum number of lines preceding traceback to include.
+
+        Returns:
+            TracebackReports.
+        """
+        tracebacks = []
+        for screen_log in (x for x in path.glob("screenlog.*") if x.is_file()):
+            tbr = TracebackReport.from_file(
+                screen_log, max_preceding=max_preceding, ignore_kbi=ignore_kbi
+            )
+            if tbr:
+                tracebacks.append(tbr)
+        return tracebacks
+
+    @property
+    @abstractmethod
+    def has_results(self) -> bool:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def load(
+        cls, db_file: Path, tb_path: Optional[Path] = None, time_limit: float = 120
+    ) -> "BaseReporter":
+        pass
+
+    @abstractmethod
+    def results(self, max_len: int = 85) -> str:
+        """Merged and generate formatted output from results.
+
+        Args:
+            max_len: Maximum length of result description.
+
+        Returns:
+            A formatted report.
+        """
+
+    @abstractmethod
+    def specific(
+        self,
+        sysinfo: bool = False,
+        timestamp: bool = False,
+        iters_per_result: int = 100,
+    ) -> str:
+        """Merged and generate formatted output from status reports.
+
+        Args:
+            iters_per_result: Threshold for warning of potential blockers.
+
+        Returns:
+            A formatted report.
+        """
+
+    @abstractmethod
+    def summary(
+        self,
+        rate: bool = True,
+        runtime: bool = True,
+        sysinfo: bool = False,
+        timestamp: bool = False,
+        iters_per_result: int = 100,
+    ) -> str:
+        """Merge and generate a summary from status reports.
+
+        Args:
+            rate: Include iteration rate.
+            runtime: Include total runtime in output.
+            sysinfo: Include system info (CPU, disk, RAM... etc) in output.
+            timestamp: Include time stamp in output.
+            iters_per_result: Threshold for warning of potential blockers.
+
+        Returns:
+            A summary of merged reports.
+        """
+
+
+class StatusReporter(BaseReporter):
     """Read and merge Grizzly status reports, including tracebacks if found.
     Output is a single textual report, e.g. for submission to EC2SpotManager.
     """
 
-    CPU_POLL_INTERVAL = 1
     DISPLAY_LIMIT_LOG = 10  # don't include log results unless size exceeds 10MBs
-    READ_BUF_SIZE = 0x10000  # 64KB
-    SUMMARY_LIMIT = 4095  # summary output must be no more than 4KB
     TIME_LIMIT = 120  # ignore older reports
 
     def __init__(
@@ -186,40 +388,6 @@ class StatusReporter:
             tracebacks=None if tb_path is None else cls._tracebacks(tb_path),
         )
 
-    @staticmethod
-    def format_entries(entries: List[Tuple[str, Optional[str]]]) -> str:
-        """Generate formatted output from (label, body) pairs.
-        Each entry must have a label and an optional body.
-
-        Example:
-        entries = (
-            ("Test data output", None),
-            ("first", "1"),
-            ("second", "2"),
-            ("third", "3.0"),
-        )
-        Will generate...
-        Test data output
-         first : 1
-        second : 2
-         third : 3.0
-
-        Args:
-            entries: Data to merge.
-
-        Returns:
-            Formatted output.
-        """
-        label_lengths = tuple(len(x[0]) for x in entries if x[1])
-        max_len = max(label_lengths) if label_lengths else 0
-        out = []
-        for label, body in entries:
-            if body is None:
-                out.append(label)
-            else:
-                out.append(f"{label}".rjust(max_len) + f" : {body}")
-        return "\n".join(out)
-
     def results(self, max_len: int = 85) -> str:
         """Merged and generate formatted output from results.
 
@@ -253,9 +421,14 @@ class StatusReporter:
         elif blockers:
             entries.append(("(* = Blocker)", None))
         entries.append(("", None))
-        return self.format_entries(entries)
+        return self._format_entries(entries)
 
-    def specific(self, iters_per_result: int = 100) -> str:
+    def specific(
+        self,
+        sysinfo: bool = False,
+        timestamp: bool = False,
+        iters_per_result: int = 100,
+    ) -> str:
         """Merged and generate formatted output from status reports.
 
         Args:
@@ -320,7 +493,7 @@ class StatusReporter:
                     body.append(f" {entry.min:0.3f} min)")
                     entries.append((entry.name, "".join(body)))
             entries.append(("", None))
-        return self.format_entries(entries)
+        return self._format_entries(entries)
 
     def summary(
         self,
@@ -423,105 +596,12 @@ class StatusReporter:
             entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
 
         # Format output
-        msg = self.format_entries(entries)
+        msg = self._format_entries(entries)
 
         if self.tracebacks:
             txt = self._merge_tracebacks(self.tracebacks, self.SUMMARY_LIMIT - len(msg))
             msg = "".join((msg, txt))
         return msg
-
-    @staticmethod
-    def _merge_tracebacks(tracebacks: List[TracebackReport], size_limit: int) -> str:
-        """Merge traceback without exceeding size_limit.
-
-        Args:
-            tracebacks: TracebackReports to merge.
-            size_limit: Maximum size in bytes of output.
-
-        Returns:
-            Merged tracebacks.
-        """
-        txt = []
-        txt.append(f"\n\nWARNING Tracebacks ({len(tracebacks)}) detected!")
-        tb_size = len(txt[-1])
-        for tbr in tracebacks:
-            tb_size += len(tbr) + 1
-            if tb_size > size_limit:
-                break
-            txt.append(str(tbr))
-        return "\n".join(txt)
-
-    @staticmethod
-    def _sys_info() -> List[Tuple[str, str]]:
-        """Collect system information.
-
-        Args:
-            None
-
-        Returns:
-            System information.
-        """
-        entries: List[Tuple[str, str]] = []
-
-        # CPU and load
-        disp: List[str] = []
-        disp.append(
-            f"{cpu_count(logical=True)} ({cpu_count(logical=False)}) @ "
-            f"{cpu_percent(interval=StatusReporter.CPU_POLL_INTERVAL):0.0f}%"
-        )
-        # getloadavg() on Windows does not return anything useful in this case
-        # https://psutil.readthedocs.io/en/latest/#psutil.getloadavg
-        if system() != "Windows":
-            disp.append(" (")
-            # round the results of getloadavg(), precision varies across platforms
-            disp.append(", ".join(f"{x:0.1f}" for x in getloadavg()))
-            disp.append(")")
-        entries.append(("CPU & Load", "".join(disp)))
-
-        # memory usage
-        disp = []
-        mem_usage = virtual_memory()
-        if mem_usage.available < 1_073_741_824:  # < 1GB
-            disp.append(f"{mem_usage.available // 1_048_576}MB")
-        else:
-            disp.append(f"{mem_usage.available / 1_073_741_824:0.1f}GB")
-        disp.append(f" of {mem_usage.total / 1_073_741_824:0.1f}GB free")
-        entries.append(("Memory", "".join(disp)))
-
-        # disk usage
-        disp = []
-        usage = disk_usage("/")
-        if usage.free < 1_073_741_824:  # < 1GB
-            disp.append(f"{usage.free // 1_048_576}MB")
-        else:
-            disp.append(f"{usage.free / 1_073_741_824:0.1f}GB")
-        disp.append(f" of {usage.total / 1_073_741_824:0.1f}GB free")
-        entries.append(("Disk", "".join(disp)))
-
-        return entries
-
-    @staticmethod
-    def _tracebacks(
-        path: Path, ignore_kbi: bool = True, max_preceding: int = 5
-    ) -> List[TracebackReport]:
-        """Search screen logs for tracebacks.
-
-        Args:
-            path: Directory containing log files.
-            ignore_kbi: Do not include KeyboardInterrupts in results
-            max_preceding: Maximum number of lines preceding traceback to include.
-
-        Returns:
-            TracebackReports.
-        """
-        tracebacks = []
-        for screen_log in (x for x in path.glob("screenlog.*") if x.is_file()):
-            tbr = TracebackReport.from_file(
-                screen_log, max_preceding=max_preceding, ignore_kbi=ignore_kbi
-            )
-            if tbr:
-                tracebacks.append(tbr)
-        return tracebacks
 
 
 class _TableFormatter:
@@ -623,14 +703,13 @@ def _format_number(number: Optional[int], total: float = 0) -> str:
     return result
 
 
-class ReductionStatusReporter(StatusReporter):
+class ReductionStatusReporter(BaseReporter):
     """Create a status report for a reducer instance.
     Merging multiple reports is not possible. This is intended for automated use only.
     """
 
     TIME_LIMIT = 120  # ignore older reports
 
-    # pylint: disable=super-init-not-called
     def __init__(
         self,
         reports: List[ReductionStatus],
@@ -708,10 +787,14 @@ class ReductionStatusReporter(StatusReporter):
             ),
         )
 
-    def specific(  # pylint: disable=arguments-renamed
+    def results(self, max_len: int = 85) -> str:  # pragma: no cover
+        raise NotImplementedError()
+
+    def specific(
         self,
         sysinfo: bool = False,
         timestamp: bool = False,
+        iters_per_result: int = 0,
     ) -> str:
         """Generate formatted output from status report.
 
@@ -782,15 +865,16 @@ class ReductionStatusReporter(StatusReporter):
             if timestamp:
                 entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
 
-            reports.append(self.format_entries(entries))
+            reports.append(self._format_entries(entries))
         return "\n\n".join(reports)
 
-    def summary(  # pylint: disable=arguments-differ
+    def summary(
         self,
         rate: bool = False,
         runtime: bool = False,
         sysinfo: bool = False,
         timestamp: bool = False,
+        iters_per_result: int = 0,
     ) -> str:
         """Merge and generate a summary from status reports.
 
@@ -799,6 +883,7 @@ class ReductionStatusReporter(StatusReporter):
             runtime: Ignored (compatibility).
             sysinfo: Include system info (CPU, disk, RAM... etc) in output.
             timestamp: Include time stamp in output.
+            iters_per_result: Ignored (compatibility).
 
         Returns:
             A summary of merged reports.
@@ -839,7 +924,7 @@ class ReductionStatusReporter(StatusReporter):
                 lines.extend(tabulator.format_rows(report.finished_steps))
             # Format output
             if entries:
-                lines.append(self.format_entries(entries))
+                lines.append(self._format_entries(entries))
             if lines:
                 reports.append("\n".join(lines))
 
@@ -854,7 +939,7 @@ class ReductionStatusReporter(StatusReporter):
             entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
 
         if entries:
-            reports.append(self.format_entries(entries))
+            reports.append(self._format_entries(entries))
 
         msg = "\n\n".join(reports)
 
@@ -883,11 +968,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         log_fmt = "%(message)s"
     basicConfig(format=log_fmt, datefmt="%Y-%m-%d %H:%M:%S", level=log_level)
 
-    modes: Dict[str, Tuple[Type[StatusReporter], Path]] = {
-        "fuzzing": (StatusReporter, STATUS_DB_FUZZ),
-        "reducing": (ReductionStatusReporter, STATUS_DB_REDUCE),
-    }
-
     # report types: define name and time range of scan
     report_types = {
         # include status reports from the last 2 minutes
@@ -911,9 +991,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument(
         "--scan-mode",
-        choices=modes.keys(),
+        choices=("fuzzing", "reducing"),
         default="fuzzing",
-        help="Report mode. (default: %(default)s)",
+        help="Scan mode. (default: %(default)s)",
     )
     parser.add_argument(
         "--system-report",
@@ -936,26 +1016,30 @@ def main(argv: Optional[List[str]] = None) -> int:
         parser.error("--tracebacks must be a directory")
 
     time_limit = report_types[args.type] if args.time_limit is None else args.time_limit
-    reporter_cls, status_db = modes[args.scan_mode]
-    reporter = reporter_cls.load(
-        status_db,
-        tb_path=args.tracebacks,
-        time_limit=time_limit,
-    )
+    if args.scan_mode == "fuzzing":
+        reporter: Union[StatusReporter, ReductionStatusReporter] = StatusReporter.load(
+            STATUS_DB_FUZZ,
+            tb_path=args.tracebacks,
+            time_limit=time_limit,
+        )
+    else:
+        reporter = ReductionStatusReporter.load(
+            STATUS_DB_REDUCE,
+            tb_path=args.tracebacks,
+            time_limit=time_limit,
+        )
 
     if args.dump:
         with args.dump.open("w") as ofp:
             if args.type == "active" and args.scan_mode == "fuzzing":
                 ofp.write(reporter.summary(runtime=False, sysinfo=True, timestamp=True))
+            # mode == "fuzzing"
             elif args.type == "active":
                 # reducer only has one instance, so show specific report while running
                 ofp.write(reporter.specific(sysinfo=True, timestamp=True))
+            # type == "complete"
             else:
-                ofp.write(
-                    reporter.summary(
-                        rate=False, runtime=True, sysinfo=False, timestamp=False
-                    )
-                )
+                ofp.write(reporter.summary(rate=False))
         return 0
 
     if not reporter.reports:

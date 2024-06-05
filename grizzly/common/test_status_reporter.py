@@ -499,11 +499,11 @@ def test_status_reporter_09(mocker, tmp_path):
 
 
 def test_status_reporter_10():
-    """test StatusReporter.format_entries()"""
-    assert StatusReporter.format_entries([]) == ""
-    assert StatusReporter.format_entries([("test", None)]) == "test"
-    assert StatusReporter.format_entries([("test", "1")]) == "test : 1"
-    out = StatusReporter.format_entries(
+    """test StatusReporter._format_entries()"""
+    assert StatusReporter._format_entries([]) == ""
+    assert StatusReporter._format_entries([("test", None)]) == "test"
+    assert StatusReporter._format_entries([("test", "1")]) == "test : 1"
+    out = StatusReporter._format_entries(
         [("first", "1"), ("second", "2"), ("third", "3")]
     )
     assert out == " first : 1\nsecond : 2\n third : 3"
@@ -684,18 +684,27 @@ def test_traceback_report_08(tmp_path):
     assert "AssertionError" in output
 
 
-def test_main_01(mocker, tmp_path):
+@mark.parametrize("report_mode", ["fuzzing", "reducing"])
+def test_main_01(mocker, tmp_path, report_mode):
     """test main()"""
     status_db = tmp_path / "status.db"
-    mocker.patch("grizzly.common.status_reporter.STATUS_DB_FUZZ", status_db)
     # without a report
     assert main([]) == 0
     # with a report
-    status = Status.start(status_db)
+    if report_mode == "fuzzing":
+        mocker.patch("grizzly.common.status_reporter.STATUS_DB_FUZZ", status_db)
+        status = Status.start(status_db)
+        status.results.count("uid", "[@ test]")
+    elif report_mode == "reducing":
+        mocker.patch("grizzly.common.status_reporter.STATUS_DB_REDUCE", status_db)
+        status = ReductionStatus.start(
+            status_db,
+            testcase_size_cb=lambda: 47,
+            strategies=[],
+        )
     status.iteration = 1
-    status.results.count("uid", "[@ test]")
     status.report(force=True)
-    assert main([]) == 0
+    assert main(["--scan-mode", report_mode]) == 0
 
 
 def test_main_02(capsys):
@@ -705,20 +714,8 @@ def test_main_02(capsys):
     assert "--tracebacks must be a directory" in capsys.readouterr()[-1]
 
 
-@mark.parametrize(
-    "report_mode",
-    [
-        "fuzzing",
-        "reducing",
-    ],
-)
-@mark.parametrize(
-    "report_type",
-    [
-        "active",
-        "complete",
-    ],
-)
+@mark.parametrize("report_mode", ["fuzzing", "reducing"])
+@mark.parametrize("report_type", ["active", "complete"])
 def test_main_03(mocker, tmp_path, report_type, report_mode):
     """test main() --dump"""
     mocker.patch("grizzly.common.status_reporter.cpu_percent", return_value=10)
@@ -732,44 +729,13 @@ def test_main_03(mocker, tmp_path, report_type, report_mode):
         )
         with status.measure("total"):
             status.iteration = 1
-        status.report(force=True)
     else:
         mocker.patch("grizzly.common.status_reporter.STATUS_DB_FUZZ", status_db)
         status = Status.start(status_db)
         status.iteration = 1
-        status.report(force=True)
+    status.report(force=True)
     dump_file = tmp_path / "output.txt"
     cmd = ["--dump", str(dump_file), "--type", report_type, "--scan-mode", report_mode]
-    assert main(cmd) == 0
-    assert dump_file.is_file()
-    if report_type == "active":
-        assert b"Runtime" not in dump_file.read_bytes()
-    else:
-        assert b"Timestamp" not in dump_file.read_bytes()
-
-
-@mark.parametrize(
-    "report_type",
-    [
-        "active",
-        "complete",
-    ],
-)
-def test_main_04(mocker, tmp_path, report_type):
-    """test main() --dump"""
-    mocker.patch("grizzly.common.status_reporter.cpu_percent", return_value=10)
-    status_db = tmp_path / "status.db"
-    mocker.patch("grizzly.common.status_reporter.STATUS_DB_REDUCE", status_db)
-    status = ReductionStatus.start(
-        status_db,
-        testcase_size_cb=lambda: 47,
-        strategies=[],
-    )
-    with status.measure("total"):
-        status.iteration = 1
-        status.report(force=True)
-    dump_file = tmp_path / "output.txt"
-    cmd = ["--dump", str(dump_file), "--type", report_type, "--scan-mode", "reducing"]
     assert main(cmd) == 0
     assert dump_file.is_file()
     if report_type == "active":
