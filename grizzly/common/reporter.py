@@ -170,7 +170,8 @@ class FilesystemReporter(Reporter):
         log_path = dest / f"{self.report_prefix}_logs"
         if log_path.is_dir():
             LOG.warning("Report log path exists '%s'", log_path)
-        move(report.path, log_path)
+        # Python 3.9+: move() accepts a path-like object for both src and dst
+        move(str(report.path.resolve()), str(log_path.resolve()))
         # avoid filling the disk
         free_space = disk_usage(str(log_path.resolve())).free
         if free_space < self.min_space:

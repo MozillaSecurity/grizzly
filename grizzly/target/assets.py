@@ -59,8 +59,8 @@ class AssetManager:
             else:
                 copytree(path, dst)
         else:
-            # TODO: move() only accepts str in Python 3.8
-            move(str(path), str(self.path))
+            # Python 3.9+: move() accepts a path-like object for both src and dst
+            move(str(path.resolve()), str(self.path.resolve()))
         self.assets[asset] = path.name
         LOG.debug("%s asset %r to '%s'", "copied" if copy else "moved", asset, dst)
         return dst
