@@ -293,7 +293,7 @@ class Bucket:
             self._data = self._coll.get(self._url).json()
         if name not in self._data:
             raise AttributeError(
-                f"'{type(self).__name__,}' object has no attribute '{name}'"
+                f"'{type(self).__name__}' object has no attribute '{name}'"
                 f" (has: {list(self._data)})"
             )
         return self._data[name]

@@ -924,7 +924,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--time-limit",
         type=int,
         help="Maximum age of reports in seconds. Use zero for no limit."
-        f" (default: {', '.join(f'{k}: {v}' for k, v  in report_types.items())})",
+        f" (default: {', '.join(f'{k}: {v}' for k, v in report_types.items())})",
     )
     parser.add_argument(
         "--tracebacks",
