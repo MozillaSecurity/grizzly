@@ -203,7 +203,8 @@ class TestCase:
             if copy:
                 copyfile(src_file, dst_file)
             else:
-                move(src_file, dst_file)
+                # Python 3.9+: move() accepts a path-like object for both src and dst
+                move(str(src_file.resolve()), str(dst_file.resolve()))
 
         # entry_point is always 'required'
         if required or url_path == self.entry_point:
