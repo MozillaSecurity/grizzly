@@ -58,6 +58,13 @@ repos:
       - id: check-useless-excludes
   - repo: local
     hooks:
+      - id: mypy
+        name: mypy
+        entry: tox -e mypy --
+        language: system
+        require_serial: true
+        exclude: (/conftest.py$|/test_.*\.py$)
+        types: [python]
       - id: pylint
         name: pylint
         entry: tox -e pylint --

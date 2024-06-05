@@ -26,6 +26,11 @@ exclude_lines = [
 known_first_party = "grizzly"
 profile = "black"
 
+[tool.mypy]
+ignore_missing_imports = true
+strict = true
+show_error_codes = true
+
 [tool.pylint.format]
 max-line-length = 88
 
