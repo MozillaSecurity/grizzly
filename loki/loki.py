@@ -27,7 +27,7 @@ class Loki:
     __slots__ = ("aggr", "byte_order")
 
     def __init__(
-        self, aggression: Optional[float] = 0.0, byte_order: Optional[str] = None
+        self, aggression: float = 0.0, byte_order: Optional[str] = None
     ) -> None:
         """
         Arguments:
@@ -35,11 +35,9 @@ class Loki:
             byte_order: Used to indicate big or little endian when mutating multiple
                         bytes at once.
         """
-        assert aggression is not None
-        assert aggression >= 0
-        assert aggression <= 1
+        assert 0 <= aggression <= 1
         assert byte_order is None or byte_order in self.BYTE_ORDERS
-        self.aggr = min(max(aggression, 0.0), 1.0)
+        self.aggr = aggression
         self.byte_order = byte_order
 
     @staticmethod
@@ -100,7 +98,7 @@ class Loki:
             LOG.debug("cannot fuzz empty file")
             return
         # minimum number of mutations should be 1
-        max_mutations = max(int(round(length * self.aggr)), 1)
+        max_mutations = max(round(length * self.aggr), 1)
         mutations = randint(1, max_mutations)
         LOG.debug(
             "%d of a possible %d mutations will be performed", mutations, max_mutations
