@@ -1,6 +1,7 @@
 """
 Sapphire unit test fixtures
 """
+
 import socket
 from hashlib import sha1
 from http.client import BadStatusLine

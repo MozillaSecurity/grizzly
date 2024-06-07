@@ -1,6 +1,7 @@
 """
 Sapphire unit tests
 """
+
 # pylint: disable=protected-access
 
 import socket

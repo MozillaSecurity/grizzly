@@ -1,6 +1,7 @@
 """
 Job unit tests
 """
+
 # pylint: disable=protected-access
 from pathlib import Path
 from platform import system

@@ -1,6 +1,7 @@
 """
 ConnectionManager unit tests
 """
+
 # pylint: disable=protected-access
 
 from itertools import count
