@@ -68,7 +68,7 @@ class Loki:
 
         fuzz_op = randint(0, 4)
         if fuzz_op == 0:  # boundary
-            out_data = (2 ** randint(2, data_size * 8)) + randint(-2, 2)
+            out_data: int = (2 ** randint(2, data_size * 8)) + randint(-2, 2)
         elif fuzz_op == 1:  # arithmetic
             out_data = unpack(pack_unit, in_data)[0] + randint(-10, 10)
         elif fuzz_op == 2:  # interesting byte, short or int
@@ -82,6 +82,12 @@ class Loki:
                 out_data = randint(1, 0x1FFF) * 8
             elif data_size == 4:  # multiple of 8
                 out_data = randint(1, 0x1FFFFFFF) * 8
+            else:  # pragma: no cover
+                # this should be unreachable
+                raise RuntimeError(f"Unsupported data size: {data_size}")
+        else:  # pragma: no cover
+            # this should be unreachable
+            raise AssertionError(f"Invalid fuzz op: {fuzz_op}")
 
         return pack(pack_unit, out_data & mask)
 

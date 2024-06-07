@@ -135,15 +135,16 @@ def test_loki_fuzz_02(mocker):
 def test_loki_stress_01():
     """test Loki._fuzz_data() with random input"""
     orders = ("<", ">")
-    sizes = (1, 2, 4)
     for _ in range(3000):
-        size = choice(sizes)
+        size = choice((1, 2, 4))
         if size == 1:
             in_data = pack("B", getrandbits(8))
         elif size == 2:
             in_data = pack("H", getrandbits(16))
         elif size == 4:
             in_data = pack("I", getrandbits(32))
+        else:
+            raise AssertionError(f"invalid size: {size}")
         assert len(Loki._fuzz_data(in_data, choice(orders))) == size
 
 

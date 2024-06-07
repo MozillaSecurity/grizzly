@@ -80,7 +80,7 @@ class TracebackReport:
             ignore_kbi: Skip/ignore KeyboardInterrupt.
 
         Returns:
-            TracebackReport containing data from givin log file.
+            TracebackReport containing data from given log file.
         """
         token = b"Traceback (most recent call last):"
         assert len(token) < cls.READ_LIMIT
