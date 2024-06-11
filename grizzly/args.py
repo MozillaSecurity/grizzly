@@ -411,9 +411,15 @@ class GrizzlyArgs(CommonArgs):
             " target is relaunched.",
         )
 
-        self.launcher_grp.add_argument(
-            "--coverage", action="store_true", help="Enable coverage collection."
-        )
+        if system().startswith("Linux"):
+            self.launcher_grp.add_argument(
+                "--coverage",
+                action="store_true",
+                help="Dump coverage data to disk (requires a supported browser build).",
+            )
+        else:
+            self.parser.set_defaults(coverage=False)
+
         self.launcher_grp.add_argument(
             "--runtime",
             type=int,
@@ -460,6 +466,5 @@ class GrizzlyArgs(CommonArgs):
             self.parser.error("--runtime must be >= 0")
 
         if args.smoke_test:
-            if args.limit == 0:
-                # set iteration limit for smoke-test
-                args.limit = 10
+            # set iteration limit for smoke-test
+            args.limit = args.limit or 10
