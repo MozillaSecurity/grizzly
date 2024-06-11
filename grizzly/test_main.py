@@ -3,8 +3,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly main"""
 from pathlib import Path
+from platform import system
 
-from pytest import mark
+from pytest import mark, skip
 
 from .args import GrizzlyArgs
 from .common.utils import Exit
@@ -41,6 +42,9 @@ from .target import TargetLaunchError
 )
 def test_main_01(mocker, session_setup, adpt_relaunch, extra_args):
     """test main()"""
+    cov_support = system() == "Linux"
+    if "--coverage" in extra_args and not cov_support:
+        skip(f"--coverage not available on {system()}")
     mocker.patch(
         "grizzly.args.scan_plugins",
         autospec=True,
@@ -55,7 +59,8 @@ def test_main_01(mocker, session_setup, adpt_relaunch, extra_args):
     session_obj.status.results.total = 1 if args.smoke_test else 0
 
     assert main(args) == (Exit.ERROR if args.smoke_test else Exit.SUCCESS)
-    assert session_cls.mock_calls[0][-1]["coverage"] == args.coverage
+    if cov_support:
+        assert session_cls.mock_calls[0][-1]["coverage"] == args.coverage
     if adpt_relaunch:
         assert session_cls.mock_calls[0][-1]["relaunch"] == adpt_relaunch
     else:

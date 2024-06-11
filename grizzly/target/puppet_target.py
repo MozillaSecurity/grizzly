@@ -1,28 +1,18 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from itertools import chain
 from logging import getLogger
 from os import kill
 from pathlib import Path
 from platform import system
-from signal import SIGABRT, Signals
+from signal import SIGABRT
 from tempfile import TemporaryDirectory, mkdtemp
-from time import sleep, time
 from typing import Any, Dict, Optional, Set, cast
-
-try:
-    from signal import SIGUSR1  # pylint: disable=ungrouped-imports
-
-    COVERAGE_SIG: Optional[Signals] = SIGUSR1
-except ImportError:
-    COVERAGE_SIG = None
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
 from ffpuppet.helpers import certutil_available, certutil_find
 from ffpuppet.sanitizer_util import SanitizerOptions
 from prefpicker import PrefPicker
-from psutil import AccessDenied, NoSuchProcess, Process, process_iter, wait_procs
 
 from sapphire import CertificateBundle
 
@@ -249,98 +239,9 @@ class PuppetTarget(Target):
     def https(self) -> bool:
         return self._https
 
-    def dump_coverage(self, timeout: int = 5) -> None:
-        if system() != "Linux":
-            LOG.debug("dump_coverage() only supported on Linux")
-            return
-
-        assert COVERAGE_SIG is not None
-        pid = self._puppet.get_pid()
-        if pid is None or not self._puppet.is_healthy():
-            LOG.debug("Skipping coverage dump (target is not in a good state)")
-            return
-        # If at this point, the browser is in a good state, i.e. no crashes
-        # or hangs, so signal the browser to dump coverage.
-        running_procs = 0
-        signaled_pids: Set[int] = set()
-        try:
-            # send COVERAGE_SIG (SIGUSR1) to browser processes
-            # TODO: this should use FFPuppet.processes()
-            parent_proc = Process(pid)
-            for proc in chain([parent_proc], parent_proc.children(recursive=True)):
-                # avoid sending signal to non-browser processes
-                if Path(proc.exe()).name.startswith("firefox"):
-                    LOG.debug(
-                        "Sending signal to %d (%s)",
-                        proc.pid,
-                        "parent" if proc.pid == pid else "child",
-                    )
-                    try:
-                        kill(proc.pid, COVERAGE_SIG)
-                        signaled_pids.add(proc.pid)
-                    except OSError:
-                        LOG.warning("Failed to send signal to pid %d", proc.pid)
-                if proc.is_running():
-                    running_procs += 1
-        except (AccessDenied, NoSuchProcess):  # pragma: no cover
-            pass
-        if not signaled_pids:
-            LOG.warning(
-                "Signal not sent, no browser processes found (%d process(es) running)",
-                running_procs,
-            )
-            return
-        start_time = time()
-        gcda_found = False
-        delay = 0.1
-        # wait for processes to write .gcda files (typically takes <1 second)
-        while True:
-            for proc in process_iter(attrs=["pid", "open_files"]):
-                # scan signaled processes for open .gcda files
-                if (
-                    proc.info["pid"] in signaled_pids
-                    and proc.info["open_files"]
-                    and any(x.path.endswith(".gcda") for x in proc.info["open_files"])
-                ):
-                    gcda_found = True
-                    # TODO: collect all process with open files
-                    # collect pid of process with open .gcda file
-                    gcda_open = proc.info["pid"]
-                    break
-            else:
-                gcda_open = None
-            elapsed = time() - start_time
-            if gcda_found:
-                if gcda_open is None:
-                    # success
-                    LOG.debug("gcda dump took %0.2fs", elapsed)
-                    break
-                if elapsed >= timeout:
-                    # timeout waiting for .gcda file to be written
-                    LOG.warning(
-                        "gcda file open by pid %d after %0.2fs", gcda_open, elapsed
-                    )
-                    try:
-                        kill(gcda_open, SIGABRT)
-                        # wait for logs
-                        wait_procs([Process(gcda_open)], timeout=5)
-                    except (AccessDenied, NoSuchProcess, OSError):  # pragma: no cover
-                        pass
-                    self.close()
-                    break
-                if delay < 1.0:
-                    # increase delay to a maximum of 1 second
-                    # it is increased when waiting for the .gcda files to be written
-                    # this decreases the number of calls to process_iter()
-                    delay = min(1.0, delay + 0.1)
-            elif elapsed >= 10:
-                # assume we missed the process writing .gcda files
-                LOG.warning("No gcda files seen after %0.2fs", elapsed)
-                break
-            if not self._puppet.is_healthy():
-                LOG.warning("Browser failure during dump_coverage()")
-                break
-            sleep(delay)
+    def dump_coverage(self, timeout: int = 15) -> None:
+        if self._puppet.is_healthy():
+            self._puppet.dump_coverage(timeout=timeout)
 
     def launch(self, location: str) -> None:
         # setup environment
