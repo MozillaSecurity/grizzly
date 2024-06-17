@@ -29,24 +29,26 @@ __credits__ = ["Tyson Smith"]
 # collection of ports to avoid
 # see: searchfox.org/mozilla-central/source/netwerk/base/nsIOService.cpp
 # include ports above 1024
-BLOCKED_PORTS = (
-    1719,
-    1720,
-    1723,
-    2049,
-    3659,
-    4045,
-    5060,
-    5061,
-    6000,
-    6566,
-    6665,
-    6666,
-    6667,
-    6668,
-    6669,
-    6697,
-    10080,
+BLOCKED_PORTS = frozenset(
+    (
+        1719,
+        1720,
+        1723,
+        2049,
+        3659,
+        4045,
+        5060,
+        5061,
+        6000,
+        6566,
+        6665,
+        6666,
+        6667,
+        6668,
+        6669,
+        6697,
+        10080,
+    )
 )
 LOG = getLogger(__name__)
 
@@ -56,9 +58,9 @@ def create_listening_socket(
     port: int = 0,
     remote: bool = False,
 ) -> socket:
-    """Create listening socket. Search for an open socket if needed and
-    configure the socket. If a specific port is unavailable or no
-    available ports can be found socket.error will be raised.
+    """Create listening socket. Search for an open socket if needed and configure the
+    socket. If the specified port is unavailable an OSError or PermissionError will be
+    raised. If an available port cannot be found a RuntimeError will be raised.
 
     Args:
         attempts: Number of attempts to configure the socket.
@@ -70,6 +72,9 @@ def create_listening_socket(
     """
     assert attempts > 0
     assert 0 <= port <= 65535
+
+    if port in BLOCKED_PORTS or 0 < port <= 1024:
+        raise ValueError("Cannot bind to blocked ports or ports <= 1024")
 
     for remaining in reversed(range(attempts)):
         sock = socket()

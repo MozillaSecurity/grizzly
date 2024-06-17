@@ -785,6 +785,12 @@ def test_create_listening_socket_02(mocker, bind, attempts, raised):
 def test_create_listening_socket_03(mocker):
     """test create_listening_socket() - fail to find port"""
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
+    # specify blocked port
+    with raises(ValueError, match="Cannot bind to blocked ports"):
+        create_listening_socket(port=6000, attempts=1)
+    # specify reserved port
+    with raises(ValueError, match="Cannot bind to blocked ports"):
+        create_listening_socket(port=123, attempts=1)
     # always choose a blocked port
     fake_sock.return_value.getsockname.return_value = (None, 6665)
     with raises(RuntimeError, match="Could not find available port"):
