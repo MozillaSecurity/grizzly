@@ -8,7 +8,7 @@ import socket
 from random import randint
 from threading import Thread, ThreadError
 
-from pytest import mark
+from pytest import mark, raises
 
 from .job import Job
 from .worker import Request, Worker
@@ -211,7 +211,14 @@ def test_response_02(req):
     assert Request.parse(req) is None
 
 
-def test_response_03():
+def test_response_03(mocker):
+    """test Request.parse() fail to parse"""
+    mocker.patch("sapphire.worker.urlparse", side_effect=ValueError("foo"))
+    with raises(ValueError, match="foo"):
+        Request.parse(b"GET http://foo HTTP/1.1")
+
+
+def test_response_04():
     """test Request.parse() by passing random urls"""
     for _ in range(1000):
         # create random 'netloc', for example '%1A%EF%09'

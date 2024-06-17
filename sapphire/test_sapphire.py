@@ -53,15 +53,15 @@ class _TestFile:
         return test
 
 
-@mark.parametrize("count", [1, 100])
-def test_sapphire_01(client, tmp_path, count):
+@mark.parametrize("files", [1, 100])
+def test_sapphire_01(client, tmp_path, files):
     """test serving files"""
     _TestFile.create("unrelated.bin", tmp_path)
     to_serve = [
         _TestFile.create(
             f"test_{i:04d}.html", tmp_path, data=urandom(5), calc_hash=True
         )
-        for i in range(count)
+        for i in range(files)
     ]
     # all files are required
     required = [x.file for x in to_serve]
@@ -81,7 +81,7 @@ def test_sapphire_01(client, tmp_path, count):
 
 
 @mark.parametrize(
-    "count, req_idx",
+    "files, req_idx",
     [
         # multiple files (skip optional)
         (5, 0),
@@ -89,14 +89,14 @@ def test_sapphire_01(client, tmp_path, count):
         (5, 4),
     ],
 )
-def test_sapphire_02(client, tmp_path, count, req_idx):
+def test_sapphire_02(client, tmp_path, files, req_idx):
     """test serving files"""
     _TestFile.create("unrelated.bin", tmp_path)
     to_serve = [
         _TestFile.create(
             f"test_{i:04d}.html", tmp_path, data=urandom(5), calc_hash=True
         )
-        for i in range(count)
+        for i in range(files)
     ]
     required = to_serve[req_idx].file
     with Sapphire(timeout=10) as serv:
@@ -318,7 +318,7 @@ def test_sapphire_13(client, tmp_path, path, query):
     with Sapphire(timeout=10) as serv:
         # target will be requested indirectly via the redirect
         target = _TestFile.create(path, tmp_path, data=b"Redirect DATA!")
-        request_path = "redirect" if query is None else "?".join(("redirect", query))
+        request_path = "redirect" if query is None else f"redirect?{query}"
         redirect = _TestFile(request_path)
         # point "redirect" at target
         smap.set_redirect("redirect", target.file, required=True)
@@ -420,7 +420,7 @@ def test_sapphire_15(client, tmp_path, query, required):
     _data = b"dynamic response -- TEST DATA!"
     # build request
     path = "dyn_test"
-    request = path if query is None else "?".join([path, query])
+    request = path if query is None else f"{path}?{query}"
 
     # setup custom callback
     def dr_callback(data):
@@ -523,8 +523,7 @@ def test_sapphire_19(client_factory, tmp_path):
     with Sapphire(max_workers=max_workers, timeout=60) as serv:
         clients = []
         try:
-            for _ in range(max_workers):  # number of clients to spawn
-                clients.append(client_factory(rx_size=1))
+            clients = [client_factory(rx_size=1) for _ in range(max_workers)]
             for client in clients:
                 client.launch(
                     "127.0.0.1", serv.port, to_serve, in_order=True, throttle=0.05
@@ -731,12 +730,14 @@ def test_sapphire_28(client, tmp_path):
     assert test.len_srv == test.len_org
 
 
-def test_sapphire_29(tmp_path):
+def test_sapphire_29():
     """test Sapphire with certificates"""
-    certs = CertificateBundle.create(path=tmp_path)
-    with Sapphire(timeout=10, certs=certs) as serv:
-        assert serv.scheme == "https"
-    certs.cleanup()
+    certs = CertificateBundle.create()
+    try:
+        with Sapphire(timeout=10, certs=certs) as serv:
+            assert serv.scheme == "https"
+    finally:
+        certs.cleanup()
 
 
 @mark.parametrize(
@@ -776,7 +777,7 @@ def test_create_listening_socket_02(mocker, bind, attempts, raised):
     mocker.patch("sapphire.core.sleep", autospec=True)
     fake_sock = mocker.patch("sapphire.core.socket", autospec=True)
     fake_sock.return_value.bind.side_effect = bind
-    with raises(raised):
+    with raises(raised, match="foo"):
         create_listening_socket(attempts=attempts)
     assert fake_sock.return_value.close.call_count == attempts
 

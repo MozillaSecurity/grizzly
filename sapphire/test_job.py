@@ -169,7 +169,7 @@ def test_job_04(mocker, tmp_path):
     assert resource.target == srv_include / "test_file.txt"
     assert resource.url == request
     # test redirect with file in a nested directory
-    request = "/".join(["testinc", "nested", "nested_file.txt"])
+    request = "testinc/nested/nested_file.txt"
     resource = job.lookup_resource(request)
     assert isinstance(resource, FileResource)
     assert resource.target == nst_1
