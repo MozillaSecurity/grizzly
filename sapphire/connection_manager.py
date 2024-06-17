@@ -103,13 +103,8 @@ class ConnectionManager:
         Returns:
             Workers that do not join before the timeout is reached.
         """
-        assert timeout >= 0
-        alive = []
         deadline = time() + timeout
-        for worker in workers:
-            if not worker.join(timeout=max(deadline - time(), 0)):
-                alive.append(worker)
-        return alive
+        return [x for x in workers if not x.join(timeout=max(deadline - time(), 0))]
 
     def serve(
         self,
