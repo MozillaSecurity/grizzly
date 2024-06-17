@@ -45,6 +45,7 @@ def test_worker_01(mocker):
     [
         socket.timeout("test"),
         OSError("test"),
+        BlockingIOError("test"),
     ],
 )
 def test_worker_02(mocker, exc):
