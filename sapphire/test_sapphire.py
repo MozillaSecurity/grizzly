@@ -6,7 +6,7 @@ Sapphire unit tests
 
 import socket
 from hashlib import sha1
-from itertools import repeat
+from itertools import count, repeat
 from os import urandom
 from pathlib import Path
 from platform import system
@@ -700,16 +700,24 @@ def test_sapphire_26(client, tmp_path):
 
 def test_sapphire_27(mocker):
     """test Sapphire.clear_backlog()"""
-    mocker.patch("sapphire.core.socket", autospec=True)
-    mocker.patch("sapphire.core.time", autospec=True, return_value=1)
+    mocker.patch("sapphire.core.perf_counter", autospec=True, side_effect=count())
+    mocker.patch("sapphire.core.sleep", autospec=True)
+    # test clearing backlog
     pending = mocker.Mock(spec_set=socket.socket)
+    pending.accept.side_effect = ((pending, None), OSError, BlockingIOError)
+    pending.getblocking.return_value = False
+    pending.getsockname.return_value = (None, 1337)
+    mocker.patch("sapphire.core.socket", return_value=pending)
     with Sapphire(timeout=10) as serv:
-        serv._socket = mocker.Mock(spec_set=socket.socket)
-        serv._socket.accept.side_effect = ((pending, None), OSError, BlockingIOError)
-        serv.clear_backlog()
+        assert serv.clear_backlog()
         assert serv._socket.accept.call_count == 3
-        assert serv._socket.settimeout.call_count == 2
-    assert pending.close.call_count == 1
+        assert pending.close.call_count == 1
+    pending.reset_mock()
+    # test hang
+    pending.accept.side_effect = None
+    pending.accept.return_value = (pending, None)
+    with Sapphire(timeout=1) as serv:
+        assert not serv.clear_backlog()
 
 
 @mark.skipif(system() != "Windows", reason="Only supported on Windows")

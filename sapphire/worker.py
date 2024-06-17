@@ -287,6 +287,9 @@ class Worker:
                 job.accepting.clear()
                 w_thread.start()
                 return cls(conn, w_thread)
+            except BlockingIOError:
+                # accept() can block because of race between select() and accept()
+                pass
             except OSError as exc:
                 LOG.debug("worker thread not launched: %s", exc)
             except ThreadError:

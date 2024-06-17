@@ -9,7 +9,7 @@ from logging import getLogger
 from pathlib import Path
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
 from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
-from time import sleep, time
+from time import perf_counter, sleep
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union, cast
 
 from .certificate_bundle import CertificateBundle
@@ -83,6 +83,8 @@ def create_listening_socket(
         try:
             sock.bind(("0.0.0.0" if remote else "127.0.0.1", port))
             sock.listen(5)
+            # put socket in non-blocking mode
+            sock.settimeout(0)
         except (OSError, PermissionError) as exc:
             sock.close()
             if remaining > 0:
@@ -137,31 +139,36 @@ class Sapphire:
     def __exit__(self, *exc: Any) -> None:
         self.close()
 
-    def clear_backlog(self) -> None:
+    def clear_backlog(self, timeout: float = 10) -> bool:
         """Remove all pending connections from backlog. This should only be
         called when there isn't anything actively trying to connect.
 
         Args:
-            None
+            timeout: Maximum number of seconds to run.
 
         Returns:
-            None
+            True if all connections are cleared from the backlog otherwise False.
         """
+        # this assumes the socket is in non-blocking mode
+        assert not self._socket.getblocking()
         LOG.debug("clearing socket backlog")
-        self._socket.settimeout(0)
-        deadline = time() + 10
+        deadline = perf_counter() + timeout
         while True:
             try:
                 self._socket.accept()[0].close()
             except BlockingIOError:
+                # no remaining pending connections
                 break
             except OSError as exc:
                 LOG.debug("Error closing socket: %r", exc)
             else:
                 LOG.debug("pending socket closed")
             # if this fires something is likely actively trying to connect
-            assert deadline > time()
-        self._socket.settimeout(None)
+            if deadline <= perf_counter():
+                return False
+            # avoid hogging the cpu
+            sleep(0.1)
+        return True
 
     def close(self) -> None:
         """Close listening server socket.

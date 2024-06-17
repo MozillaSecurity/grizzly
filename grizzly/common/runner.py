@@ -159,7 +159,8 @@ class Runner:
         assert self._target is not None
         assert max_retries >= 0
         assert retry_delay >= 0
-        self._server.clear_backlog()
+        # nothing should be trying to connect, did the previous target.close() fail?
+        assert self._server.clear_backlog()
         self._tests_run = 0
         self.startup_failure = False
         launch_duration: float = 0
