@@ -29,7 +29,13 @@ from ..common.reporter import (
 from ..common.status import STATUS_DB_REDUCE, ReductionStatus
 from ..common.status_reporter import ReductionStatusReporter
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..common.utils import ConfigError, Exit, configure_logging, time_limits
+from ..common.utils import (
+    ConfigError,
+    Exit,
+    configure_logging,
+    package_version,
+    time_limits,
+)
 from ..replay import ReplayManager, ReplayResult
 from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
@@ -756,6 +762,7 @@ class ReduceManager:
         setlocale(LC_ALL, "")
 
         LOG.info("Starting Grizzly Reduce")
+        LOG.debug("grizzly-framework version: %s", package_version("grizzly-framework"))
 
         if args.headless:
             LOG.info("Running browser headless (%s)", args.headless)

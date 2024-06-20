@@ -30,6 +30,7 @@ from ..common.utils import (
     configure_logging,
     display_time_limits,
     grz_tmp,
+    package_version,
     time_limits,
 )
 from ..target import (
@@ -599,6 +600,7 @@ class ReplayManager:
     def main(cls, args: Namespace) -> int:
         configure_logging(args.log_level)
         LOG.info("Starting Grizzly Replay")
+        LOG.debug("grizzly-framework version: %s", package_version("grizzly-framework"))
 
         if args.headless:
             LOG.info("Running browser headless (%s)", args.headless)

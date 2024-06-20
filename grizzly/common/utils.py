@@ -17,17 +17,13 @@ __all__ = (
     "Exit",
     "grz_tmp",
     "HARNESS_FILE",
+    "package_version",
     "time_limits",
     "TIMEOUT_DELAY",
 )
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
-try:
-    __version__ = version("grizzly-framework")
-except PackageNotFoundError:  # pragma: no cover
-    # package is not installed
-    __version__ = "unknown"
 
 DEFAULT_TIME_LIMIT = 30
 GRZ_TMP = Path(getenv("GRZ_TMP", gettempdir()), "grizzly")
@@ -107,6 +103,23 @@ def display_time_limits(time_limit: int, timeout: int, no_harness: bool) -> None
         else:
             LOG.info("Using time limit: %ds, timeout: DISABLED,", time_limit)
         LOG.warning("TIMEOUT DISABLED, not recommended for automation")
+
+
+def package_version(name: str, default: str = "unknown") -> str:
+    """Get version of an installed package.
+
+    Args:
+        name: Package name.
+        default: String to use if package is not found.
+
+    Returns:
+        Version string.
+    """
+    try:
+        return version(name)
+    except PackageNotFoundError:
+        # package is not installed
+        return default
 
 
 def grz_tmp(*subdir: Union[str, Path]) -> Path:
