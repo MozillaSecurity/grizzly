@@ -16,7 +16,13 @@ from .common.reporter import (
     FuzzManagerReporter,
     Reporter,
 )
-from .common.utils import Exit, configure_logging, display_time_limits, time_limits
+from .common.utils import (
+    Exit,
+    configure_logging,
+    display_time_limits,
+    package_version,
+    time_limits,
+)
 from .session import LogRate, Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -30,6 +36,7 @@ LOG = getLogger(__name__)
 def main(args: Namespace) -> int:
     configure_logging(args.log_level)
     LOG.info("Starting Grizzly (%d)", getpid())
+    LOG.debug("grizzly-framework version: %s", package_version("grizzly-framework"))
 
     if args.headless:
         LOG.info("Running browser headless (%s)", args.headless)

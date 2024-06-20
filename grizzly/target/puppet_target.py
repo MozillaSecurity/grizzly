@@ -17,7 +17,7 @@ from prefpicker import PrefPicker
 from sapphire import CertificateBundle
 
 from ..common.report import Report
-from ..common.utils import grz_tmp
+from ..common.utils import grz_tmp, package_version
 from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
@@ -95,6 +95,7 @@ class PuppetTarget(Target):
         memory_limit: int,
         **kwds: Dict[str, Any],
     ) -> None:
+        LOG.debug("ffpuppet version: %s", package_version("ffpuppet"))
         certs = cast(Optional[CertificateBundle], kwds.pop("certs", None))
         # only pass certs to FFPuppet if certutil is available
         # otherwise certs can't be used

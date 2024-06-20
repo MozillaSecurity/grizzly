@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from importlib.metadata import PackageNotFoundError
 from logging import DEBUG, INFO
 
 from pytest import mark
@@ -12,6 +13,7 @@ from .utils import (
     configure_logging,
     display_time_limits,
     grz_tmp,
+    package_version,
     time_limits,
 )
 
@@ -108,3 +110,18 @@ def test_display_time_limits_01(caplog, time_limit, timeout, no_harness, msg):
     """test display_time_limits()"""
     display_time_limits(time_limit, timeout, no_harness)
     assert msg in caplog.text
+
+
+@mark.parametrize(
+    "version, expected",
+    [
+        # missing package
+        (PackageNotFoundError(), "unknown"),
+        # success
+        (("1.2.3",), "1.2.3"),
+    ],
+)
+def test_package_version_01(mocker, version, expected):
+    """test package_version()"""
+    mocker.patch("grizzly.common.utils.version", autospec=True, side_effect=version)
+    assert package_version("foo", default="unknown") == expected

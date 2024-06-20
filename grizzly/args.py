@@ -20,7 +20,7 @@ from FTB.ProgramConfiguration import ProgramConfiguration
 from .common.fuzzmanager import FM_CONFIG
 from .common.plugins import scan as scan_plugins
 from .common.plugins import scan_target_assets
-from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, __version__
+from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, package_version
 
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
@@ -205,7 +205,7 @@ class CommonArgs:
             "--version",
             "-V",
             action="version",
-            version=__version__,
+            version=package_version("grizzly-framework"),
             help="Show version number",
         )
         if system().startswith("Linux"):

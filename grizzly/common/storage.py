@@ -13,7 +13,7 @@ from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
 from typing import Any, Dict, Generator, Optional, Tuple, Union, cast
 
-from .utils import __version__, grz_tmp
+from .utils import grz_tmp, package_version
 
 __all__ = ("TestCase", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
@@ -21,6 +21,7 @@ __credits__ = ["Tyson Smith"]
 
 
 LOG = getLogger(__name__)
+GRZ_VERSION = package_version("grizzly-framework")
 TEST_INFO = "test_info.json"
 
 
@@ -76,7 +77,7 @@ class TestCase:
         self.input_fname = input_fname  # file that was used to create the test case
         self.entry_point = self.sanitize_path(entry_point)
         self.timestamp = time() if timestamp is None else timestamp
-        self.version = __version__
+        self.version = GRZ_VERSION
         self._files = TestFileMap()
         if data_path is not None:
             self._root = data_path
