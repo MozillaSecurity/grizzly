@@ -4,9 +4,13 @@
 from logging import getLogger
 from typing import Any, Dict, List, Tuple
 
-from pkg_resources import iter_entry_points
+try:
+    from pkg_resources import iter_entry_points
+except ImportError:
+    from .utils import iter_entry_points  # type: ignore
 
-__all__ = ("load", "scan", "PluginLoadError")
+
+__all__ = ("load_plugin", "scan_plugins", "PluginLoadError")
 
 
 LOG = getLogger(__name__)
@@ -16,7 +20,7 @@ class PluginLoadError(Exception):
     """Raised if loading a plug-in fails"""
 
 
-def load(name: str, group: str, base_type: type) -> Any:
+def load_plugin(name: str, group: str, base_type: type) -> Any:
     """Load a plug-in.
 
     Args:
@@ -30,8 +34,8 @@ def load(name: str, group: str, base_type: type) -> Any:
     assert isinstance(base_type, type)
     for entry in iter_entry_points(group):
         if entry.name == name:
-            LOG.debug("loading %r (%s)", name, base_type.__name__)
             plugin = entry.load()
+            LOG.debug("loading %r (%s)", name, base_type.__name__)
             break
     else:
         raise PluginLoadError(f"{name!r} not found in {group!r}")
@@ -40,7 +44,7 @@ def load(name: str, group: str, base_type: type) -> Any:
     return plugin
 
 
-def scan(group: str) -> List[str]:
+def scan_plugins(group: str) -> List[str]:
     """Scan for installed plug-ins.
 
     Args:
@@ -49,7 +53,7 @@ def scan(group: str) -> List[str]:
     Returns:
         Names of installed entry points.
     """
-    found = []
+    found: List[str] = []
     LOG.debug("scanning %r", group)
     for entry in iter_entry_points(group):
         if entry.name in found:
@@ -68,7 +72,7 @@ def scan_target_assets() -> Dict[str, Tuple[str, ...]]:
     Returns:
         Name of target and list of supported assets.
     """
-    assets = {}
+    assets: Dict[str, Tuple[str, ...]] = {}
     for entry in iter_entry_points("grizzly_targets"):
         assets[entry.name] = entry.load().SUPPORTED_ASSETS
     return assets

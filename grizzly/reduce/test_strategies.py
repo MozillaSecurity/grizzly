@@ -82,11 +82,10 @@ def test_strategy_load_fail(mocker):
         def load(cls):
             raise RuntimeError("oops")
 
-    def entries(_):
-        yield _BadStrategy
-        yield _GoodStrategy
-
-    mocker.patch("grizzly.reduce.strategies.iter_entry_points", side_effect=entries)
+    mocker.patch(
+        "grizzly.reduce.strategies.iter_entry_points",
+        return_value=(_BadStrategy, _GoodStrategy),
+    )
     mocker.patch("grizzly.reduce.strategies.DEFAULT_STRATEGIES", new=("good",))
     result = _load_strategies()
     assert result == {"good": _GoodStrategy}

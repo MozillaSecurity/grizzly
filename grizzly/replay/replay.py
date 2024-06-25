@@ -13,7 +13,7 @@ from FTB.Signatures.CrashInfo import CrashSignature
 
 from sapphire import CertificateBundle, Sapphire, ServerMap
 
-from ..common.plugins import load as load_plugin
+from ..common.plugins import load_plugin
 from ..common.report import Report
 from ..common.reporter import (
     FailedLaunchReporter,
