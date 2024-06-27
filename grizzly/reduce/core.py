@@ -18,7 +18,7 @@ from FTB.Signatures.CrashInfo import CrashSignature
 from sapphire import CertificateBundle, Sapphire
 
 from ..common.fuzzmanager import CrashEntry
-from ..common.plugins import load as load_plugin
+from ..common.plugins import load_plugin
 from ..common.reporter import (
     FailedLaunchReporter,
     FilesystemReporter,

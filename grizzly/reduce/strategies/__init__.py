@@ -30,10 +30,13 @@ from typing import (
     cast,
 )
 
-from pkg_resources import iter_entry_points
-
 from ...common.storage import TestCase
 from ...common.utils import grz_tmp
+
+try:
+    from pkg_resources import iter_entry_points
+except ImportError:
+    from ...common.utils import iter_entry_points  # type: ignore
 
 LOG = getLogger(__name__)
 

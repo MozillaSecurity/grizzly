@@ -9,7 +9,7 @@ from typing import Optional, cast
 from sapphire import CertificateBundle, Sapphire
 
 from .adapter import Adapter
-from .common.plugins import load as load_plugin
+from .common.plugins import load_plugin
 from .common.reporter import (
     FailedLaunchReporter,
     FilesystemReporter,

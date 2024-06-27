@@ -1,13 +1,14 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+import sys  # mypy looks for `sys.version_info`
 from enum import IntEnum, unique
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import EntryPoint, PackageNotFoundError, entry_points, version
 from logging import DEBUG, basicConfig, getLogger
 from os import getenv
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Any, Iterable, Optional, Tuple, Union
+from typing import Any, Generator, Iterable, Optional, Tuple, Union
 
 __all__ = (
     "ConfigError",
@@ -17,6 +18,7 @@ __all__ = (
     "Exit",
     "grz_tmp",
     "HARNESS_FILE",
+    "iter_entry_points",
     "package_version",
     "time_limits",
     "TIMEOUT_DELAY",
@@ -103,6 +105,25 @@ def display_time_limits(time_limit: int, timeout: int, no_harness: bool) -> None
         else:
             LOG.info("Using time limit: %ds, timeout: DISABLED,", time_limit)
         LOG.warning("TIMEOUT DISABLED, not recommended for automation")
+
+
+def iter_entry_points(
+    group: str,
+) -> Generator[EntryPoint, None, None]:  # pragma: no cover
+    """Compatibility wrapper code for importlib.metadata.entry_points()
+
+    Args:
+        group: See entry_points().
+
+    Yields:
+        EntryPoint
+    """
+    # TODO: remove this function when support for Python 3.9 is dropped
+    assert group
+    if sys.version_info >= (3, 10):
+        yield from entry_points().select(group=group)
+    else:
+        raise AssertionError("Unsupported Python version")
 
 
 def package_version(name: str, default: str = "unknown") -> str:

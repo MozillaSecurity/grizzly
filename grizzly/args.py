@@ -18,8 +18,7 @@ from typing import Iterable, List, Optional
 from FTB.ProgramConfiguration import ProgramConfiguration
 
 from .common.fuzzmanager import FM_CONFIG
-from .common.plugins import scan as scan_plugins
-from .common.plugins import scan_target_assets
+from .common.plugins import scan_plugins, scan_target_assets
 from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, package_version
 
 
