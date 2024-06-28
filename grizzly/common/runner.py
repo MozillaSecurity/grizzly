@@ -17,6 +17,8 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 LOG = getLogger(__name__)
+# time in seconds to wait for target to navigate away from post launch page
+POST_LAUNCH_TIMEOUT = 600
 # display warning if launch duration exceeds set value
 SLOW_LAUNCH_THRESHOLD = 20
 
@@ -253,7 +255,7 @@ class Runner:
         """Perform actions after launching browser before loading test cases.
 
         Args:
-            post_launch_delay: Time in seconds before the target will continue.
+            delay: Time in seconds before the target will continue.
 
         Returns:
             None
@@ -272,10 +274,11 @@ class Runner:
             org_timeout = self._server.timeout
             # add time buffer to redirect delay
             # in practice this should take a few seconds (~10s)
-            # in extreme cases ~40s (slow build + debugger)
-            self._server.timeout = delay + 180
+            # in extreme cases ~180s (slow build + debugger + other settings)
+            self._server.timeout = delay + POST_LAUNCH_TIMEOUT
             if delay > 0:
                 LOG.info("Browser launched, continuing in %ds...", delay)
+            LOG.debug("post launch timeout: %ds", self._server.timeout)
             # serve prompt page
             server_status, _ = self._server.serve_path(
                 content.root,
