@@ -147,7 +147,7 @@ class TracebackReport:
 
     def __str__(self) -> str:
         return "\n".join(
-            [f"Log: '{self.log_file.name}'"] + self.prev_lines + self.lines
+            [f"Log: '{self.log_file.name}'", *self.prev_lines, *self.lines]
         )
 
 
@@ -600,7 +600,7 @@ class StatusReporter(BaseReporter):
 
         if self.tracebacks:
             txt = self._merge_tracebacks(self.tracebacks, self.SUMMARY_LIMIT - len(msg))
-            msg = "".join((msg, txt))
+            msg = f"{msg}{txt}"
         return msg
 
 

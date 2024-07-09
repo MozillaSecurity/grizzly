@@ -76,12 +76,12 @@ class CommonArgs:
             help="Configure console logging (default: %(default)s)",
         )
 
-        # build 'asset' help string
+        # build 'asset' help string formatted as:
+        # target01: asset01, asset02. target02: asset03...
         assets = scan_target_assets()
-        asset_msg: List[str] = []
-        for target in sorted(assets):
-            if assets[target]:
-                asset_msg.append(f"{target}: {', '.join(sorted(assets[target]))}.")
+        asset_msg = "".join(
+            f"{x}: {', '.join(sorted(assets[x]))}." for x in sorted(assets) if assets[x]
+        )
 
         self.launcher_grp = self.parser.add_argument_group("Launcher Arguments")
         self.launcher_grp.add_argument(
@@ -90,7 +90,7 @@ class CommonArgs:
             default=[],
             metavar=("ASSET", "PATH"),
             nargs=2,
-            help=f"Specify target specific asset files. {''.join(asset_msg)}",
+            help=f"Specify target specific asset files. {asset_msg}",
         )
         self.launcher_grp.add_argument(
             "-e",

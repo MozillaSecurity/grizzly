@@ -257,10 +257,7 @@ class _BeautifyStrategy(Strategy, ABC):
                 lith_tc.dump(file)
                 continue
 
-            testcases: List[TestCase] = []
-            for test in sorted(self._testcase_root.iterdir()):
-                testcases.append(TestCase.load(test))
-            yield testcases
+            yield [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]
 
             assert self._current_feedback is not None, "No feedback for last iteration"
             if self._current_feedback:

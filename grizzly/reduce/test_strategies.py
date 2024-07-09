@@ -31,10 +31,7 @@ def test_strategy_tc_load(tmp_path, is_hang):
 
     class _TestStrategy(Strategy):
         def __iter__(self):
-            testcases = []
-            for test in sorted(self._testcase_root.iterdir()):
-                testcases.append(TestCase.load(test))
-            yield testcases
+            yield [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]
 
         def update(self, success):
             pass

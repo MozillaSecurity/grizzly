@@ -65,9 +65,7 @@ class MinimizeTestcaseList(Strategy):
         """
         assert self._current_feedback is None
         idx = 0
-        testcases: List[TestCase] = []
-        for test in sorted(self._testcase_root.iterdir()):
-            testcases.append(TestCase.load(test))
+        testcases = [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]
         n_testcases = len(testcases)
         while True:
             if n_testcases <= 1:
