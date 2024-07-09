@@ -10,7 +10,7 @@ from pathlib import Path
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
 from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
 from time import perf_counter, sleep
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union, cast
+from typing import Any, Callable, Iterable, Mapping, Optional, Tuple, Union, cast
 
 from .certificate_bundle import CertificateBundle
 from .connection_manager import ConnectionManager
@@ -200,7 +200,7 @@ class Sapphire:
         forever: bool = False,
         required_files: Optional[Iterable[str]] = None,
         server_map: Optional[ServerMap] = None,
-    ) -> Tuple[Served, Dict[str, Path]]:
+    ) -> Tuple[Served, Mapping[str, Path]]:
         """Serve files in path.
 
         The status codes include:
@@ -216,7 +216,7 @@ class Sapphire:
                 This is meant to be used with continue_cb.
             required_files: Files that need to be served in order to exit the
                 serve loop.
-            server_map (ServerMap):
+            server_map: Map of server includes, dynamic requests and redirects.
 
         Returns:
             Status code and files served.

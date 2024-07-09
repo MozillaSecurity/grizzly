@@ -13,6 +13,7 @@ from os import getenv
 from os.path import exists
 from pathlib import Path
 from platform import system
+from types import MappingProxyType
 from typing import Iterable, List, Optional
 
 from FTB.ProgramConfiguration import ProgramConfiguration
@@ -47,18 +48,20 @@ class SortingHelpFormatter(HelpFormatter):
 
 
 class CommonArgs:
-    IGNORABLE = ("log-limit", "memory", "timeout")
     DEFAULT_IGNORE = ("log-limit", "timeout")
-
-    def __init__(self) -> None:
-        # log levels for console logging
-        self._level_map = {
+    IGNORABLE = ("log-limit", "memory", "timeout")
+    # log levels for console logging
+    LEVEL_MAP = MappingProxyType(
+        {
             "CRIT": CRITICAL,
             "ERROR": ERROR,
             "WARN": WARNING,
             "INFO": INFO,
             "DEBUG": DEBUG,
         }
+    )
+
+    def __init__(self) -> None:
 
         self.parser = ArgumentParser(
             formatter_class=SortingHelpFormatter, conflict_handler="resolve"
@@ -71,7 +74,7 @@ class CommonArgs:
         self.parser.add_argument("binary", type=Path, help="Firefox binary to run")
         self.parser.add_argument(
             "--log-level",
-            choices=sorted(self._level_map),
+            choices=sorted(self.LEVEL_MAP),
             default="INFO",
             help="Configure console logging (default: %(default)s)",
         )
@@ -295,7 +298,7 @@ class CommonArgs:
         if args.launch_attempts < 1:
             self.parser.error("--launch-attempts must be >= 1")
 
-        args.log_level = self._level_map[args.log_level]
+        args.log_level = self.LEVEL_MAP[args.log_level]
 
         if args.log_limit < 0:
             self.parser.error("--log-limit must be >= 0")

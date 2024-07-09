@@ -11,7 +11,7 @@ import re
 from abc import ABC, abstractmethod
 from logging import getLogger
 from pathlib import Path
-from typing import Generator, List, Match, Optional, Set, Tuple, cast
+from typing import FrozenSet, Generator, List, Match, Optional, Tuple, cast
 
 from lithium.testcases import TestcaseLine
 
@@ -64,8 +64,8 @@ class _BeautifyStrategy(Strategy, ABC):
         tag_name: Tag name to search for in other (non-native) extensions.
     """
 
-    all_extensions: Set[str]
-    ignore_files = {TEST_INFO, "prefs.js"}
+    all_extensions: FrozenSet[str]
+    ignore_files = frozenset((TEST_INFO, "prefs.js"))
     import_available: bool
     import_name: str
     native_extension: str
@@ -276,7 +276,7 @@ class CSSBeautify(_BeautifyStrategy):
     definitions.
     """
 
-    all_extensions = {".css", ".htm", ".html", ".xhtml"}
+    all_extensions = frozenset((".css", ".htm", ".html", ".xhtml"))
     import_available = HAVE_CSSBEAUTIFIER
     import_name = "cssbeautifier"
     name = "cssbeautify"
@@ -315,7 +315,7 @@ class JSBeautify(_BeautifyStrategy):
     compound statements.
     """
 
-    all_extensions = {".js", ".htm", ".html", ".xhtml"}
+    all_extensions = frozenset((".js", ".htm", ".html", ".xhtml"))
     import_available = HAVE_JSBEAUTIFIER
     import_name = "jsbeautifier"
     name = "jsbeautify"
