@@ -106,7 +106,7 @@ tasks:
       - created: {$fromNow: ''}
         deadline: {$fromNow: '1 hour'}
         provisionerId: proj-fuzzing
-        workerType: ci
+        workerType: decision
         payload:
           features:
             taskclusterProxy: true
@@ -133,6 +133,6 @@ tasks:
         metadata:
           name: ${project_name} CI decision
           description: Schedule CI tasks for ${project_name}
-          owner: twsmith@mozilla.com
+          owner: ${user}@users.noreply.github.com
           source: https://github.com/MozillaSecurity/grizzly
     else: []
