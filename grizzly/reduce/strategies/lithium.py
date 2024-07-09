@@ -47,10 +47,12 @@ class _LithiumStrategy(Strategy, ABC):
         self._current_feedback: Optional[bool] = None
         self._current_reducer: Optional[ReductionIterator] = None
         self._files_to_reduce: List[Path] = []
-        local_tests: List[TestCase] = []
-        for test in sorted(self._testcase_root.iterdir()):
-            local_tests.append(TestCase.load(test, catalog=True))
-        self.rescan_files_to_reduce(local_tests)
+        self.rescan_files_to_reduce(
+            [
+                TestCase.load(x, catalog=True)
+                for x in sorted(self._testcase_root.iterdir())
+            ]
+        )
 
     def rescan_files_to_reduce(self, testcases: List[TestCase]) -> None:
         """Repopulate the private `files_to_reduce` attribute by scanning the testcase
@@ -128,9 +130,10 @@ class _LithiumStrategy(Strategy, ABC):
 
             for reduction in self._current_reducer:
                 reduction.dump()
-                testcases: List[TestCase] = []
-                for test in sorted(self._testcase_root.iterdir()):
-                    testcases.append(TestCase.load(test, catalog=True))
+                testcases = [
+                    TestCase.load(x, catalog=True)
+                    for x in sorted(self._testcase_root.iterdir())
+                ]
                 LOG.info("[%s] %s", self.name, self._current_reducer.description)
                 yield testcases
                 if not self._current_feedback:

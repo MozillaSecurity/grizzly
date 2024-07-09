@@ -22,7 +22,7 @@ def test_common_args_01(mocker, tmp_path, extra_args, results):
     mocker.patch("grizzly.args.scan_plugins", return_value=["targ"])
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
-    cmd = [str(fake_bin), "--platform", "targ"] + extra_args
+    cmd = [str(fake_bin), "--platform", "targ", *extra_args]
     args = vars(CommonArgs().parse_args(argv=cmd))
     assert args
     for arg_name, expected_value in results.items():
@@ -138,7 +138,7 @@ def test_common_args_03(capsys, mocker, tmp_path, args, msg, targets):
     fake_bin.touch()
     fake_bin.with_suffix(fake_bin.suffix + ".fuzzmanagerconf").touch()
     with raises(SystemExit):
-        CommonArgs().parse_args(argv=[str(fake_bin)] + args)
+        CommonArgs().parse_args(argv=[str(fake_bin), *args])
     assert msg in capsys.readouterr()[-1]
 
 
@@ -209,7 +209,7 @@ def test_grizzly_args_01(mocker, tmp_path, extra_args, results):
     )
     fake_bin = tmp_path / "fake.bin"
     fake_bin.touch()
-    cmd = [str(fake_bin), "adpt", "--platform", "targ"] + extra_args
+    cmd = [str(fake_bin), "adpt", "--platform", "targ", *extra_args]
     args = vars(GrizzlyArgs().parse_args(argv=cmd))
     assert args
     for arg_name, expected_value in results.items():
@@ -269,7 +269,7 @@ def test_grizzly_args_04(capsys, mocker, tmp_path, args, msg):
     fake_bin.touch()
     with raises(SystemExit):
         GrizzlyArgs().parse_args(
-            argv=[str(fake_bin), "adpt", "--platform", "targ"] + args
+            argv=[str(fake_bin), "adpt", "--platform", "targ", *args]
         )
     assert msg in capsys.readouterr()[-1]
 
@@ -297,6 +297,6 @@ def test_grizzly_args_05(capsys, mocker, tmp_path, args, msg):
     fake_bin.touch()
     with raises(SystemExit):
         GrizzlyArgs().parse_args(
-            argv=[str(fake_bin), "adpt", "--platform", "targ"] + args
+            argv=[str(fake_bin), "adpt", "--platform", "targ", *args]
         )
     assert msg in capsys.readouterr()[-1]

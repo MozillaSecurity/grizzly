@@ -344,10 +344,9 @@ class Runner:
         # add all files that were served (includes, etc...) to test
         existing = set(testcase.required)
         for url, local_file in served.items():
-            if url in existing:
-                continue
-            # use copy here so include files are copied
-            testcase.add_from_file(local_file, file_name=url, copy=True)
+            if url not in existing:
+                # copy include files
+                testcase.add_from_file(local_file, file_name=url, copy=True)
         # record use of https in testcase
         testcase.https = self._server.scheme == "https"
         if result.timeout:

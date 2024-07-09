@@ -54,7 +54,7 @@ def test_main_01(mocker, session_setup, adpt_relaunch, extra_args):
     adapter.RELAUNCH = adpt_relaunch
 
     # use __file__ as "binary" since it is not used
-    cmd = [__file__, "adpt", "--platform", "targ"] + extra_args
+    cmd = [__file__, "adpt", "--platform", "targ", *extra_args]
     args = GrizzlyArgs().parse_args(cmd)
     session_obj.status.results.total = 1 if args.smoke_test else 0
 
