@@ -63,4 +63,20 @@ filterwarnings = [
 ]
 log_level = "DEBUG"
 
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # Flynt
+    "FLY",
+    # Perflint
+    "PERF",
+    # Ruff-specific rules
+    "RUF",
+    # pycodestyle
+    "W",
+]
+
 [tool.setuptools_scm]

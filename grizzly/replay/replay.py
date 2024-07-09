@@ -196,7 +196,7 @@ class ReplayManager:
                 tests.append(
                     TestCase.load(entry, catalog=catalog, entry_point=entry_point)
                 )
-            except TestCaseLoadFailure as exc:
+            except TestCaseLoadFailure as exc:  # noqa: PERF203
                 LOG.warning("Failed to load: '%s' (%s)", entry, exc)
         if not tests:
             raise TestCaseLoadFailure("Failed to load TestCases")
