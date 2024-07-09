@@ -13,7 +13,8 @@ from os.path import splitext
 from pathlib import Path
 from queue import Queue
 from threading import Event, Lock
-from typing import Any, Dict, Iterable, NamedTuple, Optional, Set, Tuple, Union, cast
+from types import MappingProxyType
+from typing import Any, Iterable, Mapping, NamedTuple, Optional, Set, Tuple, Union, cast
 
 from .server_map import DynamicResource, FileResource, RedirectResource, ServerMap
 
@@ -50,13 +51,15 @@ class ServedTracker(NamedTuple):
 class Job:
     # MIME_MAP is used to support new or uncommon mime types.
     # Definitions in here take priority over mimetypes.guess_type().
-    MIME_MAP = {
-        ".avif": "image/avif",
-        ".bmp": "image/bmp",
-        ".ico": "image/x-icon",
-        ".wave": "audio/x-wav",
-        ".webp": "image/webp",
-    }
+    MIME_MAP = MappingProxyType(
+        {
+            ".avif": "image/avif",
+            ".bmp": "image/bmp",
+            ".ico": "image/x-icon",
+            ".wave": "audio/x-wav",
+            ".webp": "image/webp",
+        }
+    )
 
     __slots__ = (
         "_complete",
@@ -260,7 +263,7 @@ class Job:
             return not self._pending.files
 
     @property
-    def served(self) -> Dict[str, Path]:
+    def served(self) -> Mapping[str, Path]:
         """Served files.
 
         Args:
@@ -270,7 +273,7 @@ class Job:
             Mapping of URLs to files on disk.
         """
         with self._served.lock:
-            return {entry.url: entry.target for entry in self._served.files}
+            return MappingProxyType({x.url: x.target for x in self._served.files})
 
     @property
     def status(self) -> Served:

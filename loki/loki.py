@@ -22,7 +22,7 @@ LOG = getLogger(__name__)
 
 
 class Loki:
-    BYTE_ORDERS = {"<", ">", "@", "!", "="}
+    BYTE_ORDERS = frozenset(("<", ">", "@", "!", "="))
 
     __slots__ = ("aggr", "byte_order")
 
