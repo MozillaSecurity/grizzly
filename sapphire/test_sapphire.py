@@ -309,7 +309,7 @@ def test_sapphire_12(client, tmp_path):
         # non-alphanumeric chars (valid characters to use on filesystem)
         ("!@$%^&(_+-=[]),'~`{}", None),
         # extended ascii chars
-        ("€d’é-ñÿ", None),
+        ("€d’é-ñÿ", None),  # noqa: RUF001
     ],
 )
 def test_sapphire_13(client, tmp_path, path, query):
@@ -667,7 +667,7 @@ def test_sapphire_24(client_factory, tmp_path):
         # non-alphanumeric chars (valid characters to use on filesystem)
         "!@$%^&(_+-=[]),'~`{}",
         # extended ascii chars
-        "€d’é-ñÿ",
+        "€d’é-ñÿ",  # noqa: RUF001
     ],
 )
 def test_sapphire_25(client, tmp_path, file_name):
