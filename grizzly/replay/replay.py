@@ -33,6 +33,7 @@ from ..common.utils import (
     package_version,
     time_limits,
 )
+from ..services import WebServices
 from ..target import (
     AssetManager,
     Result,
@@ -294,6 +295,7 @@ class ReplayManager:
         launch_attempts: int = 3,
         on_iteration_cb: Optional[Callable[[], None]] = None,
         post_launch_delay: int = -1,
+        services: Optional[WebServices] = None,
     ) -> List[ReplayResult]:
         """Run testcase replay.
 
@@ -314,6 +316,7 @@ class ReplayManager:
             on_iteration_cb: Called every time a single iteration is run.
             post_launch_delay: Number of seconds to wait before continuing after the
                                browser is launched. A negative number skips redirect.
+            services: WebServices instance.
 
         Returns:
             ReplayResults that were found running provided testcases.
@@ -348,6 +351,9 @@ class ReplayManager:
                 mime_type="text/html",
             )
             server_map.set_redirect("grz_start", "grz_harness", required=False)
+
+        if services:
+            services.map_locations(server_map)
 
         # track unprocessed results
         reports: Dict[str, ReplayResult] = {}
@@ -629,6 +635,7 @@ class ReplayManager:
         certs = None
         results: Optional[List[ReplayResult]] = None
         target: Optional[Target] = None
+        ext_services = None
         try:
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)
@@ -682,6 +689,10 @@ class ReplayManager:
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
+                if certs is not None:
+                    LOG.debug("starting additional web services")
+                    ext_services = WebServices.start_services(certs.host, certs.key)
+
                 target.reverse(server.port, server.port)
                 with cls(
                     set(args.ignore),
@@ -702,6 +713,7 @@ class ReplayManager:
                         min_results=args.min_crashes,
                         post_launch_delay=args.post_launch_delay,
                         repeat=repeat,
+                        services=ext_services,
                     )
             # handle results
             success = any(x.expected for x in results)
@@ -754,4 +766,6 @@ class ReplayManager:
                 asset_mgr.cleanup()
             if certs is not None:
                 certs.cleanup()
+            if ext_services is not None:
+                ext_services.cleanup()
             LOG.info("Done.")
