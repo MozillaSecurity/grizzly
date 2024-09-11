@@ -1,13 +1,15 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from logging import getLogger
 from os import kill
 from pathlib import Path
 from platform import system
 from signal import SIGABRT
 from tempfile import TemporaryDirectory, mkdtemp
-from typing import Any, Dict, Optional, Set, cast
+from typing import Any, Dict, Optional, cast
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
 from ffpuppet.helpers import certutil_available, certutil_find
@@ -32,7 +34,7 @@ class PuppetMonitor(TargetMonitor):
     def __init__(self, puppet: FFPuppet) -> None:
         self._puppet = puppet
 
-    def clone_log(self, log_id: str, offset: int = 0) -> Optional[Path]:
+    def clone_log(self, log_id: str, offset: int = 0) -> Path | None:
         return self._puppet.clone_log(log_id, offset=offset)
 
     def is_healthy(self) -> bool:
@@ -93,7 +95,7 @@ class PuppetTarget(Target):
         launch_timeout: int,
         log_limit: int,
         memory_limit: int,
-        **kwds: Dict[str, Any],
+        **kwds: dict[str, Any],
     ) -> None:
         LOG.debug("ffpuppet version: %s", package_version("ffpuppet"))
         certs = cast(Optional[CertificateBundle], kwds.pop("certs", None))
@@ -121,8 +123,8 @@ class PuppetTarget(Target):
         if kwds.pop("valgrind", False):
             self.use_valgrind = True
             self._debugger = Debugger.VALGRIND
-        self._extension: Optional[Path] = None
-        self._prefs: Optional[Path] = None
+        self._extension: Path | None = None
+        self._prefs: Path | None = None
 
         # create Puppet object
         self._puppet = FFPuppet(
@@ -152,7 +154,7 @@ class PuppetTarget(Target):
         self.save_logs(logs)
         return Report(logs, self.binary, is_hang=is_hang, unstable=unstable)
 
-    def filtered_environ(self) -> Dict[str, str]:
+    def filtered_environ(self) -> dict[str, str]:
         # remove context specific entries from environment
         filtered = dict(self.environ)
         opts = SanitizerOptions()
@@ -174,7 +176,7 @@ class PuppetTarget(Target):
             self._monitor = PuppetMonitor(self._puppet)
         return cast(PuppetMonitor, self._monitor)
 
-    def check_result(self, ignored: Set[str]) -> Result:
+    def check_result(self, ignored: set[str]) -> Result:
         result = Result.NONE
         # check if there has been a crash, hangs will appear as SIGABRT
         if not self._puppet.is_healthy():
@@ -279,7 +281,7 @@ class PuppetTarget(Target):
                 total += length
         return total
 
-    def merge_environment(self, extra: Dict[str, str]) -> None:
+    def merge_environment(self, extra: dict[str, str]) -> None:
         output = dict(extra)
         if self.environ:
             # prioritize existing environment variables

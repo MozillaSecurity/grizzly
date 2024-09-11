@@ -7,11 +7,13 @@ Constants:
     HAVE_CSSBEAUTIFIER (bool): True if `cssbeautifier` module is available.
     HAVE_JSBEAUTIFIER (bool): True if `jsbeautifier` module is available.
 """
+from __future__ import annotations
+
 import re
 from abc import ABC, abstractmethod
 from logging import getLogger
 from pathlib import Path
-from typing import FrozenSet, Generator, List, Match, Optional, Tuple, cast
+from typing import Generator, Match, cast
 
 from lithium.testcases import TestcaseLine
 
@@ -64,14 +66,14 @@ class _BeautifyStrategy(Strategy, ABC):
         tag_name: Tag name to search for in other (non-native) extensions.
     """
 
-    all_extensions: FrozenSet[str]
+    all_extensions: frozenset[str]
     ignore_files = frozenset((TEST_INFO, "prefs.js"))
     import_available: bool
     import_name: str
     native_extension: str
     tag_name: str
 
-    def __init__(self, testcases: List[TestCase]) -> None:
+    def __init__(self, testcases: list[TestCase]) -> None:
         """Initialize beautification strategy instance.
 
         Arguments:
@@ -80,7 +82,7 @@ class _BeautifyStrategy(Strategy, ABC):
         """
         assert self.tag_name is not None
         super().__init__(testcases)
-        self._files_to_beautify: List[Path] = []
+        self._files_to_beautify: list[Path] = []
         for path in self._testcase_root.glob("**/*"):
             if (
                 path.is_file()
@@ -89,7 +91,7 @@ class _BeautifyStrategy(Strategy, ABC):
             ):
                 if _contains_dd(path):
                     self._files_to_beautify.append(path)
-        self._current_feedback: Optional[bool] = None
+        self._current_feedback: bool | None = None
         tag_bytes = self.tag_name.encode("ascii")
         self._re_tag_start = re.compile(
             rb"<\s*" + tag_bytes + rb".*?>", flags=re.DOTALL | re.IGNORECASE
@@ -124,7 +126,7 @@ class _BeautifyStrategy(Strategy, ABC):
 
     def _chunks_to_beautify(
         self, before: bytes, to_beautify: bytes, file: Path
-    ) -> Generator[Tuple[int, int], None, None]:
+    ) -> Generator[tuple[int, int], None, None]:
         """Iterate over `to_beautify` and find chunks of style/script to beautify.
 
         Arguments:
@@ -142,7 +144,7 @@ class _BeautifyStrategy(Strategy, ABC):
             return
 
         # find the last <tag> preceding DDBEGIN
-        last_tag_start: Optional[Match[bytes]] = None
+        last_tag_start: Match[bytes] | None = None
         for match in self._re_tag_start.finditer(before):
             last_tag_start = match
         in_tag_already = (
@@ -177,7 +179,7 @@ class _BeautifyStrategy(Strategy, ABC):
             yield (chunk_start, chunk_start + tag_end.start(0))
             search_start = chunk_start + tag_end.end(0)
 
-    def __iter__(self) -> Generator[List[TestCase], None, None]:
+    def __iter__(self) -> Generator[list[TestCase], None, None]:
         """Iterate over potential beautifications of testcases according to this
         strategy.
 

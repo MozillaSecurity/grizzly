@@ -1,7 +1,9 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Any, List, Optional
+from __future__ import annotations
+
+from typing import Any
 
 from sapphire.server_map import ServerMap
 
@@ -25,13 +27,13 @@ class IOManager:
         assert report_size > 0
         self.server_map = ServerMap()
         # tests will be ordered oldest to newest
-        self.tests: List[TestCase] = []
+        self.tests: list[TestCase] = []
         # total number of test cases generated
         self._generated = 0
         self._report_size = report_size
-        self._test: Optional[TestCase] = None
+        self._test: TestCase | None = None
 
-    def __enter__(self) -> "IOManager":
+    def __enter__(self) -> IOManager:
         return self
 
     def __exit__(self, *exc: Any) -> None:

@@ -2,6 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """`ReduceManager` finds the smallest testcase(s) to reproduce an issue."""
+from __future__ import annotations
+
 import json
 import os
 from argparse import Namespace
@@ -11,7 +13,7 @@ from logging import getLogger
 from math import ceil, log
 from pathlib import Path
 from time import time
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
@@ -76,24 +78,24 @@ class ReduceManager:
 
     def __init__(
         self,
-        ignore: Set[str],
+        ignore: set[str],
         server: Sapphire,
         target: Target,
-        testcases: List[TestCase],
-        strategies: List[str],
+        testcases: list[TestCase],
+        strategies: list[str],
         log_path: Path,
         any_crash: bool = False,
         expect_hang: bool = False,
         idle_delay: int = 0,
         idle_threshold: int = 0,
-        reducer_crash_id: Optional[int] = None,
+        reducer_crash_id: int | None = None,
         relaunch: int = 1,
-        report_period: Optional[int] = None,
+        report_period: int | None = None,
         report_to_fuzzmanager: bool = False,
-        signature: Optional[CrashSignature] = None,
-        signature_desc: Optional[str] = None,
+        signature: CrashSignature | None = None,
+        signature_desc: str | None = None,
         static_timeout: bool = False,
-        tool: Optional[str] = None,
+        tool: str | None = None,
         use_analysis: bool = True,
         use_harness: bool = True,
     ):
@@ -154,7 +156,7 @@ class ReduceManager:
         self._use_analysis = use_analysis
         self._use_harness = use_harness
 
-    def __enter__(self) -> "ReduceManager":
+    def __enter__(self) -> ReduceManager:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -172,7 +174,7 @@ class ReduceManager:
         for test in self.testcases:
             test.cleanup()
 
-    def update_timeout(self, results: List[ReplayResult]) -> None:
+    def update_timeout(self, results: list[ReplayResult]) -> None:
         """Tune idle/server timeout values based on actual duration of expected results.
 
         Expected durations will be updated if the actual duration is much lower.
@@ -240,7 +242,7 @@ class ReduceManager:
         self._status.iterations += 1
         self._status.report()
 
-    def run_reliability_analysis(self) -> Tuple[int, int]:
+    def run_reliability_analysis(self) -> tuple[int, int]:
         """Run several analysis passes of the current testcase to find `run` parameters.
 
         The number of repetitions and minimum number of crashes are calculated to
@@ -504,14 +506,14 @@ class ReduceManager:
 
                 strategy_last_report = time()
                 strategy_stats = self._status.measure(strategy.name)
-                best_results: List[ReplayResult] = []
-                other_results: Dict[str, Tuple[ReplayResult, List[TestCase]]] = {}
+                best_results: list[ReplayResult] = []
+                other_results: dict[str, tuple[ReplayResult, list[TestCase]]] = {}
                 try:
                     with replay, strategy, strategy_stats:
                         self._status.report(force=True)
                         for reduction in strategy:
                             keep_reduction = False
-                            results: List[ReplayResult] = []
+                            results: list[ReplayResult] = []
                             try:
                                 # reduction is a new list of testcases to be replayed
                                 results = replay.run(
@@ -708,8 +710,8 @@ class ReduceManager:
 
     def report(
         self,
-        results: List[ReplayResult],
-        testcases: List[TestCase],
+        results: list[ReplayResult],
+        testcases: list[TestCase],
         update_status: bool = False,
     ) -> None:
         """Report results, either to FuzzManager or to filesystem.
@@ -720,7 +722,7 @@ class ReduceManager:
             update_status: Whether to update status "Latest Reports"
         """
         reporter: Reporter
-        new_reports: List[str] = []
+        new_reports: list[str] = []
         status = self._status.copy()  # copy implicitly closes open counters
         for result in results:
             # write reduction stats for expected results
@@ -775,12 +777,12 @@ class ReduceManager:
         elif args.valgrind:
             LOG.info("Running with Valgrind. This will be SLOW!")
 
-        asset_mgr: Optional[AssetManager] = None
+        asset_mgr: AssetManager | None = None
         certs = None
         signature = None
         signature_desc = None
-        target: Optional[Target] = None
-        testcases: List[TestCase] = []
+        target: Target | None = None
+        testcases: list[TestCase] = []
 
         try:
             try:

@@ -1,9 +1,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional, Tuple, final
+from typing import Any, Generator, final
 
 from sapphire import ServerMap
 
@@ -54,13 +56,13 @@ class Adapter(metaclass=ABCMeta):
             raise AdapterError("name must not be empty")
         if len(name.split()) != 1 or name.strip() != name:
             raise AdapterError("name must not contain whitespace")
-        self._harness: Optional[bytes] = None
-        self.fuzz: Dict[str, Any] = {}
-        self.monitor: Optional[TargetMonitor] = None
+        self._harness: bytes | None = None
+        self.fuzz: dict[str, Any] = {}
+        self.monitor: TargetMonitor | None = None
         self.name = name
-        self.remaining: Optional[int] = None
+        self.remaining: int | None = None
 
-    def __enter__(self) -> "Adapter":
+    def __enter__(self) -> Adapter:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -94,7 +96,7 @@ class Adapter(metaclass=ABCMeta):
         assert self._harness, f"empty harness file '{path.resolve()}'"
 
     @final
-    def get_harness(self) -> Optional[bytes]:
+    def get_harness(self) -> bytes | None:
         """Get the harness. Used internally by Grizzly.
         *** DO NOT OVERRIDE! ***
 
@@ -110,7 +112,7 @@ class Adapter(metaclass=ABCMeta):
     @staticmethod
     def scan_path(
         path: str,
-        ignore: Tuple[str, ...] = IGNORE_FILES,
+        ignore: tuple[str, ...] = IGNORE_FILES,
         recursive: bool = False,
     ) -> Generator[str, None, None]:
         """Scan a path and yield the files within it. This is available as
@@ -149,7 +151,7 @@ class Adapter(metaclass=ABCMeta):
             None
         """
 
-    def on_served(self, testcase: TestCase, served: Tuple[str, ...]) -> None:
+    def on_served(self, testcase: TestCase, served: tuple[str, ...]) -> None:
         """Optional. Automatically called after a test case is successfully served.
 
         Args:
@@ -160,7 +162,7 @@ class Adapter(metaclass=ABCMeta):
             None
         """
 
-    def on_timeout(self, testcase: TestCase, served: Tuple[str, ...]) -> None:
+    def on_timeout(self, testcase: TestCase, served: tuple[str, ...]) -> None:
         """Optional. Automatically called if timeout occurs while attempting to
         serve a test case. By default it calls `self.on_served()`.
 
@@ -184,7 +186,7 @@ class Adapter(metaclass=ABCMeta):
         """
 
     # TODO: update input_path type (str -> Path)
-    def setup(self, input_path: Optional[str], server_map: ServerMap) -> None:
+    def setup(self, input_path: str | None, server_map: ServerMap) -> None:
         """Optional. Automatically called once at startup.
 
         Args:

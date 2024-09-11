@@ -2,6 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Interface for getting Crash and Bucket data from CrashManager API"""
+from __future__ import annotations
+
 import json
 from contextlib import contextmanager
 from logging import getLogger
@@ -9,7 +11,7 @@ from pathlib import Path
 from re import search
 from shutil import copyfileobj, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
-from typing import Any, Dict, Generator, List, Optional, Tuple, cast
+from typing import Any, Dict, Generator, cast
 from zipfile import BadZipFile, ZipFile
 
 from Collector.Collector import Collector
@@ -53,10 +55,10 @@ class CrashEntry:
         assert isinstance(crash_id, int)
         self._crash_id = crash_id
         self._coll = Collector()
-        self._contents: Optional[List[Path]] = None
-        self._data: Optional[Dict[str, Any]] = None
-        self._storage: Optional[Path] = None
-        self._sig_filename: Optional[Path] = None
+        self._contents: list[Path] | None = None
+        self._data: dict[str, Any] | None = None
+        self._storage: Path | None = None
+        self._sig_filename: Path | None = None
         self._url = (
             f"{self._coll.serverProtocol}://{self._coll.serverHost}:"
             f"{self._coll.serverPort}/crashmanager/rest/crashes/{crash_id}/"
@@ -66,7 +68,7 @@ class CrashEntry:
     def crash_id(self) -> int:
         return self._crash_id
 
-    def __enter__(self) -> "CrashEntry":
+    def __enter__(self) -> CrashEntry:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -112,7 +114,7 @@ class CrashEntry:
             rmtree(self._sig_filename.parent)
 
     @staticmethod
-    def _subset(tests: List[Path], subset: List[int]) -> List[Path]:
+    def _subset(tests: list[Path], subset: list[int]) -> list[Path]:
         """Select a subset of tests directories. Subset values are sanitized to
         avoid raising.
 
@@ -133,8 +135,8 @@ class CrashEntry:
         return [tests[i] for i in sorted(keep)]
 
     def testcases(
-        self, subset: Optional[List[int]] = None, ext: Optional[str] = None
-    ) -> List[Path]:
+        self, subset: list[int] | None = None, ext: str | None = None
+    ) -> list[Path]:
         """Download the testcase data from CrashManager.
 
         Arguments:
@@ -270,19 +272,19 @@ class Bucket:
         """
         assert isinstance(bucket_id, int)
         self._bucket_id = bucket_id
-        self._sig_filename: Optional[Path] = None
+        self._sig_filename: Path | None = None
         self._coll = Collector()
         self._url = (
             f"{self._coll.serverProtocol}://{self._coll.serverHost}:"
             f"{self._coll.serverPort}/crashmanager/rest/buckets/{bucket_id}/"
         )
-        self._data: Optional[Dict[str, Any]] = None
+        self._data: dict[str, Any] | None = None
 
     @property
     def bucket_id(self) -> int:
         return self._bucket_id
 
-    def __enter__(self) -> "Bucket":
+    def __enter__(self) -> Bucket:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -317,7 +319,7 @@ class Bucket:
             rmtree(self._sig_filename.parent)
 
     def iter_crashes(
-        self, quality_filter: Optional[int] = None
+        self, quality_filter: int | None = None
     ) -> Generator[CrashEntry, None, None]:
         """Fetch all crash IDs for this FuzzManager bucket.
         Only crashes with testcases are returned.
@@ -330,8 +332,8 @@ class Bucket:
         """
 
         def _get_results(
-            endpoint: str, params: Optional[Dict[str, str]] = None
-        ) -> Generator[Dict[str, Any], None, None]:
+            endpoint: str, params: dict[str, str] | None = None
+        ) -> Generator[dict[str, Any], None, None]:
             """
             Function to get paginated results from FuzzManager
 
@@ -349,7 +351,7 @@ class Bucket:
                 f"{self._coll.serverPort}/crashmanager/rest/{endpoint}/"
             )
 
-            response: Dict[str, Any] = self._coll.get(url, params=params).json()
+            response: dict[str, Any] = self._coll.get(url, params=params).json()
 
             while True:
                 LOG.debug(
@@ -433,7 +435,7 @@ class Bucket:
 @contextmanager
 def load_fm_data(
     crash_id: int, load_bucket: bool = False
-) -> Generator[Tuple[CrashEntry, Optional[Bucket]], None, None]:
+) -> Generator[tuple[CrashEntry, Bucket | None], None, None]:
     """Load CrashEntry including Bucket from FuzzManager.
 
     Arguments:

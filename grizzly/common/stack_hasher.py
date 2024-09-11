@@ -11,13 +11,14 @@ entries on the top of the stack with the offsets removed. This returns a unique
 crash id (1st hash) and a bug id (2nd hash). This is not perfect but works very
 well in most cases.
 """
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from hashlib import sha1
 from logging import DEBUG, INFO, basicConfig, getLogger
 from os.path import basename
 from re import compile as re_compile
 from re import match as re_match
-from typing import List, Optional, Type
 
 __all__ = ("Stack",)
 __author__ = "Tyson Smith"
@@ -43,10 +44,10 @@ class StackFrame(ABC):
 
     def __init__(
         self,
-        function: Optional[str] = None,
-        location: Optional[str] = None,
-        offset: Optional[str] = None,
-        stack_line: Optional[str] = None,
+        function: str | None = None,
+        location: str | None = None,
+        offset: str | None = None,
+        stack_line: str | None = None,
     ) -> None:
         self.function = function
         self.location = location
@@ -67,7 +68,7 @@ class StackFrame(ABC):
 
     @classmethod
     @abstractmethod
-    def from_line(cls, input_line: str) -> Optional["StackFrame"]:
+    def from_line(cls, input_line: str) -> StackFrame | None:
         """Parse stack frame details.
 
         Args:
@@ -80,7 +81,7 @@ class StackFrame(ABC):
 
 class MinidumpStackFrame(StackFrame):
     @classmethod
-    def from_line(cls, input_line: str) -> Optional["MinidumpStackFrame"]:
+    def from_line(cls, input_line: str) -> MinidumpStackFrame | None:
         """Parse stack frame details.
 
         Args:
@@ -127,7 +128,7 @@ class GdbStackFrame(StackFrame):
     _re_gdb = re_compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
 
     @classmethod
-    def from_line(cls, input_line: str) -> Optional["GdbStackFrame"]:
+    def from_line(cls, input_line: str) -> GdbStackFrame | None:
         """Parse stack frame details.
 
         Args:
@@ -166,7 +167,7 @@ class RrStackFrame(StackFrame):
     _re_rr = re_compile(r"rr\((?P<loc>.+)\+(?P<off>0x[0-9a-f]+)\)\[0x[0-9a-f]+\]")
 
     @classmethod
-    def from_line(cls, input_line: str) -> Optional["RrStackFrame"]:
+    def from_line(cls, input_line: str) -> RrStackFrame | None:
         """Parse stack frame details.
 
         Args:
@@ -188,7 +189,7 @@ class RustStackFrame(StackFrame):
     _re_rust_frame = re_compile(r"^\s+(?P<num>\d+):\s+0x[0-9a-f]+\s+\-\s+(?P<line>.+)")
 
     @classmethod
-    def from_line(cls, input_line: str) -> Optional["RustStackFrame"]:
+    def from_line(cls, input_line: str) -> RustStackFrame | None:
         """Parse stack frame details.
 
         Args:
@@ -212,7 +213,7 @@ class SanitizerStackFrame(StackFrame):
     )
 
     @classmethod
-    def from_line(cls, input_line: str) -> Optional["SanitizerStackFrame"]:
+    def from_line(cls, input_line: str) -> SanitizerStackFrame | None:
         """Parse stack frame details.
 
         Args:
@@ -255,7 +256,7 @@ class ThreadSanitizerStackFrame(StackFrame):
     )
 
     @classmethod
-    def from_line(cls, input_line: str) -> Optional["ThreadSanitizerStackFrame"]:
+    def from_line(cls, input_line: str) -> ThreadSanitizerStackFrame | None:
         """Parse stack frame details.
 
         Args:
@@ -300,7 +301,7 @@ class ValgrindStackFrame(StackFrame):
     )
 
     @classmethod
-    def from_line(cls, input_line: str) -> Optional["ValgrindStackFrame"]:
+    def from_line(cls, input_line: str) -> ValgrindStackFrame | None:
         """Parse stack frame details.
 
         Args:
@@ -340,7 +341,7 @@ class Stack:
 
     def __init__(
         self,
-        frames: List[StackFrame],
+        frames: list[StackFrame],
         height_limit: int = 0,
         major_depth: int = MAJOR_DEPTH,
     ) -> None:
@@ -351,13 +352,13 @@ class Stack:
         self._height_limit = height_limit
         # use 0 for no limit for no limit
         self._major_depth = major_depth
-        self._major: Optional[str] = None
-        self._minor: Optional[str] = None
+        self._major: str | None = None
+        self._minor: str | None = None
 
     def __str__(self) -> str:
         return "\n".join(str(frame) for frame in self.frames)
 
-    def _calculate_hash(self, major: bool = False) -> Optional[str]:
+    def _calculate_hash(self, major: bool = False) -> str | None:
         """Calculate hash value from frames.
 
         Args:
@@ -400,7 +401,7 @@ class Stack:
         return bucket_hash.hexdigest()
 
     @classmethod
-    def from_text(cls, input_text: str, major_depth: int = MAJOR_DEPTH) -> "Stack":
+    def from_text(cls, input_text: str, major_depth: int = MAJOR_DEPTH) -> Stack:
         """Parse a stack trace from text. This is intended to parse the output
         from a single result. Some debuggers such as ASan and TSan can include
         multiple stacks per result.
@@ -414,14 +415,14 @@ class Stack:
             Stack
         """
 
-        frames: List[StackFrame] = []
-        parser_class: Optional[Type[StackFrame]] = None
+        frames: list[StackFrame] = []
+        parser_class: type[StackFrame] | None = None
         for line in input_text.split("\n"):
             line = line.rstrip()
             if not line:
                 # skip empty lines
                 continue
-            frame: Optional[StackFrame] = None
+            frame: StackFrame | None = None
             try:
                 # only use a single StackFrame type
                 if parser_class is None:
@@ -487,13 +488,13 @@ class Stack:
         self._minor = None
 
     @property
-    def major(self) -> Optional[str]:
+    def major(self) -> str | None:
         if self._major is None:
             self._major = self._calculate_hash(major=True)
         return self._major
 
     @property
-    def minor(self) -> Optional[str]:
+    def minor(self) -> str | None:
         if self._minor is None:
             self._minor = self._calculate_hash()
         return self._minor

@@ -2,11 +2,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Grizzly reducer lithium strategy definitions."""
+from __future__ import annotations
 
 from abc import ABC
 from logging import getLogger
 from pathlib import Path
-from typing import Generator, List, Optional, Type
+from typing import Generator
 
 from lithium.strategies import CheckOnly
 from lithium.strategies import CollapseEmptyBraces as LithCollapseEmptyBraces
@@ -33,10 +34,10 @@ class _LithiumStrategy(Strategy, ABC):
         testcase_cls: Lithium testcase type.
     """
 
-    strategy_cls: Type[LithStrategy]
-    testcase_cls: Type[LithTestcase]
+    strategy_cls: type[LithStrategy]
+    testcase_cls: type[LithTestcase]
 
-    def __init__(self, testcases: List[TestCase]) -> None:
+    def __init__(self, testcases: list[TestCase]) -> None:
         """Initialize strategy instance.
 
         Arguments:
@@ -44,9 +45,9 @@ class _LithiumStrategy(Strategy, ABC):
                        testcases.
         """
         super().__init__(testcases)
-        self._current_feedback: Optional[bool] = None
-        self._current_reducer: Optional[ReductionIterator] = None
-        self._files_to_reduce: List[Path] = []
+        self._current_feedback: bool | None = None
+        self._current_reducer: ReductionIterator | None = None
+        self._files_to_reduce: list[Path] = []
         self.rescan_files_to_reduce(
             [
                 TestCase.load(x, catalog=True)
@@ -54,7 +55,7 @@ class _LithiumStrategy(Strategy, ABC):
             ]
         )
 
-    def rescan_files_to_reduce(self, testcases: List[TestCase]) -> None:
+    def rescan_files_to_reduce(self, testcases: list[TestCase]) -> None:
         """Repopulate the private `files_to_reduce` attribute by scanning the testcase
         root.
 
@@ -80,7 +81,7 @@ class _LithiumStrategy(Strategy, ABC):
             self._current_reducer.feedback(success)
         self._current_feedback = success
 
-    def __iter__(self) -> Generator[List[TestCase], None, None]:
+    def __iter__(self) -> Generator[list[TestCase], None, None]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each testcase set yielded, and call `update` with the
@@ -176,13 +177,13 @@ class Check(_LithiumStrategy):
     strategy_cls = CheckOnly
     testcase_cls = TestcaseLine
 
-    def __init__(self, testcases: List[TestCase]) -> None:
+    def __init__(self, testcases: list[TestCase]) -> None:
         super().__init__(testcases)
         # trim files_to_reduce, for check we don't need to run on every file
         # just once per Grizzly TestCase set is enough.
         self._files_to_reduce = self._files_to_reduce[:1]
 
-    def __iter__(self) -> Generator[List[TestCase], None, None]:
+    def __iter__(self) -> Generator[list[TestCase], None, None]:
         yield from super().__iter__()
 
 

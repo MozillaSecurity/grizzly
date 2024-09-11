@@ -1,13 +1,14 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
 
 from dataclasses import dataclass
 from inspect import signature
 from logging import getLogger
 from pathlib import Path
 from re import search as re_search
-from typing import Callable, Dict
+from typing import Callable
 
 __all__ = ("Resource", "ServerMap")
 __author__ = "Tyson Smith"
@@ -56,11 +57,11 @@ class ServerMap:
     __slots__ = ("dynamic", "include", "redirect")
 
     def __init__(self) -> None:
-        self.dynamic: Dict[str, DynamicResource] = {}
+        self.dynamic: dict[str, DynamicResource] = {}
         # mapping of directories that can be requested
-        self.include: Dict[str, IncludeResource] = {}
+        self.include: dict[str, IncludeResource] = {}
         # document paths to map to file names using 307s
-        self.redirect: Dict[str, RedirectResource] = {}
+        self.redirect: dict[str, RedirectResource] = {}
 
     @staticmethod
     def _check_url(url: str) -> str:

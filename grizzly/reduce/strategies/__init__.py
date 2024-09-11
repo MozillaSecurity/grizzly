@@ -11,24 +11,15 @@ Constants:
     DEFAULT_STRATEGIES: Strategy names run by default if unspecified.
     STRATEGIES: Mapping of available strategy names to implementing class.
 """
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from hashlib import sha512
 from logging import DEBUG, getLogger
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-from typing import (
-    Any,
-    Dict,
-    FrozenSet,
-    Generator,
-    Iterable,
-    List,
-    Set,
-    Tuple,
-    Type,
-    cast,
-)
+from typing import Any, Generator, Iterable, Type, cast
 
 from ...common.storage import TestCase
 from ...common.utils import grz_tmp
@@ -63,7 +54,7 @@ class Strategy(ABC):
 
     name: str
 
-    def __init__(self, testcases: List[TestCase]) -> None:
+    def __init__(self, testcases: list[TestCase]) -> None:
         """Initialize strategy instance.
 
         Arguments:
@@ -75,17 +66,17 @@ class Strategy(ABC):
         # Tuple[above, ...] is all the test files for a set of test cases meaning:
         #   0/**, 1/**, etc.
         # Set[above] is the unique test case sets which have been tried
-        self._tried: Set[Tuple[Tuple[str, bytes], ...]] = set()
+        self._tried: set[tuple[tuple[str, bytes], ...]] = set()
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
         self.dump_testcases(testcases)
 
-    def _calculate_testcase_hash(self) -> Tuple[Tuple[str, bytes], ...]:
+    def _calculate_testcase_hash(self) -> tuple[tuple[str, bytes], ...]:
         """Calculate hashes of all files in testcase root.
 
         Returns:
             Mapping of file path to SHA-512 of each file in testcase root.
         """
-        result: List[Tuple[str, bytes]] = []
+        result: list[tuple[str, bytes]] = []
         for path in self._testcase_root.glob("**/*"):
             if path.is_file():
                 tf_hash = sha512()
@@ -109,7 +100,7 @@ class Strategy(ABC):
 
         return sorted_result
 
-    def update_tried(self, tried: Iterable[Tuple[Tuple[str, bytes], ...]]) -> None:
+    def update_tried(self, tried: Iterable[tuple[tuple[str, bytes], ...]]) -> None:
         """Update the list of tried testcase/hash sets. Testcases are hashed with
         SHA-512 and digested to bytes (`hashlib.sha512(testcase).digest()`)
 
@@ -121,7 +112,7 @@ class Strategy(ABC):
         """
         self._tried.update(frozenset(tried))
 
-    def get_tried(self) -> FrozenSet[Tuple[Tuple[str, bytes], ...]]:
+    def get_tried(self) -> frozenset[tuple[tuple[str, bytes], ...]]:
         """Return the set of tried testcase hashes. Testcases are hashed with SHA-512
         and digested to bytes (`hashlib.sha512(testcase).digest()`)
 
@@ -131,7 +122,7 @@ class Strategy(ABC):
         return frozenset(self._tried)
 
     def dump_testcases(
-        self, testcases: List[TestCase], recreate_tcroot: bool = False
+        self, testcases: list[TestCase], recreate_tcroot: bool = False
     ) -> None:
         """Dump a testcase list to the testcase root on disk.
 
@@ -151,7 +142,7 @@ class Strategy(ABC):
             testcase.dump(self._testcase_root / f"{idx:03d}", include_details=True)
 
     @abstractmethod
-    def __iter__(self) -> Generator[List[TestCase], None, None]:
+    def __iter__(self) -> Generator[list[TestCase], None, None]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each reduction yielded, and call `update` with the
@@ -173,7 +164,7 @@ class Strategy(ABC):
             None
         """
 
-    def __enter__(self) -> "Strategy":
+    def __enter__(self) -> Strategy:
         """Enter a runtime context that will automatically call `cleanup` on exit.
 
         Returns:
@@ -200,13 +191,13 @@ class Strategy(ABC):
         rmtree(self._testcase_root)
 
 
-def _load_strategies() -> Dict[str, Type[Strategy]]:
+def _load_strategies() -> dict[str, type[Strategy]]:
     """STRATEGIES is created at the end of this file.
 
     Returns:
         A mapping of strategy names to strategy class.
     """
-    strategies: Dict[str, Type[Strategy]] = {}
+    strategies: dict[str, type[Strategy]] = {}
     for entry_point in iter_entry_points("grizzly_reduce_strategies"):
         try:
             strategy_cls = cast(Type[Strategy], entry_point.load())

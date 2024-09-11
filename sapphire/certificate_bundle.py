@@ -1,6 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address
 from logging import getLogger
@@ -8,7 +10,6 @@ from os import getpid
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-from typing import Dict, Optional
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -19,7 +20,7 @@ from cryptography.x509.oid import NameOID
 LOG = getLogger(__name__)
 
 
-def generate_certificates(cert_dir: Path) -> Dict[str, Path]:
+def generate_certificates(cert_dir: Path) -> dict[str, Path]:
     """Generate a root CA and host certificate.
 
     Credit to https://stackoverflow.com/a/56292132
@@ -95,7 +96,7 @@ class CertificateBundle:
         self.key = key
 
     @classmethod
-    def create(cls, path: Optional[Path] = None) -> "CertificateBundle":
+    def create(cls, path: Path | None = None) -> CertificateBundle:
         """Create certificate files.
 
         Args:

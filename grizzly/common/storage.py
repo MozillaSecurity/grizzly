@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
@@ -11,7 +12,7 @@ from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
-from typing import Any, Dict, Generator, Optional, Tuple, Union, cast
+from typing import Any, Generator, cast
 
 from .utils import grz_tmp, package_version
 
@@ -36,8 +37,8 @@ class TestFileExists(Exception):
 
 @dataclass(eq=False)
 class TestFileMap:
-    optional: Dict[str, Path] = field(default_factory=dict)
-    required: Dict[str, Path] = field(default_factory=dict)
+    optional: dict[str, Path] = field(default_factory=dict)
+    required: dict[str, Path] = field(default_factory=dict)
 
 
 class TestCase:
@@ -62,16 +63,16 @@ class TestCase:
         self,
         entry_point: str,
         adapter_name: str,
-        data_path: Optional[Path] = None,
-        input_fname: Optional[str] = None,
-        timestamp: Optional[float] = None,
+        data_path: Path | None = None,
+        input_fname: str | None = None,
+        timestamp: float | None = None,
     ) -> None:
         assert entry_point
         self.adapter_name = adapter_name
-        self.assets: Dict[str, str] = {}
-        self.assets_path: Optional[Path] = None
-        self.duration: Optional[float] = None
-        self.env_vars: Dict[str, str] = {}
+        self.assets: dict[str, str] = {}
+        self.assets_path: Path | None = None
+        self.duration: float | None = None
+        self.env_vars: dict[str, str] = {}
         self.hang = False
         self.https = False
         self.input_fname = input_fname  # file that was used to create the test case
@@ -110,7 +111,7 @@ class TestCase:
             return self._files.required[key]
         return self._files.optional[key]
 
-    def __enter__(self) -> "TestCase":
+    def __enter__(self) -> TestCase:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -169,8 +170,8 @@ class TestCase:
 
     def add_from_file(
         self,
-        src_file: Union[str, Path],
-        file_name: Optional[str] = None,
+        src_file: str | Path,
+        file_name: str | None = None,
         required: bool = False,
         copy: bool = False,
     ) -> None:
@@ -236,7 +237,7 @@ class TestCase:
         """
         self._files.optional.clear()
 
-    def clone(self) -> "TestCase":
+    def clone(self) -> TestCase:
         """Make a copy of the TestCase.
 
         Args:
@@ -365,8 +366,8 @@ class TestCase:
 
     @classmethod
     def load(
-        cls, path: Path, entry_point: Optional[Path] = None, catalog: bool = False
-    ) -> "TestCase":
+        cls, path: Path, entry_point: Path | None = None, catalog: bool = False
+    ) -> TestCase:
         """Load a TestCase.
 
         Args:
@@ -435,8 +436,8 @@ class TestCase:
 
     @classmethod
     def load_meta(
-        cls, path: Path, entry_point: Optional[Path] = None
-    ) -> Tuple[Path, Dict[str, Any]]:
+        cls, path: Path, entry_point: Path | None = None
+    ) -> tuple[Path, dict[str, Any]]:
         """Process and sanitize TestCase meta data.
 
         Args:
@@ -486,7 +487,7 @@ class TestCase:
         yield from self._files.optional
 
     @staticmethod
-    def read_info(path: Path) -> Dict[str, Any]:
+    def read_info(path: Path) -> dict[str, Any]:
         """Attempt to load test info.
 
         Args:

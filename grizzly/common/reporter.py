@@ -1,6 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from abc import ABCMeta, abstractmethod
 from enum import IntEnum, unique
 from json import dumps, loads
@@ -9,7 +11,7 @@ from os import getenv
 from pathlib import Path
 from shutil import copyfile, move, rmtree
 from tempfile import TemporaryDirectory
-from typing import Any, Dict, List, Optional, cast, final
+from typing import Any, cast, final
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from Collector.Collector import Collector
@@ -83,7 +85,7 @@ class Reporter(metaclass=ABCMeta):
 
     @abstractmethod
     def _submit_report(
-        self, report: Report, test_cases: List[TestCase], force: bool
+        self, report: Report, test_cases: list[TestCase], force: bool
     ) -> Any:
         """Implementation specific report submission code.
 
@@ -98,7 +100,7 @@ class Reporter(metaclass=ABCMeta):
 
     @final
     def submit(
-        self, test_cases: List[TestCase], report: Report, force: bool = False
+        self, test_cases: list[TestCase], report: Report, force: bool = False
     ) -> Any:
         """Submit report containing results.
 
@@ -144,7 +146,7 @@ class FilesystemReporter(Reporter):
         self.major_bucket = major_bucket
         self.min_space = FilesystemReporter.DISK_SPACE_ABORT
         self.report_path = report_path
-        self.report_prefix: Optional[str] = None
+        self.report_prefix: str | None = None
 
     def _pre_submit(self, report: Report) -> None:
         self.report_prefix = report.prefix
@@ -153,7 +155,7 @@ class FilesystemReporter(Reporter):
         pass
 
     def _submit_report(
-        self, report: Report, test_cases: List[TestCase], force: bool
+        self, report: Report, test_cases: list[TestCase], force: bool
     ) -> Path:
         # create major bucket directory in working directory if needed
         if self.major_bucket:
@@ -200,7 +202,7 @@ class FuzzManagerReporter(Reporter):
 
     def __init__(self, tool: str) -> None:
         super().__init__()
-        self._extra_metadata: Dict[str, Any] = {}
+        self._extra_metadata: dict[str, Any] = {}
         # remove whitespace and use only lowercase
         self.tool = "-".join(tool.lower().split())
         assert self.tool, "tool value cannot be empty"
@@ -237,8 +239,8 @@ class FuzzManagerReporter(Reporter):
             rmtree(trace_path)
 
     def _submit_report(
-        self, report: Report, test_cases: List[TestCase], force: bool
-    ) -> Optional[int]:
+        self, report: Report, test_cases: list[TestCase], force: bool
+    ) -> int | None:
         collector = Collector(tool=self.tool)
 
         if not force:

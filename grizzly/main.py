@@ -1,10 +1,12 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from argparse import Namespace
 from logging import DEBUG, getLogger
 from os import getpid
-from typing import Optional, cast
+from typing import cast
 
 from sapphire import CertificateBundle, Sapphire
 
@@ -49,10 +51,10 @@ def main(args: Namespace) -> int:
     elif args.valgrind:
         LOG.info("Running with Valgrind. This will be SLOW!")
 
-    adapter: Optional[Adapter] = None
-    certs: Optional[CertificateBundle] = None
+    adapter: Adapter | None = None
+    certs: CertificateBundle | None = None
     complete_with_results = False
-    target: Optional[Target] = None
+    target: Target | None = None
     try:
         LOG.debug("initializing Adapter %r", args.adapter)
         adapter = cast(

@@ -1,6 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 import binascii
 from base64 import b64decode
 from logging import getLogger
@@ -8,7 +10,7 @@ from os import environ
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-from typing import Any, Generator, List, Optional, Tuple
+from typing import Any, Generator
 from zipfile import ZipFile
 
 from bugsy import Bug, Bugsy
@@ -32,7 +34,7 @@ class BugzillaBug:
         self._data = Path(mkdtemp(prefix=f"bug{bug.id}-", dir=grz_tmp("bugzilla")))
         self._fetch_attachments()
 
-    def __enter__(self) -> "BugzillaBug":
+    def __enter__(self) -> BugzillaBug:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -82,8 +84,8 @@ class BugzillaBug:
             # TODO: add support for other archive types
 
     def assets(
-        self, ignore: Optional[Tuple[str]] = None
-    ) -> Generator[Tuple[str, Path], None, None]:
+        self, ignore: tuple[str] | None = None
+    ) -> Generator[tuple[str, Path], None, None]:
         """Scan files for assets.
 
         Arguments:
@@ -110,7 +112,7 @@ class BugzillaBug:
         rmtree(self._data)
 
     @classmethod
-    def load(cls, bug_id: int) -> Optional["BugzillaBug"]:
+    def load(cls, bug_id: int) -> BugzillaBug | None:
         """Load bug information from a Bugzilla instance.
 
         Arguments:
@@ -137,7 +139,7 @@ class BugzillaBug:
             LOG.error("Unable to connect to %r (%s)", bugzilla.bugzilla_url, exc)
         return None
 
-    def testcases(self) -> List[Path]:
+    def testcases(self) -> list[Path]:
         """Create a list of potential test cases.
 
         Arguments:

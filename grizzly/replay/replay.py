@@ -1,13 +1,14 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
 
 from argparse import Namespace
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
+from typing import Any, Callable, cast
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
@@ -59,7 +60,7 @@ class ReplayResult:
     """
 
     report: Report
-    durations: List[float]
+    durations: list[float]
     expected: bool
     count: int = 1
 
@@ -79,33 +80,33 @@ class ReplayManager:
 
     def __init__(
         self,
-        ignore: Set[str],
+        ignore: set[str],
         server: Sapphire,
         target: Target,
         any_crash: bool = False,
         relaunch: int = 1,
-        signature: Optional[CrashSignature] = None,
+        signature: CrashSignature | None = None,
         use_harness: bool = True,
     ) -> None:
         # target must relaunch every iteration when not using harness
         assert use_harness or relaunch == 1
         self.ignore = ignore
         self.server = server
-        self.status: Optional[SimpleStatus] = None
+        self.status: SimpleStatus | None = None
         self.target = target
         self._any_crash = any_crash
         self._harness = HARNESS_FILE.read_bytes() if use_harness else None
         self._relaunch = relaunch
         self._signature = signature
 
-    def __enter__(self) -> "ReplayManager":
+    def __enter__(self) -> ReplayManager:
         return self
 
     def __exit__(self, *exc: Any) -> None:
         self.cleanup()
 
     @property
-    def signature(self) -> Optional[CrashSignature]:
+    def signature(self) -> CrashSignature | None:
         return self._signature
 
     @staticmethod
@@ -148,7 +149,7 @@ class ReplayManager:
 
     @staticmethod
     def expect_hang(
-        ignore: List[str], signature: CrashSignature, tests: List[TestCase]
+        ignore: list[str], signature: CrashSignature, tests: list[TestCase]
     ) -> bool:
         """Check if any test is expected to trigger a hang. If a hang is expected
         a sanity check is performed. A ConfigError is raised if a configuration
@@ -175,10 +176,10 @@ class ReplayManager:
     @classmethod
     def load_testcases(
         cls,
-        paths: List[Path],
+        paths: list[Path],
         catalog: bool = False,
-        entry_point: Optional[Path] = None,
-    ) -> Tuple[List[TestCase], Optional[AssetManager], Optional[Dict[str, str]]]:
+        entry_point: Path | None = None,
+    ) -> tuple[list[TestCase], AssetManager | None, dict[str, str] | None]:
         """Load TestCases.
 
         Args:
@@ -190,7 +191,7 @@ class ReplayManager:
             Loaded TestCases, AssetManager and environment variables.
         """
         LOG.debug("loading the TestCases")
-        tests: List[TestCase] = []
+        tests: list[TestCase] = []
         for entry in paths:
             try:
                 tests.append(
@@ -220,7 +221,7 @@ class ReplayManager:
         return tests, asset_mgr, env_vars
 
     @staticmethod
-    def lookup_tool(tests: List[TestCase]) -> Optional[str]:
+    def lookup_tool(tests: list[TestCase]) -> str | None:
         """Lookup tool name from test cases. Find the adapter name used by the given
         test cases.
 
@@ -237,7 +238,7 @@ class ReplayManager:
 
     @staticmethod
     def report_to_filesystem(
-        dst: Path, results: List[ReplayResult], tests: List[TestCase]
+        dst: Path, results: list[ReplayResult], tests: list[TestCase]
     ) -> None:
         """Use FilesystemReporter to write reports and testcase to disk in a
         known location.
@@ -263,7 +264,7 @@ class ReplayManager:
 
     @staticmethod
     def report_to_fuzzmanager(
-        results: List[ReplayResult], tests: List[TestCase], tool: str
+        results: list[ReplayResult], tests: list[TestCase], tool: str
     ) -> None:
         """Use FuzzManagerReporter to send reports to a FuzzManager server.
 
@@ -283,7 +284,7 @@ class ReplayManager:
 
     def run(
         self,
-        testcases: List[TestCase],
+        testcases: list[TestCase],
         time_limit: int,
         repeat: int = 1,
         min_results: int = 1,
@@ -292,9 +293,9 @@ class ReplayManager:
         idle_delay: int = 0,
         idle_threshold: int = 0,
         launch_attempts: int = 3,
-        on_iteration_cb: Optional[Callable[[], None]] = None,
+        on_iteration_cb: Callable[[], None] | None = None,
         post_launch_delay: int = -1,
-    ) -> List[ReplayResult]:
+    ) -> list[ReplayResult]:
         """Run testcase replay.
 
         Args:
@@ -350,7 +351,7 @@ class ReplayManager:
             server_map.set_redirect("grz_start", "grz_harness", required=False)
 
         # track unprocessed results
-        reports: Dict[str, ReplayResult] = {}
+        reports: dict[str, ReplayResult] = {}
         try:
             sig_hash = Report.calc_hash(self._signature) if self._signature else None
             # an attempt has been made to set self._signature
@@ -383,8 +384,8 @@ class ReplayManager:
                         runner.post_launch(delay=post_launch_delay)
                     # TODO: avoid running test case if runner.startup_failure is True
                 # run tests
-                durations: List[float] = []
-                run_result: Optional[RunResult] = None
+                durations: list[float] = []
+                run_result: RunResult | None = None
                 for test_idx in range(test_count):
                     if test_count > 1:
                         LOG.info(
@@ -431,7 +432,7 @@ class ReplayManager:
                         LOG.warning("Delayed startup failure detected")
                 # process run results
                 if run_result.status == Result.FOUND:
-                    report: Optional[Report] = None
+                    report: Report | None = None
                     # processing the result may take a few minutes (rr)
                     # update console to show progress
                     LOG.info("Processing result...")
@@ -560,7 +561,7 @@ class ReplayManager:
                 success = any(
                     x.count >= min_results for x in reports.values() if x.expected
                 )
-            results: List[ReplayResult] = []
+            results: list[ReplayResult] = []
             for crash_hash, result in reports.items():
                 # if min_results not met (success=False) cleanup expected reports
                 if not success and result.expected:
@@ -627,8 +628,8 @@ class ReplayManager:
             args.tool = cls.lookup_tool(testcases) or "grizzly-replay"
 
         certs = None
-        results: Optional[List[ReplayResult]] = None
-        target: Optional[Target] = None
+        results: list[ReplayResult] | None = None
+        target: Target | None = None
         try:
             # check if hangs are expected
             expect_hang = cls.expect_hang(args.ignore, signature, testcases)

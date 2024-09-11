@@ -1,13 +1,15 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from abc import ABCMeta, abstractmethod
 from enum import IntEnum, unique
 from logging import getLogger
 from os import environ
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, Optional, Set, Tuple, final
+from typing import Any, final
 
 from sapphire import CertificateBundle
 
@@ -49,8 +51,8 @@ class TargetLaunchTimeout(TargetError):
 
 
 class Target(metaclass=ABCMeta):
-    SUPPORTED_ASSETS: Tuple[str, ...] = ()
-    TRACKED_ENVVARS: Tuple[str, ...] = ()
+    SUPPORTED_ASSETS: tuple[str, ...] = ()
+    TRACKED_ENVVARS: tuple[str, ...] = ()
 
     __slots__ = (
         "_asset_mgr",
@@ -71,7 +73,7 @@ class Target(metaclass=ABCMeta):
         launch_timeout: int,
         log_limit: int,
         memory_limit: int,
-        certs: Optional[CertificateBundle] = None,
+        certs: CertificateBundle | None = None,
     ) -> None:
         assert launch_timeout > 0
         assert log_limit >= 0
@@ -81,7 +83,7 @@ class Target(metaclass=ABCMeta):
         self._asset_mgr = AssetManager(base_path=grz_tmp("target"))
         self._https = False
         self._lock = Lock()
-        self._monitor: Optional[TargetMonitor] = None
+        self._monitor: TargetMonitor | None = None
         self.binary = binary
         self.certs = certs
         self.environ = self.scan_environment(dict(environ), self.TRACKED_ENVVARS)
@@ -89,7 +91,7 @@ class Target(metaclass=ABCMeta):
         self.log_limit = log_limit
         self.memory_limit = memory_limit
 
-    def __enter__(self) -> "Target":
+    def __enter__(self) -> Target:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -133,7 +135,7 @@ class Target(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def check_result(self, ignored: Set[str]) -> Result:
+    def check_result(self, ignored: set[str]) -> Result:
         """Check for results.
 
         Args:
@@ -203,7 +205,7 @@ class Target(metaclass=ABCMeta):
             None.
         """
 
-    def filtered_environ(self) -> Dict[str, str]:
+    def filtered_environ(self) -> dict[str, str]:
         """Used to collect the environment to add to a testcase.
 
         Args:
@@ -264,7 +266,7 @@ class Target(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def merge_environment(self, extra: Dict[str, str]) -> None:
+    def merge_environment(self, extra: dict[str, str]) -> None:
         """Add to existing environment.
 
         Args:
@@ -310,9 +312,9 @@ class Target(metaclass=ABCMeta):
 
     @staticmethod
     def scan_environment(
-        env: Dict[str, str],
-        include: Optional[Tuple[str, ...]],
-    ) -> Dict[str, str]:
+        env: dict[str, str],
+        include: tuple[str, ...] | None,
+    ) -> dict[str, str]:
         """Scan environment for tracked environment variables.
 
         Args:

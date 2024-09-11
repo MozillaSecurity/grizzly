@@ -1,6 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from argparse import (
     Action,
     ArgumentParser,
@@ -14,7 +16,7 @@ from os.path import exists
 from pathlib import Path
 from platform import system
 from types import MappingProxyType
-from typing import Iterable, List, Optional
+from typing import Iterable
 
 from FTB.ProgramConfiguration import ProgramConfiguration
 
@@ -26,7 +28,7 @@ from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, package_version
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically
 class SortingHelpFormatter(HelpFormatter):
     @staticmethod
-    def __sort_key(action: Action) -> List[str]:
+    def __sort_key(action: Action) -> list[str]:
         for opt in action.option_strings:
             if opt.startswith("--"):
                 return [opt]
@@ -34,10 +36,10 @@ class SortingHelpFormatter(HelpFormatter):
 
     def add_usage(
         self,
-        usage: Optional[str],
+        usage: str | None,
         actions: Iterable[Action],
         groups: Iterable[_MutuallyExclusiveGroup],
-        prefix: Optional[str] = None,
+        prefix: str | None = None,
     ) -> None:
         actions = sorted(actions, key=self.__sort_key)
         super().add_usage(usage, actions, groups, prefix)
@@ -274,7 +276,7 @@ class CommonArgs:
             return True
         return False
 
-    def parse_args(self, argv: Optional[List[str]] = None) -> Namespace:
+    def parse_args(self, argv: list[str] | None = None) -> Namespace:
         args = self.parser.parse_args(argv)
         self.sanity_check(args)
         return args
