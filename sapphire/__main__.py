@@ -1,10 +1,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from argparse import ArgumentParser, Namespace
 from logging import DEBUG, INFO, basicConfig
 from pathlib import Path
-from typing import List, Optional
 
 from .core import Sapphire
 
@@ -19,7 +20,7 @@ def configure_logging(log_level: int) -> None:
     basicConfig(format=log_fmt, datefmt=date_fmt, level=log_level)
 
 
-def parse_args(argv: Optional[List[str]] = None) -> Namespace:
+def parse_args(argv: list[str] | None = None) -> Namespace:
     # log levels for console logging
     level_map = {"DEBUG": DEBUG, "INFO": INFO}
     parser = ArgumentParser()

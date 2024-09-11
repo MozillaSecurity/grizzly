@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser
 from collections import defaultdict
@@ -17,17 +19,7 @@ from pathlib import Path
 from platform import system
 from re import match
 from time import gmtime, localtime, strftime
-from typing import (
-    Callable,
-    Dict,
-    Generator,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Callable, Generator, Iterable
 
 from psutil import cpu_count, cpu_percent, disk_usage, getloadavg, virtual_memory
 
@@ -58,9 +50,9 @@ class TracebackReport:
     def __init__(
         self,
         log_file: Path,
-        lines: List[str],
+        lines: list[str],
         is_kbi: bool = False,
-        prev_lines: Optional[List[str]] = None,
+        prev_lines: list[str] | None = None,
     ) -> None:
         self.is_kbi = is_kbi
         self.lines = lines
@@ -70,7 +62,7 @@ class TracebackReport:
     @classmethod
     def from_file(
         cls, log_file: Path, max_preceding: int = 5, ignore_kbi: bool = False
-    ) -> Optional["TracebackReport"]:
+    ) -> TracebackReport | None:
         """Create TracebackReport from a text file containing a Python traceback.
         Only the first traceback in the file will be parsed.
 
@@ -156,7 +148,7 @@ class BaseReporter(ABC):
     SUMMARY_LIMIT = 4096
 
     @staticmethod
-    def _format_entries(entries: List[Tuple[str, Optional[str]]]) -> str:
+    def _format_entries(entries: list[tuple[str, str | None]]) -> str:
         """Generate formatted output from (label, body) pairs.
         Each entry must have a label and an optional body.
 
@@ -190,7 +182,7 @@ class BaseReporter(ABC):
         return "\n".join(out)
 
     @staticmethod
-    def _merge_tracebacks(tracebacks: List[TracebackReport], size_limit: int) -> str:
+    def _merge_tracebacks(tracebacks: list[TracebackReport], size_limit: int) -> str:
         """Merge traceback without exceeding size_limit.
 
         Args:
@@ -211,7 +203,7 @@ class BaseReporter(ABC):
         return "\n".join(txt)
 
     @staticmethod
-    def _sys_info() -> List[Tuple[str, str]]:
+    def _sys_info() -> list[tuple[str, str]]:
         """Collect system information.
 
         Args:
@@ -220,10 +212,10 @@ class BaseReporter(ABC):
         Returns:
             System information.
         """
-        entries: List[Tuple[str, str]] = []
+        entries: list[tuple[str, str]] = []
 
         # CPU and load
-        disp: List[str] = []
+        disp: list[str] = []
         disp.append(
             f"{cpu_count(logical=True)} ({cpu_count(logical=False)}) @ "
             # use minimum interval=0.1 for accuracy
@@ -263,7 +255,7 @@ class BaseReporter(ABC):
     @staticmethod
     def _tracebacks(
         path: Path, ignore_kbi: bool = True, max_preceding: int = 5
-    ) -> List[TracebackReport]:
+    ) -> list[TracebackReport]:
         """Search screen logs for tracebacks.
 
         Args:
@@ -291,8 +283,8 @@ class BaseReporter(ABC):
     @classmethod
     @abstractmethod
     def load(
-        cls, db_file: Path, tb_path: Optional[Path] = None, time_limit: float = 120
-    ) -> "BaseReporter":
+        cls, db_file: Path, tb_path: Path | None = None, time_limit: float = 120
+    ) -> BaseReporter:
         pass
 
     @abstractmethod
@@ -355,8 +347,8 @@ class StatusReporter(BaseReporter):
 
     def __init__(
         self,
-        reports: List[ReadOnlyStatus],
-        tracebacks: Optional[List[TracebackReport]] = None,
+        reports: list[ReadOnlyStatus],
+        tracebacks: list[TracebackReport] | None = None,
     ) -> None:
         self.reports = reports
         self.tracebacks = tracebacks
@@ -369,9 +361,9 @@ class StatusReporter(BaseReporter):
     def load(
         cls,
         db_file: Path,
-        tb_path: Optional[Path] = None,
+        tb_path: Path | None = None,
         time_limit: float = TIME_LIMIT,
-    ) -> "StatusReporter":
+    ) -> StatusReporter:
         """Read Grizzly status reports and create a StatusReporter object.
 
         Args:
@@ -397,9 +389,9 @@ class StatusReporter(BaseReporter):
         Returns:
             A formatted report.
         """
-        blockers: Set[str] = set()
-        counts: Dict[str, int] = defaultdict(int)
-        descs: Dict[str, Optional[str]] = {}
+        blockers: set[str] = set()
+        counts: dict[str, int] = defaultdict(int)
+        descs: dict[str, str | None] = {}
         # calculate totals
         for report in self.reports:
             for result in report.results:
@@ -407,7 +399,7 @@ class StatusReporter(BaseReporter):
                 counts[result.rid] += result.count
             blockers.update(x.rid for x in report.results.blockers(report.iteration))
         # generate output
-        entries: List[Tuple[str, Optional[str]]] = []
+        entries: list[tuple[str, str | None]] = []
         for rid, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
             desc = descs[rid]
             assert desc is not None
@@ -440,7 +432,7 @@ class StatusReporter(BaseReporter):
         if not self.reports:
             return "No status reports available"
         self.reports.sort(key=lambda x: x.start_time)
-        entries: List[Tuple[str, Optional[str]]] = []
+        entries: list[tuple[str, str | None]] = []
         for report in self.reports:
             label = (
                 f"PID {report.pid} started at "
@@ -515,7 +507,7 @@ class StatusReporter(BaseReporter):
         Returns:
             A summary of merged reports.
         """
-        entries: List[Tuple[str, Optional[str]]] = []
+        entries: list[tuple[str, str | None]] = []
         # Job specific status
         if self.reports:
             # calculate totals
@@ -546,7 +538,7 @@ class StatusReporter(BaseReporter):
             if total_iters:
                 total_results = sum(results)
                 result_pct = total_results / total_iters * 100
-                buckets: Set[str] = set()
+                buckets: set[str] = set()
                 for report in self.reports:
                     buckets.update(x.rid for x in report.results)
                 disp = [f"{total_results} ({len(buckets)})"]
@@ -609,8 +601,8 @@ class _TableFormatter:
 
     def __init__(
         self,
-        column_names: Tuple[str, ...],
-        formatters: Tuple[Optional[Callable[..., str]], ...],
+        column_names: tuple[str, ...],
+        formatters: tuple[Callable[..., str] | None, ...],
         vsep: str = " | ",
         hsep: str = "-",
     ) -> None:
@@ -642,7 +634,7 @@ class _TableFormatter:
             Each line of formatted tabular data.
         """
         max_width = [len(col) for col in self._columns]
-        formatted: List[List[str]] = []
+        formatted: list[list[str]] = []
         for row in rows:
             data = astuple(row)
             assert len(data) == len(self._formatters)
@@ -680,7 +672,7 @@ def _format_seconds(duration: float) -> str:
     return f"{seconds}s"
 
 
-def _format_duration(duration: Optional[int], total: float = 0) -> str:
+def _format_duration(duration: int | None, total: float = 0) -> str:
     result = ""
     if duration is not None:
         if total == 0:
@@ -692,7 +684,7 @@ def _format_duration(duration: Optional[int], total: float = 0) -> str:
     return result
 
 
-def _format_number(number: Optional[int], total: float = 0) -> str:
+def _format_number(number: int | None, total: float = 0) -> str:
     result = ""
     if number is not None:
         if total == 0:
@@ -712,10 +704,10 @@ class ReductionStatusReporter(BaseReporter):
 
     def __init__(
         self,
-        reports: List[ReductionStatus],
-        tracebacks: Optional[List[TracebackReport]] = None,
+        reports: list[ReductionStatus],
+        tracebacks: list[TracebackReport] | None = None,
     ) -> None:
-        self.reports: List[ReductionStatus] = reports
+        self.reports: list[ReductionStatus] = reports
         self.tracebacks = tracebacks
 
     @property
@@ -726,9 +718,9 @@ class ReductionStatusReporter(BaseReporter):
     def load(
         cls,
         db_file: Path,
-        tb_path: Optional[Path] = None,
+        tb_path: Path | None = None,
         time_limit: float = TIME_LIMIT,
-    ) -> "ReductionStatusReporter":
+    ) -> ReductionStatusReporter:
         """Read Grizzly reduction status reports and create a ReductionStatusReporter
         object.
 
@@ -749,7 +741,7 @@ class ReductionStatusReporter(BaseReporter):
         )
 
     @staticmethod
-    def _analysis_entry(report: ReductionStatus) -> Tuple[str, str]:
+    def _analysis_entry(report: ReductionStatus) -> tuple[str, str]:
         return (
             "Analysis",
             ", ".join(
@@ -759,18 +751,18 @@ class ReductionStatusReporter(BaseReporter):
         )
 
     @staticmethod
-    def _crash_id_entry(report: ReductionStatus) -> Tuple[str, str]:
+    def _crash_id_entry(report: ReductionStatus) -> tuple[str, str]:
         crash_str = str(report.crash_id)
         if report.tool:
             crash_str += f" ({report.tool})"
         return ("Crash ID", crash_str)
 
     @staticmethod
-    def _last_reports_entry(report: ReductionStatus) -> Tuple[str, str]:
+    def _last_reports_entry(report: ReductionStatus) -> tuple[str, str]:
         return ("Latest Reports", ", ".join(str(r) for r in report.last_reports))
 
     @staticmethod
-    def _run_params_entry(report: ReductionStatus) -> Tuple[str, str]:
+    def _run_params_entry(report: ReductionStatus) -> tuple[str, str]:
         return (
             "Run Parameters",
             ", ".join(
@@ -779,7 +771,7 @@ class ReductionStatusReporter(BaseReporter):
         )
 
     @staticmethod
-    def _signature_info_entry(report: ReductionStatus) -> Tuple[str, str]:
+    def _signature_info_entry(report: ReductionStatus) -> tuple[str, str]:
         return (
             "Signature",
             ", ".join(
@@ -807,9 +799,9 @@ class ReductionStatusReporter(BaseReporter):
         if not self.reports:
             return "No status reports available"
 
-        reports: List[str] = []
+        reports: list[str] = []
         for report in self.reports:
-            entries: List[Tuple[str, Optional[str]]] = []
+            entries: list[tuple[str, str | None]] = []
             if report.crash_id:
                 entries.append(self._crash_id_entry(report))
             if report.analysis:
@@ -891,10 +883,10 @@ class ReductionStatusReporter(BaseReporter):
         if not self.reports:
             return "No status reports available"
 
-        reports: List[str] = []
+        reports: list[str] = []
         for report in self.reports:
-            entries: List[Tuple[str, Optional[str]]] = []
-            lines: List[str] = []
+            entries: list[tuple[str, str | None]] = []
+            lines: list[str] = []
             if report.crash_id:
                 entries.append(self._crash_id_entry(report))
             if report.analysis:
@@ -951,7 +943,7 @@ class ReductionStatusReporter(BaseReporter):
         return msg
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """Merge Grizzly status files into a single report (main entrypoint).
 
     Args:
@@ -1017,7 +1009,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     time_limit = report_types[args.type] if args.time_limit is None else args.time_limit
     if args.scan_mode == "fuzzing":
-        reporter: Union[StatusReporter, ReductionStatusReporter] = StatusReporter.load(
+        reporter: StatusReporter | ReductionStatusReporter = StatusReporter.load(
             STATUS_DB_FUZZ,
             tb_path=args.tracebacks,
             time_limit=time_limit,

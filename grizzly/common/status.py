@@ -2,6 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Manage Grizzly status reports."""
+from __future__ import annotations
+
 from abc import ABC
 from collections import defaultdict
 from contextlib import closing, contextmanager
@@ -13,18 +15,7 @@ from os import getpid
 from pathlib import Path
 from sqlite3 import Connection, OperationalError, connect
 from time import perf_counter, time
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import Any, Callable, Generator, cast
 
 from .reporter import FuzzManagerReporter
 from .utils import grz_tmp
@@ -63,7 +54,7 @@ class ProfileEntry:
 class ResultEntry:
     rid: str
     count: int
-    desc: Optional[str]
+    desc: str | None
 
 
 def _db_version_check(con: Connection, expected: int = DB_VERSION) -> bool:
@@ -106,8 +97,8 @@ class SimpleResultCounter:
 
     def __init__(self, pid: int) -> None:
         assert pid >= 0
-        self._count: Dict[str, int] = defaultdict(int)
-        self._desc: Dict[str, str] = {}
+        self._count: dict[str, int] = defaultdict(int)
+        self._desc: dict[str, str] = {}
         self.pid = pid
 
     def __iter__(self) -> Generator[ResultEntry, None, None]:
@@ -143,7 +134,7 @@ class SimpleResultCounter:
                 if entry.count > 1 and iterations / entry.count <= iters_per_result:
                     yield entry
 
-    def count(self, result_id: str, desc: str) -> Tuple[int, bool]:
+    def count(self, result_id: str, desc: str) -> tuple[int, bool]:
         """
 
         Args:
@@ -189,13 +180,11 @@ class SimpleResultCounter:
 
 
 class ReadOnlyResultCounter(SimpleResultCounter):
-    def count(self, result_id: str, desc: str) -> Tuple[int, bool]:
+    def count(self, result_id: str, desc: str) -> tuple[int, bool]:
         raise NotImplementedError("Read only!")  # pragma: no cover
 
     @classmethod
-    def load(
-        cls, db_file: Path, time_limit: float = 0
-    ) -> List["ReadOnlyResultCounter"]:
+    def load(cls, db_file: Path, time_limit: float = 0) -> list[ReadOnlyResultCounter]:
         """Load existing entries for database and populate a ReadOnlyResultCounter.
 
         Args:
@@ -254,7 +243,7 @@ class ResultCounter(SimpleResultCounter):
         assert db_file
         assert report_limit >= 0
         self._db_file = db_file
-        self._frequent: Set[str] = set()
+        self._frequent: set[str] = set()
         # use zero to disable report limit
         self._limit = report_limit
         self.last_found = 0.0
@@ -296,7 +285,7 @@ class ResultCounter(SimpleResultCounter):
                     if not str(exc).startswith("no such table:"):
                         raise  # pragma: no cover
 
-    def count(self, result_id: str, desc: str) -> Tuple[int, bool]:
+    def count(self, result_id: str, desc: str) -> tuple[int, bool]:
         """Count results and write results to the database.
 
         Args:
@@ -428,13 +417,13 @@ class BaseStatus(ABC):
         assert iteration >= 0
         assert log_size >= 0
         assert start_time >= 0
-        self._profiles: Dict[str, Dict[str, Union[float, int]]] = {}
+        self._profiles: dict[str, dict[str, float | int]] = {}
         self.ignored = ignored
         self.iteration = iteration
         self.log_size = log_size
         self.pid = pid
         self.start_time = start_time
-        self.test_name: Optional[str] = None
+        self.test_name: str | None = None
 
     def profile_entries(self) -> Generator[ProfileEntry, None, None]:
         """Used to retrieve profiling data.
@@ -504,7 +493,7 @@ class ReadOnlyStatus(BaseStatus):
         ignored: int = 0,
         iteration: int = 0,
         log_size: int = 0,
-        results: Optional[ReadOnlyResultCounter] = None,
+        results: ReadOnlyResultCounter | None = None,
     ) -> None:
         super().__init__(
             pid,
@@ -520,7 +509,7 @@ class ReadOnlyStatus(BaseStatus):
     @classmethod
     def load_all(
         cls, db_file: Path, time_limit: float = 300
-    ) -> Generator["ReadOnlyStatus", None, None]:
+    ) -> Generator[ReadOnlyStatus, None, None]:
         """Load all status reports found in `db_file`.
 
         Args:
@@ -609,7 +598,7 @@ class SimpleStatus(BaseStatus):
         self.results = SimpleResultCounter(pid)
 
     @classmethod
-    def start(cls) -> "SimpleStatus":
+    def start(cls) -> SimpleStatus:
         """Create a unique SimpleStatus object.
 
         Args:
@@ -803,7 +792,7 @@ class Status(BaseStatus):
     @classmethod
     def start(
         cls, db_file: Path, enable_profiling: bool = False, report_limit: int = 0
-    ) -> "Status":
+    ) -> Status:
         """Create a unique Status object.
 
         Args:
@@ -828,11 +817,11 @@ class Status(BaseStatus):
 @dataclass(frozen=True)
 class ReductionStep:
     name: str
-    duration: Optional[float]
-    successes: Optional[int]
-    attempts: Optional[int]
-    size: Optional[int]
-    iterations: Optional[int]
+    duration: float | None
+    successes: int | None
+    attempts: int | None
+    size: int | None
+    iterations: int | None
 
 
 @dataclass(frozen=True)
@@ -849,12 +838,12 @@ class ReductionStatus:
 
     def __init__(
         self,
-        strategies: Optional[List[str]] = None,
-        testcase_size_cb: Optional[Callable[[], int]] = None,
-        crash_id: Optional[int] = None,
-        db_file: Optional[Path] = None,
-        pid: Optional[int] = None,
-        tool: Optional[str] = None,
+        strategies: list[str] | None = None,
+        testcase_size_cb: Callable[[], int] | None = None,
+        crash_id: int | None = None,
+        db_file: Path | None = None,
+        pid: int | None = None,
+        tool: str | None = None,
         life_time: float = REPORTS_EXPIRE,
     ) -> None:
         """Initialize a ReductionStatus instance.
@@ -867,27 +856,27 @@ class ReductionStatus:
             tool: The tool name used for reporting to FuzzManager.
             life_time:
         """
-        self.analysis: Dict[str, float] = {}
+        self.analysis: dict[str, float] = {}
         self.attempts = 0
         self.iterations = 0
         # TODO: make RunParams dataclass?
-        self.run_params: Dict[str, Union[bool, int]] = {}
+        self.run_params: dict[str, bool | int] = {}
         # TODO: make SigInfo dataclass?
-        self.signature_info: Dict[str, Union[bool, str]] = {}
+        self.signature_info: dict[str, bool | str] = {}
         self.successes = 0
-        self.current_strategy_idx: Optional[int] = None
+        self.current_strategy_idx: int | None = None
         self._testcase_size_cb = testcase_size_cb
         self.crash_id = crash_id
-        self.finished_steps: List[ReductionStep] = []
-        self._in_progress_steps: List[_MilestoneTimer] = []
+        self.finished_steps: list[ReductionStep] = []
+        self._in_progress_steps: list[_MilestoneTimer] = []
         self.strategies = strategies
         self._db_file = db_file
         self.pid = pid
         self.timestamp = time()
         self.tool = tool
-        self._current_size: Optional[int] = None
+        self._current_size: int | None = None
         # this holds results from Reporter.submit()
-        self.last_reports: List[str] = []
+        self.last_reports: list[str] = []
 
         # prepare database
         if self._db_file:
@@ -929,11 +918,11 @@ class ReductionStatus:
     def start(
         cls,
         db_file: Path,
-        strategies: Optional[List[str]] = None,
-        testcase_size_cb: Optional[Callable[[], int]] = None,
-        crash_id: Optional[int] = None,
-        tool: Optional[str] = None,
-    ) -> "ReductionStatus":
+        strategies: list[str] | None = None,
+        testcase_size_cb: Callable[[], int] | None = None,
+        crash_id: int | None = None,
+        tool: str | None = None,
+    ) -> ReductionStatus:
         """Create a unique ReductionStatus object.
 
         Args:
@@ -1068,7 +1057,7 @@ class ReductionStatus:
     @classmethod
     def load_all(
         cls, db_file: Path, time_limit: float = 300
-    ) -> Generator["ReductionStatus", None, None]:
+    ) -> Generator[ReductionStatus, None, None]:
         """Load all reduction status reports found in `db_file`.
 
         Args:
@@ -1137,13 +1126,13 @@ class ReductionStatus:
             status.last_reports = loads(entry[15])
             yield status
 
-    def _testcase_size(self) -> Optional[int]:
+    def _testcase_size(self) -> int | None:
         if self._db_file is None:
             return self._current_size
         assert self._testcase_size_cb is not None
         return self._testcase_size_cb()
 
-    def __deepcopy__(self, memo: Optional[Dict[int, Any]]) -> "ReductionStatus":
+    def __deepcopy__(self, memo: dict[int, Any] | None) -> ReductionStatus:
         """Return a deep copy of this instance."""
         # pylint: disable=protected-access
         result = type(self)(
@@ -1191,7 +1180,7 @@ class ReductionStatus:
         )
 
     @property
-    def current_strategy(self) -> Optional[ReductionStep]:
+    def current_strategy(self) -> ReductionStep | None:
         if self._in_progress_steps:
             return self._tmr_to_step(self._in_progress_steps[-1])
         if self.finished_steps:
@@ -1199,7 +1188,7 @@ class ReductionStatus:
         return None
 
     @property
-    def total(self) -> Optional[ReductionStep]:
+    def total(self) -> ReductionStep | None:
         if self._in_progress_steps:
             return self._tmr_to_step(self._in_progress_steps[0])
         if self.finished_steps:
@@ -1207,7 +1196,7 @@ class ReductionStatus:
         return None
 
     @property
-    def original(self) -> Optional[ReductionStep]:
+    def original(self) -> ReductionStep | None:
         if self.finished_steps:
             return self.finished_steps[0]
         return None
@@ -1215,10 +1204,10 @@ class ReductionStatus:
     def record(
         self,
         name: str,
-        duration: Optional[float] = None,
-        iterations: Optional[int] = None,
-        attempts: Optional[int] = None,
-        successes: Optional[int] = None,
+        duration: float | None = None,
+        iterations: int | None = None,
+        attempts: int | None = None,
+        successes: int | None = None,
         report: bool = True,
     ) -> None:
         """Record reduction status for a given point in time:
@@ -1282,7 +1271,7 @@ class ReductionStatus:
             report=report,
         )
 
-    def copy(self) -> "ReductionStatus":
+    def copy(self) -> ReductionStatus:
         """Create a deep copy of this instance.
 
         Arguments:

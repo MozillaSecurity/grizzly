@@ -1,11 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from logging import getLogger
 from socket import socket
 from time import time
 from traceback import format_exception
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable
 
 from .job import Job
 from .worker import Worker
@@ -35,7 +37,7 @@ class ConnectionManager:
     ) -> None:
         assert limit > 0
         assert poll > 0
-        self._deadline: Optional[float] = None
+        self._deadline: float | None = None
         self._deadline_exceeded = False
         self._job = job
         self._limit = limit
@@ -43,13 +45,13 @@ class ConnectionManager:
         self._poll = poll
         self._socket = srv_socket
 
-    def __enter__(self) -> "ConnectionManager":
+    def __enter__(self) -> ConnectionManager:
         return self
 
     def __exit__(self, *exc: Any) -> None:
         self.close()
 
-    def _can_continue(self, continue_cb: Union[Callable[[], bool], None]) -> bool:
+    def _can_continue(self, continue_cb: Callable[[], bool] | None) -> bool:
         """Check timeout and callback status.
 
         Args:
@@ -93,7 +95,7 @@ class ConnectionManager:
             raise exc_obj
 
     @staticmethod
-    def _join_workers(workers: List[Worker], timeout: float = 0) -> List[Worker]:
+    def _join_workers(workers: list[Worker], timeout: float = 0) -> list[Worker]:
         """Attempt to join workers.
 
         Args:
@@ -109,7 +111,7 @@ class ConnectionManager:
     def serve(
         self,
         timeout: int,
-        continue_cb: Optional[Callable[[], bool]] = None,
+        continue_cb: Callable[[], bool] | None = None,
         shutdown_delay: float = SHUTDOWN_DELAY,
     ) -> bool:
         """Manage workers and serve job contents.
@@ -135,7 +137,7 @@ class ConnectionManager:
 
         launches = 0
         running = 0
-        workers: List[Worker] = []
+        workers: list[Worker] = []
         LOG.debug("accepting requests (workers: %d, timeout: %r)", self._limit, timeout)
         try:
             while not self._job.is_complete() and self._can_continue(continue_cb):

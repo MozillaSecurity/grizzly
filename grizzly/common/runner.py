@@ -1,11 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 from time import perf_counter, sleep
-from typing import Callable, Optional, Set, Tuple
+from typing import Callable
 
 from sapphire import Sapphire, Served, ServerMap
 
@@ -49,7 +51,7 @@ class _IdleChecker:
         self._init_delay = initial_delay  # time to wait before the initial idle poll
         self._poll_delay = poll_delay  # time to wait between subsequent polls
         self._threshold = threshold  # CPU usage threshold
-        self._next_poll: Optional[float] = None
+        self._next_poll: float | None = None
 
     def is_idle(self) -> bool:
         """Check the target idle callback. This is throttled by '_next_poll'
@@ -69,7 +71,7 @@ class _IdleChecker:
             self.schedule_poll(now=now)
         return False
 
-    def schedule_poll(self, initial: int = False, now: Optional[float] = None) -> None:
+    def schedule_poll(self, initial: int = False, now: float | None = None) -> None:
         """Update `_next_poll`.
 
         Args:
@@ -100,7 +102,7 @@ class RunResult:
         idle: Target was idle (only applies to timeout).
     """
 
-    served: Tuple[str, ...]
+    served: tuple[str, ...]
     duration: float
     attempted: bool = False
     status: Result = Result.NONE
@@ -132,7 +134,7 @@ class Runner:
         if idle_threshold > 0:
             assert idle_delay > 0
             LOG.debug("using idle check, th %d, delay %ds", idle_threshold, idle_delay)
-            self._idle: Optional[_IdleChecker] = _IdleChecker(
+            self._idle: _IdleChecker | None = _IdleChecker(
                 target.monitor.is_idle, idle_threshold, idle_delay
             )
         else:
@@ -206,10 +208,10 @@ class Runner:
     def location(
         srv_path: str,
         srv_port: int,
-        close_after: Optional[int] = None,
+        close_after: int | None = None,
         post_launch_delay: int = -1,
         scheme: str = "http",
-        time_limit: Optional[int] = None,
+        time_limit: int | None = None,
     ) -> str:
         """Build a valid URL to pass to a browser.
 
@@ -296,7 +298,7 @@ class Runner:
 
     def run(
         self,
-        ignore: Set[str],
+        ignore: set[str],
         server_map: ServerMap,
         testcase: TestCase,
         coverage: bool = False,

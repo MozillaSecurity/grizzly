@@ -1,9 +1,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import Optional
 
 __all__ = ("TargetMonitor",)
 __author__ = "Tyson Smith"
@@ -12,7 +13,7 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 class TargetMonitor(metaclass=ABCMeta):
     @abstractmethod
-    def clone_log(self, log_id: str, offset: int = 0) -> Optional[Path]:
+    def clone_log(self, log_id: str, offset: int = 0) -> Path | None:
         """Create a copy of a log.
 
         Args:

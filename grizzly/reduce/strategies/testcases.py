@@ -2,10 +2,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Grizzly reducer testcase list strategy definition."""
+from __future__ import annotations
 
 from logging import getLogger
 from shutil import rmtree
-from typing import Generator, List, Optional
+from typing import Generator
 
 from ...common.storage import TestCase
 from . import Strategy
@@ -28,7 +29,7 @@ class MinimizeTestcaseList(Strategy):
 
     name = "list"
 
-    def __init__(self, testcases: List[TestCase]) -> None:
+    def __init__(self, testcases: list[TestCase]) -> None:
         """Initialize strategy instance.
 
         Arguments:
@@ -36,7 +37,7 @@ class MinimizeTestcaseList(Strategy):
                        testcases.
         """
         super().__init__(testcases)
-        self._current_feedback: Optional[bool] = None
+        self._current_feedback: bool | None = None
         # TODO: is this unused?
         self._current_served = None
 
@@ -53,7 +54,7 @@ class MinimizeTestcaseList(Strategy):
         assert self._current_served is None
         self._current_feedback = success
 
-    def __iter__(self) -> Generator[List[TestCase], None, None]:
+    def __iter__(self) -> Generator[list[TestCase], None, None]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each testcase set yielded, and call `update` with the

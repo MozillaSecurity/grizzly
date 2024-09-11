@@ -4,6 +4,7 @@
 """
 Loki fuzzing library
 """
+from __future__ import annotations
 
 from argparse import Namespace
 from logging import ERROR, INFO, basicConfig, getLogger
@@ -14,7 +15,7 @@ from shutil import copy
 from struct import pack, unpack
 from tempfile import SpooledTemporaryFile, mkdtemp
 from time import perf_counter, strftime
-from typing import IO, Optional
+from typing import IO
 
 __author__ = "Tyson Smith"
 
@@ -26,9 +27,7 @@ class Loki:
 
     __slots__ = ("aggr", "byte_order")
 
-    def __init__(
-        self, aggression: float = 0.0, byte_order: Optional[str] = None
-    ) -> None:
+    def __init__(self, aggression: float = 0.0, byte_order: str | None = None) -> None:
         """
         Arguments:
             aggression: Amount of fuzzing to perform. 0 for 0% up to 1.0 for 100%.
@@ -153,7 +152,7 @@ class Loki:
             return tmp_fp.read()
 
     def fuzz_file(
-        self, src: Path, count: int, dst: Path, ext: Optional[str] = None
+        self, src: Path, count: int, dst: Path, ext: str | None = None
     ) -> bool:
         """Create fuzzed copies of the provided file.
 

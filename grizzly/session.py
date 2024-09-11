@@ -1,10 +1,12 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from enum import IntEnum, unique
 from logging import getLogger
 from time import time
-from typing import Any, Optional, Set
+from typing import Any
 
 from sapphire import Sapphire
 
@@ -121,7 +123,7 @@ class Session:
         )
         self.target = target
 
-    def __enter__(self) -> "Session":
+    def __enter__(self) -> Session:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -155,9 +157,9 @@ class Session:
 
     def run(
         self,
-        ignore: Set[str],
+        ignore: set[str],
         time_limit: int,
-        input_path: Optional[str] = None,
+        input_path: str | None = None,
         iteration_limit: int = 0,
         no_harness: bool = False,
         result_limit: int = 0,

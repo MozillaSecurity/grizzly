@@ -4,6 +4,8 @@
 """
 Sapphire HTTP server job
 """
+from __future__ import annotations
+
 from enum import IntEnum, unique
 from errno import ENAMETOOLONG
 from itertools import chain
@@ -14,7 +16,7 @@ from pathlib import Path
 from queue import Queue
 from threading import Event, Lock
 from types import MappingProxyType
-from typing import Any, Iterable, Mapping, NamedTuple, Optional, Set, Tuple, Union, cast
+from typing import Any, Iterable, Mapping, NamedTuple, Tuple, Union, cast
 
 from .server_map import DynamicResource, FileResource, RedirectResource, ServerMap
 
@@ -39,12 +41,12 @@ class Served(IntEnum):
 
 
 class PendingTracker(NamedTuple):
-    files: Set[str]
+    files: set[str]
     lock: Lock
 
 
 class ServedTracker(NamedTuple):
-    files: Set[FileResource]
+    files: set[FileResource]
     lock: Lock
 
 
@@ -79,8 +81,8 @@ class Job:
         wwwroot: Path,
         auto_close: int = -1,
         forever: bool = False,
-        required_files: Optional[Iterable[str]] = None,
-        server_map: Optional[ServerMap] = None,
+        required_files: Iterable[str] | None = None,
+        server_map: ServerMap | None = None,
     ) -> None:
         self._complete = Event()
         self._pending = PendingTracker(files=set(), lock=Lock())
@@ -90,7 +92,7 @@ class Job:
         self.accepting.set()
         self.auto_close = auto_close
         # quotes around type for Python 3.8
-        self.exceptions: "Queue[Tuple[Any, Any, Any]]" = Queue()
+        self.exceptions: Queue[tuple[Any, Any, Any]] = Queue()
         self.forever = forever
         self.server_map = server_map
         self.worker_complete = Event()
@@ -98,7 +100,7 @@ class Job:
         if not self._pending.files and not self.forever:
             raise RuntimeError("Empty Job")
 
-    def _build_pending(self, required_files: Union[Iterable[str], None]) -> None:
+    def _build_pending(self, required_files: Iterable[str] | None) -> None:
         """Build file list to track files that must be served.
         Note: This is intended to only be called once by __init__().
 
@@ -152,7 +154,7 @@ class Job:
 
     def lookup_resource(
         self, path: str
-    ) -> Optional[Union[FileResource, DynamicResource, RedirectResource]]:
+    ) -> FileResource | DynamicResource | RedirectResource | None:
         """Find the Resource mapped to a given URL path.
 
         Args:
@@ -223,7 +225,7 @@ class Job:
         with self._served.lock:
             self._served.files.add(item)
 
-    def is_complete(self, wait: Optional[float] = None) -> bool:
+    def is_complete(self, wait: float | None = None) -> bool:
         """Check if a Job has been marked as complete.
 
         Args:

@@ -1,8 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-from typing import Optional
+from __future__ import annotations
 
 from sapphire import ServerMap
 
@@ -20,7 +19,7 @@ class NoOpAdapter(Adapter):
 
     NAME = "no-op"
 
-    def setup(self, input_path: Optional[str], server_map: ServerMap) -> None:
+    def setup(self, input_path: str | None, server_map: ServerMap) -> None:
         """Generate a static test case that calls `window.close()` when run.
         Normally this is done in generate() but since the test is static only
         do it once. Use the default harness to allow running multiple test cases

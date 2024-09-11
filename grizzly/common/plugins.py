@@ -1,8 +1,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from logging import getLogger
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 try:
     from pkg_resources import iter_entry_points
@@ -44,7 +46,7 @@ def load_plugin(name: str, group: str, base_type: type) -> Any:
     return plugin
 
 
-def scan_plugins(group: str) -> List[str]:
+def scan_plugins(group: str) -> list[str]:
     """Scan for installed plug-ins.
 
     Args:
@@ -53,7 +55,7 @@ def scan_plugins(group: str) -> List[str]:
     Returns:
         Names of installed entry points.
     """
-    found: List[str] = []
+    found: list[str] = []
     LOG.debug("scanning %r", group)
     for entry in iter_entry_points(group):
         if entry.name in found:
@@ -63,7 +65,7 @@ def scan_plugins(group: str) -> List[str]:
     return found
 
 
-def scan_target_assets() -> Dict[str, Tuple[str, ...]]:
+def scan_target_assets() -> dict[str, tuple[str, ...]]:
     """Scan targets and load collection of supported assets (minimal sanity checking).
 
     Args:
@@ -72,7 +74,7 @@ def scan_target_assets() -> Dict[str, Tuple[str, ...]]:
     Returns:
         Name of target and list of supported assets.
     """
-    assets: Dict[str, Tuple[str, ...]] = {}
+    assets: dict[str, tuple[str, ...]] = {}
     for entry in iter_entry_points("grizzly_targets"):
         assets[entry.name] = entry.load().SUPPORTED_ASSETS
     return assets

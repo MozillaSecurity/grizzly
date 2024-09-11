@@ -4,13 +4,15 @@
 """
 Sapphire HTTP server
 """
+from __future__ import annotations
+
 from argparse import Namespace
 from logging import getLogger
 from pathlib import Path
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
 from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
 from time import perf_counter, sleep
-from typing import Any, Callable, Iterable, Mapping, Optional, Tuple, Union, cast
+from typing import Any, Callable, Iterable, Mapping, cast
 
 from .certificate_bundle import CertificateBundle
 from .connection_manager import ConnectionManager
@@ -111,7 +113,7 @@ class Sapphire:
         self,
         allow_remote: bool = False,
         auto_close: int = -1,
-        certs: Optional[CertificateBundle] = None,
+        certs: CertificateBundle | None = None,
         max_workers: int = 10,
         port: int = 0,
         timeout: int = 60,
@@ -124,7 +126,7 @@ class Sapphire:
         if certs:
             context = SSLContext(PROTOCOL_TLS_SERVER)
             context.load_cert_chain(certs.host, certs.key)
-            self._socket: Union[socket, SSLSocket] = context.wrap_socket(
+            self._socket: socket | SSLSocket = context.wrap_socket(
                 sock, server_side=True
             )
             self.scheme = "https"
@@ -133,7 +135,7 @@ class Sapphire:
             self.scheme = "http"
         self.timeout = timeout
 
-    def __enter__(self) -> "Sapphire":
+    def __enter__(self) -> Sapphire:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -196,11 +198,11 @@ class Sapphire:
     def serve_path(
         self,
         path: Path,
-        continue_cb: Optional[Callable[[], bool]] = None,
+        continue_cb: Callable[[], bool] | None = None,
         forever: bool = False,
-        required_files: Optional[Iterable[str]] = None,
-        server_map: Optional[ServerMap] = None,
-    ) -> Tuple[Served, Mapping[str, Path]]:
+        required_files: Iterable[str] | None = None,
+        server_map: ServerMap | None = None,
+    ) -> tuple[Served, Mapping[str, Path]]:
         """Serve files in path.
 
         The status codes include:

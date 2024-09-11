@@ -1,16 +1,17 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
-from typing import List, Optional
 
 from loki import Loki
 
 __author__ = "Tyson Smith"
 
 
-def parse_args(argv: Optional[List[str]] = None) -> Namespace:
+def parse_args(argv: list[str] | None = None) -> Namespace:
     parser = ArgumentParser(description="Loki fuzzing library")
     parser.add_argument(
         "input", type=Path, help="Output will be generated based on this file"

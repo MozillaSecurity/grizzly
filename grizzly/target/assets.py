@@ -1,11 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from logging import getLogger
 from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import mkdtemp
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 __all__ = ("AssetError", "AssetManager")
 __author__ = "Tyson Smith"
@@ -21,11 +23,11 @@ class AssetError(Exception):
 class AssetManager:
     __slots__ = ("assets", "path")
 
-    def __init__(self, base_path: Optional[Path] = None) -> None:
-        self.assets: Dict[str, str] = {}
+    def __init__(self, base_path: Path | None = None) -> None:
+        self.assets: dict[str, str] = {}
         self.path = Path(mkdtemp(prefix="assets_", dir=base_path))
 
-    def __enter__(self) -> "AssetManager":
+    def __enter__(self) -> AssetManager:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -65,7 +67,7 @@ class AssetManager:
         LOG.debug("%s asset %r to '%s'", "copied" if copy else "moved", asset, dst)
         return dst
 
-    def add_batch(self, assets: List[List[str]]) -> None:
+    def add_batch(self, assets: list[list[str]]) -> None:
         """Add collection of assets to the AssetManager.
 
         Args:
@@ -90,7 +92,7 @@ class AssetManager:
             rmtree(self.path, ignore_errors=True)
             self.assets.clear()
 
-    def get(self, asset: str) -> Optional[Path]:
+    def get(self, asset: str) -> Path | None:
         """Get path to content on filesystem for given asset.
 
         Args:
@@ -115,8 +117,8 @@ class AssetManager:
 
     @classmethod
     def load(
-        cls, assets: Dict[str, str], src_path: Path, base_path: Optional[Path] = None
-    ) -> "AssetManager":
+        cls, assets: dict[str, str], src_path: Path, base_path: Path | None = None
+    ) -> AssetManager:
         """Load assets from filesystem.
 
         Args:

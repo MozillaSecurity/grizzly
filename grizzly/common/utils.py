@@ -1,6 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 import sys  # mypy looks for `sys.version_info`
 from enum import IntEnum, unique
 from importlib.metadata import EntryPoint, PackageNotFoundError, entry_points, version
@@ -8,7 +10,7 @@ from logging import DEBUG, basicConfig, getLogger
 from os import getenv
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Any, Generator, Iterable, Optional, Tuple, Union
+from typing import Any, Generator, Iterable
 
 __all__ = (
     "ConfigError",
@@ -143,7 +145,7 @@ def package_version(name: str, default: str = "unknown") -> str:
         return default
 
 
-def grz_tmp(*subdir: Union[str, Path]) -> Path:
+def grz_tmp(*subdir: str | Path) -> Path:
     """Create (if needed) a temporary working directory in a known location.
 
     Args:
@@ -158,13 +160,13 @@ def grz_tmp(*subdir: Union[str, Path]) -> Path:
 
 
 def time_limits(
-    time_limit: Optional[int],
-    timeout: Optional[int],
+    time_limit: int | None,
+    timeout: int | None,
     # NOTE: Any should be TestCase, this function should likely live somewhere else
-    tests: Optional[Iterable[Any]] = None,
+    tests: Iterable[Any] | None = None,
     default_limit: int = DEFAULT_TIME_LIMIT,
     timeout_delay: int = TIMEOUT_DELAY,
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Determine the test time limit and timeout. If time_limit or timeout is None
     it is calculated otherwise the provided value is used.
 

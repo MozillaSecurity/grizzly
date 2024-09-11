@@ -4,6 +4,8 @@
 """
 Sapphire HTTP server worker
 """
+from __future__ import annotations
+
 from logging import getLogger
 from re import compile as re_compile
 from select import select
@@ -12,7 +14,6 @@ from socket import timeout as sock_timeout  # Py3.10 socket.timeout => TimeoutEr
 from sys import exc_info
 from threading import Thread, ThreadError, active_count
 from time import sleep
-from typing import Optional
 from urllib.parse import ParseResult, quote, unquote, urlparse
 
 from .job import Job
@@ -37,7 +38,7 @@ class Request:
         self.url = url
 
     @classmethod
-    def parse(cls, raw_data: bytes) -> Optional["Request"]:
+    def parse(cls, raw_data: bytes) -> Request | None:
         assert isinstance(raw_data, bytes)
         req_match = cls.REQ_PATTERN.match(raw_data)
         if not req_match:
@@ -77,7 +78,7 @@ class Worker:
 
     def __init__(self, conn: socket, thread: Thread) -> None:
         self._conn = conn
-        self._thread: Optional[Thread] = thread
+        self._thread: Thread | None = thread
 
     @staticmethod
     def _200_header(c_length: int, c_type: str) -> bytes:
@@ -272,7 +273,7 @@ class Worker:
     @classmethod
     def launch(
         cls, listen_sock: socket, job: Job, timeout: float = 30
-    ) -> Optional["Worker"]:
+    ) -> Worker | None:
         assert timeout >= 0
         assert job.accepting.is_set()
         # TODO: is select() timeout value too short, too long?

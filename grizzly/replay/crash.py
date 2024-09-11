@@ -1,10 +1,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from argparse import Namespace
 from json import loads
 from logging import getLogger
-from typing import Optional
 
 from ..common.fuzzmanager import Bucket, CrashEntry, load_fm_data
 from ..common.utils import configure_logging
@@ -30,9 +31,7 @@ def main(args: Namespace) -> int:
         return ReplayManager.main(modify_args(args, crash, bucket))
 
 
-def modify_args(
-    args: Namespace, crash: CrashEntry, bucket: Optional[Bucket]
-) -> Namespace:
+def modify_args(args: Namespace, crash: CrashEntry, bucket: Bucket | None) -> Namespace:
     """
 
     Arguments:

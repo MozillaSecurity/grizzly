@@ -1,6 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 from hashlib import sha1
 from logging import getLogger
 from os import SEEK_END
@@ -11,7 +13,7 @@ from re import compile as re_compile
 from shutil import copyfileobj, move, rmtree
 from tempfile import mkstemp
 from time import strftime
-from typing import List, NamedTuple, Optional, cast
+from typing import NamedTuple, cast
 
 # import FuzzManager utilities
 from Collector.Collector import Collector
@@ -31,9 +33,9 @@ LOG = getLogger(__name__)
 
 # NOTE: order matters, aux -> stderr -> stdout
 class LogMap(NamedTuple):
-    aux: Optional[Path]
-    stderr: Optional[Path]
-    stdout: Optional[Path]
+    aux: Path | None
+    stderr: Path | None
+    stdout: Path | None
 
 
 class Report:
@@ -63,10 +65,10 @@ class Report:
         size_limit: int = MAX_LOG_SIZE,
         unstable: bool = False,
     ) -> None:
-        self._crash_info: Optional[CrashInfo] = None
+        self._crash_info: CrashInfo | None = None
         self._logs = self._select_logs(log_path)
         assert self._logs is not None
-        self._short_signature: Optional[str] = None
+        self._short_signature: str | None = None
         self._signature = None
         self._target_binary = target_binary
         self.is_hang = is_hang
@@ -89,14 +91,14 @@ class Report:
                 # was detected to attempt to help local bucketing
                 stack.height_limit = self.HANG_STACK_HEIGHT if is_hang else 0
                 self.prefix = f"{stack.minor[:8]}_{strftime('%Y-%m-%d_%H-%M-%S')}"
-                self.stack: Optional[Stack] = stack
+                self.stack: Stack | None = stack
                 break
         else:
             self.prefix = f"{self.DEFAULT_MINOR}_{strftime('%Y-%m-%d_%H-%M-%S')}"
             self.stack = None
 
     @staticmethod
-    def calc_hash(signature: Optional[CrashSignature]) -> str:
+    def calc_hash(signature: CrashSignature | None) -> str:
         """Create unique hash from a signature.
 
         Args:
@@ -172,7 +174,7 @@ class Report:
         return self._crash_info
 
     @property
-    def crash_signature(self) -> Optional[CrashSignature]:
+    def crash_signature(self) -> CrashSignature | None:
         """Create CrashSignature object from CrashInfo.
 
         Args:
@@ -225,7 +227,7 @@ class Report:
         return suggested_frames + ignore
 
     @staticmethod
-    def _find_ffpuppet_worker(logs: List[Path]) -> Optional[Path]:
+    def _find_ffpuppet_worker(logs: list[Path]) -> Path | None:
         """Search through list of log files for a ffpuppet worker log.
 
         Args:
@@ -243,7 +245,7 @@ class Report:
         return found
 
     @staticmethod
-    def _find_minidump(logs: List[Path]) -> Optional[Path]:
+    def _find_minidump(logs: list[Path]) -> Path | None:
         """Search through list of log files for a minidump log.
 
         Args:
@@ -267,7 +269,7 @@ class Report:
         return None
 
     @staticmethod
-    def _find_sanitizer(logs: List[Path]) -> Optional[Path]:
+    def _find_sanitizer(logs: list[Path]) -> Path | None:
         """Search through list of log files for a sanitizer (ASan, UBSan, etc...) log.
 
         Args:
@@ -323,7 +325,7 @@ class Report:
         return found or fallback
 
     @staticmethod
-    def _find_valgrind(logs: List[Path]) -> Optional[Path]:
+    def _find_valgrind(logs: list[Path]) -> Path | None:
         """Search through log files for a Valgrind log. Empty files are ignored.
 
         Args:
@@ -338,7 +340,7 @@ class Report:
         return None
 
     @staticmethod
-    def _load_log(path: Path) -> List[str]:
+    def _load_log(path: Path) -> list[str]:
         """Load and sanitize text from a file for use with CrashInfo.fromRawCrashData().
 
         Args:
@@ -378,7 +380,7 @@ class Report:
         return self.DEFAULT_MINOR
 
     @property
-    def preferred(self) -> Optional[Path]:
+    def preferred(self) -> Path | None:
         """Log file containing most relevant data.
 
         Args:
@@ -391,7 +393,7 @@ class Report:
         return self._logs.aux or self._logs.stderr
 
     @classmethod
-    def _select_logs(cls, path: Path) -> Optional[LogMap]:
+    def _select_logs(cls, path: Path) -> LogMap | None:
         """Scan path for file containing stderr, stdout and other (aux)
         data and build a LogMap.
 
