@@ -283,7 +283,7 @@ class CommonArgs:
 
     def sanity_check(self, args: Namespace) -> None:
         if not args.binary.is_file():
-            self.parser.error(f"file not found: '{args.binary!s}'")
+            self.parser.error(f"file not found: '{args.binary}'")
 
         # fuzzmanager reporter related checks
         if args.fuzzmanager:
