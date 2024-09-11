@@ -905,11 +905,11 @@ class ReductionStatusReporter(BaseReporter):
                     (
                         str,  # name
                         # duration/successes/attempts are % of total/last
-                        partial(_format_duration, total=report.total.duration),
-                        partial(_format_number, total=report.total.successes),
-                        partial(_format_number, total=report.total.attempts),
+                        partial(_format_duration, total=report.total.duration or 0),
+                        partial(_format_number, total=report.total.successes or 0),
+                        partial(_format_number, total=report.total.attempts or 0),
                         # size is % of init/1st
-                        partial(_format_number, total=report.original.size),
+                        partial(_format_number, total=report.original.size or 0),
                         None,  # iterations (hidden)
                     ),
                 )
