@@ -6,8 +6,7 @@ from __future__ import annotations
 
 from abc import ABC
 from logging import getLogger
-from pathlib import Path
-from typing import Generator
+from typing import TYPE_CHECKING, Iterator
 
 from lithium.strategies import CheckOnly
 from lithium.strategies import CollapseEmptyBraces as LithCollapseEmptyBraces
@@ -18,6 +17,9 @@ from lithium.testcases import TestcaseAttrs, TestcaseChar, TestcaseJsStr, Testca
 
 from ...common.storage import TestCase
 from . import Strategy, _contains_dd
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 LOG = getLogger(__name__)
 
@@ -81,7 +83,7 @@ class _LithiumStrategy(Strategy, ABC):
             self._current_reducer.feedback(success)
         self._current_feedback = success
 
-    def __iter__(self) -> Generator[list[TestCase], None, None]:
+    def __iter__(self) -> Iterator[list[TestCase]]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each testcase set yielded, and call `update` with the
@@ -183,7 +185,7 @@ class Check(_LithiumStrategy):
         # just once per Grizzly TestCase set is enough.
         self._files_to_reduce = self._files_to_reduce[:1]
 
-    def __iter__(self) -> Generator[list[TestCase], None, None]:
+    def __iter__(self) -> Iterator[list[TestCase]]:
         yield from super().__iter__()
 
 

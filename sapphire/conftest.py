@@ -181,10 +181,11 @@ def client_factory():
                             exc_tb.tb_lineno if exc_tb else None,
                             t_file.file,
                         )
-                        if indicate_failure:
-                            if not skip_served or t_file.code is None:
-                                t_file.code = 0
-                                break
+                        if indicate_failure and (
+                            not skip_served or t_file.code is None
+                        ):
+                            t_file.code = 0
+                            break
             self._idle.set()
 
         def wait(self, timeout=None):

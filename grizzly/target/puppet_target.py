@@ -42,10 +42,7 @@ class PuppetMonitor(TargetMonitor):
 
     def is_idle(self, threshold: int) -> bool:
         # assert 0 <= threshold <= 100
-        for _, cpu in self._puppet.cpu_usage():
-            if cpu >= threshold:
-                return False
-        return True
+        return all(cpu < threshold for _, cpu in self._puppet.cpu_usage())
 
     def is_running(self) -> bool:
         return self._puppet.is_running()

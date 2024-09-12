@@ -4,13 +4,16 @@
 from __future__ import annotations
 
 from logging import getLogger
-from socket import socket
 from time import time
 from traceback import format_exception
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Callable
 
-from .job import Job
 from .worker import Worker
+
+if TYPE_CHECKING:
+    from socket import socket
+
+    from .job import Job
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -48,7 +51,7 @@ class ConnectionManager:
     def __enter__(self) -> ConnectionManager:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.close()
 
     def _can_continue(self, continue_cb: Callable[[], bool] | None) -> bool:

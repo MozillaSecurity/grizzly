@@ -12,13 +12,15 @@ from itertools import chain
 from logging import getLogger
 from mimetypes import guess_type
 from os.path import splitext
-from pathlib import Path
 from queue import Queue
 from threading import Event, Lock
 from types import MappingProxyType
-from typing import Any, Iterable, Mapping, NamedTuple, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, NamedTuple, Tuple, Union, cast
 
 from .server_map import DynamicResource, FileResource, RedirectResource, ServerMap
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]

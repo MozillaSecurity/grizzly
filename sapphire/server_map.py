@@ -6,9 +6,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from inspect import signature
 from logging import getLogger
-from pathlib import Path
 from re import search as re_search
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 __all__ = ("Resource", "ServerMap")
 __author__ = "Tyson Smith"

@@ -268,13 +268,11 @@ class CommonArgs:
 
     @staticmethod
     def is_headless() -> bool:
-        if (
+        return (
             system().startswith("Linux")
             and not getenv("DISPLAY")
             and not getenv("WAYLAND_DISPLAY")
-        ):
-            return True
-        return False
+        )
 
     def parse_args(self, argv: list[str] | None = None) -> Namespace:
         args = self.parser.parse_args(argv)

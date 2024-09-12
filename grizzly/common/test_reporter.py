@@ -89,7 +89,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     _create_crash_log(log_path / "log_asan_blah.txt")
-    tests = list(mocker.Mock(spec_set=TestCase, timestamp=x) for x in range(10))
+    tests = [mocker.Mock(spec_set=TestCase, timestamp=x) for x in range(10)]
     report_path = tmp_path / "reports"
     assert not report_path.exists()
     reporter = FilesystemReporter(report_path)
@@ -102,7 +102,7 @@ def test_filesystem_reporter_02(tmp_path, mocker):
     log_path.mkdir()
     (log_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (log_path / "log_stdout.txt").write_bytes(b"STDOUT log")
-    tests = list(mocker.Mock(spec_set=TestCase, timestamp=1) for _ in range(2))
+    tests = [mocker.Mock(spec_set=TestCase, timestamp=1) for _ in range(2)]
     reporter.submit(tests, Report(log_path, Path("bin")))
     assert all(x.dump.call_count == 1 for x in tests)
     assert len(tuple(report_path.iterdir())) == 2

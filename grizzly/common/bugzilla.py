@@ -10,7 +10,7 @@ from os import environ
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-from typing import Any, Generator
+from typing import Generator
 from zipfile import ZipFile
 
 from bugsy import Bug, Bugsy
@@ -37,7 +37,7 @@ class BugzillaBug:
     def __enter__(self) -> BugzillaBug:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
     def _fetch_attachments(self) -> None:
@@ -150,7 +150,7 @@ class BugzillaBug:
         """
         # unpack archives
         self._unpack_archives()
-        testcases = list(x for x in self._data.iterdir() if x.is_dir())
+        testcases = [x for x in self._data.iterdir() if x.is_dir()]
         # scan base directory for files, filtering out assets
         files = tuple(
             x

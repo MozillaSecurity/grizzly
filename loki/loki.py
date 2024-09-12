@@ -6,7 +6,6 @@ Loki fuzzing library
 """
 from __future__ import annotations
 
-from argparse import Namespace
 from logging import ERROR, INFO, basicConfig, getLogger
 from os import SEEK_END
 from pathlib import Path
@@ -15,7 +14,10 @@ from shutil import copy
 from struct import pack, unpack
 from tempfile import SpooledTemporaryFile, mkdtemp
 from time import perf_counter, strftime
-from typing import IO
+from typing import IO, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from argparse import Namespace
 
 __author__ = "Tyson Smith"
 

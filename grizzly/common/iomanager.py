@@ -3,8 +3,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from typing import Any
-
 from sapphire.server_map import ServerMap
 
 from .storage import TestCase
@@ -36,7 +34,7 @@ class IOManager:
     def __enter__(self) -> IOManager:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
     def cleanup(self) -> None:

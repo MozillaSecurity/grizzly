@@ -12,8 +12,7 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from logging import getLogger
-from pathlib import Path
-from typing import Generator, Match, cast
+from typing import TYPE_CHECKING, Generator, Match, cast
 
 from lithium.testcases import TestcaseLine
 
@@ -33,6 +32,9 @@ except ImportError:  # pragma: no cover
 
 from ...common.storage import TEST_INFO, TestCase
 from . import Strategy, _contains_dd
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 LOG = getLogger(__name__)
 
@@ -88,9 +90,9 @@ class _BeautifyStrategy(Strategy, ABC):
                 path.is_file()
                 and path.suffix in self.all_extensions
                 and path.name not in self.ignore_files
+                and _contains_dd(path)
             ):
-                if _contains_dd(path):
-                    self._files_to_beautify.append(path)
+                self._files_to_beautify.append(path)
         self._current_feedback: bool | None = None
         tag_bytes = self.tag_name.encode("ascii")
         self._re_tag_start = re.compile(

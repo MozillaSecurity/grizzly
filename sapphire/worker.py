@@ -14,10 +14,13 @@ from socket import timeout as sock_timeout  # Py3.10 socket.timeout => TimeoutEr
 from sys import exc_info
 from threading import Thread, ThreadError, active_count
 from time import sleep
+from typing import TYPE_CHECKING
 from urllib.parse import ParseResult, quote, unquote, urlparse
 
-from .job import Job
 from .server_map import DynamicResource, FileResource, RedirectResource
+
+if TYPE_CHECKING:
+    from .job import Job
 
 # TODO: urlparse -> urlsplit
 

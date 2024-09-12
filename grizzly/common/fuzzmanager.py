@@ -71,7 +71,7 @@ class CrashEntry:
     def __enter__(self) -> CrashEntry:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
     def __getattr__(self, name: str) -> Any:
@@ -287,7 +287,7 @@ class Bucket:
     def __enter__(self) -> Bucket:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
     def __getattr__(self, name: str) -> Any:
