@@ -342,6 +342,7 @@ def test_status_reporter_05(mocker, tmp_path):
     assert "Runtime" in output
     # multiple reports
     status = Status.start(db_file, enable_profiling=True)
+    status.start_time -= 1220
     status.ignored = 1
     status.iteration = 50
     status.results.count("uid1", "sig1")

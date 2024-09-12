@@ -479,7 +479,8 @@ class StatusReporter(BaseReporter):
                         body.append(str(timedelta(seconds=int(entry.total))))
                     else:
                         body.append(f"{entry.total:0.3f}s")
-                    body.append(f" {entry.total / report.runtime * 100:0.2f}%")
+                    if report.runtime > 0:
+                        body.append(f" {entry.total / report.runtime * 100:0.2f}%")
                     body.append(f" ({avg:0.3f} avg,")
                     body.append(f" {entry.max:0.3f} max,")
                     body.append(f" {entry.min:0.3f} min)")
