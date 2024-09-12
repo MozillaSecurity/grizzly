@@ -3,12 +3,11 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from argparse import Namespace
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Any, Callable, cast
+from typing import TYPE_CHECKING, Callable, cast
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
@@ -41,6 +40,9 @@ from ..target import (
     TargetLaunchError,
     TargetLaunchTimeout,
 )
+
+if TYPE_CHECKING:
+    from argparse import Namespace
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -102,7 +104,7 @@ class ReplayManager:
     def __enter__(self) -> ReplayManager:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
     @property

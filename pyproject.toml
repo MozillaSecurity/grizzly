@@ -19,6 +19,7 @@ exclude_lines = [
     "@(abc.)?abstract*",
     "except ImportError(.*):",
     "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
     "pragma: no cover",
 ]
 
@@ -65,6 +66,8 @@ log_level = "DEBUG"
 
 [tool.ruff.lint]
 select = [
+    # flake8-comprehensions
+    "C4",
     # pycodestyle
     "E",
     # Pyflakes
@@ -73,10 +76,15 @@ select = [
     "FLY",
     # Perflint
     "PERF",
+    # flake8-simplify
+    "SIM",
+    # flake8-type-checking
+    "TCH",
     # Ruff-specific rules
     "RUF",
     # pycodestyle
     "W",
 ]
+ignore = ["SIM117"]
 
 [tool.setuptools_scm]

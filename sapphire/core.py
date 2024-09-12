@@ -6,18 +6,21 @@ Sapphire HTTP server
 """
 from __future__ import annotations
 
-from argparse import Namespace
 from logging import getLogger
 from pathlib import Path
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
 from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
 from time import perf_counter, sleep
-from typing import Any, Callable, Iterable, Mapping, cast
+from typing import TYPE_CHECKING, Callable, Iterable, Mapping, cast
 
-from .certificate_bundle import CertificateBundle
 from .connection_manager import ConnectionManager
 from .job import Job, Served
-from .server_map import ServerMap
+
+if TYPE_CHECKING:
+    from argparse import Namespace
+
+    from .certificate_bundle import CertificateBundle
+    from .server_map import ServerMap
 
 __all__ = (
     "BLOCKED_PORTS",
@@ -138,7 +141,7 @@ class Sapphire:
     def __enter__(self) -> Sapphire:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.close()
 
     def clear_backlog(self, timeout: float = 10) -> bool:

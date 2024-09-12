@@ -3,14 +3,17 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from argparse import Namespace
 from json import loads
 from logging import getLogger
+from typing import TYPE_CHECKING
 
 from ..common.fuzzmanager import Bucket, CrashEntry, load_fm_data
 from ..common.utils import configure_logging
 from .args import ReplayFuzzManagerIDArgs
 from .replay import ReplayManager
+
+if TYPE_CHECKING:
+    from argparse import Namespace
 
 LOG = getLogger(__name__)
 

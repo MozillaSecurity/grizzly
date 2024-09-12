@@ -12,7 +12,7 @@ from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
-from typing import Any, Generator, cast
+from typing import Any, Generator, Iterator, cast
 
 from .utils import grz_tmp, package_version
 
@@ -114,10 +114,10 @@ class TestCase:
     def __enter__(self) -> TestCase:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
-    def __iter__(self) -> Generator[str, None, None]:
+    def __iter__(self) -> Iterator[str]:
         """TestCase contents.
 
         Args:

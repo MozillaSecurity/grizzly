@@ -14,6 +14,7 @@ well in most cases.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from contextlib import suppress
 from hashlib import sha1
 from logging import DEBUG, INFO, basicConfig, getLogger
 from os.path import basename
@@ -155,10 +156,8 @@ class GdbStackFrame(StackFrame):
         # find file name and line number
         if ") at " in input_line:
             input_line = input_line.split(") at ")[-1]
-            try:
+            with suppress(ValueError):
                 input_line, sframe.offset = input_line.split(":")
-            except ValueError:
-                pass
             sframe.location = basename(input_line).split()[0]
         return sframe
 
@@ -379,14 +378,14 @@ class Stack:
         major_depth = 0
         for frame in self.frames[offset:]:
             # only track depth when needed
-            if major and self._major_depth > 0:
-                # don't count ignored frames towards major hash depth
-                if not frame.function or not any(
-                    frame.function.startswith(x) for x in IGNORED_FRAMES
-                ):
-                    major_depth += 1
-                    if major_depth > self._major_depth:
-                        break
+            # and don't count ignored frames towards major hash depth
+            if (major and self._major_depth > 0) and (
+                not frame.function
+                or not any(frame.function.startswith(x) for x in IGNORED_FRAMES)
+            ):
+                major_depth += 1
+                if major_depth > self._major_depth:
+                    break
 
             if frame.location is not None:
                 bucket_hash.update(frame.location.encode(errors="replace"))

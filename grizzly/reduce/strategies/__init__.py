@@ -19,10 +19,12 @@ from logging import DEBUG, getLogger
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-from typing import Any, Generator, Iterable, Type, cast
+from typing import TYPE_CHECKING, Iterable, Iterator, Type, cast
 
-from ...common.storage import TestCase
 from ...common.utils import grz_tmp
+
+if TYPE_CHECKING:
+    from ...common.storage import TestCase
 
 try:
     from pkg_resources import iter_entry_points
@@ -142,7 +144,7 @@ class Strategy(ABC):
             testcase.dump(self._testcase_root / f"{idx:03d}", include_details=True)
 
     @abstractmethod
-    def __iter__(self) -> Generator[list[TestCase], None, None]:
+    def __iter__(self) -> Iterator[list[TestCase]]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each reduction yielded, and call `update` with the
@@ -172,7 +174,7 @@ class Strategy(ABC):
         """
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         """Exit the runtime context. `cleanup` is called.
 
         Arguments:

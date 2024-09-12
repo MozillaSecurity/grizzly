@@ -5,13 +5,15 @@ from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import Any, Generator, final
+from typing import TYPE_CHECKING, Any, Generator, final
 
-from sapphire import ServerMap
-
-from ..common.storage import TestCase
 from ..common.utils import DEFAULT_TIME_LIMIT, HARNESS_FILE
-from ..target.target_monitor import TargetMonitor
+
+if TYPE_CHECKING:
+    from sapphire import ServerMap
+
+    from ..common.storage import TestCase
+    from ..target.target_monitor import TargetMonitor
 
 __all__ = ("Adapter", "AdapterError")
 __author__ = "Tyson Smith"
@@ -65,7 +67,7 @@ class Adapter(metaclass=ABCMeta):
     def __enter__(self) -> Adapter:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
     @final

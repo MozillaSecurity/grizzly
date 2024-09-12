@@ -12,13 +12,16 @@ from dataclasses import astuple, dataclass
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
-from pathlib import Path
 from sqlite3 import Connection, OperationalError, connect
 from time import perf_counter, time
-from typing import Any, Callable, Generator, cast
+from typing import TYPE_CHECKING, Any, Callable, Generator, cast
 
-from .reporter import FuzzManagerReporter
 from .utils import grz_tmp
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .reporter import FuzzManagerReporter
 
 __all__ = ("ReadOnlyStatus", "ReductionStatus", "Status", "SimpleStatus")
 __author__ = "Tyson Smith"

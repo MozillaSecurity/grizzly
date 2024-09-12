@@ -675,10 +675,7 @@ def _format_seconds(duration: float) -> str:
 def _format_duration(duration: int | None, total: float = 0) -> str:
     result = ""
     if duration is not None:
-        if total == 0:
-            percent = 0
-        else:
-            percent = int(100 * duration / total)
+        percent = 0 if total == 0 else int(100 * duration / total)
         result = _format_seconds(duration)
         result += f" ({percent:3d}%)"
     return result
@@ -687,10 +684,7 @@ def _format_duration(duration: int | None, total: float = 0) -> str:
 def _format_number(number: int | None, total: float = 0) -> str:
     result = ""
     if number is not None:
-        if total == 0:
-            percent = 0
-        else:
-            percent = int(100 * number / total)
+        percent = 0 if total == 0 else int(100 * number / total)
         result = f"{number:n} ({percent:3d}%)"
     return result
 

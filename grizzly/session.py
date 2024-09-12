@@ -6,17 +6,19 @@ from __future__ import annotations
 from enum import IntEnum, unique
 from logging import getLogger
 from time import time
-from typing import Any
+from typing import TYPE_CHECKING
 
-from sapphire import Sapphire
-
-from .adapter import Adapter
 from .common.iomanager import IOManager
-from .common.reporter import Reporter
 from .common.runner import Runner
 from .common.status import STATUS_DB_FUZZ, Status
-from .common.storage import TestCase
 from .target import Result, Target
+
+if TYPE_CHECKING:
+    from sapphire import Sapphire
+
+    from .adapter import Adapter
+    from .common.reporter import Reporter
+    from .common.storage import TestCase
 
 __all__ = ("SessionError", "LogOutputLimiter", "Session")
 __author__ = "Tyson Smith"
@@ -69,9 +71,7 @@ class LogOutputLimiter:
         if cur_iter >= self._iterations:
             ready = True
             self._iterations *= self._multiplier
-        elif launches >= self._launches:
-            ready = True
-        elif time() - self._delay >= self._time:
+        elif launches >= self._launches or time() - self._delay >= self._time:
             ready = True
         if ready:
             self._time = time()
@@ -126,7 +126,7 @@ class Session:
     def __enter__(self) -> Session:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.close()
 
     def close(self) -> None:

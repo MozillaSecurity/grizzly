@@ -7,16 +7,19 @@ from abc import ABCMeta, abstractmethod
 from enum import IntEnum, unique
 from logging import getLogger
 from os import environ
-from pathlib import Path
 from threading import Lock
-from typing import Any, final
+from typing import TYPE_CHECKING, final
 
 from sapphire import CertificateBundle
 
-from ..common.report import Report
 from ..common.utils import grz_tmp
 from .assets import AssetManager
-from .target_monitor import TargetMonitor
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from ..common.report import Report
+    from .target_monitor import TargetMonitor
 
 __all__ = ("Result", "Target", "TargetError", "TargetLaunchError")
 __author__ = "Tyson Smith"
@@ -94,7 +97,7 @@ class Target(metaclass=ABCMeta):
     def __enter__(self) -> Target:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
     @property

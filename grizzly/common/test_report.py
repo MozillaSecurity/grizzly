@@ -33,8 +33,8 @@ def test_report_01(tmp_path):
     assert report._logs.stdout.name == "log_stdout.txt"
     assert report.preferred.name == "log_stderr.txt"
     assert report.stack is None
-    assert Report.DEFAULT_MAJOR == report.major
-    assert Report.DEFAULT_MINOR == report.minor
+    assert report.major == Report.DEFAULT_MAJOR
+    assert report.minor == Report.DEFAULT_MINOR
     assert report.prefix is not None
     report.cleanup()
     assert not tmp_path.exists()
@@ -53,8 +53,8 @@ def test_report_02(tmp_path):
     assert report._logs.stdout.name == "log_stdout.txt"
     assert report.preferred.name == "log_asan_blah.txt"
     assert report.stack is not None
-    assert Report.DEFAULT_MAJOR != report.major
-    assert Report.DEFAULT_MINOR != report.minor
+    assert report.major != Report.DEFAULT_MAJOR
+    assert report.minor != Report.DEFAULT_MINOR
     assert report.prefix is not None
     report.cleanup()
 

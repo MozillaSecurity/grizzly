@@ -6,14 +6,13 @@ from __future__ import annotations
 
 import json
 import os
-from argparse import Namespace
 from itertools import chain
 from locale import LC_ALL, setlocale
 from logging import getLogger
 from math import ceil, log
 from pathlib import Path
 from time import time
-from typing import Any
+from typing import TYPE_CHECKING
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
@@ -42,6 +41,9 @@ from ..replay import ReplayManager, ReplayResult
 from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
 from .strategies import STRATEGIES
+
+if TYPE_CHECKING:
+    from argparse import Namespace
 
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]
@@ -159,7 +161,7 @@ class ReduceManager:
     def __enter__(self) -> ReduceManager:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
     def cleanup(self) -> None:

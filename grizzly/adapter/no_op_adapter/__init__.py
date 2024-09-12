@@ -3,10 +3,14 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from sapphire import ServerMap
+from typing import TYPE_CHECKING
 
-from ...common.storage import TestCase
 from ..adapter import Adapter
+
+if TYPE_CHECKING:
+    from sapphire import ServerMap
+
+    from ...common.storage import TestCase
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]

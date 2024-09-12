@@ -11,7 +11,7 @@ from os import getenv
 from pathlib import Path
 from shutil import copyfile, move, rmtree
 from tempfile import TemporaryDirectory
-from typing import Any, cast, final
+from typing import TYPE_CHECKING, Any, cast, final
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from Collector.Collector import Collector
@@ -19,8 +19,10 @@ from fasteners.process_lock import InterProcessLock
 from psutil import disk_usage
 
 from .report import Report
-from .storage import TestCase
 from .utils import grz_tmp
+
+if TYPE_CHECKING:
+    from .storage import TestCase
 
 __all__ = ("FilesystemReporter", "FuzzManagerReporter", "Quality")
 __author__ = "Tyson Smith"

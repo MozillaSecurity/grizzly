@@ -7,7 +7,6 @@ from logging import getLogger
 from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import mkdtemp
-from typing import Any
 
 __all__ = ("AssetError", "AssetManager")
 __author__ = "Tyson Smith"
@@ -30,7 +29,7 @@ class AssetManager:
     def __enter__(self) -> AssetManager:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
     def add(self, asset: str, path: Path, copy: bool = True) -> Path:

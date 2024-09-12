@@ -190,7 +190,7 @@ def test_crash_03(mocker, tmp_path, file_name, passed_ext, expected):
         "id": 234,
         "testcase": file_name,
     }
-    with open(tmp_path / file_name, "w") as zip_fp:
+    with (tmp_path / file_name).open("w") as zip_fp:
         zip_fp.write("data")
     with CrashEntry(234) as crash:
         assert crash.testcase == file_name  # pre-load data dict so I can re-patch get

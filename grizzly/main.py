@@ -3,10 +3,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from argparse import Namespace
 from logging import DEBUG, getLogger
 from os import getpid
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from sapphire import CertificateBundle, Sapphire
 
@@ -27,6 +26,9 @@ from .common.utils import (
 )
 from .session import LogRate, Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
+
+if TYPE_CHECKING:
+    from argparse import Namespace
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
