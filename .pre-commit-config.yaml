@@ -43,6 +43,12 @@ repos:
   - repo: meta
     hooks:
       - id: check-useless-excludes
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+        args: [--contrib=contrib-title-conventional-commits, --ignore=body-is-missing, --msg-filename]
+        stages: [ commit-msg ]
   - repo: local
     hooks:
       - id: mypy
