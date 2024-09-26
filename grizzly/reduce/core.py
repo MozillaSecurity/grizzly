@@ -596,7 +596,7 @@ class ReduceManager:
                                         result.report.minor in other_results
                                     )
 
-                                    is_smaller = None
+                                    is_smaller = False
                                     if other_result_exists:
                                         # we have a result already queued for this sig
                                         # check size to see which to keep
@@ -609,7 +609,7 @@ class ReduceManager:
                                         old_size = sum(
                                             tc.data_size for tc in old_reduction
                                         )
-                                        is_smaller = bool(reduction_size < old_size)
+                                        is_smaller = reduction_size < old_size
 
                                     if not other_result_exists or is_smaller:
                                         if other_result_exists:
