@@ -3,6 +3,7 @@ repos:
     rev: v0.6.5
     hooks:
       - id: ruff
+        args: [--fix]
   - repo: https://github.com/ambv/black
     rev: 24.8.0
     hooks:
