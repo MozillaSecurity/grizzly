@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any, cast, final
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from Collector.Collector import Collector
-from fasteners.process_lock import InterProcessLock
 from psutil import disk_usage
 
 from .report import Report
@@ -248,8 +247,7 @@ class FuzzManagerReporter(Reporter):
         if not force:
             if collector.sigCacheDir and Path(collector.sigCacheDir).is_dir():
                 # search for a cached signature match
-                with InterProcessLock(str(grz_tmp() / "fm_sigcache.lock")):
-                    _, cache_metadata = collector.search(report.crash_info)
+                _, cache_metadata = collector.search(report.crash_info)
                 # check if signature has been marked as frequent in FM
                 if cache_metadata and cache_metadata["frequent"]:
                     LOG.info(

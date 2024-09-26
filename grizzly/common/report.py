@@ -17,7 +17,6 @@ from typing import NamedTuple, cast
 
 # import FuzzManager utilities
 from Collector.Collector import Collector
-from fasteners.process_lock import InterProcessLock
 from FTB.ProgramConfiguration import ProgramConfiguration
 from FTB.Signatures.CrashInfo import CrashInfo, CrashSignature
 
@@ -186,11 +185,10 @@ class Report:
         if self._signature is None:
             collector = Collector()
             if collector.sigCacheDir and Path(collector.sigCacheDir).is_dir():
-                with InterProcessLock(str(grz_tmp() / "fm_sigcache.lock")):
-                    cache_sig, _ = collector.search(self.crash_info)
-                    if cache_sig:
-                        LOG.debug("signature loaded from cache file %r", cache_sig)
-                        self._signature = CrashSignature.fromFile(cache_sig)
+                cache_sig, _ = collector.search(self.crash_info)
+                if cache_sig:
+                    LOG.debug("signature loaded from cache file %r", cache_sig)
+                    self._signature = CrashSignature.fromFile(cache_sig)
             # if cache lookup failed generate a crash signature
             if self._signature is None:
                 self._signature = self.crash_info.createCrashSignature(
