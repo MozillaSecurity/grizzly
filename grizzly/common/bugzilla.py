@@ -53,11 +53,12 @@ class BugzillaBug:
             if (
                 attachment.is_obsolete
                 or attachment.content_type == "text/x-phabricator-request"
+                or not attachment.file_name
                 or attachment.file_name.split(".")[-1] in IGNORE_EXTS
             ):
                 continue
             try:
-                data = b64decode(attachment.data)
+                data = b64decode(attachment.data or "")
             except binascii.Error as exc:
                 LOG.warning(
                     "Failed to decode attachment: %r (%s)", attachment.file_name, exc
