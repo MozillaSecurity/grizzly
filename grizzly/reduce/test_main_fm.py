@@ -6,6 +6,7 @@ from pytest import mark
 
 from ..common.reporter import Quality
 from ..common.utils import Exit
+from .bucket import main as main_wrapper
 from .crash import main as crash_main
 
 pytestmark = mark.usefixtures("tmp_path_status_db_reduce")
@@ -44,3 +45,10 @@ def test_crash_main_quality(mocker, exit_code, pre_quality, post_quality):
     # verify testcase quality was updated
     assert crash.testcase_quality == post_quality
     assert reduce_main.call_args[0][0].sig is None
+
+
+def test_bucket_main_wrapper_coverage(mocker):
+    """test is for coverage of the wrapper function"""
+    mocker.patch("grizzly.reduce.bucket.bucket_main", return_value=0)
+    mocker.patch("grizzly.reduce.bucket.ReduceFuzzManagerIDQualityArgs")
+    assert main_wrapper() == 0

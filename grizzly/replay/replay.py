@@ -40,6 +40,7 @@ from ..target import (
     TargetLaunchError,
     TargetLaunchTimeout,
 )
+from .args import ReplayArgs
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -600,8 +601,18 @@ class ReplayManager:
                 result.report.cleanup()
 
     @classmethod
-    def main(cls, args: Namespace) -> int:
+    def main(cls, args: Namespace | None = None) -> int:
+        """CLI for `grizzly.reduce`.
+
+        Arguments:
+            args: Result from `ReplayArgs.parse_args`.
+
+        Returns:
+            Exit.SUCCESS (0) for success otherwise a different Exit code is returned.
+        """
+        args = args or ReplayArgs().parse_args()
         configure_logging(args.log_level)
+
         LOG.info("Starting Grizzly Replay")
         LOG.debug("grizzly-framework version: %s", package_version("grizzly-framework"))
 

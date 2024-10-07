@@ -18,15 +18,16 @@ if TYPE_CHECKING:
 LOG = getLogger(__name__)
 
 
-def main(args: Namespace) -> int:
+def main(args: Namespace | None = None) -> int:
     """CLI for `grizzly.replay.crash`.
 
     Arguments:
-        args: Result from `ReplayArgs.parse_args`.
+        args: Result from `ReplayFuzzManagerIDArgs.parse_args`.
 
     Returns:
-        0 for success. non-0 indicates a problem.
+        Exit.SUCCESS (0) for success otherwise a different Exit code is returned.
     """
+    args = args or ReplayFuzzManagerIDArgs().parse_args()
     configure_logging(args.log_level)
     with load_fm_data(args.input, load_bucket=not args.sig) as (crash, bucket):
         LOG.info("Loaded crash %d from FuzzManager", crash.crash_id)
@@ -38,7 +39,7 @@ def modify_args(args: Namespace, crash: CrashEntry, bucket: Bucket | None) -> Na
     """
 
     Arguments:
-        args: Result from `ReplayArgs.parse_args`.
+        args: Result from `ReplayFuzzManagerIDArgs.parse_args`.
         crash: Crash entry to process.
         bucket: Bucket that contains crash.
 
@@ -77,4 +78,4 @@ def modify_args(args: Namespace, crash: CrashEntry, bucket: Bucket | None) -> Na
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(ReplayFuzzManagerIDArgs().parse_args()))
+    raise SystemExit(main())

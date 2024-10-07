@@ -38,7 +38,16 @@ LOG = getLogger(__name__)
 
 
 def main(args: Namespace) -> int:
+    """CLI for `grizzly`.
+
+    Arguments:
+        args: Result from `GrizzlyArgs.parse_args`.
+
+    Returns:
+        Exit.SUCCESS (0) for success otherwise a different Exit code is returned.
+    """
     configure_logging(args.log_level)
+
     LOG.info("Starting Grizzly (%d)", getpid())
     LOG.debug("grizzly-framework version: %s", package_version("grizzly-framework"))
 

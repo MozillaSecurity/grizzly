@@ -1,8 +1,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from argparse import Namespace
+from __future__ import annotations
+
 from logging import getLogger
+from typing import TYPE_CHECKING
 
 from ..common.fuzzmanager import load_fm_data
 from ..common.reporter import Quality
@@ -11,18 +13,22 @@ from ..replay.crash import modify_args
 from .args import ReduceFuzzManagerIDArgs
 from .core import ReduceManager
 
+if TYPE_CHECKING:
+    from argparse import Namespace
+
 LOG = getLogger(__name__)
 
 
-def main(args: Namespace) -> int:
+def main(args: Namespace | None = None) -> int:
     """CLI for `grizzly.reduce.crash`.
 
     Arguments:
         args: Result from `ReduceArgs.parse_args`.
 
     Returns:
-        0 for success. non-0 indicates a problem.
+        Exit.SUCCESS (0) for success otherwise a different Exit code is returned.
     """
+    args = args or ReduceFuzzManagerIDArgs().parse_args()
     configure_logging(args.log_level)
     with load_fm_data(args.input, load_bucket=not args.sig) as (crash, bucket):
         LOG.info(
@@ -61,4 +67,4 @@ def main(args: Namespace) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(ReduceFuzzManagerIDArgs().parse_args()))
+    raise SystemExit(main())

@@ -39,6 +39,7 @@ from ..common.utils import (
 )
 from ..replay import ReplayManager, ReplayResult
 from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
+from .args import ReduceArgs
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
 from .strategies import STRATEGIES
 
@@ -752,16 +753,17 @@ class ReduceManager:
             self._status.last_reports = new_reports
 
     @classmethod
-    def main(cls, args: Namespace) -> int:
+    def main(cls, args: Namespace | None = None) -> int:
         """CLI for `grizzly.reduce`.
 
         Arguments:
             args: Result from `ReduceArgs.parse_args`.
 
         Returns:
-            0 for success. non-0 indicates a problem.
+            Exit.SUCCESS (0) for success otherwise a different Exit code is returned.
         """
         # pylint: disable=too-many-return-statements
+        args = args or ReduceArgs().parse_args()
         configure_logging(args.log_level)
         setlocale(LC_ALL, "")
 
