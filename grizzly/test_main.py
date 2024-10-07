@@ -2,7 +2,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly main"""
-from pathlib import Path
 from platform import system
 
 from pytest import mark, skip
@@ -86,7 +85,7 @@ def test_main_02(mocker, session_setup, exit_code, to_raise):
         session_obj.run.side_effect = TargetLaunchError("test", mocker.Mock())
     else:
         session_obj.run.side_effect = to_raise()
-    args = mocker.MagicMock(adapter="fake", binary=Path("bin"), time_limit=1, timeout=1)
+    args = mocker.MagicMock(adapter="fake", time_limit=1, timeout=1)
     assert main(args) == exit_code
     assert target_cls.return_value.cleanup.call_count == 1
 
@@ -111,7 +110,6 @@ def test_main_03(mocker, session_setup, test_limit, timeout):
     # no_harness=False for code coverage
     args = mocker.MagicMock(
         adapter="fake",
-        binary=Path("bin"),
         no_harness=False,
         time_limit=test_limit,
         timeout=timeout,
@@ -142,7 +140,6 @@ def test_main_04(
     assert sum((pernosco, rr, valgrind)) < 2, "test broken!"
     args = mocker.MagicMock(
         adapter="fake",
-        binary=Path("bin"),
         pernosco=pernosco,
         rr=rr,
         time_limit=1,
@@ -162,7 +159,6 @@ def test_main_05(mocker, session_setup):
     target_cls.return_value.https.return_value = False
     args = mocker.MagicMock(
         adapter="fake",
-        binary=Path("bin"),
         use_http=False,
         time_limit=1,
         timeout=1,

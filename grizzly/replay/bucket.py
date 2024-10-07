@@ -1,14 +1,18 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from argparse import Namespace
+from __future__ import annotations
+
 from logging import getLogger
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from ..common.fuzzmanager import Bucket
 from ..common.utils import Exit, configure_logging
 from .args import ReplayFuzzManagerIDQualityArgs
 from .crash import main as crash_main
+
+if TYPE_CHECKING:
+    from argparse import Namespace
 
 LOG = getLogger(__name__)
 
@@ -21,7 +25,7 @@ def bucket_main(args: Namespace, tool_main: Callable[[Namespace], int]) -> int:
         tool_main: Main function from a supported Grizzly tool.
 
     Returns:
-        0 for success. non-0 indicates a problem.
+        Exit.SUCCESS (0) for success otherwise a different Exit code is returned.
     """
     assert callable(tool_main)
     configure_logging(args.log_level)
@@ -49,7 +53,17 @@ def bucket_main(args: Namespace, tool_main: Callable[[Namespace], int]) -> int:
     return result
 
 
+def main() -> int:
+    """Wrapper for bucket_main() which is the CLI for `grizzly.replay.bucket`.
+
+    Arguments:
+        None
+
+    Returns:
+        Exit.SUCCESS (0) for success otherwise a different Exit code is returned.
+    """
+    return bucket_main(ReplayFuzzManagerIDQualityArgs().parse_args(), crash_main)
+
+
 if __name__ == "__main__":
-    raise SystemExit(
-        bucket_main(ReplayFuzzManagerIDQualityArgs().parse_args(), crash_main)
-    )
+    raise SystemExit(main())

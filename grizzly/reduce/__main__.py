@@ -4,6 +4,5 @@
 """Grizzly reducer CLI.
 """
 from . import ReduceManager
-from .args import ReduceArgs
 
-raise SystemExit(ReduceManager.main(ReduceArgs().parse_args()))
+raise SystemExit(ReduceManager.main())

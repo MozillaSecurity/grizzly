@@ -9,6 +9,7 @@ from pytest import mark
 from ..common.fuzzmanager import Bucket, CrashEntry
 from ..common.utils import Exit
 from .bucket import bucket_main
+from .bucket import main as main_wrapper
 from .crash import main as crash_main
 from .crash import modify_args
 
@@ -133,3 +134,10 @@ def test_bucket_main(mocker, crashes, main_exit_codes, result, arg_sig, arg_tool
             assert call_args[idx].sig == arg_sig
         else:
             assert call_args[idx].sig == "test_sig.json"
+
+
+def test_bucket_main_wrapper_coverage(mocker):
+    """test is for coverage of the wrapper function"""
+    mocker.patch("grizzly.replay.bucket.bucket_main", return_value=0)
+    mocker.patch("grizzly.replay.bucket.ReplayFuzzManagerIDQualityArgs")
+    assert main_wrapper() == 0
