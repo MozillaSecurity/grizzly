@@ -23,25 +23,25 @@ python3 -m pip install grizzly-framework --upgrade
 **Fuzzing** - Run the `no-op` test adapter to check everything is working.
 
 ```
-python3 -m grizzly <browser-binary> no-op
+grizzly <browser-binary> no-op
 ```
 
 **Reduce** - [Grizzly Reduce](https://github.com/MozillaSecurity/grizzly/wiki/Grizzly-Reduce) can reduce a test case.
 
 ```
-python3 -m grizzly.reduce <browser-binary> <testcase>
+grizzly-reduce <browser-binary> <testcase>
 ```
 
 **Replay** - [Grizzly Replay](https://github.com/MozillaSecurity/grizzly/wiki/Grizzly-Replay) can replay a test case with different builds and debuggers.
 
 ```
-python3 -m grizzly.replay <browser-binary> <testcase>
+grizzly-replay <browser-binary> <testcase>
 ```
 
 [Bugzilla](https://bugzilla.mozilla.org/) is also supported by Grizzly Replay. Bugs can be replayed via a bug ID:
 
 ```
-python3 -m grizzly.replay.bugzilla <browser-binary> <bug_id>
+grizzly-replay-bugzilla <browser-binary> <bug_id>
 ```
 
 Questions
