@@ -16,13 +16,16 @@ from os.path import exists
 from pathlib import Path
 from platform import system
 from types import MappingProxyType
-from typing import Iterable
+from typing import TYPE_CHECKING
 
 from FTB.ProgramConfiguration import ProgramConfiguration
 
 from .common.fuzzmanager import FM_CONFIG
 from .common.plugins import scan_plugins, scan_target_assets
 from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, package_version
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 # ref: https://stackoverflow.com/questions/12268602/sort-argparse-help-alphabetically

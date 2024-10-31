@@ -10,7 +10,10 @@ from logging import DEBUG, basicConfig, getLogger
 from os import getenv
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Any, Generator, Iterable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable
 
 __all__ = (
     "ConfigError",

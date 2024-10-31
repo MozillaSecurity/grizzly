@@ -9,7 +9,7 @@ from pathlib import Path
 from platform import system
 from signal import SIGABRT
 from tempfile import TemporaryDirectory, mkdtemp
-from typing import Any, Dict, Optional, cast
+from typing import Any, Optional, cast
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
 from ffpuppet.helpers import certutil_available, certutil_find
@@ -95,6 +95,7 @@ class PuppetTarget(Target):
         **kwds: dict[str, Any],
     ) -> None:
         LOG.debug("ffpuppet version: %s", package_version("ffpuppet"))
+        # Optional is required for Python 3.9
         certs = cast(Optional[CertificateBundle], kwds.pop("certs", None))
         # only pass certs to FFPuppet if certutil is available
         # otherwise certs can't be used
@@ -126,6 +127,7 @@ class PuppetTarget(Target):
         # create Puppet object
         self._puppet = FFPuppet(
             debugger=self._debugger,
+            # Optional is required for Python 3.9
             headless=cast(Optional[str], kwds.pop("headless", None)),
             working_path=str(grz_tmp("target")),
         )
@@ -259,7 +261,8 @@ class PuppetTarget(Target):
                 memory_limit=self.memory_limit,
                 prefs_js=self._prefs,
                 extension=[self._extension] if self._extension else None,
-                env_mod=cast(Dict[str, Optional[str]], env_mod),
+                # Optional is required for Python 3.9
+                env_mod=cast(dict[str, Optional[str]], env_mod),
                 cert_files=[self.certs.root] if self.certs else None,
             )
         except LaunchError as exc:

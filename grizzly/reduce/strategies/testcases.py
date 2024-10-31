@@ -6,10 +6,13 @@ from __future__ import annotations
 
 from logging import getLogger
 from shutil import rmtree
-from typing import Generator
+from typing import TYPE_CHECKING
 
 from ...common.storage import TestCase
 from . import Strategy
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 LOG = getLogger(__name__)
 

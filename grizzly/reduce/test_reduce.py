@@ -734,9 +734,8 @@ def test_report_02(mocker, tmp_path):
         ["fake"],
         log_path,
         use_analysis=False,
-    ) as mgr:
-        with raises(KeyboardInterrupt):
-            mgr.run()
+    ) as mgr, raises(KeyboardInterrupt):
+        mgr.run()
 
     n_reports = 1
     reports = {"20"}

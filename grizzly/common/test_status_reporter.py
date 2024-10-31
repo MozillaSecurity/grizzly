@@ -143,11 +143,10 @@ def test_reduce_status_reporter_04(mocker, tmp_path):
     status.run_params["splines"] = "reticulated"
     status.last_reports.append(45678)
     status.record("init")
-    with status.measure("total"):
-        with status.measure("strategy_0"):
-            status.iterations = 1
-            status.attempts = 1
-            status.successes = 1
+    with status.measure("total"), status.measure("strategy_0"):
+        status.iterations = 1
+        status.attempts = 1
+        status.successes = 1
     status.report(force=True)
     rptr = ReductionStatusReporter.load(db_file)
     assert rptr.reports

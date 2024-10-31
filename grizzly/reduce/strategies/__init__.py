@@ -19,11 +19,13 @@ from logging import DEBUG, getLogger
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-from typing import TYPE_CHECKING, Iterable, Iterator, Type, cast
+from typing import TYPE_CHECKING, cast
 
 from ...common.utils import grz_tmp
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
     from ...common.storage import TestCase
 
 try:
@@ -202,7 +204,7 @@ def _load_strategies() -> dict[str, type[Strategy]]:
     strategies: dict[str, type[Strategy]] = {}
     for entry_point in iter_entry_points("grizzly_reduce_strategies"):
         try:
-            strategy_cls = cast(Type[Strategy], entry_point.load())
+            strategy_cls = cast(type[Strategy], entry_point.load())
             assert (
                 strategy_cls.name == entry_point.name
             ), f"entry_point name mismatch, check setup.py and {strategy_cls.__name__}"

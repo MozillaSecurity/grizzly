@@ -19,7 +19,7 @@ from pathlib import Path
 from platform import system
 from re import match
 from time import gmtime, localtime, strftime
-from typing import Callable, Generator, Iterable
+from typing import TYPE_CHECKING, Callable
 
 from psutil import cpu_count, cpu_percent, disk_usage, getloadavg, virtual_memory
 
@@ -31,6 +31,9 @@ from .status import (
     ReductionStatus,
     ReductionStep,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable
 
 __all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"
@@ -77,15 +80,17 @@ class TracebackReport:
         token = b"Traceback (most recent call last):"
         assert len(token) < cls.READ_LIMIT
         try:
-            with log_file.open("rb") as lfp:
-                with mmap(lfp.fileno(), 0, access=ACCESS_READ) as lmm:
-                    idx = lmm.find(token)
-                    if idx == -1:
-                        # no traceback here, move along
-                        return None
-                    # seek back 2KB to collect preceding lines
-                    lmm.seek(max(idx - len(token) - 2048, 0))
-                    data = lmm.read(cls.READ_LIMIT)
+            with (
+                log_file.open("rb") as lfp,
+                mmap(lfp.fileno(), 0, access=ACCESS_READ) as lmm,
+            ):
+                idx = lmm.find(token)
+                if idx == -1:
+                    # no traceback here, move along
+                    return None
+                # seek back 2KB to collect preceding lines
+                lmm.seek(max(idx - len(token) - 2048, 0))
+                data = lmm.read(cls.READ_LIMIT)
         except (OSError, ValueError):  # pragma: no cover
             # OSError: in case the file goes away
             # ValueError: cannot mmap an empty file on Windows
