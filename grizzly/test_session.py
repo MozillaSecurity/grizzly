@@ -233,9 +233,11 @@ def test_session_04(mocker):
     server.serve_path.return_value = (Served.NONE, {})
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.monitor.launches = 1
-    with Session(FuzzAdapter("fuzz"), None, server, target) as session:
-        with raises(SessionError, match="Test case is missing entry point"):
-            session.run([], 10)
+    with (
+        Session(FuzzAdapter("fuzz"), None, server, target) as session,
+        raises(SessionError, match="Test case is missing entry point"),
+    ):
+        session.run([], 10)
 
 
 @mark.parametrize(

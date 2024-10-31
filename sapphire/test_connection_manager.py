@@ -70,9 +70,11 @@ def test_connection_manager_03(mocker, tmp_path):
     serv_sock = mocker.Mock(spec_set=socket)
     serv_sock.accept.return_value = (clnt_sock, None)
     mocker.patch("sapphire.worker.select", return_value=([serv_sock], None, None))
-    with raises(Exception, match="worker exception"):
-        with ConnectionManager(job, serv_sock) as mgr:
-            mgr.serve(10)
+    with (
+        raises(Exception, match="worker exception"),
+        ConnectionManager(job, serv_sock) as mgr,
+    ):
+        mgr.serve(10)
     assert clnt_sock.close.call_count == 1
     assert job.is_complete()
     assert job.exceptions.empty()

@@ -41,18 +41,20 @@ def test_replay_01(mocker, server, tmp_path, post_launch_delay):
     target.monitor.is_healthy.return_value = False
     (tmp_path / "a.html").touch()
     server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
-    with TestCase.load(tmp_path) as testcase:
-        with ReplayManager([], server, target, use_harness=True, relaunch=1) as replay:
-            assert not replay.run([testcase], 10, post_launch_delay=post_launch_delay)
-            assert replay.signature is None
-            assert replay.status
-            assert replay.status.ignored == 0
-            assert replay.status.iteration == 1
-            assert replay.status.results.total == 0
-            assert target.monitor.is_healthy.call_count == 1
-            assert target.close.call_count == 2
-            assert target.close.mock_calls[0] == mocker.call()
-            assert target.close.mock_calls[1] == mocker.call(force_close=True)
+    with (
+        TestCase.load(tmp_path) as testcase,
+        ReplayManager([], server, target, use_harness=True, relaunch=1) as replay,
+    ):
+        assert not replay.run([testcase], 10, post_launch_delay=post_launch_delay)
+        assert replay.signature is None
+        assert replay.status
+        assert replay.status.ignored == 0
+        assert replay.status.iteration == 1
+        assert replay.status.results.total == 0
+        assert target.monitor.is_healthy.call_count == 1
+        assert target.close.call_count == 2
+        assert target.close.mock_calls[0] == mocker.call()
+        assert target.close.mock_calls[1] == mocker.call(force_close=True)
 
 
 def test_replay_02(mocker, server, tmp_path):
@@ -65,17 +67,19 @@ def test_replay_02(mocker, server, tmp_path):
     iter_cb = mocker.Mock()
     (tmp_path / "a.html").touch()
     server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
-    with TestCase.load(tmp_path) as testcase:
-        with ReplayManager([], server, target, use_harness=True, relaunch=20) as replay:
-            assert not replay.run([testcase], 10, repeat=10, on_iteration_cb=iter_cb)
-            assert replay.signature is None
-            assert replay.status
-            assert replay.status.ignored == 0
-            assert replay.status.iteration == iter_cb.call_count == 10
-            assert replay.status.results.total == 0
-            assert target.handle_hang.call_count == 0
-            assert target.monitor.is_healthy.call_count == 1
-            assert target.close.call_count == 2
+    with (
+        TestCase.load(tmp_path) as testcase,
+        ReplayManager([], server, target, use_harness=True, relaunch=20) as replay,
+    ):
+        assert not replay.run([testcase], 10, repeat=10, on_iteration_cb=iter_cb)
+        assert replay.signature is None
+        assert replay.status
+        assert replay.status.ignored == 0
+        assert replay.status.iteration == iter_cb.call_count == 10
+        assert replay.status.results.total == 0
+        assert target.handle_hang.call_count == 0
+        assert target.monitor.is_healthy.call_count == 1
+        assert target.close.call_count == 2
 
 
 def test_replay_03(mocker, server, tmp_path):
@@ -91,16 +95,18 @@ def test_replay_03(mocker, server, tmp_path):
     target.check_result.return_value = Result.NONE
     (tmp_path / "a.html").touch()
     server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
-    with TestCase.load(tmp_path) as testcase:
-        with ReplayManager([], server, target, use_harness=True, relaunch=20) as replay:
-            assert not replay.run([testcase], 10, repeat=10, min_results=1)
-            assert replay.status
-            assert replay.status.ignored == 0
-            assert replay.status.iteration == 10
-            assert replay.status.results.total == 0
-            assert target.handle_hang.call_count == 0
-            assert target.monitor.is_healthy.call_count == 0
-            assert target.close.call_count == 1
+    with (
+        TestCase.load(tmp_path) as testcase,
+        ReplayManager([], server, target, use_harness=True, relaunch=20) as replay,
+    ):
+        assert not replay.run([testcase], 10, repeat=10, min_results=1)
+        assert replay.status
+        assert replay.status.ignored == 0
+        assert replay.status.iteration == 10
+        assert replay.status.results.total == 0
+        assert target.handle_hang.call_count == 0
+        assert target.monitor.is_healthy.call_count == 0
+        assert target.close.call_count == 1
 
 
 @mark.parametrize("sig_parsed", [True, False])
@@ -593,17 +599,19 @@ def test_replay_19(mocker, server, tmp_path):
         Served.ALL,
         {"test.html": str(tmp_path / "test.html")},
     )
-    with TestCase.load(tmp_path) as testcase:
-        with ReplayManager([], server, target, use_harness=True) as replay:
-            assert not replay.run([testcase], 30)
-            assert replay.status
-            assert replay.status.iteration == 1
-            assert not replay.run([testcase], 30)
-            assert replay.status
-            assert replay.status.iteration == 1
-            assert not replay.run([testcase], 30)
-            assert replay.status
-            assert replay.status.iteration == 1
+    with (
+        TestCase.load(tmp_path) as testcase,
+        ReplayManager([], server, target, use_harness=True) as replay,
+    ):
+        assert not replay.run([testcase], 30)
+        assert replay.status
+        assert replay.status.iteration == 1
+        assert not replay.run([testcase], 30)
+        assert replay.status
+        assert replay.status.iteration == 1
+        assert not replay.run([testcase], 30)
+        assert replay.status
+        assert replay.status.iteration == 1
     assert server.serve_path.call_count == 3
 
 

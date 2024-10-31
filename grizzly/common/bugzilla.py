@@ -10,7 +10,7 @@ from os import environ
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-from typing import Generator
+from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
 from bugsy import Bug, Bugsy
@@ -18,6 +18,9 @@ from bugsy.errors import BugsyException
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from .utils import grz_tmp
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 # attachments that can be ignored
 IGNORE_EXTS = frozenset({"c", "cpp", "diff", "exe", "log", "patch", "php", "py", "txt"})

@@ -48,10 +48,6 @@ tasks:
         - tox; tox -e codecov
       jobs:
         include:
-          - name: tests python 3.8
-            version: "3.8"
-            env:
-              TOXENV: py38,lint
           - name: tests python 3.9
             version: "3.9"
             env:
@@ -79,7 +75,7 @@ tasks:
             env:
               TOXENV: py312,lint
           - name: PyPI upload
-            version: "3.8"
+            version: "3.9"
             env:
               TOXENV: pypi
             script:

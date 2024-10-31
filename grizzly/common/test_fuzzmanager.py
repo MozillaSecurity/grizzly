@@ -303,9 +303,8 @@ def test_crash_06(mocker):
         "rawStderr": "",
         "rawCrashData": "",
     }
-    with raises(RuntimeError) as exc:
-        with CrashEntry(123) as crash:
-            crash.create_signature(None)
+    with raises(RuntimeError) as exc, CrashEntry(123) as crash:
+        crash.create_signature(None)
     assert "insufficient data to generate" in str(exc).lower()
     assert coll.return_value.get.call_count == 1
 

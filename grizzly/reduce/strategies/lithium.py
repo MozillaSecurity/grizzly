@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from abc import ABC
 from logging import getLogger
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING
 
 from lithium.strategies import CheckOnly, Minimize, ReductionIterator
 from lithium.strategies import CollapseEmptyBraces as LithCollapseEmptyBraces
@@ -18,6 +18,7 @@ from ...common.storage import TestCase
 from . import Strategy, _contains_dd
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 LOG = getLogger(__name__)

@@ -6,6 +6,7 @@ Sapphire HTTP server job
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from enum import IntEnum, unique
 from errno import ENAMETOOLONG
 from itertools import chain
@@ -15,7 +16,7 @@ from os.path import splitext
 from queue import Queue
 from threading import Event, Lock
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Iterable, Mapping, NamedTuple, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, Union, cast
 
 from .server_map import DynamicResource, FileResource, RedirectResource, ServerMap
 
@@ -93,7 +94,6 @@ class Job:
         self.accepting = Event()
         self.accepting.set()
         self.auto_close = auto_close
-        # quotes around type for Python 3.8
         self.exceptions: Queue[tuple[Any, Any, Any]] = Queue()
         self.forever = forever
         self.server_map = server_map
@@ -127,7 +127,7 @@ class Job:
             raise OSError(f"wwwroot '{self._wwwroot}' does not exist")
         if self.server_map:
             for url, resource in cast(
-                Iterable[Tuple[str, Union[DynamicResource, RedirectResource]]],
+                Iterable[tuple[str, Union[DynamicResource, RedirectResource]]],
                 chain(
                     self.server_map.redirect.items(), self.server_map.dynamic.items()
                 ),

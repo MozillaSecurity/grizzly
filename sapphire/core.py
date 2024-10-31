@@ -11,13 +11,14 @@ from pathlib import Path
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
 from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
 from time import perf_counter, sleep
-from typing import TYPE_CHECKING, Callable, Iterable, Mapping, cast
+from typing import TYPE_CHECKING, Callable, cast
 
 from .connection_manager import ConnectionManager
 from .job import Job, Served
 
 if TYPE_CHECKING:
     from argparse import Namespace
+    from collections.abc import Iterable, Mapping
 
     from .certificate_bundle import CertificateBundle
     from .server_map import ServerMap

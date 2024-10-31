@@ -12,9 +12,12 @@ from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
-from typing import Any, Generator, Iterator, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .utils import grz_tmp, package_version
+
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterator
 
 __all__ = ("TestCase", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
@@ -35,7 +38,7 @@ class TestFileExists(Exception):
     TestFile with the same name"""
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, frozen=True)
 class TestFileMap:
     optional: dict[str, Path] = field(default_factory=dict)
     required: dict[str, Path] = field(default_factory=dict)

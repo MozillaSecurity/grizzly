@@ -5,11 +5,13 @@ from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generator, final
+from typing import TYPE_CHECKING, Any, final
 
 from ..common.utils import DEFAULT_TIME_LIMIT, HARNESS_FILE
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from sapphire import ServerMap
 
     from ..common.storage import TestCase
@@ -187,7 +189,7 @@ class Adapter(metaclass=ABCMeta):
             None
         """
 
-    # TODO: update input_path type (str -> Path)
+    # TODO: update input_path type (str -> list[str])
     def setup(self, input_path: str | None, server_map: ServerMap) -> None:
         """Optional. Automatically called once at startup.
 

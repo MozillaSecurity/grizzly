@@ -11,7 +11,7 @@ from pathlib import Path
 from re import search
 from shutil import copyfileobj, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
-from typing import Any, Dict, Generator, cast
+from typing import TYPE_CHECKING, Any, cast
 from zipfile import BadZipFile, ZipFile
 
 from Collector.Collector import Collector
@@ -21,6 +21,9 @@ from FTB.Signatures.CrashInfo import CrashInfo
 from .reporter import Quality
 from .storage import TEST_INFO
 from .utils import grz_tmp
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 FM_CONFIG = Path.home() / ".fuzzmanagerconf"
 LOG = getLogger(__name__)
@@ -79,7 +82,7 @@ class CrashEntry:
             need_raw = "1" if name in self.RAW_FIELDS else "0"
             # TODO: handle 403 and 404?
             self._data = cast(
-                Dict[str, Any],
+                dict[str, Any],
                 self._coll.get(self._url, params={"include_raw": need_raw}).json(),
             )
         if name not in self._data:

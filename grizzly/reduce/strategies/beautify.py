@@ -12,7 +12,8 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from logging import getLogger
-from typing import TYPE_CHECKING, Generator, Match, cast
+from re import Match
+from typing import TYPE_CHECKING, cast
 
 from lithium.testcases import TestcaseLine
 
@@ -34,6 +35,7 @@ from ...common.storage import TEST_INFO, TestCase
 from . import Strategy, _contains_dd
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from pathlib import Path
 
 LOG = getLogger(__name__)
