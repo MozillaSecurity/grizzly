@@ -1,2 +1,5 @@
+include loki/py.typed
 include grizzly/common/harness.html
 include grizzly/common/post_launch_delay.html
+include grizzly/py.typed
+include sapphire/py.typed
