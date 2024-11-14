@@ -20,10 +20,27 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 from .utils import grz_tmp
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterable
 
 # attachments that can be ignored
-IGNORE_EXTS = frozenset({"c", "cpp", "diff", "exe", "log", "patch", "php", "py", "txt"})
+IGNORE_EXTS = frozenset(
+    (
+        "c",
+        "cpp",
+        "diff",
+        "diffs",
+        "exe",
+        "gz",
+        "idl",
+        "log",
+        "patch",
+        "php",
+        "py",
+        "tar",
+        "txt",
+        "xul",
+    )
+)
 # TODO: support all target assets
 KNOWN_ASSETS = {"prefs": "prefs.js"}
 LOG = getLogger(__name__)
@@ -32,10 +49,10 @@ LOG = getLogger(__name__)
 class BugzillaBug:
     __slots__ = ("_bug", "_data")
 
-    def __init__(self, bug: Bug) -> None:
+    def __init__(self, bug: Bug, ignore: Iterable[str] = IGNORE_EXTS) -> None:
         self._bug = bug
         self._data = Path(mkdtemp(prefix=f"bug{bug.id}-", dir=grz_tmp("bugzilla")))
-        self._fetch_attachments()
+        self._fetch_attachments(ignore)
 
     def __enter__(self) -> BugzillaBug:
         return self
@@ -43,21 +60,26 @@ class BugzillaBug:
     def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
-    def _fetch_attachments(self) -> None:
+    def _fetch_attachments(
+        self, ignore: Iterable[str], require_extension: bool = True
+    ) -> None:
         """Download bug attachments.
 
         Arguments:
-            None
+            ignore: File extensions to ignore.
+            require_extension: Attachment must have a file extension.
 
         Returns:
             None
         """
         for attachment in self._bug.get_attachments():
+            # pylint: disable=too-many-boolean-expressions
             if (
                 attachment.is_obsolete
                 or attachment.content_type == "text/x-phabricator-request"
                 or not attachment.file_name
-                or attachment.file_name.split(".")[-1] in IGNORE_EXTS
+                or (require_extension and "." not in attachment.file_name)
+                or attachment.file_name.split(".")[-1] in ignore
             ):
                 continue
             try:
@@ -113,7 +135,8 @@ class BugzillaBug:
         Returns:
             None
         """
-        rmtree(self._data)
+        if self._data.exists():
+            rmtree(self._data)
 
     @classmethod
     def load(cls, bug_id: int) -> BugzillaBug | None:
@@ -142,6 +165,18 @@ class BugzillaBug:
         except RequestsConnectionError as exc:
             LOG.error("Unable to connect to %r (%s)", bugzilla.bugzilla_url, exc)
         return None
+
+    @property
+    def path(self) -> Path:
+        """Directory containing downloaded bug attachments.
+
+        Arguments:
+            None
+
+        Returns:
+            Path to directory.
+        """
+        return self._data
 
     def testcases(self) -> list[Path]:
         """Create a list of potential test cases.

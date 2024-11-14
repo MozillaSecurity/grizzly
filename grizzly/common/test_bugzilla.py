@@ -49,9 +49,9 @@ def test_bugzilla_01(mocker):
         ),
     )
     with BugzillaBug(bug) as bz_bug:
-        assert len(tuple(bz_bug._data.iterdir())) == 1
-        assert (bz_bug._data / "test.html").is_file()
-        assert (bz_bug._data / "test.html").read_text() == "foo"
+        assert len(tuple(bz_bug.path.iterdir())) == 1
+        assert (bz_bug.path / "test.html").is_file()
+        assert (bz_bug.path / "test.html").read_text() == "foo"
 
 
 @mark.parametrize(
