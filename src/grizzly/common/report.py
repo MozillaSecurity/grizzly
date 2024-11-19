@@ -474,5 +474,4 @@ class Report:
                 out_fp.write(b"[LOG TAILED]\n")
                 copyfileobj(in_fp, out_fp, 0x10000)  # 64KB chunks
         in_file.unlink()
-        # Python 3.9+: move() accepts a path-like object for both src and dst
-        move(out_file, str(in_file.resolve()))
+        move(out_file, in_file)
