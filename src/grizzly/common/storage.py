@@ -78,7 +78,8 @@ class TestCase:
         self.env_vars: dict[str, str] = {}
         self.hang = False
         self.https = False
-        self.input_fname = input_fname  # file that was used to create the test case
+        # file that was used to create the test case
+        self.input_fname = input_fname
         self.entry_point = self.sanitize_path(entry_point)
         self.timestamp = time() if timestamp is None else timestamp
         self.version = GRZ_VERSION
