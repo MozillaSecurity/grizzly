@@ -198,13 +198,18 @@ def test_response_01(req, method, scheme, path):
 @mark.parametrize(
     "req",
     [
+        b"",
         b"a",
         # Invalid IPv6 URL
         b"GET http://[test/ HTTP/1.1",
+        # Missing Path
         b"GET  HTTP/1.1",
+        # Invalid Path
         b"GET a a a a a HTTP/1.1",
         # Invalid characters under NFKC normalization
         b"GET http://%E2%84%80/ HTTP/1.1",
+        # Missing method
+        b" / HTTP/1.1",
     ],
 )
 def test_response_02(req):

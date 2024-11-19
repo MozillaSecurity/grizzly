@@ -50,10 +50,9 @@ class Request:
 
         # TODO: parse headers if needed
 
+        raw_url = req_match.group("url")
         try:
-            url_str = req_match.group("url").decode("ascii", errors="replace")
-            # unquote() accepts str | bytes as of Python 3.9
-            url = urlparse(unquote(url_str))
+            url = urlparse(unquote(raw_url))
         except ValueError as exc:
             msg = str(exc)
             if (
@@ -61,7 +60,7 @@ class Request:
                 and "Invalid IPv6 URL" not in msg
                 and "does not appear to be an IPv4 or IPv6 address" not in msg
             ):
-                LOG.error("Failed to parse URL: %r", url_str)
+                LOG.error("Failed to parse URL: %r", raw_url)
                 raise
             LOG.debug("failed to parse url from request")
             return None
