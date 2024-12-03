@@ -3,13 +3,26 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 from base64 import b64encode
+from pathlib import Path
 from zipfile import ZipFile
 
 from bugsy import Attachment, Bug, BugsyException
-from pytest import mark
+from pytest import fixture, mark
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from .bugzilla import BugzillaBug
+
+
+@fixture(autouse=True)
+def tmp_path_grz_tmp(tmp_path, mocker):
+    """Provide an alternate working directory for testing."""
+
+    def _grz_tmp(*subdir):
+        path = Path(tmp_path, "grizzly", *subdir)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    mocker.patch("grizzly.common.bugzilla.grz_tmp", _grz_tmp)
 
 
 def test_bugzilla_01(mocker):
@@ -47,11 +60,28 @@ def test_bugzilla_01(mocker):
             file_name="broken.html",
             data=b"bad-b64",
         ),
+        # invalid file name
+        mocker.Mock(
+            spec=Attachment,
+            is_obsolete=False,
+            content_type="text/html",
+            file_name=".",
+            data=b64encode(b"foo"),
+        ),
+        # invalid file name
+        mocker.Mock(
+            spec=Attachment,
+            is_obsolete=False,
+            content_type="text/html",
+            file_name="../escape.html",
+            data=b64encode(b"foo"),
+        ),
     )
     with BugzillaBug(bug) as bz_bug:
         assert len(tuple(bz_bug.path.iterdir())) == 1
         assert (bz_bug.path / "test.html").is_file()
         assert (bz_bug.path / "test.html").read_text() == "foo"
+        assert not (bz_bug.path / ".." / "escape.html").is_file()
 
 
 @mark.parametrize(

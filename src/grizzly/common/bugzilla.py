@@ -51,7 +51,9 @@ class BugzillaBug:
 
     def __init__(self, bug: Bug, ignore: Iterable[str] = IGNORE_EXTS) -> None:
         self._bug = bug
-        self._data = Path(mkdtemp(prefix=f"bug{bug.id}-", dir=grz_tmp("bugzilla")))
+        self._data = Path(
+            mkdtemp(prefix=f"bug{bug.id}-", dir=grz_tmp("bugzilla"))
+        ).resolve()
         self._fetch_attachments(ignore)
 
     def __enter__(self) -> BugzillaBug:
@@ -82,6 +84,14 @@ class BugzillaBug:
                 or attachment.file_name.split(".")[-1] in ignore
             ):
                 continue
+            target = (self._data / attachment.file_name).resolve()
+            # check file name
+            if target.is_dir() or not target.is_relative_to(self._data):
+                LOG.debug(
+                    "bug %d: skipping attachment %r", self._bug.id, attachment.file_name
+                )
+                continue
+            # decode data
             try:
                 data = b64decode(attachment.data or "")
             except binascii.Error as exc:
@@ -89,7 +99,7 @@ class BugzillaBug:
                     "Failed to decode attachment: %r (%s)", attachment.file_name, exc
                 )
                 continue
-            (self._data / attachment.file_name).write_bytes(data)
+            target.write_bytes(data)
 
     def _unpack_archives(self) -> None:
         """Unpack and remove archives.
