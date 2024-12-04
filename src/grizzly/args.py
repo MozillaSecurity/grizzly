@@ -81,7 +81,7 @@ class CommonArgs:
             "--log-level",
             choices=sorted(self.LEVEL_MAP),
             default="INFO",
-            help="Configure console logging (default: %(default)s)",
+            help="Configure console output. (default: %(default)s)",
         )
 
         # build 'asset' help string formatted as:
