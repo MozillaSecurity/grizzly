@@ -34,7 +34,6 @@ class SimpleAdapter(Adapter):
 
     def generate(self, testcase, _server_map):
         assert testcase.adapter_name == self.name
-        testcase.input_fname = self.fuzz["input"]
         testcase.add_from_bytes(b"test", testcase.entry_point)
         if self.remaining is not None:
             assert self.remaining > 0
@@ -101,7 +100,6 @@ def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runti
             runtime_limit=runtime,
         )
         assert session.status.iteration == max_iters
-        assert session.status.test_name == "file.bin"
         assert target.close.call_count == max_iters / relaunch
         assert target.check_result.call_count == max_iters
         assert target.handle_hang.call_count == 0
