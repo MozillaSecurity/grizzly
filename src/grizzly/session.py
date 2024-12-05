@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from enum import IntEnum, unique
 from logging import getLogger
-from time import time
+from time import perf_counter
 from typing import TYPE_CHECKING
 
 from .common.iomanager import IOManager
@@ -61,7 +61,7 @@ class LogOutputLimiter:
         self._launches = 1  # next launch to trigger output
         self._multiplier = delta_multiplier  # rate to decrease output (iterations)
         self._rate = rate
-        self._time = time()
+        self._time = perf_counter()
 
     def ready(self, cur_iter: int, launches: int) -> bool:
         # calculate if a status line should be output
@@ -71,10 +71,10 @@ class LogOutputLimiter:
         if cur_iter >= self._iterations:
             ready = True
             self._iterations *= self._multiplier
-        elif launches >= self._launches or time() - self._delay >= self._time:
+        elif launches >= self._launches or perf_counter() - self._delay >= self._time:
             ready = True
         if ready:
-            self._time = time()
+            self._time = perf_counter()
             self._launches = launches + 1
         return ready
 

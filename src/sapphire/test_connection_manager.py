@@ -97,7 +97,7 @@ def test_connection_manager_04(mocker, tmp_path):
 
 def test_connection_manager_05(mocker, tmp_path):
     """test ConnectionManager.serve() with timeout"""
-    mocker.patch("sapphire.connection_manager.time", autospec=True, side_effect=count())
+    mocker.patch("sapphire.connection_manager.perf_counter", side_effect=count())
     (tmp_path / "file").touch()
     clnt_sock = mocker.Mock(spec_set=socket)
     clnt_sock.recv.return_value = b""
@@ -113,7 +113,7 @@ def test_connection_manager_05(mocker, tmp_path):
 def test_connection_manager_06(mocker, tmp_path):
     """test ConnectionManager.serve() worker fails to exit"""
     mocker.patch("sapphire.worker.Thread", autospec=True)
-    mocker.patch("sapphire.connection_manager.time", autospec=True, side_effect=count())
+    mocker.patch("sapphire.connection_manager.perf_counter", side_effect=count())
     (tmp_path / "file").touch()
     clnt_sock = mocker.Mock(spec_set=socket)
     serv_sock = mocker.Mock(spec_set=socket)

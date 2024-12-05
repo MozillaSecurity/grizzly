@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from logging import getLogger
-from time import time
+from time import perf_counter
 from traceback import format_exception
 from typing import TYPE_CHECKING, Callable
 
@@ -63,7 +63,7 @@ class ConnectionManager:
         Returns:
             True if callback returns True and timeout has been be hit otherwise False.
         """
-        now = time()
+        now = perf_counter()
         if self._next_poll > now:
             return True
         self._next_poll = now + self._poll
@@ -108,8 +108,10 @@ class ConnectionManager:
         Returns:
             Workers that do not join before the timeout is reached.
         """
-        deadline = time() + timeout
-        return [x for x in workers if not x.join(timeout=max(deadline - time(), 0))]
+        deadline = perf_counter() + timeout
+        return [
+            x for x in workers if not x.join(timeout=max(deadline - perf_counter(), 0))
+        ]
 
     def serve(
         self,
@@ -135,7 +137,7 @@ class ConnectionManager:
             raise TypeError("continue_cb must be callable")
 
         self._deadline_exceeded = False
-        start_time = time()
+        start_time = perf_counter()
         self._deadline = start_time + timeout if timeout else None
 
         launches = 0
@@ -168,7 +170,7 @@ class ConnectionManager:
             LOG.debug(
                 "serve exit: %d request(s) in %0.3fs, waiting for %d worker(s)...",
                 launches,
-                time() - start_time,
+                perf_counter() - start_time,
                 running,
             )
             if not self._job.is_complete():
