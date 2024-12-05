@@ -46,6 +46,9 @@ class TestFileMap:
 
 class TestCase:
     __slots__ = (
+        "_files",
+        "_in_place",
+        "_root",
         "adapter_name",
         "assets",
         "assets_path",
@@ -57,9 +60,6 @@ class TestCase:
         "input_fname",
         "timestamp",
         "version",
-        "_files",
-        "_in_place",
-        "_root",
     )
 
     def __init__(
@@ -326,14 +326,14 @@ class TestCase:
             }
             if self.adapter_name:
                 info["adapter"] = self.adapter_name
-            if self.duration:
-                info["duration"] = self.duration
+            if self.duration is not None:
+                info["duration"] = round(self.duration, 1)
             if self.env_vars:
                 info["env"] = self.env_vars
             if self.hang:
                 info["hang"] = self.hang
             if self.input_fname:
-                info["input"] = Path(self.input_fname).name
+                info["input"] = self.input_fname
             if self.timestamp:
                 info["timestamp"] = self.timestamp
             if self.version:
