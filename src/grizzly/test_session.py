@@ -469,7 +469,7 @@ def test_session_10(mocker, harness, iters, result_limit, results):
 
 def test_log_output_limiter_01(mocker):
     """test LogOutputLimiter.ready() not ready"""
-    fake_time = mocker.patch("grizzly.session.time", autospec=True)
+    fake_time = mocker.patch("grizzly.session.perf_counter", autospec=True)
     fake_time.return_value = 1.0
     lol = LogOutputLimiter(delay=10, delta_multiplier=2)
     assert lol._delay == 10
@@ -489,7 +489,7 @@ def test_log_output_limiter_01(mocker):
 
 def test_log_output_limiter_02(mocker):
     """test LogOutputLimiter.ready() due to iterations"""
-    fake_time = mocker.patch("grizzly.session.time", autospec=True)
+    fake_time = mocker.patch("grizzly.session.perf_counter", autospec=True)
     fake_time.return_value = 1.0
     lol = LogOutputLimiter(delay=10, delta_multiplier=2)
     fake_time.return_value = 1.1
@@ -502,7 +502,7 @@ def test_log_output_limiter_02(mocker):
 
 def test_log_output_limiter_03(mocker):
     """test LogOutputLimiter.ready() due to launches"""
-    fake_time = mocker.patch("grizzly.session.time", autospec=True)
+    fake_time = mocker.patch("grizzly.session.perf_counter", autospec=True)
     fake_time.return_value = 1.0
     lol = LogOutputLimiter(delay=10, delta_multiplier=2)
     lol._iterations = 4
@@ -514,7 +514,7 @@ def test_log_output_limiter_03(mocker):
 
 def test_log_output_limiter_04(mocker):
     """test LogOutputLimiter.ready() due to time"""
-    fake_time = mocker.patch("grizzly.session.time", autospec=True)
+    fake_time = mocker.patch("grizzly.session.perf_counter", autospec=True)
     fake_time.return_value = 1.0
     lol = LogOutputLimiter(delay=1, delta_multiplier=2)
     lol._iterations = 4
