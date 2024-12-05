@@ -355,7 +355,14 @@ def test_testcase_14(tmp_path):
     assert (dst / "_assets_" / "asset.txt").is_file()
 
 
-def test_testcase_15(tmp_path):
+@mark.parametrize(
+    "duration, hang, https, input_fname",
+    [
+        (1.2, True, True, "foo/test.name"),
+        (0, False, False, None),
+    ],
+)
+def test_testcase_15(tmp_path, duration, hang, https, input_fname):
     """test TestCase - dump, load and compare"""
     asset_path = tmp_path / "assets"
     asset_path.mkdir()
@@ -364,11 +371,11 @@ def test_testcase_15(tmp_path):
     working = tmp_path / "working"
     with TestCase("a.html", "adpt") as org:
         # set non default values
-        org.duration = 1.23
+        org.duration = duration
         org.env_vars = {"en1": "1", "en2": "2"}
-        org.https = not org.https
-        org.hang = not org.hang
-        org.input_fname = "infile"
+        org.https = https
+        org.hang = hang
+        org.input_fname = input_fname
         org.add_from_bytes(b"a", org.entry_point)
         org.assets = {"sample": asset.name}
         org.assets_path = asset_path
