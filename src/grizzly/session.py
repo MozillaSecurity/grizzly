@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from .common.reporter import Reporter
     from .common.storage import TestCase
 
-__all__ = ("SessionError", "LogOutputLimiter", "Session")
+__all__ = ("LogOutputLimiter", "Session", "SessionError")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
