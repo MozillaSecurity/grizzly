@@ -2,7 +2,7 @@ Grizzly
 =======
 [![Task Status](https://community-tc.services.mozilla.com/api/github/v1/repository/MozillaSecurity/grizzly/master/badge.svg)](https://community-tc.services.mozilla.com/api/github/v1/repository/MozillaSecurity/grizzly/master/latest)
 [![codecov](https://codecov.io/gh/MozillaSecurity/grizzly/branch/master/graph/badge.svg)](https://codecov.io/gh/MozillaSecurity/grizzly)
-[![Matrix](https://img.shields.io/badge/dynamic/json?color=green&label=chat&query=%24.chunk[%3F(%40.canonical_alias%3D%3D%22%23fuzzing%3Amozilla.org%22)].num_joined_members&suffix=%20users&url=https%3A%2F%2Fmozilla.modular.im%2F_matrix%2Fclient%2Fr0%2FpublicRooms&style=flat&logo=matrix)](https://riot.im/app/#/room/#fuzzing:mozilla.org)
+[![Matrix](https://img.shields.io/badge/chat-%23fuzzing-green?logo=matrix)](https://matrix.to/#/#fuzzing:mozilla.org)
 [![PyPI](https://img.shields.io/pypi/v/grizzly-framework)](https://pypi.org/project/grizzly-framework)
 
 Grizzly is a modular general purpose browser fuzzing framework. The goal is to create a platform that can be extended via the creation of plug-ins to support multiple combinations of browsers and fuzzers. An Adapter is used to add support for a fuzzer and a Target to add support for a browser. Generated test cases are intended to be standalone and not require Grizzly.
