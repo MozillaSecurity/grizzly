@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 
 __all__ = (
     "BLOCKED_PORTS",
-    "create_listening_socket",
     "Sapphire",
+    "create_listening_socket",
 )
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]

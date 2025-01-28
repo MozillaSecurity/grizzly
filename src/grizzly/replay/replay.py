@@ -70,15 +70,15 @@ class ReplayResult:
 
 class ReplayManager:
     __slots__ = (
+        "_any_crash",
+        "_harness",
+        "_relaunch",
+        "_signature",
+        "_unpacked",
         "ignore",
         "server",
         "status",
         "target",
-        "_any_crash",
-        "_harness",
-        "_signature",
-        "_relaunch",
-        "_unpacked",
     )
 
     def __init__(

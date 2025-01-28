@@ -12,7 +12,7 @@ except ImportError:
     from .utils import iter_entry_points  # type: ignore
 
 
-__all__ = ("load_plugin", "scan_plugins", "PluginLoadError")
+__all__ = ("PluginLoadError", "load_plugin", "scan_plugins")
 
 
 LOG = getLogger(__name__)

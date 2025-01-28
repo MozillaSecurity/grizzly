@@ -84,7 +84,7 @@ class PuppetTarget(Target):
         "XPCOM_DEBUG_BREAK",
     )
 
-    __slots__ = ("use_valgrind", "_debugger", "_extension", "_prefs", "_puppet")
+    __slots__ = ("_debugger", "_extension", "_prefs", "_puppet", "use_valgrind")
 
     def __init__(
         self,

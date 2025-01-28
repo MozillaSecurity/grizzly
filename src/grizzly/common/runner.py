@@ -14,7 +14,7 @@ from sapphire import Sapphire, Served, ServerMap
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .storage import TestCase
 
-__all__ = ("Runner", "RunResult")
+__all__ = ("RunResult", "Runner")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -34,7 +34,7 @@ class _IdleChecker:
     has elapsed.
     """
 
-    __slots__ = ("_check_cb", "_init_delay", "_poll_delay", "_threshold", "_next_poll")
+    __slots__ = ("_check_cb", "_init_delay", "_next_poll", "_poll_delay", "_threshold")
 
     def __init__(
         self,

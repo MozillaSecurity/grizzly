@@ -46,8 +46,8 @@ class Report:
     __slots__ = (
         "_crash_info",
         "_logs",
-        "_signature",
         "_short_signature",
+        "_signature",
         "_target_binary",
         "is_hang",
         "path",
