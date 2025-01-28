@@ -40,12 +40,12 @@ class CrashEntry:
     RAW_FIELDS = frozenset({"rawCrashData", "rawStderr", "rawStdout"})
 
     __slots__ = (
-        "_crash_id",
         "_coll",
         "_contents",
+        "_crash_id",
         "_data",
-        "_storage",
         "_sig_filename",
+        "_storage",
         "_url",
     )
 

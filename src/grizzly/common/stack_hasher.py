@@ -336,7 +336,7 @@ class ValgrindStackFrame(StackFrame):
 
 
 class Stack:
-    __slots__ = ("frames", "_height_limit", "_major", "_major_depth", "_minor")
+    __slots__ = ("_height_limit", "_major", "_major_depth", "_minor", "frames")
 
     def __init__(
         self,

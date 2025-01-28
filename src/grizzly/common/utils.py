@@ -16,17 +16,17 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
 __all__ = (
+    "DEFAULT_TIME_LIMIT",
+    "HARNESS_FILE",
+    "TIMEOUT_DELAY",
     "ConfigError",
+    "Exit",
     "configure_logging",
     "display_time_limits",
-    "DEFAULT_TIME_LIMIT",
-    "Exit",
     "grz_tmp",
-    "HARNESS_FILE",
     "iter_entry_points",
     "package_version",
     "time_limits",
-    "TIMEOUT_DELAY",
 )
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from .reporter import FuzzManagerReporter
 
-__all__ = ("ReadOnlyStatus", "ReductionStatus", "Status", "SimpleStatus")
+__all__ = ("ReadOnlyStatus", "ReductionStatus", "SimpleStatus", "Status")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 

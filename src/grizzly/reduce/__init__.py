@@ -4,7 +4,7 @@
 """Grizzly reducer module.
 """
 
-__all__ = ("ReduceManager", "ReduceArgs")
+__all__ = ("ReduceArgs", "ReduceManager")
 
 from .args import ReduceArgs
 from .core import ReduceManager
