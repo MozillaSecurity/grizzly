@@ -33,8 +33,8 @@ from .target import TargetLaunchError
         (0, ["--smoke-test"]),
         # ignore something
         (0, ["--ignore", "timeout"]),
-        # headless
-        (0, ["--headless"]),
+        # non-default display
+        (0, ["--display", "headless"]),
         # verbose mode
         (0, ["--verbose"]),
     ],
