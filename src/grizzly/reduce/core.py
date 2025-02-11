@@ -769,9 +769,8 @@ class ReduceManager:
 
         LOG.info("Starting Grizzly Reduce")
         LOG.debug("grizzly-framework version: %s", package_version("grizzly-framework"))
-
-        if args.headless:
-            LOG.info("Running browser headless (%s)", args.headless)
+        if args.display != "default":
+            LOG.info("Browser display mode: %s", args.display)
         if args.ignore:
             LOG.info("Ignoring: %s", ", ".join(args.ignore))
         if args.pernosco:
@@ -826,7 +825,7 @@ class ReduceManager:
                 args.log_limit,
                 args.memory,
                 certs=certs,
-                headless=args.headless,
+                display_mode=args.display,
                 pernosco=args.pernosco,
                 rr=args.rr,
                 valgrind=args.valgrind,

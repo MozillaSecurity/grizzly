@@ -9,19 +9,21 @@ from pathlib import Path
 from platform import system
 from signal import SIGABRT
 from tempfile import TemporaryDirectory, mkdtemp
-from typing import Any, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
+from ffpuppet.display import DisplayMode
 from ffpuppet.helpers import certutil_available, certutil_find
 from ffpuppet.sanitizer_util import SanitizerOptions
 from prefpicker import PrefPicker
-
-from sapphire import CertificateBundle
 
 from ..common.report import Report
 from ..common.utils import grz_tmp, package_version
 from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
+
+if TYPE_CHECKING:
+    from sapphire import CertificateBundle
 
 __all__ = ("PuppetTarget",)
 __author__ = "Tyson Smith"
@@ -92,11 +94,14 @@ class PuppetTarget(Target):
         launch_timeout: int,
         log_limit: int,
         memory_limit: int,
+        certs: CertificateBundle | None = None,
+        display_mode: str = "default",
+        pernosco: bool = False,
+        rr: bool = False,
+        valgrind: bool = False,
         **kwds: dict[str, Any],
     ) -> None:
         LOG.debug("ffpuppet version: %s", package_version("ffpuppet"))
-        # Optional is required for Python 3.9
-        certs = cast(Optional[CertificateBundle], kwds.pop("certs", None))
         # only pass certs to FFPuppet if certutil is available
         # otherwise certs can't be used
         if certs and not certutil_available(certutil_find(binary)):
@@ -114,21 +119,21 @@ class PuppetTarget(Target):
 
         # TODO: clean up handling debuggers
         self._debugger = Debugger.NONE
-        if kwds.pop("pernosco", False):
+        if pernosco:
             self._debugger = Debugger.PERNOSCO
-        if kwds.pop("rr", False):
+        if rr:
             self._debugger = Debugger.RR
-        if kwds.pop("valgrind", False):
+        if valgrind:
+            # TODO: replace use_valgrind with something debugger generic
             self.use_valgrind = True
             self._debugger = Debugger.VALGRIND
         self._extension: Path | None = None
         self._prefs: Path | None = None
 
-        # create Puppet object
+        # create FFPuppet object
         self._puppet = FFPuppet(
             debugger=self._debugger,
-            # Optional is required for Python 3.9
-            headless=cast(Optional[str], kwds.pop("headless", None)),
+            display_mode=DisplayMode[display_mode.upper()],
             working_path=str(grz_tmp("target")),
         )
         if kwds:
@@ -247,7 +252,7 @@ class PuppetTarget(Target):
 
     def launch(self, location: str) -> None:
         # setup environment
-        env_mod = dict(self.environ)
+        env_mod: dict[str, str | None] = dict(self.environ)
         # do not allow network connections to non local endpoints
         env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
         # we always want the browser to exit when a crash is detected
@@ -261,8 +266,7 @@ class PuppetTarget(Target):
                 memory_limit=self.memory_limit,
                 prefs_js=self._prefs,
                 extension=[self._extension] if self._extension else None,
-                # Optional is required for Python 3.9
-                env_mod=cast(dict[str, Optional[str]], env_mod),
+                env_mod=env_mod,
                 cert_files=[self.certs.root] if self.certs else None,
             )
         except LaunchError as exc:

@@ -103,24 +103,22 @@ class CommonArgs:
         self.launcher_grp.add_argument(
             "-e",
             "--extension",
-            help="DEPRECATED. Install an extension. Specify the path to the xpi or the"
-            " directory containing the unpacked extension.",
+            help="DEPRECATED: Use '--asset' instead. Install an extension. Specify the "
+            "path to the xpi or the directory containing the unpacked extension.",
+        )
+        display_modes = ["default", "headless"]
+        if system().startswith("Linux"):
+            display_modes.append("xvfb")
+        self.launcher_grp.add_argument(
+            "--display",
+            choices=display_modes,
+            default="headless" if self.is_headless() else "default",
+            help="Display mode.",
         )
         self.launcher_grp.add_argument(
             "--display-launch-failures",
             action="store_true",
             help="Output launch failure logs to console. (default: %(default)s)",
-        )
-        headless_choices = ["default"]
-        if system().startswith("Linux"):
-            headless_choices.append("xvfb")
-        self.launcher_grp.add_argument(
-            "--headless",
-            choices=headless_choices,
-            const="default",
-            default="default" if self.is_headless() else None,
-            nargs="?",
-            help="Headless mode. 'default' uses browser's built-in headless mode.",
         )
         self.launcher_grp.add_argument(
             "--launch-attempts",
@@ -170,7 +168,9 @@ class CommonArgs:
             "(default: %(default)s)",
         )
         self.launcher_grp.add_argument(
-            "-p", "--prefs", help="DEPRECATED. prefs.js file to use"
+            "-p",
+            "--prefs",
+            help="DEPRECATED: Use '--asset' instead. Specify prefs.js file to use",
         )
         self.launcher_grp.add_argument(
             "--relaunch",
@@ -217,7 +217,9 @@ class CommonArgs:
         )
         if system().startswith("Linux"):
             self.launcher_grp.add_argument(
-                "--xvfb", action="store_true", help="DEPRECATED. Use Xvfb."
+                "--xvfb",
+                action="store_true",
+                help="DEPRECATED: Use '--display' instead. Use Xvfb.",
             )
         else:
             self.parser.set_defaults(xvfb=False)
@@ -368,7 +370,7 @@ class CommonArgs:
                 self.parser.error("--tool cannot contain whitespace")
 
         if args.xvfb:  # pragma: no cover
-            args.headless = "xvfb"
+            args.display = "xvfb"
 
 
 class GrizzlyArgs(CommonArgs):
