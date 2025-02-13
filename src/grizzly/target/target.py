@@ -16,6 +16,7 @@ from ..common.utils import grz_tmp
 from .assets import AssetManager
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
 
     from ..common.report import Report
@@ -61,7 +62,6 @@ class Target(metaclass=ABCMeta):
         "_asset_mgr",
         "_https",
         "_lock",
-        "_monitor",
         "binary",
         "certs",
         "environ",
@@ -86,10 +86,9 @@ class Target(metaclass=ABCMeta):
         self._asset_mgr = AssetManager(base_path=grz_tmp("target"))
         self._https = False
         self._lock = Lock()
-        self._monitor: TargetMonitor | None = None
         self.binary = binary
         self.certs = certs
-        self.environ = self.scan_environment(dict(environ), self.TRACKED_ENVVARS)
+        self.environ = self.scan_environment(environ, self.TRACKED_ENVVARS)
         self.launch_timeout = launch_timeout
         self.log_limit = log_limit
         self.memory_limit = memory_limit
@@ -138,7 +137,7 @@ class Target(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def check_result(self, ignored: set[str]) -> Result:
+    def check_result(self, ignored: Iterable[str]) -> Result:
         """Check for results.
 
         Args:
@@ -153,10 +152,10 @@ class Target(metaclass=ABCMeta):
         """Perform necessary cleanup. DO NOT OVERRIDE.
 
         Args:
-            ignored: Types of results to ignore.
+            None
 
         Returns:
-            Result code.
+            None.
         """
         # call target specific _cleanup method first
         self._cleanup()
@@ -269,7 +268,7 @@ class Target(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def merge_environment(self, extra: dict[str, str]) -> None:
+    def merge_environment(self, extra: Mapping[str, str]) -> None:
         """Add to existing environment.
 
         Args:
@@ -315,8 +314,8 @@ class Target(metaclass=ABCMeta):
 
     @staticmethod
     def scan_environment(
-        env: dict[str, str],
-        include: tuple[str, ...] | None,
+        env: Mapping[str, str],
+        include: Iterable[str],
     ) -> dict[str, str]:
         """Scan environment for tracked environment variables.
 
@@ -327,7 +326,7 @@ class Target(metaclass=ABCMeta):
         Returns:
             Tracked variables found in scanned environment.
         """
-        return {var: env[var] for var in include if var in env} if include else {}
+        return {var: env[var] for var in include if var in env}
 
     @abstractmethod
     def save_logs(self, dst: Path) -> None:

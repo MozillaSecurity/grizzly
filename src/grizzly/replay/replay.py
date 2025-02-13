@@ -44,6 +44,7 @@ from .args import ReplayArgs
 
 if TYPE_CHECKING:
     from argparse import Namespace
+    from collections.abc import Iterable
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -83,7 +84,7 @@ class ReplayManager:
 
     def __init__(
         self,
-        ignore: set[str],
+        ignore: Iterable[str],
         server: Sapphire,
         target: Target,
         any_crash: bool = False,
@@ -179,7 +180,7 @@ class ReplayManager:
     @classmethod
     def load_testcases(
         cls,
-        paths: list[Path],
+        paths: Iterable[Path],
         catalog: bool = False,
         entry_point: Path | None = None,
     ) -> tuple[list[TestCase], AssetManager | None, dict[str, str] | None]:
@@ -697,7 +698,7 @@ class ReplayManager:
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
                 target.reverse(server.port, server.port)
                 with cls(
-                    set(args.ignore),
+                    frozenset(args.ignore),
                     server,
                     target,
                     any_crash=args.any_crash,

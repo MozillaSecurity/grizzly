@@ -9,7 +9,7 @@ from pathlib import Path
 from platform import system
 from signal import SIGABRT
 from tempfile import TemporaryDirectory, mkdtemp
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
 from ffpuppet.display import DisplayMode
@@ -23,6 +23,8 @@ from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+
     from sapphire import CertificateBundle
 
 __all__ = ("PuppetTarget",)
@@ -86,7 +88,14 @@ class PuppetTarget(Target):
         "XPCOM_DEBUG_BREAK",
     )
 
-    __slots__ = ("_debugger", "_extension", "_prefs", "_puppet", "use_valgrind")
+    __slots__ = (
+        "_debugger",
+        "_extension",
+        "_monitor",
+        "_prefs",
+        "_puppet",
+        "use_valgrind",
+    )
 
     def __init__(
         self,
@@ -116,6 +125,7 @@ class PuppetTarget(Target):
             certs=certs,
         )
         self._https = certs is not None
+        self._monitor: PuppetMonitor | None = None
 
         # TODO: clean up handling debuggers
         self._debugger = Debugger.NONE
@@ -178,9 +188,9 @@ class PuppetTarget(Target):
     def monitor(self) -> PuppetMonitor:
         if self._monitor is None:
             self._monitor = PuppetMonitor(self._puppet)
-        return cast(PuppetMonitor, self._monitor)
+        return self._monitor
 
-    def check_result(self, ignored: set[str]) -> Result:
+    def check_result(self, ignored: Iterable[str]) -> Result:
         result = Result.NONE
         # check if there has been a crash, hangs will appear as SIGABRT
         if not self._puppet.is_healthy():
@@ -285,7 +295,7 @@ class PuppetTarget(Target):
                 total += length
         return total
 
-    def merge_environment(self, extra: dict[str, str]) -> None:
+    def merge_environment(self, extra: Mapping[str, str]) -> None:
         output = dict(extra)
         if self.environ:
             # prioritize existing environment variables

@@ -45,6 +45,7 @@ from .strategies import STRATEGIES
 
 if TYPE_CHECKING:
     from argparse import Namespace
+    from collections.abc import Iterable
 
 __author__ = "Jesse Schwartzentruber"
 __credits__ = ["Jesse Schwartzentruber", "Tyson Smith"]
@@ -60,9 +61,9 @@ class ReduceManager:
     Attributes:
         ignore: Classes of results to ignore (see `--ignore`).
         server: Server instance to serve testcases.
-        strategies: List of strategies to use for reducing testcases (in order).
+        strategies: Strategies to use for reducing testcases (in order).
         target: Target instance to run testcases.
-        testcases: List of one or more Grizzly testcases to reduce.
+        testcases: One or more Grizzly testcases to reduce.
     """
 
     ANALYSIS_ITERATIONS = 11  # number of iterations to analyze
@@ -81,7 +82,7 @@ class ReduceManager:
 
     def __init__(
         self,
-        ignore: set[str],
+        ignore: Iterable[str],
         server: Sapphire,
         target: Target,
         testcases: list[TestCase],
@@ -853,7 +854,7 @@ class ReduceManager:
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
                 target.reverse(server.port, server.port)
                 with ReduceManager(
-                    set(args.ignore),
+                    frozenset(args.ignore),
                     server,
                     target,
                     testcases,
