@@ -41,7 +41,7 @@ class SimpleTarget(Target):
 
     @property
     def monitor(self):
-        return self._monitor
+        pass
 
     def merge_environment(self, extra):
         pass
@@ -69,7 +69,6 @@ def test_target_01(tmp_path):
         assert target.log_size() == 0
         assert target.log_limit == 2
         assert target.memory_limit == 3
-        assert target.monitor is None
         # test stubs
         target.reverse(1, 2)
 

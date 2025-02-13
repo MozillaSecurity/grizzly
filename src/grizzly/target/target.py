@@ -61,7 +61,6 @@ class Target(metaclass=ABCMeta):
         "_asset_mgr",
         "_https",
         "_lock",
-        "_monitor",
         "binary",
         "certs",
         "environ",
@@ -86,7 +85,6 @@ class Target(metaclass=ABCMeta):
         self._asset_mgr = AssetManager(base_path=grz_tmp("target"))
         self._https = False
         self._lock = Lock()
-        self._monitor: TargetMonitor | None = None
         self.binary = binary
         self.certs = certs
         self.environ = self.scan_environment(dict(environ), self.TRACKED_ENVVARS)
@@ -153,10 +151,10 @@ class Target(metaclass=ABCMeta):
         """Perform necessary cleanup. DO NOT OVERRIDE.
 
         Args:
-            ignored: Types of results to ignore.
+            None
 
         Returns:
-            Result code.
+            None.
         """
         # call target specific _cleanup method first
         self._cleanup()
