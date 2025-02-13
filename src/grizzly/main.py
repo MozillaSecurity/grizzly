@@ -153,7 +153,7 @@ def main(args: Namespace) -> int:
                 else:
                     log_rate = LogRate.NORMAL
                 session.run(
-                    set(args.ignore),
+                    frozenset(args.ignore),
                     time_limit,
                     input_path=str(args.input.resolve()) if args.input else None,
                     iteration_limit=args.limit,
