@@ -9,7 +9,7 @@ from pathlib import Path
 from platform import system
 from signal import SIGABRT
 from tempfile import TemporaryDirectory, mkdtemp
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
 from ffpuppet.display import DisplayMode
@@ -86,7 +86,14 @@ class PuppetTarget(Target):
         "XPCOM_DEBUG_BREAK",
     )
 
-    __slots__ = ("_debugger", "_extension", "_prefs", "_puppet", "use_valgrind")
+    __slots__ = (
+        "_debugger",
+        "_extension",
+        "_monitor",
+        "_prefs",
+        "_puppet",
+        "use_valgrind",
+    )
 
     def __init__(
         self,
@@ -116,6 +123,7 @@ class PuppetTarget(Target):
             certs=certs,
         )
         self._https = certs is not None
+        self._monitor: PuppetMonitor | None = None
 
         # TODO: clean up handling debuggers
         self._debugger = Debugger.NONE
@@ -178,7 +186,7 @@ class PuppetTarget(Target):
     def monitor(self) -> PuppetMonitor:
         if self._monitor is None:
             self._monitor = PuppetMonitor(self._puppet)
-        return cast(PuppetMonitor, self._monitor)
+        return self._monitor
 
     def check_result(self, ignored: set[str]) -> Result:
         result = Result.NONE
