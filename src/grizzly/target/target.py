@@ -16,6 +16,7 @@ from ..common.utils import grz_tmp
 from .assets import AssetManager
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
     from ..common.report import Report
@@ -136,7 +137,7 @@ class Target(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def check_result(self, ignored: set[str]) -> Result:
+    def check_result(self, ignored: Iterable[str]) -> Result:
         """Check for results.
 
         Args:
