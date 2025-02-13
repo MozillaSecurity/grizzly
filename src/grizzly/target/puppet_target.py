@@ -11,7 +11,7 @@ from platform import system
 from shutil import copytree, rmtree
 from signal import SIGABRT
 from tempfile import TemporaryDirectory, mkdtemp
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
 from ffpuppet.display import DisplayMode
@@ -93,6 +93,7 @@ class PuppetTarget(Target):
     __slots__ = (
         "_debugger",
         "_extension",
+        "_monitor",
         "_prefs",
         "_profile_template",
         "_puppet",
@@ -122,6 +123,7 @@ class PuppetTarget(Target):
         # only pass certs to FFPuppet if certutil is available
         # otherwise certs can't be used
         self._https = False
+        self._monitor: PuppetMonitor | None = None
         self._profile_template = None
         if certs is not None:
             certutil = certutil_find(binary)
@@ -227,7 +229,7 @@ class PuppetTarget(Target):
     def monitor(self) -> PuppetMonitor:
         if self._monitor is None:
             self._monitor = PuppetMonitor(self._puppet)
-        return cast(PuppetMonitor, self._monitor)
+        return self._monitor
 
     def check_result(self, ignored: set[str]) -> Result:
         result = Result.NONE
