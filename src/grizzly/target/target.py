@@ -16,7 +16,7 @@ from ..common.utils import grz_tmp
 from .assets import AssetManager
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
 
     from ..common.report import Report
@@ -88,7 +88,7 @@ class Target(metaclass=ABCMeta):
         self._lock = Lock()
         self.binary = binary
         self.certs = certs
-        self.environ = self.scan_environment(dict(environ), self.TRACKED_ENVVARS)
+        self.environ = self.scan_environment(environ, self.TRACKED_ENVVARS)
         self.launch_timeout = launch_timeout
         self.log_limit = log_limit
         self.memory_limit = memory_limit
@@ -268,7 +268,7 @@ class Target(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def merge_environment(self, extra: dict[str, str]) -> None:
+    def merge_environment(self, extra: Mapping[str, str]) -> None:
         """Add to existing environment.
 
         Args:
@@ -314,8 +314,8 @@ class Target(metaclass=ABCMeta):
 
     @staticmethod
     def scan_environment(
-        env: dict[str, str],
-        include: tuple[str, ...] | None,
+        env: Mapping[str, str],
+        include: Iterable[str],
     ) -> dict[str, str]:
         """Scan environment for tracked environment variables.
 
@@ -326,7 +326,7 @@ class Target(metaclass=ABCMeta):
         Returns:
             Tracked variables found in scanned environment.
         """
-        return {var: env[var] for var in include if var in env} if include else {}
+        return {var: env[var] for var in include if var in env}
 
     @abstractmethod
     def save_logs(self, dst: Path) -> None:

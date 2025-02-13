@@ -27,7 +27,7 @@ from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
 
     from sapphire import CertificateBundle
 
@@ -337,7 +337,7 @@ class PuppetTarget(Target):
                 total += length
         return total
 
-    def merge_environment(self, extra: dict[str, str]) -> None:
+    def merge_environment(self, extra: Mapping[str, str]) -> None:
         output = dict(extra)
         if self.environ:
             # prioritize existing environment variables
