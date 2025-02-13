@@ -7,12 +7,15 @@ from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 from time import perf_counter, sleep
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from sapphire import Sapphire, Served, ServerMap
 
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .storage import TestCase
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 __all__ = ("RunResult", "Runner")
 __author__ = "Tyson Smith"
@@ -298,7 +301,7 @@ class Runner:
 
     def run(
         self,
-        ignore: set[str],
+        ignore: Iterable[str],
         server_map: ServerMap,
         testcase: TestCase,
         coverage: bool = False,
@@ -344,7 +347,7 @@ class Runner:
             timeout=server_status == Served.TIMEOUT,
         )
         # add all files that were served (includes, etc...) to test
-        existing = set(testcase.required)
+        existing = frozenset(testcase.required)
         for url, local_file in served.items():
             if url not in existing:
                 # copy include files

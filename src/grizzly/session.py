@@ -14,6 +14,8 @@ from .common.status import STATUS_DB_FUZZ, Status
 from .target import Result, Target
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from sapphire import Sapphire
 
     from .adapter import Adapter
@@ -157,7 +159,7 @@ class Session:
 
     def run(
         self,
-        ignore: set[str],
+        ignore: Iterable[str],
         time_limit: int,
         input_path: str | None = None,
         iteration_limit: int = 0,
