@@ -2,6 +2,9 @@
 requires = ["setuptools >= 43", "wheel", "setuptools_scm[toml] >= 3.4"]
 build-backend = "setuptools.build_meta"
 
+[tool.black]
+exclude = "src/grizzly/services/webtransport/"
+
 [tool.coverage.run]
 omit = [
     "*/setup.py",
@@ -12,6 +15,7 @@ omit = [
     "*/resources/*",
     "*/.tox/*",
     "*/.egg/*",
+    "grizzly/services/webtransport/wpt_h3_server/*",
 ]
 
 [tool.coverage.report]
@@ -64,6 +68,7 @@ log_level = "DEBUG"
 [tool.ruff]
 fix = true
 target-version = "py39"
+exclude = ["src/grizzly/services/webtransport/wpt_h3_server"]
 
 [tool.ruff.lint]
 select = [
