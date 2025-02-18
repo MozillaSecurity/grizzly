@@ -7,7 +7,7 @@ from logging import getLogger
 from typing import TYPE_CHECKING
 
 from ..common.bugzilla import BugzillaBug
-from ..common.utils import Exit, configure_logging
+from ..common.frontend import Exit, configure_logging
 from .args import ReplayFuzzBugzillaArgs
 from .replay import ReplayManager
 

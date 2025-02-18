@@ -11,9 +11,9 @@ from pytest import mark
 
 from sapphire import Served
 
+from ..common.frontend import Exit
 from ..common.report import Report
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..common.utils import Exit
 from ..target import (
     AssetManager,
     Result,

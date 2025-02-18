@@ -7,7 +7,8 @@ from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, final
 
-from ..common.utils import DEFAULT_TIME_LIMIT, HARNESS_FILE
+from ..common.frontend import DEFAULT_TIME_LIMIT
+from ..common.utils import HARNESS_FILE
 
 if TYPE_CHECKING:
     from collections.abc import Generator

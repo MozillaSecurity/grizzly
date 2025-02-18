@@ -20,9 +20,10 @@ from typing import TYPE_CHECKING
 
 from FTB.ProgramConfiguration import ProgramConfiguration
 
+from .common.frontend import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY
 from .common.fuzzmanager import FM_CONFIG
 from .common.plugins import scan_plugins, scan_target_assets
-from .common.utils import DEFAULT_TIME_LIMIT, TIMEOUT_DELAY, package_version
+from .common.utils import package_version
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
