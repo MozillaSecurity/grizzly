@@ -6,8 +6,8 @@ from __future__ import annotations
 from logging import getLogger
 from typing import TYPE_CHECKING, Callable
 
+from ..common.frontend import Exit, configure_logging
 from ..common.fuzzmanager import Bucket
-from ..common.utils import Exit, configure_logging
 from .args import ReplayFuzzManagerIDQualityArgs
 from .crash import main as crash_main
 

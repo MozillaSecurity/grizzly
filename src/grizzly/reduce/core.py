@@ -18,6 +18,12 @@ from FTB.Signatures.CrashInfo import CrashSignature
 
 from sapphire import CertificateBundle, Sapphire
 
+from ..common.frontend import (
+    ConfigError,
+    Exit,
+    configure_logging,
+    time_limits,
+)
 from ..common.fuzzmanager import CrashEntry
 from ..common.plugins import load_plugin
 from ..common.reporter import (
@@ -30,13 +36,7 @@ from ..common.reporter import (
 from ..common.status import STATUS_DB_REDUCE, ReductionStatus
 from ..common.status_reporter import ReductionStatusReporter
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..common.utils import (
-    ConfigError,
-    Exit,
-    configure_logging,
-    package_version,
-    time_limits,
-)
+from ..common.utils import package_version
 from ..replay import ReplayManager, ReplayResult
 from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 from .args import ReduceArgs

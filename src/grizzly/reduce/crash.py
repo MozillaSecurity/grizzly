@@ -6,9 +6,9 @@ from __future__ import annotations
 from logging import getLogger
 from typing import TYPE_CHECKING
 
+from ..common.frontend import Exit, configure_logging
 from ..common.fuzzmanager import load_fm_data
 from ..common.reporter import Quality
-from ..common.utils import Exit, configure_logging
 from ..replay.crash import modify_args
 from .args import ReduceFuzzManagerIDArgs
 from .core import ReduceManager

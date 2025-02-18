@@ -4,8 +4,8 @@
 """Unit tests for `grizzly.reduce.main`."""
 from pytest import mark, raises
 
+from ..common.frontend import ConfigError, Exit
 from ..common.storage import TestCase, TestCaseLoadFailure
-from ..common.utils import ConfigError, Exit
 from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs

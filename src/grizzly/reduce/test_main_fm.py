@@ -4,8 +4,8 @@
 """Unit tests for `grizzly.reduce.crash` and `grizzly.reduce.bucket`."""
 from pytest import mark
 
+from ..common.frontend import Exit
 from ..common.reporter import Quality
-from ..common.utils import Exit
 from .bucket import main as main_wrapper
 from .crash import main as crash_main
 

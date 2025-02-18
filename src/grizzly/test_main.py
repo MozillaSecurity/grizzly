@@ -7,7 +7,7 @@ from platform import system
 from pytest import mark, skip
 
 from .args import GrizzlyArgs
-from .common.utils import Exit
+from .common.frontend import Exit
 from .main import main
 from .target import TargetLaunchError
 

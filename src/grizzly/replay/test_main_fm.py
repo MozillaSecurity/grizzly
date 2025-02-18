@@ -6,8 +6,8 @@ from copy import deepcopy
 
 from pytest import mark
 
+from ..common.frontend import Exit
 from ..common.fuzzmanager import Bucket, CrashEntry
-from ..common.utils import Exit
 from .bucket import bucket_main
 from .bucket import main as main_wrapper
 from .crash import main as crash_main
