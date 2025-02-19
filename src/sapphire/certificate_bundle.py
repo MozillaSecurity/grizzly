@@ -121,3 +121,23 @@ class CertificateBundle:
         """
         LOG.debug("removing certificate path (%s)", self._base)
         rmtree(self._base, ignore_errors=True)
+
+    @classmethod
+    def load(cls, src: Path) -> CertificateBundle:
+        """Load certificate files.
+
+        Args:
+            src: Location to load from.
+
+        Returns:
+            CertificateBundle
+        """
+        certs = {
+            "host": src / "host.pem",
+            "key": src / "host.key",
+            "root": src / "root.pem",
+        }
+        for entry in certs.values():
+            if not entry.is_file():
+                raise FileNotFoundError(f"{entry} does not exist")
+        return cls(src, certs["root"], certs["host"], certs["key"])
