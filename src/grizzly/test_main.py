@@ -6,6 +6,8 @@ from platform import system
 
 from pytest import mark, skip
 
+from sapphire import CertificateBundle
+
 from .args import GrizzlyArgs
 from .common.frontend import Exit
 from .main import main
@@ -41,6 +43,7 @@ from .target import TargetLaunchError
 )
 def test_main_01(mocker, session_setup, adpt_relaunch, extra_args):
     """test main()"""
+    mocker.patch("grizzly.main.get_certs", autospec=True)
     cov_support = system() == "Linux"
     if "--coverage" in extra_args and not cov_support:
         skip(f"--coverage not available on {system()}")
@@ -153,8 +156,11 @@ def test_main_04(
     assert target_cls.call_args[-1]["valgrind"] == valgrind
 
 
-def test_main_05(mocker, session_setup):
+def test_main_05(mocker, tmp_path, session_setup):
     """test target does not support https"""
+    (tmp_path / "bundle").mkdir()
+    bundle = CertificateBundle.create(tmp_path / "bundle")
+    mocker.patch("grizzly.main.get_certs", autospec=True, return_value=bundle)
     target_cls = session_setup[3]
     target_cls.return_value.https.return_value = False
     args = mocker.MagicMock(

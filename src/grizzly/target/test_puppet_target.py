@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
+from hashlib import sha1
 from platform import system
 
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, Debugger, Reason
@@ -312,8 +313,9 @@ def test_puppet_target_10(tmp_path, asset, env):
                 assert not asset_mgr.get("lsan-suppressions")
 
 
-def test_puppet_target_11(tmp_path):
+def test_puppet_target_11(mocker, tmp_path):
     """test PuppetTarget.filtered_environ()"""
+    mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     with PuppetTarget(fake_file, 300, 25, 5000) as target:
@@ -346,8 +348,9 @@ def test_puppet_target_11(tmp_path):
         ({"a": "1"}, {"a": "2", "b": "2"}, {"a": "1", "b": "2"}),
     ],
 )
-def test_puppet_target_12(tmp_path, base, extra, result):
+def test_puppet_target_12(mocker, tmp_path, base, extra, result):
     """test PuppetTarget.merge_environment()"""
+    mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     with PuppetTarget(fake_file, 300, 25, 5000) as target:
@@ -367,8 +370,9 @@ def test_puppet_target_12(tmp_path, base, extra, result):
         ({"ASAN_OPTIONS": "a=1:c=3"}, {"ASAN_OPTIONS": "b=2"}, ["a=1", "b=2", "c=3"]),
     ],
 )
-def test_puppet_target_13(tmp_path, base, extra, result):
+def test_puppet_target_13(mocker, tmp_path, base, extra, result):
     """test PuppetTarget.merge_environment() - merge sanitizer options"""
+    mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"
     fake_file.touch()
     with PuppetTarget(fake_file, 300, 25, 5000) as target:
@@ -380,6 +384,7 @@ def test_puppet_target_13(tmp_path, base, extra, result):
 
 def test_puppet_target_14(mocker, tmp_path):
     """test PuppetTarget.dump_coverage() - skip on unsupported platform"""
+    mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     mocker.patch("grizzly.target.puppet_target.system", return_value="foo")
     fake_file = tmp_path / "fake"
     fake_file.touch()
@@ -403,10 +408,37 @@ def test_puppet_target_15(mocker, tmp_path, certutil, certs):
     mocker.patch(
         "grizzly.target.puppet_target.certutil_available", return_value=certutil
     )
+    mocker.patch("grizzly.target.puppet_target.certutil_find", autospec=True)
+    mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
 
     fake_file = tmp_path / "fake"
     fake_file.touch()
 
-    certs_bundle = mocker.Mock(spec_set=CertificateBundle) if certs else None
-    with PuppetTarget(fake_file, 300, 25, 5000, certs=certs_bundle) as target:
+    bundle = mocker.Mock(spec_set=CertificateBundle).return_value if certs else None
+    mocker.patch.object(PuppetTarget, "_get_certdb", return_value=tmp_path)
+    with PuppetTarget(fake_file, 300, 25, 5000, certs=bundle) as target:
         assert target.https() == (certutil and certs)
+        assert target._profile_template == (tmp_path if (certutil and certs) else None)
+
+
+def test_puppet_target_16(mocker, tmp_path):
+    """test PuppetTarget._get_certdb()"""
+    (tmp_path / "grz_tmp").mkdir()
+    mocker.patch(
+        "grizzly.target.puppet_target.grz_tmp", return_value=tmp_path / "grz_tmp"
+    )
+    mocker.patch("grizzly.target.puppet_target.Profile", autospec=True)
+    mocker.patch(
+        "grizzly.target.puppet_target.find_cached", autospec=True, return_value=None
+    )
+    (tmp_path / "root.pem").touch()
+    cert_hash = sha1(
+        (tmp_path / "root.pem").read_bytes(), usedforsecurity=False
+    ).hexdigest()
+    certdb = tmp_path / f"certdb_{cert_hash}"
+    certdb.mkdir()
+    fake_add = mocker.patch(
+        "grizzly.target.puppet_target.add_cached", autospec=True, return_value=tmp_path
+    )
+    PuppetTarget._get_certdb(tmp_path / "root.pem", "fake-certutil")
+    assert fake_add.call_count == 1

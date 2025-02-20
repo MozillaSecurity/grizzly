@@ -3,10 +3,12 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
+from hashlib import sha1
 from logging import getLogger
-from os import kill
+from os import getpid, kill
 from pathlib import Path
 from platform import system
+from shutil import copytree, rmtree
 from signal import SIGABRT
 from tempfile import TemporaryDirectory, mkdtemp
 from typing import TYPE_CHECKING, Any, cast
@@ -14,9 +16,11 @@ from typing import TYPE_CHECKING, Any, cast
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
 from ffpuppet.display import DisplayMode
 from ffpuppet.helpers import certutil_available, certutil_find
+from ffpuppet.profile import Profile
 from ffpuppet.sanitizer_util import SanitizerOptions
 from prefpicker import PrefPicker
 
+from ..common.cache import add_cached, find_cached
 from ..common.report import Report
 from ..common.utils import grz_tmp, package_version
 from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
@@ -86,7 +90,14 @@ class PuppetTarget(Target):
         "XPCOM_DEBUG_BREAK",
     )
 
-    __slots__ = ("_debugger", "_extension", "_prefs", "_puppet", "use_valgrind")
+    __slots__ = (
+        "_debugger",
+        "_extension",
+        "_prefs",
+        "_profile_template",
+        "_puppet",
+        "use_valgrind",
+    )
 
     def __init__(
         self,
@@ -101,21 +112,24 @@ class PuppetTarget(Target):
         valgrind: bool = False,
         **kwds: dict[str, Any],
     ) -> None:
-        LOG.debug("ffpuppet version: %s", package_version("ffpuppet"))
-        # only pass certs to FFPuppet if certutil is available
-        # otherwise certs can't be used
-        if certs and not certutil_available(certutil_find(binary)):
-            LOG.warning("HTTPS support requires NSS certutil.")
-            certs = None
-
         super().__init__(
             binary,
             launch_timeout,
             log_limit,
             memory_limit,
-            certs=certs,
         )
-        self._https = certs is not None
+        LOG.debug("ffpuppet version: %s", package_version("ffpuppet"))
+        # only pass certs to FFPuppet if certutil is available
+        # otherwise certs can't be used
+        self._https = False
+        self._profile_template = None
+        if certs is not None:
+            certutil = certutil_find(binary)
+            if certutil_available(certutil):
+                self._https = True
+                self._profile_template = self._get_certdb(certs.root, certutil)
+            else:
+                LOG.warning("HTTPS support requires NSS certutil.")
 
         # TODO: clean up handling debuggers
         self._debugger = Debugger.NONE
@@ -134,6 +148,7 @@ class PuppetTarget(Target):
         self._puppet = FFPuppet(
             debugger=self._debugger,
             display_mode=DisplayMode[display_mode.upper()],
+            use_profile=self._profile_template,
             working_path=str(grz_tmp("target")),
         )
         if kwds:
@@ -143,6 +158,40 @@ class PuppetTarget(Target):
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
         with self._lock:
             self._puppet.clean_up()
+        if self._profile_template is not None:
+            rmtree(self._profile_template)
+
+    @staticmethod
+    def _get_certdb(cert_file: Path, certuil: str) -> Path:
+        """Load or create a certdb to use with Firefox. This will search for a cached
+        certificate and certdb before generating and caching a new bundle.
+        The cache allows reuse across processes.
+
+        Args:
+            cert_file: Certificate to install into the newly created certdb.
+            certutil: certutil binary.
+
+        Returns:
+            Directory containing the certdb files.
+        """
+        cached = find_cached("crypto")
+        # certs and certdb are dependent on each other
+        # use the hash of the cert file to ensure this
+        db_path = (
+            f"certdb_{sha1(cert_file.read_bytes(), usedforsecurity=False).hexdigest()}"
+        )
+        if cached is None or not (cached / db_path).exists():
+            with TemporaryDirectory() as tmp_path:
+                certdb = Path(tmp_path) / db_path
+                certdb.mkdir(parents=True)
+                Profile.init_cert_db(certdb, certuil)
+                Profile.install_cert(certdb, cert_file, certuil)
+                # add certdb to cache
+                cached = add_cached("crypto", certdb)
+        # copy data from cache
+        path = grz_tmp("certdb") / str(getpid())
+        copytree(cached / db_path, path)
+        return path
 
     def close(self, force_close: bool = False) -> None:
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
@@ -267,7 +316,6 @@ class PuppetTarget(Target):
                 prefs_js=self._prefs,
                 extension=[self._extension] if self._extension else None,
                 env_mod=env_mod,
-                cert_files=[self.certs.root] if self.certs else None,
             )
         except LaunchError as exc:
             self.close()

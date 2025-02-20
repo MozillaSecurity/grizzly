@@ -5,8 +5,16 @@ from __future__ import annotations
 
 from enum import IntEnum, unique
 from logging import DEBUG, basicConfig, getLogger
-from os import getenv
+from os import getenv, getpid
+from pathlib import Path
+from shutil import copytree
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
+
+from sapphire import CertificateBundle
+
+from .cache import add_cached, find_cached
+from .utils import grz_tmp
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -99,6 +107,32 @@ def display_time_limits(time_limit: int, timeout: int, no_harness: bool) -> None
         else:
             LOG.info("Using time limit: %ds, timeout: DISABLED,", time_limit)
         LOG.warning("TIMEOUT DISABLED, not recommended for automation")
+
+
+def get_certs() -> CertificateBundle:
+    """Load or create a CertificateBundle. This will search for a cached
+    certificate bundle before generating and caching a new bundle.
+    The cache allows reuse across processes.
+
+    Args:
+        None.
+
+    Returns:
+        CertificateBundle
+    """
+    cached = find_cached("crypto")
+    # create certificates if required
+    if cached is None or not (cached / "certs").exists():
+        with TemporaryDirectory() as tmp_path:
+            certs = Path(tmp_path) / "certs"
+            certs.mkdir(parents=True)
+            CertificateBundle.create(certs)
+            # add newly generated certs to cache
+            cached = add_cached("crypto", certs)
+    # copy data from cache
+    path = grz_tmp("certs") / str(getpid())
+    copytree(cached / "certs", path)
+    return CertificateBundle.load(path)
 
 
 def time_limits(
