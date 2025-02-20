@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 from pytest import mark
 
-from sapphire import Served
+from sapphire import CertificateBundle, Served
 
 from ..common.frontend import Exit
 from ..common.report import Report
@@ -454,6 +454,9 @@ def test_main_07(mocker, server, tmp_path):
 @mark.parametrize("https_supported", [True, False])
 def test_main_08(mocker, tmp_path, https_supported):
     """test ReplayManager.main() - Target HTTPS support"""
+    (tmp_path / "bundle").mkdir()
+    bundle = CertificateBundle.create(tmp_path / "bundle")
+    mocker.patch("grizzly.replay.replay.get_certs", autospec=True, return_value=bundle)
     (tmp_path / "test.html").touch()
     args = mocker.MagicMock(
         adapter="fake",

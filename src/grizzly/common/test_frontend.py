@@ -10,6 +10,7 @@ from .frontend import (
     TIMEOUT_DELAY,
     configure_logging,
     display_time_limits,
+    get_certs,
     time_limits,
 )
 from .storage import TestCase
@@ -90,3 +91,24 @@ def test_display_time_limits_01(caplog, time_limit, timeout, no_harness, msg):
     """test display_time_limits()"""
     display_time_limits(time_limit, timeout, no_harness)
     assert msg in caplog.text
+
+
+def test_get_certs(mocker, tmp_path):
+    """test get_certs()"""
+    (tmp_path / "grz_tmp").mkdir()
+    mocker.patch("grizzly.common.frontend.grz_tmp", return_value=tmp_path / "grz_tmp")
+    certs = tmp_path / "certs"
+    certs.mkdir()
+    (certs / "host.pem").touch()
+    (certs / "host.key").touch()
+    (certs / "root.pem").touch()
+    mocker.patch(
+        "grizzly.common.frontend.add_cached", autospec=True, return_value=tmp_path
+    )
+    mocker.patch(
+        "grizzly.common.frontend.find_cached", autospec=True, return_value=None
+    )
+    bundle = get_certs()
+    assert bundle.root.is_file()
+    assert bundle.host.is_file()
+    assert bundle.key.is_file()

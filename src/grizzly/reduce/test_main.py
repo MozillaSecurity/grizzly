@@ -236,6 +236,7 @@ def test_main_launch_error(mocker, exc_type):
 def test_main_https_support(mocker, tmp_path, https_supported):
     """test ReduceManager.main() - Target HTTPS support"""
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
+    mocker.patch("grizzly.reduce.core.get_certs", autospec=True)
     mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True, return_value=0)
     mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)

@@ -11,13 +11,15 @@ from typing import TYPE_CHECKING, Callable, cast
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
-from sapphire import CertificateBundle, Sapphire, ServerMap
+from sapphire import Sapphire, ServerMap
 
+from ..common.cache import clear_cached
 from ..common.frontend import (
     ConfigError,
     Exit,
     configure_logging,
     display_time_limits,
+    get_certs,
     time_limits,
 )
 from ..common.plugins import load_plugin
@@ -658,7 +660,7 @@ class ReplayManager:
                 relaunch,
             )
             if not args.use_http:
-                certs = CertificateBundle.create()
+                certs = get_certs()
             LOG.debug("initializing the Target")
             target = load_plugin(args.platform, "grizzly_targets", Target)(
                 args.binary,
@@ -765,4 +767,5 @@ class ReplayManager:
                 asset_mgr.cleanup()
             if certs is not None:
                 certs.cleanup()
+            clear_cached()
             LOG.info("Done.")

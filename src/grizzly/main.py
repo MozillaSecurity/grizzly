@@ -10,10 +10,12 @@ from typing import TYPE_CHECKING, cast
 from sapphire import CertificateBundle, Sapphire
 
 from .adapter import Adapter
+from .common.cache import clear_cached
 from .common.frontend import (
     Exit,
     configure_logging,
     display_time_limits,
+    get_certs,
     time_limits,
 )
 from .common.plugins import load_plugin
@@ -85,7 +87,7 @@ def main(args: Namespace) -> int:
             relaunch = args.relaunch
 
         if not args.use_http:
-            certs = CertificateBundle.create()
+            certs = get_certs()
 
         LOG.debug("initializing the Target %r", args.platform)
         target = cast(
@@ -183,6 +185,7 @@ def main(args: Namespace) -> int:
             adapter.cleanup()
         if certs is not None:
             certs.cleanup()
+        clear_cached()
         LOG.info("Done.")
 
     if complete_with_results:

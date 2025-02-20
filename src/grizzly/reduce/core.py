@@ -16,12 +16,14 @@ from typing import TYPE_CHECKING
 
 from FTB.Signatures.CrashInfo import CrashSignature
 
-from sapphire import CertificateBundle, Sapphire
+from sapphire import Sapphire
 
+from ..common.cache import clear_cached
 from ..common.frontend import (
     ConfigError,
     Exit,
     configure_logging,
+    get_certs,
     time_limits,
 )
 from ..common.fuzzmanager import CrashEntry
@@ -816,7 +818,7 @@ class ReduceManager:
             relaunch = min(args.relaunch, args.repeat)
 
             if not args.use_http:
-                certs = CertificateBundle.create()
+                certs = get_certs()
 
             LOG.debug("initializing the Target")
             target = load_plugin(args.platform, "grizzly_targets", Target)(
@@ -915,4 +917,5 @@ class ReduceManager:
                 asset_mgr.cleanup()
             if certs is not None:
                 certs.cleanup()
+            clear_cached()
             LOG.info("Done.")
