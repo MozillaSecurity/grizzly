@@ -45,16 +45,18 @@ def test_interprocess_lock_basic(mocker, tmp_path):
         pass
 
 
+# NOTE: this function must be at the top level to work on Windows
+def _count(count_file, start_gate, steps):
+    start_gate.wait()
+    for _ in range(steps):
+        with interprocess_lock("test"):
+            value = int(count_file.read_text()) + 1
+            count_file.write_text(str(value))
+
+
 def test_interprocess_lock_multi_proc(mocker, tmp_path):
     """test interprocess_lock() with multiple processes"""
     mocker.patch("grizzly.common.utils.LOCK_DB", new=tmp_path / "lock.db")
-
-    def worker(count_file, start_gate, steps):
-        start_gate.wait()
-        for _ in range(steps):
-            with interprocess_lock("test"):
-                value = int(count_file.read_text()) + 1
-                count_file.write_text(str(value))
 
     count_file = tmp_path / "count.txt"
     count_file.write_text("0")
@@ -63,7 +65,7 @@ def test_interprocess_lock_multi_proc(mocker, tmp_path):
     start_gate = Event()
     procs = []
     for _ in range(procs_count):
-        procs.append(Process(target=worker, args=(count_file, start_gate, procs_steps)))
+        procs.append(Process(target=_count, args=(count_file, start_gate, procs_steps)))
         procs[-1].start()
     start_gate.set()
     for proc in procs:
