@@ -35,15 +35,23 @@ def _active_cache(max_age: int = MAX_AGE) -> Path:
     global _ACTIVE_CACHE  # pylint: disable=global-statement
     assert max_age >= 0
     if _ACTIVE_CACHE is None:
+        limit = CACHE_TIME - max_age
         with interprocess_lock(LOCK_ID):
-            limit = CACHE_TIME - max_age
             # find most recent active entry
-            for entry in sorted(CACHE_PATH.iterdir(), reverse=True):
-                with suppress(ValueError):
-                    if int(entry.name) > limit and entry.is_dir():
-                        _ACTIVE_CACHE = entry
-                        LOG.debug("active cache found: '%s'", _ACTIVE_CACHE)
-                        break
+            # TODO: ideally this should use the creation time not the directory name
+            # but that is not currently available on all platforms
+            for entry in sorted(
+                (
+                    int(x.name)
+                    for x in CACHE_PATH.iterdir()
+                    if x.is_dir() and x.name.isdecimal()
+                ),
+                reverse=True,
+            ):
+                if entry > limit:
+                    _ACTIVE_CACHE = CACHE_PATH / str(entry)
+                    LOG.debug("active cache found: '%s'", _ACTIVE_CACHE)
+                    break
             else:
                 # create a new active entry if one does not exist
                 _ACTIVE_CACHE = CACHE_PATH / str(CACHE_TIME)
