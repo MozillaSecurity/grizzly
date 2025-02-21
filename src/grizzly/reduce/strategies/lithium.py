@@ -18,7 +18,7 @@ from ...common.storage import TestCase
 from . import Strategy, _contains_dd
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from pathlib import Path
 
 LOG = getLogger(__name__)
@@ -83,7 +83,7 @@ class _LithiumStrategy(Strategy, ABC):
             self._current_reducer.feedback(success)
         self._current_feedback = success
 
-    def __iter__(self) -> Iterator[list[TestCase]]:
+    def __iter__(self) -> Generator[list[TestCase]]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each testcase set yielded, and call `update` with the
@@ -185,7 +185,7 @@ class Check(_LithiumStrategy):
         # just once per Grizzly TestCase set is enough.
         self._files_to_reduce = self._files_to_reduce[:1]
 
-    def __iter__(self) -> Iterator[list[TestCase]]:
+    def __iter__(self) -> Generator[list[TestCase]]:
         yield from super().__iter__()
 
 

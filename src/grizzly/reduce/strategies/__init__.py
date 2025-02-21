@@ -19,12 +19,13 @@ from logging import DEBUG, getLogger
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
+from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
 
 from ...common.utils import grz_tmp
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterable, Iterator, Sequence
 
     from ...common.storage import TestCase
 
@@ -58,7 +59,7 @@ class Strategy(ABC):
 
     name: str
 
-    def __init__(self, testcases: list[TestCase]) -> None:
+    def __init__(self, testcases: Sequence[TestCase]) -> None:
         """Initialize strategy instance.
 
         Arguments:
@@ -126,9 +127,9 @@ class Strategy(ABC):
         return frozenset(self._tried)
 
     def dump_testcases(
-        self, testcases: list[TestCase], recreate_tcroot: bool = False
+        self, testcases: Sequence[TestCase], recreate_tcroot: bool = False
     ) -> None:
-        """Dump a testcase list to the testcase root on disk.
+        """Dump provided testcases to the testcase root on disk.
 
         Arguments:
             testcases: Testcases to dump.
@@ -195,7 +196,7 @@ class Strategy(ABC):
         rmtree(self._testcase_root)
 
 
-def _load_strategies() -> dict[str, type[Strategy]]:
+def _load_strategies() -> MappingProxyType[str, type[Strategy]]:
     """STRATEGIES is created at the end of this file.
 
     Returns:
@@ -217,7 +218,7 @@ def _load_strategies() -> dict[str, type[Strategy]]:
             f"Unknown entry in DEFAULT_STRATEGIES: {strategy} "
             f"(STRATEGIES: [{','.join(strategies)}])"
         )
-    return strategies
+    return MappingProxyType(strategies)
 
 
 def _contains_dd(path: Path) -> bool:

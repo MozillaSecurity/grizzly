@@ -30,8 +30,8 @@ class NoOpAdapter(Adapter):
         in a row without closing the browser after each one.
 
         Args:
-            _input: Unused.
-            _server_map: Unused.
+            input: Unused in this example.
+            server_map: Unused in this example.
 
         Returns:
             None
@@ -55,7 +55,7 @@ class NoOpAdapter(Adapter):
 
         Args:
             testcase: TestCase to be populated.
-            _server_map: Unused in this example.
+            server_map: Unused in this example.
 
         Returns:
             None

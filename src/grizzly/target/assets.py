@@ -7,6 +7,10 @@ from logging import getLogger
 from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import mkdtemp
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
 
 __all__ = ("AssetError", "AssetManager")
 __author__ = "Tyson Smith"
@@ -65,11 +69,11 @@ class AssetManager:
         LOG.debug("%s asset %r to '%s'", "copied" if copy else "moved", asset, dst)
         return dst
 
-    def add_batch(self, assets: list[list[str]]) -> None:
+    def add_batch(self, assets: Iterable[Sequence[str]]) -> None:
         """Add collection of assets to the AssetManager.
 
         Args:
-            assets: List of list that contain asset, path pairs.
+            assets: Collection of asset name, path pairs.
 
         Returns:
             None
@@ -115,7 +119,10 @@ class AssetManager:
 
     @classmethod
     def load(
-        cls, assets: dict[str, str], src_path: Path, base_path: Path | None = None
+        cls,
+        assets: Mapping[str, str],
+        src_path: Path,
+        base_path: Path | None = None,
     ) -> AssetManager:
         """Load assets from filesystem.
 

@@ -6,7 +6,6 @@ Sapphire HTTP server job
 """
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
 from enum import IntEnum, unique
 from errno import ENAMETOOLONG
 from itertools import chain
@@ -16,11 +15,12 @@ from os.path import splitext
 from queue import Queue
 from threading import Event, Lock
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, NamedTuple, Union, cast
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from .server_map import DynamicResource, FileResource, RedirectResource, ServerMap
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
 
 __author__ = "Tyson Smith"
@@ -126,15 +126,16 @@ class Job:
         if not self._pending.files and not self._wwwroot.is_dir():
             raise OSError(f"wwwroot '{self._wwwroot}' does not exist")
         if self.server_map:
-            for url, resource in cast(
-                Iterable[tuple[str, Union[DynamicResource, RedirectResource]]],
-                chain(
-                    self.server_map.redirect.items(), self.server_map.dynamic.items()
-                ),
+            for url, resource in chain(
+                self.server_map.redirect.items(), self.server_map.dynamic.items()
             ):
                 if resource.required:
                     self._pending.files.add(url)
-                    LOG.debug("required: %r -> %r", url, resource.target)
+                    LOG.debug(
+                        "required: %r -> %r",
+                        url,
+                        resource.target,  # type: ignore[attr-defined]
+                    )
         LOG.debug("job has %d required file(s)", len(self._pending.files))
 
     @classmethod

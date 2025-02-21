@@ -321,14 +321,12 @@ class Bucket:
         if self._sig_filename is not None:
             rmtree(self._sig_filename.parent)
 
-    def iter_crashes(
-        self, quality_filter: int | None = None
-    ) -> Generator[CrashEntry, None, None]:
+    def iter_crashes(self, quality_filter: int | None = None) -> Generator[CrashEntry]:
         """Fetch all crash IDs for this FuzzManager bucket.
         Only crashes with testcases are returned.
 
         Arguments:
-            quality_filter: Filter crashes by quality value (None for all)
+            quality_filter: Filter crashes by quality value (None for no filter)
 
         Yields:
             CrashEntry objects.
@@ -336,7 +334,7 @@ class Bucket:
 
         def _get_results(
             endpoint: str, params: dict[str, str] | None = None
-        ) -> Generator[dict[str, Any], None, None]:
+        ) -> Generator[dict[str, Any]]:
             """
             Function to get paginated results from FuzzManager
 
@@ -344,8 +342,8 @@ class Bucket:
                 endpoint: FuzzManager REST API to query (eg. "crashes").
                 params: Params to pass through to requests.get.
 
-            Returns:
-                Objects (dict) returned by FuzzManager.
+            Yields:
+                Data returned by FuzzManager.
             """
             LOG.debug("first request to /%s/", endpoint)
 
@@ -438,7 +436,7 @@ class Bucket:
 @contextmanager
 def load_fm_data(
     crash_id: int, load_bucket: bool = False
-) -> Generator[tuple[CrashEntry, Bucket | None], None, None]:
+) -> Generator[tuple[CrashEntry, Bucket | None]]:
     """Load CrashEntry including Bucket from FuzzManager.
 
     Arguments:

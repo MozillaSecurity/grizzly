@@ -629,7 +629,7 @@ class _TableFormatter:
         self._vsep = vsep
         self._hsep = hsep
 
-    def format_rows(self, rows: Iterable[ReductionStep]) -> Generator[str, None, None]:
+    def format_rows(self, rows: Iterable[ReductionStep]) -> Generator[str]:
         """Format rows as a table and return a line generator.
 
         Arguments:

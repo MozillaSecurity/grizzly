@@ -105,7 +105,7 @@ class SimpleResultCounter:
         self._desc: dict[str, str] = {}
         self.pid = pid
 
-    def __iter__(self) -> Generator[ResultEntry, None, None]:
+    def __iter__(self) -> Generator[ResultEntry]:
         """Yield all result data.
 
         Args:
@@ -120,7 +120,7 @@ class SimpleResultCounter:
 
     def blockers(
         self, iterations: int, iters_per_result: int = 100
-    ) -> Generator[ResultEntry, None, None]:
+    ) -> Generator[ResultEntry]:
         """Any result with an iterations-per-result ratio of less than or equal the
         given limit are considered 'blockers'. Results with a count <= 1 are not
         included.
@@ -429,7 +429,7 @@ class BaseStatus(ABC):
         self.start_time = start_time
         self.test_name: str | None = None
 
-    def profile_entries(self) -> Generator[ProfileEntry, None, None]:
+    def profile_entries(self) -> Generator[ProfileEntry]:
         """Used to retrieve profiling data.
 
         Args:
@@ -513,7 +513,7 @@ class ReadOnlyStatus(BaseStatus):
     @classmethod
     def load_all(
         cls, db_file: Path, time_limit: float = 300
-    ) -> Generator[ReadOnlyStatus, None, None]:
+    ) -> Generator[ReadOnlyStatus]:
         """Load all status reports found in `db_file`.
 
         Args:
@@ -680,7 +680,7 @@ class Status(BaseStatus):
                 cur.execute("""DELETE FROM status WHERE pid = ?;""", (pid,))
 
     @contextmanager
-    def measure(self, name: str) -> Generator[None, None, None]:
+    def measure(self, name: str) -> Generator[None]:
         """Used to simplify collecting profiling data.
 
         Args:
@@ -1061,7 +1061,7 @@ class ReductionStatus:
     @classmethod
     def load_all(
         cls, db_file: Path, time_limit: float = 300
-    ) -> Generator[ReductionStatus, None, None]:
+    ) -> Generator[ReductionStatus]:
         """Load all reduction status reports found in `db_file`.
 
         Args:
@@ -1247,7 +1247,7 @@ class ReductionStatus:
             self.report(force=True)
 
     @contextmanager
-    def measure(self, name: str, report: bool = True) -> Generator[None, None, None]:
+    def measure(self, name: str, report: bool = True) -> Generator[None]:
         """Time and record the period leading up to a reduction milestone.
         eg. a strategy being run.
 
