@@ -11,7 +11,7 @@ from ..common.frontend import DEFAULT_TIME_LIMIT
 from ..common.utils import HARNESS_FILE
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterable
 
     from sapphire import ServerMap
 
@@ -45,7 +45,7 @@ class Adapter(metaclass=ABCMeta):
         remaining: Can be used to indicate the number of TestCases remaining to process.
     """
 
-    IGNORE_FILES = ("desktop.ini", "thumbs.db")
+    IGNORE_FILES = frozenset(("desktop.ini", "thumbs.db"))
     # Maximum iterations between Target relaunches (<1 use default)
     RELAUNCH = 0
     # Maximum execution time per test (used as minimum timeout). The iteration is
@@ -117,9 +117,9 @@ class Adapter(metaclass=ABCMeta):
     @staticmethod
     def scan_path(
         path: str,
-        ignore: tuple[str, ...] = IGNORE_FILES,
+        ignore: Iterable[str] = IGNORE_FILES,
         recursive: bool = False,
-    ) -> Generator[str, None, None]:
+    ) -> Generator[str]:
         """Scan a path and yield the files within it. This is available as
         a helper method.
 
@@ -156,7 +156,7 @@ class Adapter(metaclass=ABCMeta):
             None
         """
 
-    def on_served(self, testcase: TestCase, served: tuple[str, ...]) -> None:
+    def on_served(self, testcase: TestCase, served: Iterable[str]) -> None:
         """Optional. Automatically called after a test case is successfully served.
 
         Args:
@@ -167,7 +167,7 @@ class Adapter(metaclass=ABCMeta):
             None
         """
 
-    def on_timeout(self, testcase: TestCase, served: tuple[str, ...]) -> None:
+    def on_timeout(self, testcase: TestCase, served: Iterable[str]) -> None:
         """Optional. Automatically called if timeout occurs while attempting to
         serve a test case. By default it calls `self.on_served()`.
 

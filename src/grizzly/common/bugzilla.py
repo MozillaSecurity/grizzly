@@ -10,6 +10,7 @@ from os import environ
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
@@ -42,7 +43,7 @@ IGNORE_EXTS = frozenset(
     )
 )
 # TODO: support all target assets
-KNOWN_ASSETS = {"prefs": "prefs.js"}
+KNOWN_ASSETS = MappingProxyType({"prefs": "prefs.js"})
 LOG = getLogger(__name__)
 
 
@@ -119,9 +120,7 @@ class BugzillaBug:
                 entry.unlink()
             # TODO: add support for other archive types
 
-    def assets(
-        self, ignore: tuple[str] | None = None
-    ) -> Generator[tuple[str, Path], None, None]:
+    def assets(self, ignore: tuple[str] | None = None) -> Generator[tuple[str, Path]]:
         """Scan files for assets.
 
         Arguments:

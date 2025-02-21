@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 from .utils import grz_tmp, package_version
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterator
+    from collections.abc import Generator
 
 __all__ = ("TestCase", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
@@ -121,7 +121,7 @@ class TestCase:
     def __exit__(self, *exc: object) -> None:
         self.cleanup()
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Generator[str]:
         """TestCase contents.
 
         Args:
@@ -478,7 +478,7 @@ class TestCase:
         return (entry_point, info)
 
     @property
-    def optional(self) -> Generator[str, None, None]:
+    def optional(self) -> Generator[str]:
         """Get file paths of optional files.
 
         Args:
@@ -511,7 +511,7 @@ class TestCase:
         return info or {}
 
     @property
-    def required(self) -> Generator[str, None, None]:
+    def required(self) -> Generator[str]:
         """Get file paths of required files.
 
         Args:

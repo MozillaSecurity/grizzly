@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 LOG = getLogger(__name__)
 
 
-def _split_normal_lines(data: bytes) -> Generator[bytes, None, None]:
+def _split_normal_lines(data: bytes) -> Generator[bytes]:
     """Like str.splitlines but only respect \n, \r\n, and \r .. leave other
     potential line break characters intact.
 
@@ -130,7 +130,7 @@ class _BeautifyStrategy(Strategy, ABC):
 
     def _chunks_to_beautify(
         self, before: bytes, to_beautify: bytes, file: Path
-    ) -> Generator[tuple[int, int], None, None]:
+    ) -> Generator[tuple[int, int]]:
         """Iterate over `to_beautify` and find chunks of style/script to beautify.
 
         Arguments:
@@ -183,7 +183,7 @@ class _BeautifyStrategy(Strategy, ABC):
             yield (chunk_start, chunk_start + tag_end.start(0))
             search_start = chunk_start + tag_end.end(0)
 
-    def __iter__(self) -> Generator[list[TestCase], None, None]:
+    def __iter__(self) -> Generator[list[TestCase]]:
         """Iterate over potential beautifications of testcases according to this
         strategy.
 

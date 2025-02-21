@@ -44,7 +44,7 @@ from .args import ReplayArgs
 
 if TYPE_CHECKING:
     from argparse import Namespace
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
@@ -180,7 +180,7 @@ class ReplayManager:
     @classmethod
     def load_testcases(
         cls,
-        paths: Iterable[Path],
+        paths: Sequence[Path],
         catalog: bool = False,
         entry_point: Path | None = None,
     ) -> tuple[list[TestCase], AssetManager | None, dict[str, str] | None]:

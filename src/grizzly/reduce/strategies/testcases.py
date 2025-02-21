@@ -57,7 +57,7 @@ class MinimizeTestcaseList(Strategy):
         assert self._current_served is None
         self._current_feedback = success
 
-    def __iter__(self) -> Generator[list[TestCase], None, None]:
+    def __iter__(self) -> Generator[list[TestCase]]:
         """Iterate over potential reductions of testcases according to this strategy.
 
         The caller should evaluate each testcase set yielded, and call `update` with the
