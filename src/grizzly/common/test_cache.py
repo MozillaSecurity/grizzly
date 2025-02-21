@@ -2,6 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from pytest import raises
+
 from .cache import _active_cache, add_cached, clear_cached, find_cached
 
 
@@ -34,32 +36,38 @@ def test_cache_basic(mocker, tmp_path):
     mocker.patch("grizzly.common.cache._ACTIVE_CACHE", new=None)
     # attempt to clear empty cache
     clear_cached()
+    # invalid keys
+    with raises(ValueError, match="Key must be alphanumeric"):
+        add_cached("", tmp_path / "foo")
+    with raises(ValueError, match="Key must be alphanumeric"):
+        find_cached("test/key")
     # look for non-existing entry
-    assert find_cached("test_key") is None
+    assert find_cached("test-key") is None
     # add entry
     content = tmp_path / "content"
     content.mkdir()
     (content / "data.txt").write_text("123")
-    cache_dir = add_cached("test_key", content)
+    cache_dir = add_cached("test-key", content)
     assert cache_dir.is_dir()
     assert not content.is_dir()
     assert (cache_dir / "content" / "data.txt").is_file()
     assert (cache_dir / "content" / "data.txt").read_text() == "123"
     # find existing entry
-    cache_dir = find_cached("test_key")
+    cache_dir = find_cached("test-key")
+    assert cache_dir is not None
     assert (cache_dir / "content" / "data.txt").is_file()
     assert (cache_dir / "content" / "data.txt").read_text() == "123"
     # look for missing entry when cache has data
-    assert find_cached("test_missing") is None
+    assert find_cached("missing") is None
     # add when entry exists (use existing)
-    collision = add_cached("test_key", content)
+    collision = add_cached("test-key", content)
     assert collision is not None
     assert (collision / "content" / "data.txt").samefile(
         cache_dir / "content" / "data.txt"
     )
     # clear with nothing expired
     clear_cached()
-    assert find_cached("test_key") is not None
+    assert find_cached("test-key") is not None
     # clear with expired
     clear_cached(max_age=0)
-    assert find_cached("test_key") is None
+    assert find_cached("test-key") is None

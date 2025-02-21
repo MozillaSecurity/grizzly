@@ -52,6 +52,18 @@ def _active_cache(max_age: int = MAX_AGE) -> Path:
     return _ACTIVE_CACHE
 
 
+def _valid_key(key: str) -> bool:
+    """Check if key contains only alphanumeric characters. Dash/hyphen (-) is allowed.
+
+    Args:
+        key: Identifier to validate.
+
+    Returns:
+        True if key is valid otherwise False.
+    """
+    return key.replace("-", "").isalnum()
+
+
 def add_cached(key: str, src: Path) -> Path:
     """Move a file or directory into the cache.
 
@@ -62,6 +74,8 @@ def add_cached(key: str, src: Path) -> Path:
     Returns:
         Directory containing cached content.
     """
+    if not _valid_key(key):
+        raise ValueError("Key must be alphanumeric")
     dst = _active_cache() / key
     with interprocess_lock(LOCK_ID):
         dst.mkdir(parents=True, exist_ok=True)
@@ -102,6 +116,8 @@ def find_cached(key: str) -> Path | None:
     Returns:
         Directory containing cached content or None if no valid entry is found.
     """
+    if not _valid_key(key):
+        raise ValueError("Key must be alphanumeric")
     path = _active_cache() / key
     with interprocess_lock(LOCK_ID):
         if path.is_dir():
