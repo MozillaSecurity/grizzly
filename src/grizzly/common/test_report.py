@@ -404,6 +404,9 @@ def test_report_15(tmp_path, data, lines):
 def test_report_16(mocker, tmp_path, hang, has_log, expected):
     """test Report.short_signature"""
     mocker.patch("grizzly.common.report.ProgramConfiguration", autospec=True)
+    collector = mocker.patch("grizzly.common.report.Collector", autospec=True)
+    # prevent checking signature cache (if it exists)
+    collector.return_value.sigCacheDir = None
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     if has_log:
