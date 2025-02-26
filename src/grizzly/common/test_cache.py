@@ -10,7 +10,7 @@ from .cache import _active_cache, add_cached, clear_cached, find_cached
 def test_cache_active_cache(mocker, tmp_path):
     """test _active_cache()"""
     mocker.patch("grizzly.common.cache.CACHE_PATH", new=tmp_path)
-    fake_ipl = mocker.patch("grizzly.common.cache.interprocess_lock")
+    fake_ipl = mocker.patch("grizzly.common.cache.InterProcessLock")
     # create path
     mocker.patch("grizzly.common.cache._ACTIVE_CACHE", new=None)
     new_path = _active_cache()
@@ -32,7 +32,7 @@ def test_cache_active_cache(mocker, tmp_path):
 def test_cache_basic(mocker, tmp_path):
     """test basic cache functionality"""
     mocker.patch("grizzly.common.cache.CACHE_PATH", new=tmp_path)
-    mocker.patch("grizzly.common.cache.interprocess_lock")
+    mocker.patch("grizzly.common.cache.InterProcessLock")
     mocker.patch("grizzly.common.cache._ACTIVE_CACHE", new=None)
     # attempt to clear empty cache
     clear_cached()
