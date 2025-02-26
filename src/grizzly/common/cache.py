@@ -9,7 +9,9 @@ from shutil import move, rmtree
 from time import time
 from typing import TYPE_CHECKING
 
-from .utils import grz_tmp, interprocess_lock
+from fasteners import InterProcessLock
+
+from .utils import grz_tmp
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -18,7 +20,7 @@ if TYPE_CHECKING:
 _ACTIVE_CACHE = None
 CACHE_PATH = grz_tmp("cache")
 CACHE_TIME = int(time())
-LOCK_ID = "cache"
+LOCK_FILE = grz_tmp() / "cache.lock"
 LOG = getLogger(__name__)
 MAX_AGE = 86400
 
@@ -36,7 +38,7 @@ def _active_cache(max_age: int = MAX_AGE) -> Path:
     assert max_age >= 0
     if _ACTIVE_CACHE is None:
         limit = CACHE_TIME - max_age
-        with interprocess_lock(LOCK_ID):
+        with InterProcessLock(LOCK_FILE):
             # find most recent active entry
             # TODO: ideally this should use the creation time not the directory name
             # but that is not currently available on all platforms
@@ -85,7 +87,7 @@ def add_cached(key: str, src: Path) -> Path:
     if not _valid_key(key):
         raise ValueError("Key must be alphanumeric")
     dst = _active_cache() / key
-    with interprocess_lock(LOCK_ID):
+    with InterProcessLock(LOCK_FILE):
         dst.mkdir(parents=True, exist_ok=True)
         if (dst / src.name).exists():
             LOG.debug("add_cache: '%s' exists in '%s'", (dst / src.name), dst)
@@ -105,7 +107,7 @@ def clear_cached(max_age: int = MAX_AGE * 2) -> None:
     """
     assert max_age >= 0
     limit = CACHE_TIME - max_age
-    with interprocess_lock(LOCK_ID):
+    with InterProcessLock(LOCK_FILE):
         # iterate over all directories in CACHE_PATH
         for entry in (x for x in CACHE_PATH.iterdir() if x.is_dir()):
             with suppress(ValueError):
@@ -127,7 +129,7 @@ def find_cached(key: str) -> Path | None:
     if not _valid_key(key):
         raise ValueError("Key must be alphanumeric")
     path = _active_cache() / key
-    with interprocess_lock(LOCK_ID):
+    with InterProcessLock(LOCK_FILE):
         if path.is_dir():
             return path
     return None

@@ -4,14 +4,12 @@
 from __future__ import annotations
 
 import sys  # mypy looks for `sys.version_info`
-from contextlib import contextmanager, suppress
+from contextlib import suppress
 from importlib.metadata import EntryPoint, PackageNotFoundError, entry_points, version
 from logging import getLogger
 from os import getenv
 from pathlib import Path
-from sqlite3 import IntegrityError, connect
 from tempfile import gettempdir
-from time import perf_counter, sleep
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -29,7 +27,6 @@ __credits__ = ["Tyson Smith"]
 
 GRZ_TMP = Path(getenv("GRZ_TMP", gettempdir()), "grizzly")
 HARNESS_FILE = Path(__file__).parent / "harness.html"
-LOCK_DB = GRZ_TMP / "lock.db"
 LOG = getLogger(__name__)
 
 
@@ -45,46 +42,6 @@ def grz_tmp(*subdir: str | Path) -> Path:
     path = Path(GRZ_TMP, *subdir)
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-@contextmanager
-def interprocess_lock(name: str, timeout: int = 60) -> Generator[None]:
-    """A cross process locking mechanism.
-
-    Args:
-        name: Identifier of lock to acquire.
-        timeout: Time to wait (seconds) to acquire lock before raising RuntimeError.
-
-    Yields:
-        None
-    """
-    assert name
-    assert timeout > 0
-    acquired = False
-    conn = connect(LOCK_DB)
-    try:
-        # create db if needed
-        with conn:
-            conn.execute("CREATE TABLE IF NOT EXISTS locks (name TEXT PRIMARY KEY)")
-        # acquire lock
-        deadline = perf_counter() + timeout
-        while perf_counter() < deadline:
-            with suppress(IntegrityError), conn:
-                conn.execute("INSERT INTO locks (name) VALUES (?)", (name,))
-                acquired = True
-                break
-            sleep(0.1)
-        else:
-            raise RuntimeError(f"Failed to acquire lock after {timeout}s")
-        yield
-    finally:
-        try:
-            # release lock if we acquired it
-            if acquired:
-                with conn:
-                    conn.execute("DELETE FROM locks WHERE name = ?", (name,))
-        finally:
-            conn.close()
 
 
 def iter_entry_points(group: str) -> Generator[EntryPoint]:  # pragma: no cover
