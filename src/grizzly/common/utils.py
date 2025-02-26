@@ -4,14 +4,14 @@
 from __future__ import annotations
 
 import sys  # mypy looks for `sys.version_info`
-from contextlib import contextmanager, suppress
+from contextlib import closing, contextmanager, suppress
 from importlib.metadata import EntryPoint, PackageNotFoundError, entry_points, version
 from logging import getLogger
 from os import getenv
 from pathlib import Path
 from sqlite3 import IntegrityError, connect
 from tempfile import gettempdir
-from time import perf_counter, sleep
+from time import perf_counter, sleep, time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -60,31 +60,28 @@ def interprocess_lock(name: str, timeout: int = 60) -> Generator[None]:
     """
     assert name
     assert timeout > 0
-    acquired = False
-    conn = connect(LOCK_DB)
-    try:
+    # prevent a possible but unlikely deadlock (remove old databases)
+    with suppress(FileNotFoundError, PermissionError):
+        if LOCK_DB.stat().st_mtime < (time() - (timeout * 3)):
+            LOCK_DB.unlink(missing_ok=True)
+    # connect() should have a timeout greater than the passed timeout
+    with closing(connect(LOCK_DB, timeout=60)) as con:
         # create db if needed
-        with conn:
-            conn.execute("CREATE TABLE IF NOT EXISTS locks (name TEXT PRIMARY KEY)")
+        con.execute("CREATE TABLE IF NOT EXISTS locks (name TEXT PRIMARY KEY)")
         # acquire lock
         deadline = perf_counter() + timeout
         while perf_counter() < deadline:
-            with suppress(IntegrityError), conn:
-                conn.execute("INSERT INTO locks (name) VALUES (?)", (name,))
-                acquired = True
+            with suppress(IntegrityError), con:
+                con.execute("INSERT INTO locks (name) VALUES (?)", (name,))
                 break
-            sleep(0.1)
+            # avoid DoS'ing the database
+            sleep(0.2)
         else:
             raise RuntimeError(f"Failed to acquire lock after {timeout}s")
         yield
-    finally:
-        try:
-            # release lock if we acquired it
-            if acquired:
-                with conn:
-                    conn.execute("DELETE FROM locks WHERE name = ?", (name,))
-        finally:
-            conn.close()
+        # release lock (if this fails it will create a deadlock)
+        with con:
+            con.execute("DELETE FROM locks WHERE name = ?", (name,))
 
 
 def iter_entry_points(group: str) -> Generator[EntryPoint]:  # pragma: no cover

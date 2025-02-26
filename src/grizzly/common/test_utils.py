@@ -38,6 +38,7 @@ def test_interprocess_lock_basic(mocker, tmp_path):
     with interprocess_lock("test"):
         pass
 
+    mocker.patch("grizzly.common.utils.time", autospec=True, return_value=float("inf"))
     fake_conn = mocker.patch("grizzly.common.utils.connect", autospec=True).return_value
     fake_conn.execute.side_effect = chain([None], repeat(IntegrityError))
     # fail to acquire
