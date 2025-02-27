@@ -40,6 +40,7 @@ from ..common.status_reporter import ReductionStatusReporter
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import package_version
 from ..replay import ReplayManager, ReplayResult
+from ..services import WebServices
 from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
 from .args import ReduceArgs
 from .exceptions import GrizzlyReduceBaseException, NotReproducible
@@ -98,6 +99,7 @@ class ReduceManager:
         relaunch: int = 1,
         report_period: int | None = None,
         report_to_fuzzmanager: bool = False,
+        services: WebServices | None = None,
         signature: CrashSignature | None = None,
         signature_desc: str | None = None,
         static_timeout: bool = False,
@@ -123,6 +125,7 @@ class ReduceManager:
                       Target should be relaunched.
             report_period: Periodically report best results for long-running strategies.
             report_to_fuzzmanager: Report to FuzzManager rather than filesystem.
+            services: WebServices instance.
             signature: Signature for accepting crashes.
             signature_desc: Short description of the given signature.
             static_timeout: Use only specified timeouts (`--timeout` and
@@ -161,6 +164,7 @@ class ReduceManager:
         )
         self._use_analysis = use_analysis
         self._use_harness = use_harness
+        self._services = services
 
     def __enter__(self) -> ReduceManager:
         return self
@@ -330,6 +334,7 @@ class ReduceManager:
                     idle_delay=self._idle_delay,
                     idle_threshold=self._idle_threshold,
                     on_iteration_cb=self._on_replay_iteration,
+                    services=self._services,
                 )
                 try:
                     crashes = sum(x.count for x in results if x.expected)
@@ -533,6 +538,7 @@ class ReduceManager:
                                     repeat=repeat,
                                     on_iteration_cb=self._on_replay_iteration,
                                     post_launch_delay=post_launch_delay,
+                                    services=self._services,
                                 )
                                 self._status.attempts += 1
                                 self.update_timeout(results)
@@ -785,6 +791,7 @@ class ReduceManager:
 
         asset_mgr: AssetManager | None = None
         certs = None
+        ext_services = None
         signature = None
         signature_desc = None
         target: Target | None = None
@@ -854,6 +861,10 @@ class ReduceManager:
             LOG.debug("starting sapphire server")
             # launch HTTP server used to serve test cases
             with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
+                if certs is not None:
+                    LOG.debug("starting additional web services")
+                    ext_services = WebServices.start_services(certs.host, certs.key)
+
                 target.reverse(server.port, server.port)
                 with ReduceManager(
                     frozenset(args.ignore),
@@ -876,6 +887,7 @@ class ReduceManager:
                     tool=args.tool,
                     use_analysis=not args.no_analysis,
                     use_harness=not args.no_harness,
+                    services=ext_services,
                 ) as mgr:
                     return_code = mgr.run(
                         repeat=args.repeat,
@@ -918,5 +930,7 @@ class ReduceManager:
                 asset_mgr.cleanup()
             if certs is not None:
                 certs.cleanup()
+            if ext_services is not None:
+                ext_services.cleanup()
             clear_cached()
             LOG.info("Done.")

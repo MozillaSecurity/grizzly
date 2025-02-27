@@ -68,3 +68,5 @@ repos:
 
 default_language_version:
   python: python3
+
+exclude: '.*wpt_h3_server/.*'
