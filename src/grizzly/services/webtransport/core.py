@@ -4,10 +4,9 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from asyncio import AbstractEventLoop
 from logging import getLogger
-from pathlib import Path
+from os.path import abspath, dirname, join
 from platform import system
 from threading import Thread
 from typing import Optional
@@ -25,8 +24,8 @@ from .wpt_h3_server.webtransport_h3_server import (
 )
 
 # Override global _doc_root
-webtransport_h3_server._doc_root = os.path.join(  # pylint: disable=protected-access
-    os.path.dirname(os.path.abspath(__file__)),
+webtransport_h3_server._doc_root = join(  # pylint: disable=protected-access
+    dirname(abspath(__file__)),
     "wpt_h3_server",
     "handlers",
 )
