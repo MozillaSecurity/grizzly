@@ -63,7 +63,7 @@ class WebTransportServer(BaseService):
         """URL for Sapphire.set_dynamic_response
 
         Args:
-            _query (str): Unused query string.
+            _query: Unused query string.
         """
         return b"https://127.0.0.1:%d" % (self._port,)
 
