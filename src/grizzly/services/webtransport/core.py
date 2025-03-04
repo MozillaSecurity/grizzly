@@ -9,7 +9,7 @@ from logging import getLogger
 from os.path import abspath, dirname, join
 from platform import system
 from threading import Thread
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from aioquic.asyncio import serve  # type: ignore[attr-defined]
 from aioquic.h3.connection import H3_ALPN
@@ -22,6 +22,9 @@ from .wpt_h3_server.webtransport_h3_server import (
     WebTransportH3Protocol,
     _connect_to_server,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Override global _doc_root
 webtransport_h3_server._doc_root = join(  # pylint: disable=protected-access
