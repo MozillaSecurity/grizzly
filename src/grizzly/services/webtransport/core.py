@@ -1,6 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 import asyncio
 import os
 from asyncio import AbstractEventLoop
@@ -45,8 +47,8 @@ class WebTransportServer(BaseService):
         self._cert = cert
         self._key = key
 
-        self._loop: Optional[AbstractEventLoop] = None
-        self._server_thread: Optional[Thread] = None
+        self._loop: AbstractEventLoop | None = None
+        self._server_thread: Thread | None = None
         self._started: bool = False
 
     @property
