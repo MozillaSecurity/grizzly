@@ -1,17 +1,22 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
 import asyncio
-from collections.abc import Mapping
 from enum import Enum
 from logging import getLogger
-from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from sapphire import ServerMap, create_listening_socket
 
-from .base import BaseService
 from .webtransport.core import WebTransportServer
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+
+    from .base import BaseService
 
 LOG = getLogger(__name__)
 
@@ -29,7 +34,7 @@ class WebServices:
         """Initialize new WebServices instance
 
         Args:
-            services (dict of ServiceName: BaseService): Collection of services.
+            services: Collection of services.
         """
         self.services = services
 
@@ -46,10 +51,10 @@ class WebServices:
         """Polls all available services to ensure they are running and accessible.
 
         Args:
-            timeout (int): Total time to wait.
+            timeout: Total time to wait.
 
         Returns:
-            bool: Indicates if all services started successfully.
+            Indicates if all services started successfully.
         """
         tasks = {}
         for name, service in self.services.items():
@@ -79,12 +84,12 @@ class WebServices:
             )
 
     @classmethod
-    def start_services(cls, cert: Path, key: Path) -> "WebServices":
+    def start_services(cls, cert: Path, key: Path) -> WebServices:
         """Start all available services
 
         Args:
-            cert (Path): Path to the certificate file
-            key (Path): Path to the certificate's private key
+            cert: Certificate file
+            key: Certificate's private key
         """
         services = {}
         # Start WebTransport service

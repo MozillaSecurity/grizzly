@@ -4,7 +4,7 @@
 # pylint: disable=protected-access
 import asyncio
 
-import pytest
+from pytest import raises
 
 from sapphire import CertificateBundle
 
@@ -32,7 +32,7 @@ def test_webtransport_01():
         web_transport.cleanup()
 
         assert not web_transport._started
-        with pytest.raises(asyncio.TimeoutError):
+        with raises(asyncio.TimeoutError):
             asyncio.run(asyncio.wait_for(web_transport.is_ready(), timeout=1.0))
     finally:
         cert.cleanup()

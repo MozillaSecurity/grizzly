@@ -6,10 +6,9 @@ from __future__ import annotations
 import asyncio
 from asyncio import AbstractEventLoop
 from logging import getLogger
-from os.path import abspath, dirname, join
+from pathlib import Path
 from platform import system
 from threading import Thread
-from typing import TYPE_CHECKING
 
 from aioquic.asyncio import serve  # type: ignore[attr-defined]
 from aioquic.h3.connection import H3_ALPN
@@ -23,15 +22,11 @@ from .wpt_h3_server.webtransport_h3_server import (
     _connect_to_server,
 )
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
 # Override global _doc_root
-webtransport_h3_server._doc_root = join(  # pylint: disable=protected-access
-    dirname(abspath(__file__)),
-    "wpt_h3_server",
-    "handlers",
+webtransport_h3_server._doc_root = str(  # pylint: disable=protected-access
+    (Path(__file__).parent / "wpt_h3_server" / "handlers").resolve()
 )
+
 
 LOG = getLogger(__name__)
 
@@ -42,8 +37,8 @@ class WebTransportServer(BaseService):
 
         Args:
             port: The port on which to listen on.
-            cert: The path to the certificate file.
-            key: The path to the certificate's private key.
+            cert: Certificate file.
+            key: Certificate's private key.
         """
         self._port = port
         self._cert = cert
@@ -51,7 +46,7 @@ class WebTransportServer(BaseService):
 
         self._loop: AbstractEventLoop | None = None
         self._server_thread: Thread | None = None
-        self._started: bool = False
+        self._started = False
 
     @property
     def location(self) -> str:
@@ -84,7 +79,7 @@ class WebTransportServer(BaseService):
                 max_datagram_frame_size=65536,
             )
 
-            LOG.debug("Starting WebTransport service on port %s", self.port)
+            LOG.debug("Starting WebTransport service on port %d", self.port)
             configuration.load_cert_chain(self._cert, self._key)
             ticket_store = SessionTicketStore()
 
@@ -117,14 +112,15 @@ class WebTransportServer(BaseService):
     def cleanup(self) -> None:
         """Stop the server."""
 
-        async def _stop_loop() -> None:
-            if self._loop is not None:
-                self._loop.stop()
-
         if self._started:
+
+            async def _stop_loop() -> None:
+                if self._loop is not None:
+                    self._loop.stop()
+
             if self._loop is not None:
                 asyncio.run_coroutine_threadsafe(_stop_loop(), self._loop)
             if self._server_thread is not None:
                 self._server_thread.join()
-            LOG.debug("Stopped WebTransport service on port %s", self._port)
-        self._started = False
+            LOG.debug("Stopped WebTransport service on port %d", self._port)
+            self._started = False
