@@ -22,7 +22,9 @@ from .wpt_h3_server.webtransport_h3_server import (
     _connect_to_server,
 )
 
-# Override global _doc_root
+# The WebTransport server provided by WPT uses globals to specify file paths.
+# To avoid modifying the original server source, we override the doc_root
+# global here.
 webtransport_h3_server._doc_root = str(  # pylint: disable=protected-access
     (Path(__file__).parent / "wpt_h3_server" / "handlers").resolve()
 )
