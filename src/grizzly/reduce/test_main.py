@@ -240,6 +240,7 @@ def test_main_https_support(mocker, tmp_path, https_supported):
     mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True, return_value=0)
     mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
     mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
+    mocker.patch("grizzly.reduce.core.WebServices", autospec=True)
     (tmp_path / "test.html").touch()
     # setup args
     args = mocker.Mock(

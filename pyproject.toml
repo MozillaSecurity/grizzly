@@ -12,6 +12,7 @@ omit = [
     "*/resources/*",
     "*/.tox/*",
     "*/.egg/*",
+    "*/wpt_h3_server/*",
 ]
 
 [tool.coverage.report]
@@ -56,6 +57,7 @@ disable = [
 ignored-modules = ["pytest"]
 
 [tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
     "ignore::pytest.PytestCollectionWarning",
 ]
@@ -64,6 +66,7 @@ log_level = "DEBUG"
 [tool.ruff]
 fix = true
 target-version = "py39"
+exclude = ["src/grizzly/services/webtransport/wpt_h3_server"]
 
 [tool.ruff.lint]
 select = [
