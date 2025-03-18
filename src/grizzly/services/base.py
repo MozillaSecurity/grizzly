@@ -26,5 +26,9 @@ class BaseService(ABC):
         """Wait until the service is ready"""
 
     @abstractmethod
+    def start(self, timeout: int) -> None:
+        """Start the service"""
+
+    @abstractmethod
     def cleanup(self) -> None:
         """Stop the server."""
