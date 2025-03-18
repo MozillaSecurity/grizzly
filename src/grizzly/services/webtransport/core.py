@@ -35,12 +35,12 @@ LOG = getLogger(__name__)
 
 class WebTransportServer(BaseService):
     def __init__(self, port: int, cert: Path, key: Path) -> None:
-        """A WebTransport service.
+        """A WebTransport service
 
         Args:
-            port: The port on which to listen on.
-            cert: Certificate file.
-            key: Certificate's private key.
+            port: The port on which to listen on
+            cert: Certificate file
+            key: Certificate's private key
         """
         self._port = port
         self._cert = cert
