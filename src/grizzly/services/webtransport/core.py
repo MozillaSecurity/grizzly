@@ -8,7 +8,7 @@ from asyncio import AbstractEventLoop
 from logging import getLogger
 from pathlib import Path
 from platform import system
-from threading import Thread
+from threading import Event, Thread
 
 from aioquic.asyncio import serve  # type: ignore[attr-defined]
 from aioquic.h3.connection import H3_ALPN
@@ -48,7 +48,7 @@ class WebTransportServer(BaseService):
 
         self._loop: AbstractEventLoop | None = None
         self._server_thread: Thread | None = None
-        self._started = False
+        self._started = Event()
 
     @property
     def location(self) -> str:
@@ -71,8 +71,8 @@ class WebTransportServer(BaseService):
         """Wait until the service is ready"""
         await _connect_to_server("127.0.0.1", self.port)
 
-    def start(self) -> None:
-        """Start the server."""
+    def start(self, timeout: int = 5) -> None:
+        """Start the server"""
 
         def _start_service() -> None:
             configuration = QuicConfiguration(
@@ -94,7 +94,6 @@ class WebTransportServer(BaseService):
                 )
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
-
             self._loop.run_until_complete(
                 serve(
                     "127.0.0.1",
@@ -105,11 +104,14 @@ class WebTransportServer(BaseService):
                     session_ticket_handler=ticket_store.add,
                 )
             )
+            self._started.set()
             self._loop.run_forever()
 
         self._server_thread = Thread(target=_start_service, daemon=True)
         self._server_thread.start()
-        self._started = True
+
+        if not self._started.wait(timeout=timeout):
+            raise RuntimeError("WebTransport server did not start in time")
 
     def cleanup(self) -> None:
         """Stop the server."""
@@ -125,4 +127,4 @@ class WebTransportServer(BaseService):
             if self._server_thread is not None:
                 self._server_thread.join()
             LOG.debug("Stopped WebTransport service on port %d", self._port)
-            self._started = False
+            self._started.clear()

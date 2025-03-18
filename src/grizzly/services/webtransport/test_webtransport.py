@@ -18,20 +18,14 @@ def test_webtransport_01():
     try:
         port = WebServices.get_free_port()
         web_transport = WebTransportServer(port, cert.host, cert.key)
-        assert not web_transport._started
-
         web_transport.start()
 
-        # Check that all services are running
-        assert web_transport._started
-        asyncio.run(asyncio.wait_for(web_transport.is_ready(), timeout=3.0))
+        asyncio.run(asyncio.wait_for(web_transport.is_ready(), timeout=1.0))
 
         assert web_transport.location == "grz_webtransport_server"
         assert isinstance(web_transport.url(""), bytes)
 
         web_transport.cleanup()
-
-        assert not web_transport._started
         with raises(asyncio.TimeoutError):
             asyncio.run(asyncio.wait_for(web_transport.is_ready(), timeout=1.0))
     finally:
