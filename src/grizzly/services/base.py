@@ -19,7 +19,7 @@ class BaseService(ABC):
 
     @abstractmethod
     def url(self, _query: str) -> bytes:
-        """Returns the URL of the server."""
+        """Returns the URL of the server"""
 
     @abstractmethod
     async def is_ready(self) -> None:
@@ -31,4 +31,4 @@ class BaseService(ABC):
 
     @abstractmethod
     def cleanup(self) -> None:
-        """Stop the server."""
+        """Stop the server"""
