@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 """Unit tests for `grizzly.reduce.strategies`."""
+
 from collections import namedtuple
 from logging import getLogger
 from pathlib import Path
@@ -191,9 +192,9 @@ def test_list(
     assert set(log_path.iterdir()) == {log_path / "reports"}
     tests = {test.read_text() for test in log_path.glob("reports/*-*/test.html")}
     assert tests == expected_results
-    assert (
-        sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports
-    ), list((log_path / "reports").iterdir())
+    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, (
+        list((log_path / "reports").iterdir())
+    )
 
 
 def test_dd_only(mocker, tmp_path):
@@ -248,8 +249,8 @@ def test_dd_only(mocker, tmp_path):
     assert len(tuple(log_path.glob("reports/*-*/*.html"))) == 2
     tests = {test.read_text() for test in log_path.glob("reports/*-*/test.html")}
     assert tests == expected_results
-    assert (
-        sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports
-    ), list((log_path / "reports").iterdir())
+    assert sum(1 for _ in (log_path / "reports").iterdir()) == expected_num_reports, (
+        list((log_path / "reports").iterdir())
+    )
     others = {test.read_text() for test in log_path.glob("reports/*-*/other.html")}
     assert others == {"blah\n"}

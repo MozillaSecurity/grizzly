@@ -5,6 +5,7 @@
 """
 unit tests for grizzly.Session
 """
+
 from itertools import chain, count, repeat
 from pathlib import Path
 

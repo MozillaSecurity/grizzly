@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 """Unit tests for `grizzly.reduce.strategies.beautify`."""
+
 from logging import getLogger
 
 import pytest

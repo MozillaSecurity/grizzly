@@ -4,6 +4,7 @@
 """
 Loki fuzzing library
 """
+
 from __future__ import annotations
 
 from logging import ERROR, INFO, basicConfig, getLogger

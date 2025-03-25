@@ -2,8 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-"""Common unit test fixtures for `grizzly.reduce`.
-"""
+"""Common unit test fixtures for `grizzly.reduce`."""
 
 import pytest
 

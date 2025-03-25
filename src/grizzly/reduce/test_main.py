@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Unit tests for `grizzly.reduce.main`."""
+
 from pytest import mark, raises
 
 from ..common.frontend import ConfigError, Exit
@@ -176,7 +177,7 @@ def test_main_exit(
         sig=sig,
         test_index=[],
         timeout=10,
-        **kwargs
+        **kwargs,
     )
 
     mocker.patch(patch_func, side_effect=side_effect, return_value=return_value)

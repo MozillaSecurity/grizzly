@@ -68,7 +68,6 @@ class CommonArgs:
     )
 
     def __init__(self) -> None:
-
         self.parser = ArgumentParser(
             formatter_class=SortingHelpFormatter, conflict_handler="resolve"
         )

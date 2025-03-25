@@ -11,6 +11,7 @@ Constants:
     DEFAULT_STRATEGIES: Strategy names run by default if unspecified.
     STRATEGIES: Mapping of available strategy names to implementing class.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -206,9 +207,9 @@ def _load_strategies() -> MappingProxyType[str, type[Strategy]]:
     for entry_point in iter_entry_points("grizzly_reduce_strategies"):
         try:
             strategy_cls = cast(type[Strategy], entry_point.load())
-            assert (
-                strategy_cls.name == entry_point.name
-            ), f"entry_point name mismatch, check setup.py and {strategy_cls.__name__}"
+            assert strategy_cls.name == entry_point.name, (
+                f"entry_point name mismatch, check setup.py and {strategy_cls.__name__}"
+            )
         except Exception as exc:  # pylint: disable=broad-except
             LOG.debug("error loading strategy type %s: %s", entry_point.name, exc)
             continue

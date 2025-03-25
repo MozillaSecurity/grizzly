@@ -11,6 +11,7 @@ entries on the top of the stack with the offsets removed. This returns a unique
 crash id (1st hash) and a bug id (2nd hash). This is not perfect but works very
 well in most cases.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

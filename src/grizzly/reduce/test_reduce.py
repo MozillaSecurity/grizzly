@@ -2,8 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-"""Unit tests for `grizzly.reduce.reduce`.
-"""
+"""Unit tests for `grizzly.reduce.reduce`."""
+
 from collections import namedtuple
 from functools import partial, wraps
 from itertools import count
@@ -610,9 +610,9 @@ def test_repro(
             test.read_text() for test in log_path.glob("other_reports/*-0/test.html")
         }
         assert other_tests == other_reports
-        assert (
-            sum(1 for _ in (log_path / "other_reports").iterdir()) == n_other * 2
-        ), list((log_path / "other_reports").iterdir())
+        assert sum(1 for _ in (log_path / "other_reports").iterdir()) == n_other * 2, (
+            list((log_path / "other_reports").iterdir())
+        )
     assert replayer.run.call_count == expected_run_calls
 
 
@@ -726,15 +726,18 @@ def test_report_02(mocker, tmp_path):
     target.filtered_environ.return_value = {}
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
 
-    with ReduceManager(
-        set(),
-        mocker.Mock(spec_set=Sapphire, timeout=30),
-        target,
-        [testcase],
-        ["fake"],
-        log_path,
-        use_analysis=False,
-    ) as mgr, raises(KeyboardInterrupt):
+    with (
+        ReduceManager(
+            set(),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
+            target,
+            [testcase],
+            ["fake"],
+            log_path,
+            use_analysis=False,
+        ) as mgr,
+        raises(KeyboardInterrupt),
+    ):
         mgr.run()
 
     n_reports = 1
