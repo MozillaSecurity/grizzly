@@ -4,6 +4,7 @@
 """
 unit tests for grizzly.replay.args
 """
+
 from platform import system
 
 from pytest import mark, param, raises

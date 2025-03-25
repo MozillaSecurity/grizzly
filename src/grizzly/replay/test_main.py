@@ -4,6 +4,7 @@
 """
 unit tests for grizzly.replay.main
 """
+
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -353,11 +354,17 @@ def test_main_05(mocker, server, tmp_path):
         (False, True, False, False),
         # Valgrind enabled
         (False, False, True, False),
-    ],  # pylint: disable=invalid-name
+    ],
 )
 def test_main_06(
-    mocker, server, tmp_path, pernosco, rr, valgrind, no_harness
-):  # pylint: disable=invalid-name
+    mocker,
+    server,
+    tmp_path,
+    pernosco,
+    rr,  # pylint: disable=invalid-name
+    valgrind,
+    no_harness,
+):
     """test ReplayManager.main() enable debuggers"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server.serve_path.return_value = (Served.ALL, {"test.html": "/fake/path"})

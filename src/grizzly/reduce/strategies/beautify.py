@@ -7,6 +7,7 @@ Constants:
     HAVE_CSSBEAUTIFIER (bool): True if `cssbeautifier` module is available.
     HAVE_JSBEAUTIFIER (bool): True if `jsbeautifier` module is available.
 """
+
 from __future__ import annotations
 
 import re

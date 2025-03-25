@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly Report"""
+
 # pylint: disable=protected-access
 from pathlib import Path
 
@@ -62,7 +63,7 @@ def test_report_02(tmp_path):
 def test_report_03(tmp_path):
     """test Report.tail()"""
     tmp_file = tmp_path / "file.txt"
-    tmp_file.write_bytes(b"blah\ntest\n123\xEF\x00FOO")
+    tmp_file.write_bytes(b"blah\ntest\n123\xef\x00FOO")
     length = tmp_file.stat().st_size
     # don't trim
     Report.tail(tmp_file, length + 1)

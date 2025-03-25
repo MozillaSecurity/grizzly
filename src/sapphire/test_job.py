@@ -31,7 +31,7 @@ def test_job_01(tmp_path):
     assert job.lookup_resource("test") is None
     assert job.lookup_resource("test/test/") is None
     assert job.lookup_resource("test/../../") is None
-    assert job.lookup_resource("\x00\x0B\xAD\xF0\x0D") is None
+    assert job.lookup_resource("\x00\x0b\xad\xf0\x0d") is None
     assert job.lookup_resource("test.txt")
     assert job.pending == 1
     assert not job.is_complete()
@@ -146,7 +146,7 @@ def test_job_04(mocker, tmp_path):
     # test include path pointing to a missing file
     assert job.lookup_resource("testinc/missing") is None
     # test include path pointing to an invalid file name
-    assert job.lookup_resource("testinc/\x00\x0B\xAD\xF0\x0D") is None
+    assert job.lookup_resource("testinc/\x00\x0b\xad\xf0\x0d") is None
     # test includes that map to 'srv_include'
     includes = [res for res in smap.include.values() if res.target == srv_include]
     assert includes

@@ -5,6 +5,7 @@
 """
 unit tests for grizzly.replay
 """
+
 from itertools import cycle
 from pathlib import Path
 

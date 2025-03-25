@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """test Grizzly main"""
+
 from platform import system
 
 from pytest import mark, skip
@@ -134,10 +135,14 @@ def test_main_03(mocker, session_setup, test_limit, timeout):
         # Valgrind enabled
         (False, False, True),
     ],
-)  # pylint: disable=invalid-name
+)
 def test_main_04(
-    mocker, session_setup, pernosco, rr, valgrind
-):  # pylint: disable=invalid-name
+    mocker,
+    session_setup,
+    pernosco,
+    rr,  # pylint: disable=invalid-name
+    valgrind,
+):
     """test enabling debuggers"""
     # maximum one debugger allowed at a time
     assert sum((pernosco, rr, valgrind)) < 2, "test broken!"

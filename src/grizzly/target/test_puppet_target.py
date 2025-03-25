@@ -243,11 +243,15 @@ def test_puppet_target_08(mocker, tmp_path):
         (False, True, False),
         # Valgrind selected
         (False, False, True),
-    ],  # pylint: disable=invalid-name
+    ],
 )
 def test_puppet_target_09(
-    mocker, tmp_path, pernosco, rr, valgrind
-):  # pylint: disable=invalid-name
+    mocker,
+    tmp_path,
+    pernosco,
+    rr,  # pylint: disable=invalid-name
+    valgrind,
+):
     """test PuppetTarget debugger args"""
     fake_ffp = mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
     fake_file = tmp_path / "fake"

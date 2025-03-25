@@ -115,9 +115,9 @@ class Reporter(metaclass=ABCMeta):
         Returns:
             Implementation specific result indicating where the report was created.
         """
-        assert (
-            not test_cases or test_cases[0].timestamp <= test_cases[-1].timestamp
-        ), "tests must be ordered oldest to newest"
+        assert not test_cases or test_cases[0].timestamp <= test_cases[-1].timestamp, (
+            "tests must be ordered oldest to newest"
+        )
         self._pre_submit(report)
         # output report contents to console
         if self.display_logs:
