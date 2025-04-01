@@ -217,7 +217,7 @@ class ReduceManager:
             # expected), so lowering timeout or idle delay will only hide crashes
             return
 
-        durations = list(
+        durations = tuple(
             chain.from_iterable(x.durations for x in results if x.expected)
         )
         if not durations:
@@ -226,7 +226,7 @@ class ReduceManager:
         run_time = max(durations)
 
         # If `run_time * multiplier` is less than idle poll delay, update it
-        LOG.debug("Run time %r", run_time)
+        LOG.debug("Longest run time %0.3f", run_time)
         new_idle_delay = max(
             self.IDLE_DELAY_MIN,
             min(
@@ -234,7 +234,7 @@ class ReduceManager:
             ),
         )
         if new_idle_delay < self._idle_delay:
-            LOG.info("Updating poll delay to: %r", new_idle_delay)
+            LOG.info("Updating poll delay to: %d", new_idle_delay)
             self._idle_delay = new_idle_delay
         # If `run_time * multiplier` is less than iter_timeout, update it
         # in other words, decrease the timeout if this ran in less than half the timeout
@@ -246,7 +246,7 @@ class ReduceManager:
             ),
         )
         if new_iter_timeout < self.server.timeout:
-            LOG.info("Updating max timeout to: %r", new_iter_timeout)
+            LOG.info("Updating max timeout to: %d", new_iter_timeout)
             self.server.timeout = new_iter_timeout
 
     def _on_replay_iteration(self) -> None:
@@ -355,16 +355,12 @@ class ReduceManager:
                     for result in results:
                         result.report.cleanup()
                 reliability = crashes / self.ANALYSIS_ITERATIONS
-                desc = ("using" if use_harness else "without") + " harness"
-                if last_test_only:
-                    desc += "/last test only"
-                else:
-                    desc += "/all tests"
                 LOG.info(
-                    "Testcase was interesting %0.1f%% of %d attempts %s.",
-                    100.0 * reliability,
+                    "Testcase was interesting %0.1f%% of %d attempts %s/%s.",
+                    reliability * 100,
                     self.ANALYSIS_ITERATIONS,
-                    desc,
+                    "using harness" if use_harness else "without harness",
+                    "last test only" if last_test_only else "all tests",
                 )
                 if use_harness and last_test_only:
                     key = "last test"
@@ -902,8 +898,8 @@ class ReduceManager:
             LOG.error(str(exc))
             return exc.exit_code
 
-        except KeyboardInterrupt as exc:
-            LOG.error("Exception: %r", exc)
+        except KeyboardInterrupt:
+            LOG.error("Aborted.")
             return Exit.ABORT
 
         except (TargetLaunchError, TargetLaunchTimeout) as exc:
