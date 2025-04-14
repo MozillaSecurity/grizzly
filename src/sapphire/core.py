@@ -19,7 +19,8 @@ from .job import Job, Served
 
 if TYPE_CHECKING:
     from argparse import Namespace
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
+    from types import MappingProxyType
 
     from .certificate_bundle import CertificateBundle
     from .server_map import ServerMap
@@ -207,7 +208,7 @@ class Sapphire:
         forever: bool = False,
         required_files: Iterable[str] | None = None,
         server_map: ServerMap | None = None,
-    ) -> tuple[Served, Mapping[str, Path]]:
+    ) -> tuple[Served, MappingProxyType[str, Path]]:
         """Serve files in path.
 
         The status codes include:

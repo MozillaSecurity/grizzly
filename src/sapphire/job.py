@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from .server_map import DynamicResource, FileResource, RedirectResource, ServerMap
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
     from pathlib import Path
 
 __author__ = "Tyson Smith"
@@ -269,7 +269,7 @@ class Job:
             return not self._pending.files
 
     @property
-    def served(self) -> Mapping[str, Path]:
+    def served(self) -> MappingProxyType[str, Path]:
         """Served files.
 
         Args:
