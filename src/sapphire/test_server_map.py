@@ -53,7 +53,7 @@ def test_servermap_02(tmp_path):
 def test_servermap_03(tmp_path):
     """test ServerMap includes"""
     srv_map = ServerMap()
-    with raises(IOError, match="Include path not found: no_dir"):
+    with raises(FileNotFoundError, match="Include path not found: no_dir"):
         srv_map.set_include("test_url", Path("no_dir"))
     assert not srv_map.include
     srv_map.set_include("url_01", tmp_path)

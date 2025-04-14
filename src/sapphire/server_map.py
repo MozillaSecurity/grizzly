@@ -95,7 +95,7 @@ class ServerMap:
     def set_include(self, url: str, target: Path) -> None:
         url = self._check_url(url)
         if not target.is_dir():
-            raise OSError(f"Include path not found: {target}")
+            raise FileNotFoundError(f"Include path not found: {target}")
         if url in self.dynamic or url in self.redirect:
             raise MapCollisionError(f"URL collision on {url!r}")
         # sanity check to prevent mapping overlapping paths
