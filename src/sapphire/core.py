@@ -227,7 +227,7 @@ class Sapphire:
             server_map: Map of server includes, dynamic requests and redirects.
 
         Returns:
-            Status code and files served.
+            Served status and files served.
         """
         assert self.timeout >= 0
         LOG.debug("serving '%s' (forever=%r, timeout=%d)", path, forever, self.timeout)
@@ -240,7 +240,7 @@ class Sapphire:
         )
         with ConnectionManager(job, self._socket, limit=self._max_workers) as mgr:
             timed_out = not mgr.serve(self.timeout, continue_cb=continue_cb)
-        LOG.debug("%s, timed out: %r", job.status, timed_out)
+        LOG.debug("status: %s, timed out: %r", job.status.name, timed_out)
         return (Served.TIMEOUT if timed_out else job.status, job.served)
 
     @classmethod

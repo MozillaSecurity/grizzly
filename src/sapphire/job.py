@@ -107,7 +107,7 @@ class Job:
         Note: This is intended to only be called once by __init__().
 
         Args:
-            required_files: File paths (relative to wwwroot) that must be served.
+            required_files: Files (relative to wwwroot) that must be served.
 
         Returns:
             None
@@ -134,7 +134,11 @@ class Job:
                     LOG.debug(
                         "required: %r -> %r",
                         url,
-                        resource.target,  # type: ignore[attr-defined]
+                        (
+                            "<dynamic resource>"
+                            if isinstance(resource, DynamicResource)
+                            else resource.target  # type: ignore[attr-defined]
+                        ),
                     )
         LOG.debug("job has %d required file(s)", len(self._pending.files))
 
@@ -258,7 +262,7 @@ class Job:
         """Remove a file from pending list.
 
         Args:
-            file_name (str): File to remove from pending list.
+            file_name: File to remove from pending list.
 
         Returns:
             True when all files have been removed otherwise False.
