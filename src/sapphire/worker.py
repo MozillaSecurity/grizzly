@@ -43,7 +43,6 @@ class Request:
 
     @classmethod
     def parse(cls, raw_data: bytes) -> Request | None:
-        assert isinstance(raw_data, bytes)
         req_match = cls.REQ_PATTERN.match(raw_data)
         if not req_match:
             LOG.debug("request failed to match regex")
@@ -85,7 +84,6 @@ class Worker:
 
     @staticmethod
     def _200_header(c_length: int, c_type: str) -> bytes:
-        assert c_type is not None
         data = (
             "HTTP/1.1 200 OK\r\n"
             "Cache-Control: max-age=0, no-cache\r\n"

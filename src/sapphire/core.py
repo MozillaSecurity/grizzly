@@ -8,7 +8,6 @@ Sapphire HTTP server
 from __future__ import annotations
 
 from logging import getLogger
-from pathlib import Path
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
 from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
 from time import perf_counter, sleep
@@ -20,6 +19,7 @@ from .job import Job, Served
 if TYPE_CHECKING:
     from argparse import Namespace
     from collections.abc import Iterable
+    from pathlib import Path
     from types import MappingProxyType
 
     from .certificate_bundle import CertificateBundle
@@ -229,7 +229,6 @@ class Sapphire:
         Returns:
             Status code and files served.
         """
-        assert isinstance(path, Path)
         assert self.timeout >= 0
         LOG.debug("serving '%s' (forever=%r, timeout=%d)", path, forever, self.timeout)
         job = Job(
