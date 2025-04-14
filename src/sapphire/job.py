@@ -7,7 +7,7 @@ Sapphire HTTP server job
 
 from __future__ import annotations
 
-from enum import IntEnum, unique
+from enum import Enum, auto
 from errno import ENAMETOOLONG
 from itertools import chain
 from logging import getLogger
@@ -30,18 +30,17 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-@unique
-class Served(IntEnum):
+class Served(Enum):
     """Server Job status codes"""
 
     # all expected requests for required files have been received
-    ALL = 0
+    ALL = auto()
     # no requests for required files have been received
-    NONE = 1
+    NONE = auto()
     # some requests for required files have been received
-    REQUEST = 2
+    REQUEST = auto()
     # timeout occurred
-    TIMEOUT = 3
+    TIMEOUT = auto()
 
 
 class PendingTracker(NamedTuple):
