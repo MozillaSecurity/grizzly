@@ -7,11 +7,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory, mkdtemp
 
 from ffpuppet import BrowserTimeoutError, LaunchError
+from fxpoppet import ADBLaunchError, ADBProcess, ADBSession, Reason
 from prefpicker import PrefPicker
 
-from ..common.reporter import Report
+from ..common.report import Report
 from ..common.utils import grz_tmp
-from .adb_device import ADBLaunchError, ADBProcess, ADBSession, Reason
+from .puppet_target import merge_sanitizer_options
 from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
@@ -24,9 +25,21 @@ LOG = getLogger("adb_target")
 class ADBTarget(Target):
     SUPPORTED_ASSETS = ("prefs",)
 
+    __slots__ = (
+        "_monitor",
+        "_package",
+        "_prefs",
+        "_proc",
+        "_session",
+        "forced_close",
+        "use_rr",
+    )
+
     def __init__(self, binary, launch_timeout, log_limit, memory_limit, **kwds):
         super().__init__(binary, launch_timeout, log_limit, memory_limit)
-        self.forced_close = True  # app will not close itself on Android
+        self._monitor = None
+        # app will not close itself on Android
+        self.forced_close = True
         self.use_rr = False
 
         for unsupported in ("pernosco", "rr", "valgrind", "xvfb"):
@@ -79,14 +92,21 @@ class ADBTarget(Target):
                 status = Result.FOUND
         return status
 
-    def create_report(self, is_hang=False):
-        logs = mkdtemp(prefix="logs_", dir=grz_tmp("logs"))
+    def create_report(self, is_hang=False, unstable=False):
+        logs = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
         self.save_logs(logs)
-        return Report(logs, self.binary, is_hang=is_hang)
+        return Report(logs, self.binary, is_hang=is_hang, unstable=unstable)
 
-    def handle_hang(self, ignore_idle=True):
+    def dump_coverage(self, timeout=0):
+        return NotImplementedError("Not supported")
+
+    def handle_hang(self, ignore_idle=True, ignore_timeout=False):
         # TODO: attempt to detect idle hangs?
         self.close()
+        return False
+
+    def https(self):
+        # HTTPS support is not currently supported
         return False
 
     def launch(self, location):
@@ -113,6 +133,16 @@ class ADBTarget(Target):
                 raise TargetLaunchTimeout(str(exc)) from None
             raise TargetLaunchError(str(exc), self.create_report()) from None
 
+    def log_size(self):
+        LOG.debug("log_size not currently implemented")
+        return 0
+
+    def merge_environment(self, extra):
+        output = dict(extra)
+        output.update(self.environ)
+        output.update(merge_sanitizer_options(self.environ, extra=extra))
+        self.environ = output
+
     @property
     def monitor(self):
         if self._monitor is None:
@@ -129,11 +159,14 @@ class ADBTarget(Target):
                     finally:
                         os.remove(log_file)
 
-                def is_running(_):
-                    return self._proc.is_running()
-
                 def is_healthy(_):
                     return self._proc.is_healthy()
+
+                def is_idle(self, threshold):
+                    return False
+
+                def is_running(_):
+                    return self._proc.is_running()
 
                 @property
                 def launches(_):
@@ -147,7 +180,7 @@ class ADBTarget(Target):
         return self._monitor
 
     def process_assets(self):
-        self._prefs = self.assets.get("prefs")
+        self._prefs = self.asset_mgr.get("prefs")
         # generate temporary prefs.js with prefpicker
         if self._prefs is None:
             LOG.debug("using prefpicker to generate prefs.js")
@@ -155,11 +188,11 @@ class ADBTarget(Target):
                 prefs = Path(tmp_path) / "prefs.js"
                 template = PrefPicker.lookup_template("browser-fuzzing.yml")
                 PrefPicker.load_template(template).create_prefsjs(prefs)
-                self._prefs = self.assets.add("prefs", str(prefs), copy=False)
+                self._prefs = self.asset_mgr.add("prefs", prefs, copy=False)
 
     def reverse(self, remote, local):
         # remote->device, local->desktop
         self._session.reverse(remote, local)
 
-    def save_logs(self, *args, **kwargs):
-        self._proc.save_logs(*args, **kwargs)
+    def save_logs(self, dst):
+        self._proc.save_logs(dst)
