@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 from hashlib import sha1
+from itertools import chain
 from platform import system
 
 from ffpuppet import BrowserTerminatedError, BrowserTimeoutError, Debugger, Reason
@@ -11,7 +12,7 @@ from pytest import mark, raises
 from sapphire import CertificateBundle
 
 from .assets import AssetManager
-from .puppet_target import PuppetTarget
+from .puppet_target import PuppetTarget, merge_sanitizer_options
 from .target import Result, TargetLaunchError, TargetLaunchTimeout
 
 
@@ -348,6 +349,12 @@ def test_puppet_target_11(mocker, tmp_path):
         ({"a": "1"}, {"a": "2"}, {"a": "1"}),
         # name collision and merge
         ({"a": "1"}, {"a": "2", "b": "2"}, {"a": "1", "b": "2"}),
+        # sanitizer options
+        (
+            {"ASAN_OPTIONS": "a=1", "b": "2"},
+            {"c": "3"},
+            {"ASAN_OPTIONS": "a=1", "b": "2", "c": "3"},
+        ),
     ],
 )
 def test_puppet_target_12(mocker, tmp_path, base, extra, result):
@@ -364,24 +371,58 @@ def test_puppet_target_12(mocker, tmp_path, base, extra, result):
 @mark.parametrize(
     "base, extra, result",
     [
+        # nothing to add
+        ({}, {}, {}),
+        # nothing to add
+        (
+            {"ASAN_OPTIONS": "a=1"},
+            {},
+            {"ASAN_OPTIONS": frozenset(("a=1",))},
+        ),
+        # add to empty base
+        (
+            {},
+            {"ASAN_OPTIONS": "a=1"},
+            {"ASAN_OPTIONS": frozenset(("a=1",))},
+        ),
+        # add to base with unrelated variables
+        (
+            {"UNRELATED": "1"},
+            {"ASAN_OPTIONS": "a=1"},
+            {"ASAN_OPTIONS": frozenset(("a=1",))},
+        ),
         # collision with existing option
-        ({"ASAN_OPTIONS": "a=1"}, {"ASAN_OPTIONS": "a=2"}, ["a=1"]),
+        (
+            {"ASAN_OPTIONS": "a=1"},
+            {"ASAN_OPTIONS": "a=2"},
+            {"ASAN_OPTIONS": frozenset(("a=1",))},
+        ),
         # add option from extra
-        ({"ASAN_OPTIONS": "a=1"}, {"ASAN_OPTIONS": "b=2:c3"}, ["a=1", "b=2", "c=3"]),
+        (
+            {"ASAN_OPTIONS": "a=1"},
+            {"ASAN_OPTIONS": "b=2:c=3"},
+            {"ASAN_OPTIONS": frozenset(("a=1", "b=2", "c=3"))},
+        ),
         # add option from extra
-        ({"ASAN_OPTIONS": "a=1:c=3"}, {"ASAN_OPTIONS": "b=2"}, ["a=1", "b=2", "c=3"]),
+        (
+            {"ASAN_OPTIONS": "a=1:c=3"},
+            {"ASAN_OPTIONS": "b=2"},
+            {"ASAN_OPTIONS": frozenset(("a=1", "b=2", "c=3"))},
+        ),
+        (
+            {"ASAN_OPTIONS": "a=1"},
+            {"UBSAN_OPTIONS": "a=2"},
+            {"ASAN_OPTIONS": frozenset(("a=1",)), "UBSAN_OPTIONS": frozenset(("a=2",))},
+        ),
     ],
 )
-def test_puppet_target_13(mocker, tmp_path, base, extra, result):
-    """test PuppetTarget.merge_environment() - merge sanitizer options"""
-    mocker.patch("grizzly.target.puppet_target.FFPuppet", autospec=True)
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with PuppetTarget(fake_file, 300, 25, 5000) as target:
-        target.environ = base
-        target.merge_environment(extra)
-        for opt in target.environ["ASAN_OPTIONS"].split(":"):
-            assert opt in result
+def test_puppet_target_13(base, extra, result):
+    """test merge_sanitizer_environment() - merge sanitizer options"""
+    merged = merge_sanitizer_options(base, extra)
+    assert all(x.endswith("SAN_OPTIONS") for x in merged)
+    for sanitizer in (x for x in chain(base, extra) if x.endswith("SAN_OPTIONS")):
+        assert sanitizer in merged
+        assert frozenset(merged[sanitizer].split(":")) == result[sanitizer]
 
 
 def test_puppet_target_14(mocker, tmp_path):
