@@ -3,7 +3,7 @@ name: Python CI
 on:
   push:
   pull_request:
-    branches: [master]
+    branches: [master, test-gh-actions-2]
 
 jobs:
   test:
