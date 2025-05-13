@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import signal
 from logging import DEBUG, INFO, getLogger
 from pathlib import Path
+from time import sleep
 
 from grizzly.common.frontend import configure_logging
 from grizzly.services import WebServices
@@ -79,9 +79,10 @@ def main() -> None:
     LOG.info("Services are running. Press Ctrl+C to shut down.")
 
     try:
-        signal.pause()
+        sleep(1e9)  # sleep for 31 years (or until Ctrl+C)
     except KeyboardInterrupt:
         LOG.info("Ctrl+C detected. Shutting down services...")
+    finally:
         services.cleanup()
 
 
