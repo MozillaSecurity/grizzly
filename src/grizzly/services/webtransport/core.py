@@ -4,10 +4,10 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from asyncio import AbstractEventLoop
 from logging import getLogger
 from pathlib import Path
-from platform import system
 from threading import Event, Thread
 
 from aioquic.asyncio import serve  # type: ignore[attr-defined]
@@ -88,10 +88,8 @@ class WebTransportServer(BaseService):
             # On Windows, the default event loop is ProactorEventLoop, but it
             # doesn't seem to work when aioquic detects a connection loss.
             # Use SelectorEventLoop to work around the problem.
-            if system() == "Windows":
-                asyncio.set_event_loop_policy(
-                    asyncio.WindowsSelectorEventLoopPolicy()  # type: ignore
-                )
+            if sys.platform.startswith("win"):
+                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
             self._loop.run_until_complete(
