@@ -41,7 +41,10 @@ jobs:
         run: python -m pip install --upgrade tox
 
       - name: Run tests
-        run: tox -e py${{ matrix.python-version.replace('.', '') }}
+        run: |
+          TOXENV=${{ matrix.python-version }}
+          TOXENV=${TOXENV//.}
+          tox
 
       - name: Run lint
         if: matrix.run-lint == true
