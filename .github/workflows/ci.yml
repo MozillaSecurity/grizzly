@@ -54,9 +54,10 @@ jobs:
         if: matrix.run-lint == true
         run: tox -e lint
 
-      - uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Run Codecov
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: tox -e codecov
 
   publish:
     name: Build & Publish to PyPI
