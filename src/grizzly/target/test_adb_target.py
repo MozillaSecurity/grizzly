@@ -1,9 +1,9 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from fxpoppet import ADBSession, Reason
 from pytest import mark, raises
 
-from .adb_device import ADBSession, Reason
 from .adb_target import ADBTarget
 from .target import Result
 
@@ -33,7 +33,7 @@ def test_adb_target_01(mocker, tmp_path, kwargs):
     fake_session.get_package_name.return_value = "the_name"
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with ADBTarget(str(fake_apk), 300, 25, 5000, **kwargs) as target:
+    with ADBTarget(fake_apk, 300, 25, 5000, **kwargs) as target:
         assert target.closed
         assert target.forced_close
         assert target.monitor is not None
@@ -60,7 +60,7 @@ def test_adb_target_02(mocker, tmp_path):
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
     with raises(RuntimeError, match="Could not create ADB Session!"):
-        ADBTarget(str(fake_apk), 300, 25, 5000)
+        ADBTarget(fake_apk, 300, 25, 5000)
 
 
 @mark.parametrize(
@@ -82,7 +82,7 @@ def test_adb_target_03(mocker, tmp_path, healthy, reason, result, closes):
     mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with ADBTarget(str(fake_apk), 300, 25, 5000) as target:
+    with ADBTarget(fake_apk, 300, 25, 5000) as target:
         target.launch("fake.url")
         assert fake_process.return_value.launch.call_count == 1
         assert target.monitor.is_running()
@@ -99,7 +99,7 @@ def test_adb_target_04(mocker, tmp_path):
     mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with ADBTarget(str(fake_apk), 300, 25, 5000) as target:
+    with ADBTarget(fake_apk, 300, 25, 5000) as target:
         fake_process.return_value.is_healthy.return_value = True
         fake_process.return_value.is_running.return_value = True
         assert not target.handle_hang()
