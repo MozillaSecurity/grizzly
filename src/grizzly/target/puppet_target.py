@@ -42,9 +42,6 @@ class PuppetMonitor(TargetMonitor):
     def __init__(self, puppet: FFPuppet) -> None:
         self._puppet = puppet
 
-    def clone_log(self, log_id: str, offset: int = 0) -> Path | None:
-        return self._puppet.clone_log(log_id, offset=offset)
-
     def is_healthy(self) -> bool:
         return self._puppet.is_healthy()
 

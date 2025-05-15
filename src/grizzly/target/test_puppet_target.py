@@ -177,8 +177,6 @@ def test_puppet_target_06(mocker, tmp_path):
         assert target.monitor.launches == 123
         fake_ffp.return_value.log_length.return_value = 100
         assert target.monitor.log_length("stdout") == 100
-        target.monitor.clone_log("somelog")
-        assert fake_ffp.return_value.clone_log.call_count == 1
 
 
 def test_puppet_target_07(mocker, tmp_path):
