@@ -1,6 +1,6 @@
 Grizzly
 =======
-[![Task Status](https://community-tc.services.mozilla.com/api/github/v1/repository/MozillaSecurity/grizzly/master/badge.svg)](https://community-tc.services.mozilla.com/api/github/v1/repository/MozillaSecurity/grizzly/master/latest)
+[![CI](https://github.com/MozillaSecurity/grizzly/actions/workflows/ci.yml/badge.svg)](https://github.com/MozillaSecurity/grizzly/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/MozillaSecurity/grizzly/branch/master/graph/badge.svg)](https://codecov.io/gh/MozillaSecurity/grizzly)
 [![Matrix](https://img.shields.io/badge/chat-%23fuzzing-green?logo=matrix)](https://matrix.to/#/#fuzzing:mozilla.org)
 [![PyPI](https://img.shields.io/pypi/v/grizzly-framework)](https://pypi.org/project/grizzly-framework)
