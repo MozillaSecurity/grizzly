@@ -4,10 +4,6 @@
 from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 __all__ = ("TargetMonitor",)
 __author__ = "Tyson Smith"
@@ -15,18 +11,6 @@ __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
 class TargetMonitor(metaclass=ABCMeta):
-    @abstractmethod
-    def clone_log(self, log_id: str, offset: int = 0) -> Path | None:
-        """Create a copy of a log.
-
-        Args:
-            log_id: Log identifier.
-            offset: Number of bytes to seek into log before copying data.
-
-        Returns:
-            Copy of specified log.
-        """
-
     @abstractmethod
     def is_healthy(self) -> bool:
         """Check for failures such as assertions, crashes, etc.
