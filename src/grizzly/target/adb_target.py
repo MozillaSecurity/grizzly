@@ -1,10 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import os
+
+from __future__ import annotations
+
 from logging import getLogger
 from pathlib import Path
 from tempfile import TemporaryDirectory, mkdtemp
+from typing import TYPE_CHECKING
 
 from ffpuppet import BrowserTimeoutError, LaunchError
 from fxpoppet import ADBLaunchError, ADBProcess, ADBSession, Reason
@@ -16,10 +19,40 @@ from .puppet_target import merge_sanitizer_options
 from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+    from typing import Any
+
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 LOG = getLogger("adb_target")
+
+
+class ADBMonitor(TargetMonitor):
+    def __init__(self, proc: ADBProcess) -> None:
+        self._proc = proc
+
+    def clone_log(self, log_id: str, offset: int = 0) -> None:
+        # TODO: unused... remove
+        return None
+
+    def is_healthy(self) -> bool:
+        return self._proc.is_healthy()
+
+    def is_idle(self, threshold: int) -> bool:
+        return False
+
+    def is_running(self) -> bool:
+        return self._proc.is_running()
+
+    @property
+    def launches(self) -> int:
+        return self._proc.launches
+
+    def log_length(self, log_id: str) -> int:
+        # TODO: This needs to be implemented
+        return 0
 
 
 class ADBTarget(Target):
@@ -35,50 +68,58 @@ class ADBTarget(Target):
         "use_rr",
     )
 
-    def __init__(self, binary, launch_timeout, log_limit, memory_limit, **kwds):
+    def __init__(
+        self,
+        binary: Path,
+        launch_timeout: int,
+        log_limit: int,
+        memory_limit: int,
+        **kwds: dict[str, Any],
+    ) -> None:
         super().__init__(binary, launch_timeout, log_limit, memory_limit)
-        self._monitor = None
         # app will not close itself on Android
         self.forced_close = True
         self.use_rr = False
 
         for unsupported in ("pernosco", "rr", "valgrind", "xvfb"):
-            if kwds.pop(unsupported, False):
-                LOG.warning("ADBTarget ignoring %r: not supported", unsupported)
+            if kwds.pop(unsupported, None):
+                LOG.warning("ADBTarget ignoring '%s': not supported", unsupported)
         if kwds:
             LOG.warning("ADBTarget ignoring unsupported arguments: %s", ", ".join(kwds))
 
         LOG.debug("opening a session and setting up the environment")
-        self._session = ADBSession.create(as_root=True, max_attempts=10, retry_delay=15)
-        if self._session is None:
+        session = ADBSession.create(as_root=True, max_attempts=10, retry_delay=15)
+        if session is None:
             raise RuntimeError("Could not create ADB Session!")
+        self._session = session
         self._package = ADBSession.get_package_name(self.binary)
-        self._prefs = None
+        if self._package is None:
+            raise RuntimeError("Could not find package name.")
+        self._prefs: Path | None = None
         self._proc = ADBProcess(self._package, self._session)
-        self._session.symbols[self._package] = os.path.join(
-            os.path.dirname(self.binary), "symbols"
-        )
+        self._monitor = ADBMonitor(self._proc)
+        self._session.symbols[self._package] = self.binary.parent / "symbols"
 
-    def _cleanup(self):
+    def _cleanup(self) -> None:
         with self._lock:
             if self._proc is not None:
                 self._proc.cleanup()
             if self._session.connected:
                 self._session.reverse_remove()
             self._session.disconnect()
-        if self._prefs and os.path.isfile(self._prefs):
-            os.remove(self._prefs)
+        if self._prefs and self._prefs.is_file():
+            self._prefs.unlink()
 
-    def close(self, force_close=False):
+    def close(self, force_close: bool = False) -> None:
         with self._lock:
             if self._proc is not None:
                 self._proc.close()
 
     @property
-    def closed(self):
+    def closed(self) -> bool:
         return self._proc.reason is not None
 
-    def check_result(self, _ignored):
+    def check_result(self, _ignored: Iterable[str]) -> Result:
         status = Result.NONE
         if not self._proc.is_healthy():
             self._proc.close()
@@ -92,24 +133,26 @@ class ADBTarget(Target):
                 status = Result.FOUND
         return status
 
-    def create_report(self, is_hang=False, unstable=False):
+    def create_report(self, is_hang: bool = False, unstable: bool = False) -> Report:
         logs = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
         self.save_logs(logs)
         return Report(logs, self.binary, is_hang=is_hang, unstable=unstable)
 
-    def dump_coverage(self, timeout=0):
-        return NotImplementedError("Not supported")
+    def dump_coverage(self, timeout: int = 0) -> None:
+        raise NotImplementedError()
 
-    def handle_hang(self, ignore_idle=True, ignore_timeout=False):
+    def handle_hang(
+        self, ignore_idle: bool = True, ignore_timeout: bool = False
+    ) -> bool:
         # TODO: attempt to detect idle hangs?
         self.close()
         return False
 
-    def https(self):
+    def https(self) -> bool:
         # HTTPS support is not currently supported
         return False
 
-    def launch(self, location):
+    def launch(self, location: str) -> None:
         env_mod = dict(self.environ)
         # disabled external network connections during testing
         env_mod["MOZ_IN_AUTOMATION"] = "1"
@@ -133,53 +176,21 @@ class ADBTarget(Target):
                 raise TargetLaunchTimeout(str(exc)) from None
             raise TargetLaunchError(str(exc), self.create_report()) from None
 
-    def log_size(self):
+    def log_size(self) -> int:
         LOG.debug("log_size not currently implemented")
         return 0
 
-    def merge_environment(self, extra):
+    def merge_environment(self, extra: Mapping[str, str]) -> None:
         output = dict(extra)
         output.update(self.environ)
         output.update(merge_sanitizer_options(self.environ, extra=extra))
         self.environ = output
 
     @property
-    def monitor(self):
-        if self._monitor is None:
-
-            class _ADBMonitor(TargetMonitor):
-                # pylint: disable=no-self-argument,protected-access
-                def clone_log(_, *_a, **_k):  # pylint: disable=arguments-differ
-                    log_file = self._proc.clone_log()
-                    if log_file is None:
-                        return None
-                    try:
-                        with open(log_file, "rb") as log_fp:
-                            return log_fp.read()
-                    finally:
-                        os.remove(log_file)
-
-                def is_healthy(_):
-                    return self._proc.is_healthy()
-
-                def is_idle(self, threshold):
-                    return False
-
-                def is_running(_):
-                    return self._proc.is_running()
-
-                @property
-                def launches(_):
-                    return self._proc.launches
-
-                def log_length(_, *_a):  # pylint: disable=arguments-differ
-                    # TODO: This needs to be implemented
-                    return 0
-
-            self._monitor = _ADBMonitor()
+    def monitor(self) -> ADBMonitor:
         return self._monitor
 
-    def process_assets(self):
+    def process_assets(self) -> None:
         self._prefs = self.asset_mgr.get("prefs")
         # generate temporary prefs.js with prefpicker
         if self._prefs is None:
@@ -187,12 +198,13 @@ class ADBTarget(Target):
             with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
                 prefs = Path(tmp_path) / "prefs.js"
                 template = PrefPicker.lookup_template("browser-fuzzing.yml")
+                assert template is not None
                 PrefPicker.load_template(template).create_prefsjs(prefs)
                 self._prefs = self.asset_mgr.add("prefs", prefs, copy=False)
 
-    def reverse(self, remote, local):
+    def reverse(self, remote: int, local: int) -> None:
         # remote->device, local->desktop
         self._session.reverse(remote, local)
 
-    def save_logs(self, dst):
+    def save_logs(self, dst: Path) -> None:
         self._proc.save_logs(dst)
