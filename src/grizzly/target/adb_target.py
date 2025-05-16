@@ -33,10 +33,6 @@ class ADBMonitor(TargetMonitor):
     def __init__(self, proc: ADBProcess) -> None:
         self._proc = proc
 
-    def clone_log(self, log_id: str, offset: int = 0) -> None:
-        # TODO: unused... remove
-        return None
-
     def is_healthy(self) -> bool:
         return self._proc.is_healthy()
 
