@@ -234,7 +234,6 @@ class Worker:
                     resource.mime,
                     resource.target,
                 )
-                assert resource.mime is not None
                 with resource.target.open("rb") as in_fp:
                     conn.sendall(cls._200_header(data_size, resource.mime))
                     offset = 0
