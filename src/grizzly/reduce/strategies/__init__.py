@@ -23,17 +23,13 @@ from tempfile import mkdtemp
 from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
 
-from ...common.utils import grz_tmp
+from ...common.utils import grz_tmp, iter_entry_points
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
     from ...common.storage import TestCase
 
-try:
-    from pkg_resources import iter_entry_points
-except ImportError:
-    from ...common.utils import iter_entry_points  # type: ignore
 
 LOG = getLogger(__name__)
 
