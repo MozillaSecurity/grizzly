@@ -56,7 +56,6 @@ class Adapter(metaclass=ABCMeta):
     __slots__ = ("_harness", "fuzz", "monitor", "name", "remaining")
 
     def __init__(self, name: str) -> None:
-        assert isinstance(name, str)
         if not name:
             raise AdapterError("name must not be empty")
         if len(name.split()) != 1 or name.strip() != name:
