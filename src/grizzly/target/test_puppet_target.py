@@ -100,9 +100,9 @@ def test_puppet_target_03(mocker, tmp_path, healthy, reason, ignore, result, clo
     fake_file = tmp_path / "fake"
     fake_file.touch()
     if "memory" in ignore:
-        fake_ffp.return_value.available_logs.return_value = "ffp_worker_memory_usage"
+        fake_ffp.return_value.available_logs.return_value = {"ffp_worker_memory_usage"}
     elif "log-limit" in ignore:
-        fake_ffp.return_value.available_logs.return_value = "ffp_worker_log_size"
+        fake_ffp.return_value.available_logs.return_value = {"ffp_worker_log_size"}
     fake_ffp.return_value.is_healthy.return_value = healthy
     fake_ffp.return_value.reason = reason
     with PuppetTarget(fake_file, 300, 25, 5000) as target:
