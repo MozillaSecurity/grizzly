@@ -6,11 +6,7 @@ from __future__ import annotations
 from logging import getLogger
 from typing import Any
 
-try:
-    from pkg_resources import iter_entry_points
-except ImportError:
-    from .utils import iter_entry_points  # type: ignore
-
+from .utils import iter_entry_points
 
 __all__ = ("PluginLoadError", "load_plugin", "scan_plugins")
 

@@ -53,12 +53,15 @@ def iter_entry_points(group: str) -> Generator[EntryPoint]:  # pragma: no cover
     Yields:
         EntryPoint
     """
+    # pylint: disable=import-outside-toplevel
     # TODO: remove this function when support for Python 3.9 is dropped
     assert group
     if sys.version_info >= (3, 10):
         yield from entry_points().select(group=group)
     else:
-        raise AssertionError("Unsupported Python version")
+        import pkg_resources
+
+        yield from pkg_resources.iter_entry_points(group)  # type: ignore
 
 
 def package_version(name: str, default: str = "unknown") -> str:
