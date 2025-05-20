@@ -21,8 +21,6 @@ class NoOpAdapter(Adapter):
     to help measure a baseline iteration rate for Grizzly.
     """
 
-    NAME = "no-op"
-
     def setup(self, input_path: str | None, server_map: ServerMap) -> None:
         """Generate a static test case that calls `window.close()` when run.
         Normally this is done in generate() but since the test is static only
