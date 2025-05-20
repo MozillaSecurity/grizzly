@@ -12,8 +12,9 @@ body {
 }
 </style>
 <script>
-let close_after, limit_tmr, time_limit
+let close_after, limit_tmr
 let sub = null
+let time_limit = 0
 
 let grzDump = (msg) => {
   console.log(`[grz harness][${new Date().toUTCString()}] ${msg}\n`)
@@ -55,7 +56,7 @@ let main = () => {
       '&gt; Browser should close momentarily...'
     )
     try { window.focus() } catch(e) { }
-    let xhr = new XMLHttpRequest()
+    const xhr = new XMLHttpRequest()
     // indicate the test is complete by requesting `/grz_next_test`
     // this allows Sapphire to finish with the current test
     xhr.open('GET', '/grz_next_test', false)
@@ -69,7 +70,7 @@ let main = () => {
   }
   else {
     // open test
-    let location = (sub !== null) ? '/grz_next_test' : '/grz_current_test'
+    const location = (sub !== null) ? '/grz_next_test' : '/grz_current_test'
     sub = window.open()
     if (sub === null) {
       setMsg(
@@ -105,7 +106,7 @@ let main = () => {
 
 window.addEventListener('load', () => {
   // parse arguments
-  let args = window.location.search.replace('?', '')
+  const args = window.location.search.replace('?', '')
   if (args) {
     for (let kv of args.split('&')) {
       let [k, v] = kv.split('=')
