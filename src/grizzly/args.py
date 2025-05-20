@@ -154,7 +154,7 @@ class CommonArgs:
         )
         self.launcher_grp.add_argument(
             "--platform",
-            default="ffpuppet",
+            default="firefox",
             choices=sorted(targets),
             help="Target to use (default: %(default)s)",
         )
