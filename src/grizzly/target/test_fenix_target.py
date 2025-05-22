@@ -4,7 +4,7 @@
 from fxpoppet import ADBSession, Reason
 from pytest import mark, raises
 
-from .adb_target import ADBTarget
+from .fenix_target import FenixTarget
 from .target import Result
 
 
@@ -19,21 +19,21 @@ from .target import Result
         {"unknown_kwarg": "1"},
     ],
 )
-def test_adb_target_01(mocker, tmp_path, kwargs):
-    """test creating a simple ADBTarget"""
+def test_fenix_target_01(mocker, tmp_path, kwargs):
+    """test creating a simple FenixTarget"""
     # pylint: disable=protected-access
-    fake_process = mocker.patch("grizzly.target.adb_target.ADBProcess", autospec=True)
+    fake_process = mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
     fake_process.return_value.is_healthy.return_value = False
     fake_process.return_value.is_running.return_value = False
     fake_process.return_value.launches = 0
     fake_process.return_value.reason = Reason.CLOSED
     fake_sess_obj = mocker.Mock(spec_set=ADBSession, connected=True, symbols={})
-    fake_session = mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
+    fake_session = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
     fake_session.create.return_value = fake_sess_obj
     fake_session.get_package_name.return_value = "the_name"
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with ADBTarget(fake_apk, 300, 25, 5000, **kwargs) as target:
+    with FenixTarget(fake_apk, 300, 25, 5000, **kwargs) as target:
         assert target.closed
         assert target.forced_close
         assert target.monitor is not None
@@ -53,14 +53,14 @@ def test_adb_target_01(mocker, tmp_path, kwargs):
     assert "the_name" in fake_sess_obj.symbols
 
 
-def test_adb_target_02(mocker, tmp_path):
-    """test ADBTarget fail to create session"""
-    session_cls = mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
+def test_fenix_target_02(mocker, tmp_path):
+    """test FenixTarget fail to create session"""
+    session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
     session_cls.create.return_value = None
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
     with raises(RuntimeError, match="Could not create ADB Session!"):
-        ADBTarget(fake_apk, 300, 25, 5000)
+        FenixTarget(fake_apk, 300, 25, 5000)
 
 
 @mark.parametrize(
@@ -76,13 +76,13 @@ def test_adb_target_02(mocker, tmp_path):
         (False, Reason.EXITED, Result.NONE, 1),
     ],
 )
-def test_adb_target_03(mocker, tmp_path, healthy, reason, result, closes):
-    """test ADBTarget launch() and check_result()"""
-    fake_process = mocker.patch("grizzly.target.adb_target.ADBProcess", autospec=True)
-    mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
+def test_fenix_target_03(mocker, tmp_path, healthy, reason, result, closes):
+    """test FenixTarget launch() and check_result()"""
+    fake_process = mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
+    mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with ADBTarget(fake_apk, 300, 25, 5000) as target:
+    with FenixTarget(fake_apk, 300, 25, 5000) as target:
         target.launch("fake.url")
         assert fake_process.return_value.launch.call_count == 1
         assert target.monitor.is_running()
@@ -93,13 +93,13 @@ def test_adb_target_03(mocker, tmp_path, healthy, reason, result, closes):
         assert fake_process.return_value.close.call_count == closes
 
 
-def test_adb_target_04(mocker, tmp_path):
-    """test ADBTarget.handle_hang()"""
-    fake_process = mocker.patch("grizzly.target.adb_target.ADBProcess", autospec=True)
-    mocker.patch("grizzly.target.adb_target.ADBSession", autospec=True)
+def test_fenix_target_04(mocker, tmp_path):
+    """test FenixTarget.handle_hang()"""
+    fake_process = mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
+    mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with ADBTarget(fake_apk, 300, 25, 5000) as target:
+    with FenixTarget(fake_apk, 300, 25, 5000) as target:
         fake_process.return_value.is_healthy.return_value = True
         fake_process.return_value.is_running.return_value = True
         assert not target.handle_hang()

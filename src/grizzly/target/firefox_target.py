@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from sapphire import CertificateBundle
 
-__all__ = ("PuppetTarget",)
+__all__ = ("FirefoxTarget",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
@@ -60,7 +60,9 @@ class PuppetMonitor(TargetMonitor):
         return self._puppet.log_length(log_id) or 0
 
 
-class PuppetTarget(Target):
+class FirefoxTarget(Target):
+    """This target adds support for desktop Firefox on Linux, MacOS and Windows."""
+
     SUPPORTED_ASSETS = (
         # file containing line separated list of tokens to scan stderr/out for
         "abort-tokens",
@@ -153,7 +155,7 @@ class PuppetTarget(Target):
             working_path=str(grz_tmp("target")),
         )
         if kwds:
-            LOG.debug("PuppetTarget ignoring unsupported kwargs: %s", ", ".join(kwds))
+            LOG.debug("FirefoxTarget ignoring unsupported kwargs: %s", ", ".join(kwds))
 
     def _cleanup(self) -> None:
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
