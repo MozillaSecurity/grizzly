@@ -1,7 +1,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 from __future__ import annotations
 
 from logging import getLogger
@@ -15,7 +14,7 @@ from prefpicker import PrefPicker
 
 from ..common.report import Report
 from ..common.utils import grz_tmp
-from .puppet_target import merge_sanitizer_options
+from .firefox_target import merge_sanitizer_options
 from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
 
@@ -23,13 +22,14 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
     from typing import Any
 
+__all__ = ("FenixTarget",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
-LOG = getLogger("adb_target")
+LOG = getLogger(__name__)
 
 
-class ADBMonitor(TargetMonitor):
+class FenixMonitor(TargetMonitor):
     def __init__(self, proc: ADBProcess) -> None:
         self._proc = proc
 
@@ -51,7 +51,11 @@ class ADBMonitor(TargetMonitor):
         return 0
 
 
-class ADBTarget(Target):
+class FenixTarget(Target):
+    """This target adds support for Firefox on Android. Currently this is only
+    supported on Linux.
+    """
+
     SUPPORTED_ASSETS = ("prefs",)
 
     __slots__ = (
@@ -79,9 +83,11 @@ class ADBTarget(Target):
 
         for unsupported in ("pernosco", "rr", "valgrind", "xvfb"):
             if kwds.pop(unsupported, None):
-                LOG.warning("ADBTarget ignoring '%s': not supported", unsupported)
+                LOG.warning("FenixTarget ignoring '%s': not supported", unsupported)
         if kwds:
-            LOG.warning("ADBTarget ignoring unsupported arguments: %s", ", ".join(kwds))
+            LOG.warning(
+                "FenixTarget ignoring unsupported arguments: %s", ", ".join(kwds)
+            )
 
         LOG.debug("opening a session and setting up the environment")
         session = ADBSession.create(as_root=True, max_attempts=10, retry_delay=15)
@@ -93,7 +99,7 @@ class ADBTarget(Target):
             raise RuntimeError("Could not find package name.")
         self._prefs: Path | None = None
         self._proc = ADBProcess(self._package, self._session)
-        self._monitor = ADBMonitor(self._proc)
+        self._monitor = FenixMonitor(self._proc)
         self._session.symbols[self._package] = self.binary.parent / "symbols"
 
     def _cleanup(self) -> None:
@@ -183,7 +189,7 @@ class ADBTarget(Target):
         self.environ = output
 
     @property
-    def monitor(self) -> ADBMonitor:
+    def monitor(self) -> FenixMonitor:
         return self._monitor
 
     def process_assets(self) -> None:
