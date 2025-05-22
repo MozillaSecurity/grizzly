@@ -8,14 +8,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory, mkdtemp
 from typing import TYPE_CHECKING
 
-from ffpuppet import BrowserTimeoutError, LaunchError
 from fxpoppet import ADBLaunchError, ADBProcess, ADBSession, Reason
 from prefpicker import PrefPicker
 
 from ..common.report import Report
 from ..common.utils import grz_tmp
 from .firefox_target import merge_sanitizer_options
-from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
+from .target import Result, Target, TargetLaunchError
 from .target_monitor import TargetMonitor
 
 if TYPE_CHECKING:
@@ -171,11 +170,9 @@ class FenixTarget(Target):
                 prefs_js=self._prefs,
                 url=location,
             )
-        except (ADBLaunchError, LaunchError) as exc:
+        except ADBLaunchError as exc:
             LOG.error("ADBProcess LaunchError: %s", exc)
             self.close()
-            if isinstance(exc, BrowserTimeoutError):
-                raise TargetLaunchTimeout(str(exc)) from None
             raise TargetLaunchError(str(exc), self.create_report()) from None
 
     def log_size(self) -> int:
