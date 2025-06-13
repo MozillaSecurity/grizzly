@@ -73,6 +73,8 @@ class CommonArgs:
         )
 
         targets = scan_plugins("grizzly_targets")
+        if system() != "Linux" and "firefox-android" in targets:
+            targets.remove("firefox-android")
         if not targets:
             self.parser.error("No Platforms (Targets) are installed")
 
