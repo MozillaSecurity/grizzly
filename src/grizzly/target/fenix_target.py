@@ -3,12 +3,14 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
+from contextlib import suppress
 from logging import getLogger
 from pathlib import Path
 from tempfile import TemporaryDirectory, mkdtemp
 from typing import TYPE_CHECKING
 
-from fxpoppet import ADBLaunchError, ADBProcess, ADBSession, Reason
+with suppress(ImportError):
+    from fxpoppet import ADBLaunchError, ADBProcess, ADBSession, Reason
 from prefpicker import PrefPicker
 
 from ..common.report import Report
