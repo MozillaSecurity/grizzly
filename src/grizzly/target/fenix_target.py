@@ -81,6 +81,7 @@ class FenixTarget(Target):
         # app will not close itself on Android
         self.forced_close = True
         self.use_rr = False
+        self._prefs: Path | None = None
 
         for unsupported in ("pernosco", "rr", "valgrind", "xvfb"):
             if kwds.pop(unsupported, None):
@@ -90,18 +91,27 @@ class FenixTarget(Target):
                 "FenixTarget ignoring unsupported arguments: %s", ", ".join(kwds)
             )
 
-        LOG.debug("opening a session and setting up the environment")
-        session = ADBSession.create(as_root=True, max_attempts=10, retry_delay=15)
-        if session is None:
-            raise RuntimeError("Could not create ADB Session!")
-        self._session = session
         self._package = ADBSession.get_package_name(self.binary)
         if self._package is None:
+            LOG.error("FenixTarget init failed!")
             raise RuntimeError("Could not find package name.")
-        self._prefs: Path | None = None
-        self._proc = ADBProcess(self._package, self._session)
-        self._monitor = FenixMonitor(self._proc)
+
+        LOG.debug("opening adb session...")
+        session = ADBSession.create(as_root=True, max_attempts=10, retry_delay=15)
+        if session is None:
+            LOG.error("FenixTarget init failed!")
+            raise RuntimeError("Could not create ADB Session!")
+        LOG.debug("connected to device (%s)", session.device_id)
+        self._session = session
         self._session.symbols[self._package] = self.binary.parent / "symbols"
+
+        try:
+            self._proc = ADBProcess(self._package, self._session)
+        except:
+            LOG.error("FenixTarget init failed!")
+            self._session.disconnect()
+            raise
+        self._monitor = FenixMonitor(self._proc)
 
     def _cleanup(self) -> None:
         with self._lock:
@@ -142,7 +152,7 @@ class FenixTarget(Target):
         return Report(logs, self.binary, is_hang=is_hang, unstable=unstable)
 
     def dump_coverage(self, timeout: int = 0) -> None:
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def handle_hang(
         self, ignore_idle: bool = True, ignore_timeout: bool = False
@@ -165,6 +175,11 @@ class FenixTarget(Target):
         env_mod["MOZ_CRASHREPORTER_SHUTDOWN"] = "1"
         # do not allow network connections to non local endpoints
         env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
+        if not self._session.wait_for_boot(1):
+            LOG.error("Device is not available for launch attempt!")
+            # TODO: this should likely be a TargetLaunchError or similar
+            # but we cannot get logs when the device goes away
+            raise RuntimeError("Device not available")
         try:
             self._proc.launch(
                 env_mod=env_mod,
