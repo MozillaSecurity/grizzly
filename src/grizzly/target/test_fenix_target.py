@@ -5,7 +5,7 @@ from fxpoppet.adb_process import ADBLaunchError, Reason
 from fxpoppet.adb_session import ADBSession, ADBSessionError
 from pytest import mark, raises
 
-from .fenix_target import FenixTarget
+from .fenix_target import FenixMonitor, FenixTarget
 from .target import Result, TargetLaunchError
 
 
@@ -161,7 +161,7 @@ def test_fenix_target_handle_hang(mocker, tmp_path):
     with FenixTarget(fake_apk, 300, 25, 5000) as target:
         fake_process.return_value.is_healthy.return_value = True
         fake_process.return_value.is_running.return_value = True
-        assert not target.handle_hang()
+        assert target.handle_hang()
         assert fake_process.return_value.close.call_count == 1
 
 
@@ -179,3 +179,21 @@ def test_fenix_target_create_report(mocker, tmp_path):
     proc_cls.return_value.save_logs = fake_save_logs
     with FenixTarget(fake_apk, 300, 25, 5000) as target:
         target.create_report()
+
+
+def test_fenix_monitor(mocker):
+    """test FenixMonitor simple"""
+    proc = mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
+    proc.cpu_usage.return_value = ((123, 20), (124, 10), (125, 0))
+    proc.launches = 3
+    monitor = FenixMonitor(proc)
+    assert monitor.is_healthy()
+    assert proc.is_healthy.call_count == 1
+    assert not monitor.is_idle(10)
+    assert monitor.is_idle(25)
+    assert proc.cpu_usage.call_count == 2
+    assert monitor.is_running()
+    assert proc.is_running.call_count == 1
+    assert monitor.launches == 3
+    # zero until implemented
+    assert monitor.log_length("foo") == 0

@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
     from typing import Any
 
-__all__ = ("FenixTarget",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
@@ -38,7 +37,7 @@ class FenixMonitor(TargetMonitor):
         return self._proc.is_healthy()
 
     def is_idle(self, threshold: int) -> bool:
-        return False
+        return all(cpu < threshold for _, cpu in self._proc.cpu_usage())
 
     def is_running(self) -> bool:
         return self._proc.is_running()
@@ -157,9 +156,9 @@ class FenixTarget(Target):
     def handle_hang(
         self, ignore_idle: bool = True, ignore_timeout: bool = False
     ) -> bool:
-        # TODO: attempt to detect idle hangs?
+        was_idle = self.monitor.is_idle(15)
         self.close()
-        return False
+        return was_idle
 
     def https(self) -> bool:
         # HTTPS support is not currently supported
