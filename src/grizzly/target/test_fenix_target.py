@@ -195,5 +195,5 @@ def test_fenix_monitor(mocker):
     assert monitor.is_running()
     assert proc.is_running.call_count == 1
     assert monitor.launches == 3
-    # zero until implemented
+    # log_length() will return zero until implemented
     assert monitor.log_length("foo") == 0
