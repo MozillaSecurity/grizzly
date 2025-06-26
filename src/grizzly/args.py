@@ -73,6 +73,8 @@ class CommonArgs:
         )
 
         targets = scan_plugins("grizzly_targets")
+        if system() != "Linux" and "firefox-android" in targets:
+            targets.remove("firefox-android")
         if not targets:
             self.parser.error("No Platforms (Targets) are installed")
 
@@ -154,7 +156,7 @@ class CommonArgs:
         )
         self.launcher_grp.add_argument(
             "--platform",
-            default="ffpuppet",
+            default="firefox",
             choices=sorted(targets),
             help="Target to use (default: %(default)s)",
         )

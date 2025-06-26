@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from sapphire import CertificateBundle
 
-__all__ = ("PuppetTarget",)
+__all__ = ("FirefoxTarget",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
@@ -60,7 +60,9 @@ class PuppetMonitor(TargetMonitor):
         return self._puppet.log_length(log_id) or 0
 
 
-class PuppetTarget(Target):
+class FirefoxTarget(Target):
+    """This target adds support for desktop Firefox on Linux, MacOS and Windows."""
+
     SUPPORTED_ASSETS = (
         # file containing line separated list of tokens to scan stderr/out for
         "abort-tokens",
@@ -153,7 +155,7 @@ class PuppetTarget(Target):
             working_path=str(grz_tmp("target")),
         )
         if kwds:
-            LOG.debug("PuppetTarget ignoring unsupported kwargs: %s", ", ".join(kwds))
+            LOG.debug("FirefoxTarget ignoring unsupported kwargs: %s", ", ".join(kwds))
 
     def _cleanup(self) -> None:
         # prevent parallel calls to FFPuppet.close() and/or FFPuppet.clean_up()
@@ -335,23 +337,12 @@ class PuppetTarget(Target):
         return total
 
     def merge_environment(self, extra: Mapping[str, str]) -> None:
+        # use extra as base
         output = dict(extra)
-        if self.environ:
-            # prioritize existing environment variables
-            output.update(self.environ)
-            # merge contents of *SAN_OPTIONS
-            org = SanitizerOptions()
-            out = SanitizerOptions()
-            for san in ("ASAN", "LSAN", "TSAN", "UBSAN"):
-                opts = f"{san}_OPTIONS"
-                org.load_options(self.environ.get(opts, ""))
-                if not org:
-                    # nothing to add from original
-                    continue
-                out.load_options(extra.get(opts, ""))
-                for opt, value in org:  # pylint: disable=not-an-iterable
-                    out.add(opt, value, overwrite=True)
-                output[opts] = str(out)
+        # overwrite extra values with existing values
+        output.update(self.environ)
+        # handle *SAN_OPTIONS
+        output.update(merge_sanitizer_options(self.environ, extra))
         self.environ = output
 
     def process_assets(self) -> None:
@@ -410,3 +401,32 @@ class PuppetTarget(Target):
 
     def save_logs(self, dst: Path) -> None:
         self._puppet.save_logs(dst)
+
+
+def merge_sanitizer_options(
+    base_env: Mapping[str, str],
+    extra: Mapping[str, str],
+) -> dict[str, str]:
+    """Merge the contents of sanitizer specific options (*SAN_OPTIONS) environment
+    variables. This favors existing values over loaded values to enable setting
+    values on the command line.
+
+    Args:
+        base_env: Current environment variables.
+        extra: Values to merge.
+
+    Returns:
+        Dictionary keyed on sanitizer options with values merged.
+    """
+    merged: dict[str, str] = {}
+    org_opts = SanitizerOptions()
+    new_opts = SanitizerOptions()
+    for sanitizer in ("ASAN_OPTIONS", "LSAN_OPTIONS", "TSAN_OPTIONS", "UBSAN_OPTIONS"):
+        org_opts.load_options(base_env.get(sanitizer))
+        new_opts.load_options(extra.get(sanitizer))
+        for sub_opt, value in org_opts:
+            # favor the original value
+            new_opts.add(sub_opt, value, overwrite=True)
+        if new_opts:
+            merged[sanitizer] = str(new_opts)
+    return merged
