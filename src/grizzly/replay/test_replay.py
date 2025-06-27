@@ -2,9 +2,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
-"""
-unit tests for grizzly.replay
-"""
 
 from itertools import cycle
 from pathlib import Path
@@ -12,7 +9,7 @@ from pathlib import Path
 from FTB.Signatures.CrashInfo import CrashSignature
 from pytest import mark, raises
 
-from sapphire import Served
+from sapphire import Served, ServeResult
 
 from ..common.report import Report
 from ..common.storage import TestCase, TestCaseLoadFailure
@@ -41,7 +38,9 @@ def test_replay_01(mocker, server, tmp_path, post_launch_delay):
     target.check_result.return_value = Result.NONE
     target.monitor.is_healthy.return_value = False
     (tmp_path / "a.html").touch()
-    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": tmp_path / "a.html"}, Served.ALL, False
+    )
     with (
         TestCase.load(tmp_path) as testcase,
         ReplayManager([], server, target, use_harness=True, relaunch=1) as replay,
@@ -67,7 +66,9 @@ def test_replay_02(mocker, server, tmp_path):
     target.monitor.is_healthy.return_value = False
     iter_cb = mocker.Mock()
     (tmp_path / "a.html").touch()
-    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": tmp_path / "a.html"}, Served.ALL, False
+    )
     with (
         TestCase.load(tmp_path) as testcase,
         ReplayManager([], server, target, use_harness=True, relaunch=20) as replay,
@@ -95,7 +96,9 @@ def test_replay_03(mocker, server, tmp_path):
     target = mocker.Mock(spec_set=Target, closed=False, launch_timeout=30)
     target.check_result.return_value = Result.NONE
     (tmp_path / "a.html").touch()
-    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": tmp_path / "a.html"}, Served.ALL, False
+    )
     with (
         TestCase.load(tmp_path) as testcase,
         ReplayManager([], server, target, use_harness=True, relaunch=20) as replay,
@@ -129,7 +132,9 @@ def test_replay_04(mocker, server, tmp_path, sig_parsed, post_launch_delay):
 
         target.save_logs = _save_logs
     (tmp_path / "a.html").touch()
-    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": tmp_path / "a.html"}, Served.ALL, False
+    )
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, relaunch=10) as replay:
             assert replay.signature is None
@@ -161,7 +166,7 @@ def test_replay_05(mocker, server):
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html", assets={})]
     # test target unresponsive
     target.check_result.return_value = Result.NONE
-    server.serve_path.return_value = (Served.NONE, {})
+    server.serve_path.return_value = ServeResult({}, Served.NONE, False)
     with ReplayManager([], server, target, use_harness=False) as replay:
         assert not replay.run(tests, 10, repeat=1)
         assert replay.status
@@ -183,8 +188,8 @@ def test_replay_06(mocker, server):
     target.save_logs = _fake_save_logs
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     server.serve_path.side_effect = (
-        (Served.ALL, {"a.html": "/fake/path"}),
-        (Served.REQUEST, {"x": "/fake/path"}),
+        ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
+        ServeResult({"x": "/fake/path"}, Served.REQUEST, False),
     )
     with ReplayManager([], server, target, use_harness=True, relaunch=10) as replay:
         assert replay.run(tests, 10, repeat=2)
@@ -198,7 +203,9 @@ def test_replay_06(mocker, server):
 
 def test_replay_07(mocker, server):
     """test ReplayManager.run() - ignored (timeout)"""
-    server.serve_path.return_value = (Served.TIMEOUT, {"a.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, True
+    )
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     target.check_result.return_value = Result.IGNORED
     target.handle_hang.return_value = True
@@ -215,7 +222,9 @@ def test_replay_07(mocker, server):
 def test_replay_08(mocker, server):
     """test ReplayManager.run() - early exit"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, False
+    )
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.save_logs = _fake_save_logs
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
@@ -287,7 +296,9 @@ def test_replay_09(mocker, server):
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2, report_3)
     fake_report.calc_hash.return_value = "bucketHASH"
-    server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, False
+    )
     signature = mocker.Mock()
     signature.matches.side_effect = (True, False, False)
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
@@ -320,7 +331,9 @@ def test_replay_10(mocker, server):
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_0, report_1)
     fake_report.calc_hash.return_value = "bucketHASH"
-    server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, False
+    )
     sig = mocker.Mock(spec_set=CrashSignature)
     sig.matches.side_effect = (True, True)
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
@@ -350,7 +363,9 @@ def test_replay_11(mocker, server):
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2)
-    server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, False
+    )
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
@@ -377,7 +392,9 @@ def test_replay_12(mocker, server):
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2)
-    server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, False
+    )
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.side_effect = (
         Result.NONE,
@@ -404,19 +421,82 @@ def test_replay_12(mocker, server):
     "to_serve, sig_value, expected, unexpected",
     [
         # No signature provided
-        (((Served.NONE, {}), (Served.ALL, {"a.html": "/fake/path"})), None, 2, 0),
-        (((Served.ALL, {"a.html": "/fake/path"}), (Served.NONE, {})), None, 2, 0),
-        (((Served.NONE, {}), (Served.NONE, {})), None, 2, 0),
+        (
+            (
+                ServeResult({}, Served.NONE, False),
+                ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
+            ),
+            None,
+            2,
+            0,
+        ),
+        (
+            (
+                ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
+                ServeResult({}, Served.NONE, False),
+            ),
+            None,
+            2,
+            0,
+        ),
+        (
+            (ServeResult({}, Served.NONE, False), ServeResult({}, Served.NONE, False)),
+            None,
+            2,
+            0,
+        ),
         # Signature provided (signatures match)
-        (((Served.NONE, {}), (Served.ALL, {"a.html": "/fake/path"})), "STDERR", 2, 0),
-        (((Served.ALL, {"a.html": "/fake/path"}), (Served.NONE, {})), "STDERR", 2, 0),
-        (((Served.NONE, {}), (Served.NONE, {})), "STDERR", 2, 0),
+        (
+            (
+                ServeResult({}, Served.NONE, False),
+                ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
+            ),
+            "STDERR",
+            2,
+            0,
+        ),
+        (
+            (
+                ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
+                ServeResult({}, Served.NONE, False),
+            ),
+            "STDERR",
+            2,
+            0,
+        ),
+        (
+            (ServeResult({}, Served.NONE, False), ServeResult({}, Served.NONE, False)),
+            "STDERR",
+            2,
+            0,
+        ),
         # Signature provided (signatures don't match)
-        (((Served.NONE, {}), (Served.ALL, {"a.html": "/fake/path"})), "miss", 0, 1),
-        (((Served.ALL, {"a.html": "/fake/path"}), (Served.NONE, {})), "miss", 0, 1),
-        (((Served.NONE, {}), (Served.NONE, {})), "miss", 0, 1),
+        (
+            (
+                ServeResult({}, Served.NONE, False),
+                ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
+            ),
+            "miss",
+            0,
+            1,
+        ),
+        (
+            (
+                ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
+                ServeResult({}, Served.NONE, False),
+            ),
+            "miss",
+            0,
+            1,
+        ),
+        (
+            (ServeResult({}, Served.NONE, False), ServeResult({}, Served.NONE, False)),
+            "miss",
+            0,
+            1,
+        ),
         # Hang after launch, before first test
-        (((Served.TIMEOUT, {}),), None, 0, 0),
+        ((ServeResult({}, Served.NONE, True),), None, 0, 0),
     ],
 )
 def test_replay_13(mocker, server, tmp_path, to_serve, sig_value, expected, unexpected):
@@ -469,7 +549,9 @@ def test_replay_14(mocker, server):
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_1, report_2, report_3)
     fake_report.calc_hash.return_value = "bucket_hash"
-    server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, False
+    )
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
@@ -497,7 +579,7 @@ def test_replay_15(mocker, server):
     fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
     fake_report.side_effect = (report_0,)
     server.serve_path.side_effect = (
-        (Served.ALL, {"a.html": "/fake/path"}),
+        ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
         KeyboardInterrupt,
     )
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
@@ -522,7 +604,9 @@ def test_replay_15(mocker, server):
 def test_replay_16(mocker, server):
     """test ReplayManager.run() - multiple TestCases - no repro"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, False
+    )
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     target.check_result.return_value = Result.NONE
     tests = [
@@ -539,7 +623,9 @@ def test_replay_16(mocker, server):
 
 def test_replay_17(mocker, server):
     """test ReplayManager.run() - multiple TestCases - no repro - with repeats"""
-    server.serve_path.return_value = (Served.ALL, {"a.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, False
+    )
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     # test relaunch < repeat
     type(target).closed = mocker.PropertyMock(side_effect=cycle([True, False]))
@@ -563,9 +649,9 @@ def test_replay_17(mocker, server):
 def test_replay_18(mocker, server):
     """test ReplayManager.run() - multiple TestCases - successful repro"""
     server.serve_path.side_effect = (
-        (Served.ALL, {"0.html": "/fake/path"}),
-        (Served.ALL, {"1.html": "/fake/path"}),
-        (Served.ALL, {"2.html": "/fake/path"}),
+        ServeResult({"0.html": "/fake/path"}, Served.ALL, False),
+        ServeResult({"1.html": "/fake/path"}, Served.ALL, False),
+        ServeResult({"2.html": "/fake/path"}, Served.ALL, False),
     )
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.side_effect = (
@@ -596,9 +682,8 @@ def test_replay_19(mocker, server, tmp_path):
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     target.check_result.return_value = Result.NONE
     (tmp_path / "test.html").touch()
-    server.serve_path.return_value = (
-        Served.ALL,
-        {"test.html": str(tmp_path / "test.html")},
+    server.serve_path.return_value = ServeResult(
+        {"test.html": tmp_path / "test.html"}, Served.ALL, False
     )
     with (
         TestCase.load(tmp_path) as testcase,
@@ -728,9 +813,8 @@ def test_replay_23(
     mocker, server, expect_hang, is_hang, use_sig, match_sig, ignored, results
 ):
     """test ReplayManager.run() - detect hangs"""
-    server.serve_path.return_value = (
-        Served.TIMEOUT if is_hang else Served.ALL,
-        {"a.html": "/fake/path"},
+    server.serve_path.return_value = ServeResult(
+        {"a.html": "/fake/path"}, Served.ALL, is_hang
     )
     if use_sig:
         signature = mocker.Mock()
@@ -820,7 +904,9 @@ def test_replay_25(mocker, server, tmp_path):
     target.save_logs.side_effect = _save_logs_variation
 
     (tmp_path / "a.html").touch()
-    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": tmp_path / "a.html"}, Served.ALL, False
+    )
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, relaunch=10, signature=sig) as replay:
             results = replay.run([testcase], 10, min_results=2, repeat=2)
@@ -886,7 +972,9 @@ def test_replay_26(mocker, server, tmp_path, stderr_log, ignored, total, include
 
     has_sig = include_stack[0]
     (tmp_path / "a.html").touch()
-    server.serve_path.return_value = (Served.ALL, {"a.html": str(tmp_path / "a.html")})
+    server.serve_path.return_value = ServeResult(
+        {"a.html": tmp_path / "a.html"}, Served.ALL, False
+    )
     with TestCase.load(tmp_path) as testcase:
         with ReplayManager([], server, target, relaunch=10) as replay:
             results = replay.run([testcase], 10, min_results=2, repeat=iters)
@@ -917,12 +1005,13 @@ def test_replay_27(mocker, server, tmp_path):
         test.dump(src, include_details=True)
     with TestCase.load(src) as test:
         server.serve_path.side_effect = (
-            (
-                Served.ALL,
+            ServeResult(
                 {
                     "test.html": test.root / "test.html",
                     "include.js": test.root / "include.js",
                 },
+                Served.ALL,
+                False,
             ),
         )
         with ReplayManager([], server, target, use_harness=True) as replay:
