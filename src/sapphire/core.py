@@ -7,6 +7,7 @@ Sapphire HTTP server
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from logging import getLogger
 from socket import SO_REUSEADDR, SOL_SOCKET, gethostname, socket
 from ssl import PROTOCOL_TLS_SERVER, SSLContext, SSLSocket
@@ -59,6 +60,13 @@ BLOCKED_PORTS = frozenset(
     )
 )
 LOG = getLogger(__name__)
+
+
+@dataclass(eq=False, frozen=True)
+class ServeResult:
+    served: MappingProxyType[str, Path]
+    status: Served
+    timeout: bool
 
 
 def create_listening_socket(
@@ -208,7 +216,7 @@ class Sapphire:
         forever: bool = False,
         required_files: Iterable[str] | None = None,
         server_map: ServerMap | None = None,
-    ) -> tuple[Served, MappingProxyType[str, Path]]:
+    ) -> ServeResult:
         """Serve files in path.
 
         The status codes include:
@@ -241,7 +249,7 @@ class Sapphire:
         with ConnectionManager(job, self._socket, limit=self._max_workers) as mgr:
             timed_out = not mgr.serve(self.timeout, continue_cb=continue_cb)
         LOG.debug("status: %s, timed out: %r", job.status.name, timed_out)
-        return (Served.TIMEOUT if timed_out else job.status, job.served)
+        return ServeResult(job.served, job.status, timed_out)
 
     @classmethod
     def main(cls, args: Namespace) -> None:

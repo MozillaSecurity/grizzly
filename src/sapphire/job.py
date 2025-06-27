@@ -39,8 +39,6 @@ class Served(Enum):
     NONE = auto()
     # some requests for required files have been received
     REQUEST = auto()
-    # timeout occurred
-    TIMEOUT = auto()
 
 
 class PendingTracker(NamedTuple):
