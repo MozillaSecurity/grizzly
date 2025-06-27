@@ -11,7 +11,7 @@ from pathlib import Path
 
 from pytest import mark, raises
 
-from sapphire import Sapphire, Served
+from sapphire import Sapphire, Served, ServeResult
 
 from .adapter import Adapter
 from .common.reporter import Report, Reporter
@@ -90,9 +90,8 @@ def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runti
         enable_profiling=profiling,
         relaunch=relaunch,
     ) as session:
-        server.serve_path = lambda *a, **kv: (
-            Served.ALL,
-            {session.iomanager.page_name(offset=-1): "/fake/path"},
+        server.serve_path = lambda *a, **kv: ServeResult(
+            {session.iomanager.page_name(offset=-1): "/fake/path"}, Served.ALL, False
         )
         services = mocker.Mock(spec_set=WebServices)
         session.run(
@@ -151,9 +150,8 @@ def test_session_02(mocker, harness, relaunch, remaining):
         target,
         relaunch=relaunch,
     ) as session:
-        server.serve_path = lambda *a, **kv: (
-            Served.ALL,
-            {session.iomanager.page_name(offset=-1): "fake/path"},
+        server.serve_path = lambda *a, **kv: ServeResult(
+            {session.iomanager.page_name(offset=-1): "/fake/path"}, Served.ALL, False
         )
         session.run([], 10)
         assert session.status.iteration == remaining
@@ -215,9 +213,8 @@ def test_session_03(mocker, tmp_path, harness, report_size, relaunch, iters, has
     with Session(
         adapter, reporter, server, target, relaunch=relaunch, report_size=report_size
     ) as session:
-        server.serve_path = lambda *a, **kv: (
-            Served.ALL,
-            {session.iomanager.page_name(offset=-1): "/fake/path"},
+        server.serve_path = lambda *a, **kv: ServeResult(
+            {session.iomanager.page_name(offset=-1): "/fake/path"}, Served.ALL, False
         )
         session.run([], 10, input_path="file.bin", iteration_limit=iters)
         assert reporter.submit.call_count == 1
@@ -232,7 +229,7 @@ def test_session_04(mocker):
             pass
 
     server = mocker.Mock(spec_set=Sapphire, port=0x1337)
-    server.serve_path.return_value = (Served.NONE, {})
+    server.serve_path.return_value = ServeResult({}, Served.NONE, False)
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.monitor.launches = 1
     with (
@@ -279,8 +276,10 @@ def test_session_05(mocker, harness, report_size):
         report_size=report_size,
     ) as session:
         server.serve_path.side_effect = (
-            (Served.ALL, {session.iomanager.page_name(): "/fake/path"}),
-            (Served.NONE, {}),
+            ServeResult(
+                {session.iomanager.page_name(): "/fake/path"}, Served.ALL, False
+            ),
+            ServeResult({}, Served.NONE, False),
         )
         session.run([], 10, iteration_limit=2, post_launch_delay=-1)
         assert reporter.submit.call_count == 1
@@ -289,15 +288,15 @@ def test_session_05(mocker, harness, report_size):
 
 
 @mark.parametrize(
-    "srv_results, target_result, ignored, results",
+    "srv_result, target_result, ignored, results",
     [
         # delayed startup crash (before requesting test)
-        (Served.NONE, Result.FOUND, 0, 1),
+        (ServeResult({}, Served.NONE, False), Result.FOUND, 0, 1),
         # startup hang/unresponsive
-        (Served.TIMEOUT, Result.NONE, 1, 0),
+        (ServeResult({}, Served.NONE, True), Result.NONE, 1, 0),
     ],
 )
-def test_session_06(mocker, srv_results, target_result, ignored, results):
+def test_session_06(mocker, srv_result, target_result, ignored, results):
     """test Session.run() - initial test case was not served"""
     report = mocker.Mock(
         spec_set=Report,
@@ -314,7 +313,7 @@ def test_session_06(mocker, srv_results, target_result, ignored, results):
     target.check_result.side_effect = (target_result,)
     target.create_report.return_value = report
     with Session(SimpleAdapter(False), reporter, server, target) as session:
-        server.serve_path.return_value = (srv_results, {})
+        server.serve_path.return_value = srv_result
         session.run([], 10, iteration_limit=1)
         assert session.status.iteration == 1
         assert session.status.results.total == results
@@ -410,9 +409,8 @@ def test_session_09(mocker, harness, report_size, relaunch, iters, report_limit)
     with Session(
         adapter, reporter, server, target, report_limit=report_limit, relaunch=1
     ) as session:
-        server.serve_path = lambda *a, **kv: (
-            Served.ALL,
-            {session.iomanager.page_name(offset=-1): "/fake/path"},
+        server.serve_path = lambda *a, **kv: ServeResult(
+            {session.iomanager.page_name(offset=-1): "/fake/path"}, Served.ALL, False
         )
         session.run([], 10, input_path="file.bin", iteration_limit=iters)
         if report_limit > 0:
@@ -457,9 +455,8 @@ def test_session_10(mocker, harness, iters, result_limit, results):
     target.log_size.return_value = 1
     target.create_report.return_value = report
     with Session(adapter, reporter, server, target, relaunch=1) as session:
-        server.serve_path = lambda *a, **kv: (
-            Served.ALL,
-            {session.iomanager.page_name(offset=-1): "/fake/path"},
+        server.serve_path = lambda *a, **kv: ServeResult(
+            {session.iomanager.page_name(offset=-1): "/fake/path"}, Served.ALL, False
         )
         session.run(
             [], 10, input_path="a.bin", iteration_limit=iters, result_limit=result_limit

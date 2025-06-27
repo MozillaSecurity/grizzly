@@ -1,16 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-"""
-unit tests for grizzly.replay.main
-"""
 
 from pathlib import Path
 from unittest.mock import Mock
 
 from pytest import mark
 
-from sapphire import CertificateBundle, Served
+from sapphire import CertificateBundle, Served, ServeResult
 
 from ..common.frontend import Exit
 from ..common.report import Report
@@ -38,7 +35,9 @@ def test_main_01(mocker, server, tmp_path):
     # and the forth attempt should be skipped.
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     mocker.patch("grizzly.replay.replay.WebServices", autospec=True)
-    server.serve_path.return_value = (Served.ALL, {"test.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"test.html": "/fake/path"}, Served.ALL, False
+    )
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
     target = mocker.Mock(
@@ -114,7 +113,9 @@ def test_main_01(mocker, server, tmp_path):
 def test_main_02(mocker, server, tmp_path, repro_results):
     """test ReplayManager.main() - no repro"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server.serve_path.return_value = (Served.ALL, {"test.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult(
+        {"test.html": "/fake/path"}, Served.ALL, False
+    )
     # setup Target
     target = mocker.Mock(
         spec_set=Target, binary=Path("bin"), environ={}, launch_timeout=30
@@ -281,7 +282,7 @@ def test_main_04(mocker, tmp_path):
 
 def test_main_05(mocker, server, tmp_path):
     """test ReplayManager.main() loading specified assets"""
-    server.serve_path.return_value = (None, {"test.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult({}, Served.NONE, False)
     # setup Target
     target = mocker.NonCallableMock(
         spec_set=Target, binary=Path("bin"), launch_timeout=30
@@ -367,7 +368,7 @@ def test_main_06(
 ):
     """test ReplayManager.main() enable debuggers"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server.serve_path.return_value = (Served.ALL, {"test.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult({}, Served.NONE, False)
     # setup Target
     target = mocker.NonCallableMock(spec_set=Target, binary="bin", launch_timeout=30)
     target.check_result.return_value = Result.NONE
@@ -414,7 +415,7 @@ def test_main_06(
 def test_main_07(mocker, server, tmp_path):
     """test ReplayManager.main() - report to FuzzManager"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
-    server.serve_path.return_value = (Served.ALL, {"test.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult({}, Served.NONE, False)
     reporter = mocker.patch("grizzly.replay.replay.FuzzManagerReporter", autospec=True)
     # setup Target
     load_target = mocker.patch("grizzly.replay.replay.load_plugin", autospec=True)
@@ -498,7 +499,7 @@ def test_main_08(mocker, tmp_path, https_supported):
 
 def test_main_09(mocker, server, tmp_path):
     """test ReplayManager.main() - load test case assets"""
-    server.serve_path.return_value = (None, {"test.html": "/fake/path"})
+    server.serve_path.return_value = ServeResult({}, Served.NONE, False)
     # setup Target
     target = mocker.NonCallableMock(
         spec_set=Target, binary=Path("bin"), launch_timeout=30

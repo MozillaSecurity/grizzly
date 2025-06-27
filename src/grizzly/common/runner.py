@@ -285,16 +285,16 @@ class Runner:
                 LOG.info("Browser launched, continuing in %ds...", delay)
             LOG.debug("post launch timeout: %ds", self._server.timeout)
             # serve prompt page
-            server_status, _ = self._server.serve_path(
+            srv_result = self._server.serve_path(
                 content.root,
                 continue_cb=self._target.monitor.is_healthy,
                 server_map=srv_map,
             )
             # restore server timeout
             self._server.timeout = org_timeout
-            if server_status != Served.ALL:
+            if srv_result.status != Served.ALL:
                 self.startup_failure = True
-                if server_status == Served.TIMEOUT:
+                if srv_result.timeout:
                     # this should never happen with a correctly functioning build
                     LOG.warning("Target hung after launch")
                 LOG.warning("Post launch check failed!")
@@ -332,7 +332,7 @@ class Runner:
         testcase.clear_optional()
         # serve the test case
         serve_start = perf_counter()
-        server_status, served = self._server.serve_path(
+        srv_result = self._server.serve_path(
             testcase.root,
             continue_cb=self._keep_waiting,
             forever=wait_for_callback,
@@ -341,14 +341,14 @@ class Runner:
         )
         duration = perf_counter() - serve_start
         result = RunResult(
-            tuple(served),
+            tuple(srv_result.served),
             duration,
-            attempted=testcase.entry_point in served,
-            timeout=server_status == Served.TIMEOUT,
+            attempted=testcase.entry_point in srv_result.served,
+            timeout=srv_result.timeout,
         )
         # add all files that were served (includes, etc...) to test
         existing = frozenset(testcase.required)
-        for url, local_file in served.items():
+        for url, local_file in srv_result.served.items():
             if url not in existing:
                 # copy include files
                 testcase.add_from_file(local_file, file_name=url, copy=True)

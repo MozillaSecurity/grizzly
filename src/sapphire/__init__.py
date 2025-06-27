@@ -1,19 +1,17 @@
-"""
-Sapphire HTTP server
-"""
-
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Sapphire HTTP server"""
 
 from .certificate_bundle import CertificateBundle
-from .core import Sapphire, create_listening_socket
+from .core import Sapphire, ServeResult, create_listening_socket
 from .job import Served
 from .server_map import ServerMap
 
 __all__ = (
     "CertificateBundle",
     "Sapphire",
+    "ServeResult",
     "Served",
     "ServerMap",
     "create_listening_socket",

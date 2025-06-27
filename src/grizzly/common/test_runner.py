@@ -3,10 +3,11 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
 from itertools import count
+from pathlib import Path
 
 from pytest import mark, raises
 
-from sapphire import Sapphire, Served, ServerMap
+from sapphire import Sapphire, Served, ServeResult, ServerMap
 
 from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .report import Report
@@ -27,9 +28,7 @@ from .storage import TestCase
 )
 def test_runner_01(mocker, coverage, scheme):
     """test Runner()"""
-    mocker.patch(
-        "grizzly.common.runner.perf_counter", autospec=True, side_effect=count()
-    )
+    mocker.patch("grizzly.common.runner.perf_counter", side_effect=count())
     server = mocker.Mock(spec_set=Sapphire, scheme=scheme)
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
@@ -43,7 +42,7 @@ def test_runner_01(mocker, coverage, scheme):
     with TestCase("a.bin", "x") as testcase:
         testcase.add_from_bytes(b"", testcase.entry_point)
         serv_files = {"a.bin": testcase.root / "a.bin"}
-        server.serve_path.return_value = (Served.ALL, serv_files)
+        server.serve_path.return_value = ServeResult(serv_files, Served.ALL, False)
         result = runner.run(set(), serv_map, testcase, coverage=coverage)
         assert testcase.https == (scheme == "https")
     assert runner.initial
@@ -69,7 +68,7 @@ def test_runner_02(mocker):
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
     serv_files = ("a.bin",)
-    server.serve_path.return_value = (Served.ALL, {"a.bin": ""})
+    server.serve_path.return_value = ServeResult({"a.bin": Path()}, Served.ALL, False)
     testcase = mocker.Mock(
         spec_set=TestCase,
         __iter__=serv_files,
@@ -138,18 +137,18 @@ def test_runner_02(mocker):
 
 
 @mark.parametrize(
-    "srv_result, served",
+    "srv_result",
     [
         # no files served
-        (Served.NONE, {}),
+        ServeResult({}, Served.NONE, False),
         # entry point not served
-        (Served.REQUEST, {"harness": ""}),
+        ServeResult({"harness": Path()}, Served.REQUEST, False),
     ],
 )
-def test_runner_03(mocker, srv_result, served):
+def test_runner_03(mocker, srv_result):
     """test Runner() errors"""
     server = mocker.Mock(spec_set=Sapphire)
-    server.serve_path.return_value = (srv_result, served)
+    server.serve_path.return_value = srv_result
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
     test = mocker.Mock(spec_set=TestCase, entry_point="x", required=["x"])
@@ -160,7 +159,7 @@ def test_runner_03(mocker, srv_result, served):
     assert result
     assert result.status == Result.NONE
     assert not result.attempted
-    assert set(result.served) == set(served)
+    assert set(result.served) == set(srv_result.served)
     assert not result.timeout
     assert target.close.call_count == 1
 
@@ -180,14 +179,14 @@ def test_runner_04(mocker, ignore, status, idle, check_result):
     """test reporting timeout"""
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
-    serv_files = {"a.bin": ""}
+    serv_files = {"a.bin": Path()}
     test = mocker.Mock(
         spec_set=TestCase,
         __iter__=tuple(serv_files),
         entry_point="a.bin",
         required=["a.bin"],
     )
-    server.serve_path.return_value = (Served.TIMEOUT, serv_files)
+    server.serve_path.return_value = ServeResult(serv_files, Served.ALL, True)
     target.check_result.return_value = Result.FOUND
     target.handle_hang.return_value = idle
     target.monitor.is_healthy.return_value = False
@@ -207,17 +206,17 @@ def test_runner_04(mocker, ignore, status, idle, check_result):
     "served, attempted, target_result, status",
     [
         # FAILURE
-        ({"a.bin": ""}, True, Result.FOUND, Result.FOUND),
+        ({"a.bin": Path()}, True, Result.FOUND, Result.FOUND),
         # IGNORED
-        ({"a.bin": ""}, True, Result.IGNORED, Result.IGNORED),
+        ({"a.bin": Path()}, True, Result.IGNORED, Result.IGNORED),
         # failure before serving entry point
-        ({"harness": ""}, False, Result.FOUND, Result.FOUND),
+        ({"harness": Path()}, False, Result.FOUND, Result.FOUND),
     ],
 )
 def test_runner_05(mocker, served, attempted, target_result, status):
     """test reporting failures"""
     server = mocker.Mock(spec_set=Sapphire)
-    server.serve_path.return_value = (Served.REQUEST, served)
+    server.serve_path.return_value = ServeResult(served, Served.REQUEST, False)
     target = mocker.Mock(spec_set=Target, launch_timeout=10)
     target.check_result.return_value = target_result
     target.monitor.is_healthy.return_value = False
@@ -237,8 +236,8 @@ def test_runner_06(mocker):
     server = mocker.Mock(spec_set=Sapphire)
     target = mocker.Mock(spec_set=Target)
     target.check_result.return_value = Result.NONE
-    serv_files = {"a.bin": ""}
-    server.serve_path.return_value = (Served.ALL, serv_files)
+    serv_files = {"a.bin": Path()}
+    server.serve_path.return_value = ServeResult(serv_files, Served.ALL, False)
     runner = Runner(server, target, idle_threshold=0.01, idle_delay=0.01, relaunch=10)
     assert runner._idle is not None
     result = runner.run(
@@ -356,7 +355,7 @@ def test_runner_10(mocker, tmp_path):
             "nested/nested_inc.bin": inc2,
             "test/inc_file3.txt": inc3,
         }
-        server.serve_path.return_value = (Served.ALL, serv_files)
+        server.serve_path.return_value = ServeResult(serv_files, Served.ALL, False)
         result = runner.run(set(), smap, test)
         assert result.attempted
         assert result.status == Result.NONE
@@ -379,12 +378,13 @@ def test_runner_11(mocker):
         (test.root / "extra.js").touch()
         assert "extra.html" not in test
         assert "other.html" in test
-        server.serve_path.return_value = (
-            Served.ALL,
+        server.serve_path.return_value = ServeResult(
             {
                 "test.html": test.root / "test.html",
                 "extra.js": test.root / "extra.js",
             },
+            Served.ALL,
+            False,
         )
         result = runner.run(set(), ServerMap(), test)
         assert result.attempted
@@ -398,13 +398,13 @@ def test_runner_11(mocker):
     "delay, srv_result, startup_failure",
     [
         # with delay
-        (10, (Served.ALL, None), False),
+        (10, ServeResult({}, Served.ALL, False), False),
         # continue immediately
-        (0, (Served.ALL, None), False),
+        (0, ServeResult({}, Served.ALL, False), False),
         # startup failure
-        (0, (Served.NONE, None), True),
+        (0, ServeResult({}, Served.NONE, False), True),
         # target hang while loading content
-        (0, (Served.TIMEOUT, None), True),
+        (0, ServeResult({}, Served.NONE, True), True),
     ],
 )
 def test_runner_12(mocker, delay, srv_result, startup_failure):
