@@ -6,8 +6,8 @@
 # pylint: disable=protected-access
 from pathlib import Path
 
-from FTB.Signatures.CrashInfo import CrashInfo
-from pytest import mark
+from FTB.Signatures.CrashInfo import CrashInfo, TraceParsingError
+from pytest import mark, raises
 
 from .report import Report
 
@@ -310,6 +310,18 @@ def test_report_12(tmp_path):
     assert report._crash_info.configuration.product == "grizzly-test"
 
 
+def test_report_13(mocker, tmp_path):
+    """test Report.crash_info with unparsable log"""
+    crash_info = mocker.patch("grizzly.common.report.CrashInfo", autospec=True)
+    crash_info.fromRawCrashData.side_effect = TraceParsingError(line_no=0)
+    (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
+    (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
+    _create_crash_log(tmp_path / "log_asan_blah.txt")
+    with raises(TraceParsingError):
+        # pylint: disable=expression-not-assigned
+        Report(tmp_path, Path("bin")).crash_info
+
+
 @mark.parametrize(
     "sig_cache, has_sig",
     [
@@ -321,7 +333,7 @@ def test_report_12(tmp_path):
         (None, False),
     ],
 )
-def test_report_13(mocker, tmp_path, sig_cache, has_sig):
+def test_report_14(mocker, tmp_path, sig_cache, has_sig):
     """test Report.crash_signature and Report.crash_hash"""
     mocker.patch("grizzly.common.report.ProgramConfiguration", autospec=True)
     collector = mocker.patch("grizzly.common.report.Collector", autospec=True)
@@ -365,7 +377,7 @@ def test_report_13(mocker, tmp_path, sig_cache, has_sig):
         (("1", "2", "3", "4", "5", "std::panicking::rust_panic"), 5),
     ],
 )
-def test_report_14(mocker, backtrace, lines):
+def test_report_15(mocker, backtrace, lines):
     """test Report.crash_signature_max_frames()"""
     info = mocker.Mock(spec=CrashInfo, backtrace=backtrace)
     assert Report.crash_signature_max_frames(info, suggested_frames=5) == lines
@@ -384,7 +396,7 @@ def test_report_14(mocker, backtrace, lines):
         ("a\n\0", 2),
     ],
 )
-def test_report_15(tmp_path, data, lines):
+def test_report_16(tmp_path, data, lines):
     """test Report._load_log()"""
     log = tmp_path / "test-log.txt"
     log.write_text(data)
@@ -402,7 +414,7 @@ def test_report_15(tmp_path, data, lines):
         (True, True, "Potential hang detected"),
     ],
 )
-def test_report_16(mocker, tmp_path, hang, has_log, expected):
+def test_report_17(mocker, tmp_path, hang, has_log, expected):
     """test Report.short_signature"""
     mocker.patch("grizzly.common.report.ProgramConfiguration", autospec=True)
     collector = mocker.patch("grizzly.common.report.Collector", autospec=True)
