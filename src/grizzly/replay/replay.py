@@ -139,7 +139,7 @@ class ReplayManager:
             # avoid catching other crashes with forgiving hang signatures
             return False
         # Fuzzmanager is missing type hints, use cast()
-        return cast(bool, signature.matches(report.crash_info))
+        return cast("bool", signature.matches(report.crash_info))
 
     def cleanup(self) -> None:
         """Remove temporary files from disk.

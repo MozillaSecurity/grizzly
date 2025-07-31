@@ -42,7 +42,7 @@ class WebServices:
     def get_free_port() -> int:
         """Returns an open port"""
         sock = create_listening_socket()
-        port = cast(int, sock.getsockname()[1])
+        port = cast("int", sock.getsockname()[1])
         sock.close()
 
         return port

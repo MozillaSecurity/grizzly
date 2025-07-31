@@ -199,7 +199,7 @@ class Sapphire:
         Returns:
             Listening port number.
         """
-        return cast(int, self._socket.getsockname()[1])
+        return cast("int", self._socket.getsockname()[1])
 
     def serve_path(
         self,

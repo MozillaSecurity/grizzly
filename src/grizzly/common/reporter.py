@@ -302,4 +302,4 @@ class FuzzManagerReporter(Reporter):
                 report.crash_info, testCase=zip_name, testCaseQuality=quality.value
             )
         LOG.info("Reported: %d, %s, %s", new_entry["id"], quality.name, collector.tool)
-        return cast(int, new_entry["id"])
+        return cast("int", new_entry["id"])

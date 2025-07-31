@@ -82,10 +82,9 @@ class CrashEntry:
         if self._data is None or (name in self.RAW_FIELDS and name not in self._data):
             need_raw = "1" if name in self.RAW_FIELDS else "0"
             # TODO: handle 403 and 404?
-            self._data = cast(
-                dict[str, Any],
-                self._coll.get(self._url, params={"include_raw": need_raw}).json(),
-            )
+            self._data = self._coll.get(
+                self._url, params={"include_raw": need_raw}
+            ).json()
         if name not in self._data:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute '{name}' "
@@ -390,7 +389,7 @@ class Bucket:
 
             n_yielded += 1
             LOG.debug("yielding crash #%d", n_yielded)
-            result = CrashEntry(cast(int, crash["id"]))
+            result = CrashEntry(cast("int", crash["id"]))
             result._data = crash  # pylint: disable=protected-access
             yield result
 

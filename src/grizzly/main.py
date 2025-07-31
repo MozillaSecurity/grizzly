@@ -72,7 +72,7 @@ def main(args: Namespace) -> int:
     try:
         LOG.debug("initializing Adapter %r", args.adapter)
         adapter = cast(
-            Adapter,
+            "Adapter",
             load_plugin(args.adapter, "grizzly_adapters", Adapter)(args.adapter),
         )
 
@@ -93,7 +93,7 @@ def main(args: Namespace) -> int:
 
         LOG.debug("initializing the Target %r", args.platform)
         target = cast(
-            Target,
+            "Target",
             load_plugin(args.platform, "grizzly_targets", Target)(
                 args.binary,
                 args.launch_timeout,

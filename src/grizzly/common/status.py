@@ -76,12 +76,12 @@ def _db_version_check(con: Connection, expected: int = DB_VERSION) -> bool:
     cur = con.cursor()
     # collect db version and check if an update is required
     cur.execute("PRAGMA user_version;")
-    version = cur.fetchone()[0]
+    version: int = cur.fetchone()[0]
     if version < expected:
         cur.execute("BEGIN EXCLUSIVE;")
         # check db version again while locked to avoid race
         cur.execute("PRAGMA user_version;")
-        version = cast(int, cur.fetchone()[0])
+        version = cur.fetchone()[0]
         if version < expected:
             LOG.debug("db version %d < %d", version, expected)
             # remove ALL tables from the database
@@ -441,7 +441,7 @@ class BaseStatus(ABC):
         """
         for name, entry in self._profiles.items():
             yield ProfileEntry(
-                cast(int, entry["count"]),
+                cast("int", entry["count"]),
                 entry["max"],
                 entry["min"],
                 name,
@@ -553,7 +553,7 @@ class ReadOnlyStatus(BaseStatus):
             # look up counter
             current_counter = None
             for counter in results:
-                if counter.pid == cast(int, entry[0]):
+                if counter.pid == entry[0]:
                     current_counter = counter
                     break
 
