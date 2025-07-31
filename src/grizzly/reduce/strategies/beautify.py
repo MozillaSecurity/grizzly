@@ -14,7 +14,7 @@ import re
 from abc import ABC, abstractmethod
 from logging import getLogger
 from re import Match
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from lithium.testcases import TestcaseLine
 
@@ -309,10 +309,10 @@ class CSSBeautify(_BeautifyStrategy):
         assert cls.import_available
         opts = cssbeautifier.css.options.BeautifierOptions(cls.opts)
         opts.eol = "\n"
-        beautified = cssbeautifier.beautify(
+        beautified: str = cssbeautifier.beautify(
             data.decode("utf-8", errors="surrogateescape"), opts
         )
-        return cast(bytes, beautified.encode("utf-8", errors="surrogateescape"))
+        return beautified.encode("utf-8", errors="surrogateescape")
 
 
 class JSBeautify(_BeautifyStrategy):
@@ -353,4 +353,4 @@ class JSBeautify(_BeautifyStrategy):
         # All try/catch pairs will be expanded on their own lines
         # Collapse these pairs when only a single instruction is contained within
         beautified = cls.try_catch_re.sub(r"\1 \2 \3", beautified)
-        return cast(bytes, beautified.encode("utf-8", errors="surrogateescape"))
+        return beautified.encode("utf-8", errors="surrogateescape")

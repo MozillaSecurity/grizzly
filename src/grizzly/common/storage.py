@@ -12,7 +12,7 @@ from pathlib import Path
 from shutil import copyfile, copytree, move, rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from .utils import grz_tmp, package_version
 
@@ -24,6 +24,7 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 
+DEFAULT_ASSETS = "_assets_"
 LOG = getLogger(__name__)
 GRZ_VERSION = package_version("grizzly-framework")
 TEST_INFO = "test_info.json"
@@ -76,17 +77,17 @@ class TestCase:
         self.assets_path: Path | None = None
         self.duration: float | None = None
         self.env_vars: dict[str, str] = {}
-        self.hang = False
-        self.https = False
+        self.hang: bool = False
+        self.https: bool = False
         # file that was used to create the test case
         self.input_fname = input_fname
         self.entry_point = self.sanitize_path(entry_point)
         self.timestamp = time() if timestamp is None else timestamp
-        self.version = GRZ_VERSION
+        self.version: str = GRZ_VERSION
         self._files = TestFileMap()
         if data_path is not None:
             self._root = data_path
-            self._in_place = True
+            self._in_place: bool = True
         else:
             self._root = Path(mkdtemp(prefix="testcase_", dir=grz_tmp("storage")))
             self._in_place = False
@@ -342,8 +343,8 @@ class TestCase:
             if self.assets:
                 assert isinstance(self.assets_path, Path)
                 info["assets"] = self.assets
-                info["assets_path"] = "_assets_"
-                copytree(self.assets_path, dst_path / cast(str, info["assets_path"]))
+                info["assets_path"] = DEFAULT_ASSETS
+                copytree(self.assets_path, dst_path / DEFAULT_ASSETS)
             with (dst_path / TEST_INFO).open("w") as out_fp:
                 json.dump(info, out_fp, indent=2, sort_keys=True)
 
@@ -391,7 +392,7 @@ class TestCase:
         # create test case
         test = cls(
             entry_point.relative_to(entry_point.parent).as_posix(),
-            info.get("adapter", None),
+            info.get("adapter", "unknown"),
             data_path=entry_point.parent,
             input_fname=info.get("input", None),
             timestamp=info.get("timestamp", 0),
@@ -401,7 +402,7 @@ class TestCase:
         test.env_vars = info.get("env", {})
         test.hang = info.get("hang", False)
         test.https = info.get("https", False)
-        test.version = info.get("version", None)
+        test.version = info.get("version", "unknown")
         # sanity check assets data
         assert isinstance(test.assets, dict)
         for name, value in test.assets.items():

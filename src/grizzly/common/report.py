@@ -13,7 +13,7 @@ from re import compile as re_compile
 from shutil import copyfileobj, move, rmtree
 from tempfile import mkstemp
 from time import strftime
-from typing import NamedTuple, cast
+from typing import NamedTuple
 
 # import FuzzManager utilities
 from Collector.Collector import Collector
@@ -451,9 +451,7 @@ class Report:
                 self._short_signature = "Signature creation failed"
             else:
                 # TODO: FM is missing type hints
-                self._short_signature = cast(
-                    str, self.crash_info.createShortSignature()
-                )
+                self._short_signature = self.crash_info.createShortSignature()
         return self._short_signature
 
     @staticmethod
