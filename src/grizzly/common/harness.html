@@ -15,18 +15,10 @@ body {
 let close_after, limit_tmr
 let sub = null
 let time_limit = 0
+let worker = null
 
 let grzDump = (msg) => {
   console.log(`[grz harness][${new Date().toUTCString()}] ${msg}\n`)
-}
-
-let poll = () => {
-  // poll until sub is closed
-  // sub should be closed by either itself (test) or time limit
-  if (!sub || sub.closed)
-    setTimeout(main)
-  else
-    setTimeout(poll, 50)
 }
 
 let setMsg = (msgStr) => {
@@ -35,6 +27,58 @@ let setMsg = (msgStr) => {
   } catch(e) {
     grzDump(`setMsg error: ${e}`)
   }
+}
+
+let startPolling = () => {
+  if (worker) {
+    worker.terminate()
+  }
+
+  const workerCode = `
+    let pollInterval = null;
+
+    self.onmessage = function(e) {
+      if (e.data.command === 'start') {
+        // Start polling every 50ms
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(() => {
+          self.postMessage({type: 'poll'});
+        }, 50);
+      } else if (e.data.command === 'stop') {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+      }
+    };
+  `;
+
+  const blob = new Blob([workerCode], {type: 'application/javascript'})
+  worker = new Worker(URL.createObjectURL(blob))
+
+  worker.onmessage = function(e) {
+    if (e.data.type === 'poll') {
+      // Check window status
+      try {
+        if (!sub || sub.closed) {
+          grzDump('Worker poll: sub is closed, calling main()')
+          worker.postMessage({command: 'stop'})
+          setTimeout(main)
+        }
+      } catch (error) {
+        grzDump(`Worker poll error: ${error}`)
+        worker.postMessage({command: 'stop'})
+        setTimeout(main, 500)
+      }
+    }
+  }
+
+  worker.onerror = function(error) {
+    grzDump(`Worker error: ${error}`)
+    setTimeout(main, 500)
+  }
+
+  worker.postMessage({command: 'start'})
 }
 
 let main = () => {
@@ -98,8 +142,7 @@ let main = () => {
           }
         }, time_limit)
       }
-      // wait for test to complete
-      setTimeout(poll, 50)
+      startPolling()
     }
   }
 }
@@ -123,6 +166,13 @@ window.addEventListener('load', () => {
   setMsg('&gt; Running...')
   // begin iterations
   setTimeout(main)
+})
+
+// Clean up worker when page unloads
+window.addEventListener('beforeunload', () => {
+  if (worker) {
+    worker.terminate()
+  }
 })
 </script>
 </head>
