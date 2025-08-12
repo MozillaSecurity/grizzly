@@ -1,40 +1,40 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-<meta charset=UTF-8>
-<title>Grizzly &sdot; Harness</title>
-<style>
-body {
-  background-color: #222;
-  color: #ccc;
-  font-family: monospace;
-  font-size: 1.2em;
-}
-</style>
-<script>
-let close_after, limit_tmr
-let sub = null
-let time_limit = 0
-let worker = null
+  <head>
+    <meta charset="UTF-8" />
+    <title>Grizzly &sdot; Harness</title>
+    <style>
+      body {
+        background-color: #222;
+        color: #ccc;
+        font-family: monospace;
+        font-size: 1.2em;
+      }
+    </style>
+    <script>
+      let close_after, limit_tmr;
+      let sub = null;
+      let time_limit = 0;
+      let worker = null;
 
-let grzDump = (msg) => {
-  console.log(`[grz harness][${new Date().toUTCString()}] ${msg}\n`)
-}
+      let grzDump = (msg) => {
+        console.log(`[grz harness][${new Date().toUTCString()}] ${msg}\n`);
+      };
 
-let setMsg = (msgStr) => {
-  try {
-    document.getElementById('msg').innerHTML = msgStr
-  } catch(e) {
-    grzDump(`setMsg error: ${e}`)
-  }
-}
+      let setMsg = (msgStr) => {
+        try {
+          document.getElementById("msg").innerHTML = msgStr;
+        } catch (e) {
+          grzDump(`setMsg error: ${e}`);
+        }
+      };
 
-let startPolling = () => {
-  if (worker) {
-    worker.terminate()
-  }
+      let startPolling = () => {
+        if (worker) {
+          worker.terminate();
+        }
 
-  const workerCode = `
+        const workerCode = `
     let pollInterval = null;
 
     self.onmessage = function(e) {
@@ -53,131 +53,134 @@ let startPolling = () => {
     };
   `;
 
-  const blob = new Blob([workerCode], {type: 'application/javascript'})
-  worker = new Worker(URL.createObjectURL(blob))
+        const blob = new Blob([workerCode], { type: "application/javascript" });
+        worker = new Worker(URL.createObjectURL(blob));
 
-  worker.onmessage = function(e) {
-    if (e.data.type === 'poll') {
-      // Check window status
-      try {
-        if (!sub || sub.closed) {
-          grzDump('Worker poll: sub is closed, calling main()')
-          worker.postMessage({command: 'stop'})
-          setTimeout(main)
-        }
-      } catch (error) {
-        grzDump(`Worker poll error: ${error}`)
-        worker.postMessage({command: 'stop'})
-        setTimeout(main, 500)
-      }
-    }
-  }
-
-  worker.onerror = function(error) {
-    grzDump(`Worker error: ${error}`)
-    setTimeout(main, 500)
-  }
-
-  worker.postMessage({command: 'start'})
-}
-
-let main = () => {
-  // if limit_tmr is set, clear it
-  if (limit_tmr !== undefined) {
-    clearTimeout(limit_tmr)
-    limit_tmr = undefined
-  }
-
-  if (sub && !sub.closed) {
-    grzDump('Something is wrong, the harness is in a bad state!')
-  }
-
-  if ((close_after !== undefined) && (close_after-- < 1)) {
-    grzDump('Iteration limit hit.')
-    setMsg(
-      '&gt; Iteration limit hit.<br>' +
-      '&gt; Note: Open tabs can block browser from closing.<br>' +
-      '&gt; Browser should close momentarily...'
-    )
-    try { window.focus() } catch(e) { }
-    const xhr = new XMLHttpRequest()
-    // indicate the test is complete by requesting `/grz_next_test`
-    // this allows Sapphire to finish with the current test
-    xhr.open('GET', '/grz_next_test', false)
-    xhr.send(null)
-    // close the harness to help catch browser shutdown issues
-    if ('requestIdleCallback' in window) {
-      window.requestIdleCallback(window.close, {timeout: 500})
-    } else {
-      setTimeout(window.close)
-    }
-  }
-  else {
-    // open test
-    const location = (sub !== null) ? '/grz_next_test' : '/grz_current_test'
-    sub = window.open()
-    if (sub === null) {
-      setMsg(
-        '&gt; ERROR: window.open() failed!<br>' +
-        '&gt; Try disabling popup blocker.<br>' +
-        '&gt; Stopped.'
-      )
-      grzDump('Could not open test! Blocked by the popup blocker?')
-    }
-    else {
-      // null opener will prevent test case interactions with harness
-      sub.opener = null
-      sub.location = location
-      // set the test case time limit
-      if (time_limit > 0) {
-        grzDump(`Using test case time limit of ${time_limit}`)
-        limit_tmr = setTimeout(() => {
-          grzDump('Test case time limit exceeded')
-          if (sub && !sub.closed) {
-            grzDump('Closing test case')
-            // WARNING: simplifying this setTimeout can break the harness!
-            setTimeout(() => {
-              try { sub.close() } catch (e) { }
-            })
+        worker.onmessage = function (e) {
+          if (e.data.type === "poll") {
+            // Check window status
+            try {
+              if (!sub || sub.closed) {
+                grzDump("Worker poll: sub is closed, calling main()");
+                worker.postMessage({ command: "stop" });
+                setTimeout(main);
+              }
+            } catch (error) {
+              grzDump(`Worker poll error: ${error}`);
+              worker.postMessage({ command: "stop" });
+              setTimeout(main, 500);
+            }
           }
-        }, time_limit)
-      }
-      startPolling()
-    }
-  }
-}
+        };
 
-window.addEventListener('load', () => {
-  // parse arguments
-  const args = window.location.search.replace('?', '')
-  if (args) {
-    for (let kv of args.split('&')) {
-      let [k, v] = kv.split('=')
-      if (k === 'time_limit') {
-        time_limit = Number(v)
-      } else if (k === 'close_after') {
-        close_after = Number(v)
-      } else {
-        grzDump(`unknown arg '${k}'`)
-      }
-    }
-  }
-  // update msg
-  setMsg('&gt; Running...')
-  // begin iterations
-  setTimeout(main)
-})
+        worker.onerror = function (error) {
+          grzDump(`Worker error: ${error}`);
+          setTimeout(main, 500);
+        };
 
-// Clean up worker when page unloads
-window.addEventListener('beforeunload', () => {
-  if (worker) {
-    worker.terminate()
-  }
-})
-</script>
-</head>
-<body>
-<h4>Grizzly &sdot; Harness</h4>
-<div id='msg'>&gt; Loading harness...</h4>
-</body>
+        worker.postMessage({ command: "start" });
+      };
+
+      let main = () => {
+        // if limit_tmr is set, clear it
+        if (limit_tmr !== undefined) {
+          clearTimeout(limit_tmr);
+          limit_tmr = undefined;
+        }
+
+        if (sub && !sub.closed) {
+          grzDump("Something is wrong, the harness is in a bad state!");
+        }
+
+        if (close_after !== undefined && close_after-- < 1) {
+          grzDump("Iteration limit hit.");
+          setMsg(
+            "&gt; Iteration limit hit.<br>" +
+              "&gt; Note: Open tabs can block browser from closing.<br>" +
+              "&gt; Browser should close momentarily...",
+          );
+          try {
+            window.focus();
+          } catch (e) {}
+          const xhr = new XMLHttpRequest();
+          // indicate the test is complete by requesting `/grz_next_test`
+          // this allows Sapphire to finish with the current test
+          xhr.open("GET", "/grz_next_test", false);
+          xhr.send(null);
+          // close the harness to help catch browser shutdown issues
+          if ("requestIdleCallback" in window) {
+            window.requestIdleCallback(window.close, { timeout: 500 });
+          } else {
+            setTimeout(window.close);
+          }
+        } else {
+          // open test
+          const location =
+            sub !== null ? "/grz_next_test" : "/grz_current_test";
+          sub = window.open();
+          if (sub === null) {
+            setMsg(
+              "&gt; ERROR: window.open() failed!<br>" +
+                "&gt; Try disabling popup blocker.<br>" +
+                "&gt; Stopped.",
+            );
+            grzDump("Could not open test! Blocked by the popup blocker?");
+          } else {
+            // null opener will prevent test case interactions with harness
+            sub.opener = null;
+            sub.location = location;
+            // set the test case time limit
+            if (time_limit > 0) {
+              grzDump(`Using test case time limit of ${time_limit}`);
+              limit_tmr = setTimeout(() => {
+                grzDump("Test case time limit exceeded");
+                if (sub && !sub.closed) {
+                  grzDump("Closing test case");
+                  // WARNING: simplifying this setTimeout can break the harness!
+                  setTimeout(() => {
+                    try {
+                      sub.close();
+                    } catch (e) {}
+                  });
+                }
+              }, time_limit);
+            }
+            startPolling();
+          }
+        }
+      };
+
+      window.addEventListener("load", () => {
+        // parse arguments
+        const args = window.location.search.replace("?", "");
+        if (args) {
+          for (let kv of args.split("&")) {
+            let [k, v] = kv.split("=");
+            if (k === "time_limit") {
+              time_limit = Number(v);
+            } else if (k === "close_after") {
+              close_after = Number(v);
+            } else {
+              grzDump(`unknown arg '${k}'`);
+            }
+          }
+        }
+        // update msg
+        setMsg("&gt; Running...");
+        // begin iterations
+        setTimeout(main);
+      });
+
+      // Clean up worker when page unloads
+      window.addEventListener("beforeunload", () => {
+        if (worker) {
+          worker.terminate();
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <h4>Grizzly &sdot; Harness</h4>
+    <div id="msg">&gt; Loading harness...</div>
+  </body>
 </html>
