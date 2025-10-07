@@ -3,12 +3,15 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
+from contextlib import suppress
 from logging import getLogger
+from os import getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory, mkdtemp
 from typing import TYPE_CHECKING
 
 from fxpoppet import ADBLaunchError, ADBProcess, ADBSession, Reason
+from fxpoppet.adb_session import ADBCommunicationError, ADBSessionError
 from prefpicker import PrefPicker
 
 from ..common.report import Report
@@ -90,14 +93,18 @@ class FenixTarget(Target):
 
         self._package = ADBSession.get_package_name(self.binary)
         if self._package is None:
-            LOG.error("FenixTarget init failed!")
+            LOG.error("FenixTarget failed to get package name!")
             raise RuntimeError("Could not find package name.")
 
         LOG.debug("opening adb session...")
-        session = ADBSession.create(as_root=True, max_attempts=10, retry_delay=15)
-        if session is None:
-            LOG.error("FenixTarget init failed!")
-            raise RuntimeError("Could not create ADB Session!")
+        serial = self._select_device()
+        session = ADBSession(serial)
+        with suppress(ADBCommunicationError, ADBSessionError):
+            # emulator is expected to be running
+            session.connect(as_root=True, boot_timeout=30)
+        if not session.connected:
+            LOG.error("FenixTarget failed to connect to device!")
+            raise RuntimeError("Could not create ADBSession!")
         LOG.debug("connected to device (%s)", session.device_id)
         self._session = session
         self._session.symbols[self._package] = self.binary.parent / "symbols"
@@ -105,10 +112,25 @@ class FenixTarget(Target):
         try:
             self._proc = ADBProcess(self._package, self._session)
         except:
-            LOG.error("FenixTarget init failed!")
+            LOG.error("FenixTarget ADBProcess init failed!")
             self._session.disconnect()
             raise
         self._monitor = FenixMonitor(self._proc)
+
+    @staticmethod
+    def _select_device() -> str:
+        serial = getenv("ANDROID_SERIAL")
+        if serial is None:
+            devices = ADBSession("").devices(any_state=True)
+            if len(devices) > 1:
+                LOG.error("Multiple Android devices detected, use ANDROID_SERIAL")
+                raise RuntimeError("Multiple Android devices detected")
+            if devices:
+                serial, _ = devices.popitem()
+            else:
+                LOG.error("No Android device detected")
+                raise RuntimeError("No Android device detected")
+        return serial
 
     def _cleanup(self) -> None:
         with self._lock:
