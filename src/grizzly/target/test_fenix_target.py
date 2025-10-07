@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# pylint: disable=protected-access
 from fxpoppet.adb_process import ADBLaunchError, Reason
 from fxpoppet.adb_session import ADBSession, ADBSessionError
 from pytest import mark, raises
@@ -9,19 +10,40 @@ from .fenix_target import FenixMonitor, FenixTarget
 from .target import Result, TargetLaunchError
 
 
+def test_fenix_target_select_device(mocker):
+    """test FenixTarget._select_device()"""
+    mocker.patch("grizzly.target.fenix_target.ADBSession.devices", return_value={})
+    with raises(RuntimeError, match=r"No Android device detect"):
+        FenixTarget._select_device()
+
+    mocker.patch(
+        "grizzly.target.fenix_target.ADBSession.devices",
+        return_value={"fake-1234": "device", "fake-5678": "device"},
+    )
+    with raises(RuntimeError, match=r"Multiple Android devices detected"):
+        FenixTarget._select_device()
+
+    mocker.patch(
+        "grizzly.target.fenix_target.ADBSession.devices",
+        return_value={"fake-1234": "device"},
+    )
+    assert FenixTarget._select_device() == "fake-1234"
+
+
 def test_fenix_target_missing_package_name(mocker, tmp_path):
     """test FenixTarget missing package name"""
     session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
     session_cls.get_package_name.return_value = None
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with raises(RuntimeError, match="Could not find package name."):
+    with raises(RuntimeError, match=r"Could not find package name."):
         FenixTarget(fake_apk, 300, 25, 5000)
 
 
 def test_fenix_target_adb_proc_error(mocker, tmp_path):
     """test FenixTarget ADBProcess error"""
-    mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
+    session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
+    session_cls.return_value.devices.return_value = {"fake-device": "device"}
     mocker.patch(
         "grizzly.target.fenix_target.ADBProcess", side_effect=ADBSessionError("test")
     )
@@ -34,7 +56,8 @@ def test_fenix_target_adb_proc_error(mocker, tmp_path):
 def test_fenix_target_launch_missing_device(mocker, tmp_path):
     """test FenixTarget.launch() missing device"""
     session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
-    session_cls.create.return_value.wait_for_boot.return_value = False
+    session_cls.return_value.devices.return_value = {"fake-device": "device"}
+    session_cls.return_value.wait_for_boot.return_value = False
     mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
@@ -47,7 +70,8 @@ def test_fenix_target_launch_missing_device(mocker, tmp_path):
 
 def test_fenix_target_launch_failure(mocker, tmp_path):
     """test FenixTarget ADBProcess.launch() failure"""
-    mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
+    session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
+    session_cls.return_value.devices.return_value = {"fake-device": "device"}
     mocker.patch("grizzly.target.fenix_target.FenixTarget.create_report", autospec=True)
     proc_cls = mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
     fake_apk = tmp_path / "test.apk"
@@ -81,7 +105,8 @@ def test_fenix_target_simple(mocker, tmp_path, kwargs):
     fake_process.return_value.reason = Reason.CLOSED
     fake_sess_obj = mocker.Mock(spec_set=ADBSession, connected=True, symbols={})
     fake_session = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
-    fake_session.create.return_value = fake_sess_obj
+    fake_session.return_value = fake_sess_obj
+    fake_sess_obj.devices.return_value = {"fake-device": "device"}
     fake_session.get_package_name.return_value = "the_name"
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
@@ -105,7 +130,6 @@ def test_fenix_target_simple(mocker, tmp_path, kwargs):
     assert not target.monitor.is_running()
     assert not target.monitor.is_healthy()
     assert target.monitor.launches == 0
-    assert fake_session.create.call_count == 1
     assert fake_session.get_package_name.call_count == 1
     assert "the_name" in fake_sess_obj.symbols
 
@@ -113,10 +137,11 @@ def test_fenix_target_simple(mocker, tmp_path, kwargs):
 def test_fenix_target_create_session_failed(mocker, tmp_path):
     """test FenixTarget fail to create session"""
     session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
-    session_cls.create.return_value = None
+    session_cls.return_value.devices.return_value = {"fake-device": "device"}
+    session_cls.return_value.connected = False
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
-    with raises(RuntimeError, match="Could not create ADB Session!"):
+    with raises(RuntimeError, match="Could not create ADBSession!"):
         FenixTarget(fake_apk, 300, 25, 5000)
 
 
@@ -137,8 +162,9 @@ def test_fenix_target_launch_and_check_result(
     mocker, tmp_path, healthy, reason, result, closes
 ):
     """test FenixTarget launch() and check_result()"""
+    session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
+    session_cls.return_value.devices.return_value = {"fake-device": "device"}
     fake_process = mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
-    mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
     with FenixTarget(fake_apk, 300, 25, 5000) as target:
@@ -154,8 +180,9 @@ def test_fenix_target_launch_and_check_result(
 
 def test_fenix_target_handle_hang(mocker, tmp_path):
     """test FenixTarget.handle_hang()"""
+    session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
+    session_cls.return_value.devices.return_value = {"fake-device": "device"}
     fake_process = mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
-    mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
     with FenixTarget(fake_apk, 300, 25, 5000) as target:
@@ -167,7 +194,8 @@ def test_fenix_target_handle_hang(mocker, tmp_path):
 
 def test_fenix_target_create_report(mocker, tmp_path):
     """test FenixTarget ADBProcess.create_report()"""
-    mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
+    session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
+    session_cls.return_value.devices.return_value = {"fake-device": "device"}
     proc_cls = mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
     fake_apk = tmp_path / "test.apk"
     fake_apk.touch()
