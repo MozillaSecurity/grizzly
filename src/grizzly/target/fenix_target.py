@@ -3,15 +3,15 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from contextlib import suppress
 from logging import getLogger
 from os import getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory, mkdtemp
 from typing import TYPE_CHECKING
 
-from fxpoppet import ADBLaunchError, ADBProcess, ADBSession, Reason
-from fxpoppet.adb_session import ADBCommunicationError, ADBSessionError
+from fxpoppet.adb_process import ADBLaunchError, ADBProcess, Reason
+from fxpoppet.adb_session import ADBSession, ADBSessionError
+from fxpoppet.adb_wrapper import ADBWrapper
 from prefpicker import PrefPicker
 
 from ..common.report import Report
@@ -94,34 +94,31 @@ class FenixTarget(Target):
         self._package = ADBSession.get_package_name(self.binary)
         if self._package is None:
             LOG.error("FenixTarget failed to get package name!")
-            raise RuntimeError("Could not find package name.")
+            raise RuntimeError("Could not find package name")
 
         LOG.debug("opening adb session...")
         serial = self._select_device()
-        session = ADBSession(serial)
-        with suppress(ADBCommunicationError, ADBSessionError):
+        try:
             # emulator is expected to be running
-            session.connect(as_root=True, boot_timeout=30)
-        if not session.connected:
-            LOG.error("FenixTarget failed to connect to device!")
-            raise RuntimeError("Could not create ADBSession!")
-        LOG.debug("connected to device (%s)", session.device_id)
-        self._session = session
+            self._session = ADBSession.connect(serial, as_root=True, boot_timeout=10)
+        except ADBSessionError as exc:
+            LOG.error("FenixTarget failed to connect to device: %s", exc)
+            raise RuntimeError("Could not create ADBSession") from None
+        LOG.debug("connected to device (%s)", serial)
         self._session.symbols[self._package] = self.binary.parent / "symbols"
 
         try:
             self._proc = ADBProcess(self._package, self._session)
-        except:
-            LOG.error("FenixTarget ADBProcess init failed!")
-            self._session.disconnect()
-            raise
+        except ADBSessionError as exc:
+            LOG.error("FenixTarget ADBProcess init failed: %s", exc)
+            raise RuntimeError("Could not create ADBProcess") from None
         self._monitor = FenixMonitor(self._proc)
 
     @staticmethod
     def _select_device() -> str:
         serial = getenv("ANDROID_SERIAL")
         if serial is None:
-            devices = ADBSession("").devices(any_state=True)
+            devices = ADBWrapper.devices(any_state=True)
             if len(devices) > 1:
                 LOG.error("Multiple Android devices detected, use ANDROID_SERIAL")
                 raise RuntimeError("Multiple Android devices detected")
@@ -134,11 +131,8 @@ class FenixTarget(Target):
 
     def _cleanup(self) -> None:
         with self._lock:
-            if self._proc is not None:
-                self._proc.cleanup()
-            if self._session.connected:
-                self._session.reverse_remove()
-            self._session.disconnect()
+            self._proc.cleanup()
+            self._session.reverse_remove()
         if self._prefs and self._prefs.is_file():
             self._prefs.unlink()
 
@@ -171,7 +165,7 @@ class FenixTarget(Target):
         return Report(logs, self.binary, is_hang=is_hang, unstable=unstable)
 
     def dump_coverage(self, timeout: int = 0) -> None:
-        raise NotImplementedError()  # pragma: no cover
+        raise NotImplementedError()
 
     def handle_hang(
         self, ignore_idle: bool = True, ignore_timeout: bool = False
@@ -194,7 +188,7 @@ class FenixTarget(Target):
         env_mod["MOZ_CRASHREPORTER_SHUTDOWN"] = "1"
         # do not allow network connections to non local endpoints
         env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
-        if not self._session.wait_for_boot(1):
+        if not self._session.device.wait_for_boot(10):
             LOG.error("Device is not available for launch attempt!")
             # TODO: this should likely be a TargetLaunchError or similar
             # but we cannot get logs when the device goes away
@@ -207,7 +201,7 @@ class FenixTarget(Target):
                 url=location,
             )
         except ADBLaunchError as exc:
-            LOG.error("ADBProcess LaunchError: %s", exc)
+            LOG.error("ADBLaunchError: %s", exc)
             self.close()
             raise TargetLaunchError(str(exc), self.create_report()) from None
 

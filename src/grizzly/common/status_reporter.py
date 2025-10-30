@@ -780,7 +780,7 @@ class ReductionStatusReporter(BaseReporter):
             ),
         )
 
-    def results(self, max_len: int = 85) -> str:  # pragma: no cover
+    def results(self, max_len: int = 85) -> str:
         raise NotImplementedError()
 
     def specific(
