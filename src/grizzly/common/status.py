@@ -186,7 +186,7 @@ class SimpleResultCounter:
 
 class ReadOnlyResultCounter(SimpleResultCounter):
     def count(self, result_id: str, desc: str) -> tuple[int, bool]:
-        raise NotImplementedError("Read only!")  # pragma: no cover
+        raise NotImplementedError("Read only!")
 
     @classmethod
     def load(cls, db_file: Path, time_limit: float = 0) -> list[ReadOnlyResultCounter]:
