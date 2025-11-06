@@ -331,7 +331,7 @@ class CommonArgs:
         if args.pernosco or args.rr:
             # currently we only support rr on Linux
             settings = "/proc/sys/kernel/perf_event_paranoid"
-            value = int(Path(settings).read_text())
+            value = int(Path(settings).read_text(encoding="utf-8"))
             if value > 1:
                 self.parser.error(f"rr needs {settings} <= 1, but it is {value}")
 
