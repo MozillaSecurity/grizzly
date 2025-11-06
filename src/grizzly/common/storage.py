@@ -386,7 +386,6 @@ class TestCase:
         Returns:
             A TestCase.
         """
-        assert isinstance(path, Path)
         # load test case info
         entry_point, info = cls.load_meta(path, entry_point=entry_point)
         # create test case
@@ -545,7 +544,6 @@ class TestCase:
         Returns:
             Sanitized path.
         """
-        assert isinstance(path, str)
         # check for missing filename or path containing drive letter (Windows)
         if split(path)[-1] in ("", ".", "..") or ":" in path:
             raise ValueError(f"invalid path {path!r}")

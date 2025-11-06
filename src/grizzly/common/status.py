@@ -149,7 +149,6 @@ class SimpleResultCounter:
         Returns:
             Current count for given result_id.
         """
-        assert isinstance(result_id, str)
         self._count[result_id] += 1
         initial = False
         if result_id not in self._desc:
@@ -166,7 +165,6 @@ class SimpleResultCounter:
         Returns:
             ResultEntry: Count and description.
         """
-        assert isinstance(result_id, str)
         return ResultEntry(
             result_id, self._count.get(result_id, 0), self._desc.get(result_id, None)
         )
@@ -345,7 +343,6 @@ class ResultCounter(SimpleResultCounter):
         Returns:
             True if limit has been exceeded otherwise False.
         """
-        assert isinstance(result_id, str)
         if self._limit < 1:
             return False
         if result_id in self._frequent:
@@ -381,7 +378,6 @@ class ResultCounter(SimpleResultCounter):
         Returns:
             None
         """
-        assert isinstance(result_id, str)
         if result_id not in self._frequent:
             self._frequent.add(result_id)
 
@@ -709,7 +705,6 @@ class Status(BaseStatus):
             None
         """
         if self._enable_profiling:
-            assert isinstance(duration, (float, int))
             try:
                 self._profiles[name]["count"] += 1
                 if self._profiles[name]["max"] < duration:
