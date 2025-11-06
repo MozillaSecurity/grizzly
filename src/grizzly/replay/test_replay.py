@@ -12,8 +12,8 @@ from pytest import mark, raises
 from sapphire import Served, ServeResult
 
 from ..common.report import Report
-from ..common.storage import TestCase, TestCaseLoadFailure
-from ..target import AssetManager, Result, Target
+from ..common.storage import TestCase
+from ..target import Result, Target
 from .replay import ReplayManager, ReplayResult
 
 pytestmark = mark.usefixtures("patch_collector", "tmp_path_grz_tmp")
@@ -748,48 +748,6 @@ def test_replay_20(mocker, tmp_path):
     assert not (tmp_path / "expected_2").is_dir()
     assert path.is_dir()
     assert (path / "reports" / "expected_2_logs").is_dir()
-
-
-def test_replay_21(tmp_path):
-    """test ReplayManager.load_testcases()"""
-    # nothing to load
-    with raises(TestCaseLoadFailure, match="Failed to load TestCases"):
-        ReplayManager.load_testcases([])
-    input_path = tmp_path / "test.html"
-    input_path.touch()
-    # load single file
-    tests, asset_mgr, env_vars = ReplayManager.load_testcases([input_path])
-    assert len(tests) == 1
-    assert not tests[-1].assets
-    assert not tests[-1].env_vars
-    assert not env_vars
-    assert asset_mgr is None
-    # skip invalid
-    tests, _, _ = ReplayManager.load_testcases([Path("missing"), input_path])
-    assert len(tests) == 1
-
-
-def test_replay_22(tmp_path):
-    """test ReplayManager.load_testcases() with assets and env vars"""
-    # build test case
-    with AssetManager() as asset_mgr:
-        (tmp_path / "prefs.js").touch()
-        asset_mgr.add("prefs", tmp_path / "prefs.js", copy=False)
-        with TestCase("test.html", "foo") as test:
-            test.add_from_bytes(b"", test.entry_point)
-            test.env_vars = {"foo": "bar"}
-            test.assets = dict(asset_mgr.assets)
-            test.assets_path = asset_mgr.path
-            test.dump(tmp_path / "src", include_details=True)
-    # load directory with test info file
-    tests, asset_mgr, env_vars = ReplayManager.load_testcases([tmp_path / "src"])
-    assert asset_mgr
-    with asset_mgr:
-        assert len(tests) == 1
-        assert not tests[-1].assets
-        assert not tests[-1].env_vars
-        assert env_vars == {"foo": "bar"}
-        assert "prefs" in asset_mgr.assets
 
 
 @mark.parametrize(

@@ -14,12 +14,12 @@ from tempfile import NamedTemporaryFile, mkdtemp
 from time import time
 from typing import TYPE_CHECKING, Any
 
+from ..target import AssetManager
 from .utils import grz_tmp, package_version
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Sequence
 
-__all__ = ("TestCase", "TestCaseLoadFailure", "TestFileExists")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
@@ -555,3 +555,47 @@ class TestCase:
         if path.startswith("../"):
             raise ValueError(f"invalid path {path!r}")
         return path.lstrip("/")
+
+
+def load_testcases(
+    paths: Sequence[Path],
+    catalog: bool = False,
+    entry_point: Path | None = None,
+) -> tuple[list[TestCase], AssetManager | None, dict[str, str] | None]:
+    """Load TestCases.
+
+    Args:
+        paths: Testcases to load.
+        catalog: See TestCase.load().
+        entry_point: See TestCase.load().
+
+    Returns:
+        Loaded TestCases, AssetManager and environment variables.
+    """
+    LOG.debug("loading the TestCases")
+    tests: list[TestCase] = []
+    for entry in paths:
+        try:
+            tests.append(TestCase.load(entry, catalog=catalog, entry_point=entry_point))
+        except TestCaseLoadFailure as exc:  # noqa: PERF203
+            LOG.warning("Failed to load: '%s' (%s)", entry, exc)
+    if not tests:
+        raise TestCaseLoadFailure("Failed to load TestCases")
+    # load and remove assets and environment variables from test cases
+    asset_mgr = None
+    env_vars = None
+    for test in tests:
+        if asset_mgr is None and test.assets and test.assets_path:
+            asset_mgr = AssetManager.load(test.assets, test.assets_path)
+        if not env_vars and test.env_vars:
+            env_vars = dict(test.env_vars)
+        test.env_vars.clear()
+        test.assets.clear()
+        test.assets_path = None
+    LOG.debug(
+        "loaded TestCase(s): %d, assets: %r, env vars: %r",
+        len(tests),
+        asset_mgr is not None,
+        env_vars is not None,
+    )
+    return tests, asset_mgr, env_vars

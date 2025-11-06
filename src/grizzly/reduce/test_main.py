@@ -125,7 +125,7 @@ def test_args_04(tmp_path):
             False,
         ),
         (
-            "grizzly.reduce.core.ReplayManager.load_testcases",
+            "grizzly.reduce.main.load_testcases",
             TestCaseLoadFailure,
             None,
             {},
@@ -133,7 +133,7 @@ def test_args_04(tmp_path):
             False,
         ),
         (
-            "grizzly.reduce.core.ReplayManager.load_testcases",
+            "grizzly.reduce.main.load_testcases",
             ConfigError("", 999),
             None,
             {"no_harness": False},
@@ -141,7 +141,7 @@ def test_args_04(tmp_path):
             False,
         ),
         (
-            "grizzly.reduce.core.ReplayManager.load_testcases",
+            "grizzly.reduce.main.load_testcases",
             RuntimeError,
             None,
             {},
@@ -195,7 +195,7 @@ def test_main_launch_error(mocker, exc_type):
     mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
     mocker.patch(
-        "grizzly.reduce.core.ReplayManager.load_testcases",
+        "grizzly.reduce.main.load_testcases",
         return_value=(
             [mocker.Mock(spec_set=TestCase, hang=False, adapter_name="fake")],
             None,
@@ -269,8 +269,7 @@ def test_main_load_assets_and_env(mocker, tmp_path):
     """test main() - Use assets and env vars from loaded TestCase"""
     asset_mgr = mocker.Mock(spec_set=AssetManager)
     mocker.patch(
-        "grizzly.reduce.core.ReplayManager.load_testcases",
-        autospec=True,
+        "grizzly.reduce.main.load_testcases",
         return_value=([], asset_mgr, {"FOO_ENV": "123"}),
     )
     mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True, return_value=0)

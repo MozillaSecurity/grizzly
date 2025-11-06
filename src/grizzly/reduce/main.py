@@ -23,7 +23,7 @@ from ..common.frontend import (
 )
 from ..common.plugins import load_plugin
 from ..common.reporter import FailedLaunchReporter
-from ..common.storage import TestCase, TestCaseLoadFailure
+from ..common.storage import TestCase, TestCaseLoadFailure, load_testcases
 from ..common.utils import package_version
 from ..replay import ReplayManager
 from ..services import WebServices
@@ -75,9 +75,7 @@ def main(args: Namespace | None = None) -> int:
     testcases: list[TestCase] = []
 
     try:
-        testcases, asset_mgr, env_vars = ReplayManager.load_testcases(
-            args.input, catalog=True
-        )
+        testcases, asset_mgr, env_vars = load_testcases(args.input, catalog=True)
 
         if args.sig:
             signature = CrashSignature.fromFile(args.sig)
