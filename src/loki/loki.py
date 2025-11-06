@@ -146,7 +146,6 @@ class Loki:
         Returns:
             Fuzzed data.
         """
-        assert isinstance(data, bytes)
         # open a temp file in memory for fuzzing
         with SpooledTemporaryFile(max_size=0x800000, mode="r+b") as tmp_fp:
             tmp_fp.write(data)

@@ -480,7 +480,6 @@ class Stack:
 
     @height_limit.setter
     def height_limit(self, value: int) -> None:
-        assert isinstance(value, int)
         assert value >= 0
         self._height_limit = value
         # force recalculation of hashes

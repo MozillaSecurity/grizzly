@@ -56,7 +56,6 @@ class CrashEntry:
         Arguments:
             crash_id: ID of the requested crash on the server side
         """
-        assert isinstance(crash_id, int)
         self._crash_id = crash_id
         self._coll = Collector()
         self._contents: list[Path] | None = None
@@ -128,7 +127,6 @@ class CrashEntry:
         Returns:
             Directories that have been selected.
         """
-        assert isinstance(subset, list)
         assert tests
         count = len(tests)
         # deduplicate and limit requested indices to valid range
@@ -273,7 +271,6 @@ class Bucket:
         Arguments:
             bucket_id: ID of the requested bucket on the server.
         """
-        assert isinstance(bucket_id, int)
         self._bucket_id = bucket_id
         self._sig_filename: Path | None = None
         self._coll = Collector()

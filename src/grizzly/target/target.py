@@ -10,14 +10,14 @@ from os import environ
 from threading import Lock
 from typing import TYPE_CHECKING, final
 
-from sapphire import CertificateBundle
-
 from ..common.utils import grz_tmp
 from .assets import AssetManager
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
     from pathlib import Path
+
+    from sapphire import CertificateBundle
 
     from ..common.report import Report
     from .target_monitor import TargetMonitor
@@ -82,7 +82,6 @@ class Target(ABC):
         assert log_limit >= 0
         assert memory_limit >= 0
         assert binary is not None and binary.is_file()
-        assert certs is None or isinstance(certs, CertificateBundle)
         self._asset_mgr = AssetManager(base_path=grz_tmp("target"))
         self._https = False
         self._lock = Lock()
@@ -122,7 +121,6 @@ class Target(ABC):
             AssetManager.
         """
         self._asset_mgr.cleanup()
-        assert isinstance(asset_mgr, AssetManager)
         self._asset_mgr = asset_mgr
 
     @abstractmethod

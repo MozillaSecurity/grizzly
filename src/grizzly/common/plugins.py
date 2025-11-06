@@ -29,7 +29,6 @@ def load_plugin(name: str, group: str, base_type: type) -> Any:
     Returns:
         Loaded plug-in object.
     """
-    assert isinstance(base_type, type)
     for entry in iter_entry_points(group):
         if entry.name == name:
             plugin = entry.load()

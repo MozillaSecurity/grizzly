@@ -221,7 +221,6 @@ class FuzzManagerReporter(Reporter):
         Returns:
             None
         """
-        assert isinstance(key, str)
         assert key not in self._extra_metadata
         # deep copy and ensure that value is JSON serializable
         self._extra_metadata[key] = loads(dumps(value))

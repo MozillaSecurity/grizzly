@@ -278,7 +278,6 @@ class ReplayManager:
         if self._harness is None:
             server_map.set_redirect("grz_start", "grz_current_test", required=False)
         else:
-            assert isinstance(self._harness, bytes)
             assert self._harness, "harness must contain data"
 
             def harness_fn(_: str) -> bytes:  # pragma: no cover
