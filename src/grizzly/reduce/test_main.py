@@ -8,9 +8,9 @@ from pytest import mark, raises
 from ..common.frontend import ConfigError, Exit
 from ..common.storage import TestCase, TestCaseLoadFailure
 from ..target import AssetManager, Target, TargetLaunchError, TargetLaunchTimeout
-from . import ReduceManager
 from .args import ReduceArgs, ReduceFuzzManagerIDArgs, ReduceFuzzManagerIDQualityArgs
 from .exceptions import GrizzlyReduceBaseException
+from .main import main
 
 pytestmark = mark.usefixtures("tmp_path_status_db_reduce")
 
@@ -109,7 +109,7 @@ def test_args_04(tmp_path):
             False,
         ),
         (
-            "grizzly.reduce.core.load_plugin",
+            "grizzly.reduce.main.load_plugin",
             KeyboardInterrupt,
             None,
             {},
@@ -117,7 +117,7 @@ def test_args_04(tmp_path):
             True,
         ),
         (
-            "grizzly.reduce.core.load_plugin",
+            "grizzly.reduce.main.load_plugin",
             GrizzlyReduceBaseException("", 999),
             None,
             {},
@@ -153,11 +153,11 @@ def test_args_04(tmp_path):
 def test_main_exit(
     mocker, tmp_path, patch_func, side_effect, return_value, kwargs, exit_code, use_sig
 ):
-    """test ReduceManager.main() failure cases"""
+    """test main() failure cases"""
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
-    mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)
     mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
-    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
+    mocker.patch("grizzly.reduce.main.load_plugin", autospec=True)
+    mocker.patch("grizzly.reduce.main.Sapphire", autospec=True)
 
     if use_sig:
         sig = tmp_path / "fake.sig"
@@ -181,7 +181,7 @@ def test_main_exit(
     )
 
     mocker.patch(patch_func, side_effect=side_effect, return_value=return_value)
-    assert ReduceManager.main(args) == exit_code
+    assert main(args) == exit_code
 
 
 @mark.parametrize(
@@ -194,8 +194,6 @@ def test_main_exit(
 def test_main_launch_error(mocker, exc_type):
     mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
-    reporter = mocker.patch("grizzly.reduce.core.FailedLaunchReporter", autospec=True)
-    mocker.patch("grizzly.reduce.core.load_plugin", autospec=True)
     mocker.patch(
         "grizzly.reduce.core.ReplayManager.load_testcases",
         return_value=(
@@ -204,9 +202,11 @@ def test_main_launch_error(mocker, exc_type):
             {},
         ),
     )
-    mocker.patch("grizzly.reduce.core.time_limits", return_value=(None, 10))
     run = mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True)
-    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
+    reporter = mocker.patch("grizzly.reduce.main.FailedLaunchReporter", autospec=True)
+    mocker.patch("grizzly.reduce.main.load_plugin", autospec=True)
+    mocker.patch("grizzly.reduce.main.Sapphire", autospec=True)
+    mocker.patch("grizzly.reduce.main.time_limits", return_value=(None, 10))
     # setup args
     args = mocker.Mock(
         ignore=["fake"],
@@ -223,7 +223,7 @@ def test_main_launch_error(mocker, exc_type):
         "error", mocker.Mock() if exc_type is TargetLaunchError else None
     )
     run.side_effect = exc_obj
-    assert ReduceManager.main(args) == 4
+    assert main(args) == 4
     if exc_type is TargetLaunchError:
         assert reporter.return_value.submit.call_count == 1
         reported_testcases, report = reporter.return_value.submit.call_args[0]
@@ -235,13 +235,13 @@ def test_main_launch_error(mocker, exc_type):
 
 @mark.parametrize("https_supported", [True, False])
 def test_main_https_support(mocker, tmp_path, https_supported):
-    """test ReduceManager.main() - Target HTTPS support"""
+    """test main() - Target HTTPS support"""
     mocker.patch("grizzly.reduce.core.FuzzManagerReporter", autospec=True)
-    mocker.patch("grizzly.reduce.core.get_certs", autospec=True)
     mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True, return_value=0)
     mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
-    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
-    mocker.patch("grizzly.reduce.core.WebServices", autospec=True)
+    mocker.patch("grizzly.reduce.main.get_certs", autospec=True)
+    mocker.patch("grizzly.reduce.main.Sapphire", autospec=True)
+    mocker.patch("grizzly.reduce.main.WebServices", autospec=True)
     (tmp_path / "test.html").touch()
     # setup args
     args = mocker.Mock(
@@ -260,13 +260,13 @@ def test_main_https_support(mocker, tmp_path, https_supported):
     target_cls = mocker.MagicMock(spec_set=Target)
     target = target_cls.return_value
     target.https.return_value = https_supported
-    mocker.patch("grizzly.reduce.core.load_plugin", return_value=target_cls)
-    assert ReduceManager.main(args) == 0
+    mocker.patch("grizzly.reduce.main.load_plugin", return_value=target_cls)
+    assert main(args) == 0
     assert target.https.call_count == 1
 
 
 def test_main_load_assets_and_env(mocker, tmp_path):
-    """test ReduceManager.main() - Use assets and env vars from loaded TestCase"""
+    """test main() - Use assets and env vars from loaded TestCase"""
     asset_mgr = mocker.Mock(spec_set=AssetManager)
     mocker.patch(
         "grizzly.reduce.core.ReplayManager.load_testcases",
@@ -275,7 +275,7 @@ def test_main_load_assets_and_env(mocker, tmp_path):
     )
     mocker.patch("grizzly.reduce.core.ReduceManager.run", autospec=True, return_value=0)
     mocker.patch("grizzly.reduce.core.ReductionStatus", autospec=True)
-    mocker.patch("grizzly.reduce.core.Sapphire", autospec=True)
+    mocker.patch("grizzly.reduce.main.Sapphire", autospec=True)
     (tmp_path / "test.html").touch()
     # setup args
     args = mocker.Mock(
@@ -292,8 +292,8 @@ def test_main_load_assets_and_env(mocker, tmp_path):
 
     target = mocker.Mock(spec_set=Target)
     target_cls = mocker.MagicMock(spec_set=Target, return_value=target)
-    mocker.patch("grizzly.reduce.core.load_plugin", return_value=target_cls)
-    assert ReduceManager.main(args) == 0
+    mocker.patch("grizzly.reduce.main.load_plugin", return_value=target_cls)
+    assert main(args) == 0
     assert target.merge_environment.call_count == 1
     assert target.merge_environment.call_args.args == ({"FOO_ENV": "123"},)
     assert asset_mgr.add_batch.call_count == 1

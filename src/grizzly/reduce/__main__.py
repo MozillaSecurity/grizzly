@@ -3,6 +3,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Grizzly reducer CLI."""
 
-from . import ReduceManager
+from .main import main
 
-raise SystemExit(ReduceManager.main())
+raise SystemExit(main())

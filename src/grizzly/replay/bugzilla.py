@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from ..common.bugzilla import BugzillaBug
 from ..common.frontend import Exit, configure_logging
 from .args import ReplayFuzzBugzillaArgs
-from .replay import ReplayManager
+from .main import main as replay_main
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -43,7 +43,7 @@ def main(args: Namespace | None = None) -> int:
             LOG.error("No test case data attached to bug %d", args.input)
             return Exit.ERROR
         args.input = testcases
-        return ReplayManager.main(args)
+        return replay_main(args)
 
 
 if __name__ == "__main__":

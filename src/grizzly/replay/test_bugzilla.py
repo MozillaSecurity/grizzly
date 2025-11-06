@@ -24,8 +24,7 @@ def test_crash_main_no_bug(mocker, tmp_path):
 def test_crash_main(mocker, tmp_path):
     """test main()"""
     fake_bugsy = mocker.patch("grizzly.common.bugzilla.Bugsy", autospec=True)
-    fake_replay = mocker.patch("grizzly.replay.bugzilla.ReplayManager", autospec=True)
-    fake_replay.main.return_value = 0
+    mocker.patch("grizzly.replay.bugzilla.replay_main", return_value=0)
     file = tmp_path / "file"
     file.touch()
 
