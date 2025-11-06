@@ -17,10 +17,7 @@ from .crash import modify_args
 
 def test_crash_main(mocker):
     """test main()"""
-    replay_main = mocker.patch(
-        "grizzly.replay.crash.ReplayManager.main",
-        return_value=0,
-    )
+    replay_main = mocker.patch("grizzly.replay.crash.replay_main", return_value=0)
     crash = mocker.Mock(spec=CrashEntry, crash_id=1, tool="tool-name")
     crash.create_signature.side_effect = RuntimeError("no sig to create")
     load_fm_data = mocker.patch("grizzly.replay.crash.load_fm_data")

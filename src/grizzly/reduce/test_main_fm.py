@@ -29,7 +29,7 @@ pytestmark = mark.usefixtures("tmp_path_status_db_reduce")
 def test_crash_main_quality(mocker, exit_code, pre_quality, post_quality):
     """test that quality is updated"""
     reduce_main = mocker.patch(
-        "grizzly.reduce.crash.ReduceManager.main",
+        "grizzly.reduce.crash.reduce_main",
         return_value=exit_code,
     )
     crash = mocker.Mock(testcase_quality=pre_quality, crash_id=1)

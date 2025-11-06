@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from ..common.frontend import configure_logging
 from ..common.fuzzmanager import Bucket, CrashEntry, load_fm_data
 from .args import ReplayFuzzManagerIDArgs
-from .replay import ReplayManager
+from .main import main as replay_main
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -32,7 +32,7 @@ def main(args: Namespace | None = None) -> int:
     with load_fm_data(args.input, load_bucket=not args.sig) as (crash, bucket):
         LOG.info("Loaded crash %d from FuzzManager", crash.crash_id)
         # call grizzly.replay
-        return ReplayManager.main(modify_args(args, crash, bucket))
+        return replay_main(modify_args(args, crash, bucket))
 
 
 def modify_args(args: Namespace, crash: CrashEntry, bucket: Bucket | None) -> Namespace:

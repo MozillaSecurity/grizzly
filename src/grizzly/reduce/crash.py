@@ -11,7 +11,7 @@ from ..common.fuzzmanager import load_fm_data
 from ..common.reporter import Quality
 from ..replay.crash import modify_args
 from .args import ReduceFuzzManagerIDArgs
-from .core import ReduceManager
+from .main import main as reduce_main
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -37,7 +37,7 @@ def main(args: Namespace | None = None) -> int:
             Quality(crash.testcase_quality).name,
         )
         # call grizzly.reduce
-        result = ReduceManager.main(modify_args(args, crash, bucket))
+        result = reduce_main(modify_args(args, crash, bucket))
 
         # update quality
         # map Exit.* -> Quality.*

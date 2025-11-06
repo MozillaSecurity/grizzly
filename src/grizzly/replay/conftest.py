@@ -14,7 +14,7 @@ from sapphire import Sapphire
 def server(mocker):
     """Mock Sapphire server"""
     srv = mocker.Mock(spec_set=Sapphire, port=1337, timeout=10)
-    srv_cls = mocker.patch("grizzly.replay.replay.Sapphire", autospec=True)
+    srv_cls = mocker.patch("grizzly.replay.main.Sapphire", autospec=True)
     srv_cls.return_value.__enter__.return_value = srv
     return srv
 
