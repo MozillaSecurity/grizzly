@@ -66,7 +66,7 @@ def test_testcase_02():
         assert len(tuple(tcase.required)) == 1
         assert len(tuple(tcase.optional)) == 1
         # add previously added file
-        with raises(TestFileExists, match="'opt.html' exists in test"):
+        with raises(TestFileExists, match=r"'opt.html' exists in test"):
             tcase.add_from_file(tcase.root / "opt.html", required=False)
 
 
@@ -95,7 +95,7 @@ def test_testcase_03(tmp_path, copy, required):
         assert in_file.exists() == copy
         # try overwriting existing file
         if copy:
-            with raises(TestFileExists, match="'file.bin' exists in test"):
+            with raises(TestFileExists, match=r"'file.bin' exists in test"):
                 tcase.add_from_file(in_file, copy=True)
             assert in_file.exists()
         else:
