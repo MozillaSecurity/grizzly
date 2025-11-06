@@ -4,11 +4,18 @@
 # pylint: disable=protected-access
 
 from json import dumps, loads
+from pathlib import Path
 
 from pytest import mark, raises
 
 from ..target import AssetManager
-from .storage import TEST_INFO, TestCase, TestCaseLoadFailure, TestFileExists
+from .storage import (
+    TEST_INFO,
+    TestCase,
+    TestCaseLoadFailure,
+    TestFileExists,
+    load_testcases,
+)
 
 
 def test_testcase_01(tmp_path):
@@ -500,3 +507,45 @@ def test_testcase_18(path):
 def test_testcase_19(path, expected_result):
     """test TestCase.sanitize_path()"""
     assert TestCase.sanitize_path(path) == expected_result
+
+
+def test_load_testcases(tmp_path):
+    """test load_testcases()"""
+    # nothing to load
+    with raises(TestCaseLoadFailure, match="Failed to load TestCases"):
+        load_testcases([])
+    input_path = tmp_path / "test.html"
+    input_path.touch()
+    # load single file
+    tests, asset_mgr, env_vars = load_testcases([input_path])
+    assert len(tests) == 1
+    assert not tests[-1].assets
+    assert not tests[-1].env_vars
+    assert not env_vars
+    assert asset_mgr is None
+    # skip invalid
+    tests, _, _ = load_testcases([Path("missing"), input_path])
+    assert len(tests) == 1
+
+
+def test_load_testcases_with_assets_and_env(tmp_path):
+    """test load_testcases() with assets and env vars"""
+    # build test case
+    with AssetManager() as asset_mgr:
+        (tmp_path / "prefs.js").touch()
+        asset_mgr.add("prefs", tmp_path / "prefs.js", copy=False)
+        with TestCase("test.html", "foo") as test:
+            test.add_from_bytes(b"", test.entry_point)
+            test.env_vars = {"foo": "bar"}
+            test.assets = dict(asset_mgr.assets)
+            test.assets_path = asset_mgr.path
+            test.dump(tmp_path / "src", include_details=True)
+    # load directory with test info file
+    tests, asset_mgr, env_vars = load_testcases([tmp_path / "src"])
+    assert asset_mgr
+    with asset_mgr:
+        assert len(tests) == 1
+        assert not tests[-1].assets
+        assert not tests[-1].env_vars
+        assert env_vars == {"foo": "bar"}
+        assert "prefs" in asset_mgr.assets

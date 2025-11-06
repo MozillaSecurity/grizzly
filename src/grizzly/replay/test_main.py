@@ -197,11 +197,7 @@ def test_main_03(mocker, load_plugin, load_testcases, signature, result):
         autospec=True,
         side_effect=load_plugin,
     )
-    mocker.patch(
-        "grizzly.replay.replay.ReplayManager.load_testcases",
-        autospec=True,
-        side_effect=(load_testcases,),
-    )
+    mocker.patch("grizzly.replay.main.load_testcases", side_effect=(load_testcases,))
     fake_sig = mocker.patch("grizzly.replay.main.CrashSignature", autospec=True)
     # setup args
     args = mocker.Mock(

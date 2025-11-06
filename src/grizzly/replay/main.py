@@ -21,7 +21,7 @@ from ..common.frontend import (
 )
 from ..common.plugins import load_plugin
 from ..common.reporter import FailedLaunchReporter
-from ..common.storage import TestCaseLoadFailure
+from ..common.storage import TestCaseLoadFailure, load_testcases
 from ..common.utils import package_version
 from ..services import WebServices
 from ..target import Target, TargetLaunchError, TargetLaunchTimeout
@@ -64,7 +64,7 @@ def main(args: Namespace | None = None) -> int:
     signature = CrashSignature.fromFile(args.sig) if args.sig else None
 
     try:
-        testcases, asset_mgr, env_vars = ReplayManager.load_testcases(
+        testcases, asset_mgr, env_vars = load_testcases(
             args.input, entry_point=args.entry_point
         )
     except TestCaseLoadFailure as exc:

@@ -16,17 +16,17 @@ from ..common.report import Report
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter
 from ..common.runner import Runner, RunResult
 from ..common.status import SimpleStatus
-from ..common.storage import TestCase, TestCaseLoadFailure
 from ..common.utils import HARNESS_FILE, grz_tmp
-from ..target import AssetManager, Result, Target
+from ..target import Result, Target
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable
 
     from FTB.Signatures.CrashInfo import CrashSignature
 
     from sapphire import Sapphire
 
+    from ..common.storage import TestCase
     from ..services import WebServices
 
 __author__ = "Tyson Smith"
@@ -159,53 +159,6 @@ class ReplayManager:
                     "Cannot ignore 'timeout' when detecting hangs", Exit.ERROR
                 )
         return is_hang
-
-    @classmethod
-    def load_testcases(
-        cls,
-        paths: Sequence[Path],
-        catalog: bool = False,
-        entry_point: Path | None = None,
-    ) -> tuple[list[TestCase], AssetManager | None, dict[str, str] | None]:
-        """Load TestCases.
-
-        Args:
-            paths: Testcases to load.
-            catalog: See TestCase.load().
-            entry_point: See TestCase.load().
-
-        Returns:
-            Loaded TestCases, AssetManager and environment variables.
-        """
-        LOG.debug("loading the TestCases")
-        tests: list[TestCase] = []
-        for entry in paths:
-            try:
-                tests.append(
-                    TestCase.load(entry, catalog=catalog, entry_point=entry_point)
-                )
-            except TestCaseLoadFailure as exc:  # noqa: PERF203
-                LOG.warning("Failed to load: '%s' (%s)", entry, exc)
-        if not tests:
-            raise TestCaseLoadFailure("Failed to load TestCases")
-        # load and remove assets and environment variables from test cases
-        asset_mgr = None
-        env_vars = None
-        for test in tests:
-            if asset_mgr is None and test.assets and test.assets_path:
-                asset_mgr = AssetManager.load(test.assets, test.assets_path)
-            if not env_vars and test.env_vars:
-                env_vars = dict(test.env_vars)
-            test.env_vars.clear()
-            test.assets.clear()
-            test.assets_path = None
-        LOG.debug(
-            "loaded TestCase(s): %d, assets: %r, env vars: %r",
-            len(tests),
-            asset_mgr is not None,
-            env_vars is not None,
-        )
-        return tests, asset_mgr, env_vars
 
     @staticmethod
     def lookup_tool(tests: list[TestCase]) -> str | None:
