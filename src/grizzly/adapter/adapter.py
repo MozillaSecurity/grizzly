@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, final
 
@@ -27,7 +27,7 @@ class AdapterError(Exception):
     """The base class for exceptions raised by an Adapter"""
 
 
-class Adapter(metaclass=ABCMeta):
+class Adapter(ABC):
     """An Adapter is the interface between Grizzly and a fuzzer. A subclass must
     be created in order to add support for additional fuzzers. The Adapter is
     responsible for handling input/output data and executing the fuzzer.

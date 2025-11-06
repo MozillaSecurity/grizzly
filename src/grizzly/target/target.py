@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from enum import IntEnum, unique
 from logging import getLogger
 from os import environ
@@ -54,7 +54,7 @@ class TargetLaunchTimeout(TargetError):
     """Raised if the target does not launch within the defined amount of time"""
 
 
-class Target(metaclass=ABCMeta):
+class Target(ABC):
     SUPPORTED_ASSETS: tuple[str, ...] = ()
     TRACKED_ENVVARS: tuple[str, ...] = ()
 

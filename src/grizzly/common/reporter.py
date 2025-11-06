@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from enum import IntEnum, unique
 from json import dumps, loads
 from logging import getLogger
@@ -56,7 +56,7 @@ class Quality(IntEnum):
     NOT_REPRODUCIBLE = 10
 
 
-class Reporter(metaclass=ABCMeta):
+class Reporter(ABC):
     __slots__ = ("display_logs",)
 
     def __init__(self) -> None:

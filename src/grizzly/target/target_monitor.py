@@ -3,14 +3,14 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 
 __all__ = ("TargetMonitor",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
 
-class TargetMonitor(metaclass=ABCMeta):
+class TargetMonitor(ABC):
     @abstractmethod
     def is_healthy(self) -> bool:
         """Check for failures such as assertions, crashes, etc.
