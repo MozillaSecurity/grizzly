@@ -45,7 +45,7 @@
           self.postMessage({type: 'poll'});
         }, 50);
       } else if (e.data.command === 'stop') {
-        if (pollInterval) {
+        if (pollInterval !== null) {
           clearInterval(pollInterval);
           pollInterval = null;
         }
