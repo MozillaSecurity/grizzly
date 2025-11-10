@@ -5,10 +5,10 @@
 
 from __future__ import annotations
 
-import os
 from itertools import chain
 from logging import getLogger
 from math import ceil, log
+from os import linesep
 from pathlib import Path
 from time import time
 from typing import TYPE_CHECKING
@@ -651,20 +651,18 @@ class ReduceManager:
                         # otherwise, ensure the first found signature is used throughout
                         self._signature = replay.signature
 
-                    if best_results:
-                        self.report(best_results, self.testcases, update_status=True)
-                    for result, reduction in other_results.values():
-                        self.report([result], reduction)
-
                 except KeyboardInterrupt:
                     if best_results:
-                        self.report(best_results, self.testcases, update_status=True)
                         LOG.warning(
                             "Ctrl+C detected, best reduction so far reported as %r",
                             self._status.last_reports,
                         )
                     raise
                 finally:
+                    if best_results:
+                        self.report(best_results, self.testcases, update_status=True)
+                    for result, reduction in other_results.values():
+                        self.report([result], reduction)
                     for result in best_results:
                         result.report.cleanup()
                     for result, reduction in other_results.values():
@@ -696,7 +694,7 @@ class ReduceManager:
         # log a summary of what was done.
         LOG.info(
             "Reduction summary:%s%s",
-            os.linesep,
+            linesep,
             ReductionStatusReporter([self._status]).summary(),
         )
         self._status.report(force=True)
