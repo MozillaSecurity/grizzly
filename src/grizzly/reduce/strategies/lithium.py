@@ -48,6 +48,7 @@ class _LithiumStrategy(Strategy, ABC):
                        testcases.
         """
         super().__init__(testcases)
+        self.minimize_repeat = "never"
         self._current_feedback: bool | None = None
         self._current_reducer: ReductionIterator | None = None
         self._files_to_reduce: list[Path] = []
