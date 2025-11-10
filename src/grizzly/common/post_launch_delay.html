@@ -1,87 +1,84 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<meta charset=UTF-8>
-<title>Grizzly &sdot; Post Launch Delay</title>
-<head>
-<style>
-body {
-    background-color: #222;
-    color: #ccc;
-    font-family: monospace;
-    font-size: 1.2em;
-}
-button {
-    background-color: #444;
-    border: 2px solid;
-    border-color: #ccc;
-    color: inherit;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: inherit;
-    padding: .1em .4em;
-}
-</style>
-<script>
-const args = window.location.search.replace('?', '')
-const target = args ? `/grz_continue?${args}` : '/grz_continue'
-let countInterval = null
+  <meta charset="UTF-8" />
+  <title>Grizzly &sdot; Post Launch Delay</title>
+  <head>
+    <style>
+      body {
+        background-color: #222;
+        color: #ccc;
+        font-family: monospace;
+        font-size: 1.2em;
+      }
+      button {
+        background-color: #444;
+        border: 2px solid;
+        border-color: #ccc;
+        color: inherit;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: inherit;
+        padding: 0.1em 0.4em;
+      }
+    </style>
+    <script>
+      const args = window.location.search.replace("?", "");
+      const target = args ? `/grz_continue?${args}` : "/grz_continue";
+      let countInterval = null;
 
-// parse args
-let limit = 300
-if (args) {
-    for (let kv of args.split('&')) {
-        let [k, v] = kv.split('=')
-        if (k === 'post_launch_delay') {
-            limit = Math.max(Number.parseInt(v), 0)
-            break
+      // parse args
+      let limit = 300;
+      if (args) {
+        for (let kv of args.split("&")) {
+          let [k, v] = kv.split("=");
+          if (k === "post_launch_delay") {
+            limit = Math.max(Number.parseInt(v), 0);
+            break;
+          }
         }
-    }
-}
-let remaining = limit
+      }
+      let remaining = limit;
 
-function countDown() {
-    remaining -= 1
-    setTimeout(updateDisplay, 0)
-    if (remaining <= 0)
-        setTimeout(next, 0)
-}
+      function countDown() {
+        remaining -= 1;
+        setTimeout(updateDisplay, 0);
+        if (remaining <= 0) setTimeout(next, 0);
+      }
 
-function next() {
-    if (countInterval) {
-        clearInterval(countInterval)
-    }
-    document.getElementById('msg').innerText = `> Redirecting...`
-    setTimeout(() => {
-        window.location = target
-    }, 0)
-}
+      function next() {
+        if (countInterval) {
+          clearInterval(countInterval);
+        }
+        document.getElementById("msg").innerText = `> Redirecting...`;
+        setTimeout(() => {
+          window.location = target;
+        }, 0);
+      }
 
-function updateDisplay() {
-    remainingSeconds = Math.max(remaining, 0)
-    document.getElementById('msg').innerText = (
-        `> Continuing automatically in: ${remainingSeconds}s`
-    )
-}
+      function updateDisplay() {
+        remainingSeconds = Math.max(remaining, 0);
+        document.getElementById("msg").innerText =
+          `> Continuing automatically in: ${remainingSeconds}s`;
+      }
 
-window.onload = () => {
-    setTimeout(updateDisplay, 0)
-    if (remaining) {
-        countInterval = setInterval(countDown, 1000)
-    }
-    else {
-        document.getElementById('btn').style.display = 'none'
-        document.getElementById('prompt').style.display = 'none'
-        setTimeout(countDown, 0)
-    }
-}
-</script>
-</head>
-<body>
-<h4>Grizzly &sdot; Post Launch Delay</h4>
-<div>&gt; Browser launched.</div>
-<div id='prompt'>&gt; Connect debugger, etc...</div>
-<div id='msg'></div>
-<div>&nbsp;</div>
-<button id='btn' onclick='next()'>Continue</button>
-</body>
+      window.onload = () => {
+        setTimeout(updateDisplay, 0);
+        if (remaining) {
+          countInterval = setInterval(countDown, 1000);
+        } else {
+          document.getElementById("btn").style.display = "none";
+          document.getElementById("prompt").style.display = "none";
+          setTimeout(countDown, 0);
+        }
+      };
+    </script>
+  </head>
+  <body>
+    <h4>Grizzly &sdot; Post Launch Delay</h4>
+    <div>&gt; Browser launched.</div>
+    <div id="prompt">&gt; Connect debugger, etc...</div>
+    <div id="msg"></div>
+    <div>&nbsp;</div>
+    <button id="btn" onclick="next()">Continue</button>
+  </body>
 </html>
