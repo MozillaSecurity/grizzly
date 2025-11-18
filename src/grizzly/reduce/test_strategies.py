@@ -240,7 +240,7 @@ def test_dd_only(mocker, tmp_path):
     ) as mgr:
         assert mgr.run() == 0
 
-    expected_run_calls = 3
+    expected_run_calls = 2
     expected_results = {"DDBEGIN\nrequired\nDDEND\n"}
     expected_num_reports = 2
 

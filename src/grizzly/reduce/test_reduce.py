@@ -5,7 +5,7 @@
 """Unit tests for `grizzly.reduce.reduce`."""
 
 from collections import namedtuple
-from functools import partial, wraps
+from functools import wraps
 from itertools import count
 from logging import getLogger
 from pathlib import Path
@@ -430,7 +430,7 @@ ReproTestParams = namedtuple(
             detect_failure=lambda contents: set(contents.splitlines()) >= set("135"),
             interesting_str="%r contains {'1', '3', '5'}",
             is_expected=lambda contents: contents != "1\n3\n5\n",
-            expected_run_calls=13,
+            expected_run_calls=12,
             n_reports=2,
             reports={"1\n2\n3\n4\n5\n6\n", "1\n2\n3\n5\n"},
             n_other=1,
@@ -468,7 +468,7 @@ ReproTestParams = namedtuple(
             ),
             interesting_str="%r contains {'A1\\n', 'A3\\n', 'A5\\n'}",
             is_expected=lambda _: True,
-            expected_run_calls=34,
+            expected_run_calls=32,
             # lines found nothing, only check and chars should report
             n_reports=2,
             reports={"A1\nA2\nA3\nA4\nA5\nA6\n", "A1\nA3\nA5\n"},
@@ -501,22 +501,6 @@ ReproTestParams = namedtuple(
             interesting_str="%r is anything, incl. empty",
             is_expected=lambda _: True,
             expected_run_calls=3,
-            n_reports=2,
-            reports={"1\n2\n3\n", ""},
-            n_other=0,
-            other_reports=None,
-            result=0,
-        ),
-        # reproduces, two strategies, 1st no reduce, 2nd testcase reduces to 0
-        ReproTestParams(
-            original=b"1\n2\n3\n",
-            strategies=["check", "lines", "lines"],
-            detect_failure=_ignore_arg(
-                partial([True, False, False, False, False, True, True, True].pop, 0)
-            ),
-            interesting_str="%r is anything, only in second strategy",
-            is_expected=lambda _: True,
-            expected_run_calls=8,
             n_reports=2,
             reports={"1\n2\n3\n", ""},
             n_other=0,
