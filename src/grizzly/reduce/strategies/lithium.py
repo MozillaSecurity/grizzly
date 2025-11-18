@@ -48,7 +48,6 @@ class _LithiumStrategy(Strategy, ABC):
                        testcases.
         """
         super().__init__(testcases)
-        self.minimize_repeat = "never"
         self._current_feedback: bool | None = None
         self._current_reducer: ReductionIterator | None = None
         self._files_to_reduce: list[Path] = []
@@ -118,6 +117,7 @@ class _LithiumStrategy(Strategy, ABC):
             lithium_testcase = self.testcase_cls()  # pylint: disable=not-callable
             lithium_testcase.load(file)
             strategy = self.strategy_cls()  # pylint: disable=not-callable
+            strategy.minimize_repeat = "never"  # type: ignore[attr-defined]
             self._current_reducer = strategy.reduce(lithium_testcase)
 
             # Populate the lithium strategy "tried" cache.
