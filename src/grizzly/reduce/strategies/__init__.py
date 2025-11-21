@@ -39,6 +39,7 @@ DEFAULT_STRATEGIES = (
     "lines",
     "cssbeautify",
     "jsbeautify",
+    "beautifulsoup",
     "collapsebraces",
     "attrs",
 )

@@ -1,0 +1,113 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import annotations
+
+from logging import getLogger
+from typing import TYPE_CHECKING
+
+from lithium.testcases import TestcaseLine
+
+try:
+    from bs4 import BeautifulSoup
+    from bs4.formatter import HTMLFormatter
+
+    HAVE_BEAUTIFULSOUP = True
+except ImportError:  # pragma: no cover
+    HAVE_BEAUTIFULSOUP = False
+
+from ...common.storage import TEST_INFO, TestCase
+from . import Strategy, _contains_dd
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+    from pathlib import Path
+
+LOG = getLogger(__name__)
+
+
+class BeautifulSoupPrettify(Strategy):
+    all_extensions = frozenset((".htm", ".html", ".xhtml", ".svg"))
+    ignore_files = frozenset((TEST_INFO, "prefs.js"))
+    import_available = HAVE_BEAUTIFULSOUP
+    import_name = "beautifulsoup4"
+    name = "beautifulsoup"
+
+    def __init__(self, testcases: list[TestCase]) -> None:
+        """Initialize strategy instance.
+
+        Arguments:
+            testcases: Testcases to reduce. The object does not take ownership of the
+                       testcases.
+        """
+        super().__init__(testcases)
+        self._current_feedback: bool | None = None
+        self._files_to_process: list[Path] = []
+        for path in self._testcase_root.glob("**/*"):
+            if (
+                path.is_file()
+                and path.suffix in self.all_extensions
+                and path.name not in self.ignore_files
+                and _contains_dd(path)
+            ):
+                self._files_to_process.append(path)
+
+    def update(self, success: bool) -> None:
+        """Inform the strategy whether or not the last modification yielded was good.
+
+        Arguments:
+            success: Whether or not the last modification was acceptable.
+
+        Returns:
+            None
+        """
+        assert self._current_feedback is None
+        self._current_feedback = success
+
+    def __iter__(self) -> Generator[list[TestCase]]:
+        """Iterate over potential modifications of testcases according to this strategy.
+
+        The caller should evaluate each testcase set yielded, and call `update` with the
+        result. The caller owns the testcases yielded, and should call `cleanup` for
+        each.
+
+        Yields:
+            Testcases with modifications.
+        """
+        if not self.import_available:
+            LOG.warning("%s not available, skipping strategy.", self.import_name)
+            return
+
+        LOG.info("BeautifulSoup prettifying %d files", len(self._files_to_process))
+        for file_no, file in enumerate(self._files_to_process, start=1):
+            LOG.info(
+                "BeautifulSoup prettifying %s (file %d/%d)",
+                file.relative_to(self._testcase_root),
+                file_no,
+                len(self._files_to_process),
+            )
+
+            # Use Lithium just to split the file at DDBEGIN/END.
+            # Lithium already has the right logic for DDBEGIN/END.
+            lith_tc = TestcaseLine()
+            lith_tc.load(file)
+            soup = BeautifulSoup(
+                b"".join(lith_tc.parts).decode(),
+                features="html.parser",
+            )
+            with file.open("wb") as testcase_fp:
+                testcase_fp.write(lith_tc.before)
+                testcase_fp.write(
+                    soup.prettify(formatter=HTMLFormatter(indent=0), encoding="utf-8")
+                )
+                testcase_fp.write(lith_tc.after)
+
+            yield [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]
+
+            assert self._current_feedback is not None, "No feedback for last iteration"
+            if self._current_feedback:
+                LOG.info("%s was successful", self.name)
+            else:
+                LOG.warning("%s failed (reverting)", self.name)
+                lith_tc.dump(file)
+            self._current_feedback = None
