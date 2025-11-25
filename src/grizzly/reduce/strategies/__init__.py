@@ -21,7 +21,7 @@ from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
 from types import MappingProxyType
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from ...common.utils import grz_tmp, iter_entry_points
 
@@ -203,7 +203,7 @@ def _load_strategies() -> MappingProxyType[str, type[Strategy]]:
     strategies: dict[str, type[Strategy]] = {}
     for entry_point in iter_entry_points("grizzly_reduce_strategies"):
         try:
-            strategy_cls = cast("type[Strategy]", entry_point.load())
+            strategy_cls: type[Strategy] = entry_point.load()
             assert strategy_cls.name == entry_point.name, (
                 f"entry_point name mismatch, check setup.py and {strategy_cls.__name__}"
             )
