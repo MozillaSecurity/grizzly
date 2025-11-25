@@ -10,10 +10,10 @@ Constants:
 
 from __future__ import annotations
 
-import re
 from abc import ABC, abstractmethod
 from logging import getLogger
-from re import Match
+from re import DOTALL, IGNORECASE, Match
+from re import compile as re_compile
 from typing import TYPE_CHECKING
 
 from lithium.testcases import TestcaseLine
@@ -98,11 +98,11 @@ class _BeautifyStrategy(Strategy, ABC):
                 self._files_to_beautify.append(path)
         self._current_feedback: bool | None = None
         tag_bytes = self.tag_name.encode("ascii")
-        self._re_tag_start = re.compile(
-            rb"<\s*" + tag_bytes + rb".*?>", flags=re.DOTALL | re.IGNORECASE
+        self._re_tag_start = re_compile(
+            rb"<\s*" + tag_bytes + rb".*?>", flags=DOTALL | IGNORECASE
         )
-        self._re_tag_end = re.compile(
-            rb"</\s*" + tag_bytes + rb"\s*>", flags=re.IGNORECASE
+        self._re_tag_end = re_compile(
+            rb"</\s*" + tag_bytes + rb"\s*>", flags=IGNORECASE
         )
 
     def update(self, success: bool) -> None:
@@ -332,7 +332,7 @@ class JSBeautify(_BeautifyStrategy):
         ("preserve_newlines", False),
     )
     tag_name = "script"
-    try_catch_re = re.compile(r"(\s*try {)\r?\n\s*(.*)\r?\n\s*(}\s*catch.*)")
+    try_catch_re = re_compile(r"(\s*try {)\r?\n\s*(.*)\r?\n\s*(}\s*catch.*)")
 
     @classmethod
     def beautify_bytes(cls, data: bytes) -> bytes:
