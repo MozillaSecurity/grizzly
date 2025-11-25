@@ -83,7 +83,9 @@ class Strategy(ABC):
         for path in self._testcase_root.glob("**/*"):
             if path.is_file():
                 tf_hash = sha512()
-                tf_hash.update(path.read_bytes())
+                with path.open("rb") as tfp:
+                    while data := tfp.read(1_048_576):
+                        tf_hash.update(data)
                 result.append(
                     (str(path.relative_to(self._testcase_root)), tf_hash.digest())
                 )
