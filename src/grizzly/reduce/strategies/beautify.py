@@ -258,12 +258,6 @@ class _BeautifyStrategy(Strategy, ABC):
                     LOG.warning("Beautify had no effect on the file, skipping")
                     continue
 
-            tc_hash = self._calculate_testcase_hash()
-            if tc_hash in self._tried:
-                LOG.info("cache hit, reverting")
-                lith_tc.dump(file)
-                continue
-
             yield [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]
 
             assert self._current_feedback is not None, "No feedback for last iteration"
@@ -272,7 +266,6 @@ class _BeautifyStrategy(Strategy, ABC):
             else:
                 LOG.warning("%s failed (reverting)", self.name)
                 lith_tc.dump(file)
-                self._tried.add(tc_hash)
             self._current_feedback = None
 
 
