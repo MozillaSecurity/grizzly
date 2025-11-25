@@ -18,29 +18,54 @@ LOG = getLogger(__name__)
     "test_data, reduced",
     [
         param(
+            "<br/>",
+            "<br/>\n",
+            id="add final new line",
+        ),
+        param(
             "<br><br>\n",
             "<br/>\n<br/>\n",
-            id="#1: add line breaks between tags",
+            id="add line breaks between tags",
         ),
         param(
             "<p>test</p>\n",
             "<p>\ntest\n</p>\n",
-            id="#2: add line breaks between tags and text",
+            id="add line breaks between tags and text",
         ),
         param(
             "<br/>\n",
             "<br/>\n",
-            id="#3: no changes needed",
+            id="no changes needed",
         ),
         param(
             "<div>",
-            "<div>\n</div>\n",
-            id="#4: add missing close tag",
+            "<div></div>\n",
+            id="add missing close tag",
         ),
         param(
-            "<script>let a='<a>'</script>",
+            "<div></div>\n",
+            "<div></div>\n",
+            id="keep empty tags closed",
+        ),
+        param(
+            "<div>\n</div>\n",
+            "<div></div>\n",
+            id="collapse empty tags closed",
+        ),
+        param(
+            "<div>test<div>nested</div><div></div></div>\n",
+            "<div>\ntest\n<div>\nnested\n</div>\n<div></div>\n</div>\n",
+            id="split text and tags",
+        ),
+        param(
+            "<div><br/></div>\n",
+            "<div>\n<br/>\n</div>\n",
+            id="split tags with nested tags that do not contain text",
+        ),
+        param(
+            "<script>let a='<a>'</script>\n",
             "<script>\nlet a='<a>'\n</script>\n",
-            id="#5: script tags",
+            id="script tags",
         ),
     ],
 )

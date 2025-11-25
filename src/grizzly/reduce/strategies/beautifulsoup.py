@@ -91,15 +91,22 @@ class BeautifulSoupPrettify(Strategy):
             # Lithium already has the right logic for DDBEGIN/END.
             lith_tc = TestcaseLine()
             lith_tc.load(file)
-            soup = BeautifulSoup(
+
+            # do initial prettify pass
+            prettified = BeautifulSoup(
                 b"".join(lith_tc.parts).decode(),
                 features="html.parser",
-            )
+            ).prettify(formatter=HTMLFormatter(indent=0), encoding="utf-8")
+
+            # collapse empty tags, for example '<p>\n</p>' should be '<p></p>'
+            soup = BeautifulSoup(prettified, features="html.parser")
+            for tag in soup.find_all():
+                if tag.string is not None and tag.string.strip() == "":
+                    tag.string = ""
+
             with file.open("wb") as testcase_fp:
                 testcase_fp.write(lith_tc.before)
-                testcase_fp.write(
-                    soup.prettify(formatter=HTMLFormatter(indent=0), encoding="utf-8")
-                )
+                testcase_fp.write(soup.encode(encoding="utf-8"))
                 testcase_fp.write(lith_tc.after)
 
             yield [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]
