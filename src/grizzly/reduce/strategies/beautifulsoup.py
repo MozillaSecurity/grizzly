@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
+from hashlib import sha256
 from logging import getLogger
 from typing import TYPE_CHECKING
 
@@ -92,21 +93,28 @@ class BeautifulSoupPrettify(Strategy):
             lith_tc = TestcaseLine()
             lith_tc.load(file)
 
+            data = b"".join(lith_tc.parts)
+            org_hash = sha256(data).digest()
+
             # do initial prettify pass
-            prettified = BeautifulSoup(
-                b"".join(lith_tc.parts).decode(),
-                features="html.parser",
-            ).prettify(formatter=HTMLFormatter(indent=0), encoding="utf-8")
+            data = BeautifulSoup(data.decode(), features="html.parser").prettify(
+                formatter=HTMLFormatter(indent=0), encoding="utf-8"
+            )
 
             # collapse empty tags, for example '<p>\n</p>' should be '<p></p>'
-            soup = BeautifulSoup(prettified, features="html.parser")
+            soup = BeautifulSoup(data, features="html.parser")
             for tag in soup.find_all():
                 if tag.string is not None and tag.string.strip() == "":
                     tag.string = ""
 
+            data = soup.encode(encoding="utf-8")
+            if sha256(data).digest() == org_hash:
+                LOG.warning("Prettifying had no effect on the file, skipping")
+                continue
+
             with file.open("wb") as testcase_fp:
                 testcase_fp.write(lith_tc.before)
-                testcase_fp.write(soup.encode(encoding="utf-8"))
+                testcase_fp.write(data)
                 testcase_fp.write(lith_tc.after)
 
             yield [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]

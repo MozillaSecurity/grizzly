@@ -33,6 +33,11 @@ LOG = getLogger(__name__)
             id="add line breaks between tags and text",
         ),
         param(
+            "<div>a</div>\n<!-- DDBEGIN -->\n<p>b</p>\n<!-- DDEND-->\n<div>c</div>",
+            "<div>a</div>\n<!-- DDBEGIN -->\n<p>\nb\n</p>\n<!-- DDEND-->\n<div>c</div>",
+            id="DDBEGIN and DDEND",
+        ),
+        param(
             "<br/>\n",
             "<br/>\n",
             id="no changes needed",
@@ -89,6 +94,25 @@ def test_beautifulsoup_prettify(test_data, reduced, mocker, tmp_path):
                 best_tests = [x.clone() for x in tests]
         assert len(best_tests) == 1
         assert best_tests[0]["test.html"].read_bytes().decode("utf-8") == reduced
+    finally:
+        for test in best_tests:
+            test.cleanup()
+
+
+def test_beautifulsoup_no_effect(mocker, tmp_path):
+    """test BeautifulSoupPrettify() had no effect"""
+    mocker.patch(
+        "grizzly.reduce.strategies.beautifulsoup._contains_dd", return_value=True
+    )
+
+    with TestCase("test.html", "test-adapter") as test:
+        test.add_from_bytes(b"<br/>\n", test.entry_point)
+        test.dump(tmp_path / "src", include_details=True)
+    best_tests = [TestCase.load(tmp_path / "src")]
+
+    try:
+        with BeautifulSoupPrettify(best_tests) as sgy:
+            assert not any(sgy)
     finally:
         for test in best_tests:
             test.cleanup()
