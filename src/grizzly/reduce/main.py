@@ -99,8 +99,9 @@ def main(args: Namespace | None = None) -> int:
         if not args.use_http:
             certs = get_certs()
 
-        LOG.debug("initializing the Target")
-        target = load_plugin(args.platform, "grizzly_targets", Target)(
+        LOG.debug("initializing Target")
+        target_cls: type[Target] = load_plugin(args.platform, "grizzly_targets", Target)
+        target = target_cls(  # type: ignore[call-arg]
             args.binary,
             args.launch_timeout,
             args.log_limit,
@@ -111,7 +112,6 @@ def main(args: Namespace | None = None) -> int:
             rr=args.rr,
             valgrind=args.valgrind,
         )
-        assert target
         if env_vars is not None:
             LOG.debug("adding environment loaded from test case")
             target.merge_environment(env_vars)

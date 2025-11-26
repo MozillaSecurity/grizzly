@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from logging import DEBUG, getLogger
 from os import getpid
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from sapphire import CertificateBundle, Sapphire
 
@@ -70,11 +70,11 @@ def main(args: Namespace) -> int:
     ext_services = None
     target: Target | None = None
     try:
-        LOG.debug("initializing Adapter %r", args.adapter)
-        adapter = cast(
-            "Adapter",
-            load_plugin(args.adapter, "grizzly_adapters", Adapter)(args.adapter),
+        LOG.debug("initializing Adapter")
+        adapter_cls: type[Adapter] = load_plugin(
+            args.adapter, "grizzly_adapters", Adapter
         )
+        adapter = adapter_cls(args.adapter)
 
         # calculate time limit and timeout
         time_limit, timeout = time_limits(
@@ -91,20 +91,18 @@ def main(args: Namespace) -> int:
         if not args.use_http:
             certs = get_certs()
 
-        LOG.debug("initializing the Target %r", args.platform)
-        target = cast(
-            "Target",
-            load_plugin(args.platform, "grizzly_targets", Target)(
-                args.binary,
-                args.launch_timeout,
-                args.log_limit,
-                args.memory,
-                certs=certs,
-                display_mode=args.display,
-                pernosco=args.pernosco,
-                rr=args.rr,
-                valgrind=args.valgrind,
-            ),
+        LOG.debug("initializing Target")
+        target_cls: type[Target] = load_plugin(args.platform, "grizzly_targets", Target)
+        target = target_cls(  # type: ignore[call-arg]
+            args.binary,
+            args.launch_timeout,
+            args.log_limit,
+            args.memory,
+            certs=certs,
+            display_mode=args.display,
+            pernosco=args.pernosco,
+            rr=args.rr,
+            valgrind=args.valgrind,
         )
         # add specified assets
         target.asset_mgr.add_batch(args.asset)
