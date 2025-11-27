@@ -53,7 +53,7 @@ class AssetManager:
         dst = self.path / path.name
         # remove existing asset with the same name
         if asset in self.assets:
-            LOG.debug("asset %r exists, removing existing", asset)
+            LOG.debug("asset '%s' exists, removing existing", asset)
             self.remove(asset)
         # avoid overwriting data that is part of an existing asset
         if dst.exists():
@@ -66,7 +66,7 @@ class AssetManager:
         else:
             move(path, self.path)
         self.assets[asset] = path.name
-        LOG.debug("%s asset %r to '%s'", "copied" if copy else "moved", asset, dst)
+        LOG.debug("%s asset '%s' to '%s'", "copied" if copy else "moved", asset, dst)
         return dst
 
     def add_batch(self, assets: Iterable[Sequence[str]]) -> None:

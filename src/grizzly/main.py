@@ -126,9 +126,9 @@ def main(args: Namespace) -> int:
         reporter.display_logs = args.smoke_test or reporter.display_logs
 
         if args.limit:
-            LOG.info("%r iteration(s) will be attempted", args.limit)
+            LOG.info("%d iteration(s) will be attempted", args.limit)
         if args.runtime:
-            LOG.info("Runtime is limited to %rs", args.runtime)
+            LOG.info("Runtime is limited to %ds", args.runtime)
 
         # set 'auto_close=1' so the client error pages (code 4XX) will
         # call 'window.close()' after a second.

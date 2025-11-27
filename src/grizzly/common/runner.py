@@ -394,7 +394,7 @@ class Runner:
         else:
             # something is wrong so close the target
             # previous iteration put target in a bad state?
-            LOG.debug("entry point not served (%r)", testcase.entry_point)
+            LOG.debug("entry point not served (%s)", testcase.entry_point)
             self._target.close()
             # detect startup failures
             if self.initial:

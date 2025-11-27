@@ -654,8 +654,8 @@ class ReduceManager:
                 except KeyboardInterrupt:
                     if best_results:
                         LOG.warning(
-                            "Ctrl+C detected, best reduction so far reported as %r",
-                            self._status.last_reports,
+                            "Ctrl+C detected, best reduction so far reported as '%s'",
+                            ", ".join(self._status.last_reports),
                         )
                     raise
                 finally:

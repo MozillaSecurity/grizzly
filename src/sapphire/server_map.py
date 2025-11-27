@@ -88,8 +88,8 @@ class ServerMap:
         if not isinstance(mime_type, str):
             raise TypeError("mime_type must be of type 'str'")
         if url in self.include or url in self.redirect:
-            raise MapCollisionError(f"URL collision on {url!r}")
-        LOG.debug("mapping dynamic response %r -> %r (%r)", url, callback, mime_type)
+            raise MapCollisionError(f"URL collision on '{url}'")
+        LOG.debug("mapping dynamic response '%s' -> %r (%s)", url, callback, mime_type)
         self.dynamic[url] = DynamicResource(url, required, callback, mime_type)
 
     def set_include(self, url: str, target: Path) -> None:
@@ -97,7 +97,7 @@ class ServerMap:
         if not target.is_dir():
             raise FileNotFoundError(f"Include path not found: {target}")
         if url in self.dynamic or url in self.redirect:
-            raise MapCollisionError(f"URL collision on {url!r}")
+            raise MapCollisionError(f"URL collision on '{url}'")
         # sanity check to prevent mapping overlapping paths
         # Note: This was added to help map file served via includes back to
         # the files on disk. This is a temporary workaround until mapping of
@@ -107,16 +107,16 @@ class ServerMap:
                 # allow overwriting entry
                 continue
             if resource.target in target.parents:
-                LOG.error("%r mapping includes path '%s'", existing_url, target)
+                LOG.error("'%s' mapping includes path '%s'", existing_url, target)
                 raise MapCollisionError(
-                    f"{url!r} and {existing_url!r} include '{target}'"
+                    f"'{url}' and '{existing_url}' include '{target}'"
                 )
             if target in resource.target.parents:
-                LOG.error("%r mapping includes path '%s'", url, resource.target)
+                LOG.error("'%s' mapping includes path '%s'", url, resource.target)
                 raise MapCollisionError(
-                    f"{url!r} and {existing_url!r} include '{resource.target}'"
+                    f"'{url}' and '{existing_url}' include '{resource.target}'"
                 )
-        LOG.debug("mapping include %r -> '%s'", url, target)
+        LOG.debug("mapping include '%s' -> '%s'", url, target)
         self.include[url] = IncludeResource(url, False, target)
 
     def set_redirect(self, url: str, target: str, required: bool = True) -> None:
@@ -126,5 +126,5 @@ class ServerMap:
         if not target:
             raise TypeError("target must not be an empty string")
         if url in self.dynamic or url in self.include:
-            raise MapCollisionError(f"URL collision on {url!r}")
+            raise MapCollisionError(f"URL collision on '{url}'")
         self.redirect[url] = RedirectResource(url, required, target)

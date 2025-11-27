@@ -61,11 +61,11 @@ class StackFrame(ABC):
         if self.stack_line is not None:
             out.append(f"{int(self.stack_line):02d}")
         if self.function is not None:
-            out.append(f"function: {self.function!r}")
+            out.append(f"function: '{self.function}'")
         if self.location is not None:
-            out.append(f"location: {self.location!r}")
+            out.append(f"location: '{self.location}'")
         if self.offset is not None:
-            out.append(f"offset: {self.offset!r}")
+            out.append(f"offset: '{self.offset}'")
         return " - ".join(out)
 
     @classmethod
@@ -444,7 +444,7 @@ class Stack:
                 else:
                     frame = parser_class.from_line(line)
             except Exception:  # pragma: no cover
-                LOG.error("Error calling from_line() with: %r", line)
+                LOG.error("Error calling from_line() with: '%s'", line)
                 raise
             if frame is None:
                 continue

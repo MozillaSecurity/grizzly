@@ -178,7 +178,7 @@ class Session:
 
         LOG.debug("calling adapter.setup()")
         self.adapter.setup(input_path, self.iomanager.server_map)
-        LOG.debug("configuring harness (%r)", not no_harness)
+        LOG.debug("configuring harness (%s)", not no_harness)
         harness = None if no_harness else self.adapter.get_harness()
         LOG.debug("configuring redirects (w/harness: %s)", harness is not None)
         if harness is None:
@@ -298,7 +298,7 @@ class Session:
                 self.status.ignored += 1
                 if result.timeout:
                     LOG.info(
-                        "Ignored - %d; timeout, idle: %r",
+                        "Ignored - %d; timeout, idle: %s",
                         self.status.ignored,
                         result.idle,
                     )

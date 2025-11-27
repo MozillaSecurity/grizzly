@@ -349,11 +349,11 @@ class CommonArgs:
             for asset, path in args.asset:
                 if not supported_assets or asset not in supported_assets:
                     self.parser.error(
-                        f"Asset {asset!r} not supported by target {args.platform!r}"
+                        f"Asset '{asset}' not supported by target '{args.platform}'"
                     )
                 if not exists(path):
                     self.parser.error(
-                        f"Failed to add asset {asset!r} cannot find {path!r}"
+                        f"Failed to add asset '{asset}' cannot find '{path}'"
                     )
 
         if args.time_limit is not None and args.time_limit < 1:
