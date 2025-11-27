@@ -394,7 +394,7 @@ class ReplayManager:
                         assert not expect_hang
                         assert self._signature is None
                         LOG.debug(
-                            "no signature given, using short sig %r",
+                            "no signature given, using short sig '%s'",
                             report.short_signature,
                         )
                         if runner.startup_failure:
@@ -447,7 +447,7 @@ class ReplayManager:
                     self.status.ignored += 1
                     if run_result.timeout:
                         LOG.info(
-                            "Result: Ignored (%d); timeout, idle: %r",
+                            "Result: Ignored (%d); timeout, idle: %s",
                             self.status.ignored,
                             run_result.idle,
                         )
@@ -511,7 +511,7 @@ class ReplayManager:
                 if not success and result.expected:
                     if not self._any_crash:
                         LOG.debug(
-                            "%r less than minimum (%d/%d)",
+                            "'%s' less than minimum (%d/%d)",
                             crash_hash,
                             result.count,
                             min_results,

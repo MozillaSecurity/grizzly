@@ -32,12 +32,12 @@ def load_plugin(name: str, group: str, base_type: type) -> Any:
     for entry in iter_entry_points(group):
         if entry.name == name:
             plugin = entry.load()
-            LOG.debug("loading %r (%s)", name, base_type.__name__)
+            LOG.debug("loading '%s' (%s)", name, base_type.__name__)
             break
     else:
-        raise PluginLoadError(f"{name!r} not found in {group!r}")
+        raise PluginLoadError(f"'{name}' not found in '{group}'")
     if not issubclass(plugin, base_type):
-        raise PluginLoadError(f"{name!r} doesn't inherit from {base_type.__name__}")
+        raise PluginLoadError(f"'{name}' doesn't inherit from {base_type.__name__}")
     return plugin
 
 
@@ -51,11 +51,11 @@ def scan_plugins(group: str) -> list[str]:
         Names of installed entry points.
     """
     found: list[str] = []
-    LOG.debug("scanning %r", group)
+    LOG.debug("scanning '%s'", group)
     for entry in iter_entry_points(group):
         if entry.name in found:
             # not sure if this can even happen
-            raise PluginLoadError(f"Duplicate entry {entry.name!r} in {group!r}")
+            raise PluginLoadError(f"Duplicate entry '{entry.name}' in '{group}'")
         found.append(entry.name)
     return found
 

@@ -200,7 +200,7 @@ class TestCase:
         else:
             url_path = self.sanitize_path(file_name)
         if url_path in self:
-            raise TestFileExists(f"{url_path!r} exists in test")
+            raise TestFileExists(f"'{url_path}' exists in test")
 
         dst_file = self._root / url_path
         # don't move/copy data is already in place
@@ -546,12 +546,12 @@ class TestCase:
         """
         # check for missing filename or path containing drive letter (Windows)
         if split(path)[-1] in ("", ".", "..") or ":" in path:
-            raise ValueError(f"invalid path {path!r}")
+            raise ValueError(f"invalid path '{path}'")
         # normalize path
         path = normpath(path).replace("\\", "/")
         # check normalized path does not resolve to location outside of '.'
         if path.startswith("../"):
-            raise ValueError(f"invalid path {path!r}")
+            raise ValueError(f"invalid path '{path}'")
         return path.lstrip("/")
 
 
@@ -591,7 +591,7 @@ def load_testcases(
         test.assets.clear()
         test.assets_path = None
     LOG.debug(
-        "loaded TestCase(s): %d, assets: %r, env vars: %r",
+        "loaded TestCase(s): %d, assets: %s, env vars: %s",
         len(tests),
         asset_mgr is not None,
         env_vars is not None,

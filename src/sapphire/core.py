@@ -176,7 +176,7 @@ class Sapphire:
                 # no remaining pending connections
                 break
             except OSError as exc:
-                LOG.debug("Error closing socket: %r", exc)
+                LOG.debug("Error closing socket: '%s'", exc)
             else:
                 LOG.debug("pending socket closed")
             # if this fires something is likely actively trying to connect
@@ -238,7 +238,7 @@ class Sapphire:
             Served status and files served.
         """
         assert self.timeout >= 0
-        LOG.debug("serving '%s' (forever=%r, timeout=%d)", path, forever, self.timeout)
+        LOG.debug("serving '%s' (forever=%s, timeout=%d)", path, forever, self.timeout)
         job = Job(
             path,
             auto_close=self._auto_close,
@@ -248,7 +248,7 @@ class Sapphire:
         )
         with ConnectionManager(job, self._socket, limit=self._max_workers) as mgr:
             timed_out = not mgr.serve(self.timeout, continue_cb=continue_cb)
-        LOG.debug("status: %s, timed out: %r", job.status.name, timed_out)
+        LOG.debug("status: %s, timed out: %s", job.status.name, timed_out)
         return ServeResult(job.served, job.status, timed_out)
 
     @classmethod

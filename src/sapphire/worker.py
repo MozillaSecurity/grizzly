@@ -168,13 +168,15 @@ class Worker:
                 conn.sendall(
                     cls._4xx_page(405, "Method Not Allowed", serv_job.auto_close)
                 )
-                LOG.debug("405 method %r (%d to go)", request.method, serv_job.pending)
+                LOG.debug(
+                    "405 method '%s' (%d to go)", request.method, serv_job.pending
+                )
                 return
 
             # lookup resource
-            LOG.debug("lookup resource %r", request.url.path)
+            LOG.debug("lookup resource '%s'", request.url.path)
             resource = serv_job.lookup_resource(request.url.path)
-            if resource:
+            if resource is not None:
                 if isinstance(resource, FileResource):
                     finish_job = serv_job.remove_pending(str(resource.target))
                 elif isinstance(resource, (DynamicResource, RedirectResource)):
@@ -202,11 +204,11 @@ class Worker:
             elif isinstance(resource, RedirectResource):
                 redirect_to = [quote(resource.target)]
                 if request.url.query:
-                    LOG.debug("appending query %r", request.url.query)
+                    LOG.debug("appending query '%s'", request.url.query)
                     redirect_to.append(request.url.query)
                 conn.sendall(cls._307_redirect("?".join(redirect_to)))
                 LOG.debug(
-                    "307 %r -> %r (%d to go)",
+                    "307 '%s' -> '%s' (%d to go)",
                     request.url.path,
                     resource.target,
                     serv_job.pending,
@@ -215,12 +217,12 @@ class Worker:
                 # pass query string to callback
                 data = resource.target(request.url.query)
                 if not isinstance(data, bytes):
-                    LOG.debug("dynamic request: %r", request.url.path)
+                    LOG.debug("dynamic request: '%s'", request.url.path)
                     raise TypeError("dynamic request callback must return 'bytes'")
                 conn.sendall(cls._200_header(len(data), resource.mime))
                 conn.sendall(data)
                 LOG.debug(
-                    "200 %r - dynamic request (%d to go)",
+                    "200 '%s' - dynamic request (%d to go)",
                     request.url.path,
                     serv_job.pending,
                 )
@@ -229,7 +231,7 @@ class Worker:
                 # serve the file
                 data_size = resource.target.stat().st_size
                 LOG.debug(
-                    "sending: %s, %r, '%s'",
+                    "sending: %s, '%s', '%s'",
                     f"{data_size:,}B",
                     resource.mime,
                     resource.target,
@@ -240,7 +242,7 @@ class Worker:
                     while offset < data_size:
                         conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
                         offset = in_fp.tell()
-                LOG.debug("200 %r (%d to go)", request.url.path, serv_job.pending)
+                LOG.debug("200 '%s' (%d to go)", request.url.path, serv_job.pending)
                 serv_job.mark_served(resource)
 
         except (OSError, sock_timeout):

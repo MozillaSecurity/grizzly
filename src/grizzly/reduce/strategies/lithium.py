@@ -100,7 +100,7 @@ class _LithiumStrategy(Strategy, ABC):
         reduce_queue.sort()  # not necessary, but helps make tests more predictable
         while reduce_queue:
             LOG.debug(
-                "Reduce queue: %r",
+                "Reduce queue: '%s'",
                 ", ".join(
                     str(x.relative_to(self._testcase_root)) for x in reduce_queue
                 ),
@@ -145,7 +145,7 @@ class _LithiumStrategy(Strategy, ABC):
                     self._tried.add(self._calculate_testcase_hash())
                 else:
                     LOG.debug(
-                        "files being reduced before: %r",
+                        "files being reduced before: '%s'",
                         ", ".join(
                             str(x.relative_to(self._testcase_root))
                             for x in self._files_to_reduce
@@ -153,7 +153,7 @@ class _LithiumStrategy(Strategy, ABC):
                     )
                     self.rescan_files_to_reduce(testcases)
                     LOG.debug(
-                        "files being reduced after: %r",
+                        "files being reduced after: '%s'",
                         ", ".join(
                             str(x.relative_to(self._testcase_root))
                             for x in self._files_to_reduce

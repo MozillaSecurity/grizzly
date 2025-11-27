@@ -284,7 +284,7 @@ class FirefoxTarget(Target):
                 elif send_abort:
                     # sending SIGABRT is only supported on Linux for now
                     # TODO: add/test on other OSs
-                    LOG.debug("sending SIGABRT to %r (%0.1f%%)", pid, cpu)
+                    LOG.debug("sending SIGABRT to %d (%0.1f%%)", pid, cpu)
                     try:
                         kill(pid, SIGABRT)
                     except OSError:
@@ -384,7 +384,7 @@ class FirefoxTarget(Target):
                 path = Path(suppressions.strip("\"'"))
                 if path.is_file():
                     # use environment specified suppression file
-                    LOG.debug("using %r from environment", asset)
+                    LOG.debug("using '%s' from environment", asset)
                     opts.add(
                         "suppressions",
                         f"'{self.asset_mgr.add(asset, path)}'",
@@ -393,10 +393,10 @@ class FirefoxTarget(Target):
                 else:
                     LOG.warning("Missing %s suppressions file '%s'", sanitizer, path)
             else:
-                LOG.debug("%r does not contain suppressions", var_name)
+                LOG.debug("'%s' does not contain suppressions", var_name)
                 continue
             # update sanitized *SAN_OPTIONS
-            LOG.debug("updating suppressions in %r", var_name)
+            LOG.debug("updating suppressions in '%s'", var_name)
             self.environ[var_name] = str(opts)
 
     def save_logs(self, dst: Path) -> None:

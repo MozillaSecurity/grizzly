@@ -143,7 +143,7 @@ class ConnectionManager:
         launches = 0
         running = 0
         workers: list[Worker] = []
-        LOG.debug("accepting requests (workers: %d, timeout: %r)", self._limit, timeout)
+        LOG.debug("accepting requests (workers: %d, timeout: %d)", self._limit, timeout)
         try:
             while not self._job.is_complete() and self._can_continue(continue_cb):
                 # launch workers

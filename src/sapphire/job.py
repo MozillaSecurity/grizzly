@@ -119,7 +119,7 @@ class Job:
                 entry = self._wwwroot / required
                 if entry.is_file():
                     self._pending.files.add(str(entry.resolve()))
-                    LOG.debug("required: %r", required)
+                    LOG.debug("required: '%s'", required)
         # if nothing was found check if the path exists
         if not self._pending.files and not self._wwwroot.is_dir():
             raise OSError(f"wwwroot '{self._wwwroot}' does not exist")
@@ -130,7 +130,7 @@ class Job:
                 if resource.required:
                     self._pending.files.add(url)
                     LOG.debug(
-                        "required: %r -> %r",
+                        "required: '%s' -> '%s'",
                         url,
                         (
                             "<dynamic resource>"
@@ -191,7 +191,7 @@ class Job:
                 return self.server_map.dynamic[path]
             # search include paths for a match
             for inc in (x for x in self.server_map.include if path.startswith(x)):
-                LOG.debug("checking include %r", inc)
+                LOG.debug("checking include '%s'", inc)
                 # strip include prefix from potential file name
                 file = path[len(inc) :].lstrip("/")
                 local = self.server_map.include[inc].target / file
