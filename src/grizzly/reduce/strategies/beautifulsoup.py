@@ -27,12 +27,12 @@ if TYPE_CHECKING:
 LOG = getLogger(__name__)
 
 
-class BeautifulSoupPrettify(Strategy):
+class BeautifulSoupStrategy(Strategy):
     all_extensions = frozenset((".htm", ".html", ".xhtml", ".svg"))
     ignore_files = frozenset((TEST_INFO, "prefs.js"))
     import_available = HAVE_BEAUTIFULSOUP
     import_name = "beautifulsoup4"
-    name = "beautifulsoup"
+    name: str
 
     def __init__(self, testcases: list[TestCase]) -> None:
         """Initialize strategy instance.
@@ -64,6 +64,10 @@ class BeautifulSoupPrettify(Strategy):
         """
         assert self._current_feedback is None
         self._current_feedback = success
+
+
+class BeautifulSoupPrettify(BeautifulSoupStrategy):
+    name = "beautifulsoup"
 
     def __iter__(self) -> Generator[list[TestCase]]:
         """Iterate over potential modifications of testcases according to this strategy.
@@ -115,6 +119,81 @@ class BeautifulSoupPrettify(Strategy):
             with file.open("wb") as testcase_fp:
                 testcase_fp.write(lith_tc.before)
                 testcase_fp.write(data)
+                testcase_fp.write(lith_tc.after)
+
+            yield [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]
+
+            assert self._current_feedback is not None, "No feedback for last iteration"
+            if self._current_feedback:
+                LOG.info("%s was successful", self.name)
+            else:
+                LOG.warning("%s failed (reverting)", self.name)
+                lith_tc.dump(file)
+            self._current_feedback = None
+
+
+class BeautifulSoupCSSMerge(BeautifulSoupStrategy):
+    name = "css-merge"
+
+    def __iter__(self) -> Generator[list[TestCase]]:
+        """Iterate over potential modifications of testcases according to this strategy.
+
+        The caller should evaluate each testcase set yielded, and call `update` with the
+        result. The caller owns the testcases yielded, and should call `cleanup` for
+        each.
+
+        Yields:
+            Testcases with modifications.
+        """
+        if not self.import_available:
+            LOG.warning("%s not available, skipping strategy.", self.import_name)
+            return
+
+        LOG.info("BeautifulSoup CSS Merge %d files", len(self._files_to_process))
+        for file_no, file in enumerate(self._files_to_process, start=1):
+            LOG.info(
+                "BeautifulSoup CSS Merge %s (file %d/%d)",
+                file.relative_to(self._testcase_root),
+                file_no,
+                len(self._files_to_process),
+            )
+
+            # Use Lithium just to split the file at DDBEGIN/END.
+            # Lithium already has the right logic for DDBEGIN/END.
+            lith_tc = TestcaseLine()
+            lith_tc.load(file)
+            data = b"".join(lith_tc.parts)
+
+            style_data: list[str] = []
+            soup = BeautifulSoup(data.decode(), features="html.parser")
+            for tag in soup.find_all():
+                attr_value = tag.attrs.pop("style", None)
+                # collect style data and prepare it to be added to a style tag
+                if isinstance(attr_value, str) and attr_value:
+                    tag_id = tag.get("id")
+                    if tag_id is None:
+                        # only move style data to a tag if id is available
+                        continue
+                    style_data.append(f"#{tag_id} {{ {attr_value} }}")
+
+            if not style_data:
+                LOG.warning("CSS merge did not detect content to merge, skipping")
+                continue
+
+            # add style data to a style tag (create one if needed)
+            style_tag = soup.find("style")
+            if style_tag is None:
+                style_tag = soup.new_tag("style")
+                soup.append("\n")
+                soup.append(style_tag)
+                soup.append("\n")
+            new_styles = "\n".join(style_data)
+            existing_styles = style_tag.string or ""
+            style_tag.string = f"{existing_styles.rstrip()}\n{new_styles}\n"
+
+            with file.open("wb") as testcase_fp:
+                testcase_fp.write(lith_tc.before)
+                testcase_fp.write(soup.encode(encoding="utf-8"))
                 testcase_fp.write(lith_tc.after)
 
             yield [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]
