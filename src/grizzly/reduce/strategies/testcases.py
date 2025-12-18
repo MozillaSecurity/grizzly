@@ -42,8 +42,6 @@ class MinimizeTestcaseList(Strategy):
         """
         super().__init__(testcases)
         self._current_feedback: bool | None = None
-        # TODO: is this unused?
-        self._current_served = None
 
     def update(self, success: bool) -> None:
         """Inform the strategy whether or not the last reduction yielded was good.
@@ -55,7 +53,6 @@ class MinimizeTestcaseList(Strategy):
             None
         """
         assert self._current_feedback is None
-        assert self._current_served is None
         self._current_feedback = success
 
     def __iter__(self) -> Generator[list[TestCase]]:
@@ -98,4 +95,3 @@ class MinimizeTestcaseList(Strategy):
                 idx += 1
             # reset
             self._current_feedback = None
-            self._current_served = None
