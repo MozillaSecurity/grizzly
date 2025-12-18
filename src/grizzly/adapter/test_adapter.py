@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import pytest
+from pytest import raises
 
 from .adapter import Adapter, AdapterError
 
@@ -13,11 +13,11 @@ class SimpleAdapter(Adapter):
 
 def test_adapter_01():
     """test a simple Adapter"""
-    with pytest.raises(AdapterError, match="name must not be empty"):
+    with raises(AdapterError, match="name must not be empty"):
         SimpleAdapter("")
-    with pytest.raises(AdapterError, match="name must not contain whitespace"):
+    with raises(AdapterError, match="name must not contain whitespace"):
         SimpleAdapter("a a")
-    with pytest.raises(AdapterError, match="name must not contain whitespace"):
+    with raises(AdapterError, match="name must not contain whitespace"):
         SimpleAdapter(" a")
     adpt = SimpleAdapter("simple")
     assert isinstance(adpt.fuzz, dict)
@@ -47,6 +47,11 @@ def test_adapter_02(tmp_path):
     ext_harness_file.write_bytes(test_data)
     adpt.enable_harness(ext_harness_file)
     assert adpt.get_harness() == test_data
+    # empty harness
+    ext_harness_file.unlink()
+    ext_harness_file.touch()
+    with raises(AdapterError, match="empty harness file"):
+        adpt.enable_harness(ext_harness_file)
 
 
 def test_adapter_03(tmp_path):
