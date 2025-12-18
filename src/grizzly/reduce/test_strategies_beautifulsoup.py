@@ -141,8 +141,11 @@ def test_beautifulsoup_prettify_failed(mocker, tmp_path):
 
     try:
         with BeautifulSoupPrettify(best_tests) as sgy:
+            count = 0
             for _ in sgy:
                 sgy.update(False)
+                count += 1
+            assert count > 0
     finally:
         for test in best_tests:
             test.cleanup()
@@ -270,14 +273,17 @@ def test_beautifulsoup_css_merge_failed(mocker, tmp_path):
     )
 
     with TestCase("test.html", "test-adapter") as test:
-        test.add_from_bytes(b"<div style='a: 1'></div>", test.entry_point)
+        test.add_from_bytes(b"<div id='a' style='a: 1'></div>", test.entry_point)
         test.dump(tmp_path / "src", include_details=True)
     best_tests = [TestCase.load(tmp_path / "src")]
 
     try:
         with BeautifulSoupCSSMerge(best_tests) as sgy:
+            count = 0
             for _ in sgy:
                 sgy.update(False)
+                count += 1
+            assert count > 0
     finally:
         for test in best_tests:
             test.cleanup()
