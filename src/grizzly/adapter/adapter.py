@@ -97,7 +97,8 @@ class Adapter(ABC):
             None
         """
         self._harness = path.read_bytes()
-        assert self._harness, f"empty harness file '{path.resolve()}'"
+        if not self._harness:
+            raise AdapterError(f"empty harness file '{path.resolve()}'")
 
     @final
     def get_harness(self) -> bytes | None:
