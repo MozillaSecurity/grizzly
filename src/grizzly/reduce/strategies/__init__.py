@@ -37,6 +37,7 @@ LOG = getLogger(__name__)
 DEFAULT_STRATEGIES = (
     "list",
     "lines",
+    "css-merge",
     "cssbeautify",
     "jsbeautify",
     "beautifulsoup",
