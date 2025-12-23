@@ -17,6 +17,7 @@ LOG = getLogger(__name__)
 @mark.parametrize(
     "test_data, reduced",
     [
+        param("", "", id="no data"),
         param(
             "<br/>",
             "<br/>\n",
@@ -190,6 +191,7 @@ def test_beautifulsoup_prettify_ignore_unsupported_files(mocker, tmp_path):
 @mark.parametrize(
     "test_data, reduced",
     [
+        param("", "", id="no data"),
         param(
             "<div></div>",
             "<div></div>",
