@@ -96,6 +96,9 @@ class BeautifulSoupPrettify(BeautifulSoupStrategy):
             # Lithium already has the right logic for DDBEGIN/END.
             lith_tc = TestcaseLine()
             lith_tc.load(file)
+            if not lith_tc.parts:
+                LOG.warning("No data to prettify, skipping")
+                continue
 
             data = b"".join(lith_tc.parts)
             org_hash = sha256(data).digest()
@@ -162,6 +165,9 @@ class BeautifulSoupCSSMerge(BeautifulSoupStrategy):
             # Lithium already has the right logic for DDBEGIN/END.
             lith_tc = TestcaseLine()
             lith_tc.load(file)
+            if not lith_tc.parts:
+                LOG.warning("No data to prettify, skipping")
+                continue
             data = b"".join(lith_tc.parts)
 
             style_data: list[str] = []
