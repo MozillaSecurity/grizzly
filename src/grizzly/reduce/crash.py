@@ -61,6 +61,7 @@ def main(args: Namespace | None = None) -> int:
                 quality.name,
                 quality,
             )
+            # TODO: handle 404 in case the original is deleted from the server
             crash.testcase_quality = quality.value
 
     return result
