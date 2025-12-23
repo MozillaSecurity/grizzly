@@ -328,8 +328,7 @@ class ReduceManager:
                 try:
                     crashes = sum(x.count for x in results if x.expected)
                     if crashes and not self._any_crash and self._signature_desc is None:
-                        first_expected = next((x for x in results if x.expected), None)
-                        assert first_expected
+                        first_expected = next(x for x in results if x.expected)
                         self._signature_desc = first_expected.report.short_signature
                     self.report([x for x in results if not x.expected], testcases)
                     if use_harness:
