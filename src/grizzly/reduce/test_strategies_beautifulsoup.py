@@ -87,9 +87,7 @@ LOG = getLogger(__name__)
 )
 def test_beautifulsoup_prettify(test_data, reduced, mocker, tmp_path):
     """test BeautifulSoupPrettify() successful attempts"""
-    mocker.patch(
-        "grizzly.reduce.strategies.beautifulsoup._contains_dd", return_value=True
-    )
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
 
     with TestCase("test.html", "test-adapter") as test:
         test.add_from_bytes(test_data.encode("utf-8"), test.entry_point)
@@ -112,9 +110,7 @@ def test_beautifulsoup_prettify(test_data, reduced, mocker, tmp_path):
 
 def test_beautifulsoup_no_effect(mocker, tmp_path):
     """test BeautifulSoupPrettify() had no effect"""
-    mocker.patch(
-        "grizzly.reduce.strategies.beautifulsoup._contains_dd", return_value=True
-    )
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
 
     with TestCase("test.html", "test-adapter") as test:
         test.add_from_bytes(b"<br/>\n", test.entry_point)
@@ -131,9 +127,7 @@ def test_beautifulsoup_no_effect(mocker, tmp_path):
 
 def test_beautifulsoup_prettify_failed(mocker, tmp_path):
     """test BeautifulSoupPrettify() failed attempt"""
-    mocker.patch(
-        "grizzly.reduce.strategies.beautifulsoup._contains_dd", return_value=True
-    )
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
 
     with TestCase("test.html", "test-adapter") as test:
         test.add_from_bytes(b"<br>", test.entry_point)
@@ -171,9 +165,7 @@ def test_beautifulsoup_prettify_not_available(tmp_path):
 
 def test_beautifulsoup_prettify_ignore_unsupported_files(mocker, tmp_path):
     """test BeautifulSoupPrettify() skip unsupported files"""
-    mocker.patch(
-        "grizzly.reduce.strategies.beautifulsoup._contains_dd", return_value=True
-    )
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
 
     with TestCase("test.js", "test-adapter") as test:
         test.add_from_bytes(b"foo", test.entry_point)
@@ -245,9 +237,7 @@ def test_beautifulsoup_prettify_ignore_unsupported_files(mocker, tmp_path):
 )
 def test_beautifulsoup_css_merge(test_data, reduced, mocker, tmp_path):
     """test BeautifulSoupCSSMerge() successful attempts"""
-    mocker.patch(
-        "grizzly.reduce.strategies.beautifulsoup._contains_dd", return_value=True
-    )
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
 
     with TestCase("test.html", "test-adapter") as test:
         test.add_from_bytes(test_data.encode("utf-8"), test.entry_point)
@@ -270,9 +260,7 @@ def test_beautifulsoup_css_merge(test_data, reduced, mocker, tmp_path):
 
 def test_beautifulsoup_css_merge_failed(mocker, tmp_path):
     """test BeautifulSoupCSSMerge() failed attempt"""
-    mocker.patch(
-        "grizzly.reduce.strategies.beautifulsoup._contains_dd", return_value=True
-    )
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
 
     with TestCase("test.html", "test-adapter") as test:
         test.add_from_bytes(b"<div id='a' style='a: 1'></div>", test.entry_point)
