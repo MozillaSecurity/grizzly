@@ -23,6 +23,7 @@ from tempfile import mkdtemp
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+from ...common.storage import TEST_INFO
 from ...common.utils import grz_tmp, iter_entry_points
 
 if TYPE_CHECKING:
@@ -33,6 +34,8 @@ if TYPE_CHECKING:
 
 LOG = getLogger(__name__)
 
+
+IGNORE_FILES = frozenset((TEST_INFO, "prefs.js"))
 
 DEFAULT_STRATEGIES = (
     "list",
@@ -195,6 +198,28 @@ class Strategy(ABC):
             None
         """
         rmtree(self._testcase_root)
+
+    @staticmethod
+    def actionable_files(
+        root: Path,
+        extensions: Iterable[str] | None = None,
+    ) -> list[Path]:
+        """Scan a directory and return files that can be processed by reducers,
+        prettifiers... etc.
+
+        Arguments:
+            root: Top level directory containing files.
+            extensions: File extension inclusion list.
+
+        Returns:
+            Files to process.
+        """
+        files = (path for path in root.glob("**/*") if path.is_file())
+        if extensions:
+            files = (path for path in files if path.suffix in extensions)
+        files = (path for path in files if path.name not in IGNORE_FILES)
+        files = (path for path in files if _contains_dd(path))
+        return list(files)
 
 
 def _load_strategies() -> MappingProxyType[str, type[Strategy]]:

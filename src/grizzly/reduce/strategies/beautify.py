@@ -32,8 +32,8 @@ try:
 except ImportError:  # pragma: no cover
     HAVE_JSBEAUTIFIER = False
 
-from ...common.storage import TEST_INFO, TestCase
-from . import Strategy, _contains_dd
+from ...common.storage import TestCase
+from . import Strategy
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -72,7 +72,6 @@ class _BeautifyStrategy(Strategy, ABC):
     """
 
     all_extensions: frozenset[str]
-    ignore_files = frozenset((TEST_INFO, "prefs.js"))
     import_available: bool
     import_name: str
     native_extension: str
@@ -85,17 +84,11 @@ class _BeautifyStrategy(Strategy, ABC):
             testcases: Testcases to reduce. The object does not take ownership of the
                        testcases.
         """
-        assert self.tag_name is not None
         super().__init__(testcases)
-        self._files_to_beautify: list[Path] = []
-        for path in self._testcase_root.glob("**/*"):
-            if (
-                path.is_file()
-                and path.suffix in self.all_extensions
-                and path.name not in self.ignore_files
-                and _contains_dd(path)
-            ):
-                self._files_to_beautify.append(path)
+        self._files_to_beautify = self.actionable_files(
+            self._testcase_root,
+            extensions=self.all_extensions,
+        )
         self._current_feedback: bool | None = None
         tag_bytes = self.tag_name.encode("ascii")
         self._re_tag_start = re_compile(
