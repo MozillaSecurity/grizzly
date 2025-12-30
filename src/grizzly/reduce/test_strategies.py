@@ -144,7 +144,7 @@ def test_list(
     expected_num_reports,
 ):
     """tests for the "list" strategy"""
-    mocker.patch("grizzly.reduce.strategies.lithium._contains_dd", return_value=True)
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
     replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
     replayer = replayer.return_value
 

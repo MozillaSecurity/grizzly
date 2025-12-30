@@ -17,41 +17,32 @@ try:
 except ImportError:  # pragma: no cover
     HAVE_BEAUTIFULSOUP = False
 
-from ...common.storage import TEST_INFO, TestCase
-from . import Strategy, _contains_dd
+from ...common.storage import TestCase
+from . import Strategy
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from pathlib import Path
 
 LOG = getLogger(__name__)
 
 
 class BeautifulSoupStrategy(Strategy):
     all_extensions = frozenset((".htm", ".html", ".xhtml", ".svg"))
-    ignore_files = frozenset((TEST_INFO, "prefs.js"))
     import_available = HAVE_BEAUTIFULSOUP
     import_name = "beautifulsoup4"
     name: str
 
-    def __init__(self, testcases: list[TestCase]) -> None:
+    def __init__(self, testcases: list[TestCase], dd_markers: bool = False) -> None:
         """Initialize strategy instance.
 
         Arguments:
             testcases: Testcases to reduce. The object does not take ownership of the
                        testcases.
+            dd_markers: Indicate DDBEGIN/DDEND markers have been detected.
         """
-        super().__init__(testcases)
+        super().__init__(testcases, dd_markers=dd_markers)
         self._current_feedback: bool | None = None
-        self._files_to_process: list[Path] = []
-        for path in self._testcase_root.glob("**/*"):
-            if (
-                path.is_file()
-                and path.suffix in self.all_extensions
-                and path.name not in self.ignore_files
-                and _contains_dd(path)
-            ):
-                self._files_to_process.append(path)
+        self._files_to_process = self.actionable_files(extensions=self.all_extensions)
 
     def update(self, success: bool) -> None:
         """Inform the strategy whether or not the last modification yielded was good.

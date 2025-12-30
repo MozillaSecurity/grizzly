@@ -15,7 +15,7 @@ LOG = getLogger(__name__)
 
 
 def _test_beautify(cls, interesting, test_name, test_data, reduced, mocker, tmp_path):
-    mocker.patch("grizzly.reduce.strategies.beautify._contains_dd", return_value=True)
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
 
     with TestCase(test_name, "test-adapter") as test:
         test.add_from_bytes(test_data.encode("ascii"), test.entry_point)

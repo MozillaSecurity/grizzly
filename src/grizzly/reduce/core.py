@@ -449,6 +449,7 @@ class ReduceManager:
             One of the Exit enum values.
         """
         any_success = False
+        contains_dd = False
         sig_given = self._signature is not None
         last_tried = None
         self._status.record("init")
@@ -494,10 +495,17 @@ class ReduceManager:
                     signature=self._signature,
                     use_harness=self._use_harness,
                 )
-                strategy = STRATEGIES[strategy_name](self.testcases)
+                strategy = STRATEGIES[strategy_name](
+                    self.testcases, dd_markers=contains_dd
+                )
                 if last_tried is not None:
                     strategy.update_tried(last_tried)
                     last_tried = None
+
+                # track if dd markers have ever been detected
+                if not contains_dd:
+                    LOG.debug("dd markers detected")
+                    contains_dd = strategy.contains_dd
 
                 strategy_last_report = time()
                 strategy_stats = self._status.measure(strategy.name)
