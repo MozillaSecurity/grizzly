@@ -33,14 +33,15 @@ class MinimizeTestcaseList(Strategy):
 
     name = "list"
 
-    def __init__(self, testcases: list[TestCase]) -> None:
+    def __init__(self, testcases: list[TestCase], dd_markers: bool = False) -> None:
         """Initialize strategy instance.
 
         Arguments:
             testcases: Testcases to reduce. The object does not take ownership of the
                        testcases.
+            dd_markers: Indicate DDBEGIN/DDEND markers have been detected.
         """
-        super().__init__(testcases)
+        super().__init__(testcases, dd_markers=dd_markers)
         self._current_feedback: bool | None = None
 
     def update(self, success: bool) -> None:
