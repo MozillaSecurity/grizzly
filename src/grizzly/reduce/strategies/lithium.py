@@ -15,12 +15,13 @@ from lithium.strategies import Strategy as LithStrategy
 from lithium.testcases import Testcase as LithTestcase
 from lithium.testcases import TestcaseAttrs, TestcaseChar, TestcaseJsStr, TestcaseLine
 
-from ...common.storage import TestCase
 from . import Strategy
 
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
+
+    from ...common.storage import TestCase
 
 LOG = getLogger(__name__)
 
@@ -40,17 +41,18 @@ class _LithiumStrategy(Strategy, ABC):
     strategy_cls: type[LithStrategy]
     testcase_cls: type[LithTestcase]
 
-    def __init__(self, testcases: list[TestCase]) -> None:
+    def __init__(self, testcases: list[TestCase], dd_markers: bool = False) -> None:
         """Initialize strategy instance.
 
         Arguments:
             testcases: Testcases to reduce. The object does not take ownership of the
                        testcases.
+            dd_markers: Indicate DDBEGIN/DDEND markers have been detected.
         """
-        super().__init__(testcases)
+        super().__init__(testcases, dd_markers=dd_markers)
         self._current_feedback: bool | None = None
         self._current_reducer: ReductionIterator | None = None
-        self._files_to_reduce = self.actionable_files(self._testcase_root)
+        self._files_to_reduce = self.actionable_files()
 
     def update(self, success: bool) -> None:
         """Inform the strategy whether or not the last reduction yielded was good.
@@ -116,10 +118,7 @@ class _LithiumStrategy(Strategy, ABC):
 
             for reduction in self._current_reducer:
                 reduction.dump()
-                testcases = [
-                    TestCase.load(x, catalog=True)
-                    for x in sorted(self._testcase_root.iterdir())
-                ]
+                testcases = self.reload_testcases()
                 LOG.info("[%s] %s", self.name, self._current_reducer.description)
                 yield testcases
                 if not self._current_feedback:
@@ -150,8 +149,8 @@ class Check(_LithiumStrategy):
     strategy_cls = CheckOnly
     testcase_cls = TestcaseLine
 
-    def __init__(self, testcases: list[TestCase]) -> None:
-        super().__init__(testcases)
+    def __init__(self, testcases: list[TestCase], dd_markers: bool = False) -> None:
+        super().__init__(testcases, dd_markers=dd_markers)
         # trim files_to_reduce, for check we don't need to run on every file
         # just once per Grizzly TestCase set is enough.
         self._files_to_reduce = self._files_to_reduce[:1]

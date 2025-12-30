@@ -77,19 +77,17 @@ class _BeautifyStrategy(Strategy, ABC):
     native_extension: str
     tag_name: str
 
-    def __init__(self, testcases: list[TestCase]) -> None:
+    def __init__(self, testcases: list[TestCase], dd_markers: bool = False) -> None:
         """Initialize beautification strategy instance.
 
         Arguments:
             testcases: Testcases to reduce. The object does not take ownership of the
                        testcases.
+            dd_markers: Indicate DDBEGIN/DDEND markers have been detected.
         """
-        super().__init__(testcases)
-        self._files_to_beautify = self.actionable_files(
-            self._testcase_root,
-            extensions=self.all_extensions,
-        )
+        super().__init__(testcases, dd_markers=dd_markers)
         self._current_feedback: bool | None = None
+        self._files_to_beautify = self.actionable_files(extensions=self.all_extensions)
         tag_bytes = self.tag_name.encode("ascii")
         self._re_tag_start = re_compile(
             rb"<\s*" + tag_bytes + rb".*?>", flags=DOTALL | IGNORECASE

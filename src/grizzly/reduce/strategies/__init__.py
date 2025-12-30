@@ -23,20 +23,13 @@ from tempfile import mkdtemp
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from ...common.storage import TEST_INFO
+from ...common.storage import TestCase
 from ...common.utils import grz_tmp, iter_entry_points
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
-    from ...common.storage import TestCase
-
-
 LOG = getLogger(__name__)
-
-
-IGNORE_FILES = frozenset((TEST_INFO, "prefs.js"))
-
 DEFAULT_STRATEGIES = (
     "list",
     "lines",
@@ -61,12 +54,13 @@ class Strategy(ABC):
 
     name: str
 
-    def __init__(self, testcases: Sequence[TestCase]) -> None:
+    def __init__(self, testcases: Sequence[TestCase], dd_markers: bool = False) -> None:
         """Initialize strategy instance.
 
         Arguments:
             testcases: Testcases to reduce. The object does not take ownership of the
                        testcases.
+            dd_markers: Indicate DDBEGIN/DDEND markers have been detected.
         """
         # Tuple[str, bytes] is str(path.relative_to(tc_root)) -> hash(testfile data)
         #   for each test file in tc_root (see calculate_testcase_hash below)
@@ -75,6 +69,7 @@ class Strategy(ABC):
         # Set[above] is the unique test case sets which have been tried
         self._tried: set[tuple[tuple[str, bytes], ...]] = set()
         self._testcase_root = Path(mkdtemp(prefix="tc_", dir=grz_tmp("reduce")))
+        self.contains_dd = dd_markers
         self.dump_testcases(testcases)
 
     def _calculate_testcase_hash(self) -> tuple[tuple[str, bytes], ...]:
@@ -130,25 +125,40 @@ class Strategy(ABC):
         """
         return frozenset(self._tried)
 
-    def dump_testcases(
-        self, testcases: Sequence[TestCase], recreate_tcroot: bool = False
-    ) -> None:
+    def dump_testcases(self, testcases: Sequence[TestCase]) -> None:
         """Dump provided testcases to the testcase root on disk.
 
         Arguments:
             testcases: Testcases to dump.
-            recreate_tcroot: if True, delete and recreate tcroot before dumping it.
 
         Returns:
             None
         """
-        if recreate_tcroot:
-            rmtree(self._testcase_root)
-            self._testcase_root.mkdir()
         for idx, testcase in enumerate(testcases):
             LOG.debug("Extracting testcase %d/%d", idx + 1, len(testcases))
             # NOTE: naming determines load order
             testcase.dump(self._testcase_root / f"{idx:03d}", include_details=True)
+        # scan for files with dd markers
+        if not self.contains_dd:
+            self.contains_dd = any(
+                path
+                for path in self._testcase_root.glob("**/*")
+                if path.is_file() and _contains_dd(path)
+            )
+
+    def reload_testcases(self) -> list[TestCase]:
+        """Scan and reload testcase from the filesystem.
+
+        Arguments:
+            None
+
+        Returns:
+            Testcases that have been loaded.
+        """
+        return [
+            TestCase.load(x, catalog=True)
+            for x in sorted(self._testcase_root.iterdir())
+        ]
 
     @abstractmethod
     def __iter__(self) -> Iterator[list[TestCase]]:
@@ -199,27 +209,26 @@ class Strategy(ABC):
         """
         rmtree(self._testcase_root)
 
-    @staticmethod
-    def actionable_files(
-        root: Path,
-        extensions: Iterable[str] | None = None,
-    ) -> list[Path]:
-        """Scan a directory and return files that can be processed by reducers,
+    def actionable_files(self, extensions: Iterable[str] | None = None) -> list[Path]:
+        """Scan testcases and return files that can be processed by reducers,
         prettifiers... etc.
 
         Arguments:
-            root: Top level directory containing files.
             extensions: File extension inclusion list.
 
         Returns:
             Files to process.
         """
-        files = (path for path in root.glob("**/*") if path.is_file())
+        tests = self.reload_testcases()
+        if self.contains_dd:
+            files: list[Path] = []
+            for test in tests:
+                files.extend(test.root / x for x in test if _contains_dd(test.root / x))
+        else:
+            files = [x.root / x.entry_point for x in tests]
         if extensions:
-            files = (path for path in files if path.suffix in extensions)
-        files = (path for path in files if path.name not in IGNORE_FILES)
-        files = (path for path in files if _contains_dd(path))
-        return list(files)
+            files = [x for x in files if x.suffix in extensions]
+        return files
 
 
 def _load_strategies() -> MappingProxyType[str, type[Strategy]]:
