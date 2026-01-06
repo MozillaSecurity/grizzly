@@ -29,12 +29,15 @@ jobs:
           - python-version: "3.13"
             platform: ubuntu-latest
             toxenv: py313
-          - python-version: "3.12"
+          - python-version: "3.14"
+            platform: ubuntu-latest
+            toxenv: py314
+          - python-version: "3.14"
             platform: macos-latest
-            toxenv: py312
-          - python-version: "3.12"
+            toxenv: py314
+          - python-version: "3.14"
             platform: windows-latest
-            toxenv: py312
+            toxenv: py314
 
     steps:
       - uses: actions/checkout@v4
