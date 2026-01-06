@@ -406,7 +406,7 @@ class ReduceManager:
         LOG.info("Analysis results:")
         if harness_best >= self.ANALYSIS_ITERATIONS / 2:
             LOG.info(
-                "* testcase was better than 50% reliable with the harness "
+                "* testcase was better than 50%% reliable with the harness "
                 "(--no-harness not assessed)"
             )
         elif harness_best == non_harness_crashes:
