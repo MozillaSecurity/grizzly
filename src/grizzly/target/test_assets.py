@@ -84,7 +84,7 @@ def test_asset_manager_02(tmp_path):
         # add with asset with name and file collision
         asset_mgr.add("example_file", example, copy=True)
         # add with file name collision as different asset
-        with raises(AssetError, match="collide: 'example.txt' already exists"):
+        with raises(AssetError, match=r"collide: 'example\.txt' already exists"):
             asset_mgr.add("collide", example)
         assert "collide" not in asset_mgr.assets
 

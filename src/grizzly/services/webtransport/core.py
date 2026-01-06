@@ -89,7 +89,10 @@ class WebTransportServer(BaseService):
             # doesn't seem to work when aioquic detects a connection loss.
             # Use SelectorEventLoop to work around the problem.
             if sys.platform.startswith("win"):
-                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+                asyncio.set_event_loop_policy(
+                    # pylint: disable=deprecated-class, line-too-long
+                    asyncio.WindowsSelectorEventLoopPolicy()  # type: ignore[attr-defined]
+                )
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
             self._loop.run_until_complete(
