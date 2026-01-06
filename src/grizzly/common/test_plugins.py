@@ -20,8 +20,8 @@ class FakeType2:
 def test_load_01(mocker):
     """test load() - nothing to load"""
     mocker.patch(
-        "grizzly.common.plugins.iter_entry_points", autospec=True, return_value=()
-    )
+        "grizzly.common.plugins.entry_points", autospec=True
+    ).return_value.select.return_value = ()
     with raises(PluginLoadError, match="'test-name' not found in 'test-group'"):
         load_plugin("test-name", "test-group", FakeType1)
 
@@ -32,10 +32,8 @@ def test_load_02(mocker):
     entry.name = "test-name"
     entry.load.return_value = FakeType1
     mocker.patch(
-        "grizzly.common.plugins.iter_entry_points",
-        autospec=True,
-        return_value=(entry,),
-    )
+        "grizzly.common.plugins.entry_points", autospec=True
+    ).return_value.select.return_value = (entry,)
     assert load_plugin("test-name", "test-group", FakeType1)
 
 
@@ -45,10 +43,8 @@ def test_load_03(mocker):
     entry.name = "test-name"
     entry.load.return_value = FakeType1
     mocker.patch(
-        "grizzly.common.plugins.iter_entry_points",
-        autospec=True,
-        return_value=(entry,),
-    )
+        "grizzly.common.plugins.entry_points", autospec=True
+    ).return_value.select.return_value = (entry,)
     with raises(PluginLoadError, match="'test-name' doesn't inherit from FakeType2"):
         load_plugin("test-name", "test-group", FakeType2)
 
@@ -56,8 +52,8 @@ def test_load_03(mocker):
 def test_scan_01(mocker):
     """test scan() - no entries found"""
     mocker.patch(
-        "grizzly.common.plugins.iter_entry_points", autospec=True, return_value=()
-    )
+        "grizzly.common.plugins.entry_points", autospec=True
+    ).return_value.select.return_value = ()
     assert not scan_plugins("test_group")
 
 
@@ -66,10 +62,8 @@ def test_scan_02(mocker):
     entry = mocker.Mock(spec=EntryPoint)
     entry.name = "test_entry"
     mocker.patch(
-        "grizzly.common.plugins.iter_entry_points",
-        autospec=True,
-        return_value=(entry, entry),
-    )
+        "grizzly.common.plugins.entry_points", autospec=True
+    ).return_value.select.return_value = (entry, entry)
     with raises(PluginLoadError, match="Duplicate entry 'test_entry' in 'test_group'"):
         scan_plugins("test_group")
 
@@ -79,10 +73,8 @@ def test_scan_03(mocker):
     entry = mocker.Mock(spec=EntryPoint)
     entry.name = "test-name"
     mocker.patch(
-        "grizzly.common.plugins.iter_entry_points",
-        autospec=True,
-        return_value=(entry,),
-    )
+        "grizzly.common.plugins.entry_points", autospec=True
+    ).return_value.select.return_value = (entry,)
     assert "test-name" in scan_plugins("test_group")
 
 
@@ -95,10 +87,8 @@ def test_scan_target_assets_01(mocker):
     targ2.name = "t2"
     targ2.load.return_value = mocker.Mock(spec_set=Target, SUPPORTED_ASSETS=("a", "B"))
     mocker.patch(
-        "grizzly.common.plugins.iter_entry_points",
-        autospec=True,
-        return_value=(targ1, targ2),
-    )
+        "grizzly.common.plugins.entry_points", autospec=True
+    ).return_value.select.return_value = (targ1, targ2)
     assets = scan_target_assets()
     assert "t1" in assets
     assert not assets["t1"]

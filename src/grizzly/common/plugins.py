@@ -3,10 +3,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
+from importlib.metadata import entry_points
 from logging import getLogger
 from typing import Any
-
-from .utils import iter_entry_points
 
 __all__ = ("PluginLoadError", "load_plugin", "scan_plugins")
 
@@ -29,7 +28,8 @@ def load_plugin(name: str, group: str, base_type: type) -> Any:
     Returns:
         Loaded plug-in object.
     """
-    for entry in iter_entry_points(group):
+
+    for entry in entry_points().select(group=group):
         if entry.name == name:
             plugin = entry.load()
             LOG.debug("loading '%s' (%s)", name, base_type.__name__)
@@ -52,7 +52,7 @@ def scan_plugins(group: str) -> list[str]:
     """
     found: list[str] = []
     LOG.debug("scanning '%s'", group)
-    for entry in iter_entry_points(group):
+    for entry in entry_points().select(group=group):
         if entry.name in found:
             # not sure if this can even happen
             raise PluginLoadError(f"Duplicate entry '{entry.name}' in '{group}'")
@@ -70,6 +70,6 @@ def scan_target_assets() -> dict[str, tuple[str, ...]]:
         Name of target and list of supported assets.
     """
     assets: dict[str, tuple[str, ...]] = {}
-    for entry in iter_entry_points("grizzly_targets"):
+    for entry in entry_points().select(group="grizzly_targets"):
         assets[entry.name] = entry.load().SUPPORTED_ASSETS
     return assets

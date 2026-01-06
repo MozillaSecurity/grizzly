@@ -20,7 +20,7 @@ from pathlib import Path
 from platform import system
 from re import match
 from time import gmtime, localtime, strftime
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from psutil import cpu_count, cpu_percent, disk_usage, getloadavg, virtual_memory
 
@@ -34,7 +34,7 @@ from .status import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Callable, Generator, Iterable
 
 __all__ = ("StatusReporter",)
 __author__ = "Tyson Smith"

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from logging import getLogger
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from ..common.frontend import Exit, configure_logging
 from ..common.fuzzmanager import Bucket
@@ -13,6 +13,7 @@ from .crash import main as crash_main
 
 if TYPE_CHECKING:
     from argparse import Namespace
+    from collections.abc import Callable
 
 LOG = getLogger(__name__)
 

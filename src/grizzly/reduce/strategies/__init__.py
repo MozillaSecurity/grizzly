@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from hashlib import sha512
+from importlib.metadata import entry_points
 from logging import DEBUG, getLogger
 from pathlib import Path
 from shutil import rmtree
@@ -24,7 +25,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from ...common.storage import TestCase
-from ...common.utils import grz_tmp, iter_entry_points
+from ...common.utils import grz_tmp
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
@@ -238,7 +239,7 @@ def _load_strategies() -> MappingProxyType[str, type[Strategy]]:
         A mapping of strategy names to strategy class.
     """
     strategies: dict[str, type[Strategy]] = {}
-    for entry_point in iter_entry_points("grizzly_reduce_strategies"):
+    for entry_point in entry_points().select(group="grizzly_reduce_strategies"):
         try:
             strategy_cls: type[Strategy] = entry_point.load()
             assert strategy_cls.name == entry_point.name, (

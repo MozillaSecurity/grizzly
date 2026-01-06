@@ -15,12 +15,12 @@ from logging import getLogger
 from os import getpid
 from sqlite3 import Connection, OperationalError, connect
 from time import perf_counter, time
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .utils import grz_tmp
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
     from pathlib import Path
 
     from .reporter import FuzzManagerReporter

@@ -7,9 +7,10 @@ from dataclasses import dataclass
 from inspect import signature
 from logging import getLogger
 from re import search as re_search
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 __all__ = ("Resource", "ServerMap")

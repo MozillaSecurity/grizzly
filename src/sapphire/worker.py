@@ -11,7 +11,6 @@ from logging import getLogger
 from re import compile as re_compile
 from select import select
 from socket import SHUT_RDWR, socket
-from socket import timeout as sock_timeout  # Py3.10 socket.timeout => TimeoutError
 from sys import exc_info
 from threading import Thread, ThreadError, active_count
 from time import sleep
@@ -179,7 +178,7 @@ class Worker:
             if resource is not None:
                 if isinstance(resource, FileResource):
                     finish_job = serv_job.remove_pending(str(resource.target))
-                elif isinstance(resource, (DynamicResource, RedirectResource)):
+                elif isinstance(resource, DynamicResource | RedirectResource):
                     finish_job = serv_job.remove_pending(request.url.path.lstrip("/"))
                 else:  # pragma: no cover
                     # this should never happen
@@ -245,7 +244,7 @@ class Worker:
                 LOG.debug("200 '%s' (%d to go)", request.url.path, serv_job.pending)
                 serv_job.mark_served(resource)
 
-        except (OSError, sock_timeout):
+        except (TimeoutError, OSError):
             _, exc_obj, exc_tb = exc_info()
             LOG.debug("%r - line %r", exc_obj, exc_tb.tb_lineno if exc_tb else None)
             if not finish_job:
