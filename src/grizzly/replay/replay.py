@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, cast
 
 from sapphire import ServerMap
 
@@ -20,7 +20,7 @@ from ..common.utils import HARNESS_FILE, grz_tmp
 from ..target import Result, Target
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from FTB.Signatures.CrashInfo import CrashSignature
 

@@ -43,7 +43,7 @@ def test_worker_01(mocker):
 @mark.parametrize(
     "exc",
     [
-        socket.timeout("test"),
+        TimeoutError("test"),
         OSError("test"),
         BlockingIOError("test"),
     ],

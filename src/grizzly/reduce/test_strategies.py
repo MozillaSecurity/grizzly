@@ -81,9 +81,8 @@ def test_strategy_load_fail(mocker):
             raise RuntimeError("oops")
 
     mocker.patch(
-        "grizzly.reduce.strategies.iter_entry_points",
-        return_value=(_BadStrategy, _GoodStrategy),
-    )
+        "grizzly.reduce.strategies.entry_points", autospec=True
+    ).return_value.select.return_value = (_BadStrategy, _GoodStrategy)
     mocker.patch("grizzly.reduce.strategies.DEFAULT_STRATEGIES", new=("good",))
     result = _load_strategies()
     assert result == {"good": _GoodStrategy}

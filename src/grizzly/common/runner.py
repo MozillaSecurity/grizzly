@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 from time import perf_counter, sleep
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from sapphire import Sapphire, Served, ServerMap
 
@@ -15,7 +15,7 @@ from ..target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .storage import TestCase
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
 __all__ = ("RunResult", "Runner")
 __author__ = "Tyson Smith"

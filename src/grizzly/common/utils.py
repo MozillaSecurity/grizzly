@@ -3,22 +3,16 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-import sys  # mypy looks for `sys.version_info`
 from contextlib import suppress
-from importlib.metadata import EntryPoint, PackageNotFoundError, entry_points, version
+from importlib.metadata import PackageNotFoundError, version
 from logging import getLogger
 from os import getenv
 from pathlib import Path
 from tempfile import gettempdir
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
 
 __all__ = (
     "HARNESS_FILE",
     "grz_tmp",
-    "iter_entry_points",
     "package_version",
 )
 __author__ = "Tyson Smith"
@@ -42,26 +36,6 @@ def grz_tmp(*subdir: str | Path) -> Path:
     path = Path(GRZ_TMP, *subdir)
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def iter_entry_points(group: str) -> Generator[EntryPoint]:  # pragma: no cover
-    """Compatibility wrapper code for importlib.metadata.entry_points()
-
-    Args:
-        group: See entry_points().
-
-    Yields:
-        EntryPoint
-    """
-    # pylint: disable=import-outside-toplevel
-    # TODO: remove this function when support for Python 3.9 is dropped
-    assert group
-    if sys.version_info >= (3, 10):
-        yield from entry_points().select(group=group)
-    else:
-        import pkg_resources
-
-        yield from pkg_resources.iter_entry_points(group)  # type: ignore
 
 
 def package_version(name: str, default: str = "unknown") -> str:

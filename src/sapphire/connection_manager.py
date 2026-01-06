@@ -6,11 +6,12 @@ from __future__ import annotations
 from logging import getLogger
 from time import perf_counter
 from traceback import format_exception
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from .worker import Worker
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from socket import socket
 
     from .job import Job

@@ -65,7 +65,7 @@ log_level = "DEBUG"
 
 [tool.ruff]
 fix = true
-target-version = "py39"
+target-version = "py310"
 exclude = ["src/grizzly/services/webtransport/wpt_h3_server"]
 
 [tool.ruff.lint]
