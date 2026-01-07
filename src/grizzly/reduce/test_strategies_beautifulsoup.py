@@ -219,6 +219,15 @@ def test_beautifulsoup_prettify_ignore_unsupported_files(mocker, tmp_path):
             id="multiple tags with style attr",
         ),
         param(
+            "<div id='a' style='foo: 1'></div>\n<div style='foo: 1'></div>",
+            (
+                '<div id="a"></div>\n'
+                '<div style="foo: 1"></div>\n'
+                "<style>\n#a { foo: 1 }\n</style>\n"
+            ),
+            id="multiple tags with style attr and tag with style missing id",
+        ),
+        param(
             "<style>\n#a {}\n</style>\n<div id='b' style='foo: 1'></div>",
             '<style>\n#a {}\n#b { foo: 1 }\n</style>\n<div id="b"></div>',
             id="existing style tag",

@@ -183,14 +183,13 @@ class BeautifulSoupCSSMerge(BeautifulSoupStrategy):
 
             style_data: list[str] = []
             for tag in soup.find_all():
-                attr_value = tag.attrs.pop("style", None)
-                # collect style data and prepare it to be added to a style tag
-                if isinstance(attr_value, str) and attr_value:
-                    tag_id = tag.get("id")
-                    if tag_id is None:
-                        # only move style data to a tag if id is available
-                        continue
-                    style_data.append(f"#{tag_id} {{ {attr_value} }}")
+                tag_id = tag.get("id")
+                # only move style data to a tag if 'id' is available
+                if tag_id is not None:
+                    attr_value = tag.attrs.pop("style", None)
+                    # collect style data and prepare it to be added to a style tag
+                    if isinstance(attr_value, str) and attr_value:
+                        style_data.append(f"#{tag_id} {{ {attr_value} }}")
 
             if not style_data:
                 LOG.warning("CSS merge did not detect content to merge, skipping")
