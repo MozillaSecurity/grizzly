@@ -6,10 +6,15 @@
 
 from logging import getLogger
 
+from bs4 import BeautifulSoup
 from pytest import mark, param
 
 from ..common.storage import TestCase
-from .strategies.beautifulsoup import BeautifulSoupCSSMerge, BeautifulSoupPrettify
+from .strategies.beautifulsoup import (
+    BeautifulSoupCSSMerge,
+    BeautifulSoupPrettify,
+    check_depth,
+)
 
 LOG = getLogger(__name__)
 
@@ -294,3 +299,35 @@ def test_beautifulsoup_css_merge_not_available(tmp_path):
     finally:
         for test in best_tests:
             test.cleanup()
+
+
+def test_check_depth():
+    """test check_depth()"""
+    soup = BeautifulSoup("<html></html>", "html.parser")
+    body = soup.new_tag("body")
+    soup.html.append(body)
+    current_tag = soup.new_tag("div")
+    body.append(current_tag)
+    for _ in range(20):
+        next_tag = soup.new_tag("div")
+        current_tag.append(next_tag)
+        current_tag = next_tag
+    # don't exceed depth_limit
+    assert check_depth(soup, 100)
+    # exceed depth_limit
+    assert not check_depth(soup, 10)
+
+
+@mark.parametrize("bs_cls", [BeautifulSoupCSSMerge, BeautifulSoupPrettify])
+def test_beautifulsoup_check_depth_fails(mocker, bs_cls):
+    """test check_depth() fails"""
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
+    mocker.patch(
+        "grizzly.reduce.strategies.beautifulsoup.check_depth",
+        return_value=False,
+    )
+    with TestCase("test.html", "test-adapter") as test:
+        test.add_from_bytes(b"foo", test.entry_point)
+        with bs_cls([test]) as sgy:
+            for _ in sgy:
+                sgy.update(True)
