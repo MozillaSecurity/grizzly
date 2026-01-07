@@ -26,8 +26,21 @@ if TYPE_CHECKING:
 LOG = getLogger(__name__)
 
 
+def check_depth(soup: BeautifulSoup, max_depth: int) -> bool:
+    """Check document depth.
+
+    Arguments:
+        soup: Document to check.
+
+    Returns:
+        True if document depth is less than the limit otherwise False.
+    """
+    return not any(sum(1 for _ in tag.parents) > max_depth for tag in soup.find_all())
+
+
 class BeautifulSoupStrategy(Strategy):
     all_extensions = frozenset((".htm", ".html", ".xhtml", ".svg"))
+    depth_limit = 100
     import_available = HAVE_BEAUTIFULSOUP
     import_name = "beautifulsoup4"
     name: str
@@ -95,9 +108,11 @@ class BeautifulSoupPrettify(BeautifulSoupStrategy):
             org_hash = sha256(data).digest()
 
             # do initial prettify pass
-            data = BeautifulSoup(data.decode(), features="html.parser").prettify(
-                formatter=HTMLFormatter(indent=0), encoding="utf-8"
-            )
+            soup = BeautifulSoup(data.decode(), features="html.parser")
+            if not check_depth(soup, self.depth_limit):
+                LOG.warning("Document exceeds max depth, skipping")
+                continue
+            data = soup.prettify(formatter=HTMLFormatter(indent=0), encoding="utf-8")
 
             # collapse empty tags, for example '<p>\n</p>' should be '<p></p>'
             soup = BeautifulSoup(data, features="html.parser")
@@ -161,8 +176,12 @@ class BeautifulSoupCSSMerge(BeautifulSoupStrategy):
                 continue
             data = b"".join(lith_tc.parts)
 
-            style_data: list[str] = []
             soup = BeautifulSoup(data.decode(), features="html.parser")
+            if not check_depth(soup, self.depth_limit):
+                LOG.warning("Document exceeds max depth, skipping")
+                continue
+
+            style_data: list[str] = []
             for tag in soup.find_all():
                 attr_value = tag.attrs.pop("style", None)
                 # collect style data and prepare it to be added to a style tag
