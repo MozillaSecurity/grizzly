@@ -205,7 +205,7 @@ def test_beautifulsoup_prettify_ignore_unsupported_files(mocker, tmp_path):
             id="tag with style missing id",
         ),
         param(
-            "<div id='a' style='foo: 1'></div>",
+            "<div id='a' style='foo: 1'></div>\n",
             '<div id="a"></div>\n<style>\n#a { foo: 1 }\n</style>\n',
             id="add style tag",
         ),
@@ -229,23 +229,33 @@ def test_beautifulsoup_prettify_ignore_unsupported_files(mocker, tmp_path):
         ),
         param(
             "<style>\n#a {}\n</style>\n<div id='b' style='foo: 1'></div>",
-            '<style>\n#a {}\n#b { foo: 1 }\n</style>\n<div id="b"></div>',
+            '<style>\n#a {}\n#b { foo: 1 }\n</style>\n<div id="b"></div>\n',
             id="existing style tag",
         ),
         param(
             "<style></style>\n<div id='a' style='foo: 1; bar: 2'></div>",
-            '<style>\n#a { foo: 1; bar: 2 }\n</style>\n<div id="a"></div>',
+            '<style>\n#a { foo: 1; bar: 2 }\n</style>\n<div id="a"></div>\n',
             id="multiple style attr entries",
         ),
         param(
             "<style></style>\n<style></style>\n<div id='a' style='foo: 1'></div>",
-            '<style>\n#a { foo: 1 }\n</style>\n<style></style>\n<div id="a"></div>',
+            '<style>\n#a { foo: 1 }\n</style>\n<style></style>\n<div id="a"></div>\n',
             id="multiple style tags",
         ),
         param(
             "<style></style>\n<div id='a' style='foo: 1' style='bar: 2'></div>",
-            '<style>\n#a { bar: 2 }\n</style>\n<div id="a"></div>',
+            '<style>\n#a { bar: 2 }\n</style>\n<div id="a"></div>\n',
             id="multiple style attrs on one tag",
+        ),
+        param(
+            "<div id='a' style='foo: 1'><div>\n",
+            '<div id="a"><div>\n</div></div>\n<style>\n#a { foo: 1 }\n</style>\n',
+            id="close tags added by bs",
+        ),
+        param(
+            "<style></style>\n<div id='a' style='foo: 1'><div>\n",
+            '<style>\n#a { foo: 1 }\n</style>\n<div id="a"><div>\n</div></div>\n',
+            id="close tags added by bs with existing style",
         ),
     ],
 )

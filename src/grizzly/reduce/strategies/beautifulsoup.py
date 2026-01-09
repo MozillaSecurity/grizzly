@@ -195,13 +195,15 @@ class BeautifulSoupCSSMerge(BeautifulSoupStrategy):
                 LOG.warning("CSS merge did not detect content to merge, skipping")
                 continue
 
-            # add style data to a style tag (create one if needed)
+            # add style data to a style tag
             style_tag = soup.find("style")
             if style_tag is None:
+                # no style tag exists so create one
                 style_tag = soup.new_tag("style")
-                soup.append("\n")
+                # add new style tag on a new line
+                if not str(soup.contents[-1]).endswith("\n"):
+                    soup.append("\n")
                 soup.append(style_tag)
-                soup.append("\n")
             new_styles = "\n".join(style_data)
             existing_styles = style_tag.string or ""
             style_tag.string = f"{existing_styles.rstrip()}\n{new_styles}\n"
@@ -209,6 +211,9 @@ class BeautifulSoupCSSMerge(BeautifulSoupStrategy):
             with file.open("wb") as testcase_fp:
                 testcase_fp.write(lith_tc.before)
                 testcase_fp.write(soup.encode(encoding="utf-8"))
+                # bs will add missing close tags so add final new line if needed
+                if not str(soup.contents[-1]).endswith("\n"):
+                    testcase_fp.write(b"\n")
                 testcase_fp.write(lith_tc.after)
 
             yield [TestCase.load(x) for x in sorted(self._testcase_root.iterdir())]
