@@ -21,9 +21,7 @@ def test_firefox_target_01(mocker, tmp_path):
     fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
     fake_ffp.return_value.reason = Reason.CLOSED
     fake_ffp.return_value.log_length.return_value = 562
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         assert target.asset_mgr
         assert target.closed
         assert target.launch_timeout == 300
@@ -39,17 +37,15 @@ def test_firefox_target_01(mocker, tmp_path):
         assert fake_ffp.return_value.save_logs.call_count == 1
     assert fake_ffp.return_value.clean_up.call_count == 1
     # with extra args
-    with FirefoxTarget(fake_file, 1, 1, 1, rr=True, fake=1) as target:
+    with FirefoxTarget(tmp_path / "fake", 1, 1, 1, rr=True, fake=1) as target:
         pass
 
 
 def test_firefox_target_02(mocker, tmp_path):
     """test FirefoxTarget.launch()"""
     fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
     # test providing prefs.js
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         # launch success
         target.launch("launch_target_page")
         assert fake_ffp.return_value.launch.call_count == 1
@@ -98,15 +94,13 @@ def test_firefox_target_02(mocker, tmp_path):
 def test_firefox_target_03(mocker, tmp_path, healthy, reason, ignore, result, closes):
     """test FirefoxTarget.check_result()"""
     fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
     if "memory" in ignore:
         fake_ffp.return_value.available_logs.return_value = {"ffp_worker_memory_usage"}
     elif "log-limit" in ignore:
         fake_ffp.return_value.available_logs.return_value = {"ffp_worker_log_size"}
     fake_ffp.return_value.is_healthy.return_value = healthy
     fake_ffp.return_value.reason = reason
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         assert target.check_result(ignore) == result
     assert fake_ffp.return_value.close.call_count == closes
 
@@ -135,11 +129,9 @@ def test_firefox_target_04(mocker, tmp_path, healthy, usage, os_name, killed, de
     fake_kill = mocker.patch("grizzly.target.firefox_target.kill", autospec=True)
     # raise OSError for code coverage
     fake_kill.side_effect = OSError
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
     fake_ffp.return_value.cpu_usage.return_value = usage
     fake_ffp.return_value.is_healthy.return_value = healthy
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         target._debugger = debugger
         target.handle_hang()
     assert fake_ffp.return_value.is_healthy.call_count == 1
@@ -152,9 +144,7 @@ def test_firefox_target_04(mocker, tmp_path, healthy, usage, os_name, killed, de
 def test_firefox_target_05(mocker, tmp_path):
     """test FirefoxTarget.dump_coverage()"""
     fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         target.dump_coverage()
     assert fake_ffp.return_value.dump_coverage.call_count == 1
 
@@ -162,9 +152,7 @@ def test_firefox_target_05(mocker, tmp_path):
 def test_firefox_target_06(mocker, tmp_path):
     """test FirefoxTarget.monitor"""
     fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         fake_ffp.return_value.is_running.return_value = False
         fake_ffp.return_value.is_healthy.return_value = False
         assert target.monitor is not None
@@ -184,9 +172,7 @@ def test_firefox_target_07(mocker, tmp_path):
     """test FirefoxTarget.monitor.is_idle()"""
     fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
     fake_ffp.return_value.cpu_usage.return_value = [(999, 30), (998, 20), (997, 10)]
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         assert not target.monitor.is_idle(0)
         assert not target.monitor.is_idle(25)
         assert target.monitor.is_idle(50)
@@ -253,10 +239,8 @@ def test_firefox_target_09(
 ):
     """test FirefoxTarget debugger args"""
     fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
     with FirefoxTarget(
-        fake_file, 30, 25, 500, pernosco=pernosco, rr=rr, valgrind=valgrind
+        tmp_path / "fake", 30, 25, 500, pernosco=pernosco, rr=rr, valgrind=valgrind
     ) as _:
         pass
     if pernosco:
@@ -319,9 +303,7 @@ def test_firefox_target_10(tmp_path, asset, env):
 def test_firefox_target_11(mocker, tmp_path):
     """test FirefoxTarget.filtered_environ()"""
     mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         target.environ = {
             "TRACKED": "1",
             "ASAN_OPTIONS": "external_symbolizer_path='a':no_remove='b'",
@@ -360,9 +342,7 @@ def test_firefox_target_11(mocker, tmp_path):
 def test_firefox_target_12(mocker, tmp_path, base, extra, result):
     """test FirefoxTarget.merge_environment()"""
     mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         target.environ = base
         target.merge_environment(extra)
         assert target.environ == result
@@ -429,9 +409,7 @@ def test_firefox_target_14(mocker, tmp_path):
     """test FirefoxTarget.dump_coverage() - skip on unsupported platform"""
     mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
     mocker.patch("grizzly.target.firefox_target.system", return_value="foo")
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with FirefoxTarget(fake_file, 300, 25, 5000) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
         target.dump_coverage()
 
 
@@ -454,12 +432,9 @@ def test_firefox_target_15(mocker, tmp_path, certutil, certs):
     mocker.patch("grizzly.target.firefox_target.certutil_find", autospec=True)
     mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
 
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-
     bundle = mocker.Mock(spec_set=CertificateBundle).return_value if certs else None
     mocker.patch.object(FirefoxTarget, "_get_certdb", return_value=tmp_path)
-    with FirefoxTarget(fake_file, 300, 25, 5000, certs=bundle) as target:
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000, certs=bundle) as target:
         assert target.https() == (certutil and certs)
         assert target._profile_template == (tmp_path if (certutil and certs) else None)
 
