@@ -56,7 +56,6 @@ class SimpleTarget(Target):
 def test_target_01(tmp_path):
     """test creating a simple Target"""
     fake_file = tmp_path / "fake"
-    fake_file.touch()
     with SimpleTarget(fake_file, 10, 2, 3) as target:
         assert target.binary == fake_file
         assert target.asset_mgr
@@ -76,9 +75,7 @@ def test_target_01(tmp_path):
 def test_target_02(mocker, tmp_path):
     """test loading TRACKED_ENVVARS"""
     mocker.patch.dict("grizzly.target.target.environ", {"SKIP": "x", "TEST_INC": "1"})
-    fake_file = tmp_path / "fake"
-    fake_file.touch()
-    with SimpleTarget(fake_file, 321, 2, 3) as target:
+    with SimpleTarget(tmp_path / "fake", 321, 2, 3) as target:
         assert target.environ
         assert "SKIP" not in target.environ
         assert target.environ["TEST_INC"] == "1"

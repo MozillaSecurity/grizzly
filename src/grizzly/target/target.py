@@ -81,7 +81,7 @@ class Target(ABC):
         assert launch_timeout > 0
         assert log_limit >= 0
         assert memory_limit >= 0
-        assert binary is not None and binary.is_file()
+        assert binary is not None
         self._asset_mgr = AssetManager(base_path=grz_tmp("target"))
         self._https = False
         self._lock = Lock()
