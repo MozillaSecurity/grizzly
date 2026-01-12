@@ -35,7 +35,7 @@ __credits__ = ["Tyson Smith"]
 LOG = getLogger(__name__)
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, slots=True)
 class ReplayResult:
     """Contains information related to the replay of testcases.
 

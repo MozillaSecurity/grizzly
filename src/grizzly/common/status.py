@@ -46,7 +46,7 @@ STATUS_DB_REDUCE = grz_tmp() / "reduce-status.db"
 LOG = getLogger(__name__)
 
 
-@dataclass(eq=False, frozen=True)
+@dataclass(eq=False, frozen=True, slots=True)
 class ProfileEntry:
     count: int
     max: float
@@ -55,7 +55,7 @@ class ProfileEntry:
     total: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ResultEntry:
     rid: str
     count: int
@@ -814,7 +814,7 @@ class Status(BaseStatus):
         return status
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ReductionStep:
     name: str
     duration: float | None
@@ -824,7 +824,7 @@ class ReductionStep:
     iterations: int | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class _MilestoneTimer:
     name: str
     start: float

@@ -28,30 +28,30 @@ class MapCollisionError(Exception):
     """Raised when a URL is already in use by ServerMap"""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Resource:
     url: str
     required: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DynamicResource(Resource):
     target: Callable[[str], bytes]
     mime: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FileResource(Resource):
     target: Path
     mime: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class IncludeResource(Resource):
     target: Path
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RedirectResource(Resource):
     target: str
 
