@@ -39,7 +39,7 @@ class TestFileExists(Exception):
     TestFile with the same name"""
 
 
-@dataclass(eq=False, frozen=True)
+@dataclass(eq=False, frozen=True, slots=True)
 class TestFileMap:
     optional: dict[str, Path] = field(default_factory=dict)
     required: dict[str, Path] = field(default_factory=dict)

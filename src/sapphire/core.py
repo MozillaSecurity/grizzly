@@ -62,7 +62,7 @@ BLOCKED_PORTS = frozenset(
 LOG = getLogger(__name__)
 
 
-@dataclass(eq=False, frozen=True)
+@dataclass(eq=False, frozen=True, slots=True)
 class ServeResult:
     served: MappingProxyType[str, Path]
     status: Served

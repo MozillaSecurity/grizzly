@@ -92,7 +92,7 @@ class _IdleChecker:
             self._next_poll = now + self._poll_delay
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, slots=True)
 class RunResult:
     """A RunResult holds result details from a call to Runner.run().
 
