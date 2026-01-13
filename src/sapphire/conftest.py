@@ -4,6 +4,7 @@ Sapphire unit test fixtures
 
 import socket
 from hashlib import sha1
+from http import HTTPStatus
 from http.client import BadStatusLine
 from logging import getLogger
 from random import shuffle
@@ -107,9 +108,9 @@ def client_factory():
                             f"http://{addr}:{port}/{t_file.url}", timeout=10
                         ) as cli:
                             data_length = 0
-                            resp_code = cli.getcode()
-                            content_type = cli.info().get("Content-Type")
-                            if resp_code == 200:
+                            resp_code = HTTPStatus(cli.status)
+                            content_type = cli.headers.get("Content-Type")
+                            if resp_code == HTTPStatus.OK:
                                 while not self._closed.is_set():
                                     data = cli.read(self.rx_size)
                                     data_length += len(data)
@@ -144,14 +145,19 @@ def client_factory():
                         content_type = None
                         data_length = len(data)
                         try:
-                            resp_code = int(
-                                match(
-                                    r"HTTP/1\.\d\s(?P<code>\d+)\s", data.decode("ascii")
-                                ).group("code")
+                            resp_code = HTTPStatus(
+                                int(
+                                    match(
+                                        r"HTTP/1\.\d\s(?P<code>\d+)\s",
+                                        data.decode("ascii"),
+                                    ).group("code")
+                                )
                             )
                         except AttributeError:
                             # set code to zero to help testing
-                            resp_code = 0 if indicate_failure else None
+                            resp_code = (
+                                HTTPStatus.BAD_REQUEST if indicate_failure else None
+                            )
 
                     # update test info
                     with t_file.lock:
@@ -160,7 +166,7 @@ def client_factory():
                             continue
                         t_file.requested += 1
                         t_file.code = resp_code
-                        if resp_code == 200:
+                        if resp_code == HTTPStatus.OK:
                             t_file.content_type = content_type
                             t_file.len_srv = data_length
                             t_file.hash_srv = data_hash
@@ -169,10 +175,10 @@ def client_factory():
                     with t_file.lock:
                         t_file.requested += 1
                         if not skip_served or t_file.code is None:
-                            t_file.code = http_err.code
+                            t_file.code = HTTPStatus(http_err.code)
                 except (BadStatusLine, OSError, URLError):
                     exc_type, exc_obj, exc_tb = exc_info()
-                    # set code to zero to help testing
+                    # set code to HTTPStatus.INTERNAL_SERVER_ERROR to help testing
                     with t_file.lock:
                         LOG.debug(
                             "%s - %s - line %r (processing: %s)",
@@ -184,7 +190,7 @@ def client_factory():
                         if indicate_failure and (
                             not skip_served or t_file.code is None
                         ):
-                            t_file.code = 0
+                            t_file.code = HTTPStatus.INTERNAL_SERVER_ERROR
                             break
             self._idle.set()
 
