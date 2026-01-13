@@ -6,6 +6,7 @@ Sapphire unit tests
 
 import socket
 from hashlib import sha1
+from http import HTTPStatus
 from itertools import count, repeat
 from os import urandom
 from pathlib import Path
@@ -76,7 +77,7 @@ def test_sapphire_01(client, tmp_path, files):
     assert len(required) == len(result.served) == len(to_serve)
     assert client.wait(timeout=10)
     for t_file in to_serve:
-        assert t_file.code == 200
+        assert t_file.code == HTTPStatus.OK
         assert t_file.len_srv == t_file.len_org
         assert t_file.url in result.served
 
@@ -111,7 +112,7 @@ def test_sapphire_02(client, tmp_path, files, req_idx):
     assert client.wait(timeout=10)
     for t_file in to_serve:
         if t_file.file in result.served:
-            assert t_file.code == 200
+            assert t_file.code == HTTPStatus.OK
             assert t_file.len_srv == t_file.len_org
 
 
@@ -141,12 +142,12 @@ def test_sapphire_03(client, tmp_path):
     assert not result.timeout
     assert len(result.served) == 1
     assert client.wait(timeout=10)
-    assert to_serve[0].code == 404
+    assert to_serve[0].code == HTTPStatus.NOT_FOUND
     assert invalid.name in to_serve[1].file
-    assert to_serve[1].code == 404
+    assert to_serve[1].code == HTTPStatus.NOT_FOUND
     assert "no_access.html" in to_serve[2].file
-    assert to_serve[2].code == 404
-    assert to_serve[3].code == 200
+    assert to_serve[2].code == HTTPStatus.NOT_FOUND
+    assert to_serve[3].code == HTTPStatus.OK
 
 
 def test_sapphire_04(tmp_path):
@@ -205,7 +206,7 @@ def test_sapphire_06(client, tmp_path):
     assert len(result.served) == len(tests)
     assert client.wait(timeout=10)
     for test in tests:
-        assert test["file"].code == 200
+        assert test["file"].code == HTTPStatus.OK
         assert test["file"].len_srv == test["size"]
         assert test["file"].hash_srv == test["file"].hash_org
 
@@ -227,7 +228,7 @@ def test_sapphire_07(client, tmp_path):
             serv.serve_path(tmp_path, required_files=[t_file.file]).status == Served.ALL
         )
     assert client.wait(timeout=10)
-    assert t_file.code == 200
+    assert t_file.code == HTTPStatus.OK
     assert t_file.len_srv == (100 * 1024 * 1024)
     assert t_file.hash_srv == t_file.hash_org
 
@@ -241,7 +242,7 @@ def test_sapphire_08(client, tmp_path):
             serv.serve_path(tmp_path, required_files=[t_file.file]).status == Served.ALL
         )
     assert client.wait(timeout=10)
-    assert t_file.code == 200
+    assert t_file.code == HTTPStatus.OK
     assert t_file.len_srv == t_file.len_org
     assert t_file.hash_srv == t_file.hash_org
 
@@ -267,7 +268,7 @@ def test_sapphire_10(client, tmp_path):
     assert client.wait(timeout=10)
     content_types = set()
     for test in to_serve:
-        assert test.code == 200
+        assert test.code == HTTPStatus.OK
         assert test.len_srv == test.len_org
         if test.file.endswith(".html"):
             content_type = "text/html"
@@ -288,7 +289,7 @@ def test_sapphire_11(client, tmp_path):
             assert serv.serve_path(tmp_path, required_files=[name]).status == Served.ALL
             assert client.wait(timeout=10)
             client.close()
-            assert test.code == 200
+            assert test.code == HTTPStatus.OK
             assert test.len_srv == test.len_org
             (tmp_path / test.file).unlink()
 
@@ -307,7 +308,7 @@ def test_sapphire_12(client, tmp_path):
             == Served.ALL
         )
     assert client.wait(timeout=10)
-    assert test.code == 200
+    assert test.code == HTTPStatus.OK
     assert test.len_srv == test.len_org
 
 
@@ -342,7 +343,7 @@ def test_sapphire_13(client, tmp_path, path, query):
     assert not result.timeout
     assert len(result.served) == 1
     assert client.wait(timeout=10)
-    assert redirect.code == 200
+    assert redirect.code == HTTPStatus.OK
     assert redirect.len_srv == target.len_org
 
 
@@ -410,13 +411,13 @@ def test_sapphire_14(client, tmp_path):
     assert "nested/nested_file.html" in result.served
     assert result.served["nested/nested_file.html"] == nest_path / "nested_file.html"
     assert client.wait(timeout=10)
-    assert inc1.code == 200
-    assert inc2.code == 200
-    assert nest.code == 200
-    assert test.code == 200
-    assert nest_404.code == 404
-    assert inc404.code == 404
-    assert inc_ext.code == 404
+    assert inc1.code == HTTPStatus.OK
+    assert inc2.code == HTTPStatus.OK
+    assert nest.code == HTTPStatus.OK
+    assert test.code == HTTPStatus.OK
+    assert nest_404.code == HTTPStatus.NOT_FOUND
+    assert inc404.code == HTTPStatus.NOT_FOUND
+    assert inc_ext.code == HTTPStatus.NOT_FOUND
 
 
 @mark.parametrize(
@@ -471,9 +472,9 @@ def test_sapphire_15(client, tmp_path, query, required):
         )
     assert client.wait(timeout=10)
     if not required:
-        assert test.code == 200
+        assert test.code == HTTPStatus.OK
         assert test.len_srv == test.len_org
-    assert test_dr.code == 200
+    assert test_dr.code == HTTPStatus.OK
     assert test_dr.len_srv == test_dr.len_org
     assert test_dr.hash_srv == test_dr.hash_org
 
@@ -497,8 +498,8 @@ def test_sapphire_16(client_factory, tmp_path):
         )
     assert client_defer.wait(timeout=10)
     assert client.wait(timeout=10)
-    assert test.code == 200
-    assert test_defer.code == 0
+    assert test.code == HTTPStatus.OK
+    assert test_defer.code == HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 def test_sapphire_17(client, tmp_path):
@@ -512,8 +513,8 @@ def test_sapphire_17(client, tmp_path):
             serv.serve_path(tmp_path, required_files=[test.file]).status == Served.ALL
         )
     assert client.wait(timeout=10)
-    assert test.code == 200
-    assert bad_test.code == 400
+    assert test.code == HTTPStatus.OK
+    assert bad_test.code == HTTPStatus.BAD_REQUEST
 
 
 def test_sapphire_18(client, tmp_path):
@@ -533,8 +534,8 @@ def test_sapphire_18(client, tmp_path):
             serv.serve_path(tmp_path, required_files=[test.file]).status == Served.ALL
         )
     assert client.wait(timeout=10)
-    assert test.code == 200
-    assert bad_test.code == 0
+    assert test.code == HTTPStatus.OK
+    assert bad_test.code == HTTPStatus.BAD_REQUEST
 
 
 def test_sapphire_19(client_factory, tmp_path):
@@ -563,7 +564,7 @@ def test_sapphire_19(client_factory, tmp_path):
     assert not result.timeout
     assert len(to_serve) == len(result.served)
     for t_file in to_serve:
-        assert t_file.code == 200
+        assert t_file.code == HTTPStatus.OK
         assert t_file.len_srv == t_file.len_org
 
 
@@ -639,7 +640,7 @@ def test_sapphire_22(client, tmp_path):
             serv.serve_path(tmp_path, required_files=[t_file.file]).status == Served.ALL
         )
     assert client.wait(timeout=10)
-    assert t_file.code == 200
+    assert t_file.code == HTTPStatus.OK
     assert t_file.len_srv == t_file.len_org
     assert t_file.hash_srv == t_file.hash_org
 
@@ -682,7 +683,7 @@ def test_sapphire_24(client_factory, tmp_path):
         assert client.wait(timeout=10)
         client.close()
     assert test.requested == 3
-    assert test.code == 200
+    assert test.code == HTTPStatus.OK
     assert test.len_srv == test.len_org
 
 
@@ -705,7 +706,7 @@ def test_sapphire_25(client, tmp_path, file_name):
         client.launch("127.0.0.1", serv.port, to_serve)
         assert serv.serve_path(tmp_path, required_files=required).status == Served.ALL
     assert client.wait(timeout=10)
-    assert all(t_file.code == 200 for t_file in to_serve)
+    assert all(t_file.code == HTTPStatus.OK for t_file in to_serve)
 
 
 def test_sapphire_26(client, tmp_path):
@@ -761,7 +762,7 @@ def test_sapphire_28(client, tmp_path):
             == Served.ALL
         )
     assert client.wait(timeout=10)
-    assert test.code == 200
+    assert test.code == HTTPStatus.OK
     assert test.len_srv == test.len_org
 
 
