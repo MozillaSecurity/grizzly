@@ -1,6 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""
+Certificate generation and management for HTTPS support.
+
+Provides utilities for creating self-signed certificates and managing certificate
+bundles (root CA, host certificate, and private key) required for HTTPS serving.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -21,9 +28,19 @@ LOG = getLogger(__name__)
 
 
 def generate_certificates(cert_dir: Path) -> dict[str, Path]:
-    """Generate a root CA and host certificate.
+    """Generate self-signed root CA and host certificate for HTTPS.
+
+    Creates a certificate chain with a root CA and a host certificate
+    signed by that CA. The host certificate is valid for localhost
+    and 127.0.0.1. All certificates are valid for 30 days.
 
     Credit to https://stackoverflow.com/a/56292132
+
+    Args:
+        cert_dir: Directory to write certificate files to.
+
+    Returns:
+        Dictionary with keys 'root', 'host', and 'key' mapping to file paths.
     """
     root_key = generate_private_key(
         public_exponent=65537,
@@ -87,9 +104,28 @@ def generate_certificates(cert_dir: Path) -> dict[str, Path]:
 
 
 class CertificateBundle:
-    """Contains root CA, host CA and private key files."""
+    """Container for certificate files required for HTTPS.
+
+    Manages a complete certificate bundle including:
+    - Root CA certificate
+    - Host certificate
+    - Private key
+
+    Supports both creating new self-signed certificates and loading existing ones.
+    """
 
     def __init__(self, path: Path, root: Path, host: Path, key: Path) -> None:
+        """Initialize CertificateBundle with existing certificate files.
+
+        Args:
+            path: Base directory containing certificate files.
+            root: Path to root CA certificate file.
+            host: Path to host certificate file.
+            key: Path to private key file.
+
+        Returns:
+            None
+        """
         self._base = path
         self.root = root
         self.host = host

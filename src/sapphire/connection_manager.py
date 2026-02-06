@@ -1,6 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""
+Manages worker threads that handle incoming HTTP connections.
+
+The ConnectionManager coordinates the lifecycle of Worker threads, enforces
+connection limits, and handles timeouts during serving operations.
+"""
+
 from __future__ import annotations
 
 from logging import getLogger
@@ -23,6 +30,13 @@ LOG = getLogger(__name__)
 
 
 class ConnectionManager:
+    """Manages worker threads for handling HTTP connections.
+
+    Coordinates the launching, monitoring, and cleanup of Worker threads that
+    process incoming requests. Enforces limits on concurrent workers and handles
+    graceful shutdown when serving completes or times out.
+    """
+
     # allow extra time before closing socket if needed
     SHUTDOWN_DELAY = 0.5
 
@@ -39,6 +53,17 @@ class ConnectionManager:
     def __init__(
         self, job: Job, srv_socket: socket, limit: int = 1, poll: float = 0.5
     ) -> None:
+        """Initialize ConnectionManager.
+
+        Args:
+            job: The Job containing resources to serve.
+            srv_socket: The listening socket for accepting connections.
+            limit: Maximum number of concurrent worker threads.
+            poll: Interval in seconds between callback and timeout checks.
+
+        Returns:
+            None
+        """
         assert limit > 0
         assert poll > 0
         self._deadline: float | None = None

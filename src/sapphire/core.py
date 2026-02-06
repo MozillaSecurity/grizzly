@@ -64,6 +64,14 @@ LOG = getLogger(__name__)
 
 @dataclass(eq=False, frozen=True, slots=True)
 class ServeResult:
+    """Result of a serve operation.
+
+    Attributes:
+        served: Mapping of served URLs to their file paths on disk.
+        status: Status code indicating which required files were served.
+        timeout: Whether the serve operation timed out.
+    """
+
     served: MappingProxyType[str, Path]
     status: Served
     timeout: bool
@@ -132,6 +140,19 @@ class Sapphire:
         port: int = 0,
         timeout: int = 60,
     ) -> None:
+        """Initialize Sapphire HTTP server.
+
+        Args:
+            allow_remote: Accept connections from non-localhost addresses.
+            auto_close: Seconds before auto-closing 4xx error pages (-1 to disable).
+            certs: Certificate bundle for HTTPS. If None, uses HTTP.
+            max_workers: Maximum number of concurrent worker threads.
+            port: Port to listen on (0 for automatic assignment).
+            timeout: Default timeout in seconds for serve operations.
+
+        Returns:
+            None
+        """
         assert timeout >= 0
         self._auto_close = auto_close  # call 'window.close()' on 4xx error pages
         self._max_workers = max_workers  # limit worker threads
@@ -253,6 +274,14 @@ class Sapphire:
 
     @classmethod
     def main(cls, args: Namespace) -> None:
+        """Run Sapphire as a standalone server from command-line arguments.
+
+        Args:
+            args: Parsed command-line arguments.
+
+        Returns:
+            None
+        """
         try:
             with cls(
                 allow_remote=args.remote, port=args.port, timeout=args.timeout

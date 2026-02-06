@@ -32,16 +32,39 @@ LOG = getLogger(__name__)
 
 
 class Request:
+    """Parsed HTTP request containing method and URL.
+
+    Parses raw HTTP request data to extract the request method (GET, POST, etc.)
+    and the requested URL with its components (path, query string, etc.).
+    """
+
     REQ_PATTERN = re_compile(rb"^(?P<method>\w+)\s(?P<url>\S+)\sHTTP/1")
 
     __slots__ = ("method", "url")
 
     def __init__(self, method: str, url: ParseResult) -> None:
+        """Initialize a Request.
+
+        Args:
+            method: HTTP method (e.g., 'GET', 'POST').
+            url: Parsed URL components.
+
+        Returns:
+            None
+        """
         self.method = method
         self.url = url
 
     @classmethod
     def parse(cls, raw_data: bytes) -> Request | None:
+        """Parse raw HTTP request data into a Request object.
+
+        Args:
+            raw_data: Raw HTTP request bytes.
+
+        Returns:
+            Request object if parsing succeeds, None otherwise.
+        """
         req_match = cls.REQ_PATTERN.match(raw_data)
         if not req_match:
             LOG.debug("request failed to match regex")
@@ -68,21 +91,48 @@ class Request:
 
 
 class WorkerError(Exception):
-    """Raised by Worker"""
+    """Raised when a Worker encounters an unexpected error."""
 
 
 class Worker:
+    """Handles individual HTTP requests in a separate thread.
+
+    Each Worker manages a single client connection, parsing the HTTP request,
+    looking up the appropriate resource, and sending the response. Workers are
+    launched and managed by ConnectionManager.
+
+    Supports serving files, dynamic content, and redirects.
+    """
+
     DEFAULT_REQUEST_LIMIT = 0x1000  # 4KB
     DEFAULT_TX_SIZE = 0x10000  # 64KB
 
     __slots__ = ("_conn", "_thread")
 
     def __init__(self, conn: socket, thread: Thread) -> None:
+        """Initialize a Worker.
+
+        Args:
+            conn: Connected socket for the client.
+            thread: Thread running the request handler.
+
+        Returns:
+            None
+        """
         self._conn = conn
         self._thread: Thread | None = thread
 
     @staticmethod
     def _200_header(c_length: int, c_type: str) -> bytes:
+        """Generate HTTP 200 OK response header.
+
+        Args:
+            c_length: Content length in bytes.
+            c_type: MIME type of the content.
+
+        Returns:
+            HTTP header bytes.
+        """
         data = (
             "HTTP/1.1 200 OK\r\n"
             "Cache-Control: max-age=0, no-cache\r\n"
@@ -94,6 +144,14 @@ class Worker:
 
     @staticmethod
     def _307_redirect(redirect_to: str) -> bytes:
+        """Generate HTTP 307 Temporary Redirect response.
+
+        Args:
+            redirect_to: URL to redirect to.
+
+        Returns:
+            HTTP response bytes.
+        """
         data = (
             "HTTP/1.1 307 Temporary Redirect\r\n"
             f"Location: {redirect_to}\r\n"
@@ -103,6 +161,16 @@ class Worker:
 
     @staticmethod
     def _4xx_page(code: int, hdr_msg: str, close: int = -1) -> bytes:
+        """Generate HTTP 4xx error page response.
+
+        Args:
+            code: HTTP status code (e.g., 400, 404, 405).
+            hdr_msg: HTTP status message.
+            close: Seconds to wait before calling window.close(), or -1 to disable.
+
+        Returns:
+            HTTP response bytes with HTML error page.
+        """
         if close < 0:
             content = f"<h3>{code}!</h3>"
         else:
@@ -124,6 +192,14 @@ class Worker:
         return data.encode(encoding="ascii")
 
     def close(self) -> None:
+        """Force close the worker's socket.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         # workers that are no longer running will have had close() called
         if self.is_alive():
             # shutdown socket to avoid hang
@@ -135,10 +211,31 @@ class Worker:
             self._conn.close()
 
     def is_alive(self) -> bool:
+        """Check if the worker thread is still running.
+
+        Args:
+            None
+
+        Returns:
+            True if worker thread is alive, False otherwise.
+        """
         return self._thread is not None and self._thread.is_alive()
 
     @classmethod
     def handle_request(cls, conn: socket, serv_job: Job) -> None:
+        """Handle a single HTTP request from a client.
+
+        Receives the request, looks up the appropriate resource, and sends
+        the response. Handles files, dynamic content, and redirects. Updates
+        job state to track served resources and pending files.
+
+        Args:
+            conn: Connected client socket with timeout configured.
+            serv_job: Job containing resources and state to serve.
+
+        Returns:
+            None
+        """
         finish_job = False  # call finish() on return
         try:
             # socket operations should not block forever
@@ -264,6 +361,14 @@ class Worker:
             serv_job.worker_complete.set()
 
     def join(self, timeout: float = 30) -> bool:
+        """Wait for worker thread to complete.
+
+        Args:
+            timeout: Maximum time to wait in seconds.
+
+        Returns:
+            True if worker thread has finished, False if still running.
+        """
         assert timeout >= 0
         if self._thread is not None:
             self._thread.join(timeout=timeout)
@@ -275,6 +380,20 @@ class Worker:
     def launch(
         cls, listen_sock: socket, job: Job, timeout: float = 30
     ) -> Worker | None:
+        """Launch a new worker to handle an incoming connection.
+
+        Accepts a connection from the listening socket and starts a worker
+        thread to handle the request. Returns None if no connection is
+        available or if worker creation fails.
+
+        Args:
+            listen_sock: Listening socket to accept connections from.
+            job: Job to serve.
+            timeout: Socket timeout for client operations in seconds.
+
+        Returns:
+            Worker instance if successfully launched, None otherwise.
+        """
         assert timeout >= 0
         assert job.accepting.is_set()
         # TODO: is select() timeout value too short, too long?

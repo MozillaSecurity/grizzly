@@ -1,6 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""
+Command-line interface for the Sapphire HTTP server.
+
+Provides a standalone HTTP server for serving local directories, with options
+for port configuration, remote access, and serving timeouts.
+"""
+
 from __future__ import annotations
 
 from argparse import ArgumentParser, Namespace
@@ -11,6 +18,14 @@ from .core import Sapphire
 
 
 def configure_logging(log_level: int) -> None:
+    """Configure logging format and level for console output.
+
+    Args:
+        log_level: Logging level (e.g., DEBUG, INFO).
+
+    Returns:
+        None
+    """
     if log_level == DEBUG:
         date_fmt = None
         log_fmt = "%(asctime)s %(levelname).1s %(name)s | %(message)s"
@@ -21,6 +36,14 @@ def configure_logging(log_level: int) -> None:
 
 
 def parse_args(argv: list[str] | None = None) -> Namespace:
+    """Parse and validate command-line arguments.
+
+    Args:
+        argv: Command-line arguments to parse. If None, uses sys.argv.
+
+    Returns:
+        Parsed and validated arguments.
+    """
     # log levels for console logging
     level_map = {"DEBUG": DEBUG, "INFO": INFO}
     parser = ArgumentParser()
