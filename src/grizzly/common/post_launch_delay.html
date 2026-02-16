@@ -1,8 +1,8 @@
 <!doctype html>
 <html>
-  <meta charset="UTF-8" />
-  <title>Grizzly &sdot; Post Launch Delay</title>
   <head>
+    <meta charset="UTF-8" />
+    <title>Grizzly &sdot; Post Launch Delay</title>
     <style>
       body {
         background-color: #222;
@@ -56,7 +56,7 @@
       }
 
       function updateDisplay() {
-        remainingSeconds = Math.max(remaining, 0);
+        const remainingSeconds = Math.max(remaining, 0);
         document.getElementById("msg").innerText =
           `> Continuing automatically in: ${remainingSeconds}s`;
       }
