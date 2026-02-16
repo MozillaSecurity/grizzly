@@ -16,6 +16,7 @@
       let sub = null;
       let time_limit = 0;
       let worker = null;
+      let workerUrl = null;
 
       let grzDump = (msg) => {
         console.log(`[grz harness][${new Date().toUTCString()}] ${msg}\n`);
@@ -32,6 +33,9 @@
       let startPolling = () => {
         if (worker) {
           worker.terminate();
+        }
+        if (workerUrl) {
+          URL.revokeObjectURL(workerUrl);
         }
 
         const workerCode = `
@@ -54,7 +58,8 @@
   `;
 
         const blob = new Blob([workerCode], { type: "application/javascript" });
-        worker = new Worker(URL.createObjectURL(blob));
+        workerUrl = URL.createObjectURL(blob);
+        worker = new Worker(workerUrl);
 
         worker.onmessage = function (e) {
           if (e.data.type === "poll") {
@@ -175,6 +180,9 @@
       window.addEventListener("beforeunload", () => {
         if (worker) {
           worker.terminate();
+        }
+        if (workerUrl) {
+          URL.revokeObjectURL(workerUrl);
         }
       });
     </script>
