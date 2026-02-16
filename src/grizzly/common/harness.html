@@ -67,12 +67,16 @@
             try {
               if (!sub || sub.closed) {
                 grzDump("Worker poll: sub is closed, calling main()");
-                worker.postMessage({ command: "stop" });
+                // Discard queued messages and stop the worker to prevent
+                // multiple main() calls from opening duplicate tabs.
+                worker.onmessage = null;
+                worker.terminate();
                 setTimeout(main);
               }
             } catch (error) {
               grzDump(`Worker poll error: ${error}`);
-              worker.postMessage({ command: "stop" });
+              worker.onmessage = null;
+              worker.terminate();
               setTimeout(main, 500);
             }
           }
