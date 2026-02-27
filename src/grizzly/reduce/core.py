@@ -330,7 +330,18 @@ class ReduceManager:
                     if crashes and not self._any_crash and self._signature_desc is None:
                         first_expected = next(x for x in results if x.expected)
                         self._signature_desc = first_expected.report.short_signature
-                    self.report([x for x in results if not x.expected], testcases)
+                    non_expected = [x for x in results if not x.expected]
+                    if non_expected:
+                        # add target assets to test cases
+                        if not self.target.asset_mgr.is_empty():
+                            for test in testcases:
+                                test.assets = dict(self.target.asset_mgr.assets)
+                                test.assets_path = self.target.asset_mgr.path
+                        # add target environment variables
+                        if self.target.filtered_environ():
+                            for test in testcases:
+                                test.env_vars = self.target.filtered_environ()
+                    self.report(non_expected, testcases)
                     if use_harness:
                         if last_test_only:
                             harness_last_crashes = crashes
