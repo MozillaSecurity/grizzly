@@ -622,6 +622,21 @@ class ReduceManager:
                                             old_result.report.cleanup()
                                             for testcase in old_reduction:
                                                 testcase.cleanup()
+                                        # add target assets to test cases
+                                        if not self.target.asset_mgr.is_empty():
+                                            for test in reduction:
+                                                test.assets = dict(
+                                                    self.target.asset_mgr.assets
+                                                )
+                                                test.assets_path = (
+                                                    self.target.asset_mgr.path
+                                                )
+                                        # add target environment variables
+                                        if self.target.filtered_environ():
+                                            for test in reduction:
+                                                test.env_vars = (
+                                                    self.target.filtered_environ()
+                                                )
                                         # store this reduction for later reporting
                                         # as the other result
                                         other_results[result.report.minor] = (
