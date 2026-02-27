@@ -853,6 +853,71 @@ def test_include_assets_and_environ(mocker, tmp_path):
     assert reporter.return_value.submit.call_count == 1
 
 
+def test_include_assets_and_environ_other_crashes(mocker, tmp_path):
+    """test that assets and environment variables are included in 'other' reports"""
+    mocker.patch("grizzly.reduce.strategies._contains_dd", return_value=True)
+    replayer = mocker.patch("grizzly.reduce.core.ReplayManager", autospec=True)
+    replayer = replayer.return_value
+
+    def replay_run(testcases, _time_limit, **kw):
+        kw["on_iteration_cb"]()
+        for test in testcases:
+            contents = test["test.html"].read_text()
+            if not contents:
+                continue
+            log_path = tmp_path / f"crash{replayer.run.call_count}_logs"
+            log_path.mkdir()
+            # Every non-empty reduction produces a non-target signature
+            _fake_save_logs_bar(log_path)
+            report = Report(log_path, Path("bin"))
+            return [ReplayResult(report, [], False)]
+        return []
+
+    replayer.run.side_effect = replay_run
+
+    (tmp_path / "test.html").write_text("1\n2\n3\n")
+    testcase = TestCase.load(tmp_path / "test.html")
+    assert testcase
+    log_path = tmp_path / "logs"
+
+    reporter = mocker.patch("grizzly.reduce.core.FilesystemReporter", autospec=True)
+
+    other_submit_calls = []
+
+    # pylint: disable=unused-argument
+    def submit(test_cases, report, force=False):
+        assert test_cases
+        assert isinstance(report, Report)
+        # force=False means this is an "other" (non-target) report
+        assert not force
+        other_submit_calls.append(test_cases)
+        for test in test_cases:
+            assert test.assets.get("example"), "Missing assets in other report"
+            assert test.env_vars == {"test": "abc"}, "Missing env_vars in other report"
+
+    reporter.return_value.submit.side_effect = submit
+
+    target = mocker.Mock(spec_set=Target)
+    target.filtered_environ.return_value = {"test": "abc"}
+    with AssetManager(base_path=tmp_path) as asset_mgr:
+        (tmp_path / "example_asset").touch()
+        asset_mgr.add("example", tmp_path / "example_asset", copy=False)
+        target.asset_mgr = asset_mgr
+        with ReduceManager(
+            set(),
+            mocker.Mock(spec_set=Sapphire, timeout=30),
+            target,
+            [testcase],
+            ["lines"],
+            log_path,
+            use_analysis=False,
+        ) as mgr:
+            # No target-signature match, so FAILURE is expected
+            mgr.run()
+
+    assert other_submit_calls, "Should have at least one 'other' report"
+
+
 TimeoutTestParams = namedtuple(
     "TimeoutTestParams",
     "durations, interesting, static_timeout, idle_input, idle_output, iter_input,"
