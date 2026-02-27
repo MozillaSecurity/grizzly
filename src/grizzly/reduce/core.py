@@ -332,15 +332,7 @@ class ReduceManager:
                         self._signature_desc = first_expected.report.short_signature
                     non_expected = [x for x in results if not x.expected]
                     if non_expected:
-                        # add target assets to test cases
-                        if not self.target.asset_mgr.is_empty():
-                            for test in testcases:
-                                test.assets = dict(self.target.asset_mgr.assets)
-                                test.assets_path = self.target.asset_mgr.path
-                        # add target environment variables
-                        if self.target.filtered_environ():
-                            for test in testcases:
-                                test.env_vars = self.target.filtered_environ()
+                        self._attach_target_info(testcases)
                     self.report(non_expected, testcases)
                     if use_harness:
                         if last_test_only:
@@ -430,6 +422,23 @@ class ReduceManager:
                 "more" if harness_best > non_harness_crashes else "less",
             )
         return (repeat, min_crashes)
+
+    def _attach_target_info(self, testcases: list[TestCase]) -> None:
+        """Add target assets and environment variables to testcases.
+
+        Args:
+            testcases: Testcases to update.
+
+        Returns:
+            None
+        """
+        if not self.target.asset_mgr.is_empty():
+            for test in testcases:
+                test.assets = dict(self.target.asset_mgr.assets)
+                test.assets_path = self.target.asset_mgr.path
+        if self.target.filtered_environ():
+            for test in testcases:
+                test.env_vars = self.target.filtered_environ()
 
     def testcase_size(self) -> int:
         """Calculate the current testcase size.
@@ -572,21 +581,7 @@ class ReduceManager:
                                     LOG.info("Reduction succeeded")
                                     for testcase in self.testcases:
                                         testcase.cleanup()
-                                    # add target assets to test cases
-                                    if not self.target.asset_mgr.is_empty():
-                                        for test in reduction:
-                                            test.assets = dict(
-                                                self.target.asset_mgr.assets
-                                            )
-                                            test.assets_path = (
-                                                self.target.asset_mgr.path
-                                            )
-                                    # add target environment variables
-                                    if self.target.filtered_environ():
-                                        for test in reduction:
-                                            test.env_vars = (
-                                                self.target.filtered_environ()
-                                            )
+                                    self._attach_target_info(reduction)
                                     # clone results from strategy local copy
                                     self.testcases = [x.clone() for x in reduction]
                                     keep_reduction = True
@@ -633,21 +628,7 @@ class ReduceManager:
                                             old_result.report.cleanup()
                                             for testcase in old_reduction:
                                                 testcase.cleanup()
-                                        # add target assets to test cases
-                                        if not self.target.asset_mgr.is_empty():
-                                            for test in reduction:
-                                                test.assets = dict(
-                                                    self.target.asset_mgr.assets
-                                                )
-                                                test.assets_path = (
-                                                    self.target.asset_mgr.path
-                                                )
-                                        # add target environment variables
-                                        if self.target.filtered_environ():
-                                            for test in reduction:
-                                                test.env_vars = (
-                                                    self.target.filtered_environ()
-                                                )
+                                        self._attach_target_info(reduction)
                                         # store this reduction for later reporting
                                         # as the other result
                                         other_results[result.report.minor] = (
