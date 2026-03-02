@@ -4,6 +4,7 @@
 """Unit tests for `grizzly.reduce.crash` and `grizzly.reduce.bucket`."""
 
 from pytest import mark
+from Reporter.Reporter import ServerError
 
 from ..common.frontend import Exit
 from ..common.reporter import Quality
@@ -46,6 +47,30 @@ def test_crash_main_quality(mocker, exit_code, pre_quality, post_quality):
     # verify testcase quality was updated
     assert crash.testcase_quality == post_quality
     assert reduce_main.call_args[0][0].sig is None
+
+
+def test_crash_main_server_error(mocker):
+    """test that ServerError when updating quality is handled gracefully"""
+    exit_code = Exit.SUCCESS
+    mocker.patch(
+        "grizzly.reduce.crash.reduce_main",
+        return_value=exit_code,
+    )
+    crash = mocker.Mock(crash_id=1)
+    crash.create_signature.side_effect = RuntimeError("no sig to create")
+    quality_prop = mocker.PropertyMock(return_value=Quality.UNREDUCED.value)
+    quality_prop.__set__ = mocker.Mock(side_effect=ServerError("server error"))
+    type(crash).testcase_quality = quality_prop
+    load_fm_data = mocker.patch("grizzly.reduce.crash.load_fm_data")
+    load_fm_data.return_value.__enter__ = mocker.Mock(return_value=(crash, None))
+    args = mocker.Mock(
+        input=12345,
+        no_repro_quality=Quality.NOT_REPRODUCIBLE.value,
+        sig=None,
+        tool=None,
+    )
+    assert crash_main(args) == exit_code
+    assert quality_prop.__set__.call_count == 1
 
 
 def test_bucket_main_wrapper_coverage(mocker):
