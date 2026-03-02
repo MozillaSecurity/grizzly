@@ -6,6 +6,8 @@ from __future__ import annotations
 from logging import getLogger
 from typing import TYPE_CHECKING
 
+from Reporter.Reporter import ServerError
+
 from ..common.frontend import Exit, configure_logging
 from ..common.fuzzmanager import load_fm_data
 from ..common.reporter import Quality
@@ -61,8 +63,12 @@ def main(args: Namespace | None = None) -> int:
                 quality.name,
                 quality,
             )
-            # TODO: handle 404 in case the original is deleted from the server
-            crash.testcase_quality = quality.value
+            try:
+                crash.testcase_quality = quality.value
+            except ServerError:
+                LOG.error(
+                    "Failed to update crash %d to Q%d", crash.crash_id, quality.value
+                )
 
     return result
 
