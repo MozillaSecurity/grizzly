@@ -221,6 +221,32 @@ class ReplayManager:
             # avoid reporting unexpected frequent results
             reporter.submit(tests, result.report, force=result.expected)
 
+    def _setup_server_map(self, services: WebServices | None = None) -> ServerMap:
+        """Create and configure a ServerMap for the replay session.
+        Configures the start redirect to point at either the harness or the
+        current test directly and registers any additional service locations.
+
+        Args:
+            services: Optional WebServices whose locations should be added to the map.
+
+        Returns:
+            Configured ServerMap.
+        """
+        server_map = ServerMap()
+        if self._harness is None:
+            server_map.set_redirect("grz_start", "grz_current_test", required=False)
+        else:
+            harness = self._harness
+            server_map.set_dynamic_response(
+                "grz_harness",
+                lambda _: harness,
+                mime_type="text/html",
+            )
+            server_map.set_redirect("grz_start", "grz_harness", required=False)
+        if services:
+            services.map_locations(server_map)
+        return server_map
+
     def run(
         self,
         testcases: list[TestCase],
@@ -273,25 +299,7 @@ class ReplayManager:
 
         self.status = SimpleStatus.start()
 
-        server_map = ServerMap()
-        if self._harness is None:
-            server_map.set_redirect("grz_start", "grz_current_test", required=False)
-        else:
-            assert self._harness, "harness must contain data"
-
-            def harness_fn(_: str) -> bytes:  # pragma: no cover
-                assert self._harness
-                return self._harness
-
-            server_map.set_dynamic_response(
-                "grz_harness",
-                harness_fn,
-                mime_type="text/html",
-            )
-            server_map.set_redirect("grz_start", "grz_harness", required=False)
-
-        if services:
-            services.map_locations(server_map)
+        server_map = self._setup_server_map(services)
 
         # track unprocessed results
         reports: dict[str, ReplayResult] = {}
