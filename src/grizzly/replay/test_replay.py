@@ -1004,3 +1004,43 @@ def test_replay_28(mocker, adapters, expected):
     """test ReplayManager.lookup_tool()"""
     testcases = [mocker.Mock(spec_set=TestCase, adapter_name=name) for name in adapters]
     assert ReplayManager.lookup_tool(testcases) == expected
+
+
+def test_replay_29(mocker, server):
+    """test ReplayManager._setup_server_map()"""
+    target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
+    sm_cls = mocker.patch("grizzly.replay.replay.ServerMap", autospec=True)
+
+    # without harness - redirects directly to current test
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        result = replay._setup_server_map()
+    assert result is sm_cls.return_value
+    sm_cls.return_value.set_redirect.assert_called_once_with(
+        "grz_start", "grz_current_test", required=False
+    )
+    sm_cls.return_value.set_dynamic_response.assert_not_called()
+    sm_cls.reset_mock()
+
+    # with harness - serves harness file and redirects to it
+    with ReplayManager([], server, target, use_harness=True) as replay:
+        harness_content = replay._harness
+        result = replay._setup_server_map()
+    assert result is sm_cls.return_value
+    sm_cls.return_value.set_dynamic_response.assert_called_once()
+    name, fn = sm_cls.return_value.set_dynamic_response.call_args[0]
+    assert name == "grz_harness"
+    assert (
+        sm_cls.return_value.set_dynamic_response.call_args[1]["mime_type"]
+        == "text/html"
+    )
+    assert fn(None) == harness_content
+    sm_cls.return_value.set_redirect.assert_called_once_with(
+        "grz_start", "grz_harness", required=False
+    )
+    sm_cls.reset_mock()
+
+    # with services - locations are mapped onto the server map
+    services = mocker.Mock()
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        result = replay._setup_server_map(services)
+    services.map_locations.assert_called_once_with(sm_cls.return_value)
