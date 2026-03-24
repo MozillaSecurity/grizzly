@@ -58,7 +58,6 @@ class ReplayManager:
         "_harness",
         "_relaunch",
         "_signature",
-        "_unpacked",
         "ignore",
         "server",
         "status",
@@ -376,7 +375,6 @@ class ReplayManager:
                         LOG.warning("Delayed startup failure detected")
                 # process run results
                 if run_result.status == Result.FOUND:
-                    report: Report | None = None
                     # processing the result may take a few minutes (rr)
                     # update console to show progress
                     LOG.info("Processing result...")
@@ -432,17 +430,14 @@ class ReplayManager:
                     if bucket_hash not in reports:
                         reports[bucket_hash] = ReplayResult(report, durations, expected)
                         LOG.debug("now tracking %s", bucket_hash)
-                        report = None  # don't remove report
                     else:
                         reports[bucket_hash].count += 1
                         if report.unstable and not reports[bucket_hash].report.unstable:
                             LOG.debug("updating report to unstable")
                             reports[bucket_hash].report.unstable = True
                         LOG.debug("already tracking %s", bucket_hash)
-                    # purge untracked report
-                    if report is not None:
+                        # remove duplicate report
                         report.cleanup()
-                        report = None
                 elif run_result.status == Result.IGNORED:
                     self.status.ignored += 1
                     if run_result.timeout:
