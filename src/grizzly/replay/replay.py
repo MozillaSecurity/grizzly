@@ -247,6 +247,64 @@ class ReplayManager:
             services.map_locations(server_map)
         return server_map
 
+    def _process_reports(
+        self,
+        reports: dict[str, ReplayResult],
+        min_results: int,
+    ) -> list[ReplayResult]:
+        """Collect results and cleanup remaining reports.
+
+        Args:
+            reports: Accumulated ReplayResults bucketed by hash.
+            min_results: Minimum results required for success.
+
+        Returns:
+            ReplayResults that meet the minimum required threshold.
+        """
+        if self._any_crash:
+            # all reports should be expected when self._any_crash=True
+            assert all(x.expected for x in reports.values())
+            success = sum(x.count for x in reports.values()) >= min_results
+            if not success:
+                assert self.status is not None
+                LOG.debug(
+                    "%d (any_crash) less than minimum %d",
+                    self.status.results.total,
+                    min_results,
+                )
+        else:
+            # there should be at most one expected bucket
+            assert sum(x.expected for x in reports.values()) <= 1
+            success = any(
+                x.count >= min_results for x in reports.values() if x.expected
+            )
+        results: list[ReplayResult] = []
+        for crash_hash, result in reports.items():
+            # if min_results not met (success=False) cleanup expected reports
+            if not success and result.expected:
+                if not self._any_crash:
+                    LOG.debug(
+                        "'%s' less than minimum (%d/%d)",
+                        crash_hash,
+                        result.count,
+                        min_results,
+                    )
+                result.report.cleanup()
+                continue
+            results.append(result)
+        # this should only be displayed when both conditions are met:
+        # 1) runner does not close target (no delay was given before shutdown)
+        # 2) result has not been successfully reproduced
+        if (
+            self._relaunch > 1
+            and not self.target.closed
+            and not any(x.expected for x in results)
+        ):
+            LOG.info("Perhaps try with --relaunch=1")
+        # active reports have been moved to results clear reports collection
+        reports.clear()
+        return results
+
     def run(
         self,
         testcases: list[TestCase],
@@ -491,51 +549,7 @@ class ReplayManager:
 
                 # TODO: should we warn about large browser logs?
 
-            # process results
-            if self._any_crash:
-                # all reports should be expected when self._any_crash=True
-                assert all(x.expected for x in reports.values())
-                success = sum(x.count for x in reports.values()) >= min_results
-                if not success:
-                    LOG.debug(
-                        "%d (any_crash) less than minimum %d",
-                        self.status.results.total,
-                        min_results,
-                    )
-            else:
-                # there should be at most one expected bucket
-                assert sum(x.expected for x in reports.values()) <= 1
-                success = any(
-                    x.count >= min_results for x in reports.values() if x.expected
-                )
-            results: list[ReplayResult] = []
-            for crash_hash, result in reports.items():
-                # if min_results not met (success=False) cleanup expected reports
-                if not success and result.expected:
-                    if not self._any_crash:
-                        LOG.debug(
-                            "'%s' less than minimum (%d/%d)",
-                            crash_hash,
-                            result.count,
-                            min_results,
-                        )
-                    result.report.cleanup()
-                    continue
-                results.append(result)
-
-            # this should only be displayed when both conditions are met:
-            # 1) runner does not close target (no delay was given before shutdown)
-            # 2) result has not been successfully reproduced
-            if (
-                self._relaunch > 1
-                and not self.target.closed
-                and not any(x.expected for x in results)
-            ):
-                LOG.info("Perhaps try with --relaunch=1")
-            # active reports have been moved to results
-            # clear reports to avoid cleanup of active reports
-            reports.clear()
-            return results
+            return self._process_reports(reports, min_results)
 
         finally:
             # we don't want to cleanup but we are not checking results

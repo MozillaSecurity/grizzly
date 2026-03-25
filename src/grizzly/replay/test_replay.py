@@ -4,6 +4,7 @@
 # pylint: disable=protected-access
 
 from itertools import cycle
+from logging import INFO
 from pathlib import Path
 
 from FTB.Signatures.CrashInfo import CrashSignature
@@ -1044,3 +1045,92 @@ def test_replay_29(mocker, server):
     with ReplayManager([], server, target, use_harness=False) as replay:
         result = replay._setup_server_map(services)
     services.map_locations.assert_called_once_with(sm_cls.return_value)
+
+
+@mark.parametrize(
+    "any_crash, count, min_results, success",
+    [
+        # any_crash=True, count meets minimum
+        (True, 2, 2, True),
+        # any_crash=True, count below minimum
+        (True, 1, 2, False),
+        # any_crash=False, count meets minimum
+        (False, 2, 2, True),
+        # any_crash=False, count below minimum
+        (False, 1, 2, False),
+    ],
+)
+def test_replay_30(mocker, server, any_crash, count, min_results, success):
+    """test ReplayManager._process_reports()"""
+    target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        replay._any_crash = any_crash
+        replay.status = mocker.Mock()
+        replay.status.results.total = count
+        exp = mocker.Mock(spec_set=ReplayResult, expected=True, count=count)
+        unexp = None
+        reports = {"aaa": exp}
+        if not any_crash:
+            unexp = mocker.Mock(spec_set=ReplayResult, expected=False, count=1)
+            reports["bbb"] = unexp
+        results = replay._process_reports(reports, min_results)
+    if success:
+        assert exp in results
+        exp.report.cleanup.assert_not_called()
+    else:
+        assert exp not in results
+        exp.report.cleanup.assert_called_once()
+    if unexp is not None:
+        assert unexp in results
+        unexp.report.cleanup.assert_not_called()
+
+
+def test_replay_31(mocker, server):
+    """test ReplayManager._process_reports() - empty reports returns empty list"""
+    target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        replay._any_crash = False
+        results = replay._process_reports({}, 1)
+    assert not results
+
+
+def test_replay_32(mocker, server):
+    """test ReplayManager._process_reports() - any_crash=True,
+    multiple buckets summing to min
+    """
+    target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        replay._any_crash = True
+        replay.status = mocker.Mock()
+        exp_a = mocker.Mock(spec_set=ReplayResult, expected=True, count=1)
+        exp_b = mocker.Mock(spec_set=ReplayResult, expected=True, count=1)
+        results = replay._process_reports({"aaa": exp_a, "bbb": exp_b}, 2)
+    assert exp_a in results
+    assert exp_b in results
+    exp_a.report.cleanup.assert_not_called()
+    exp_b.report.cleanup.assert_not_called()
+
+
+def test_replay_33(mocker, server):
+    """test ReplayManager._process_reports() - any_crash=False, no expected bucket"""
+    target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        replay._any_crash = False
+        unexp = mocker.Mock(spec_set=ReplayResult, expected=False, count=1)
+        results = replay._process_reports({"aaa": unexp}, 1)
+    assert unexp in results
+    unexp.report.cleanup.assert_not_called()
+
+
+def test_replay_34(mocker, server, caplog):
+    """test ReplayManager._process_reports() - relaunch hint when target still open"""
+    target = mocker.Mock(spec_set=Target, closed=False, launch_timeout=30)
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        # set _relaunch directly to avoid the use_harness/relaunch assert
+        replay._relaunch = 2
+        replay._any_crash = False
+        unexp = mocker.Mock(spec_set=ReplayResult, expected=False, count=1)
+        with caplog.at_level(INFO, logger="grizzly.replay.replay"):
+            results = replay._process_reports({"aaa": unexp}, 2)
+    assert unexp in results
+    assert "relaunch=1" in caplog.text
