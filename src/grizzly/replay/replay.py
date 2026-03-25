@@ -5,8 +5,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from logging import getLogger
-from pathlib import Path
-from tempfile import mkdtemp
 from typing import TYPE_CHECKING, cast
 
 from sapphire import ServerMap
@@ -16,11 +14,12 @@ from ..common.report import Report
 from ..common.reporter import FilesystemReporter, FuzzManagerReporter
 from ..common.runner import Runner, RunResult
 from ..common.status import SimpleStatus
-from ..common.utils import HARNESS_FILE, grz_tmp
+from ..common.utils import HARNESS_FILE
 from ..target import Result, Target
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
+    from pathlib import Path
 
     from FTB.Signatures.CrashInfo import CrashSignature
 
@@ -279,7 +278,8 @@ class ReplayManager:
                 x.count >= min_results for x in reports.values() if x.expected
             )
         results: list[ReplayResult] = []
-        for crash_hash, result in reports.items():
+        while reports:
+            crash_hash, result = reports.popitem()
             # if min_results not met (success=False) cleanup expected reports
             if not success and result.expected:
                 if not self._any_crash:
@@ -301,8 +301,6 @@ class ReplayManager:
             and not any(x.expected for x in results)
         ):
             LOG.info("Perhaps try with --relaunch=1")
-        # active reports have been moved to results clear reports collection
-        reports.clear()
         return results
 
     def run(
@@ -444,12 +442,7 @@ class ReplayManager:
                     # processing the result may take a few minutes (rr)
                     # update console to show progress
                     LOG.info("Processing result...")
-                    # TODO: use self.target.create_report here
-                    log_path = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
-                    self.target.save_logs(log_path)
-                    report = Report(
-                        log_path,
-                        self.target.binary,
+                    report = self.target.create_report(
                         is_hang=run_result.timeout,
                         unstable=runner.startup_failure,
                     )

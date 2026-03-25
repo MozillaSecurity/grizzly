@@ -20,15 +20,11 @@ from ..target import (
     TargetLaunchTimeout,
 )
 from .main import main
-from .test_replay import _fake_save_logs
 
-pytestmark = mark.usefixtures(
-    "patch_collector",
-    "tmp_path_grz_tmp",
-)
+pytestmark = mark.usefixtures("patch_collector")
 
 
-def test_main_01(mocker, server, tmp_path):
+def test_main_01(mocker, server, tmp_path, fake_create_report):
     """test main()"""
     # This is a typical scenario - a test that reproduces results ~50% of the time.
     # Of the four attempts only the first and third will 'reproduce' the result
@@ -46,7 +42,7 @@ def test_main_01(mocker, server, tmp_path):
     target.asset_mgr = mocker.Mock(spec_set=AssetManager)
     target.check_result.side_effect = (Result.FOUND, Result.NONE, Result.FOUND)
     target.filtered_environ.return_value = {"ENV": "123"}
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     load_target.return_value.return_value = target
     with TestCase("test.html", "adpt") as src:
         src.env_vars["TEST_VAR"] = "100"
@@ -110,7 +106,7 @@ def test_main_01(mocker, server, tmp_path):
         (Result.FOUND, Result.NONE),
     ],
 )
-def test_main_02(mocker, server, tmp_path, repro_results):
+def test_main_02(mocker, server, tmp_path, fake_create_report, repro_results):
     """test main() - no repro"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server.serve_path.return_value = ServeResult(
@@ -122,7 +118,7 @@ def test_main_02(mocker, server, tmp_path, repro_results):
     )
     target.check_result.side_effect = repro_results
     target.filtered_environ.return_value = {}
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     mocker.patch(
         "grizzly.replay.main.load_plugin",
         autospec=True,
@@ -276,7 +272,7 @@ def test_main_04(mocker, tmp_path):
     assert reporter.return_value.submit.call_count == 0
 
 
-def test_main_05(mocker, server, tmp_path):
+def test_main_05(mocker, server, tmp_path, fake_create_report):
     """test main() loading specified assets"""
     server.serve_path.return_value = ServeResult({}, Served.NONE, False)
     # setup Target
@@ -286,7 +282,7 @@ def test_main_05(mocker, server, tmp_path):
     target.check_result.return_value = Result.FOUND
     target.filtered_environ.return_value = {}
     target.monitor.is_healthy.return_value = False
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     mocker.patch(
         "grizzly.replay.main.load_plugin",
         autospec=True,
@@ -408,7 +404,7 @@ def test_main_06(
     assert load_target.return_value.call_args[-1]["valgrind"] == valgrind
 
 
-def test_main_07(mocker, server, tmp_path):
+def test_main_07(mocker, server, tmp_path, fake_create_report):
     """test main() - report to FuzzManager"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server.serve_path.return_value = ServeResult({}, Served.NONE, False)
@@ -419,7 +415,7 @@ def test_main_07(mocker, server, tmp_path):
         spec_set=Target, binary=Path("bin"), environ={}, launch_timeout=30
     )
     target.check_result.side_effect = (Result.FOUND,)
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     load_target.return_value.return_value = target
     with TestCase("test.html", "adpt") as src:
         src.add_from_bytes(b"test", src.entry_point)

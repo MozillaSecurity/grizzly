@@ -6,6 +6,7 @@
 from itertools import cycle
 from logging import INFO
 from pathlib import Path
+from tempfile import mkdtemp
 
 from FTB.Signatures.CrashInfo import CrashSignature
 from pytest import mark, raises
@@ -17,19 +18,7 @@ from ..common.storage import TestCase
 from ..target import Result, Target
 from .replay import ReplayManager, ReplayResult
 
-pytestmark = mark.usefixtures("patch_collector", "tmp_path_grz_tmp")
-
-
-def _fake_save_logs(result_logs):
-    """write fake log data to disk"""
-    log_path = Path(result_logs)
-    (log_path / "log_stderr.txt").write_text("STDERR log\n")
-    (log_path / "log_stdout.txt").write_text("STDOUT log\n")
-    with (log_path / "log_asan_blah.txt").open("w") as log_fp:
-        log_fp.write("==1==ERROR: AddressSanitizer: ")
-        log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
-        log_fp.write("    #0 0xbad000 in foo /file1.c:123:234\n")
-        log_fp.write("    #1 0x1337dd in bar /file2.c:1806:19\n")
+pytestmark = mark.usefixtures("patch_collector")
 
 
 @mark.parametrize("post_launch_delay", [0, -1])
@@ -116,22 +105,25 @@ def test_replay_03(mocker, server, tmp_path):
 
 @mark.parametrize("sig_parsed", [True, False])
 @mark.parametrize("post_launch_delay", [0, -1])
-def test_replay_04(mocker, server, tmp_path, sig_parsed, post_launch_delay):
+def test_replay_04(
+    mocker, server, tmp_path, fake_create_report, sig_parsed, post_launch_delay
+):
     """test ReplayManager.run() - successful repro"""
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
     if sig_parsed:
-        target.save_logs = _fake_save_logs
+        target.create_report.side_effect = fake_create_report
     else:
 
-        def _save_logs(result_logs):
-            """create uninteresting logs"""
-            log_path = Path(result_logs)
+        def _create_report_no_stack(is_hang=False, unstable=False):
+            """create a Report with uninteresting logs (no stack)"""
+            log_path = Path(mkdtemp(prefix="logs_", dir=tmp_path))
             (log_path / "log_stderr.txt").write_text("STDERR log\n")
             (log_path / "log_stdout.txt").write_text("STDOUT log\n")
+            return Report(log_path, Path("bin"), is_hang=is_hang, unstable=unstable)
 
-        target.save_logs = _save_logs
+        target.create_report.side_effect = _create_report_no_stack
     (tmp_path / "a.html").touch()
     server.serve_path.return_value = ServeResult(
         {"a.html": tmp_path / "a.html"}, Served.ALL, False
@@ -179,14 +171,14 @@ def test_replay_05(mocker, server):
     target.reset_mock()
 
 
-def test_replay_06(mocker, server):
+def test_replay_06(mocker, server, fake_create_report):
     """test ReplayManager.run()
     delayed failure - following test entry point not requested"""
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     type(target).closed = mocker.PropertyMock(side_effect=(True, False, True))
     target.check_result.side_effect = (Result.NONE, Result.FOUND)
     target.monitor.is_healthy.return_value = False
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     server.serve_path.side_effect = (
         ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
@@ -220,14 +212,14 @@ def test_replay_07(mocker, server):
     assert target.handle_hang.call_count == 1
 
 
-def test_replay_08(mocker, server):
+def test_replay_08(mocker, server, fake_create_report):
     """test ReplayManager.run() - early exit"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     # early failure
     target.check_result.side_effect = (
@@ -294,16 +286,15 @@ def test_replay_09(mocker, server):
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
     report_3 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
-    fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    fake_report.side_effect = (report_1, report_2, report_3)
-    fake_report.calc_hash.return_value = "bucketHASH"
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
     signature = mocker.Mock()
     signature.matches.side_effect = (True, False, False)
+    signature.rawSignature = "raw_sig"
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
+    target.create_report.side_effect = (report_1, report_2, report_3)
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager(
         [], server, target, signature=signature, use_harness=False
@@ -315,7 +306,7 @@ def test_replay_09(mocker, server):
         assert replay.status.iteration == 3
         assert replay.status.results.total == 1
         assert replay.status.ignored == 2
-    assert fake_report.call_count == 3
+    assert target.create_report.call_count == 3
     assert len(results) == 1
     assert not results[0].expected
     assert results[0].count == 2
@@ -329,16 +320,15 @@ def test_replay_10(mocker, server):
     """test ReplayManager.run() - test signatures - multiple matches"""
     report_0 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
-    fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    fake_report.side_effect = (report_0, report_1)
-    fake_report.calc_hash.return_value = "bucketHASH"
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
-    sig = mocker.Mock(spec_set=CrashSignature)
+    sig = mocker.Mock()
     sig.matches.side_effect = (True, True)
+    sig.rawSignature = "raw_sig"
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
+    target.create_report.side_effect = (report_0, report_1)
     target.monitor.is_healthy.return_value = False
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, signature=sig, use_harness=False) as replay:
@@ -349,7 +339,7 @@ def test_replay_10(mocker, server):
         assert replay.status.iteration == 2
         assert replay.status.results.total == 2
         assert replay.status.ignored == 0
-    assert fake_report.call_count == 2
+    assert target.create_report.call_count == 2
     assert len(results) == 1
     assert results[0].expected
     assert results[0].count == 2
@@ -362,13 +352,12 @@ def test_replay_11(mocker, server):
     """test ReplayManager.run() - any crash - success"""
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
-    fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    fake_report.side_effect = (report_1, report_2)
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
+    target.create_report.side_effect = (report_1, report_2)
     target.monitor.is_healthy.return_value = False
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, any_crash=True, use_harness=False) as replay:
@@ -379,7 +368,7 @@ def test_replay_11(mocker, server):
         assert replay.status.iteration == 2
         assert replay.status.results.total == 2
         assert replay.status.ignored == 0
-    assert fake_report.call_count == 2
+    assert target.create_report.call_count == 2
     assert len(results) == 2
     assert all(x.expected for x in results)
     assert sum(x.count for x in results if x.expected) == 2
@@ -391,8 +380,6 @@ def test_replay_12(mocker, server):
     """test ReplayManager.run() - any crash - fail to meet minimum"""
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
-    fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    fake_report.side_effect = (report_1, report_2)
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
@@ -403,6 +390,7 @@ def test_replay_12(mocker, server):
         Result.FOUND,
         Result.NONE,
     )
+    target.create_report.side_effect = (report_1, report_2)
     target.monitor.is_healthy.return_value = False
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, any_crash=True) as replay:
@@ -413,7 +401,7 @@ def test_replay_12(mocker, server):
         assert replay.status.iteration == 4
         assert replay.status.results.total == 2
         assert replay.status.ignored == 0
-    assert fake_report.call_count == 2
+    assert target.create_report.call_count == 2
     assert report_1.cleanup.call_count == 1
     assert report_2.cleanup.call_count == 1
 
@@ -500,7 +488,16 @@ def test_replay_12(mocker, server):
         ((ServeResult({}, Served.NONE, True),), None, 0, 0),
     ],
 )
-def test_replay_13(mocker, server, tmp_path, to_serve, sig_value, expected, unexpected):
+def test_replay_13(
+    mocker,
+    server,
+    tmp_path,
+    fake_create_report,
+    to_serve,
+    sig_value,
+    expected,
+    unexpected,
+):
     """test ReplayManager.run() - result after launch, before running test"""
     server.serve_path.side_effect = to_serve
 
@@ -524,7 +521,7 @@ def test_replay_13(mocker, server, tmp_path, to_serve, sig_value, expected, unex
 
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     target.monitor.is_healthy.return_value = False
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager(set(), server, target, any_crash=False, signature=sig) as replay:
@@ -538,8 +535,9 @@ def test_replay_13(mocker, server, tmp_path, to_serve, sig_value, expected, unex
 
 def test_replay_14(mocker, server):
     """test ReplayManager.run() - no signature - use first crash"""
-    auto_sig = mocker.Mock(spec_set=CrashSignature)
+    auto_sig = mocker.Mock()
     auto_sig.matches.side_effect = (True, False, True)
+    auto_sig.rawSignature = "raw_sig"
     # original
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="012", minor="999")
     report_1.crash_signature = auto_sig
@@ -547,14 +545,12 @@ def test_replay_14(mocker, server):
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="abc", minor="987")
     # matching report
     report_3 = mocker.Mock(spec_set=Report, crash_hash="h1", major="012", minor="999")
-    fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    fake_report.side_effect = (report_1, report_2, report_3)
-    fake_report.calc_hash.return_value = "bucket_hash"
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
+    target.create_report.side_effect = (report_1, report_2, report_3)
     target.monitor.is_healthy.return_value = False
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager([], server, target, use_harness=False) as replay:
@@ -565,7 +561,7 @@ def test_replay_14(mocker, server):
         assert replay.status.iteration == 3
         assert replay.status.results.total == 2
         assert replay.status.ignored == 1
-    assert fake_report.call_count == 3
+    assert target.create_report.call_count == 3
     assert len(results) == 2
     assert sum(x.expected for x in results) == 1
     assert sum(x.count for x in results if x.expected) == 2
@@ -577,14 +573,13 @@ def test_replay_14(mocker, server):
 def test_replay_15(mocker, server):
     """test ReplayManager.run() - unexpected exception"""
     report_0 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
-    fake_report = mocker.patch("grizzly.replay.replay.Report", autospec=True)
-    fake_report.side_effect = (report_0,)
     server.serve_path.side_effect = (
         ServeResult({"a.html": "/fake/path"}, Served.ALL, False),
         KeyboardInterrupt,
     )
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
+    target.create_report.side_effect = (report_0,)
     tests = [mocker.MagicMock(spec_set=TestCase, entry_point="a.html")]
     with ReplayManager(
         [], server, target, any_crash=True, use_harness=True, relaunch=2
@@ -598,7 +593,7 @@ def test_replay_15(mocker, server):
         assert replay.status.ignored == 0
     assert target.close.call_count == 1
     assert target.monitor.is_healthy.call_count == 0
-    assert fake_report.call_count == 1
+    assert target.create_report.call_count == 1
     assert report_0.cleanup.call_count == 1
 
 
@@ -647,7 +642,7 @@ def test_replay_17(mocker, server):
     assert target.monitor.is_healthy.call_count == 5
 
 
-def test_replay_18(mocker, server):
+def test_replay_18(mocker, server, fake_create_report):
     """test ReplayManager.run() - multiple TestCases - successful repro"""
     server.serve_path.side_effect = (
         ServeResult({"0.html": "/fake/path"}, Served.ALL, False),
@@ -661,7 +656,7 @@ def test_replay_18(mocker, server):
         Result.FOUND,
     )
     target.monitor.is_healthy.return_value = False
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     tests = [
         mocker.MagicMock(spec_set=TestCase, entry_point=f"{i}.html") for i in range(3)
     ]
@@ -769,7 +764,15 @@ def test_replay_20(mocker, tmp_path):
     ],
 )
 def test_replay_23(
-    mocker, server, expect_hang, is_hang, use_sig, match_sig, ignored, results
+    mocker,
+    server,
+    fake_create_report,
+    expect_hang,
+    is_hang,
+    use_sig,
+    match_sig,
+    ignored,
+    results,
 ):
     """test ReplayManager.run() - detect hangs"""
     server.serve_path.return_value = ServeResult(
@@ -784,7 +787,7 @@ def test_replay_23(
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.handle_hang.return_value = False
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     target.monitor.is_healthy.return_value = False
     test = mocker.MagicMock(spec_set=TestCase, entry_point="a.html", hang=is_hang)
     with ReplayManager([], server, target, signature=signature, relaunch=10) as replay:
@@ -847,11 +850,11 @@ def test_replay_25(mocker, server, tmp_path):
 
     call_count = 0
 
-    def _save_logs_variation(result_logs):
-        """create different stacks each call"""
+    def _create_report_variation(is_hang=False, unstable=False):
+        """create Reports with different stacks each call"""
         nonlocal call_count
         call_count += 1
-        log_path = Path(result_logs)
+        log_path = Path(mkdtemp(prefix="logs_", dir=tmp_path))
         (log_path / "log_stderr.txt").write_text("STDERR log\n")
         (log_path / "log_stdout.txt").write_text("STDOUT log\n")
         with (log_path / "log_asan_blah.txt").open("w") as log_fp:
@@ -859,8 +862,9 @@ def test_replay_25(mocker, server, tmp_path):
             log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
             log_fp.write(f"    #0 0xbad000 in call_a{call_count:02d} file.c:23:34\n")
             log_fp.write(f"    #1 0xbad001 in call_b{call_count:02d} file.c:12:45\n")
+        return Report(log_path, Path("bin"), is_hang=is_hang, unstable=unstable)
 
-    target.save_logs.side_effect = _save_logs_variation
+    target.create_report.side_effect = _create_report_variation
 
     (tmp_path / "a.html").touch()
     server.serve_path.return_value = ServeResult(
@@ -913,11 +917,11 @@ def test_replay_26(mocker, server, tmp_path, stderr_log, ignored, total, include
     target.check_result.return_value = Result.FOUND
     target.monitor.is_healthy.return_value = False
 
-    def _save_logs_variation(result_logs):
-        """create logs"""
+    def _create_report_variation(is_hang=False, unstable=False):
+        """create Reports with varying logs"""
         nonlocal stderr_log
         nonlocal include_stack
-        log_path = Path(result_logs)
+        log_path = Path(mkdtemp(prefix="logs_", dir=tmp_path))
         (log_path / "log_stderr.txt").write_text(stderr_log.pop(0))
         (log_path / "log_stdout.txt").write_text("STDOUT log\n")
         if include_stack.pop(0):
@@ -926,8 +930,9 @@ def test_replay_26(mocker, server, tmp_path, stderr_log, ignored, total, include
                 log_fp.write("SEGV on unknown address 0x0 (pc 0x0 bp 0x0 sp 0x0 T0)\n")
                 log_fp.write("    #0 0xbad000 in call_a file.c:23:34\n")
                 log_fp.write("    #1 0xbad001 in call_b file.c:12:45\n")
+        return Report(log_path, Path("bin"), is_hang=is_hang, unstable=unstable)
 
-    target.save_logs.side_effect = _save_logs_variation
+    target.create_report.side_effect = _create_report_variation
 
     has_sig = include_stack[0]
     (tmp_path / "a.html").touch()
@@ -950,12 +955,12 @@ def test_replay_26(mocker, server, tmp_path, stderr_log, ignored, total, include
         assert results
 
 
-def test_replay_27(mocker, server, tmp_path):
+def test_replay_27(mocker, server, tmp_path, fake_create_report):
     """test ReplayManager.run() - collect served files"""
     target = mocker.Mock(spec_set=Target, binary=Path("bin"), launch_timeout=30)
     target.check_result.side_effect = (Result.FOUND,)
     target.monitor.is_healthy.return_value = False
-    target.save_logs = _fake_save_logs
+    target.create_report.side_effect = fake_create_report
     src = tmp_path / "src"
     with TestCase("test.html", "test-adapter") as test:
         test.add_from_bytes(b"", test.entry_point)
