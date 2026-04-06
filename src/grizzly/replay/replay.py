@@ -55,6 +55,7 @@ class ReplayManager:
     __slots__ = (
         "_any_crash",
         "_harness",
+        "_ignore_signatures",
         "_relaunch",
         "_signature",
         "ignore",
@@ -71,6 +72,7 @@ class ReplayManager:
         any_crash: bool = False,
         relaunch: int = 1,
         signature: CrashSignature | None = None,
+        ignore_signatures: list[CrashSignature] | None = None,
         use_harness: bool = True,
     ) -> None:
         # target must relaunch every iteration when not using harness
@@ -81,6 +83,7 @@ class ReplayManager:
         self.target = target
         self._any_crash = any_crash
         self._harness = HARNESS_FILE.read_bytes() if use_harness else None
+        self._ignore_signatures = ignore_signatures or []
         self._relaunch = relaunch
         self._signature = signature
 
@@ -464,10 +467,22 @@ class ReplayManager:
                         if self._signature is not None:
                             assert not sig_hash, "sig_hash should only be set once"
                             sig_hash = Report.calc_hash(self._signature)
-                    # look for existing buckets (signature match)
-                    expected = self._any_crash or self.check_match(
-                        self._signature, report, expect_hang, sig_set
-                    )
+                    # check if results matches explicitly ignored signature
+                    ignored_sig: CrashSignature | None = None
+                    if not report.is_hang and report.crash_signature is not None:
+                        for _ignored_sig in self._ignore_signatures:
+                            if _ignored_sig.matches(report.crash_info):
+                                ignored_sig = _ignored_sig
+                                break
+                    if ignored_sig is None:
+                        # look for existing buckets (signature match)
+                        expected = self._any_crash or self.check_match(
+                            self._signature, report, expect_hang, sig_set
+                        )
+                    else:
+                        # result matched ignored signature
+                        expected = False
+
                     if expected:
                         if sig_hash is not None:
                             LOG.debug("using signature hash (%s) to bucket", sig_hash)
@@ -478,15 +493,31 @@ class ReplayManager:
                     else:
                         bucket_hash = report.crash_hash
                         self.status.ignored += 1
+                    # display message
+                    if expected:
+                        result_msg = "Result"
+                    elif ignored_sig is not None:
+                        result_msg = "Result: Ignored signature"
+                    else:
+                        result_msg = "Result: Different signature"
                     LOG.info(
                         "%s: %s (%s:%s)",
-                        "Result" if expected else "Result: Different signature",
+                        result_msg,
                         report.short_signature,
                         report.major[:8],
                         report.minor[:8],
                     )
                     # bucket result
-                    if bucket_hash not in reports:
+                    if ignored_sig is not None:
+                        if bucket_hash == sig_hash:
+                            # reset signature if set to ignored signature
+                            # this is all very hacky...
+                            sig_hash = None
+                            sig_set = False
+                            self._signature = None
+                        LOG.debug("not tracking ignored %s", bucket_hash)
+                        report.cleanup()
+                    elif bucket_hash not in reports:
                         reports[bucket_hash] = ReplayResult(report, durations, expected)
                         LOG.debug("now tracking %s", bucket_hash)
                     else:

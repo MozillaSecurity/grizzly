@@ -38,6 +38,13 @@ class ReplayCommonArgs(CommonArgs):
             help="CPU usage threshold to mark the process as idle (default: disabled)",
         )
         replay_args.add_argument(
+            "--ignore-signatures",
+            default=[],
+            nargs="+",
+            type=Path,
+            help="File(s) (JSON) containing a signature to ignore.",
+        )
+        replay_args.add_argument(
             "--min-crashes",
             type=int,
             default=1,
@@ -77,6 +84,10 @@ class ReplayCommonArgs(CommonArgs):
 
         if args.sig and not args.sig.is_file():
             self.parser.error(f"signature file not found: '{args.sig}'")
+
+        for sig in args.ignore_signatures:
+            if not sig.is_file():
+                self.parser.error(f"Ignored signature file not found: '{sig}'")
 
 
 class ReplayArgs(ReplayCommonArgs):

@@ -62,6 +62,7 @@ def main(args: Namespace | None = None) -> int:
         LOG.info("Running with Valgrind. This will be SLOW!")
 
     signature = CrashSignature.fromFile(args.sig) if args.sig else None
+    ignored_signatures = [CrashSignature.fromFile(s) for s in args.ignore_signatures]
 
     try:
         testcases, asset_mgr, env_vars = load_testcases(
@@ -143,6 +144,7 @@ def main(args: Namespace | None = None) -> int:
                 any_crash=args.any_crash,
                 relaunch=relaunch,
                 signature=signature,
+                ignore_signatures=ignored_signatures,
                 use_harness=not args.no_harness,
             ) as replay:
                 results = replay.run(

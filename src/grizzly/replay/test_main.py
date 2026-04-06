@@ -61,6 +61,7 @@ def test_main_01(mocker, server, tmp_path, fake_create_report):
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
+        ignore_signatures=[],
         input=[tmp_path / "testcase"],
         launch_attempts=3,
         min_crashes=2,
@@ -136,6 +137,7 @@ def test_main_02(mocker, server, tmp_path, fake_create_report, repro_results):
         idle_delay=0,
         idle_threshold=0,
         ignore=[],
+        ignore_signatures=[],
         input=[tmp_path / "test.html"],
         launch_attempts=3,
         min_crashes=2,
@@ -200,6 +202,7 @@ def test_main_03(mocker, load_plugin, load_testcases, signature, result):
         asset=[],
         fuzzmanager=False,
         ignore=["timeout"] if signature else [],
+        ignore_signatures=[],
         input=["test"],
         min_crashes=1,
         pernosco=False,
@@ -301,6 +304,7 @@ def test_main_05(mocker, server, tmp_path, fake_create_report):
         idle_delay=0,
         idle_threshold=0,
         ignore=[],
+        ignore_signatures=[],
         input=[input_path],
         launch_attempts=3,
         min_crashes=1,
@@ -377,6 +381,7 @@ def test_main_06(
         idle_delay=0,
         idle_threshold=0,
         ignore=["fake", "timeout"],
+        ignore_signatures=[],
         input=[tmp_path / "test.html"],
         launch_attempts=3,
         min_crashes=2,
@@ -429,6 +434,7 @@ def test_main_07(mocker, server, tmp_path, fake_create_report):
         idle_delay=0,
         idle_threshold=0,
         ignore=[],
+        ignore_signatures=[],
         input=[tmp_path / "testcase"],
         launch_attempts=1,
         min_crashes=1,
@@ -545,3 +551,61 @@ def test_main_09(mocker, server, tmp_path):
     finally:
         if target.asset_mgr:
             target.asset_mgr.cleanup()
+
+
+def test_main_10(mocker, server, tmp_path, fake_create_report):
+    """test main() - with --ignore-signatures"""
+    mocker.patch("grizzly.common.runner.sleep", autospec=True)
+    mocker.patch("grizzly.replay.main.WebServices", autospec=True)
+    server.serve_path.return_value = ServeResult(
+        {"test.html": "/fake/path"}, Served.ALL, False
+    )
+    # setup Target
+    load_target = mocker.patch("grizzly.replay.main.load_plugin", autospec=True)
+    target = mocker.Mock(
+        spec_set=Target, binary=Path("bin"), environ={}, launch_timeout=30
+    )
+    target.asset_mgr = mocker.Mock(spec_set=AssetManager)
+    target.check_result.return_value = Result.FOUND
+    target.filtered_environ.return_value = {}
+    target.create_report.side_effect = fake_create_report
+    load_target.return_value.return_value = target
+    with TestCase("test.html", "adpt") as src:
+        src.add_from_bytes(b"test", src.entry_point)
+        src.dump(tmp_path / "testcase", include_details=True)
+    # setup signature files
+    (tmp_path / "sig.json").write_bytes(
+        b'{"symptoms": [{"type": "crashAddress", "address": "0"}]}'
+    )
+    ignored_sig = tmp_path / "ignored.json"
+    ignored_sig.write_bytes(
+        b'{"symptoms": [{"type": "output", "src": "stderr", "value": "/SEGV/"}]}'
+    )
+    # setup args
+    args = mocker.Mock(
+        any_crash=False,
+        asset=[],
+        entry_point=None,
+        fuzzmanager=False,
+        idle_delay=0,
+        idle_threshold=0,
+        ignore=[],
+        ignore_signatures=[ignored_sig],
+        input=[tmp_path / "testcase"],
+        launch_attempts=3,
+        min_crashes=1,
+        no_harness=False,
+        output=tmp_path / "logs",
+        pernosco=False,
+        post_launch_delay=0,
+        relaunch=1,
+        repeat=2,
+        rr=False,
+        sig=tmp_path / "sig.json",
+        test_index=[],
+        time_limit=10,
+        timeout=None,
+        valgrind=False,
+    )
+    assert main(args) == Exit.SUCCESS
+    assert target.check_result.call_count >= 1
