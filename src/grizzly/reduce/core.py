@@ -241,14 +241,15 @@ class ReduceManager:
         self._status.iterations += 1
         self._status.report()
 
-    def run_reliability_analysis(self) -> tuple[int, int]:
+    def run_reliability_analysis(self, post_launch_delay: int) -> tuple[int, int]:
         """Run several analysis passes of the current testcase to find `run` parameters.
 
         The number of repetitions and minimum number of crashes are calculated to
         maximize the chances of observing the expected crash.
 
         Arguments:
-            None
+            post_launch_delay: Time in seconds before continuing after the browser
+                               is launched.
 
         Returns:
             Values for `repeat` and `min_crashes` resulting from analysis.
@@ -323,6 +324,7 @@ class ReduceManager:
                     idle_delay=self._idle_delay,
                     idle_threshold=self._idle_threshold,
                     on_iteration_cb=self._on_replay_iteration,
+                    post_launch_delay=post_launch_delay,
                     services=self._services,
                 )
                 try:
@@ -478,7 +480,9 @@ class ReduceManager:
         with self._status.measure("final"):
             if self._use_analysis:
                 with self._status.measure("analysis"):
-                    (repeat, min_results) = self.run_reliability_analysis()
+                    (repeat, min_results) = self.run_reliability_analysis(
+                        post_launch_delay=post_launch_delay
+                    )
                 any_success = True  # analysis ran and didn't raise
             # multi part test cases should always use relaunch == 1
             # since that can mean a delay is required
