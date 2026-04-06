@@ -13,7 +13,7 @@ from re import compile as re_compile
 from shutil import copyfileobj, move, rmtree
 from tempfile import mkstemp
 from time import strftime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from Collector.Collector import Collector
 from FTB.ProgramConfiguration import ProgramConfiguration
@@ -403,6 +403,22 @@ class Report:
             Text data sanitized and split into lines.
         """
         return path.read_text("utf-8", errors="replace").replace("\0", "?").splitlines()
+
+    def matches(self, signature: CrashSignature, expect_hang: bool) -> bool:
+        """Check if report matches signature.
+
+        Args:
+            signature: Signature to match.
+            expect_hang: Indicates if a hang is expected.
+
+        Returns:
+            True if report matches signature otherwise False.
+        """
+        if expect_hang and not self.is_hang:
+            # avoid catching other crashes with forgiving hang signatures
+            return False
+        # Fuzzmanager is missing type hints, use cast()
+        return cast("bool", signature.matches(self.crash_info))
 
     @property
     def major(self) -> str:

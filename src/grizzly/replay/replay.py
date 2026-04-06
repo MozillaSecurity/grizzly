@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from logging import getLogger
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from sapphire import ServerMap
 
@@ -97,32 +97,18 @@ class ReplayManager:
     def signature(self) -> CrashSignature | None:
         return self._signature
 
-    @staticmethod
-    def check_match(
-        signature: CrashSignature, report: Report, expect_hang: bool, check_failed: bool
-    ) -> bool:
-        """Check if report matches signature.
+    def _check_ignored(self, report: Report) -> bool:
+        """Check if a report matches any explicitly ignored signature.
 
         Args:
-            signature: Signature to match.
-            report: Report to check against signature.
-            expect_hang: Indicates if a hang is expected.
-            check_failed: Check if report signature creation failed.
+            report: Report to check.
 
         Returns:
-            True if report matches signature otherwise False.
+            True if report matches an ignored signature otherwise False.
         """
-        if signature is None:
-            if check_failed and not report.is_hang:
-                # treat failed signature creation as a match
-                return report.crash_signature is None
-            # treat 'None' signature as a bucket if it's not a hang
-            return not report.is_hang
-        if expect_hang and not report.is_hang:
-            # avoid catching other crashes with forgiving hang signatures
+        if report is None or report.crash_signature is None:
             return False
-        # Fuzzmanager is missing type hints, use cast()
-        return cast("bool", signature.matches(report.crash_info))
+        return any(report.matches(sig, False) for sig in self._ignore_signatures)
 
     def cleanup(self) -> None:
         """Remove temporary files from disk.
@@ -449,85 +435,88 @@ class ReplayManager:
                         is_hang=run_result.timeout,
                         unstable=runner.startup_failure,
                     )
-                    # set active signature
-                    if not self._any_crash and not run_result.timeout and not sig_set:
-                        assert not expect_hang
-                        assert self._signature is None
-                        LOG.debug(
-                            "no signature given, using short sig '%s'",
+                    # check ignored signatures
+                    if self._check_ignored(report):
+                        self.status.ignored += 1
+                        LOG.info(
+                            "Result: Ignored signature: %s (%s:%s)",
                             report.short_signature,
+                            report.major[:8],
+                            report.minor[:8],
                         )
-                        if runner.startup_failure:
-                            LOG.warning(
-                                "Using signature from startup failure! "
-                                "Provide a signature to avoid this."
-                            )
-                        self._signature = report.crash_signature
-                        sig_set = True
-                        if self._signature is not None:
-                            assert not sig_hash, "sig_hash should only be set once"
-                            sig_hash = Report.calc_hash(self._signature)
-                    # check if results matches explicitly ignored signature
-                    ignored_sig: CrashSignature | None = None
-                    if not report.is_hang and report.crash_signature is not None:
-                        for _ignored_sig in self._ignore_signatures:
-                            if _ignored_sig.matches(report.crash_info):
-                                ignored_sig = _ignored_sig
-                                break
-                    if ignored_sig is None:
-                        # look for existing buckets (signature match)
-                        expected = self._any_crash or self.check_match(
-                            self._signature, report, expect_hang, sig_set
-                        )
+                        report.cleanup()
                     else:
-                        # result matched ignored signature
-                        expected = False
-
-                    if expected:
-                        if sig_hash is not None:
-                            LOG.debug("using signature hash (%s) to bucket", sig_hash)
-                            bucket_hash = sig_hash
+                        # auto-set signature from first non-ignored crash
+                        if (
+                            not self._any_crash
+                            and not run_result.timeout
+                            and not sig_set
+                        ):
+                            assert not expect_hang
+                            assert self._signature is None
+                            LOG.debug(
+                                "no signature given, using short sig '%s'",
+                                report.short_signature,
+                            )
+                            if runner.startup_failure:
+                                LOG.warning(
+                                    "Using signature from startup failure! "
+                                    "Provide a signature to avoid this."
+                                )
+                            self._signature = report.crash_signature
+                            sig_set = True
+                            if self._signature is not None:
+                                assert not sig_hash, "sig_hash should only be set once"
+                                sig_hash = Report.calc_hash(self._signature)
+                        # determine if this is an expected result
+                        if self._any_crash:
+                            expected = True
+                        elif self._signature is not None:
+                            expected = report.matches(self._signature, expect_hang)
+                        elif sig_set and not report.is_hang:
+                            # signature creation failed, treat as match if
+                            # this report also failed to create a signature
+                            expected = report.crash_signature is None
+                        else:
+                            # no signature, treat any non-hang as a match
+                            expected = not report.is_hang
+                        if expected:
+                            if sig_hash is not None:
+                                LOG.debug(
+                                    "using signature hash (%s) to bucket", sig_hash
+                                )
+                                bucket_hash = sig_hash
+                            else:
+                                bucket_hash = report.crash_hash
+                            self.status.results.count(
+                                bucket_hash, report.short_signature
+                            )
                         else:
                             bucket_hash = report.crash_hash
-                        self.status.results.count(bucket_hash, report.short_signature)
-                    else:
-                        bucket_hash = report.crash_hash
-                        self.status.ignored += 1
-                    # display message
-                    if expected:
-                        result_msg = "Result"
-                    elif ignored_sig is not None:
-                        result_msg = "Result: Ignored signature"
-                    else:
-                        result_msg = "Result: Different signature"
-                    LOG.info(
-                        "%s: %s (%s:%s)",
-                        result_msg,
-                        report.short_signature,
-                        report.major[:8],
-                        report.minor[:8],
-                    )
-                    # bucket result
-                    if ignored_sig is not None:
-                        if bucket_hash == sig_hash:
-                            # reset signature if set to ignored signature
-                            # this is all very hacky...
-                            sig_hash = None
-                            sig_set = False
-                            self._signature = None
-                        LOG.debug("not tracking ignored %s", bucket_hash)
-                        report.cleanup()
-                    elif bucket_hash not in reports:
-                        reports[bucket_hash] = ReplayResult(report, durations, expected)
-                        LOG.debug("now tracking %s", bucket_hash)
-                    else:
-                        reports[bucket_hash].count += 1
-                        if report.unstable and not reports[bucket_hash].report.unstable:
-                            LOG.debug("updating report to unstable")
-                            reports[bucket_hash].report.unstable = True
-                        LOG.debug("already tracking %s", bucket_hash)
-                        # remove duplicate report
-                        report.cleanup()
+                            self.status.ignored += 1
+                        LOG.info(
+                            "%s: %s (%s:%s)",
+                            "Result" if expected else "Result: Different signature",
+                            report.short_signature,
+                            report.major[:8],
+                            report.minor[:8],
+                        )
+                        if bucket_hash not in reports:
+                            reports[bucket_hash] = ReplayResult(
+                                report, durations, expected
+                            )
+                            LOG.debug("now tracking %s", bucket_hash)
+                        else:
+                            reports[bucket_hash].count += 1
+                            if (
+                                report.unstable
+                                and not reports[bucket_hash].report.unstable
+                            ):
+                                LOG.debug("updating report to unstable")
+                                reports[bucket_hash].report.unstable = True
+                            LOG.debug("already tracking %s", bucket_hash)
+                            # remove duplicate report
+                            report.cleanup()
                 elif run_result.status == Result.IGNORED:
                     self.status.ignored += 1
                     if run_result.timeout:

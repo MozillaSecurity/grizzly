@@ -284,13 +284,15 @@ def test_replay_09(mocker, server):
     """test ReplayManager.run() - test signatures - fail to meet minimum"""
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
+    report_1.matches.return_value = True
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
+    report_2.matches.return_value = False
     report_3 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
+    report_3.matches.return_value = False
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
     signature = mocker.Mock()
-    signature.matches.side_effect = (True, False, False)
     signature.rawSignature = "raw_sig"
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
@@ -310,21 +312,24 @@ def test_replay_09(mocker, server):
     assert len(results) == 1
     assert not results[0].expected
     assert results[0].count == 2
+    assert report_1.matches.call_count == 1
+    assert report_2.matches.call_count == 1
+    assert report_3.matches.call_count == 1
     assert report_1.cleanup.call_count == 1
     assert report_2.cleanup.call_count == 0
     assert report_3.cleanup.call_count == 1
-    assert signature.matches.call_count == 3
 
 
 def test_replay_10(mocker, server):
     """test ReplayManager.run() - test signatures - multiple matches"""
     report_0 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
+    report_0.matches.return_value = True
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h2", major="0123", minor="abcd")
+    report_1.matches.return_value = True
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
     sig = mocker.Mock()
-    sig.matches.side_effect = (True, True)
     sig.rawSignature = "raw_sig"
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
@@ -343,9 +348,10 @@ def test_replay_10(mocker, server):
     assert len(results) == 1
     assert results[0].expected
     assert results[0].count == 2
+    assert report_0.matches.call_count == 1
+    assert report_1.matches.call_count == 1
     assert report_0.cleanup.call_count == 0
     assert report_1.cleanup.call_count == 1
-    assert sig.matches.call_count == 2
 
 
 def test_replay_11(mocker, server):
@@ -536,15 +542,17 @@ def test_replay_13(
 def test_replay_14(mocker, server):
     """test ReplayManager.run() - no signature - use first crash"""
     auto_sig = mocker.Mock()
-    auto_sig.matches.side_effect = (True, False, True)
     auto_sig.rawSignature = "raw_sig"
     # original
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="012", minor="999")
     report_1.crash_signature = auto_sig
+    report_1.matches.return_value = True
     # non matching report
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="abc", minor="987")
+    report_2.matches.return_value = False
     # matching report
     report_3 = mocker.Mock(spec_set=Report, crash_hash="h1", major="012", minor="999")
+    report_3.matches.return_value = True
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
@@ -1145,8 +1153,7 @@ def test_replay_35(mocker, server):
     """test ReplayManager.run() - ignored signature match"""
     # crash matches ignored signature -> cleaned up, not in results
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
-    report_1.is_hang = False
-    report_1.crash_signature = mocker.Mock()
+    report_1.matches.return_value = True
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
@@ -1154,7 +1161,6 @@ def test_replay_35(mocker, server):
     signature.matches.return_value = True
     signature.rawSignature = "raw_sig"
     ignored_sig = mocker.Mock()
-    ignored_sig.matches.return_value = True
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.create_report.return_value = report_1
@@ -1173,42 +1179,31 @@ def test_replay_35(mocker, server):
         assert replay.status.results.total == 0
     assert len(results) == 0
     assert report_1.cleanup.call_count == 1
-    assert ignored_sig.matches.call_count == 1
-    # primary signature should not have been checked since ignored matched first
-    assert signature.matches.call_count == 0
+    assert report_1.matches.call_count == 1
 
 
 def test_replay_36(mocker, server):
-    """test ReplayManager.run() - ignored signature resets auto-set signature"""
-    # no primary signature given; first crash auto-sets self._signature
-    # but also matches ignored signature -> reset, second crash sets new signature
+    """test ReplayManager.run() - ignored signature skips auto-set"""
+    # no primary signature given; first crash matches ignored sig so auto-set
+    # is skipped, second crash auto-sets signature normally
     mocker.patch("grizzly.common.runner.sleep", autospec=True)
     auto_sig = mocker.Mock()
-    auto_sig.matches.return_value = True
     auto_sig.rawSignature = "raw_sig"
-    # first report: will auto-set signature, but matches ignored sig
-    # crash_hash must match Report.calc_hash(auto_sig) for the reset path to trigger
-    report_1 = mocker.Mock(
-        spec_set=Report,
-        crash_hash=Report.calc_hash(auto_sig),
-        major="0123",
-        minor="0123",
-    )
-    report_1.is_hang = False
-    report_1.crash_signature = auto_sig
-    # second report: different crash, will auto-set new signature
     new_sig = mocker.Mock()
-    new_sig.matches.return_value = True
     new_sig.rawSignature = "raw_sig_2"
+    # first report: matches ignored sig -> skipped
+    report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
+    report_1.crash_signature = auto_sig
+    report_1.matches.return_value = True
+    # second report: does not match ignored sig, auto-sets new signature
     report_2 = mocker.Mock(spec_set=Report, crash_hash="h2", major="abcd", minor="abcd")
-    report_2.is_hang = False
     report_2.crash_signature = new_sig
+    # first call: _check_ignored (False = not ignored), second: classify (True = match)
+    report_2.matches.side_effect = (False, True)
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
     ignored_sig = mocker.Mock()
-    # first crash matches ignored sig, second does not
-    ignored_sig.matches.side_effect = (True, False)
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.create_report.side_effect = (report_1, report_2)
@@ -1224,7 +1219,7 @@ def test_replay_36(mocker, server):
         results = replay.run(tests, 10, repeat=2, min_results=1)
         assert replay.status.ignored == 1
         assert replay.status.results.total == 1
-        # signature was reset after ignored match, then re-set from report_2
+        # auto-set was skipped for first crash, set from report_2
         assert replay.signature == new_sig
     assert len(results) == 1
     assert results[0].expected
@@ -1236,16 +1231,14 @@ def test_replay_37(mocker, server):
     """test ReplayManager.run() - ignored signature does not match"""
     # crash does not match ignored signature -> normal flow
     report_1 = mocker.Mock(spec_set=Report, crash_hash="h1", major="0123", minor="0123")
-    report_1.is_hang = False
-    report_1.crash_signature = mocker.Mock()
+    # first call: _check_ignored (False = not ignored), second: classify (True = match)
+    report_1.matches.side_effect = (False, True)
     server.serve_path.return_value = ServeResult(
         {"a.html": "/fake/path"}, Served.ALL, False
     )
     signature = mocker.Mock()
-    signature.matches.return_value = True
     signature.rawSignature = "raw_sig"
     ignored_sig = mocker.Mock()
-    ignored_sig.matches.return_value = False
     target = mocker.Mock(spec_set=Target, launch_timeout=30)
     target.check_result.return_value = Result.FOUND
     target.create_report.return_value = report_1
@@ -1265,5 +1258,34 @@ def test_replay_37(mocker, server):
     assert len(results) == 1
     assert results[0].expected
     assert report_1.cleanup.call_count == 0
-    assert ignored_sig.matches.call_count == 1
-    assert signature.matches.call_count == 1
+    assert report_1.matches.call_count == 2
+
+
+def test_replay_38(mocker, server):
+    """test ReplayManager._check_ignored()"""
+    target = mocker.Mock(spec_set=Target, launch_timeout=30)
+    ignored_sig = mocker.Mock()
+
+    with ReplayManager([], server, target, use_harness=False) as replay:
+        # no ignored signatures configured
+        report = mocker.Mock(spec_set=Report)
+        assert not replay._check_ignored(report)
+        # None report
+        assert not replay._check_ignored(None)
+
+    with ReplayManager(
+        [], server, target, ignore_signatures=[ignored_sig], use_harness=False
+    ) as replay:
+        # matching ignored signature
+        report = mocker.Mock(spec_set=Report)
+        report.matches.return_value = True
+        assert replay._check_ignored(report)
+        assert report.matches.call_count == 1
+
+        # non-matching ignored signature
+        report_no_match = mocker.Mock(spec_set=Report)
+        report_no_match.matches.return_value = False
+        assert not replay._check_ignored(report_no_match)
+
+        # None report
+        assert not replay._check_ignored(None)

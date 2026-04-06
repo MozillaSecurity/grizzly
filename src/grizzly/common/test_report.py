@@ -243,6 +243,29 @@ def test_report_10(mocker, tmp_path, hang, has_log, expected):
         assert report.crash_hash == "hang"
 
 
+@mark.parametrize(
+    "is_hang, sig_match, expect_hang, expected",
+    [
+        # expect hang but report is not a hang
+        (False, True, True, False),
+        # normal match
+        (False, True, False, True),
+        # normal no-match
+        (False, False, False, False),
+        # hang matches hang signature
+        (True, True, True, True),
+    ],
+)
+def test_report_11(mocker, is_hang, sig_match, expect_hang, expected):
+    """test Report.matches()"""
+    report = mocker.Mock(spec_set=Report)
+    report.is_hang = is_hang
+    report.crash_info = mocker.Mock()
+    signature = mocker.Mock()
+    signature.matches.return_value = sig_match
+    assert Report.matches(report, signature, expect_hang) == expected
+
+
 def test_log_map_01(tmp_path):
     """test LogMap.create()"""
     # small log with nothing interesting
