@@ -325,7 +325,7 @@ def test_analysis(
         log_path,
         use_harness=use_harness,
     ) as mgr:
-        repeat, min_crashes = mgr.run_reliability_analysis()
+        repeat, min_crashes = mgr.run_reliability_analysis(-1)
 
         observed = {
             "replay_iters": replayer.run.call_count,
