@@ -23,6 +23,19 @@ def test_replay_args_01(capsys, mocker, tmp_path):
     exe.touch()
     # test success
     ReplayArgs().parse_args([str(exe), str(exe), "--platform", "targ1"])
+    # test success with --ignore-signatures
+    sig_file = tmp_path / "sig.json"
+    sig_file.touch()
+    ReplayArgs().parse_args(
+        [
+            str(exe),
+            str(exe),
+            "--platform",
+            "targ1",
+            "--ignore-signatures",
+            str(sig_file),
+        ]
+    )
     # test missing input
     with raises(SystemExit):
         ReplayArgs().parse_args(argv=[str(exe), "missing", "--platform", "targ1"])
@@ -57,6 +70,12 @@ def test_replay_args_01(capsys, mocker, tmp_path):
         ),
         # test missing signature file
         (["--sig", "missing"], "error: signature file not found", 1),
+        # test missing ignored signature file
+        (
+            ["--ignore-signatures", "missing.json"],
+            "error: Ignored signature file not found",
+            1,
+        ),
         # test --no-harness with multiple inputs
         (
             ["--no-harness"],
