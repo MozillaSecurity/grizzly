@@ -186,8 +186,6 @@ class FenixTarget(Target):
         env_mod["MOZ_CRASHREPORTER"] = "1"
         env_mod["MOZ_CRASHREPORTER_NO_REPORT"] = "1"
         env_mod["MOZ_CRASHREPORTER_SHUTDOWN"] = "1"
-        # do not allow network connections to non local endpoints
-        env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
         if not self._session.device.wait_for_boot(10):
             LOG.error("Device is not available for launch attempt!")
             # TODO: this should likely be a TargetLaunchError or similar
