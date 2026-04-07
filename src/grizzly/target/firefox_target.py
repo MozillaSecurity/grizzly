@@ -305,8 +305,6 @@ class FirefoxTarget(Target):
     def launch(self, location: str) -> None:
         # setup environment
         env_mod: dict[str, str | None] = dict(self.environ)
-        # do not allow network connections to non local endpoints
-        env_mod["MOZ_DISABLE_NONLOCAL_CONNECTIONS"] = "1"
         # we always want the browser to exit when a crash is detected
         env_mod["MOZ_CRASHREPORTER_SHUTDOWN"] = "1"
         try:
