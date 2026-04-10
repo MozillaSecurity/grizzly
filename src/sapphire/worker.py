@@ -88,7 +88,9 @@ class Worker:
             "Cache-Control: max-age=0, no-cache\r\n"
             f"Content-Length: {c_length}\r\n"
             f"Content-Type: {c_type}\r\n"
-            "Connection: close\r\n\r\n"
+            "Connection: close\r\n"
+            "Cross-Origin-Embedder-Policy: require-corp\r\n"
+            "Cross-Origin-Opener-Policy: same-origin\r\n\r\n"
         )
         return data.encode(encoding="ascii")
 
@@ -97,7 +99,9 @@ class Worker:
         data = (
             "HTTP/1.1 307 Temporary Redirect\r\n"
             f"Location: {redirect_to}\r\n"
-            "Connection: close\r\n\r\n"
+            "Connection: close\r\n"
+            "Cross-Origin-Embedder-Policy: require-corp\r\n"
+            "Cross-Origin-Opener-Policy: same-origin\r\n\r\n"
         )
         return data.encode(encoding="ascii")
 
@@ -119,7 +123,9 @@ class Worker:
             f"HTTP/1.1 {code} {hdr_msg}\r\n"
             f"Content-Length: {len(content)}\r\n"
             "Content-Type: text/html\r\n"
-            f"Connection: close\r\n\r\n{content}"
+            "Connection: close\r\n"
+            "Cross-Origin-Embedder-Policy: require-corp\r\n"
+            f"Cross-Origin-Opener-Policy: same-origin\r\n\r\n{content}"
         )
         return data.encode(encoding="ascii")
 
