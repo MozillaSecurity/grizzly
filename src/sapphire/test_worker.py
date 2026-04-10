@@ -153,12 +153,16 @@ def test_response_data_01():
     output = Worker._200_header(10, "text/html")
     assert b"Content-Length: 10" in output
     assert b"Content-Type: text/html" in output
+    assert b"Cross-Origin-Embedder-Policy: require-corp" in output
+    assert b"Cross-Origin-Opener-Policy: same-origin" in output
 
 
 def test_response_data_02():
     """test _307_redirect()"""
     output = Worker._307_redirect("http://some.test.url")
     assert b"Location: http://some.test.url" in output
+    assert b"Cross-Origin-Embedder-Policy: require-corp" in output
+    assert b"Cross-Origin-Opener-Policy: same-origin" in output
 
 
 def test_response_data_03():
@@ -167,6 +171,8 @@ def test_response_data_03():
     assert b"Content-Length: " in output
     assert b"HTTP/1.1 400 Bad Request" in output
     assert b"400!" in output
+    assert b"Cross-Origin-Embedder-Policy: require-corp" in output
+    assert b"Cross-Origin-Opener-Policy: same-origin" in output
 
 
 def test_response_data_04():
@@ -175,6 +181,8 @@ def test_response_data_04():
     assert b"Content-Length: " in output
     assert b"HTTP/1.1 404 Not Found" in output
     assert b"window.onload = () => { window.setTimeout(window.close, 10000) }" in output
+    assert b"Cross-Origin-Embedder-Policy: require-corp" in output
+    assert b"Cross-Origin-Opener-Policy: same-origin" in output
 
 
 @mark.parametrize(
