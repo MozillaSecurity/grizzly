@@ -521,7 +521,6 @@ def test_main_09(mocker, server, tmp_path):
         relaunch=1,
         repeat=1,
         sig=None,
-        use_http=False,
         test_index=[],
         time_limit=1,
         timeout=1,
