@@ -243,8 +243,10 @@ class Report:
             LOG.warning("No limit set on report log size!")
         else:
             for log in log_path.iterdir():
-                if log.is_file() and log.stat().st_size > size_limit:
-                    Report.tail(log, size_limit)
+                if log.is_file():
+                    Report.dedup_lines(log)
+                    if log.stat().st_size > size_limit:
+                        Report.tail(log, size_limit)
         # look through logs one by one until we find a stack
         for log_file in (x for x in self._logs if x is not None):
             stack = Stack.from_text(log_file.read_text("utf-8", errors="ignore"))
@@ -391,6 +393,39 @@ class Report:
             if count - ignore == suggested_frames:
                 break
         return suggested_frames + ignore
+
+    @staticmethod
+    def dedup_lines(in_file: Path) -> None:
+        """Collapse consecutive duplicate lines in a log file.
+        WARNING: This is destructive!
+
+        Args:
+            in_file: File to work with.
+
+        Returns:
+            None
+        """
+        out_fd, out_file = mkstemp(prefix="deduplog_", dir=grz_tmp())
+        prev: bytes | None = None
+        repeats = 0
+        with in_file.open("rb") as in_fp, open(out_fd, "wb") as out_fp:
+            for line in in_fp:
+                if line == prev:
+                    repeats += 1
+                    continue
+                if repeats:
+                    # suppress marker for blank/whitespace-only runs
+                    if prev is not None and prev.rstrip():
+                        out_fp.write(
+                            f"[Previous line repeated {repeats} times]\n".encode()
+                        )
+                    repeats = 0
+                out_fp.write(line)
+                prev = line
+            if repeats and prev is not None and prev.rstrip():
+                out_fp.write(f"[Previous line repeated {repeats} times]\n".encode())
+        in_file.unlink()
+        move(out_file, in_file)
 
     @staticmethod
     def _load_log(path: Path) -> list[str]:

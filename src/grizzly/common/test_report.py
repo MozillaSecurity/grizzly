@@ -75,6 +75,45 @@ def test_report_03(tmp_path):
     assert log_data[13:] == b"FOO"
 
 
+@mark.parametrize(
+    "content, expected",
+    [
+        # no duplicates -> unchanged
+        (b"alpha\nbeta\ngamma\n", b"alpha\nbeta\ngamma\n"),
+        # run in the middle
+        (
+            b"alpha\nbeta\nbeta\nbeta\ngamma\n",
+            b"alpha\nbeta\n[Previous line repeated 2 times]\ngamma\n",
+        ),
+        # run at end of file
+        (
+            b"alpha\nbeta\nbeta\n",
+            b"alpha\nbeta\n[Previous line repeated 1 times]\n",
+        ),
+        # multiple separate runs
+        (
+            b"a\na\nb\nc\nc\nc\n",
+            b"a\n[Previous line repeated 1 times]\nb\nc\n"
+            b"[Previous line repeated 2 times]\n",
+        ),
+        # empty file
+        (b"", b""),
+        # blank-line run -> collapsed without marker
+        (b"alpha\n\n\n\nbeta\n", b"alpha\n\nbeta\n"),
+        # whitespace-only run -> collapsed without marker
+        (b"alpha\n   \n   \n   \nbeta\n", b"alpha\n   \nbeta\n"),
+        # blank-line run at end of file -> no marker
+        (b"alpha\n\n\n", b"alpha\n\n"),
+    ],
+)
+def test_report_dedup_lines(tmp_path, content, expected):
+    """test Report.dedup_lines()"""
+    tmp_file = tmp_path / "file.txt"
+    tmp_file.write_bytes(content)
+    Report.dedup_lines(tmp_file)
+    assert tmp_file.read_bytes() == expected
+
+
 def test_report_04(tmp_path):
     """test Report() size_limit"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log\n" * 200)
