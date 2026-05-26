@@ -152,7 +152,6 @@ def test_main_02(mocker, server, tmp_path, fake_create_report, repro_results):
         test_index=[],
         time_limit=10,
         timeout=None,
-        use_https=False,
         valgrind=False,
     )
     assert main(args) == Exit.FAILURE
@@ -214,7 +213,6 @@ def test_main_03(mocker, load_plugin, load_testcases, signature, result):
         test_index=[],
         time_limit=10,
         timeout=None,
-        use_https=False,
         valgrind=False,
     )
     asset_mgr = load_testcases[1] if isinstance(load_testcases, tuple) else None
@@ -256,7 +254,6 @@ def test_main_04(mocker, tmp_path):
         test_index=[],
         time_limit=10,
         timeout=None,
-        use_https=False,
         valgrind=False,
     )
     # target launch error
@@ -319,7 +316,6 @@ def test_main_05(mocker, server, tmp_path, fake_create_report):
         test_index=[],
         time_limit=1,
         timeout=None,
-        use_https=False,
         valgrind=False,
     )
     # build a test case
@@ -395,7 +391,6 @@ def test_main_06(
         test_index=[],
         time_limit=10,
         timeout=None,
-        use_https=False,
         valgrind=valgrind,
     )
     # maximum one debugger allowed at a time
@@ -450,7 +445,6 @@ def test_main_07(mocker, server, tmp_path, fake_create_report):
         time_limit=10,
         timeout=None,
         tool=None,
-        use_https=False,
         valgrind=False,
     )
     assert main(args) == Exit.SUCCESS
