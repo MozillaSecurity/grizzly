@@ -1025,6 +1025,13 @@ def test_replay_29(mocker, server):
     target = mocker.Mock(spec_set=Target, closed=True, launch_timeout=30)
     sm_cls = mocker.patch("grizzly.replay.replay.ServerMap", autospec=True)
 
+    def mapped_responses():
+        # map of registered dynamic response url -> (callback, kwargs)
+        return {
+            call.args[0]: (call.args[1], call.kwargs)
+            for call in sm_cls.return_value.set_dynamic_response.call_args_list
+        }
+
     # without harness - redirects directly to current test
     with ReplayManager([], server, target, use_harness=False) as replay:
         result = replay._setup_server_map()
@@ -1032,7 +1039,8 @@ def test_replay_29(mocker, server):
     sm_cls.return_value.set_redirect.assert_called_once_with(
         "grz_start", "grz_current_test", required=False
     )
-    sm_cls.return_value.set_dynamic_response.assert_not_called()
+    # only the browser log endpoints are registered (no harness)
+    assert set(mapped_responses()) == {"grz_stderr", "grz_stdout"}
     sm_cls.reset_mock()
 
     # with harness - serves harness file and redirects to it
@@ -1040,17 +1048,18 @@ def test_replay_29(mocker, server):
         harness_content = replay._harness
         result = replay._setup_server_map()
     assert result is sm_cls.return_value
-    sm_cls.return_value.set_dynamic_response.assert_called_once()
-    name, fn = sm_cls.return_value.set_dynamic_response.call_args[0]
-    assert name == "grz_harness"
-    assert (
-        sm_cls.return_value.set_dynamic_response.call_args[1]["mime_type"]
-        == "text/html"
-    )
-    assert fn(None) == harness_content
+    responses = mapped_responses()
+    assert responses["grz_harness"][1]["mime_type"] == "text/html"
+    assert responses["grz_harness"][0](None) == harness_content
     sm_cls.return_value.set_redirect.assert_called_once_with(
         "grz_start", "grz_harness", required=False
     )
+    # browser log endpoints return the current logs as text/plain
+    for log in ("grz_stderr", "grz_stdout"):
+        assert responses[log][1]["mime_type"] == "text/plain"
+    target.read_log.return_value = b"log data"
+    assert responses["grz_stderr"][0](None) == b"log data"
+    target.read_log.assert_called_with("stderr")
     sm_cls.reset_mock()
 
     # with services - locations are mapped onto the server map
