@@ -265,6 +265,17 @@ class Target(ABC):
             Total data size of log files in bytes.
         """
 
+    def read_log(self, log_id: str) -> bytes:  # pylint: disable=unused-argument
+        """Return the current contents of a browser log (e.g. 'stdout', 'stderr').
+
+        Args:
+            log_id: Log identifier.
+
+        Returns:
+            Log contents, or empty bytes if unavailable.
+        """
+        return b""
+
     @abstractmethod
     def merge_environment(self, extra: Mapping[str, str]) -> None:
         """Add to existing environment.

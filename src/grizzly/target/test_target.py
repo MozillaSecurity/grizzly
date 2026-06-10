@@ -70,6 +70,7 @@ def test_target_01(tmp_path):
         assert target.memory_limit == 3
         # test stubs
         target.reverse(1, 2)
+        assert target.read_log("stderr") == b""
 
 
 def test_target_02(mocker, tmp_path):

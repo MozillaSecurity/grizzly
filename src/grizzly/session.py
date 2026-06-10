@@ -195,6 +195,17 @@ class Session:
             )
         if services:
             services.map_locations(self.iomanager.server_map)
+        # expose the current browser logs over HTTP
+        self.iomanager.server_map.set_dynamic_response(
+            "grz_stderr",
+            lambda _: self.target.read_log("stderr"),
+            mime_type="text/plain",
+        )
+        self.iomanager.server_map.set_dynamic_response(
+            "grz_stdout",
+            lambda _: self.target.read_log("stdout"),
+            mime_type="text/plain",
+        )
 
         log_limiter = LogOutputLimiter(rate=log_rate)
         # limit relaunch to max iterations if needed

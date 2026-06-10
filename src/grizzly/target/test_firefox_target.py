@@ -460,3 +460,20 @@ def test_firefox_target_16(mocker, tmp_path):
     )
     FirefoxTarget._get_certdb(tmp_path / "root.pem", "fake-certutil")
     assert fake_add.call_count == 1
+
+
+def test_firefox_target_17(mocker, tmp_path):
+    """test FirefoxTarget.read_log()"""
+    fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
+    with FirefoxTarget(tmp_path / "fake", 300, 25, 5000) as target:
+        # log available
+        cloned = tmp_path / "cloned.txt"
+        cloned.write_bytes(b"hello stderr")
+        fake_ffp.return_value.clone_log.return_value = cloned
+        assert target.read_log("stderr") == b"hello stderr"
+        fake_ffp.return_value.clone_log.assert_called_once_with("stderr")
+        # cloned copy is removed after reading
+        assert not cloned.is_file()
+        # log unavailable
+        fake_ffp.return_value.clone_log.return_value = None
+        assert target.read_log("stdout") == b""

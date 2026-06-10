@@ -106,6 +106,9 @@ def test_session_01(mocker, harness, profiling, coverage, relaunch, iters, runti
         assert target.close.call_count == max_iters / relaunch
         assert target.check_result.call_count == max_iters
         assert target.handle_hang.call_count == 0
+        # browser log endpoints are exposed
+        for log in ("grz_stderr", "grz_stdout"):
+            assert session.iomanager.server_map.dynamic[log].mime == "text/plain"
         if profiling:
             assert any(session.status.profile_entries()) == profiling
         else:

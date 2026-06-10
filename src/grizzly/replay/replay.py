@@ -233,6 +233,17 @@ class ReplayManager:
             server_map.set_redirect("grz_start", "grz_harness", required=False)
         if services:
             services.map_locations(server_map)
+        # expose the current browser logs over HTTP
+        server_map.set_dynamic_response(
+            "grz_stderr",
+            lambda _: self.target.read_log("stderr"),
+            mime_type="text/plain",
+        )
+        server_map.set_dynamic_response(
+            "grz_stdout",
+            lambda _: self.target.read_log("stdout"),
+            mime_type="text/plain",
+        )
         return server_map
 
     def _process_reports(

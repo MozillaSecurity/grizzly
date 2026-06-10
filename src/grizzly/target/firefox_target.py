@@ -334,6 +334,15 @@ class FirefoxTarget(Target):
                 total += length
         return total
 
+    def read_log(self, log_id: str) -> bytes:
+        cloned = self._puppet.clone_log(log_id)
+        if cloned is None:
+            return b""
+        try:
+            return cloned.read_bytes()
+        finally:
+            cloned.unlink(missing_ok=True)
+
     def merge_environment(self, extra: Mapping[str, str]) -> None:
         # use extra as base
         output = dict(extra)
