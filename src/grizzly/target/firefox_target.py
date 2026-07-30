@@ -108,6 +108,7 @@ class FirefoxTarget(Target):
         log_limit: int,
         memory_limit: int,
         certs: CertificateBundle | None = None,
+        disable_sandboxing: bool = True,
         display_mode: str = "default",
         pernosco: bool = False,
         rr: bool = False,
@@ -150,6 +151,7 @@ class FirefoxTarget(Target):
         # create FFPuppet object
         self._puppet = FFPuppet(
             debugger=self._debugger,
+            disable_sandboxing=disable_sandboxing,
             display_mode=DisplayMode[display_mode.upper()],
             use_profile=self._profile_template,
             working_path=str(grz_tmp("target")),

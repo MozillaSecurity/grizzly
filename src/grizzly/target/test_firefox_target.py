@@ -33,6 +33,8 @@ def test_firefox_target_01(mocker, tmp_path):
         fake_ffp.return_value.log_length.assert_any_call("stderr")
         fake_ffp.return_value.log_length.assert_any_call("stdout")
         assert target.monitor is not None
+        # sandboxing is disabled unless requested otherwise
+        assert fake_ffp.call_args[-1]["disable_sandboxing"]
         target.save_logs(tmp_path / "fake_dest")
         assert fake_ffp.return_value.save_logs.call_count == 1
     assert fake_ffp.return_value.clean_up.call_count == 1
@@ -477,3 +479,14 @@ def test_firefox_target_17(mocker, tmp_path):
         # log unavailable
         fake_ffp.return_value.clone_log.return_value = None
         assert target.read_log("stdout") == b""
+
+
+@mark.parametrize("disable_sandboxing", [True, False])
+def test_firefox_target_18(mocker, tmp_path, disable_sandboxing):
+    """test FirefoxTarget sandbox arg"""
+    fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
+    with FirefoxTarget(
+        tmp_path / "fake", 30, 25, 500, disable_sandboxing=disable_sandboxing
+    ) as _:
+        pass
+    assert fake_ffp.call_args[-1]["disable_sandboxing"] == disable_sandboxing
