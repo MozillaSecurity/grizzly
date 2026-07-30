@@ -777,7 +777,7 @@ def test_sapphire_29():
 
 
 @mark.parametrize(
-    "bind,",
+    "bind",
     [
         # success
         (None,),

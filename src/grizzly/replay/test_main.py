@@ -97,7 +97,7 @@ def test_main_01(mocker, server, tmp_path, fake_create_report):
 
 
 @mark.parametrize(
-    "repro_results,",
+    "repro_results",
     [
         # no results
         (Result.NONE, Result.NONE),
