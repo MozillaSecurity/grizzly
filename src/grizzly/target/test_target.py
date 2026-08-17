@@ -1,6 +1,9 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from pytest import raises
+
+from ..common.report import Report
 from .assets import AssetManager
 from .target import Target
 
@@ -68,6 +71,7 @@ def test_target_01(tmp_path):
         assert target.log_size() == 0
         assert target.log_limit == 2
         assert target.memory_limit == 3
+        assert target.report_size_limit == Report.MAX_LOG_SIZE
         # test stubs
         target.reverse(1, 2)
         assert target.read_log("stderr") == b""
@@ -91,3 +95,15 @@ def test_target_03():
     assert not Target.scan_environment({"a": "1"}, ())
     assert not Target.scan_environment({}, ("a",))
     assert Target.scan_environment({"a": "1", "b": "2"}, ("a",)) == {"a": "1"}
+
+
+def test_target_04(tmp_path):
+    """test Target report_size_limit"""
+    # override the default limit
+    with SimpleTarget(tmp_path / "fake", 10, 2, 3, report_size_limit=123) as target:
+        assert target.report_size_limit == 123
+    # zero is used to indicate 'no limit'
+    with SimpleTarget(tmp_path / "fake", 10, 2, 3, report_size_limit=0) as target:
+        assert target.report_size_limit == 0
+    with raises(AssertionError):
+        SimpleTarget(tmp_path / "fake", 10, 2, 3, report_size_limit=-1)

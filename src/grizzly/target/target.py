@@ -10,6 +10,7 @@ from os import environ
 from threading import Lock
 from typing import TYPE_CHECKING, final
 
+from ..common.report import Report
 from ..common.utils import grz_tmp
 from .assets import AssetManager
 
@@ -19,7 +20,6 @@ if TYPE_CHECKING:
 
     from sapphire import CertificateBundle
 
-    from ..common.report import Report
     from .target_monitor import TargetMonitor
 
 __all__ = ("Result", "Target", "TargetError", "TargetLaunchError")
@@ -68,6 +68,7 @@ class Target(ABC):
         "launch_timeout",
         "log_limit",
         "memory_limit",
+        "report_size_limit",
     )
 
     def __init__(
@@ -77,10 +78,12 @@ class Target(ABC):
         log_limit: int,
         memory_limit: int,
         certs: CertificateBundle | None = None,
+        report_size_limit: int = Report.MAX_LOG_SIZE,
     ) -> None:
         assert launch_timeout > 0
         assert log_limit >= 0
         assert memory_limit >= 0
+        assert report_size_limit >= 0
         assert binary is not None
         self._asset_mgr = AssetManager(base_path=grz_tmp("target"))
         self._https = False
@@ -91,6 +94,7 @@ class Target(ABC):
         self.launch_timeout = launch_timeout
         self.log_limit = log_limit
         self.memory_limit = memory_limit
+        self.report_size_limit = report_size_limit
 
     def __enter__(self) -> Target:
         return self
@@ -184,7 +188,8 @@ class Target(ABC):
 
     @abstractmethod
     def create_report(self, is_hang: bool = False, unstable: bool = False) -> Report:
-        """Process logs and create a Report.
+        """Process logs and create a Report. Log files are limited in size to
+        `report_size_limit`.
 
         Args:
             is_hang: Indicate whether the results is due to a hang/timeout.
