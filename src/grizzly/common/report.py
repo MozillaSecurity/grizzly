@@ -238,15 +238,17 @@ class Report:
         self.path = log_path
         # if a build crashes before the initial testcase is served it is unstable
         self.unstable = unstable
+        # perform line de-duping
+        for log in log_path.iterdir():
+            if log.is_file():
+                Report.dedup_lines(log)
         # tail files in log_path if needed
         if size_limit < 1:
             LOG.warning("No limit set on report log size!")
         else:
             for log in log_path.iterdir():
-                if log.is_file():
-                    Report.dedup_lines(log)
-                    if log.stat().st_size > size_limit:
-                        Report.tail(log, size_limit)
+                if log.is_file() and log.stat().st_size > size_limit:
+                    Report.tail(log, size_limit)
         # look through logs one by one until we find a stack
         for log_file in (x for x in self._logs if x is not None):
             stack = Stack.from_text(log_file.read_text("utf-8", errors="ignore"))
