@@ -11,6 +11,7 @@ from pytest import mark, raises
 
 from sapphire import CertificateBundle
 
+from ..common.report import Report
 from .assets import AssetManager
 from .firefox_target import FirefoxTarget, merge_sanitizer_options
 from .target import Result, TargetLaunchError, TargetLaunchTimeout
@@ -27,6 +28,7 @@ def test_firefox_target_01(mocker, tmp_path):
         assert target.launch_timeout == 300
         assert target.log_limit == 25
         assert target.memory_limit == 5000
+        assert target.report_size_limit == Report.MAX_LOG_SIZE
         assert target.check_result(set()) == Result.NONE
         assert not target.https()
         assert target.log_size() == 1124
@@ -490,3 +492,26 @@ def test_firefox_target_18(mocker, tmp_path, disable_sandboxing):
     ) as _:
         pass
     assert fake_ffp.call_args[-1]["disable_sandboxing"] == disable_sandboxing
+
+
+def test_firefox_target_19(mocker, tmp_path):
+    """test FirefoxTarget.create_report() log size limit"""
+    fake_ffp = mocker.patch("grizzly.target.firefox_target.FFPuppet", autospec=True)
+    entry = "STDERR log\n"
+
+    def fake_save_logs(dst):
+        (dst / "log_stderr.txt").write_text(entry * 200)
+        (dst / "log_stdout.txt").write_text(entry * 200)
+
+    fake_ffp.return_value.save_logs.side_effect = fake_save_logs
+    with FirefoxTarget(
+        tmp_path / "fake", 300, 25, 5000, report_size_limit=len(entry)
+    ) as target:
+        report = target.create_report()
+        try:
+            # tail() adds a marker on top of the given limit
+            limit = len(entry) + len(b"[LOG TAILED]\n")
+            assert report._logs.stderr.stat().st_size == limit
+            assert report._logs.stdout.stat().st_size == limit
+        finally:
+            report.cleanup()

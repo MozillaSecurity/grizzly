@@ -205,13 +205,24 @@ def test_fenix_target_create_report(mocker, tmp_path):
     )
     proc_cls = mocker.patch("grizzly.target.fenix_target.ADBProcess", autospec=True)
 
+    entry = "STDERR log\n"
+
     def fake_save_logs(dst):
-        (dst / "log_stderr.txt").write_text("foo")
-        (dst / "log_stdout.txt").write_text("foo")
+        (dst / "log_stderr.txt").write_text(entry * 200)
+        (dst / "log_stdout.txt").write_text(entry * 200)
 
     proc_cls.return_value.save_logs.side_effect = fake_save_logs
-    with FenixTarget(tmp_path / "test.apk", 300, 25, 5000) as target:
-        target.create_report()
+    with FenixTarget(
+        tmp_path / "test.apk", 300, 25, 5000, report_size_limit=len(entry)
+    ) as target:
+        report = target.create_report()
+        try:
+            # tail() adds a marker on top of the given limit
+            limit = len(entry) + len(b"[LOG TAILED]\n")
+            assert report._logs.stderr.stat().st_size == limit
+            assert report._logs.stdout.stat().st_size == limit
+        finally:
+            report.cleanup()
 
 
 def test_fenix_monitor(mocker):

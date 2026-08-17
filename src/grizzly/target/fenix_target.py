@@ -75,9 +75,16 @@ class FenixTarget(Target):
         launch_timeout: int,
         log_limit: int,
         memory_limit: int,
+        report_size_limit: int = Report.MAX_LOG_SIZE,
         **kwds: dict[str, Any],
     ) -> None:
-        super().__init__(binary, launch_timeout, log_limit, memory_limit)
+        super().__init__(
+            binary,
+            launch_timeout,
+            log_limit,
+            memory_limit,
+            report_size_limit=report_size_limit,
+        )
         # app will not close itself on Android
         self.forced_close = True
         self.use_rr = False
@@ -162,7 +169,13 @@ class FenixTarget(Target):
     def create_report(self, is_hang: bool = False, unstable: bool = False) -> Report:
         logs = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
         self.save_logs(logs)
-        return Report(logs, self.binary, is_hang=is_hang, unstable=unstable)
+        return Report(
+            logs,
+            self.binary,
+            is_hang=is_hang,
+            size_limit=self.report_size_limit,
+            unstable=unstable,
+        )
 
     def dump_coverage(self, timeout: int = 0) -> None:
         raise NotImplementedError()

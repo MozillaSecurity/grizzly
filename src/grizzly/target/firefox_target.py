@@ -111,6 +111,7 @@ class FirefoxTarget(Target):
         disable_sandboxing: bool = True,
         display_mode: str = "default",
         pernosco: bool = False,
+        report_size_limit: int = Report.MAX_LOG_SIZE,
         rr: bool = False,
         valgrind: bool = False,
         **kwds: dict[str, Any],
@@ -120,6 +121,7 @@ class FirefoxTarget(Target):
             launch_timeout,
             log_limit,
             memory_limit,
+            report_size_limit=report_size_limit,
         )
         LOG.debug("ffpuppet version: %s", package_version("ffpuppet"))
         # only pass certs to FFPuppet if certutil is available
@@ -210,7 +212,13 @@ class FirefoxTarget(Target):
     def create_report(self, is_hang: bool = False, unstable: bool = False) -> Report:
         logs = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
         self.save_logs(logs)
-        return Report(logs, self.binary, is_hang=is_hang, unstable=unstable)
+        return Report(
+            logs,
+            self.binary,
+            is_hang=is_hang,
+            size_limit=self.report_size_limit,
+            unstable=unstable,
+        )
 
     def filtered_environ(self) -> dict[str, str]:
         # remove context specific entries from environment
