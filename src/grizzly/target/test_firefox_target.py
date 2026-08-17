@@ -11,7 +11,7 @@ from pytest import mark, raises
 
 from sapphire import CertificateBundle
 
-from ..common.report import Report
+from ..common.report import MAX_LOG_SIZE
 from .assets import AssetManager
 from .firefox_target import FirefoxTarget, merge_sanitizer_options
 from .target import Result, TargetLaunchError, TargetLaunchTimeout
@@ -28,7 +28,7 @@ def test_firefox_target_01(mocker, tmp_path):
         assert target.launch_timeout == 300
         assert target.log_limit == 25
         assert target.memory_limit == 5000
-        assert target.report_size_limit == Report.MAX_LOG_SIZE
+        assert target.report_size_limit == MAX_LOG_SIZE
         assert target.check_result(set()) == Result.NONE
         assert not target.https()
         assert target.log_size() == 1124
