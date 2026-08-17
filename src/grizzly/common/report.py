@@ -30,6 +30,11 @@ __credits__ = ["Tyson Smith"]
 
 LOG = getLogger(__name__)
 
+DEFAULT_MAJOR = "NO_STACK"
+DEFAULT_MINOR = "NO_STACK"
+HANG_STACK_HEIGHT = 10
+MAX_LOG_SIZE = 1_048_576  # 1MB
+
 
 class LogMap:
     """Container mapping the three standard log file paths (aux, stderr, stdout)
@@ -201,11 +206,6 @@ class LogMap:
 class Report:
     """A crash report."""
 
-    DEFAULT_MAJOR = "NO_STACK"
-    DEFAULT_MINOR = "NO_STACK"
-    HANG_STACK_HEIGHT = 10
-    MAX_LOG_SIZE = 1_048_576  # 1MB
-
     __slots__ = (
         "_crash_info",
         "_logs",
@@ -256,12 +256,12 @@ class Report:
                 assert stack.minor is not None
                 # limit the hash calculations to the first n frames if a hang
                 # was detected to attempt to help local bucketing
-                stack.height_limit = self.HANG_STACK_HEIGHT if is_hang else 0
+                stack.height_limit = HANG_STACK_HEIGHT if is_hang else 0
                 self.prefix = f"{stack.minor[:8]}_{strftime('%Y-%m-%d_%H-%M-%S')}"
                 self.stack: Stack | None = stack
                 break
         else:
-            self.prefix = f"{self.DEFAULT_MINOR}_{strftime('%Y-%m-%d_%H-%M-%S')}"
+            self.prefix = f"{DEFAULT_MINOR}_{strftime('%Y-%m-%d_%H-%M-%S')}"
             self.stack = None
 
     @staticmethod
@@ -469,7 +469,7 @@ class Report:
         """
         if self.stack and self.stack.major is not None:
             return self.stack.major
-        return self.DEFAULT_MAJOR
+        return DEFAULT_MAJOR
 
     @property
     def minor(self) -> str:
@@ -483,7 +483,7 @@ class Report:
         """
         if self.stack and self.stack.minor is not None:
             return self.stack.minor
-        return self.DEFAULT_MINOR
+        return DEFAULT_MINOR
 
     @property
     def preferred(self) -> Path | None:

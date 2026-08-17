@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from pytest import raises
 
-from ..common.report import Report
+from ..common.report import MAX_LOG_SIZE
 from .assets import AssetManager
 from .target import Target
 
@@ -71,7 +71,7 @@ def test_target_01(tmp_path):
         assert target.log_size() == 0
         assert target.log_limit == 2
         assert target.memory_limit == 3
-        assert target.report_size_limit == Report.MAX_LOG_SIZE
+        assert target.report_size_limit == MAX_LOG_SIZE
         # test stubs
         target.reverse(1, 2)
         assert target.read_log("stderr") == b""

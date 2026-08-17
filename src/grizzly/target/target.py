@@ -10,7 +10,7 @@ from os import environ
 from threading import Lock
 from typing import TYPE_CHECKING, final
 
-from ..common.report import Report
+from ..common.report import MAX_LOG_SIZE, Report
 from ..common.utils import grz_tmp
 from .assets import AssetManager
 
@@ -78,7 +78,7 @@ class Target(ABC):
         log_limit: int,
         memory_limit: int,
         certs: CertificateBundle | None = None,
-        report_size_limit: int = Report.MAX_LOG_SIZE,
+        report_size_limit: int = MAX_LOG_SIZE,
     ) -> None:
         assert launch_timeout > 0
         assert log_limit >= 0

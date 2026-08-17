@@ -14,7 +14,7 @@ from fxpoppet.adb_session import ADBSession, ADBSessionError
 from fxpoppet.adb_wrapper import ADBWrapper
 from prefpicker import PrefPicker
 
-from ..common.report import Report
+from ..common.report import MAX_LOG_SIZE, Report
 from ..common.utils import grz_tmp
 from .firefox_target import merge_sanitizer_options
 from .target import Result, Target, TargetLaunchError
@@ -75,7 +75,7 @@ class FenixTarget(Target):
         launch_timeout: int,
         log_limit: int,
         memory_limit: int,
-        report_size_limit: int = Report.MAX_LOG_SIZE,
+        report_size_limit: int = MAX_LOG_SIZE,
         **kwds: dict[str, Any],
     ) -> None:
         super().__init__(

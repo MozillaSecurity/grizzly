@@ -9,7 +9,7 @@ from pathlib import Path
 from FTB.Signatures.CrashInfo import CrashInfo, TraceParsingError
 from pytest import mark, raises
 
-from .report import LogMap, Report
+from .report import DEFAULT_MAJOR, DEFAULT_MINOR, LogMap, Report
 
 
 def _create_crash_log(log_path):
@@ -34,8 +34,8 @@ def test_report_01(tmp_path):
     assert report._logs.stdout.name == "log_stdout.txt"
     assert report.preferred.name == "log_stderr.txt"
     assert report.stack is None
-    assert report.major == Report.DEFAULT_MAJOR
-    assert report.minor == Report.DEFAULT_MINOR
+    assert report.major == DEFAULT_MAJOR
+    assert report.minor == DEFAULT_MINOR
     assert report.prefix is not None
     report.cleanup()
     assert not tmp_path.exists()
@@ -54,8 +54,8 @@ def test_report_02(tmp_path):
     assert report._logs.stdout.name == "log_stdout.txt"
     assert report.preferred.name == "log_asan_blah.txt"
     assert report.stack is not None
-    assert report.major != Report.DEFAULT_MAJOR
-    assert report.minor != Report.DEFAULT_MINOR
+    assert report.major != DEFAULT_MAJOR
+    assert report.minor != DEFAULT_MINOR
     assert report.prefix is not None
     report.cleanup()
 
