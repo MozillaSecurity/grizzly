@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 LOG = getLogger(__name__)
 DEFAULT_STRATEGIES = (
     "list",
+    "deproxy",
     "lines",
     "css-merge",
     "cssbeautify",
