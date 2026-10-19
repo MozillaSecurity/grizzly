@@ -101,7 +101,7 @@ def create_listening_socket(
             sock.listen(5)
             # put socket in non-blocking mode
             sock.settimeout(0)
-        except (OSError, PermissionError) as exc:
+        except OSError as exc:
             sock.close()
             if remaining > 0:
                 LOG.debug("%s: %s", type(exc).__name__, exc)
