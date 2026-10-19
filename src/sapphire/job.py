@@ -190,7 +190,10 @@ class Job:
             if path in self.server_map.dynamic:
                 return self.server_map.dynamic[path]
             # search include paths for a match
-            for inc in (x for x in self.server_map.include if path.startswith(x)):
+            for inc in self.server_map.include:
+                # only match complete path segments
+                if inc and path != inc and not path.startswith(f"{inc}/"):
+                    continue
                 LOG.debug("checking include '%s'", inc)
                 # strip include prefix from potential file name
                 file = path[len(inc) :].lstrip("/")

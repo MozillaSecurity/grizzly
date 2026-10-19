@@ -198,6 +198,11 @@ def test_job_05(tmp_path):
     assert resource.target == inc_file1
     # test checking only the include url
     assert job.lookup_resource("inc_url") is None
+    # test url that only shares a prefix with the include url
+    (inc_dir / "rl").mkdir()
+    (inc_dir / "rl" / "x.js").write_bytes(b"a")
+    assert job.lookup_resource("inc_url/rl/x.js") is not None
+    assert job.lookup_resource("inc_urlrl/x.js") is None
     # file and include file collision (files should always win)
     smap.include.clear()
     inc_a = inc_dir / "a.bin"
