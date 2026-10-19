@@ -29,6 +29,13 @@ __credits__ = ["Tyson Smith"]
 
 LOG = getLogger(__name__)
 
+# headers included in all responses
+_COMMON_HEADERS = (
+    "Connection: close\r\n"
+    "Cross-Origin-Embedder-Policy: require-corp\r\n"
+    "Cross-Origin-Opener-Policy: same-origin\r\n"
+)
+
 
 class Request:
     REQ_PATTERN = re_compile(rb"^(?P<method>\w+)\s(?P<url>\S+)\sHTTP/1")
@@ -87,9 +94,7 @@ class Worker:
             "Cache-Control: max-age=0, no-cache\r\n"
             f"Content-Length: {c_length}\r\n"
             f"Content-Type: {c_type}\r\n"
-            "Connection: close\r\n"
-            "Cross-Origin-Embedder-Policy: require-corp\r\n"
-            "Cross-Origin-Opener-Policy: same-origin\r\n\r\n"
+            f"{_COMMON_HEADERS}\r\n"
         )
         return data.encode(encoding="ascii")
 
@@ -98,9 +103,7 @@ class Worker:
         data = (
             "HTTP/1.1 307 Temporary Redirect\r\n"
             f"Location: {redirect_to}\r\n"
-            "Connection: close\r\n"
-            "Cross-Origin-Embedder-Policy: require-corp\r\n"
-            "Cross-Origin-Opener-Policy: same-origin\r\n\r\n"
+            f"{_COMMON_HEADERS}\r\n"
         )
         return data.encode(encoding="ascii")
 
@@ -122,9 +125,7 @@ class Worker:
             f"HTTP/1.1 {code} {hdr_msg}\r\n"
             f"Content-Length: {len(content)}\r\n"
             "Content-Type: text/html\r\n"
-            "Connection: close\r\n"
-            "Cross-Origin-Embedder-Policy: require-corp\r\n"
-            f"Cross-Origin-Opener-Policy: same-origin\r\n\r\n{content}"
+            f"{_COMMON_HEADERS}\r\n{content}"
         )
         return data.encode(encoding="ascii")
 
