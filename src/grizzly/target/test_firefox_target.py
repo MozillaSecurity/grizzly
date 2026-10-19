@@ -238,7 +238,7 @@ def test_firefox_target_09(
     mocker,
     tmp_path,
     pernosco,
-    rr,  # pylint: disable=invalid-name
+    rr,
     valgrind,
 ):
     """test FirefoxTarget debugger args"""

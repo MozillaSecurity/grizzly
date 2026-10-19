@@ -883,7 +883,6 @@ def test_include_assets_and_environ_other_crashes(mocker, tmp_path):
 
     other_submit_calls = []
 
-    # pylint: disable=unused-argument
     def submit(test_cases, report, force=False):
         assert test_cases
         assert isinstance(report, Report)
@@ -951,7 +950,6 @@ def test_include_assets_and_environ_analysis_other_crashes(mocker, tmp_path):
 
     other_submit_calls = []
 
-    # pylint: disable=unused-argument
     def submit(test_cases, report, force=False):
         assert test_cases
         assert isinstance(report, Report)

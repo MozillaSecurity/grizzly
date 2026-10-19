@@ -98,7 +98,6 @@ def test_fenix_target_launch_failure(mocker, tmp_path):
 )
 def test_fenix_target_simple(mocker, tmp_path, kwargs):
     """test creating a simple FenixTarget"""
-    # pylint: disable=protected-access
     mocker.patch(
         "grizzly.target.fenix_target.ADBWrapper.devices",
         return_value={"fake-1234": "device"},
