@@ -178,7 +178,7 @@ class FenixTarget(Target):
         )
 
     def dump_coverage(self, timeout: int = 0) -> None:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def handle_hang(
         self, ignore_idle: bool = True, ignore_timeout: bool = False
