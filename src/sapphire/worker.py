@@ -243,10 +243,8 @@ class Worker:
                 )
                 with resource.target.open("rb") as in_fp:
                     conn.sendall(cls._200_header(data_size, resource.mime))
-                    offset = 0
-                    while offset < data_size:
-                        conn.sendall(in_fp.read(cls.DEFAULT_TX_SIZE))
-                        offset = in_fp.tell()
+                    while chunk := in_fp.read(cls.DEFAULT_TX_SIZE):
+                        conn.sendall(chunk)
                 LOG.debug("200 '%s' (%d to go)", request.url.path, serv_job.pending)
                 serv_job.mark_served(resource)
 

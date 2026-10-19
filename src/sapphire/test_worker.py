@@ -108,6 +108,30 @@ def test_worker_04(mocker, tmp_path, url):
     assert clnt_sock.close.call_count == 1
 
 
+def test_worker_file_truncated(mocker, tmp_path):
+    """test Worker.launch() serving a file that is truncated while sending"""
+    test_file = tmp_path / "testfile"
+    test_file.write_bytes(b"a" * Worker.DEFAULT_TX_SIZE * 2)
+    job = Job(tmp_path, required_files=["testfile"])
+    clnt_sock = mocker.Mock(spec_set=socket.socket)
+    clnt_sock.recv.return_value = b"GET /testfile HTTP/1.1"
+    # truncate the file after the header is sent
+    clnt_sock.sendall.side_effect = lambda _: test_file.write_bytes(b"")
+    serv_sock = mocker.Mock(spec_set=socket.socket)
+    serv_sock.accept.return_value = (clnt_sock, None)
+    mocker.patch("sapphire.worker.select", return_value=([serv_sock], None, None))
+    worker = Worker.launch(serv_sock, job)
+    assert worker is not None
+    try:
+        assert job.is_complete(wait=1)
+    finally:
+        worker.close()
+        if not job.exceptions.empty():
+            raise job.exceptions.get()[1]
+    assert worker.join(timeout=10)
+    assert clnt_sock.sendall.call_count == 1
+
+
 @mark.parametrize(
     "req, response",
     [
