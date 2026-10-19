@@ -454,7 +454,7 @@ class StatusReporter(BaseReporter):
             # results
             if report.results.total:
                 # avoid divide by zero if results are found before first update
-                iters = report.iteration if report.iteration else report.results.total
+                iters = report.iteration or report.results.total
                 result_pct = report.results.total / iters * 100
                 if any(
                     report.results.blockers(iters, iters_per_result=iters_per_result)
