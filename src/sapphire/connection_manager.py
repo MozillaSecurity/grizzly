@@ -90,13 +90,10 @@ class ConnectionManager:
         """
         self._job.finish()
         if not self._job.exceptions.empty():
-            exc_type, exc_obj, exc_tb = self._job.exceptions.get()
-            LOG.error(
-                "Unexpected exception:\n%s",
-                "".join(format_exception(exc_type, exc_obj, exc_tb)),
-            )
+            exc = self._job.exceptions.get()
+            LOG.error("Unexpected exception:\n%s", "".join(format_exception(exc)))
             # re-raise exception from worker once all workers are closed
-            raise exc_obj
+            raise exc
 
     @staticmethod
     def _join_workers(workers: list[Worker], timeout: float = 0) -> list[Worker]:

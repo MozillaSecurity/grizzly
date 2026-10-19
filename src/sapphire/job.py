@@ -16,7 +16,7 @@ from os.path import splitext
 from queue import Queue
 from threading import Event, Lock
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from .server_map import DynamicResource, FileResource, RedirectResource, ServerMap
 
@@ -92,7 +92,7 @@ class Job:
         self.accepting = Event()
         self.accepting.set()
         self.auto_close = auto_close
-        self.exceptions: Queue[tuple[Any, Any, Any]] = Queue()
+        self.exceptions: Queue[Exception] = Queue()
         self.forever = forever
         self.server_map = server_map
         self.worker_complete = Event()
