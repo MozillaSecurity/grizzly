@@ -14,14 +14,12 @@ from socket import SHUT_RDWR, socket
 from threading import Thread, ThreadError, active_count
 from time import sleep
 from typing import TYPE_CHECKING
-from urllib.parse import ParseResult, quote, unquote, urlparse
+from urllib.parse import SplitResult, quote, unquote, urlsplit
 
 from .server_map import DynamicResource, FileResource, RedirectResource
 
 if TYPE_CHECKING:
     from .job import Job
-
-# TODO: urlparse -> urlsplit
 
 
 __author__ = "Tyson Smith"
@@ -42,7 +40,7 @@ class Request:
 
     __slots__ = ("method", "url")
 
-    def __init__(self, method: str, url: ParseResult) -> None:
+    def __init__(self, method: str, url: SplitResult) -> None:
         self.method = method
         self.url = url
 
@@ -57,7 +55,7 @@ class Request:
 
         raw_url = req_match.group("url")
         try:
-            url = urlparse(unquote(raw_url))
+            url = urlsplit(unquote(raw_url))
         except ValueError as exc:
             msg = str(exc)
             if (
