@@ -188,7 +188,9 @@ class Worker:
                     finish_job = serv_job.remove_pending(request.url.path.lstrip("/"))
                 else:  # pragma: no cover
                     # this should never happen
-                    raise WorkerError(f"Unknown resource type {resource.type!r}")
+                    raise WorkerError(
+                        f"Unknown resource type {type(resource).__name__!r}"
+                    )
                 if serv_job.forever:
                     finish_job = False
 
