@@ -151,7 +151,8 @@ class Job:
             Mime type of URL. 'application/octet-stream' is returned if the mime
             type cannot be determined.
         """
-        mime = cls.MIME_MAP.get(splitext(url)[-1].lower())
+        # url is not a filesystem path
+        mime = cls.MIME_MAP.get(splitext(url)[-1].lower())  # noqa: PTH122
         if mime is None:
             # default to "application/octet-stream"
             mime = guess_type(url)[0] or "application/octet-stream"

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from hashlib import sha1
 from logging import getLogger
-from os import SEEK_END
+from os import SEEK_END, fdopen
 from pathlib import Path
 from platform import machine, system
 from re import DOTALL, VERBOSE
@@ -410,7 +410,7 @@ class Report:
         out_fd, out_file = mkstemp(prefix="deduplog_", dir=grz_tmp())
         prev: bytes | None = None
         repeats = 0
-        with in_file.open("rb") as in_fp, open(out_fd, "wb") as out_fp:
+        with in_file.open("rb") as in_fp, fdopen(out_fd, "wb") as out_fp:
             for line in in_fp:
                 if line == prev:
                     repeats += 1
@@ -539,7 +539,7 @@ class Report:
             dump_pos = end - size_limit
             in_fp.seek(dump_pos)
             out_fd, out_file = mkstemp(prefix="taillog_", dir=grz_tmp())
-            with open(out_fd, "wb") as out_fp:
+            with fdopen(out_fd, "wb") as out_fp:
                 out_fp.write(b"[LOG TAILED]\n")
                 copyfileobj(in_fp, out_fp, 65536)
         in_file.unlink()
