@@ -700,7 +700,7 @@ def test_report_02(mocker, tmp_path):
             testcases = [TestCase.load(tmp_path / "test.html")]
             assert testcases
             yield testcases
-        raise KeyboardInterrupt()
+        raise KeyboardInterrupt
 
     fake_strat.return_value.__iter__.side_effect = fake_iter
     mocker.patch("grizzly.reduce.core.STRATEGIES", new={"fake": fake_strat})

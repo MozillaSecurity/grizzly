@@ -82,6 +82,8 @@ select = [
     "I",
     # Perflint
     "PERF",
+    # flake8-raise
+    "RSE",
     # Ruff-specific rules
     "RUF",
     # flake8-simplify
