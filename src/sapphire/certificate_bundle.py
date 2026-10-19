@@ -12,7 +12,6 @@ from shutil import rmtree
 from tempfile import mkdtemp
 
 from cryptography import x509
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
 from cryptography.x509.oid import NameOID
@@ -25,11 +24,8 @@ def generate_certificates(cert_dir: Path) -> dict[str, Path]:
 
     Credit to https://stackoverflow.com/a/56292132
     """
-    root_key = generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-        backend=default_backend(),
-    )
+    now = datetime.now(timezone.utc)
+    root_key = generate_private_key(public_exponent=65537, key_size=2048)
     root_sub = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Grizzly Root CA")])
     root_cert = (
         x509.CertificateBuilder()
@@ -38,17 +34,13 @@ def generate_certificates(cert_dir: Path) -> dict[str, Path]:
         .public_key(root_key.public_key())
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc))
-        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=30))
-        .sign(root_key, hashes.SHA256(), default_backend())
+        .not_valid_before(now)
+        .not_valid_after(now + timedelta(days=30))
+        .sign(root_key, hashes.SHA256())
     )
 
     # Now we want to generate a cert from that root
-    host_key = generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-        backend=default_backend(),
-    )
+    host_key = generate_private_key(public_exponent=65537, key_size=2048)
     host_sub = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Grizzly Test Cert")])
     host_cert = (
         x509.CertificateBuilder()
@@ -56,8 +48,8 @@ def generate_certificates(cert_dir: Path) -> dict[str, Path]:
         .issuer_name(root_cert.issuer)
         .public_key(host_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc))
-        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=30))
+        .not_valid_before(now)
+        .not_valid_after(now + timedelta(days=30))
         .add_extension(
             x509.SubjectAlternativeName(
                 [
@@ -67,7 +59,7 @@ def generate_certificates(cert_dir: Path) -> dict[str, Path]:
             ),
             critical=False,
         )
-        .sign(root_key, hashes.SHA256(), default_backend())
+        .sign(root_key, hashes.SHA256())
     )
 
     root_file = cert_dir / "root.pem"
