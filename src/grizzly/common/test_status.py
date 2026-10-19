@@ -574,7 +574,7 @@ def test_report_counter_01(tmp_path, keys, counts, limit):
     """test ResultCounter functionality"""
     db_path = tmp_path / "storage.db"
     counter = ResultCounter(1, db_path, report_limit=limit)
-    for report_id, counted in zip(keys, counts):
+    for report_id, counted in zip(keys, counts, strict=True):
         assert counter.get(report_id) == ResultEntry(report_id, 0, None)
         assert not counter.is_frequent(report_id)
         # call count() with report_id 'counted' times

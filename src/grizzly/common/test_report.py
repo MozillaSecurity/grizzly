@@ -170,8 +170,7 @@ def test_report_06(mocker, tmp_path):
     (tmp_path / "log_stdout.txt").write_bytes(b"STDOUT log")
     _create_crash_log(tmp_path / "log_asan_blah.txt")
     with raises(TraceParsingError):
-        # pylint: disable=expression-not-assigned
-        Report(tmp_path, Path("bin")).crash_info
+        _ = Report(tmp_path, Path("bin")).crash_info
 
 
 @mark.parametrize(

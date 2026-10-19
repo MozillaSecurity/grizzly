@@ -25,7 +25,7 @@ def test_bucket_01(mocker):
     assert coll.return_value.get.call_count == 0
     assert bucket.testcase == "data"
     with raises(AttributeError):
-        getattr(bucket, "other")
+        _ = bucket.other
     assert coll.return_value.get.call_count == 1
 
 
@@ -123,7 +123,7 @@ def test_crash_01(mocker):
     assert coll.return_value.get.call_count == 0
     assert crash.testcase == "data"
     with raises(AttributeError):
-        getattr(crash, "other")
+        _ = crash.other
     assert coll.return_value.get.call_count == 1
     assert coll.return_value.get.call_args[1]["params"] == {"include_raw": "0"}
 
@@ -154,9 +154,9 @@ def test_crash_02(mocker):
     assert coll.return_value.get.call_count == 0
     assert coll.return_value.patch.call_count == 1
     with raises(AttributeError):
-        getattr(crash, "testcase_quality")
+        _ = crash.testcase_quality
     assert coll.return_value.get.call_count == 1
-    getattr(crash, "testcase")
+    _ = crash.testcase
     assert coll.return_value.get.call_count == 1
     crash.testcase_quality = 10
     assert coll.return_value.patch.call_count == 2
