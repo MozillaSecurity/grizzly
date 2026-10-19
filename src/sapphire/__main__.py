@@ -57,6 +57,11 @@ def parse_args(argv: list[str] | None = None) -> Namespace:
     return args
 
 
-ARGS = parse_args()
-configure_logging(ARGS.log_level)
-Sapphire.main(ARGS)
+def main() -> None:
+    args = parse_args()
+    configure_logging(args.log_level)
+    Sapphire.main(args)
+
+
+if __name__ == "__main__":
+    main()
