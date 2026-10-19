@@ -74,6 +74,8 @@ select = [
     "C4",
     # pycodestyle
     "E",
+    # flake8-executable
+    "EXE",
     # Pyflakes
     "F",
     # Flynt
