@@ -172,41 +172,44 @@ def test_worker_06(mocker):
     assert serv_con.close.call_count == 1
 
 
-def test_response_data_01():
-    """test _200_header()"""
-    output = Worker._200_header(10, "text/html")
-    assert b"Content-Length: 10" in output
-    assert b"Content-Type: text/html" in output
-    assert b"Cross-Origin-Embedder-Policy: require-corp" in output
-    assert b"Cross-Origin-Opener-Policy: same-origin" in output
-
-
-def test_response_data_02():
-    """test _307_redirect()"""
-    output = Worker._307_redirect("http://some.test.url")
-    assert b"Location: http://some.test.url" in output
-    assert b"Cross-Origin-Embedder-Policy: require-corp" in output
-    assert b"Cross-Origin-Opener-Policy: same-origin" in output
-
-
-def test_response_data_03():
-    """test _4xx_page() without close timeout"""
-    output = Worker._4xx_page(400, "Bad Request")
-    assert b"Content-Length: " in output
-    assert b"HTTP/1.1 400 Bad Request" in output
-    assert b"400!" in output
-    assert b"Cross-Origin-Embedder-Policy: require-corp" in output
-    assert b"Cross-Origin-Opener-Policy: same-origin" in output
-
-
-def test_response_data_04():
-    """test _4xx_page() with close timeout"""
-    output = Worker._4xx_page(404, "Not Found", close=10)
-    assert b"Content-Length: " in output
-    assert b"HTTP/1.1 404 Not Found" in output
-    assert b"window.onload = () => { window.setTimeout(window.close, 10000) }" in output
-    assert b"Cross-Origin-Embedder-Policy: require-corp" in output
-    assert b"Cross-Origin-Opener-Policy: same-origin" in output
+@mark.parametrize(
+    "output, expected",
+    [
+        # _200_header()
+        (
+            Worker._200_header(10, "text/html"),
+            (b"HTTP/1.1 200 OK", b"Content-Length: 10", b"Content-Type: text/html"),
+        ),
+        # _307_redirect()
+        (
+            Worker._307_redirect("http://some.test.url"),
+            (b"HTTP/1.1 307 Temporary Redirect", b"Location: http://some.test.url"),
+        ),
+        # _4xx_page() without close timeout
+        (
+            Worker._4xx_page(400, "Bad Request"),
+            (b"HTTP/1.1 400 Bad Request", b"Content-Length: ", b"400!"),
+        ),
+        # _4xx_page() with close timeout
+        (
+            Worker._4xx_page(404, "Not Found", close=10),
+            (
+                b"HTTP/1.1 404 Not Found",
+                b"Content-Length: ",
+                b"window.onload = () => { window.setTimeout(window.close, 10000) }",
+            ),
+        ),
+    ],
+)
+def test_response_data(output, expected):
+    """test response data generation"""
+    for value in expected:
+        assert value in output
+    # common headers
+    assert b"Connection: close\r\n" in output
+    assert b"Cross-Origin-Embedder-Policy: require-corp\r\n" in output
+    assert b"Cross-Origin-Opener-Policy: same-origin\r\n" in output
+    assert b"\r\n\r\n" in output
 
 
 @mark.parametrize(
