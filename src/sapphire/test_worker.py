@@ -101,7 +101,7 @@ def test_worker_04(mocker, tmp_path, url):
     finally:
         worker.close()
         if not job.exceptions.empty():
-            raise job.exceptions.get()[1]
+            raise job.exceptions.get()
     assert worker.join(timeout=10)
     assert clnt_sock.sendall.called
     assert serv_sock.accept.call_count == 1
@@ -127,7 +127,7 @@ def test_worker_file_truncated(mocker, tmp_path):
     finally:
         worker.close()
         if not job.exceptions.empty():
-            raise job.exceptions.get()[1]
+            raise job.exceptions.get()
     assert worker.join(timeout=10)
     assert clnt_sock.sendall.call_count == 1
 
@@ -153,7 +153,7 @@ def test_worker_05(mocker, tmp_path, req, response):
     assert worker.join(timeout=10)
     worker.close()
     if not job.exceptions.empty():
-        raise job.exceptions.get()[1]
+        raise job.exceptions.get()
     assert serv_sock.accept.call_count == 1
     assert clnt_sock.close.call_count == 1
     assert clnt_sock.sendall.called

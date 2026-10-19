@@ -11,7 +11,6 @@ from logging import getLogger
 from re import compile as re_compile
 from select import select
 from socket import SHUT_RDWR, socket
-from sys import exc_info
 from threading import Thread, ThreadError, active_count
 from time import sleep
 from typing import TYPE_CHECKING
@@ -250,18 +249,18 @@ class Worker:
                 LOG.debug("200 '%s' (%d to go)", request.url.path, serv_job.pending)
                 serv_job.mark_served(resource)
 
-        except (TimeoutError, OSError):
-            _, exc_obj, exc_tb = exc_info()
-            LOG.debug("%r - line %r", exc_obj, exc_tb.tb_lineno if exc_tb else None)
+        except OSError as exc:
+            exc_tb = exc.__traceback__
+            LOG.debug("%r - line %r", exc, exc_tb.tb_lineno if exc_tb else None)
             if not finish_job:
                 serv_job.accepting.set()
 
-        except Exception:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except
             LOG.debug("worker thread exception")
             # set finish_job to abort immediately
             finish_job = True
             if serv_job.exceptions.empty():
-                serv_job.exceptions.put(exc_info())
+                serv_job.exceptions.put(exc)
 
         finally:
             conn.close()

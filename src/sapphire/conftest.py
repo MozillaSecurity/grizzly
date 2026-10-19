@@ -9,7 +9,6 @@ from http.client import BadStatusLine
 from logging import getLogger
 from random import shuffle
 from re import match
-from sys import exc_info
 from threading import Event, Thread
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
@@ -176,14 +175,14 @@ def client_factory():
                         t_file.requested += 1
                         if not skip_served or t_file.code is None:
                             t_file.code = HTTPStatus(http_err.code)
-                except (BadStatusLine, OSError, URLError):
-                    exc_type, exc_obj, exc_tb = exc_info()
+                except (BadStatusLine, OSError, URLError) as exc:
+                    exc_tb = exc.__traceback__
                     # set code to HTTPStatus.INTERNAL_SERVER_ERROR to help testing
                     with t_file.lock:
                         LOG.debug(
                             "%s - %s - line %r (processing: %s)",
-                            exc_type.__name__,
-                            exc_obj,
+                            type(exc).__name__,
+                            exc,
                             exc_tb.tb_lineno if exc_tb else None,
                             t_file.file,
                         )
