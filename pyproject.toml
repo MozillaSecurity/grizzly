@@ -78,6 +78,8 @@ select = [
     "F",
     # Flynt
     "FLY",
+    # refurb
+    "FURB",
     # isort
     "I",
     # Perflint
