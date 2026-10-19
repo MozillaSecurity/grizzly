@@ -38,7 +38,7 @@ def check_depth(soup: BeautifulSoup, max_depth: int) -> bool:
     return not any(sum(1 for _ in tag.parents) > max_depth for tag in soup.find_all())
 
 
-class BeautifulSoupStrategy(Strategy):
+class BeautifulSoupStrategy(Strategy):  # pylint: disable=abstract-method
     all_extensions = frozenset((".htm", ".html", ".xhtml", ".svg"))
     depth_limit = 100
     import_available = HAVE_BEAUTIFULSOUP
