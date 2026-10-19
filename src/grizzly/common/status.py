@@ -382,7 +382,7 @@ class ResultCounter(SimpleResultCounter):
             self._frequent.add(result_id)
 
 
-class BaseStatus(ABC):
+class BaseStatus(ABC):  # noqa: B024
     """Record and manage status information.
 
     Attributes:

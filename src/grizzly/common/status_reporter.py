@@ -623,7 +623,9 @@ class _TableFormatter:
         """
         assert len(column_names) == len(formatters)
         self._columns = tuple(
-            column for (column, fmt) in zip(column_names, formatters) if fmt is not None
+            column
+            for (column, fmt) in zip(column_names, formatters, strict=True)
+            if fmt is not None
         )
         self._formatters = formatters
         self._vsep = vsep
@@ -646,7 +648,9 @@ class _TableFormatter:
             assert len(data) == len(self._formatters)
             formatted.append([])
             offset = 0
-            for idx, (datum, formatter) in enumerate(zip(data, self._formatters)):
+            for idx, (datum, formatter) in enumerate(
+                zip(data, self._formatters, strict=True)
+            ):
                 if formatter is None:
                     offset += 1
                     continue
