@@ -73,7 +73,7 @@ class ConnectionManager:
             LOG.debug("continue_cb() returned False")
             return False
         # check for a timeout
-        if self._deadline and self._deadline <= now:
+        if self._deadline is not None and self._deadline <= now:
             LOG.debug("exceeded serve deadline")
             self._deadline_exceeded = True
             return False
@@ -182,8 +182,9 @@ class ConnectionManager:
                 for worker in workers:
                     worker.close()
                 # join remaining workers
-                if self._join_workers(workers, timeout=30):
-                    LOG.error("Failed to close %d workers", len(workers))
+                failed = self._join_workers(workers, timeout=30)
+                if failed:
+                    LOG.error("Failed to close %d workers", len(failed))
                     raise RuntimeError("Failed to close workers")
 
         # return False only if there was a timeout
