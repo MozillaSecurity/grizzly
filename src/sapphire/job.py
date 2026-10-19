@@ -133,9 +133,9 @@ class Job:
                         "required: '%s' -> '%s'",
                         url,
                         (
-                            "<dynamic resource>"
-                            if isinstance(resource, DynamicResource)
-                            else resource.target  # type: ignore[attr-defined]
+                            resource.target
+                            if isinstance(resource, RedirectResource)
+                            else "<dynamic resource>"
                         ),
                     )
         LOG.debug("job has %d required file(s)", len(self._pending.files))
