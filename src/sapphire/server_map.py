@@ -125,7 +125,7 @@ class ServerMap:
         if not isinstance(target, str):
             raise TypeError("target must be of type 'str'")
         if not target:
-            raise TypeError("target must not be an empty string")
+            raise ValueError("target must not be an empty string")
         if url in self.dynamic or url in self.include:
             raise MapCollisionError(f"URL collision on '{url}'")
         self.redirect[url] = RedirectResource(url, required, target)

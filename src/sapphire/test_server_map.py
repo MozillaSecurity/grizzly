@@ -101,7 +101,7 @@ def test_servermap_04(tmp_path):
     assert not srv_map.redirect["url_02"].required
     assert not srv_map.dynamic
     assert not srv_map.include
-    with raises(TypeError, match="target must not be an empty string"):
+    with raises(ValueError, match="target must not be an empty string"):
         srv_map.set_redirect("x", "")
     with raises(TypeError, match="target must be of type 'str'"):
         srv_map.set_redirect("x", None)
