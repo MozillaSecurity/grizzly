@@ -354,7 +354,7 @@ def test_main_06(
     server,
     tmp_path,
     pernosco,
-    rr,  # pylint: disable=invalid-name
+    rr,
     valgrind,
     no_harness,
 ):

@@ -140,7 +140,7 @@ def test_main_04(
     mocker,
     session_setup,
     pernosco,
-    rr,  # pylint: disable=invalid-name
+    rr,
     valgrind,
 ):
     """test enabling debuggers"""

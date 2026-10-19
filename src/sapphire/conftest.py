@@ -26,8 +26,6 @@ def client_factory():
     clients = []
 
     class _SimpleClient:
-        # pylint: disable=missing-docstring
-
         def __init__(self, rx_size=0x10000):
             self.thread = None
             self.rx_size = rx_size
