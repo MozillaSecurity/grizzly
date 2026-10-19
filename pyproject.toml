@@ -70,6 +70,8 @@ exclude = ["src/grizzly/services/webtransport/wpt_h3_server"]
 
 [tool.ruff.lint]
 select = [
+    # flake8-bugbear
+    "B",
     # flake8-comprehensions
     "C4",
     # pycodestyle
@@ -101,6 +103,8 @@ select = [
     # pycodestyle
     "W",
 ]
+# optional no-op hooks in abstract base classes are intentional
+ignore = ["B027"]
 
 [tool.ruff.lint.per-file-ignores]
 # frames are parsed from log text, not filesystem paths
