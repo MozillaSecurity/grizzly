@@ -215,6 +215,7 @@ def test_response_data_04():
         (b"GET / HTTP/1.1\r\n", "GET", "", "/"),
         (b"GET /foo HTTP/1.1\r\n", "GET", "", "/foo"),
         (b"GET /foo/bar HTTP/1.1\r\n", "GET", "", "/foo/bar"),
+        (b"GET /foo;bar HTTP/1.1\r\n", "GET", "", "/foo;bar"),
         (b"GET http://foo/ HTTP/1.1\r\n", "GET", "http", "/"),
         (b"GET http://foo/bar HTTP/1.1\r\n", "GET", "http", "/bar"),
     ],
@@ -251,7 +252,7 @@ def test_response_02(req):
 
 def test_response_03(mocker):
     """test Request.parse() fail to parse"""
-    mocker.patch("sapphire.worker.urlparse", side_effect=ValueError("foo"))
+    mocker.patch("sapphire.worker.urlsplit", side_effect=ValueError("foo"))
     with raises(ValueError, match="foo"):
         Request.parse(b"GET http://foo HTTP/1.1")
 
