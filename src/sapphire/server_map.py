@@ -21,7 +21,7 @@ LOG = getLogger(__name__)
 
 
 class InvalidURLError(Exception):
-    """Raised what a URL string string contained invalid characters"""
+    """Raised when a URL string contains invalid characters"""
 
 
 class MapCollisionError(Exception):

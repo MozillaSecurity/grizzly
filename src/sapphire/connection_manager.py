@@ -62,7 +62,7 @@ class ConnectionManager:
             continue_cb: Indicates whether to continue.
 
         Returns:
-            True if callback returns True and timeout has been be hit otherwise False.
+            True if callback returns True and timeout has not been hit otherwise False.
         """
         now = perf_counter()
         if self._next_poll > now:
