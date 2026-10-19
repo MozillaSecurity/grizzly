@@ -396,10 +396,9 @@ ReproTestParams = namedtuple(
         ReproTestParams(
             original=b"odd\neven\n" * 3,
             strategies=["check", "lines"],
-            detect_failure=lambda contents: sum(
-                1 for line in contents.splitlines() if line == "odd"
-            )
-            == 3,
+            detect_failure=lambda contents: (
+                sum(1 for line in contents.splitlines() if line == "odd") == 3
+            ),
             interesting_str="%r contains 3x 'odd'",
             is_expected=lambda _: True,
             expected_run_calls=8,

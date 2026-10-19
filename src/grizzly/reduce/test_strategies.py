@@ -66,7 +66,7 @@ def _fake_save_logs_foo(result_logs):
 def test_strategy_load_fail(mocker):
     """test that a broken strategy doesn't block other strategies"""
 
-    class _GoodStrategy(Strategy):
+    class _GoodStrategy(Strategy):  # pylint: disable=abstract-method
         name = "good"
 
         @classmethod

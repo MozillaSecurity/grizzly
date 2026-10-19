@@ -91,7 +91,7 @@ class WebTransportServer(BaseService):
             if sys.platform.startswith("win"):
                 asyncio.set_event_loop_policy(
                     # pylint: disable=deprecated-class, line-too-long
-                    asyncio.WindowsSelectorEventLoopPolicy()  # type: ignore[attr-defined]
+                    asyncio.WindowsSelectorEventLoopPolicy()  # type: ignore[attr-defined, unused-ignore]
                 )
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
