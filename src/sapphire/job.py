@@ -295,9 +295,10 @@ class Job:
         Returns:
             Current status.
         """
-        with self._pending.lock:
+        with self._served.lock:
             if not self._served.files:
                 return Served.NONE
+        with self._pending.lock:
             if not self._pending.files:
                 return Served.ALL
         return Served.REQUEST
