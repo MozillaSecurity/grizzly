@@ -12,7 +12,6 @@ from argparse import (
 )
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import getenv
-from os.path import exists
 from pathlib import Path
 from platform import system
 from types import MappingProxyType
@@ -351,7 +350,7 @@ class CommonArgs:
                     self.parser.error(
                         f"Asset '{asset}' not supported by target '{args.platform}'"
                     )
-                if not exists(path):
+                if not Path(path).exists():
                     self.parser.error(
                         f"Failed to add asset '{asset}' cannot find '{path}'"
                     )
