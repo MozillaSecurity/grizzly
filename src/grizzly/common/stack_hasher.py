@@ -81,6 +81,8 @@ class StackFrame(ABC):
 
 
 class MinidumpStackFrame(StackFrame):
+    __slots__ = ()
+
     @classmethod
     def from_line(cls, input_line: str) -> MinidumpStackFrame | None:
         """Parse stack frame details.
@@ -126,6 +128,8 @@ class MinidumpStackFrame(StackFrame):
 
 
 class GdbStackFrame(StackFrame):
+    __slots__ = ()
+
     _re_gdb = re_compile(r"^#(?P<num>\d+)\s+(?P<off>0x[0-9a-f]+\sin\s)*(?P<line>.+)")
 
     @classmethod
@@ -163,6 +167,8 @@ class GdbStackFrame(StackFrame):
 
 
 class RrStackFrame(StackFrame):
+    __slots__ = ()
+
     _re_rr = re_compile(r"rr\((?P<loc>.+)\+(?P<off>0x[0-9a-f]+)\)\[0x[0-9a-f]+\]")
 
     @classmethod
@@ -185,6 +191,8 @@ class RrStackFrame(StackFrame):
 
 
 class RustStackFrame(StackFrame):
+    __slots__ = ()
+
     _re_rust_frame = re_compile(r"^\s+(?P<num>\d+):\s+0x[0-9a-f]+\s+\-\s+(?P<line>.+)")
 
     @classmethod
@@ -207,6 +215,8 @@ class RustStackFrame(StackFrame):
 
 
 class SanitizerStackFrame(StackFrame):
+    __slots__ = ()
+
     _re_sanitizer = re_compile(
         r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+(?P<in>\sin)?\s+(?P<line>.+)"
     )
@@ -250,6 +260,8 @@ class SanitizerStackFrame(StackFrame):
 
 
 class ThreadSanitizerStackFrame(StackFrame):
+    __slots__ = ()
+
     _re_tsan = re_compile(
         r"^\s*#(?P<num>\d+)\s(?P<line>.+)\s\(((?P<mod>.+)\+)?(?P<off>0x[0-9a-f]+)\)"
     )
@@ -295,6 +307,8 @@ class ThreadSanitizerStackFrame(StackFrame):
 
 
 class ValgrindStackFrame(StackFrame):
+    __slots__ = ()
+
     _re_valgrind = re_compile(
         r"^==\d+==\s+(at|by)\s+0x[0-9A-F]+\:\s+(?P<func>.+?)\s+\((?P<line>.+)\)"
     )
