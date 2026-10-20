@@ -150,13 +150,13 @@ class Runner:
         self._tests_run = 0  # number of tests run since target (re)launched
         self.startup_failure = False  # failure before first test was served
 
-    def launch(self, location: str, max_retries: int = 3, retry_delay: int = 0) -> None:
+    def launch(self, location: str, attempts: int = 3, retry_delay: int = 0) -> None:
         """Launch a target and open `location`.
 
         Args:
             location: URL to open via Target.
-            max_retries: Number of retries to perform before re-raising
-                         TargetLaunchTimeout.
+            attempts: Number of launch attempts to make before re-raising
+                      TargetLaunchError or TargetLaunchTimeout.
             retry_delay: Time in seconds to wait between retries.
 
         Returns:
@@ -164,7 +164,7 @@ class Runner:
         """
         assert self._server is not None
         assert self._target is not None
-        assert max_retries >= 0
+        assert attempts > 0
         assert retry_delay >= 0
         # nothing should be trying to connect, did the previous target.close() fail?
         assert self._server.clear_backlog()
@@ -172,7 +172,7 @@ class Runner:
         self.startup_failure = False
         launch_duration: float = 0
         LOG.debug("launching target (timeout %ds)", self._target.launch_timeout)
-        for retries in reversed(range(max_retries)):
+        for retries in reversed(range(attempts)):
             try:
                 launch_start = perf_counter()
                 self._target.launch(location)

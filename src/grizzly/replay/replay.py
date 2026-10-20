@@ -386,7 +386,7 @@ class ReplayManager:
                         scheme=self.server.scheme,
                         time_limit=time_limit if self._harness else None,
                     )
-                    runner.launch(location, max_retries=launch_attempts)
+                    runner.launch(location, attempts=launch_attempts)
                     if post_launch_delay >= 0 and not runner.startup_failure:
                         runner.post_launch(delay=post_launch_delay)
                     # TODO: avoid running test case if runner.startup_failure is True
