@@ -775,6 +775,32 @@ class ReductionStatusReporter(BaseReporter):
             ),
         )
 
+    @classmethod
+    def _report_entries(
+        cls, report: ReductionStatus, signature: bool = False
+    ) -> list[tuple[str, str | None]]:
+        """Entries describing the reduction that are shared by report types.
+
+        Args:
+            report: Status report to describe.
+            signature: Include signature information.
+
+        Returns:
+            Entries for available data.
+        """
+        entries: list[tuple[str, str | None]] = []
+        if report.crash_id:
+            entries.append(cls._crash_id_entry(report))
+        if report.analysis:
+            entries.append(cls._analysis_entry(report))
+        if signature and report.signature_info:
+            entries.append(cls._signature_info_entry(report))
+        if report.run_params:
+            entries.append(cls._run_params_entry(report))
+        if report.last_reports:
+            entries.append(cls._last_reports_entry(report))
+        return entries
+
     @staticmethod
     def _crash_id_entry(report: ReductionStatus) -> tuple[str, str]:
         crash_str = str(report.crash_id)
@@ -826,15 +852,7 @@ class ReductionStatusReporter(BaseReporter):
 
         reports: list[str] = []
         for report in self.reports:
-            entries: list[tuple[str, str | None]] = []
-            if report.crash_id:
-                entries.append(self._crash_id_entry(report))
-            if report.analysis:
-                entries.append(self._analysis_entry(report))
-            if report.run_params:
-                entries.append(self._run_params_entry(report))
-            if report.last_reports:
-                entries.append(self._last_reports_entry(report))
+            entries = self._report_entries(report)
             if report.current_strategy:
                 entries.append(
                     (
@@ -903,18 +921,8 @@ class ReductionStatusReporter(BaseReporter):
 
         reports: list[str] = []
         for report in self.reports:
-            entries: list[tuple[str, str | None]] = []
+            entries = self._report_entries(report, signature=True)
             lines: list[str] = []
-            if report.crash_id:
-                entries.append(self._crash_id_entry(report))
-            if report.analysis:
-                entries.append(self._analysis_entry(report))
-            if report.signature_info:
-                entries.append(self._signature_info_entry(report))
-            if report.run_params:
-                entries.append(self._run_params_entry(report))
-            if report.last_reports:
-                entries.append(self._last_reports_entry(report))
             if report.total and report.original:
                 tabulator = _TableFormatter(
                     tuple(f.name for f in fields(ReductionStep)),
