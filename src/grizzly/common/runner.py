@@ -356,10 +356,11 @@ class Runner:
         testcase.https = self._server.scheme == "https"
         if result.timeout:
             LOG.debug("timeout detected")
+            ignore_timeout = "timeout" in ignore
             result.idle = self._target.handle_hang(
-                ignore_idle=True, ignore_timeout="timeout" in ignore
+                ignore_idle=True, ignore_timeout=ignore_timeout
             )
-            if result.idle or "timeout" in ignore:
+            if result.idle or ignore_timeout:
                 result.status = Result.IGNORED
             server_map.dynamic.pop("grz_empty", None)
         if result.attempted:
@@ -376,7 +377,8 @@ class Runner:
                 # and the browser should exit on its own
                 # NOTE: this will take the full duration if target.monitor.is_idle()
                 # is unable to detect if the target is idle
-                for close_delay in range(max(int(self._close_delay / 0.5), 1)):
+                # check every 0.5 seconds
+                for close_delay in range(self._close_delay * 2):
                     if not self._target.monitor.is_healthy():
                         break
                     # wait 3 seconds (6 passes) before attempting idle exit
