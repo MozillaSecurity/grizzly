@@ -233,10 +233,11 @@ class Report:
         # if both stderr and stdout are missing something is wrong
         assert self._logs.stderr or self._logs.stdout
         self._short_signature: str | None = None
-        self._signature = None
+        self._signature: CrashSignature | None = None
         self._target_binary = target_binary
         self.is_hang = is_hang
         self.path = log_path
+        self.stack: Stack | None = None
         # if a build crashes before the initial testcase is served it is unstable
         self.unstable = unstable
         if size_limit < 1:
@@ -256,12 +257,12 @@ class Report:
                 # limit the hash calculations to the first n frames if a hang
                 # was detected to attempt to help local bucketing
                 stack.height_limit = HANG_STACK_HEIGHT if is_hang else 0
-                self.prefix = f"{stack.minor[:8]}_{strftime('%Y-%m-%d_%H-%M-%S')}"
-                self.stack: Stack | None = stack
+                self.stack = stack
                 break
-        else:
-            self.prefix = f"{DEFAULT_MINOR}_{strftime('%Y-%m-%d_%H-%M-%S')}"
-            self.stack = None
+        minor = (
+            self.stack.minor[:8] if self.stack and self.stack.minor else DEFAULT_MINOR
+        )
+        self.prefix = f"{minor}_{strftime('%Y-%m-%d_%H-%M-%S')}"
 
     @staticmethod
     def calc_hash(signature: CrashSignature | None) -> str:
