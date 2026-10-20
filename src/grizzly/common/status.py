@@ -544,15 +544,8 @@ class ReadOnlyStatus(BaseStatus):
             )
 
         # Load all results
-        results = ReadOnlyResultCounter.load(db_file, time_limit=0)
+        counters = {x.pid: x for x in ReadOnlyResultCounter.load(db_file)}
         for entry in entries:
-            # look up counter
-            current_counter = None
-            for counter in results:
-                if counter.pid == entry["pid"]:
-                    current_counter = counter
-                    break
-
             status = cls(
                 entry["pid"],
                 entry["start_time"],
@@ -560,7 +553,7 @@ class ReadOnlyStatus(BaseStatus):
                 ignored=entry["ignored"],
                 iteration=entry["iteration"],
                 log_size=entry["log_size"],
-                results=current_counter,
+                results=counters.get(entry["pid"]),
             )
             status._profiles = loads(entry["_profiles"])
             yield status
