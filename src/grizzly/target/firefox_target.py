@@ -362,7 +362,7 @@ class FirefoxTarget(Target):
         abort_tokens = self.asset_mgr.get("abort-tokens")
         if abort_tokens:
             LOG.debug("loading 'abort tokens' from '%s'", abort_tokens)
-            with (self.asset_mgr.path / abort_tokens).open() as in_fp:
+            with abort_tokens.open() as in_fp:
                 for line in in_fp:
                     line = line.strip()
                     if line:
@@ -375,14 +375,11 @@ class FirefoxTarget(Target):
             # load existing sanitizer options from environment
             var_name = f"{sanitizer.upper()}_OPTIONS"
             opts.load_options(self.environ.get(var_name, ""))
-            if self.asset_mgr.get(asset):
+            asset_path = self.asset_mgr.get(asset)
+            if asset_path:
                 # use suppression file if provided as asset
-                opts.add(
-                    "suppressions", f"'{self.asset_mgr.get(asset)}'", overwrite=True
-                )
-            elif opts.get("suppressions"):
-                suppressions = opts.pop("suppressions")
-                assert suppressions
+                opts.add("suppressions", f"'{asset_path}'", overwrite=True)
+            elif suppressions := opts.pop("suppressions"):
                 path = Path(suppressions.strip("\"'"))
                 if path.is_file():
                     # use environment specified suppression file
