@@ -10,7 +10,7 @@ from pathlib import Path
 from platform import system
 from shutil import copytree, rmtree
 from signal import SIGABRT
-from tempfile import TemporaryDirectory, mkdtemp
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
 
 from ffpuppet import BrowserTimeoutError, Debugger, FFPuppet, LaunchError, Reason
@@ -21,7 +21,7 @@ from ffpuppet.sanitizer_util import SanitizerOptions
 from prefpicker import PrefPicker
 
 from ..common.cache import add_cached, find_cached
-from ..common.report import MAX_LOG_SIZE, Report
+from ..common.report import MAX_LOG_SIZE
 from ..common.utils import grz_tmp, package_version
 from .target import Result, Target, TargetLaunchError, TargetLaunchTimeout
 from .target_monitor import TargetMonitor
@@ -208,17 +208,6 @@ class FirefoxTarget(Target):
     @property
     def closed(self) -> bool:
         return self._puppet.reason is not None
-
-    def create_report(self, is_hang: bool = False, unstable: bool = False) -> Report:
-        logs = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
-        self.save_logs(logs)
-        return Report(
-            logs,
-            self.binary,
-            is_hang=is_hang,
-            size_limit=self.report_size_limit,
-            unstable=unstable,
-        )
 
     def filtered_environ(self) -> dict[str, str]:
         # remove context specific entries from environment

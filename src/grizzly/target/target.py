@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 from enum import IntEnum, unique
 from logging import getLogger
 from os import environ
+from pathlib import Path
+from tempfile import mkdtemp
 from threading import Lock
 from typing import TYPE_CHECKING, final
 
@@ -16,7 +18,6 @@ from .assets import AssetManager
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
-    from pathlib import Path
 
     from sapphire import CertificateBundle
 
@@ -192,7 +193,6 @@ class Target(ABC):
             True if closed otherwise False.
         """
 
-    @abstractmethod
     def create_report(self, is_hang: bool = False, unstable: bool = False) -> Report:
         """Process logs and create a Report. Log files are limited in size to
         `report_size_limit`.
@@ -204,6 +204,15 @@ class Target(ABC):
         Returns:
             Report object.
         """
+        logs = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
+        self.save_logs(logs)
+        return Report(
+            logs,
+            self.binary,
+            is_hang=is_hang,
+            size_limit=self.report_size_limit,
+            unstable=unstable,
+        )
 
     @abstractmethod
     def dump_coverage(self, timeout: int = 0) -> None:

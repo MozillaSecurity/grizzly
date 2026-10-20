@@ -6,7 +6,7 @@ from __future__ import annotations
 from logging import getLogger
 from os import getenv
 from pathlib import Path
-from tempfile import TemporaryDirectory, mkdtemp
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from fxpoppet.adb_process import ADBLaunchError, ADBProcess, Reason
@@ -14,7 +14,7 @@ from fxpoppet.adb_session import ADBSession, ADBSessionError
 from fxpoppet.adb_wrapper import ADBWrapper
 from prefpicker import PrefPicker
 
-from ..common.report import MAX_LOG_SIZE, Report
+from ..common.report import MAX_LOG_SIZE
 from ..common.utils import grz_tmp
 from .firefox_target import merge_sanitizer_options
 from .target import Result, Target, TargetLaunchError
@@ -165,17 +165,6 @@ class FenixTarget(Target):
                 LOG.debug("failure detected")
                 status = Result.FOUND
         return status
-
-    def create_report(self, is_hang: bool = False, unstable: bool = False) -> Report:
-        logs = Path(mkdtemp(prefix="logs_", dir=grz_tmp("logs")))
-        self.save_logs(logs)
-        return Report(
-            logs,
-            self.binary,
-            is_hang=is_hang,
-            size_limit=self.report_size_limit,
-            unstable=unstable,
-        )
 
     def dump_coverage(self, timeout: int = 0) -> None:
         raise NotImplementedError

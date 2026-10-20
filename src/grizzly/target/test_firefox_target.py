@@ -66,7 +66,7 @@ def test_firefox_target_02(mocker, tmp_path):
         (tmp_path / "log_stderr.txt").write_text("fake log")
         (tmp_path / "log_stdout.txt").write_text("fake log")
         mocker.patch(
-            "grizzly.target.firefox_target.mkdtemp",
+            "grizzly.target.target.mkdtemp",
             autospec=True,
             return_value=str(tmp_path),
         )
