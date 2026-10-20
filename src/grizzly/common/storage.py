@@ -503,12 +503,14 @@ class TestCase:
             with (path / TEST_INFO).open("r") as in_fp:
                 info = json.load(in_fp)
         except FileNotFoundError:
-            info = None
+            return {}
         except ValueError:
             raise TestCaseLoadFailure(f"Invalid '{TEST_INFO}'") from None
-        if info is not None and not isinstance(info.get("target"), str):
+        if not isinstance(info, dict):
+            raise TestCaseLoadFailure(f"Invalid '{TEST_INFO}'")
+        if not isinstance(info.get("target"), str):
             raise TestCaseLoadFailure(f"Invalid 'target' entry in '{TEST_INFO}'")
-        return info or {}
+        return info
 
     @property
     def required(self) -> Generator[str]:
