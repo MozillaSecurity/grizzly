@@ -21,7 +21,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 from .utils import grz_tmp
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Container, Generator
 
 # attachments that can be ignored
 IGNORE_EXTS = frozenset(
@@ -50,7 +50,7 @@ LOG = getLogger(__name__)
 class BugzillaBug:
     __slots__ = ("_bug", "_data")
 
-    def __init__(self, bug: Bug, ignore: Iterable[str] = IGNORE_EXTS) -> None:
+    def __init__(self, bug: Bug, ignore: Container[str] = IGNORE_EXTS) -> None:
         self._bug = bug
         self._data = Path(
             mkdtemp(prefix=f"bug{bug.id}-", dir=grz_tmp("bugzilla"))
@@ -64,7 +64,7 @@ class BugzillaBug:
         self.cleanup()
 
     def _fetch_attachments(
-        self, ignore: Iterable[str], require_extension: bool = True
+        self, ignore: Container[str], require_extension: bool = True
     ) -> None:
         """Download bug attachments.
 
@@ -120,7 +120,9 @@ class BugzillaBug:
                 entry.unlink()
             # TODO: add support for other archive types
 
-    def assets(self, ignore: tuple[str] | None = None) -> Generator[tuple[str, Path]]:
+    def assets(
+        self, ignore: Container[str] | None = None
+    ) -> Generator[tuple[str, Path]]:
         """Scan files for assets.
 
         Arguments:
@@ -155,7 +157,7 @@ class BugzillaBug:
             bug_id: Bug to load.
 
         Returns:
-            BugzillaBug
+            BugzillaBug if the bug was loaded successfully otherwise None.
         """
         api_key = environ.get("BZ_API_KEY")
         # default root matches Bugsy
