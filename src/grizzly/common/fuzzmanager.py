@@ -339,6 +339,37 @@ class Bucket:
             rmtree(self._sig_filename.parent, ignore_errors=True)
             self._sig_filename = None
 
+    def _get_results(
+        self, endpoint: str, params: dict[str, str] | None = None
+    ) -> Generator[dict[str, Any]]:
+        """Get paginated results from FuzzManager.
+
+        Arguments:
+            endpoint: FuzzManager REST API to query (eg. "crashes").
+            params: Params to pass through to requests.get.
+
+        Yields:
+            Data returned by FuzzManager.
+        """
+        LOG.debug("first request to /%s/", endpoint)
+        url = _rest_url(self._coll, endpoint)
+        response: dict[str, Any] = self._coll.get(url, params=params).json()
+        while True:
+            LOG.debug(
+                "got %d/%d %s",
+                len(response["results"]),
+                response["count"],
+                endpoint,
+            )
+            while response["results"]:
+                yield response["results"].pop()
+
+            if response["next"] is None:
+                break
+
+            LOG.debug("next request to /%s/", endpoint)
+            response = self._coll.get(response["next"]).json()
+
     def iter_crashes(self, quality_filter: int | None = None) -> Generator[CrashEntry]:
         """Fetch all crash IDs for this FuzzManager bucket.
         Only crashes with testcases are returned.
@@ -349,54 +380,14 @@ class Bucket:
         Yields:
             CrashEntry objects.
         """
-
-        def _get_results(
-            endpoint: str, params: dict[str, str] | None = None
-        ) -> Generator[dict[str, Any]]:
-            """
-            Function to get paginated results from FuzzManager
-
-            Args:
-                endpoint: FuzzManager REST API to query (eg. "crashes").
-                params: Params to pass through to requests.get.
-
-            Yields:
-                Data returned by FuzzManager.
-            """
-            LOG.debug("first request to /%s/", endpoint)
-
-            url = _rest_url(self._coll, endpoint)
-
-            response: dict[str, Any] = self._coll.get(url, params=params).json()
-
-            while True:
-                LOG.debug(
-                    "got %d/%d %s",
-                    len(response["results"]),
-                    response["count"],
-                    endpoint,
-                )
-                while response["results"]:
-                    yield response["results"].pop()
-
-                if response["next"] is None:
-                    break
-
-                LOG.debug("next request to /%s/", endpoint)
-                response = self._coll.get(response["next"]).json()
-
         # Get all crashes for bucket
-        query_args = [
-            ("op", "AND"),
-            ("bucket", self.bucket_id),
-        ]
+        query: dict[str, Any] = {"op": "AND", "bucket": self.bucket_id}
         if quality_filter is not None:
-            query_args.append(("testcase__quality", quality_filter))
-        query = json.dumps(dict(query_args))
+            query["testcase__quality"] = quality_filter
 
         n_yielded = 0
-        for crash in _get_results(
-            "crashes", params={"query": query, "include_raw": "0"}
+        for crash in self._get_results(
+            "crashes", params={"query": json.dumps(query), "include_raw": "0"}
         ):
             if not crash["testcase"]:
                 LOG.warning("crash %d has no testcase, skipping", crash["id"])
