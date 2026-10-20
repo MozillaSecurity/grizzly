@@ -816,6 +816,27 @@ class _MilestoneTimer:
 class ReductionStatus:
     """Status for a single grizzly reduction"""
 
+    __slots__ = (
+        "_current_size",
+        "_db_file",
+        "_in_progress_steps",
+        "_testcase_size_cb",
+        "analysis",
+        "attempts",
+        "crash_id",
+        "current_strategy_idx",
+        "finished_steps",
+        "iterations",
+        "last_reports",
+        "pid",
+        "run_params",
+        "signature_info",
+        "strategies",
+        "successes",
+        "timestamp",
+        "tool",
+    )
+
     def __init__(
         self,
         strategies: list[str] | None = None,
