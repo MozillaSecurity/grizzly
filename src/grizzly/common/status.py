@@ -953,91 +953,60 @@ class ReductionStatus:
         with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
             cur = con.cursor()
             with con:
-                analysis = dumps(self.analysis)
-                run_params = dumps(self.run_params)
-                sig_info = dumps(self.signature_info)
-                finished = dumps([astuple(step) for step in self.finished_steps])
-                in_prog = dumps([astuple(step) for step in self._in_progress_steps])
-                strategies = dumps(self.strategies)
-                last_reports = dumps(self.last_reports)
-
                 cur.execute(
-                    """UPDATE reduce_status
-                       SET analysis = ?,
-                           attempts = ?,
-                           iterations = ?,
-                           run_params = ?,
-                           signature_info = ?,
-                           successes = ?,
-                           crash_id = ?,
-                           finished_steps = ?,
-                           _in_progress_steps = ?,
-                           strategies = ?,
-                           _current_size = ?,
-                           current_strategy_idx = ?,
-                           timestamp = ?,
-                           tool = ?,
-                           last_reports = ?
-                       WHERE pid = ?;""",
+                    """INSERT INTO reduce_status(
+                           pid,
+                           analysis,
+                           attempts,
+                           iterations,
+                           run_params,
+                           signature_info,
+                           successes,
+                           crash_id,
+                           finished_steps,
+                           _in_progress_steps,
+                           strategies,
+                           _current_size,
+                           current_strategy_idx,
+                           timestamp,
+                           tool,
+                           last_reports)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(pid) DO UPDATE
+                       SET analysis = excluded.analysis,
+                           attempts = excluded.attempts,
+                           iterations = excluded.iterations,
+                           run_params = excluded.run_params,
+                           signature_info = excluded.signature_info,
+                           successes = excluded.successes,
+                           crash_id = excluded.crash_id,
+                           finished_steps = excluded.finished_steps,
+                           _in_progress_steps = excluded._in_progress_steps,
+                           strategies = excluded.strategies,
+                           _current_size = excluded._current_size,
+                           current_strategy_idx = excluded.current_strategy_idx,
+                           timestamp = excluded.timestamp,
+                           tool = excluded.tool,
+                           last_reports = excluded.last_reports;""",
                     (
-                        analysis,
+                        self.pid,
+                        dumps(self.analysis),
                         self.attempts,
                         self.iterations,
-                        run_params,
-                        sig_info,
+                        dumps(self.run_params),
+                        dumps(self.signature_info),
                         self.successes,
                         self.crash_id,
-                        finished,
-                        in_prog,
-                        strategies,
+                        dumps([astuple(step) for step in self.finished_steps]),
+                        dumps([astuple(step) for step in self._in_progress_steps]),
+                        dumps(self.strategies),
                         self._testcase_size(),
                         self.current_strategy_idx,
                         self.timestamp,
                         self.tool,
-                        last_reports,
-                        self.pid,
+                        dumps(self.last_reports),
                     ),
                 )
-                if cur.rowcount < 1:
-                    cur.execute(
-                        """INSERT INTO reduce_status(
-                               pid,
-                               analysis,
-                               attempts,
-                               iterations,
-                               run_params,
-                               signature_info,
-                               successes,
-                               crash_id,
-                               finished_steps,
-                               _in_progress_steps,
-                               strategies,
-                               _current_size,
-                               current_strategy_idx,
-                               timestamp,
-                               tool,
-                               last_reports)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""",
-                        (
-                            self.pid,
-                            analysis,
-                            self.attempts,
-                            self.iterations,
-                            run_params,
-                            sig_info,
-                            self.successes,
-                            self.crash_id,
-                            finished,
-                            in_prog,
-                            strategies,
-                            self._testcase_size(),
-                            self.current_strategy_idx,
-                            self.timestamp,
-                            self.tool,
-                            last_reports,
-                        ),
-                    )
-
         return True
 
     @classmethod
