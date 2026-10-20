@@ -19,7 +19,6 @@ from hashlib import sha1
 from logging import DEBUG, INFO, basicConfig, getLogger
 from os.path import basename
 from re import compile as re_compile
-from re import match as re_match
 
 __all__ = ("Stack",)
 __author__ = "Tyson Smith"
@@ -217,6 +216,7 @@ class RustStackFrame(StackFrame):
 class SanitizerStackFrame(StackFrame):
     __slots__ = ()
 
+    _re_offset = re_compile(r"(.+?)(\:([0-9a-f]+)|\+(0x[0-9a-f]+)).*")
     _re_sanitizer = re_compile(
         r"^\s*#(?P<num>\d+)\s0x[0-9a-f]+(?P<in>\sin)?\s+(?P<line>.+)"
     )
@@ -250,7 +250,7 @@ class SanitizerStackFrame(StackFrame):
         if input_line.startswith("("):
             input_line = input_line.strip("()")
         # find location (file name or module) and offset (line # or offset)
-        offset = re_match(r"(.+?)(\:([0-9a-f]+)|\+(0x[0-9a-f]+)).*", input_line)
+        offset = cls._re_offset.match(input_line)
         if offset:
             sframe.location = basename(offset.group(1))
             sframe.offset = offset.group(3) or offset.group(4)
