@@ -13,14 +13,14 @@ from dataclasses import astuple, dataclass
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
-from sqlite3 import Connection, OperationalError, connect
+from sqlite3 import Connection, Cursor, OperationalError, connect
 from time import perf_counter, time
 from typing import TYPE_CHECKING, Any, cast
 
 from .utils import grz_tmp
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable, Generator, Sequence
     from pathlib import Path
 
     from .reporter import FuzzManagerReporter
@@ -60,6 +60,29 @@ class ResultEntry:
     rid: str
     count: int
     desc: str | None
+
+
+def _execute_if_table_exists(
+    cur: Cursor, query: str, params: Sequence[Any] = ()
+) -> list[Any]:
+    """Execute a query and fetch the results. A missing table is not treated as an
+    error, it is handled as if no results were found.
+
+    Args:
+        cur: Database cursor.
+        query: SQL query to execute.
+        params: Query parameters.
+
+    Returns:
+        Results of the query.
+    """
+    try:
+        cur.execute(query, params)
+    except OperationalError as exc:
+        if not str(exc).startswith("no such table:"):
+            raise  # pragma: no cover
+        return []
+    return cur.fetchall()
 
 
 def _db_version_check(con: Connection, expected: int = DB_VERSION) -> bool:
@@ -198,29 +221,14 @@ class ReadOnlyResultCounter(SimpleResultCounter):
             Loaded ReadOnlyResultCounter objects.
         """
         assert time_limit >= 0
+        query = "SELECT pid, result_id, description, count FROM results"
+        params: tuple[float, ...] = ()
+        if time_limit:
+            query += " WHERE timestamp > ?"
+            params = (time() - time_limit,)
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
-            cur = con.cursor()
-            try:
-                # collect entries
-                if time_limit:
-                    cur.execute(
-                        """SELECT pid,
-                                result_id,
-                                description,
-                                count
-                           FROM results
-                           WHERE timestamp > ?;""",
-                        (time() - time_limit,),
-                    )
-                else:
-                    cur.execute(
-                        """SELECT pid, result_id, description, count FROM results"""
-                    )
-                entries = cur.fetchall()
-            except OperationalError as exc:
-                if not str(exc).startswith("no such table:"):
-                    raise  # pragma: no cover
-                entries = []
+            # collect entries
+            entries = _execute_if_table_exists(con.cursor(), query, params)
 
         loaded = {}
         for pid, result_id, desc, count in entries:
@@ -279,14 +287,11 @@ class ResultCounter(SimpleResultCounter):
                 # avoid (unlikely) pid reuse collision
                 cur.execute("""DELETE FROM results WHERE pid = ?;""", (pid,))
                 # remove results for jobs that have been removed
-                try:
-                    cur.execute(
-                        """DELETE FROM results
-                           WHERE pid NOT IN (SELECT pid FROM status);"""
-                    )
-                except OperationalError as exc:
-                    if not str(exc).startswith("no such table:"):
-                        raise  # pragma: no cover
+                _execute_if_table_exists(
+                    cur,
+                    """DELETE FROM results
+                       WHERE pid NOT IN (SELECT pid FROM status);""",
+                )
 
     def count(self, result_id: str, desc: str) -> tuple[int, bool]:
         """Count results and write results to the database.
@@ -522,26 +527,20 @@ class ReadOnlyStatus(BaseStatus):
         """
         assert time_limit >= 0
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
-            cur = con.cursor()
             # collect entries
-            try:
-                cur.execute(
-                    """SELECT pid,
-                            _profiles,
-                            ignored,
-                            iteration,
-                            log_size,
-                            start_time,
-                            timestamp
-                        FROM status
-                        WHERE timestamp > ?;""",
-                    (time() - time_limit if time_limit else 0,),
-                )
-                entries = cur.fetchall()
-            except OperationalError as exc:
-                if not str(exc).startswith("no such table:"):
-                    raise  # pragma: no cover
-                entries = []
+            entries = _execute_if_table_exists(
+                con.cursor(),
+                """SELECT pid,
+                        _profiles,
+                        ignored,
+                        iteration,
+                        log_size,
+                        start_time,
+                        timestamp
+                    FROM status
+                    WHERE timestamp > ?;""",
+                (time() - time_limit if time_limit else 0,),
+            )
 
         # Load all results
         results = ReadOnlyResultCounter.load(db_file, time_limit=0)
@@ -1070,36 +1069,30 @@ class ReductionStatus:
         """
         assert time_limit >= 0
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
-            cur = con.cursor()
             # collect entries
-            try:
-                cur.execute(
-                    """SELECT pid,
-                              analysis,
-                              attempts,
-                              iterations,
-                              run_params,
-                              signature_info,
-                              successes,
-                              crash_id,
-                              finished_steps,
-                              _in_progress_steps,
-                              strategies,
-                              _current_size,
-                              current_strategy_idx,
-                              timestamp,
-                              tool,
-                              last_reports
-                       FROM reduce_status
-                       WHERE timestamp > ?
-                       ORDER BY timestamp DESC;""",
-                    (time() - time_limit if time_limit else 0,),
-                )
-                entries = cur.fetchall()
-            except OperationalError as exc:
-                if not str(exc).startswith("no such table:"):
-                    raise  # pragma: no cover
-                entries = []
+            entries = _execute_if_table_exists(
+                con.cursor(),
+                """SELECT pid,
+                          analysis,
+                          attempts,
+                          iterations,
+                          run_params,
+                          signature_info,
+                          successes,
+                          crash_id,
+                          finished_steps,
+                          _in_progress_steps,
+                          strategies,
+                          _current_size,
+                          current_strategy_idx,
+                          timestamp,
+                          tool,
+                          last_reports
+                   FROM reduce_status
+                   WHERE timestamp > ?
+                   ORDER BY timestamp DESC;""",
+                (time() - time_limit if time_limit else 0,),
+            )
 
         for entry in entries:
             pid = entry[0]
