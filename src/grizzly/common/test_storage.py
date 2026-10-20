@@ -155,6 +155,10 @@ def test_testcase_07(tmp_path):
     (tmp_path / TEST_INFO).write_text("X")
     with raises(TestCaseLoadFailure, match=f"Invalid '{TEST_INFO}'"):
         TestCase.read_info(tmp_path)
+    # test info file does not contain an object
+    (tmp_path / TEST_INFO).write_text("[]")
+    with raises(TestCaseLoadFailure, match=f"Invalid '{TEST_INFO}'"):
+        TestCase.read_info(tmp_path)
     # test info file missing 'target' entry
     (tmp_path / TEST_INFO).write_text("{}")
     with raises(TestCaseLoadFailure, match=f"Invalid 'target' entry in '{TEST_INFO}'"):
