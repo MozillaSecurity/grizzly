@@ -371,7 +371,7 @@ class Stack:
         self.frames = frames
         # use 0 for no limit
         self._height_limit = height_limit
-        # use 0 for no limit for no limit
+        # use 0 for no limit
         self._major_depth = major_depth
         self._major: str | None = None
         self._minor: str | None = None
@@ -383,7 +383,7 @@ class Stack:
         """Calculate hash value from frames.
 
         Args:
-            major: Perform major has calculation.
+            major: Perform major hash calculation.
 
         Returns:
             Hash string.
