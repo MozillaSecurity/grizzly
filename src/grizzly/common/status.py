@@ -162,14 +162,14 @@ class SimpleResultCounter:
                     yield entry
 
     def count(self, result_id: str, desc: str) -> tuple[int, bool]:
-        """
+        """Count a result.
 
         Args:
             result_id: Result ID.
             desc: User friendly description.
 
         Returns:
-            Current count for given result_id.
+            Current count for given result_id and initial report flag.
         """
         self._count[result_id] += 1
         initial = False
@@ -712,7 +712,7 @@ class Status(BaseStatus):
                     "total": duration,
                 }
 
-    def report(self, force: bool = False, report_rate: int = REPORT_RATE) -> bool:
+    def report(self, force: bool = False, report_rate: float = REPORT_RATE) -> bool:
         """Write status report to database. Reports are only written periodically.
         It is limited by `report_rate`. The specified number of seconds must
         elapse before another write will be performed unless `force` is True.
@@ -852,8 +852,10 @@ class ReductionStatus:
             testcase_size_cb: Callback to get testcase size.
             crash_id: CrashManager ID of original testcase.
             db_file: Database file containing data.
+            pid: Python process ID.
             tool: The tool name used for reporting to FuzzManager.
-            life_time:
+            life_time: Remove database entries older than the given number of
+                       seconds. Use zero to disable.
         """
         self.analysis: dict[str, float] = {}
         self.attempts = 0
@@ -1099,7 +1101,7 @@ class ReductionStatus:
         assert self._testcase_size_cb is not None
         return self._testcase_size_cb()
 
-    def __deepcopy__(self, memo: dict[int, Any] | None) -> ReductionStatus:
+    def __deepcopy__(self, memo: dict[int, Any]) -> ReductionStatus:
         """Return a deep copy of this instance."""
         # pylint: disable=protected-access
         result = type(self)(
