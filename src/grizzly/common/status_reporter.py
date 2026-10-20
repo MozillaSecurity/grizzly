@@ -184,7 +184,7 @@ class BaseReporter(ABC):
             if body is None:
                 out.append(label)
             else:
-                out.append(f"{label}".rjust(max_len) + f" : {body}")
+                out.append(f"{label.rjust(max_len)} : {body}")
         return "\n".join(out)
 
     @staticmethod
@@ -388,7 +388,7 @@ class StatusReporter(BaseReporter):
 
     @property
     def has_results(self) -> bool:
-        return any(x.results.total for x in self.reports if x.results)
+        return any(x.results.total for x in self.reports)
 
     @classmethod
     def load(
@@ -464,9 +464,8 @@ class StatusReporter(BaseReporter):
         """
         if not self.reports:
             return "No status reports available"
-        self.reports.sort(key=lambda x: x.start_time)
         entries: list[tuple[str, str | None]] = []
-        for report in self.reports:
+        for report in sorted(self.reports, key=lambda x: x.start_time):
             label = (
                 f"PID {report.pid} started at "
                 f"{strftime('%Y/%m/%d %X', localtime(report.start_time))}"
@@ -506,17 +505,16 @@ class StatusReporter(BaseReporter):
                     report.profile_entries(), key=lambda x: x.total, reverse=True
                 ):
                     avg = entry.total / entry.count
-                    body = []
-                    body.append(f"{entry.count}x ")
+                    body = [f"{entry.count}x "]
                     if entry.total > 300:
                         body.append(str(timedelta(seconds=int(entry.total))))
                     else:
                         body.append(f"{entry.total:0.3f}s")
                     if report.runtime > 0:
                         body.append(f" {entry.total / report.runtime * 100:0.2f}%")
-                    body.append(f" ({avg:0.3f} avg,")
-                    body.append(f" {entry.max:0.3f} max,")
-                    body.append(f" {entry.min:0.3f} min)")
+                    body.append(
+                        f" ({avg:0.3f} avg, {entry.max:0.3f} max, {entry.min:0.3f} min)"
+                    )
                     entries.append((entry.name, "".join(body)))
             entries.append(("", None))
         return self._format_entries(entries)
