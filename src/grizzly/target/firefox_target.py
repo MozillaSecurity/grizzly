@@ -31,7 +31,9 @@ if TYPE_CHECKING:
 
     from sapphire import CertificateBundle
 
-__all__ = ("FirefoxTarget",)
+    from .assets import AssetManager
+
+__all__ = ("FirefoxTarget", "generate_prefs", "merge_sanitizer_options")
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
@@ -350,13 +352,7 @@ class FirefoxTarget(Target):
         self._prefs = self.asset_mgr.get("prefs")
         # generate temporary prefs.js with prefpicker
         if self._prefs is None:
-            LOG.debug("using prefpicker to generate prefs.js")
-            with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
-                prefs = Path(tmp_path) / "prefs.js"
-                template = PrefPicker.lookup_template("browser-fuzzing.yml")
-                assert template
-                PrefPicker.load_template(template).create_prefsjs(prefs)
-                self._prefs = self.asset_mgr.add("prefs", prefs, copy=False)
+            self._prefs = generate_prefs(self.asset_mgr)
         abort_tokens = self.asset_mgr.get("abort-tokens")
         if abort_tokens:
             LOG.debug("loading 'abort tokens' from '%s'", abort_tokens)
@@ -398,6 +394,24 @@ class FirefoxTarget(Target):
 
     def save_logs(self, dst: Path) -> None:
         self._puppet.save_logs(dst)
+
+
+def generate_prefs(asset_mgr: AssetManager) -> Path:
+    """Generate a prefs.js file using PrefPicker and add it to the AssetManager.
+
+    Args:
+        asset_mgr: AssetManager to add the generated prefs.js to.
+
+    Returns:
+        Path to the prefs.js asset.
+    """
+    LOG.debug("using prefpicker to generate prefs.js")
+    with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
+        prefs = Path(tmp_path) / "prefs.js"
+        template = PrefPicker.lookup_template("browser-fuzzing.yml")
+        assert template is not None
+        PrefPicker.load_template(template).create_prefsjs(prefs)
+        return asset_mgr.add("prefs", prefs, copy=False)
 
 
 def merge_sanitizer_options(
