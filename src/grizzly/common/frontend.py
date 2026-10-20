@@ -28,6 +28,7 @@ __all__ = (
     "Exit",
     "configure_logging",
     "display_time_limits",
+    "get_certs",
     "time_limits",
 )
 
@@ -38,7 +39,7 @@ TIMEOUT_DELAY = 15
 
 
 class ConfigError(Exception):
-    """Raised to indicate invalid configuration a state"""
+    """Raised to indicate an invalid configuration state"""
 
     def __init__(self, message: str, exit_code: int) -> None:
         super().__init__(message)
@@ -50,7 +51,7 @@ class Exit(IntEnum):
     """Exit codes"""
 
     SUCCESS = 0
-    # unexpected error occurred (invalid input, unhanded exception, etc)
+    # unexpected error occurred (invalid input, unhandled exception, etc)
     ERROR = 1
     # invalid argument
     ARGS = 2
@@ -89,7 +90,7 @@ def display_time_limits(time_limit: int, timeout: int, no_harness: bool) -> None
     Args:
         time_limit: Time in seconds before harness attempts to close current test.
         timeout: Time in seconds before iteration is considered a timeout.
-        no_harness: Indicate whether harness will is disabled.
+        no_harness: Indicate whether harness is disabled.
 
     Returns:
         None
@@ -105,7 +106,7 @@ def display_time_limits(time_limit: int, timeout: int, no_harness: bool) -> None
         if no_harness:
             LOG.info("Using timeout: DISABLED, harness: DISABLED")
         else:
-            LOG.info("Using time limit: %ds, timeout: DISABLED,", time_limit)
+            LOG.info("Using time limit: %ds, timeout: DISABLED", time_limit)
         LOG.warning("TIMEOUT DISABLED, not recommended for automation")
 
 
