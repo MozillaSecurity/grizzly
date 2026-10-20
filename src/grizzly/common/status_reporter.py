@@ -228,6 +228,23 @@ class BaseReporter(ABC):
         return entries
 
     @staticmethod
+    def _format_free(free: int, total: int) -> str:
+        """Format available and total storage.
+
+        Args:
+            free: Available bytes.
+            total: Total bytes.
+
+        Returns:
+            Formatted output.
+        """
+        if free < 1_073_741_824:  # < 1GB
+            free_str = f"{free // 1_048_576}MB"
+        else:
+            free_str = f"{free / 1_073_741_824:0.1f}GB"
+        return f"{free_str} of {total / 1_073_741_824:0.1f}GB free"
+
+    @staticmethod
     def _sys_info() -> list[tuple[str, str]]:
         """Collect system information.
 
@@ -256,24 +273,14 @@ class BaseReporter(ABC):
         entries.append(("CPU & Load", "".join(disp)))
 
         # memory usage
-        disp = []
         mem_usage = virtual_memory()
-        if mem_usage.available < 1_073_741_824:  # < 1GB
-            disp.append(f"{mem_usage.available // 1_048_576}MB")
-        else:
-            disp.append(f"{mem_usage.available / 1_073_741_824:0.1f}GB")
-        disp.append(f" of {mem_usage.total / 1_073_741_824:0.1f}GB free")
-        entries.append(("Memory", "".join(disp)))
+        entries.append(
+            ("Memory", BaseReporter._format_free(mem_usage.available, mem_usage.total))
+        )
 
         # disk usage
-        disp = []
         usage = disk_usage("/")
-        if usage.free < 1_073_741_824:  # < 1GB
-            disp.append(f"{usage.free // 1_048_576}MB")
-        else:
-            disp.append(f"{usage.free / 1_073_741_824:0.1f}GB")
-        disp.append(f" of {usage.total / 1_073_741_824:0.1f}GB free")
-        entries.append(("Disk", "".join(disp)))
+        entries.append(("Disk", BaseReporter._format_free(usage.free, usage.total)))
 
         return entries
 
