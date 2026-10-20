@@ -406,8 +406,7 @@ class Stack:
             # only track depth when needed
             # and don't count ignored frames towards major hash depth
             if (major and self._major_depth > 0) and (
-                not frame.function
-                or not any(frame.function.startswith(x) for x in IGNORED_FRAMES)
+                not frame.function or not frame.function.startswith(IGNORED_FRAMES)
             ):
                 major_depth += 1
                 if major_depth > self._major_depth:
