@@ -198,6 +198,8 @@ class FilesystemReporter(Reporter):
 class FailedLaunchReporter(FilesystemReporter):
     """Save launch failure reports to disk."""
 
+    __slots__ = ()
+
     def __init__(self, display: bool = False) -> None:
         super().__init__(grz_tmp("launch_failures"), major_bucket=False)
         self.display_logs = display
