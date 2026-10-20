@@ -127,7 +127,7 @@ class AssetManager:
         """Load assets from filesystem.
 
         Args:
-            asset: Asset paths on filesystem relative to src_path, keyed on asset name.
+            assets: Asset paths on filesystem relative to src_path, keyed on asset name.
             src_path: Path to scan for assets.
             base_path: Base path to use to create local storage.
 

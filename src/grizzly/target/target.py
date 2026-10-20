@@ -125,10 +125,10 @@ class Target(ABC):
         """Set AssetManager and cleanup previous AssetManager.
 
         Args:
-            None
+            asset_mgr: AssetManager to use.
 
         Returns:
-            AssetManager.
+            None.
         """
         self._asset_mgr.cleanup()
         self._asset_mgr = asset_mgr
@@ -304,7 +304,7 @@ class Target(ABC):
         """TargetMonitor.
 
         Args:
-            extra: Environment variables to add.
+            None
 
         Returns:
             TargetMonitor
