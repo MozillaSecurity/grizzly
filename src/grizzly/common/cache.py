@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-_ACTIVE_CACHE = None
+_ACTIVE_CACHE: Path | None = None
 CACHE_PATH = grz_tmp("cache")
 CACHE_TIME = int(time())
 LOCK_FILE = grz_tmp() / "cache.lock"
