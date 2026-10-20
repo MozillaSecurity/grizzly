@@ -236,29 +236,30 @@ class FirefoxTarget(Target):
         # check if there has been a crash, hangs will appear as SIGABRT
         if not self._puppet.is_healthy():
             self.close()
+            reason = self._puppet.reason
             # something has happened figure out what
-            if self._puppet.reason == Reason.CLOSED:
+            if reason == Reason.CLOSED:
                 LOG.debug("target.close() was called")
-            elif self._puppet.reason == Reason.EXITED:
+            elif reason == Reason.EXITED:
                 LOG.debug("target closed itself")
             elif (
-                self._puppet.reason == Reason.WORKER
+                reason == Reason.WORKER
                 and "memory" in ignored
                 and "ffp_worker_memory_usage" in self._puppet.available_logs()
             ):
                 result = Result.IGNORED
                 LOG.debug("memory limit exceeded")
             elif (
-                self._puppet.reason == Reason.WORKER
+                reason == Reason.WORKER
                 and "log-limit" in ignored
                 and "ffp_worker_log_size" in self._puppet.available_logs()
             ):
                 result = Result.IGNORED
                 LOG.debug("log size limit exceeded")
             else:
-                assert self._puppet.reason is not None
+                assert reason is not None
                 # crash or hang (forced SIGABRT) has been detected
-                LOG.debug("result detected (%s)", self._puppet.reason.name)
+                LOG.debug("result detected (%s)", reason.name)
                 result = Result.FOUND
         return result
 
