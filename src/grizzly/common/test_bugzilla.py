@@ -44,6 +44,13 @@ def test_bugzilla_01(mocker):
             content_type="text/plain",
             file_name="ignore.txt",
         ),
+        # ignored file extension (case-insensitive)
+        mocker.Mock(
+            spec=Attachment,
+            is_obsolete=False,
+            content_type="text/plain",
+            file_name="IGNORE.TXT",
+        ),
         # valid test case
         mocker.Mock(
             spec=Attachment,
