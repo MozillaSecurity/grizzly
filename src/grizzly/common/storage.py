@@ -60,6 +60,18 @@ class TestFileMap:
     optional: dict[str, Path] = field(default_factory=dict)
     required: dict[str, Path] = field(default_factory=dict)
 
+    def items(self) -> Generator[tuple[str, Path]]:
+        """URLs and files of all entries, required entries first.
+
+        Args:
+            None
+
+        Yields:
+            URL and file of each entry.
+        """
+        yield from self.required.items()
+        yield from self.optional.items()
+
 
 class TestCase:
     __slots__ = (
@@ -308,13 +320,7 @@ class TestCase:
         Returns:
             Total size of the TestCase in bytes.
         """
-        total = 0
-        for data_file in chain(
-            self._files.required.values(),
-            self._files.optional.values(),
-        ):
-            total += data_file.stat().st_size
-        return total
+        return sum(data_file.stat().st_size for _, data_file in self._files.items())
 
     def dump(self, dst_path: Path, include_details: bool = False) -> None:
         """Write all the test case data to the filesystem.
@@ -327,10 +333,7 @@ class TestCase:
             None
         """
         # save test files to dst_path
-        for src_url, src_file in chain(
-            self._files.required.items(),
-            self._files.optional.items(),
-        ):
+        for src_url, src_file in self._files.items():
             dst_file = dst_path / src_url
             dst_file.parent.mkdir(parents=True, exist_ok=True)
             copyfile(src_file, dst_file)
