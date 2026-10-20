@@ -207,6 +207,26 @@ class BaseReporter(ABC):
             txt.append(str(tbr))
         return "\n".join(txt)
 
+    @classmethod
+    def _footer_entries(
+        cls, sysinfo: bool, timestamp: bool
+    ) -> list[tuple[str, str | None]]:
+        """Optional entries included at the end of reports.
+
+        Args:
+            sysinfo: Include system info (CPU, disk, RAM... etc).
+            timestamp: Include time stamp.
+
+        Returns:
+            Requested entries.
+        """
+        entries: list[tuple[str, str | None]] = []
+        if sysinfo:
+            entries.extend(cls._sys_info())
+        if timestamp:
+            entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
+        return entries
+
     @staticmethod
     def _sys_info() -> list[tuple[str, str]]:
         """Collect system information.
@@ -585,13 +605,7 @@ class StatusReporter(BaseReporter):
         else:
             entries.append(("No status reports available", None))
 
-        # System information
-        if sysinfo:
-            entries.extend(self._sys_info())
-
-        # Timestamp
-        if timestamp:
-            entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
+        entries.extend(self._footer_entries(sysinfo, timestamp))
 
         # Format output
         msg = self._format_entries(entries)
@@ -853,14 +867,7 @@ class ReductionStatusReporter(BaseReporter):
                     )
                 )
 
-            # System information
-            if sysinfo:
-                entries.extend(self._sys_info())
-
-            # Timestamp
-            if timestamp:
-                entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
-
+            entries.extend(self._footer_entries(sysinfo, timestamp))
             reports.append(self._format_entries(entries))
         return "\n\n".join(reports)
 
@@ -924,18 +931,9 @@ class ReductionStatusReporter(BaseReporter):
             if lines:
                 reports.append("\n".join(lines))
 
-        entries = []
-
-        # System information
-        if sysinfo:
-            entries.extend(self._sys_info())
-
-        # Timestamp
-        if timestamp:
-            entries.append(("Timestamp", strftime("%Y/%m/%d %X %z", gmtime())))
-
-        if entries:
-            reports.append(self._format_entries(entries))
+        footer = self._footer_entries(sysinfo, timestamp)
+        if footer:
+            reports.append(self._format_entries(footer))
 
         msg = "\n\n".join(reports)
 
