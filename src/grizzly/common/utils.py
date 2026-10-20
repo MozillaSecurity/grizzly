@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from contextlib import suppress
 from importlib.metadata import PackageNotFoundError, version
-from logging import getLogger
 from os import getenv
 from pathlib import Path
 from tempfile import gettempdir
@@ -21,7 +20,6 @@ __credits__ = ["Tyson Smith"]
 
 GRZ_TMP = Path(getenv("GRZ_TMP", gettempdir()), "grizzly")
 HARNESS_FILE = Path(__file__).parent / "harness.html"
-LOG = getLogger(__name__)
 
 
 def grz_tmp(*subdir: str | Path) -> Path:
