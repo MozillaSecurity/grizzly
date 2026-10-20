@@ -349,6 +349,18 @@ class ValgrindStackFrame(StackFrame):
         return sframe
 
 
+# order most to least common
+_FRAME_PARSERS: tuple[type[StackFrame], ...] = (
+    SanitizerStackFrame,
+    MinidumpStackFrame,
+    ThreadSanitizerStackFrame,
+    ValgrindStackFrame,
+    RrStackFrame,
+    RustStackFrame,
+    GdbStackFrame,
+)
+
+
 class Stack:
     __slots__ = ("_height_limit", "_major", "_major_depth", "_minor", "frames")
 
@@ -439,16 +451,7 @@ class Stack:
             try:
                 # only use a single StackFrame type
                 if parser_class is None:
-                    # order most to least common
-                    for frame_parser in (
-                        SanitizerStackFrame,
-                        MinidumpStackFrame,
-                        ThreadSanitizerStackFrame,
-                        ValgrindStackFrame,
-                        RrStackFrame,
-                        RustStackFrame,
-                        GdbStackFrame,
-                    ):
+                    for frame_parser in _FRAME_PARSERS:
                         frame = frame_parser.from_line(line)
                         if frame is not None:
                             LOG.debug("frame parser: %s", frame_parser.__name__)
