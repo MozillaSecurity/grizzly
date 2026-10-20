@@ -121,7 +121,7 @@ class LogMap:
             r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump"
         )
         for log_file in (x for x in logs if "minidump" in x.name):
-            with log_file.open() as log_fp:
+            with log_file.open(encoding="utf-8", errors="ignore") as log_fp:
                 data = log_fp.read(65536)
                 # this will select log that contains "Crash|SIGSEGV|" or
                 # the desired "DUMP_REQUESTED" log
@@ -165,7 +165,7 @@ class LogMap:
         fallback = None
         found = None
         for log_file in (x for x in logs if "asan" in x.name):
-            with log_file.open() as log_fp:
+            with log_file.open(encoding="utf-8", errors="ignore") as log_fp:
                 data = log_fp.read(65536)
             # look for interesting crash info in the log
             if "==ERROR:" in data or "WARNING:" in data:

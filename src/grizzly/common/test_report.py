@@ -471,6 +471,19 @@ def test_log_map_05(tmp_path):
     assert selected == tsan_report
 
 
+def test_log_map_05b(tmp_path):
+    """test LogMap._find_sanitizer() and _find_minidump() with invalid utf-8 data"""
+    asan_log = tmp_path / "log_asan.txt"
+    asan_log.write_bytes(
+        b"\xff\xfe==1==ERROR: AddressSanitizer: SEGV on unknown address\n"
+        b"    #0 0x1 in foo\n"
+    )
+    assert LogMap._find_sanitizer([asan_log]) == asan_log
+    md_log = tmp_path / "log_minidump.txt"
+    md_log.write_bytes(b"\xff\xfeCrash|SIGSEGV|0x0|0\n")
+    assert LogMap._find_minidump([md_log]) == md_log
+
+
 def test_log_map_06(tmp_path):
     """test selecting Valgrind logs with LogMap.create()"""
     (tmp_path / "log_stderr.txt").write_bytes(b"STDERR log")
