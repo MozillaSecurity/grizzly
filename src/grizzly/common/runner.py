@@ -162,8 +162,6 @@ class Runner:
         Returns:
             None
         """
-        assert self._server is not None
-        assert self._target is not None
         assert attempts > 0
         assert retry_delay >= 0
         # nothing should be trying to connect, did the previous target.close() fail?
