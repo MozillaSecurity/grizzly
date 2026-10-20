@@ -5,23 +5,20 @@ from __future__ import annotations
 
 from logging import getLogger
 from os import getenv
-from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from fxpoppet.adb_process import ADBLaunchError, ADBProcess, Reason
 from fxpoppet.adb_session import ADBSession, ADBSessionError
 from fxpoppet.adb_wrapper import ADBWrapper
-from prefpicker import PrefPicker
 
 from ..common.report import MAX_LOG_SIZE
-from ..common.utils import grz_tmp
-from .firefox_target import merge_sanitizer_options
+from .firefox_target import generate_prefs, merge_sanitizer_options
 from .target import Result, Target, TargetLaunchError
 from .target_monitor import TargetMonitor
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
+    from pathlib import Path
     from typing import Any
 
 __all__ = ("FenixTarget",)
@@ -216,13 +213,7 @@ class FenixTarget(Target):
         self._prefs = self.asset_mgr.get("prefs")
         # generate temporary prefs.js with prefpicker
         if self._prefs is None:
-            LOG.debug("using prefpicker to generate prefs.js")
-            with TemporaryDirectory(dir=grz_tmp("target")) as tmp_path:
-                prefs = Path(tmp_path) / "prefs.js"
-                template = PrefPicker.lookup_template("browser-fuzzing.yml")
-                assert template is not None
-                PrefPicker.load_template(template).create_prefsjs(prefs)
-                self._prefs = self.asset_mgr.add("prefs", prefs, copy=False)
+            self._prefs = generate_prefs(self.asset_mgr)
 
     def reverse(self, remote: int, local: int) -> None:
         # remote->device, local->desktop
