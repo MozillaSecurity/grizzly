@@ -139,7 +139,7 @@ class SimpleResultCounter:
         """
         for result_id, count in self._count.items():
             if count > 0:
-                yield ResultEntry(result_id, count, self._desc.get(result_id, None))
+                yield ResultEntry(result_id, count, self._desc.get(result_id))
 
     def blockers(
         self, iterations: int, iters_per_result: int = 100
@@ -188,7 +188,7 @@ class SimpleResultCounter:
             ResultEntry: Count and description.
         """
         return ResultEntry(
-            result_id, self._count.get(result_id, 0), self._desc.get(result_id, None)
+            result_id, self._count.get(result_id, 0), self._desc.get(result_id)
         )
 
     @property
@@ -382,8 +382,7 @@ class ResultCounter(SimpleResultCounter):
         Returns:
             None
         """
-        if result_id not in self._frequent:
-            self._frequent.add(result_id)
+        self._frequent.add(result_id)
 
 
 class BaseStatus:
