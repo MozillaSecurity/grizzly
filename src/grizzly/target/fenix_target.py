@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
     from typing import Any
 
+__all__ = ("FenixTarget",)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
@@ -144,15 +145,15 @@ class FenixTarget(Target):
     def closed(self) -> bool:
         return self._proc.reason is not None
 
-    def check_result(self, _ignored: Iterable[str]) -> Result:
+    def check_result(self, ignored: Iterable[str]) -> Result:
         status = Result.NONE
         if not self._proc.is_healthy():
-            self._proc.close()
+            self.close()
             # if something has happened figure out what
             if self._proc.reason == Reason.CLOSED:
                 LOG.debug("target.close() was called")
             elif self._proc.reason == Reason.EXITED:
-                LOG.debug("Target closed itself")
+                LOG.debug("target closed itself")
             else:
                 LOG.debug("failure detected")
                 status = Result.FOUND
