@@ -98,13 +98,12 @@ class LogMap:
         # order by date hopefully the oldest log is the cause of the issue
         to_scan = sorted(files, key=lambda x: x.stat().st_mtime)
         # look for file to use as aux log
-        log_aux = cls._find_sanitizer(to_scan)
-        if log_aux is None:
-            log_aux = cls._find_valgrind(to_scan)
-        if log_aux is None:
-            log_aux = cls._find_minidump(to_scan)
-        if log_aux is None:
-            log_aux = cls._find_ffpuppet_worker(to_scan)
+        log_aux = (
+            cls._find_sanitizer(to_scan)
+            or cls._find_valgrind(to_scan)
+            or cls._find_minidump(to_scan)
+            or cls._find_ffpuppet_worker(to_scan)
+        )
         # look for stderr and stdout log files
         log_err = None
         log_out = None
