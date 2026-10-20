@@ -46,7 +46,6 @@ class PuppetMonitor(TargetMonitor):
         return self._puppet.is_healthy()
 
     def is_idle(self, threshold: int) -> bool:
-        # assert 0 <= threshold <= 100
         return all(cpu < threshold for _, cpu in self._puppet.cpu_usage())
 
     def is_running(self) -> bool:
@@ -126,7 +125,6 @@ class FirefoxTarget(Target):
         LOG.debug("ffpuppet version: %s", package_version("ffpuppet"))
         # only pass certs to FFPuppet if certutil is available
         # otherwise certs can't be used
-        self._https = False
         self._monitor: PuppetMonitor | None = None
         self._profile_template = None
         if certs is not None:
@@ -143,9 +141,9 @@ class FirefoxTarget(Target):
             self._debugger = Debugger.PERNOSCO
         if rr:
             self._debugger = Debugger.RR
+        # TODO: replace use_valgrind with something debugger generic
+        self.use_valgrind = valgrind
         if valgrind:
-            # TODO: replace use_valgrind with something debugger generic
-            self.use_valgrind = True
             self._debugger = Debugger.VALGRIND
         self._extension: Path | None = None
         self._prefs: Path | None = None
@@ -169,7 +167,7 @@ class FirefoxTarget(Target):
             rmtree(self._profile_template)
 
     @staticmethod
-    def _get_certdb(cert_file: Path, certuil: str) -> Path:
+    def _get_certdb(cert_file: Path, certutil: str) -> Path:
         """Load or create a certdb to use with Firefox. This will search for a cached
         certificate and certdb before generating and caching a new bundle.
         The cache allows reuse across processes.
@@ -191,8 +189,8 @@ class FirefoxTarget(Target):
             with TemporaryDirectory() as tmp_path:
                 certdb = Path(tmp_path) / db_path
                 certdb.mkdir(parents=True)
-                Profile.init_cert_db(certdb, certuil)
-                Profile.install_cert(certdb, cert_file, certuil)
+                Profile.init_cert_db(certdb, certutil)
+                Profile.install_cert(certdb, cert_file, certutil)
                 # add certdb to cache
                 cached = add_cached("crypto", certdb)
         # copy data from cache
