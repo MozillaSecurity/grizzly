@@ -39,6 +39,22 @@ class TestFileExists(Exception):
     TestFile with the same name"""
 
 
+def _check_str_map(name: str, value: object) -> None:
+    """Check that loaded test info data is a mapping of str to str.
+
+    Args:
+        name: Name of the entry, used in the error message.
+        value: Data to check.
+
+    Returns:
+        None
+    """
+    if not isinstance(value, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in value.items()
+    ):
+        raise TestCaseLoadFailure(f"'{name}' contains invalid entry")
+
+
 @dataclass(eq=False, frozen=True, slots=True)
 class TestFileMap:
     optional: dict[str, Path] = field(default_factory=dict)
@@ -403,10 +419,7 @@ class TestCase:
         test.https = info.get("https", False)
         test.version = info.get("version", "unknown")
         # sanity check assets data
-        assert isinstance(test.assets, dict)
-        for name, value in test.assets.items():
-            if not isinstance(name, str) or not isinstance(value, str):
-                raise TestCaseLoadFailure("'assets' contains invalid entry")
+        _check_str_map("assets", test.assets)
         if test.assets:
             assets_path = info.get("assets_path", None)
             if not assets_path or not (test.root / assets_path).is_dir():
@@ -415,10 +428,7 @@ class TestCase:
             else:
                 test.assets_path = test.root / assets_path
         # sanity check environment variable data
-        assert isinstance(test.env_vars, dict)
-        for name, value in test.env_vars.items():
-            if not isinstance(name, str) or not isinstance(value, str):
-                raise TestCaseLoadFailure("'env' contains invalid entry")
+        _check_str_map("env", test.env_vars)
         # add contents of directory to test case 'contents' (excluding assets)
         # data is not copied/moved because it is already in place
         if catalog and path.is_dir():
