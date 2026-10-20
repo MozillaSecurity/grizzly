@@ -274,9 +274,9 @@ class FirefoxTarget(Target):
         )
         was_idle = False
         if self._puppet.is_healthy():
-            proc_usage = sorted(self._puppet.cpu_usage(), key=lambda x: x[1])
-            if proc_usage:
-                pid, cpu = proc_usage.pop()
+            busiest = max(self._puppet.cpu_usage(), key=lambda x: x[1], default=None)
+            if busiest is not None:
+                pid, cpu = busiest
                 if ignore_idle and cpu < 15:
                     # don't send SIGABRT if process is idle
                     LOG.debug("ignoring idle hang (%0.1f%%)", cpu)
