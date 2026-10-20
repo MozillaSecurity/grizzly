@@ -22,7 +22,13 @@ if TYPE_CHECKING:
 
     from .target_monitor import TargetMonitor
 
-__all__ = ("Result", "Target", "TargetError", "TargetLaunchError")
+__all__ = (
+    "Result",
+    "Target",
+    "TargetError",
+    "TargetLaunchError",
+    "TargetLaunchTimeout",
+)
 __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith", "Jesse Schwartzentruber"]
 
