@@ -328,6 +328,11 @@ def test_testcase_13(tmp_path):
     (src_dir / TEST_INFO).write_text(dumps(test_info))
     with raises(TestCaseLoadFailure, match="'env' contains invalid entry"):
         TestCase.load(src_dir)
+    test_info["env"] = ["bad"]
+    (src_dir / TEST_INFO).write_text(dumps(test_info))
+    with raises(TestCaseLoadFailure, match="'env' contains invalid entry"):
+        TestCase.load(src_dir)
+    test_info["env"] = {}
     # missing asset data
     test_info["env"].clear()
     test_info["assets"] = {"a": "a"}
