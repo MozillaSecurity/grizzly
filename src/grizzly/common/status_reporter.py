@@ -17,7 +17,7 @@ from mmap import ACCESS_READ, mmap
 from os import getenv
 from pathlib import Path
 from platform import system
-from re import match
+from re import compile as re_compile
 from time import gmtime, localtime, strftime
 from typing import TYPE_CHECKING
 
@@ -40,6 +40,8 @@ __author__ = "Tyson Smith"
 __credits__ = ["Tyson Smith"]
 
 LOG = getLogger(__name__)
+# matches the final line of a traceback (exception type and optional message)
+_RE_TB_ERROR = re_compile(r"^\w+(\.\w+)*\:\s|^\w+(Interrupt|Error)$")
 
 
 class TracebackReport:
@@ -110,15 +112,15 @@ class TracebackReport:
                 log_line = log_line.strip()
                 if not log_line:
                     # stop at first empty line
-                    tb_end = min(line_num, line_count)
+                    tb_end = line_num
                     break
-                if match(r"^\w+(\.\w+)*\:\s|^\w+(Interrupt|Error)$", log_line):
+                if _RE_TB_ERROR.match(log_line):
                     is_kbi = log_line.startswith("KeyboardInterrupt")
                     if is_kbi and ignore_kbi:
                         # ignore this exception since it is a KeyboardInterrupt
                         return None
                     # stop after error message
-                    tb_end = min(line_num + 1, line_count)
+                    tb_end = line_num + 1
                     break
         assert tb_start is not None
         if max_preceding > 0:
@@ -127,8 +129,8 @@ class TracebackReport:
         else:
             prev_lines = None
         if tb_end is None:
-            # limit if the end is not identified (failsafe)
-            tb_end = max(line_count, cls.MAX_LINES)
+            # end is not identified (failsafe)
+            tb_end = line_count
         if tb_end - tb_start > cls.MAX_LINES:
             # add first entry
             lines = data_lines[tb_start : tb_start + 3]
