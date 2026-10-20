@@ -113,7 +113,8 @@ class CrashEntry:
         if self._storage is not None:
             rmtree(self._storage, ignore_errors=True)
         if self._sig_filename is not None:
-            rmtree(self._sig_filename.parent)
+            rmtree(self._sig_filename.parent, ignore_errors=True)
+            self._sig_filename = None
 
     @staticmethod
     def _subset(tests: list[Path], subset: list[int]) -> list[Path]:
@@ -316,7 +317,8 @@ class Bucket:
             None
         """
         if self._sig_filename is not None:
-            rmtree(self._sig_filename.parent)
+            rmtree(self._sig_filename.parent, ignore_errors=True)
+            self._sig_filename = None
 
     def iter_crashes(self, quality_filter: int | None = None) -> Generator[CrashEntry]:
         """Fetch all crash IDs for this FuzzManager bucket.

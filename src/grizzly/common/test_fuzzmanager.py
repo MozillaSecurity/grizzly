@@ -110,6 +110,9 @@ def test_bucket_04(mocker):
         # second call returns same path
         assert bucket.signature_path() == sig_path
     assert coll.return_value.get.call_count == 1
+    assert not sig_path.parent.exists()
+    # calling cleanup() again is a no-op
+    bucket.cleanup()
 
 
 def test_crash_01(mocker):
@@ -287,6 +290,9 @@ def test_crash_05(mocker):
         # second call returns same path
         assert crash.create_signature(None) == sig_path
     assert coll.return_value.get.call_count == 1
+    assert not sig_path.parent.exists()
+    # calling cleanup() again is a no-op
+    crash.cleanup()
 
 
 def test_crash_06(mocker):
