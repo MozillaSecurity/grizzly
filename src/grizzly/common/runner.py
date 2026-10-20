@@ -74,7 +74,7 @@ class _IdleChecker:
             self.schedule_poll(now=now)
         return False
 
-    def schedule_poll(self, initial: int = False, now: float | None = None) -> None:
+    def schedule_poll(self, initial: bool = False, now: float | None = None) -> None:
         """Update `_next_poll`.
 
         Args:
