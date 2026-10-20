@@ -13,7 +13,7 @@ from dataclasses import astuple, dataclass
 from json import dumps, loads
 from logging import getLogger
 from os import getpid
-from sqlite3 import Connection, Cursor, OperationalError, connect
+from sqlite3 import Connection, Cursor, OperationalError, Row, connect
 from time import perf_counter, time
 from typing import TYPE_CHECKING, Any, cast
 
@@ -527,6 +527,7 @@ class ReadOnlyStatus(BaseStatus):
         """
         assert time_limit >= 0
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
+            con.row_factory = Row
             # collect entries
             entries = _execute_if_table_exists(
                 con.cursor(),
@@ -548,20 +549,20 @@ class ReadOnlyStatus(BaseStatus):
             # look up counter
             current_counter = None
             for counter in results:
-                if counter.pid == entry[0]:
+                if counter.pid == entry["pid"]:
                     current_counter = counter
                     break
 
             status = cls(
-                entry[0],
-                entry[5],
-                entry[6],
-                ignored=entry[2],
-                iteration=entry[3],
-                log_size=entry[4],
+                entry["pid"],
+                entry["start_time"],
+                entry["timestamp"],
+                ignored=entry["ignored"],
+                iteration=entry["iteration"],
+                log_size=entry["log_size"],
                 results=current_counter,
             )
-            status._profiles = loads(entry[1])
+            status._profiles = loads(entry["_profiles"])
             yield status
 
     @property
@@ -1025,6 +1026,7 @@ class ReductionStatus:
         """
         assert time_limit >= 0
         with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
+            con.row_factory = Row
             # collect entries
             entries = _execute_if_table_exists(
                 con.cursor(),
@@ -1051,28 +1053,28 @@ class ReductionStatus:
             )
 
         for entry in entries:
-            pid = entry[0]
-
             status = cls(
-                strategies=loads(entry[10]),
-                crash_id=entry[7],
-                pid=pid,
-                tool=entry[14],
+                strategies=loads(entry["strategies"]),
+                crash_id=entry["crash_id"],
+                pid=entry["pid"],
+                tool=entry["tool"],
             )
-            status.analysis = loads(entry[1])
-            status.attempts = entry[2]
-            status.iterations = entry[3]
-            status.run_params = loads(entry[4])
-            status.signature_info = loads(entry[5])
-            status.successes = entry[6]
-            status.finished_steps = [ReductionStep(*step) for step in loads(entry[8])]
-            status._in_progress_steps = [
-                _MilestoneTimer(*step) for step in loads(entry[9])
+            status.analysis = loads(entry["analysis"])
+            status.attempts = entry["attempts"]
+            status.iterations = entry["iterations"]
+            status.run_params = loads(entry["run_params"])
+            status.signature_info = loads(entry["signature_info"])
+            status.successes = entry["successes"]
+            status.finished_steps = [
+                ReductionStep(*step) for step in loads(entry["finished_steps"])
             ]
-            status._current_size = entry[11]
-            status.current_strategy_idx = entry[12]
-            status.timestamp = entry[13]
-            status.last_reports = loads(entry[15])
+            status._in_progress_steps = [
+                _MilestoneTimer(*step) for step in loads(entry["_in_progress_steps"])
+            ]
+            status._current_size = entry["_current_size"]
+            status.current_strategy_idx = entry["current_strategy_idx"]
+            status.timestamp = entry["timestamp"]
+            status.last_reports = loads(entry["last_reports"])
             yield status
 
     def _testcase_size(self) -> int | None:
