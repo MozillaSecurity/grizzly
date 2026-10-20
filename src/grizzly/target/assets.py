@@ -90,9 +90,8 @@ class AssetManager:
         Returns:
             None
         """
-        if self.path:
-            rmtree(self.path, ignore_errors=True)
-            self.assets.clear()
+        rmtree(self.path, ignore_errors=True)
+        self.assets.clear()
 
     def get(self, asset: str) -> Path | None:
         """Get path to content on filesystem for given asset.
@@ -103,7 +102,7 @@ class AssetManager:
         Returns:
             Path to asset content or None if asset does not exist.
         """
-        item = self.assets.get(asset, None)
+        item = self.assets.get(asset)
         return self.path / item if item else None
 
     def is_empty(self) -> bool:
