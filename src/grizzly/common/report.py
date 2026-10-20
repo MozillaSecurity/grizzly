@@ -35,6 +35,32 @@ DEFAULT_MINOR = "NO_STACK"
 HANG_STACK_HEIGHT = 10
 MAX_LOG_SIZE = 1_048_576  # 1MB
 
+# pattern to identify a minidump log containing a requested dump
+_RE_DUMP_REQ = re_compile(
+    r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump"
+)
+# pattern to identify the ASan crash triggered when the parent process goes away
+# TODO: this may no longer be required
+_RE_E10S_FORCED = re_compile(
+    r"""
+    ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
+    #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
+    """,
+    DOTALL | VERBOSE,
+)
+# Sanitizer error reports to prioritize
+# Sanitizer reports not included below are deprioritized
+_SAN_PRIORITY_TOKENS = (
+    "use-after-",
+    "-buffer-overflow on",
+    ": data race ",
+    ": SEGV on ",
+    "access-violation on ",
+    "attempting free on ",
+    "negative-size-param",
+    "-param-overlap",
+)
+
 
 class LogMap:
     """Container mapping the three standard log file paths (aux, stderr, stdout)
@@ -117,9 +143,6 @@ class LogMap:
         Returns:
             Log file if a match is found otherwise None.
         """
-        re_dump_req = re_compile(
-            r"\d+\|0\|.+?\|google_breakpad::ExceptionHandler::WriteMinidump"
-        )
         for log_file in (x for x in logs if "minidump" in x.name):
             with log_file.open(encoding="utf-8", errors="ignore") as log_fp:
                 data = log_fp.read(65536)
@@ -127,7 +150,7 @@ class LogMap:
                 # the desired "DUMP_REQUESTED" log
                 # TODO: review this it may be too strict
                 # see mozilla-central/source/accessible/ipc/DocAccessibleParent.cpp#452
-                if "Crash|DUMP_REQUESTED|" not in data or re_dump_req.search(data):
+                if "Crash|DUMP_REQUESTED|" not in data or _RE_DUMP_REQ.search(data):
                     return log_file
         return None
 
@@ -141,27 +164,6 @@ class LogMap:
         Returns:
             Log file if a match is found otherwise None.
         """
-        # pattern to identify the ASan crash triggered when the parent process goes away
-        # TODO: this may no longer be required
-        re_e10s_forced = re_compile(
-            r"""
-            ==\d+==ERROR:.+?SEGV\son.+?0x[0]+\s\(.+?T2\).+?
-            #0\s+0x[0-9a-f]+\sin\s+mozilla::ipc::MessageChannel::OnChannelErrorFromLink
-            """,
-            DOTALL | VERBOSE,
-        )
-        # this is a list of Sanitizer error reports to prioritize
-        # Sanitizer reports not included below are deprioritized
-        prioritize_tokens = (
-            "use-after-",
-            "-buffer-overflow on",
-            ": data race ",
-            ": SEGV on ",
-            "access-violation on ",
-            "attempting free on ",
-            "negative-size-param",
-            "-param-overlap",
-        )
         fallback = None
         found = None
         for log_file in (x for x in logs if "asan" in x.name):
@@ -170,12 +172,12 @@ class LogMap:
             # look for interesting crash info in the log
             if "==ERROR:" in data or "WARNING:" in data:
                 # check for e10s forced crash
-                if re_e10s_forced.search(data) is not None:
+                if _RE_E10S_FORCED.search(data) is not None:
                     continue
                 # make sure there is something that looks like a stack frame
                 if "#0 " in data:
                     found = log_file
-                    if any(x in data for x in prioritize_tokens):
+                    if any(x in data for x in _SAN_PRIORITY_TOKENS):
                         # this is the likely cause of the crash
                         break
             if found is None:
