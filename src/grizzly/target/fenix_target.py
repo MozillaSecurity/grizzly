@@ -140,13 +140,10 @@ class FenixTarget(Target):
         with self._lock:
             self._proc.cleanup()
             self._session.reverse_remove()
-        if self._prefs and self._prefs.is_file():
-            self._prefs.unlink()
 
     def close(self, force_close: bool = False) -> None:
         with self._lock:
-            if self._proc is not None:
-                self._proc.close()
+            self._proc.close()
 
     @property
     def closed(self) -> bool:
