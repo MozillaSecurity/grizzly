@@ -320,7 +320,7 @@ def test_runner_09(mocker):
     # target launch timeout
     target.launch.side_effect = TargetLaunchTimeout
     with raises(TargetLaunchTimeout):
-        runner.launch("http://a/", max_retries=3)
+        runner.launch("http://a/", attempts=3)
     assert target.launch.call_count == 3
     assert runner.startup_failure
 
