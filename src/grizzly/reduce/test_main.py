@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Unit tests for `grizzly.reduce.main`."""
 
-from pytest import mark, raises
+from pytest import fixture, mark, raises
 
 from ..common.frontend import ConfigError, Exit
 from ..common.storage import TestCase, TestCaseLoadFailure
@@ -13,6 +13,12 @@ from .exceptions import GrizzlyReduceBaseException
 from .main import main
 
 pytestmark = mark.usefixtures("tmp_path_status_db_reduce")
+
+
+@fixture(autouse=True)
+def no_setlocale(mocker):
+    """Prevent main() from changing the locale of the test process."""
+    mocker.patch("grizzly.reduce.main.setlocale", autospec=True)
 
 
 def test_args_01(capsys, tmp_path, mocker):
