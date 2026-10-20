@@ -222,10 +222,7 @@ class TestCase:
             None
         """
         src_file = Path(src_file)
-        if file_name is None:
-            url_path = self.sanitize_path(src_file.name)
-        else:
-            url_path = self.sanitize_path(file_name)
+        url_path = self.sanitize_path(src_file.name if file_name is None else file_name)
         if url_path in self:
             raise TestFileExists(f"'{url_path}' exists in test")
 
