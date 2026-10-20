@@ -956,7 +956,7 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         int
     """
-    if bool(getenv("DEBUG")):  # pragma: no cover
+    if getenv("DEBUG", "0").lower() in ("1", "true"):  # pragma: no cover
         log_level = DEBUG
         log_fmt = "%(levelname).1s %(name)s [%(asctime)s] %(message)s"
     else:
