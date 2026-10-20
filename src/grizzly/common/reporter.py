@@ -293,8 +293,8 @@ class FuzzManagerReporter(Reporter):
         report.crash_info.configuration.addMetadata(self._extra_metadata)
 
         # grab screen log (used in automation)
-        if getenv("WINDOW") is not None:
-            screen_log = Path.cwd() / f"screenlog.{getenv('WINDOW')}"
+        if (window := getenv("WINDOW")) is not None:
+            screen_log = Path.cwd() / f"screenlog.{window}"
             if screen_log.is_file():
                 target_log = report.path / "screenlog.txt"
                 copyfile(screen_log, target_log)
