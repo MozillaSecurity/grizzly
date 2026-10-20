@@ -3,7 +3,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import annotations
 
-from contextlib import suppress
 from logging import getLogger
 from shutil import move, rmtree
 from time import time
@@ -109,13 +108,12 @@ def clear_cached(max_age: int = MAX_AGE * 2) -> None:
     assert max_age >= 0
     limit = CACHE_TIME - max_age
     with InterProcessLock(LOCK_FILE):
-        # iterate over all directories in CACHE_PATH
-        for entry in (x for x in CACHE_PATH.iterdir() if x.is_dir()):
-            with suppress(ValueError):
-                # remove only expired
-                if int(entry.name) <= limit:
-                    LOG.debug("removing old cache entry: '%s'", entry)
-                    rmtree(entry, ignore_errors=True)
+        # iterate over all cache directories in CACHE_PATH
+        for entry in CACHE_PATH.iterdir():
+            # remove only expired
+            if entry.is_dir() and entry.name.isdecimal() and int(entry.name) <= limit:
+                LOG.debug("removing old cache entry: '%s'", entry)
+                rmtree(entry, ignore_errors=True)
 
 
 def find_cached(key: str) -> Path | None:
