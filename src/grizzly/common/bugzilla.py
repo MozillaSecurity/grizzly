@@ -82,7 +82,7 @@ class BugzillaBug:
                 or attachment.content_type == "text/x-phabricator-request"
                 or not attachment.file_name
                 or (require_extension and "." not in attachment.file_name)
-                or attachment.file_name.split(".")[-1] in ignore
+                or attachment.file_name.split(".")[-1].lower() in ignore
             ):
                 continue
             target = (self._data / attachment.file_name).resolve()
