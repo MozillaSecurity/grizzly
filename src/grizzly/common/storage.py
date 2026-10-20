@@ -407,11 +407,11 @@ class TestCase:
             entry_point.relative_to(entry_point.parent).as_posix(),
             info.get("adapter", "unknown"),
             data_path=entry_point.parent,
-            input_fname=info.get("input", None),
+            input_fname=info.get("input"),
             timestamp=info.get("timestamp", 0),
         )
         test.assets = info.get("assets", {})
-        test.duration = info.get("duration", None)
+        test.duration = info.get("duration")
         test.env_vars = info.get("env", {})
         test.hang = info.get("hang", False)
         test.https = info.get("https", False)
@@ -419,7 +419,7 @@ class TestCase:
         # sanity check assets data
         _check_str_map("assets", test.assets)
         if test.assets:
-            assets_path = info.get("assets_path", None)
+            assets_path = info.get("assets_path")
             if not assets_path or not (test.root / assets_path).is_dir():
                 LOG.warning("Could not find assets in test case")
                 test.assets = {}
@@ -469,7 +469,6 @@ class TestCase:
                 info["target"] = entry_point.name
             elif info:
                 entry_point = path / info["target"]
-                assert entry_point
             else:
                 # attempt to determine entry point
                 entry_point = cls._find_entry_point(path)
