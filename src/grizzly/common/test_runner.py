@@ -420,6 +420,17 @@ def test_runner_12(mocker, delay, srv_result, startup_failure):
     assert runner.startup_failure == startup_failure
 
 
+def test_runner_13(mocker):
+    """test Runner.post_launch() restores server timeout on error"""
+    server = mocker.Mock(spec_set=Sapphire, timeout=1)
+    server.serve_path.side_effect = KeyboardInterrupt
+    runner = Runner(server, mocker.Mock(spec_set=Target, launch_timeout=30))
+    runner.launch("http://a/")
+    with raises(KeyboardInterrupt):
+        runner.post_launch(delay=10)
+    assert server.timeout == 1
+
+
 def test_idle_check_01(mocker):
     """test simple _IdleChecker"""
     fake_time = mocker.patch("grizzly.common.runner.perf_counter", autospec=True)
