@@ -148,8 +148,7 @@ class Reporter(ABC):
                 LOG.info("=== BEGIN REPORT ===\nBrowser hang detected")
             LOG.info("=== END REPORT ===")
         result = self._submit_report(report, test_cases, force)
-        if report is not None:
-            report.cleanup()
+        report.cleanup()
         self._post_submit()
         return result
 
