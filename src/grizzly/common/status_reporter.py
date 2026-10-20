@@ -703,21 +703,20 @@ def _format_seconds(duration: float) -> str:
     return f"{seconds}s"
 
 
-def _format_duration(duration: int | None, total: float = 0) -> str:
-    result = ""
-    if duration is not None:
-        percent = 0 if total == 0 else int(100 * duration / total)
-        result = _format_seconds(duration)
-        result += f" ({percent:3d}%)"
-    return result
+def _percent(value: float, total: float) -> int:
+    return 0 if total == 0 else int(100 * value / total)
+
+
+def _format_duration(duration: float | None, total: float = 0) -> str:
+    if duration is None:
+        return ""
+    return f"{_format_seconds(duration)} ({_percent(duration, total):3d}%)"
 
 
 def _format_number(number: int | None, total: float = 0) -> str:
-    result = ""
-    if number is not None:
-        percent = 0 if total == 0 else int(100 * number / total)
-        result = f"{number:n} ({percent:3d}%)"
-    return result
+    if number is None:
+        return ""
+    return f"{number:n} ({_percent(number, total):3d}%)"
 
 
 class ReductionStatusReporter(BaseReporter):
