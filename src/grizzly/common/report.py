@@ -330,13 +330,12 @@ class Report:
                     system(),
                 )
             # read the log files and create a CrashInfo object
-            aux_data = self._load_log(self._logs.aux) if self._logs.aux else None
+            aux_data, err_data, out_data = (
+                self._load_log(log) if log else None for log in self._logs
+            )
             try:
                 self._crash_info = CrashInfo.fromRawCrashData(
-                    self._load_log(self._logs.stdout) if self._logs.stdout else None,
-                    self._load_log(self._logs.stderr) if self._logs.stderr else None,
-                    fm_cfg,
-                    auxCrashData=aux_data,
+                    out_data, err_data, fm_cfg, auxCrashData=aux_data
                 )
             except TraceParsingError:
                 if aux_data is not None:
