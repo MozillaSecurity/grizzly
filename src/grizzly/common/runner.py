@@ -173,10 +173,9 @@ class Runner:
         launch_duration: float = 0
         LOG.debug("launching target (timeout %ds)", self._target.launch_timeout)
         for retries in reversed(range(attempts)):
+            launch_start = perf_counter()
             try:
-                launch_start = perf_counter()
                 self._target.launch(location)
-                launch_duration = perf_counter() - launch_start
             except (TargetLaunchError, TargetLaunchTimeout) as exc:
                 is_timeout = isinstance(exc, TargetLaunchTimeout)
                 if not retries:
@@ -197,8 +196,9 @@ class Runner:
                     LOG.warning("Failure during launch (retries %d)", retries)
                     exc.report.cleanup()
                 sleep(retry_delay)
-                continue
-            break
+            else:
+                launch_duration = perf_counter() - launch_start
+                break
 
         if launch_duration > SLOW_LAUNCH_THRESHOLD:
             LOG.warning(
