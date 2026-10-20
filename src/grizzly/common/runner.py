@@ -284,14 +284,16 @@ class Runner:
             if delay > 0:
                 LOG.info("Browser launched, continuing in %ds...", delay)
             LOG.debug("post launch timeout: %ds", self._server.timeout)
-            # serve prompt page
-            srv_result = self._server.serve_path(
-                content.root,
-                continue_cb=self._target.monitor.is_healthy,
-                server_map=srv_map,
-            )
-            # restore server timeout
-            self._server.timeout = org_timeout
+            try:
+                # serve prompt page
+                srv_result = self._server.serve_path(
+                    content.root,
+                    continue_cb=self._target.monitor.is_healthy,
+                    server_map=srv_map,
+                )
+            finally:
+                # restore server timeout
+                self._server.timeout = org_timeout
             if srv_result.status != Served.ALL:
                 self.startup_failure = True
                 if srv_result.timeout:
