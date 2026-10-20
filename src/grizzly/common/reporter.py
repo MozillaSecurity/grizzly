@@ -62,6 +62,23 @@ class Reporter(ABC):
     def __init__(self) -> None:
         self.display_logs = getenv("GRZ_DISPLAY_REPORT") == "1"
 
+    @staticmethod
+    def _dump_testcases(test_cases: list[TestCase], dest: Path, prefix: str) -> None:
+        """Dump test cases and the contained files, newest first.
+
+        Args:
+            test_cases: Testcases to dump, ordered oldest to newest.
+            dest: Directory to dump test cases to.
+            prefix: Prefix of each test case directory name.
+
+        Returns:
+            None
+        """
+        for test_number, test_case in enumerate(reversed(test_cases)):
+            dump_path = dest / f"{prefix}-{test_number}"
+            dump_path.mkdir(exist_ok=True)
+            test_case.dump(dump_path, include_details=True)
+
     @abstractmethod
     def _post_submit(self) -> None:
         """Called after _submit_report() is called.
@@ -165,10 +182,8 @@ class FilesystemReporter(Reporter):
             dest = self.report_path
         dest.mkdir(parents=True, exist_ok=True)
         # dump test cases and the contained files to working directory
-        for test_number, test_case in enumerate(reversed(test_cases)):
-            dump_path = dest / f"{self.report_prefix}-{test_number}"
-            dump_path.mkdir(exist_ok=True)
-            test_case.dump(dump_path, include_details=True)
+        assert self.report_prefix is not None
+        self._dump_testcases(test_cases, dest, self.report_prefix)
         # move logs into bucket directory
         log_path = dest / f"{self.report_prefix}_logs"
         if log_path.is_dir():
@@ -265,10 +280,7 @@ class FuzzManagerReporter(Reporter):
         if test_cases:
             self.add_extra_metadata("testcase_count", len(test_cases))
             # dump test cases and the contained files to working directory
-            for test_number, test_case in enumerate(reversed(test_cases)):
-                dump_path = report.path / f"{report.prefix}-{test_number}"
-                dump_path.mkdir(exist_ok=True)
-                test_case.dump(dump_path, include_details=True)
+            self._dump_testcases(test_cases, report.path, report.prefix)
             quality = Quality.UNREDUCED
             if test_cases[0].env_vars:
                 # add environment variables to metadata
