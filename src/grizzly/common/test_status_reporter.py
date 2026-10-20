@@ -168,7 +168,7 @@ def test_reduce_status_reporter_05(tmp_path):
         testcase_size_cb=lambda: 47,
     )
     with status.measure("total"):
-        status.iteration = 1
+        status.iterations = 1
     status.report(force=True)
     # create boring screenlog
     (tmp_path / "screenlog.0").write_bytes(b"boring\ntest\n123\n")
@@ -695,6 +695,7 @@ def test_main_01(mocker, tmp_path, report_mode):
         mocker.patch("grizzly.common.status_reporter.STATUS_DB_FUZZ", status_db)
         status = Status.start(status_db)
         status.results.count("uid", "[@ test]")
+        status.iteration = 1
     elif report_mode == "reducing":
         mocker.patch("grizzly.common.status_reporter.STATUS_DB_REDUCE", status_db)
         status = ReductionStatus.start(
@@ -702,7 +703,7 @@ def test_main_01(mocker, tmp_path, report_mode):
             testcase_size_cb=lambda: 47,
             strategies=[],
         )
-    status.iteration = 1
+        status.iterations = 1
     status.report(force=True)
     assert main(["--scan-mode", report_mode]) == 0
 
@@ -728,7 +729,7 @@ def test_main_03(mocker, tmp_path, report_type, report_mode):
             strategies=[],
         )
         with status.measure("total"):
-            status.iteration = 1
+            status.iterations = 1
     else:
         mocker.patch("grizzly.common.status_reporter.STATUS_DB_FUZZ", status_db)
         status = Status.start(status_db)
