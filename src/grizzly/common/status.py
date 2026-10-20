@@ -747,45 +747,32 @@ class Status(BaseStatus):
             cur = con.cursor()
             with con:
                 cur.execute(
-                    """UPDATE status
-                       SET _profiles = ?,
-                           ignored = ?,
-                           iteration = ?,
-                           log_size = ?,
-                           start_time = ?,
-                           timestamp = ?
-                       WHERE pid = ?;""",
+                    """INSERT INTO status(
+                           pid,
+                           _profiles,
+                           ignored,
+                           iteration,
+                           log_size,
+                           start_time,
+                           timestamp)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(pid) DO UPDATE
+                       SET _profiles = excluded._profiles,
+                           ignored = excluded.ignored,
+                           iteration = excluded.iteration,
+                           log_size = excluded.log_size,
+                           start_time = excluded.start_time,
+                           timestamp = excluded.timestamp;""",
                     (
+                        self.pid,
                         profiles,
                         self.ignored,
                         self.iteration,
                         self.log_size,
                         self.start_time,
                         self.timestamp,
-                        self.pid,
                     ),
                 )
-                if cur.rowcount < 1:
-                    cur.execute(
-                        """INSERT INTO status(
-                               pid,
-                               _profiles,
-                               ignored,
-                               iteration,
-                               log_size,
-                               start_time,
-                               timestamp)
-                           VALUES (?, ?, ?, ?, ?, ?, ?);""",
-                        (
-                            self.pid,
-                            profiles,
-                            self.ignored,
-                            self.iteration,
-                            self.log_size,
-                            self.start_time,
-                            self.timestamp,
-                        ),
-                    )
         return True
 
     @classmethod
