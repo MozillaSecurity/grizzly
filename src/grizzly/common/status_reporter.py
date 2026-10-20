@@ -11,7 +11,6 @@ from collections import defaultdict
 from dataclasses import astuple, fields
 from datetime import timedelta
 from functools import partial
-from itertools import zip_longest
 from logging import DEBUG, INFO, basicConfig, getLogger
 from mmap import ACCESS_READ, mmap
 from os import getenv
@@ -664,33 +663,33 @@ class _TableFormatter:
         Yields:
             Each line of formatted tabular data.
         """
-        max_width = [len(col) for col in self._columns]
-        formatted: list[list[str]] = []
+        formatted: list[tuple[str, ...]] = []
         for row in rows:
             data = astuple(row)
             assert len(data) == len(self._formatters)
-            formatted.append([])
-            offset = 0
-            for idx, (datum, formatter) in enumerate(
-                zip(data, self._formatters, strict=True)
-            ):
-                if formatter is None:
-                    offset += 1
-                    continue
-                datum_str = formatter(datum)
-                max_width[idx - offset] = max(max_width[idx - offset], len(datum_str))
-                formatted[-1].append(datum_str)
+            formatted.append(
+                tuple(
+                    formatter(datum)
+                    for datum, formatter in zip(data, self._formatters, strict=True)
+                    if formatter is not None
+                )
+            )
+        max_width = [
+            max(len(cell) for cell in column)
+            for column in zip(self._columns, *formatted, strict=True)
+        ]
 
-        # build a format_str to space out the columns with separators using `max_width`
-        # the first column is left-aligned, and other fields are right-aligned.
-        format_str = self._vsep.join(
-            field % (width,)
-            for field, width in zip_longest(["%%-%ds"], max_width, fillvalue="%%%ds")
-        )
-        yield format_str % self._columns
+        def _format_line(cells: tuple[str, ...]) -> str:
+            # the first column is left-aligned, and other fields are right-aligned
+            return self._vsep.join(
+                cell.ljust(width) if idx == 0 else cell.rjust(width)
+                for idx, (cell, width) in enumerate(zip(cells, max_width, strict=True))
+            )
+
+        yield _format_line(self._columns)
         yield self._hsep * (len(self._vsep) * (len(self._columns) - 1) + sum(max_width))
         for fmt_row in formatted:
-            yield format_str % tuple(fmt_row)
+            yield _format_line(fmt_row)
 
 
 def _format_seconds(duration: float) -> str:
