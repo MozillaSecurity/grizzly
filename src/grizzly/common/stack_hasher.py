@@ -330,10 +330,6 @@ class ValgrindStackFrame(StackFrame):
         if match is None:
             return None
         input_line = match.group("line")
-        if input_line is None:  # pragma: no cover
-            # this should not happen
-            LOG.warning("failure in ValgrindStackFrame.from_line()")
-            return None
         sframe = cls(function=match.group("func"))
         try:
             location, sframe.offset = input_line.split(":")
