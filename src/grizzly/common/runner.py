@@ -239,7 +239,7 @@ class Runner:
         if post_launch_delay >= 0:
             args.append(f"post_launch_delay={post_launch_delay}")
         if args:
-            return "?".join((location, "&".join(args)))
+            return f"{location}?{'&'.join(args)}"
         return location
 
     @property
