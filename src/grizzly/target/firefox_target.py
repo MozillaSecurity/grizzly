@@ -113,7 +113,7 @@ class FirefoxTarget(Target):
         report_size_limit: int = MAX_LOG_SIZE,
         rr: bool = False,
         valgrind: bool = False,
-        **kwds: dict[str, Any],
+        **kwds: Any,
     ) -> None:
         super().__init__(
             binary,

@@ -76,7 +76,7 @@ class FenixTarget(Target):
         log_limit: int,
         memory_limit: int,
         report_size_limit: int = MAX_LOG_SIZE,
-        **kwds: dict[str, Any],
+        **kwds: Any,
     ) -> None:
         super().__init__(
             binary,
