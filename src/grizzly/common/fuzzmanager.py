@@ -46,6 +46,31 @@ def _rest_url(coll: Collector, endpoint: str) -> str:
     )
 
 
+def _write_signature(
+    prefix: str, sig_id: int, signature: str, metadata: dict[str, Any]
+) -> Path:
+    """Write a signature and matching metadata file to a new temporary directory.
+
+    Arguments:
+        prefix: Prefix of the temporary directory name.
+        sig_id: Used to name the signature file.
+        signature: Raw signature.
+        metadata: Signature metadata.
+
+    Returns:
+        Signature file.
+    """
+    tmpd = Path(mkdtemp(prefix=prefix, dir=grz_tmp("fuzzmanager")))
+    try:
+        sig_file = tmpd / f"{sig_id}.signature"
+        sig_file.write_text(signature)
+        sig_file.with_suffix(".metadata").write_text(json.dumps(metadata))
+    except BaseException:  # pragma: no cover
+        rmtree(tmpd)
+        raise
+    return sig_file
+
+
 class CrashEntry:
     """Get the CrashEntry data for the specified CrashManager crash.
 
@@ -239,40 +264,24 @@ class CrashEntry:
         if self._sig_filename is not None:
             return self._sig_filename
 
-        success = False
-        tmpd = Path(
-            mkdtemp(prefix=f"crash-sig-{self._crash_id}-", dir=grz_tmp("fuzzmanager"))
+        cfg = ProgramConfiguration.fromBinary(binary)
+        fm_crash = CrashInfo.fromRawCrashData(
+            self.rawStdout, self.rawStderr, cfg, auxCrashData=self.rawCrashData
         )
-        try:
-            sig_basename = f"{self._crash_id}.signature"
-            sig_filename = tmpd / sig_basename
-
-            cfg = ProgramConfiguration.fromBinary(binary)
-            fm_crash = CrashInfo.fromRawCrashData(
-                self.rawStdout, self.rawStderr, cfg, auxCrashData=self.rawCrashData
-            )
-            fm_sig = fm_crash.createCrashSignature()
-            if fm_sig is None:
-                raise RuntimeError(str(fm_crash.failureReason))
-            sig_filename.write_text(fm_sig.rawSignature)
-
-            sigmeta_filename = sig_filename.with_suffix(".metadata")
-            sigmeta_filename.write_text(
-                json.dumps(
-                    {
-                        "size": 1,
-                        "frequent": False,
-                        "shortDescription": fm_crash.createShortSignature(),
-                        "testcase__quality": Quality.UNREDUCED,
-                    }
-                )
-            )
-            success = True
-        finally:  # pragma: no cover
-            if not success:
-                rmtree(tmpd)
-
-        self._sig_filename = sig_filename
+        fm_sig = fm_crash.createCrashSignature()
+        if fm_sig is None:
+            raise RuntimeError(str(fm_crash.failureReason))
+        self._sig_filename = _write_signature(
+            f"crash-sig-{self._crash_id}-",
+            self._crash_id,
+            fm_sig.rawSignature,
+            {
+                "size": 1,
+                "frequent": False,
+                "shortDescription": fm_crash.createShortSignature(),
+                "testcase__quality": Quality.UNREDUCED,
+            },
+        )
         return self._sig_filename
 
 
@@ -411,31 +420,17 @@ class Bucket:
         if self._sig_filename is not None:
             return self._sig_filename
 
-        success = False
-        tmpd = Path(
-            mkdtemp(prefix=f"bucket-{self._bucket_id}-", dir=grz_tmp("fuzzmanager"))
+        self._sig_filename = _write_signature(
+            f"bucket-{self._bucket_id}-",
+            self._bucket_id,
+            self.signature,
+            {
+                "size": self.size,
+                "frequent": self.frequent,
+                "shortDescription": self.shortDescription,
+                "testcase__quality": self.best_quality,
+            },
         )
-        try:
-            sig_basename = f"{self._bucket_id}.signature"
-            sig_filename = tmpd / sig_basename
-            sig_filename.write_text(self.signature)
-            sigmeta_filename = sig_filename.with_suffix(".metadata")
-            sigmeta_filename.write_text(
-                json.dumps(
-                    {
-                        "size": self.size,
-                        "frequent": self.frequent,
-                        "shortDescription": self.shortDescription,
-                        "testcase__quality": self.best_quality,
-                    }
-                )
-            )
-            success = True
-        finally:  # pragma: no cover
-            if not success:
-                rmtree(tmpd)
-
-        self._sig_filename = sig_filename
         return self._sig_filename
 
 
