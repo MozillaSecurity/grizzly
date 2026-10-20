@@ -858,41 +858,45 @@ class ReductionStatus:
         # this holds results from Reporter.submit()
         self.last_reports: list[str] = []
 
-        # prepare database
         if self._db_file:
-            LOG.debug("status using db %s", self._db_file)
-            with closing(connect(self._db_file, timeout=DB_TIMEOUT)) as con:
-                _db_version_check(con)
-                cur = con.cursor()
-                with con:
-                    # create table if needed
+            self._init_db(self._db_file, pid, life_time)
+
+    @staticmethod
+    def _init_db(db_file: Path, pid: int | None, life_time: float) -> None:
+        # prepare database
+        LOG.debug("status using db %s", db_file)
+        with closing(connect(db_file, timeout=DB_TIMEOUT)) as con:
+            _db_version_check(con)
+            cur = con.cursor()
+            with con:
+                # create table if needed
+                cur.execute(
+                    """CREATE TABLE IF NOT EXISTS reduce_status (
+                       pid INTEGER NOT NULL PRIMARY KEY,
+                       analysis TEXT NOT NULL,
+                       attempts INTEGER NOT NULL,
+                       iterations INTEGER NOT NULL,
+                       run_params TEXT NOT NULL,
+                       signature_info TEXT NOT NULL,
+                       successes INTEGER NOT NULL,
+                       crash_id INTEGER,
+                       finished_steps TEXT NOT NULL,
+                       _in_progress_steps TEXT NOT NULL,
+                       strategies TEXT NOT NULL,
+                       _current_size INTEGER NOT NULL,
+                       current_strategy_idx INTEGER,
+                       timestamp REAL NOT NULL,
+                       tool TEXT,
+                       last_reports TEXT NOT NULL);"""
+                )
+                # remove expired status data
+                if life_time > 0:
                     cur.execute(
-                        """CREATE TABLE IF NOT EXISTS reduce_status (
-                           pid INTEGER NOT NULL PRIMARY KEY,
-                           analysis TEXT NOT NULL,
-                           attempts INTEGER NOT NULL,
-                           iterations INTEGER NOT NULL,
-                           run_params TEXT NOT NULL,
-                           signature_info TEXT NOT NULL,
-                           successes INTEGER NOT NULL,
-                           crash_id INTEGER,
-                           finished_steps TEXT NOT NULL,
-                           _in_progress_steps TEXT NOT NULL,
-                           strategies TEXT NOT NULL,
-                           _current_size INTEGER NOT NULL,
-                           current_strategy_idx INTEGER,
-                           timestamp REAL NOT NULL,
-                           tool TEXT,
-                           last_reports TEXT NOT NULL);"""
+                        """DELETE FROM reduce_status WHERE timestamp <= ?;""",
+                        (time() - life_time,),
                     )
-                    # remove expired status data
-                    if life_time > 0:
-                        cur.execute(
-                            """DELETE FROM reduce_status WHERE timestamp <= ?;""",
-                            (time() - life_time,),
-                        )
-                    # avoid (unlikely) pid reuse collision
-                    cur.execute("""DELETE FROM reduce_status WHERE pid = ?;""", (pid,))
+                # avoid (unlikely) pid reuse collision
+                cur.execute("""DELETE FROM reduce_status WHERE pid = ?;""", (pid,))
 
     @classmethod
     def start(
