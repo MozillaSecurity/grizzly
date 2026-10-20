@@ -288,6 +288,8 @@ class CrashEntry:
 class Bucket:
     """Get Bucket data for a specified CrashManager bucket."""
 
+    __slots__ = ("_bucket_id", "_coll", "_data", "_sig_filename", "_url")
+
     def __init__(self, bucket_id: int) -> None:
         """Initialize a Bucket instance.
 
