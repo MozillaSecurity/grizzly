@@ -327,12 +327,7 @@ class FirefoxTarget(Target):
             ) from None
 
     def log_size(self) -> int:
-        total = 0
-        for log in ("stderr", "stdout"):
-            length = self._puppet.log_length(log)
-            if length:
-                total += length
-        return total
+        return sum(self._puppet.log_length(log) or 0 for log in ("stderr", "stdout"))
 
     def read_log(self, log_id: str) -> bytes:
         cloned = self._puppet.clone_log(log_id)
