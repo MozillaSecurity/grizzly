@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-from abc import ABC
 from collections import defaultdict
 from contextlib import closing, contextmanager
 from copy import deepcopy
@@ -387,7 +386,7 @@ class ResultCounter(SimpleResultCounter):
             self._frequent.add(result_id)
 
 
-class BaseStatus(ABC):  # noqa: B024
+class BaseStatus:
     """Record and manage status information.
 
     Attributes:
