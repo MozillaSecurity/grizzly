@@ -200,13 +200,14 @@ class BugzillaBug:
         """
         # unpack archives
         self._unpack_archives()
-        testcases = [x for x in self._data.iterdir() if x.is_dir()]
-        # scan base directory for files, filtering out assets
-        files = tuple(
-            x
-            for x in self._data.iterdir()
-            if x.is_file() and x.name.lower() not in KNOWN_ASSETS.values()
-        )
+        testcases: list[Path] = []
+        files: list[Path] = []
+        for entry in self._data.iterdir():
+            if entry.is_dir():
+                testcases.append(entry)
+            # scan base directory for files, filtering out assets
+            elif entry.is_file() and entry.name.lower() not in KNOWN_ASSETS.values():
+                files.append(entry)
         # first, if base directory contains multiple files add it as a single test case
         if len(files) > 1:
             testcases.append(self._data)
