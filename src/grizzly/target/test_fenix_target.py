@@ -113,7 +113,6 @@ def test_fenix_target_simple(mocker, tmp_path, kwargs):
     fake_session.get_package_name.return_value = "the_name"
     with FenixTarget(tmp_path / "test.apk", 300, 25, 5000, **kwargs) as target:
         assert target.closed
-        assert target.forced_close
         assert target.monitor is not None
         assert not target.https()
         assert "foo" not in target.environ

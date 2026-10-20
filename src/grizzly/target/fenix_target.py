@@ -65,8 +65,6 @@ class FenixTarget(Target):
         "_prefs",
         "_proc",
         "_session",
-        "forced_close",
-        "use_rr",
     )
 
     def __init__(
@@ -85,9 +83,6 @@ class FenixTarget(Target):
             memory_limit,
             report_size_limit=report_size_limit,
         )
-        # app will not close itself on Android
-        self.forced_close = True
-        self.use_rr = False
         self._prefs: Path | None = None
 
         for unsupported in ("pernosco", "rr", "valgrind", "xvfb"):
