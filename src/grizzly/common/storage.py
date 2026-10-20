@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from itertools import chain, product
 from logging import getLogger
 from os.path import normpath, split
 from pathlib import Path
@@ -301,13 +300,12 @@ class TestCase:
         result.hang = self.hang
         result.https = self.https
         # copy test data files
-        for (file_name, data_file), required in chain(
-            product(self._files.required.items(), [True]),
-            product(self._files.optional.items(), [False]),
-        ):
+        for file_name, data_file in self._files.required.items():
             result.add_from_file(
-                data_file, file_name=file_name, required=required, copy=True
+                data_file, file_name=file_name, required=True, copy=True
             )
+        for file_name, data_file in self._files.optional.items():
+            result.add_from_file(data_file, file_name=file_name, copy=True)
         return result
 
     @property
