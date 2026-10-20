@@ -30,6 +30,22 @@ FM_CONFIG = Path.home() / ".fuzzmanagerconf"
 LOG = getLogger(__name__)
 
 
+def _rest_url(coll: Collector, endpoint: str) -> str:
+    """Build a CrashManager REST API URL.
+
+    Arguments:
+        coll: Collector providing server details.
+        endpoint: Path relative to the REST API root (eg. "crashes/1").
+
+    Returns:
+        URL of the endpoint.
+    """
+    return (
+        f"{coll.serverProtocol}://{coll.serverHost}:"
+        f"{coll.serverPort}/crashmanager/rest/{endpoint}/"
+    )
+
+
 class CrashEntry:
     """Get the CrashEntry data for the specified CrashManager crash.
 
@@ -62,10 +78,7 @@ class CrashEntry:
         self._data: dict[str, Any] | None = None
         self._storage: Path | None = None
         self._sig_filename: Path | None = None
-        self._url = (
-            f"{self._coll.serverProtocol}://{self._coll.serverHost}:"
-            f"{self._coll.serverPort}/crashmanager/rest/crashes/{crash_id}/"
-        )
+        self._url = _rest_url(self._coll, f"crashes/{crash_id}")
 
     @property
     def crash_id(self) -> int:
@@ -275,10 +288,7 @@ class Bucket:
         self._bucket_id = bucket_id
         self._sig_filename: Path | None = None
         self._coll = Collector()
-        self._url = (
-            f"{self._coll.serverProtocol}://{self._coll.serverHost}:"
-            f"{self._coll.serverPort}/crashmanager/rest/buckets/{bucket_id}/"
-        )
+        self._url = _rest_url(self._coll, f"buckets/{bucket_id}")
         self._data: dict[str, Any] | None = None
 
     @property
@@ -346,10 +356,7 @@ class Bucket:
             """
             LOG.debug("first request to /%s/", endpoint)
 
-            url = (
-                f"{self._coll.serverProtocol}://{self._coll.serverHost}:"
-                f"{self._coll.serverPort}/crashmanager/rest/{endpoint}/"
-            )
+            url = _rest_url(self._coll, endpoint)
 
             response: dict[str, Any] = self._coll.get(url, params=params).json()
 
