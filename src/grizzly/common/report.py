@@ -386,9 +386,7 @@ class Report:
         for count, entry in enumerate(crash_info.backtrace, start=1):
             # Rust panics add frames of noise to the top of the stack (std::panicking)
             # Sanitizer heap profile also have more noise on the stack (alloc::alloc)
-            if any(entry.startswith(x) for x in IGNORED_FRAMES) or entry.startswith(
-                "alloc::alloc"
-            ):
+            if entry.startswith((*IGNORED_FRAMES, "alloc::alloc")):
                 ignore += 1
             # only look at the top of the stack
             if count - ignore == suggested_frames:
