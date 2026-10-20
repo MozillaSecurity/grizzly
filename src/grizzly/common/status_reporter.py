@@ -457,6 +457,8 @@ class StatusReporter(BaseReporter):
         """Merged and generate formatted output from status reports.
 
         Args:
+            sysinfo: Ignored (compatibility).
+            timestamp: Ignored (compatibility).
             iters_per_result: Threshold for warning of potential blockers.
 
         Returns:
@@ -748,7 +750,7 @@ class ReductionStatusReporter(BaseReporter):
         object.
 
         Args:
-            path: Path to scan for status data files.
+            db_file: Status data file to load.
             tb_path: Directory to scan for files containing Python tracebacks.
             time_limit: Only include entries with a timestamp that is within the
                         given number of seconds. Use zero for no limit.
@@ -840,7 +842,9 @@ class ReductionStatusReporter(BaseReporter):
         """Generate formatted output from status report.
 
         Args:
-            None
+            sysinfo: Include system info (CPU, disk, RAM... etc) in output.
+            timestamp: Include time stamp in output.
+            iters_per_result: Ignored (compatibility).
 
         Returns:
             A formatted report.
@@ -1040,7 +1044,7 @@ def main(argv: list[str] | None = None) -> int:
         with args.dump.open("w") as ofp:
             if args.type == "active" and args.scan_mode == "fuzzing":
                 ofp.write(reporter.summary(runtime=False, sysinfo=True, timestamp=True))
-            # mode == "fuzzing"
+            # scan_mode == "reducing"
             elif args.type == "active":
                 # reducer only has one instance, so show specific report while running
                 ofp.write(reporter.specific(sysinfo=True, timestamp=True))
