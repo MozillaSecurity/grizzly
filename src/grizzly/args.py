@@ -14,6 +14,7 @@ from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from os import getenv
 from pathlib import Path
 from platform import system
+from subprocess import CalledProcessError
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -72,8 +73,10 @@ class CommonArgs:
         )
 
         targets = scan_plugins("grizzly_targets")
-        if system() != "Linux" and "firefox-android" in targets:
-            targets.remove("firefox-android")
+        if system() != "Linux":
+            for android_target in ("firefox-android", "firefox-android-emulator"):
+                if android_target in targets:
+                    targets.remove(android_target)
         if not targets:
             self.parser.error("No Platforms (Targets) are installed")
 
@@ -341,6 +344,30 @@ class CommonArgs:
         # TODO: remove deprecated 'prefs' from args
         if args.prefs:  # pragma: no cover
             args.asset.append(["prefs", args.prefs])
+
+        if args.platform == "firefox-android-emulator":
+            # pylint: disable=import-outside-toplevel
+            from .target.fenix_emulator_target import emulator_installed
+
+            if not emulator_installed():
+                self.parser.error(
+                    "Android emulator is not installed "
+                    "(run 'fxpoppet-emulator --no-launch' to install)"
+                )
+
+        if args.platform in ("firefox-android", "firefox-android-emulator"):
+            # pylint: disable=import-outside-toplevel
+            from fxpoppet.adb_session import ADBSession
+
+            try:
+                package = ADBSession.get_package_name(args.binary)
+            except CalledProcessError:
+                package = None
+            except OSError as exc:
+                # aapt is not installed
+                self.parser.error(str(exc))
+            if package is None:
+                self.parser.error(f"Invalid APK: '{args.binary}'")
 
         # check args.platform before args.asset since it is used
         if args.asset:
