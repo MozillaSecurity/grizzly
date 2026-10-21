@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from logging import getLogger
 from os import getenv
+from subprocess import CalledProcessError
 from typing import TYPE_CHECKING
 
 from fxpoppet.adb_process import ADBLaunchError, ADBProcess, Reason
@@ -30,20 +31,20 @@ LOG = getLogger(__name__)
 
 class FenixMonitor(TargetMonitor):
     def __init__(self, proc: ADBProcess) -> None:
-        self._proc = proc
+        self.proc = proc
 
     def is_healthy(self) -> bool:
-        return self._proc.is_healthy()
+        return self.proc.is_healthy()
 
     def is_idle(self, threshold: int) -> bool:
-        return all(cpu < threshold for _, cpu in self._proc.cpu_usage())
+        return all(cpu < threshold for _, cpu in self.proc.cpu_usage())
 
     def is_running(self) -> bool:
-        return self._proc.is_running()
+        return self.proc.is_running()
 
     @property
     def launches(self) -> int:
-        return self._proc.launches
+        return self.proc.launches
 
     def log_length(self, log_id: str) -> int:
         # TODO: This needs to be implemented
@@ -91,15 +92,30 @@ class FenixTarget(Target):
                 "FenixTarget ignoring unsupported arguments: %s", ", ".join(kwds)
             )
 
-        self._package = ADBSession.get_package_name(self.binary)
+        try:
+            self._package = ADBSession.get_package_name(self.binary)
+        except CalledProcessError:
+            self._package = None
         if self._package is None:
             LOG.error("FenixTarget failed to get package name!")
             raise RuntimeError("Could not find package name")
 
+        self._connect(self._open_device())
+        self._monitor = FenixMonitor(self._proc)
+
+    def _connect(self, serial: str) -> None:
+        """Create an ADBSession connected to the device and an ADBProcess.
+
+        Args:
+            serial: Serial of the device to connect to.
+
+        Returns:
+            None
+        """
+        assert self._package is not None
         LOG.debug("opening adb session...")
-        serial = self._select_device()
         try:
-            # emulator is expected to be running
+            # device is expected to be running
             self._session = ADBSession.connect(serial, as_root=True, boot_timeout=10)
         except ADBSessionError as exc:
             LOG.error("FenixTarget failed to connect to device: %s", exc)
@@ -112,7 +128,17 @@ class FenixTarget(Target):
         except ADBSessionError as exc:
             LOG.error("FenixTarget ADBProcess init failed: %s", exc)
             raise RuntimeError("Could not create ADBProcess") from None
-        self._monitor = FenixMonitor(self._proc)
+
+    def _open_device(self) -> str:
+        """Find the device to use.
+
+        Args:
+            None
+
+        Returns:
+            Serial of the device.
+        """
+        return self._select_device()
 
     @staticmethod
     def _select_device() -> str:

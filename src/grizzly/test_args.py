@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from platform import system
+from subprocess import CalledProcessError
 
 from pytest import mark, raises
 
@@ -119,6 +120,12 @@ def test_common_args_02(capsys, mocker, args, msg, idx):
             "error: --launch-attempts must be >= 1",
             ["targ1"],
         ),
+        # test android targets are not available (not Linux)
+        (
+            ["--platform", "firefox-android-emulator"],
+            "invalid choice: 'firefox-android-emulator'",
+            ["targ1", "firefox-android", "firefox-android-emulator"],
+        ),
     ],
 )
 def test_common_args_03(capsys, mocker, tmp_path, args, msg, targets):
@@ -189,6 +196,79 @@ def test_common_args_06(capsys, mocker, tmp_path):
     with raises(SystemExit):
         CommonArgs().parse_args(argv=[str(fake_bin), "--fuzzmanager"])
     assert '"product" in binary configuration file' in capsys.readouterr()[-1]
+
+
+@mark.parametrize("installed", [True, False])
+def test_common_args_07(capsys, mocker, tmp_path, installed):
+    """test CommonArgs.parse_args() - firefox-android-emulator"""
+    mocker.patch(
+        "grizzly.args.scan_plugins",
+        autospec=True,
+        return_value=["firefox-android-emulator"],
+    )
+    mocker.patch("grizzly.args.system", autospec=True, return_value="Linux")
+    mocker.patch(
+        "grizzly.target.fenix_emulator_target.emulator_installed",
+        autospec=True,
+        return_value=installed,
+    )
+    mocker.patch(
+        "fxpoppet.adb_session.ADBSession.get_package_name",
+        autospec=True,
+        return_value="org.mozilla.fenix",
+    )
+    fake_bin = tmp_path / "fake.apk"
+    fake_bin.touch()
+    argv = [str(fake_bin), "--platform", "firefox-android-emulator"]
+    if installed:
+        CommonArgs().parse_args(argv=argv)
+    else:
+        with raises(SystemExit):
+            CommonArgs().parse_args(argv=argv)
+        assert "error: Android emulator is not installed" in capsys.readouterr()[-1]
+
+
+@mark.parametrize("platform", ["firefox-android", "firefox-android-emulator"])
+@mark.parametrize(
+    "result, msg",
+    [
+        # invalid apk
+        (CalledProcessError(1, "aapt"), "error: Invalid APK: "),
+        # package name not found
+        ((None,), "error: Invalid APK: "),
+        # aapt not installed
+        (OSError("Please install AAPT"), "error: Please install AAPT"),
+        # valid apk
+        (("org.mozilla.fenix",), None),
+    ],
+)
+def test_common_args_08(capsys, mocker, tmp_path, platform, result, msg):
+    """test CommonArgs.parse_args() - android target apk check"""
+    mocker.patch(
+        "grizzly.args.scan_plugins",
+        autospec=True,
+        return_value=["firefox-android", "firefox-android-emulator"],
+    )
+    mocker.patch("grizzly.args.system", autospec=True, return_value="Linux")
+    mocker.patch(
+        "grizzly.target.fenix_emulator_target.emulator_installed",
+        autospec=True,
+        return_value=True,
+    )
+    mocker.patch(
+        "fxpoppet.adb_session.ADBSession.get_package_name",
+        autospec=True,
+        side_effect=result,
+    )
+    fake_bin = tmp_path / "fake.apk"
+    fake_bin.touch()
+    argv = [str(fake_bin), "--platform", platform]
+    if msg is None:
+        CommonArgs().parse_args(argv=argv)
+    else:
+        with raises(SystemExit):
+            CommonArgs().parse_args(argv=argv)
+        assert msg in capsys.readouterr()[-1]
 
 
 @mark.parametrize(

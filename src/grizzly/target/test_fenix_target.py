@@ -2,6 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # pylint: disable=protected-access
+from subprocess import CalledProcessError
+
 from fxpoppet.adb_process import ADBLaunchError, ADBProcess, Reason
 from fxpoppet.adb_session import ADBSession, ADBSessionError
 from pytest import mark, raises
@@ -30,10 +32,19 @@ def test_fenix_target_select_device(mocker):
     assert FenixTarget._select_device() == "fake-1234"
 
 
-def test_fenix_target_missing_package_name(mocker, tmp_path):
+@mark.parametrize(
+    "side_effect",
+    [
+        # package name not found
+        (None,),
+        # invalid apk
+        CalledProcessError(1, "aapt"),
+    ],
+)
+def test_fenix_target_missing_package_name(mocker, tmp_path, side_effect):
     """test FenixTarget missing package name"""
     session_cls = mocker.patch("grizzly.target.fenix_target.ADBSession", autospec=True)
-    session_cls.get_package_name.return_value = None
+    session_cls.get_package_name.side_effect = side_effect
     with raises(RuntimeError, match="Could not find package name"):
         FenixTarget(tmp_path / "test.apk", 300, 25, 5000)
 
